@@ -223,6 +223,7 @@ struct WupsPluginRuntime::Impl
 		{
 			try
 			{
+				WupsGuestOwnerScope ownerScope{{owner, resourceGeneration}};
 				called = moduleLoader->Invoke(callbackModule, callbackLifetime,
 					found->second, invocation.argumentWords, result, error);
 			}
@@ -715,15 +716,22 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		}
 		if (!m_impl->services->BindGuestInvoker(
 			m_impl->owner, m_impl->resourceGeneration,
-			[loader = m_impl->moduleLoader, mappedModule, lifetime](
+			[loader = m_impl->moduleLoader, mappedModule, lifetime,
+				scopedOwner = WupsOwnerToken{
+					m_impl->owner, m_impl->resourceGeneration}](
 				std::uint32_t target, std::span<const std::uint32_t> arguments,
 				std::uint32_t& result, std::string& invokeError) {
+				WupsGuestOwnerScope ownerScope{scopedOwner};
 				return loader->Invoke(mappedModule, lifetime, target,
 					arguments, result, invokeError);
 				}, error))
 			return m_impl->FailStart(error);
-		if (!m_impl->moduleLoader->Relocate(mappedModule, lifetime, error))
-			return m_impl->FailStart(error);
+		{
+			WupsGuestOwnerScope ownerScope{{
+				m_impl->owner, m_impl->resourceGeneration}};
+			if (!m_impl->moduleLoader->Relocate(mappedModule, lifetime, error))
+				return m_impl->FailStart(error);
+		}
 		{
 			std::lock_guard lock(m_impl->mutex);
 			revoked = m_impl->generation != startGeneration ||

@@ -42,6 +42,7 @@ namespace
 		}
 		bool WriteGuest(std::uint32_t address, std::span<const std::byte> input) override
 		{
+			if (failWriteAddress == address) return false;
 			if (!ValidateGuestRange(address, input.size(), WupsGuestAccess::Write)) return false;
 			std::ranges::copy(input, memory.begin() + address);
 			return true;
@@ -90,6 +91,10 @@ namespace
 			++taskCancellations;
 		}
 		bool SupportsMappedMemory() const override { return supportsMappedMemory; }
+		bool SupportsOwnerScopedHeapPointers() const override
+		{
+			return supportsOwnerScopedHeapPointers;
+		}
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(WupsOwnerToken,
 			std::uint32_t size, std::uint32_t alignment, bool writable,
 			WupsMappedMemoryPurpose purpose, std::string&) override
@@ -142,10 +147,45 @@ namespace
 		std::uint32_t nextMapping{0x8000000}, nextPhysical{0x1000000};
 		bool forceOverlap{};
 		bool supportsMappedMemory{true};
+		bool supportsOwnerScopedHeapPointers{true};
+		std::optional<std::uint32_t> failWriteAddress;
 		std::uint32_t mappingSizeExtra{};
 		std::atomic_bool failFree{};
 		std::atomic_size_t mappingFrees{}, guestFrees{}, exportReleases{}, logs{},
 			taskCancellations{};
+	};
+
+	class FakeFunctionPatcher final : public IWupsFunctionPatcherFacade
+	{
+	public:
+		std::uint32_t ApiVersion() const override { return 2; }
+		WupsServiceStatus AddPatch(WupsOwnerToken, std::uint32_t, bool,
+			std::uint32_t& handle, bool& applied, std::string&) override
+		{
+			++adds;
+			handle = 0x12345678;
+			applied = true;
+			live = true;
+			return WupsServiceStatus::Success;
+		}
+		WupsServiceStatus RemovePatch(WupsOwnerToken, std::uint32_t handle,
+			std::string&) override
+		{
+			CHECK(handle == 0x12345678);
+			++removes;
+			live = false;
+			return WupsServiceStatus::Success;
+		}
+		WupsServiceStatus IsPatchApplied(WupsOwnerToken, std::uint32_t,
+			bool& applied, std::string&) const override
+		{
+			applied = true;
+			return WupsServiceStatus::Success;
+		}
+		void ReleaseOwner(WupsOwnerToken) override { live = false; }
+
+		std::size_t adds{}, removes{};
+		bool live{};
 	};
 
 	std::uint32_t ReadGuestU32(const FakePlatform& platform,
@@ -259,6 +299,74 @@ namespace
 			WupsSymbolKind::Data, error));
 		CHECK(error.find("no safe guest effective/physical") !=
 			std::string::npos);
+
+		auto unscopedHeapPlatform = std::make_shared<FakePlatform>();
+		unscopedHeapPlatform->supportsOwnerScopedHeapPointers = false;
+		AromaCompatibilityRuntime unscopedHeapRuntime({
+			.storageRoot = root, .platform = unscopedHeapPlatform});
+		CHECK(!unscopedHeapRuntime.ResolveImport(allowed, metadata, 31, 1,
+			"homebrew_logging", "WUMSLogWrite", WupsSymbolKind::Function,
+			error));
+		CHECK(error.find("heap-taking ABI is explicitly unsupported") !=
+			std::string::npos);
+	}
+
+	void TestFunctionPatcherAbiOutputs(const std::filesystem::path& root)
+	{
+		auto platform = std::make_shared<FakePlatform>();
+		auto patcher = std::make_shared<FakeFunctionPatcher>();
+		AromaCompatibilityRuntime runtime({
+			.storageRoot = root, .platform = platform, .functionPatcher = patcher});
+		auto package = Package("function-patcher", {"homebrew_functionpatcher"});
+		package.manifest.nativePermissions.functionPatching = true;
+		WupsMetadata metadata;
+		metadata.name = "Function patcher ABI";
+		const WupsOwnerToken owner{32, 1};
+		std::string error;
+		const auto add = runtime.ResolveImport(package, metadata,
+			owner.owner, owner.generation, "homebrew_functionpatcher",
+			"FPAddFunctionPatch", WupsSymbolKind::Function, error);
+		const auto isPatched = runtime.ResolveImport(package, metadata,
+			owner.owner, owner.generation, "homebrew_functionpatcher",
+			"FPIsFunctionPatched", WupsSymbolKind::Function, error);
+		CHECK(add && isPatched);
+
+		platform->memory[0x1204] = std::byte{0xa5};
+		platform->memory[0x1205] = std::byte{0xa5};
+		platform->memory[0x1206] = std::byte{0xa5};
+		platform->memory[0x1207] = std::byte{0xa5};
+		const std::array addArguments{0x1100U, 0x1200U, 0x1204U};
+		CHECK(platform->Dispatch(*add, addArguments, error) == 0);
+		CHECK(ReadGuestU32(*platform, 0x1200) == 0x12345678);
+		CHECK(platform->memory[0x1204] == std::byte{1});
+		CHECK(platform->memory[0x1205] == std::byte{0xa5});
+		CHECK(platform->memory[0x1206] == std::byte{0xa5});
+		CHECK(platform->memory[0x1207] == std::byte{0xa5});
+
+		const std::array nullOutputs{0x1100U, 0U, 0U};
+		CHECK(platform->Dispatch(*add, nullOutputs, error) == 0);
+		CHECK(patcher->adds == 2);
+		const std::array invalidOutput{0x1100U, 0x20000U, 0x1204U};
+		CHECK(platform->Dispatch(*add, invalidOutput, error) == -0x10);
+		CHECK(patcher->adds == 2);
+
+		platform->failWriteAddress = 0x1210;
+		const std::array failedWrite{0x1100U, 0x1210U, 0x1214U};
+		CHECK(platform->Dispatch(*add, failedWrite, error) == -0x10);
+		CHECK(patcher->adds == 3);
+		CHECK(patcher->removes == 1);
+		CHECK(!patcher->live);
+		platform->failWriteAddress.reset();
+
+		platform->memory[0x1221] = std::byte{0xa5};
+		platform->memory[0x1222] = std::byte{0xa5};
+		platform->memory[0x1223] = std::byte{0xa5};
+		const std::array isArguments{0x12345678U, 0x1220U};
+		CHECK(platform->Dispatch(*isPatched, isArguments, error) == 0);
+		CHECK(platform->memory[0x1220] == std::byte{1});
+		CHECK(platform->memory[0x1221] == std::byte{0xa5});
+		CHECK(platform->memory[0x1222] == std::byte{0xa5});
+		CHECK(platform->memory[0x1223] == std::byte{0xa5});
 	}
 
 	void TestContentTraversalAndCleanup(const std::filesystem::path& root)
@@ -610,6 +718,7 @@ int main()
 	std::filesystem::create_directories(root);
 	TestStorageAndOwnerGeneration(root);
 	TestPermissionsMappingAndDispatch(root);
+	TestFunctionPatcherAbiOutputs(root);
 	TestContentTraversalAndCleanup(root);
 	TestQueuedCallbackCancelledAtUnload(root);
 	TestReentrantExportsAndCallbacks(root);

@@ -587,6 +587,15 @@ as unsupported, and `ResolveImport` refuses `homebrew_memorymapping` imports
 instead of publishing an API which only returns null. Hardware physical
 addresses are never interpreted as host pointers.
 
+The production adapter also cannot currently attribute arbitrary WUT heap
+pointers to a plugin owner generation. It therefore withholds the
+`homebrew_wupsbackend` and `homebrew_logging` guest imports, plus the storage,
+config, button-combo, and reent initialization hooks, instead of publishing
+heap-taking APIs whose pointer checks would reject valid plugin allocations.
+Lifecycle calls and later guest callbacks establish an explicit thread-local
+owner-generation scope; the host-export dispatcher rejects calls with a
+missing or mismatched scope even when Cafe has no `ModExecutionContext`.
+
 FunctionPatcher accepts the public API version 2 and descriptor struct versions
 2 and 3. It validates descriptor range/alignment, NUL-terminated function name,
 replacement execute permission, call-through write permission, process enum,

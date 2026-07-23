@@ -785,6 +785,31 @@ struct AromaCompatibilityRuntime::Impl
 		return WriteGuest(owner, address, bytes, error);
 	}
 
+	[[nodiscard]] bool ValidateGuestOutput(const Owner& owner,
+		std::uint32_t address, std::uint32_t size, std::uint32_t alignment,
+		std::string& error) const
+	{
+		if (!options.platform || address == 0 || size == 0 ||
+			(alignment > 1 && (address & (alignment - 1)) != 0) ||
+			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
+				size, WupsGuestAccess::Write))
+		{
+			error = fmt::format(
+				"owner {} generation {} supplied an invalid writable guest output "
+				"0x{:08x}+0x{:x}", owner.token.owner, owner.token.generation,
+				address, size);
+			return false;
+		}
+		return true;
+	}
+
+	[[nodiscard]] bool WriteGuestBool(const Owner& owner,
+		std::uint32_t address, bool value, std::string& error)
+	{
+		const std::array bytes{value ? std::byte{1} : std::byte{0}};
+		return WriteGuest(owner, address, bytes, error);
+	}
+
 	[[nodiscard]] bool ValidateGuestCallback(const Owner& owner,
 		std::uint32_t address, std::string& error) const
 	{
@@ -3273,6 +3298,18 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 			moduleName, symbolName, ownerId, generation, registryError);
 		return std::nullopt;
 	}
+	if ((moduleName == "homebrew_wupsbackend" ||
+			moduleName == "homebrew_logging") &&
+		(!m_impl->options.platform ||
+			!m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' cannot resolve '{}.{}': this platform "
+			"cannot attribute arbitrary WUT heap pointers to an owner generation; "
+			"the heap-taking ABI is explicitly unsupported",
+			package.manifest.modId, metadata.name, moduleName, symbolName);
+		return std::nullopt;
+	}
 	if (moduleName == "homebrew_memorymapping" &&
 		(!m_impl->options.platform ||
 			!m_impl->options.platform->SupportsMappedMemory()))
@@ -3367,6 +3404,16 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 			metadata.name);
 		return false;
 	}
+	const auto requireHeapProvenance = [&] {
+		if (m_impl->options.platform &&
+			m_impl->options.platform->SupportsOwnerScopedHeapPointers())
+			return true;
+		error = fmt::format(
+			"WUPS backend initialization hook {} is unsupported because this "
+			"platform cannot attribute arbitrary WUT heap pointers to owner {} "
+			"generation {}", static_cast<unsigned>(type), ownerId, generation);
+		return false;
+	};
 
 	auto addFunctions = [&](std::span<const std::string_view> names) {
 		for (const auto name : names)
@@ -3389,6 +3436,8 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 			error = "INIT_STORAGE requires homebrew_wupsbackend permission";
 			return false;
 		}
+		if (!requireHeapProvenance())
+			return false;
 		const auto status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 		if (status != WupsServiceStatus::Success)
 			return false;
@@ -3420,6 +3469,8 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 			error = "INIT_CONFIG requires homebrew_wupsbackend permission";
 			return false;
 		}
+		if (!requireHeapProvenance())
+			return false;
 		invocation.argumentWords = {1, owner->pluginIdentifier};
 		invocation.requireZeroResult = true;
 		return true;
@@ -3430,6 +3481,8 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 			error = "INIT_BUTTON_COMBO requires homebrew_wupsbackend permission";
 			return false;
 		}
+		if (!requireHeapProvenance())
+			return false;
 		invocation.argumentWords = {1, owner->pluginIdentifier};
 		constexpr std::array functions{
 			std::string_view{"ButtonAdd"},
@@ -3458,6 +3511,8 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 			error = "INIT_REENT_FUNCTIONS requires homebrew_wupsbackend permission";
 			return false;
 		}
+		if (!requireHeapProvenance())
+			return false;
 		invocation.argumentWords = {2};
 		constexpr std::array functions{
 			std::string_view{"ReentGet"},
@@ -4276,18 +4331,39 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			if (!require(3))
 				return FunctionPatcherAbiResult(
 					WupsServiceStatus::InvalidArgument);
+			if ((arguments[1] != 0 &&
+					!ValidateGuestOutput(*owner, arguments[1], 4, 4, error)) ||
+				(arguments[2] != 0 &&
+					!ValidateGuestOutput(*owner, arguments[2], 1, 1, error)))
+				return FunctionPatcherAbiResult(
+					WupsServiceStatus::InvalidArgument);
 			std::uint32_t handle{};
 			bool applied{};
 			const auto status = options.functionPatcher->AddPatch(
 				token, arguments[0],
 				owner->permissions.physicalAddressPatching,
 				handle, applied, error);
-			if (status == WupsServiceStatus::Success &&
-				(!WriteGuestU32(*owner, arguments[1], handle, error) ||
-					!WriteGuestU32(*owner, arguments[2],
-						applied ? 1 : 0, error)))
-				return FunctionPatcherAbiResult(
-					WupsServiceStatus::InvalidArgument);
+			if (status == WupsServiceStatus::Success)
+			{
+				const bool outputsWritten =
+					(arguments[1] == 0 ||
+						WriteGuestU32(*owner, arguments[1], handle, error)) &&
+					(arguments[2] == 0 ||
+						WriteGuestBool(*owner, arguments[2], applied, error));
+				if (!outputsWritten)
+				{
+					const auto outputError = error;
+					std::string rollbackError;
+					const auto rollbackStatus = options.functionPatcher->RemovePatch(
+						token, handle, rollbackError);
+					error = outputError;
+					if (rollbackStatus != WupsServiceStatus::Success)
+						error.append("; patch rollback failed: ").append(
+							rollbackError.empty() ? "unknown error" : rollbackError);
+					return FunctionPatcherAbiResult(
+						WupsServiceStatus::InvalidArgument);
+				}
+			}
 			return FunctionPatcherAbiResult(status);
 		}
 		if (symbolName == "FPRemoveFunctionPatch")
@@ -4308,8 +4384,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			const auto status = options.functionPatcher->IsPatchApplied(
 				token, arguments[0], applied, error);
 			if (status == WupsServiceStatus::Success &&
-				!WriteGuestU32(*owner, arguments[1],
-					applied ? 1 : 0, error))
+				!WriteGuestBool(*owner, arguments[1], applied, error))
 				return FunctionPatcherAbiResult(
 					WupsServiceStatus::InvalidArgument);
 			return FunctionPatcherAbiResult(status);

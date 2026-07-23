@@ -27,6 +27,27 @@ struct WupsOwnerToken
 		const WupsOwnerToken&) = default;
 };
 
+class WupsGuestOwnerScope
+{
+public:
+	explicit WupsGuestOwnerScope(WupsOwnerToken owner) : m_previous(s_current)
+	{
+		s_current = owner;
+	}
+	~WupsGuestOwnerScope() { s_current = m_previous; }
+	WupsGuestOwnerScope(const WupsGuestOwnerScope&) = delete;
+	WupsGuestOwnerScope& operator=(const WupsGuestOwnerScope&) = delete;
+
+	[[nodiscard]] static std::optional<WupsOwnerToken> Current()
+	{
+		return s_current;
+	}
+
+private:
+	std::optional<WupsOwnerToken> m_previous;
+	inline static thread_local std::optional<WupsOwnerToken> s_current;
+};
+
 enum class WupsGuestAccess : std::uint8_t
 {
 	Read,
@@ -268,6 +289,13 @@ public:
 	// physical address spaces must say so. Import resolution then fails instead
 	// of publishing a callable API which can only return null.
 	[[nodiscard]] virtual bool SupportsMappedMemory() const { return true; }
+	// False unless arbitrary guest heap pointers can be attributed to the
+	// currently executing owner generation. Heap-taking ABIs are withheld when
+	// this provenance is unavailable.
+	[[nodiscard]] virtual bool SupportsOwnerScopedHeapPointers() const
+	{
+		return true;
+	}
 
 	[[nodiscard]] virtual std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
 		WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,

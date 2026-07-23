@@ -83,9 +83,11 @@ namespace
 						WupsServiceStatus::StaleGeneration)));
 				return;
 			}
-			if (cpu->modExecutionContext &&
+			const auto scopedOwner = WupsGuestOwnerScope::Current();
+			if (!scopedOwner || *scopedOwner != record->owner ||
+				(cpu->modExecutionContext &&
 				(cpu->modExecutionContext->AddressSpaceId() != record->owner.owner ||
-					cpu->modExecutionContext->Generation() != record->owner.generation))
+					cpu->modExecutionContext->Generation() != record->owner.generation)))
 			{
 				osLib_returnFromFunction(cpu,
 					static_cast<std::uint32_t>(static_cast<std::int32_t>(
@@ -444,6 +446,7 @@ namespace
 		}
 
 		bool SupportsMappedMemory() const override { return false; }
+		bool SupportsOwnerScopedHeapPointers() const override { return false; }
 
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
 			WupsOwnerToken, std::uint32_t, std::uint32_t, bool,

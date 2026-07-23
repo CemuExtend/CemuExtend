@@ -103,6 +103,7 @@ int main()
 	auto platform = CreateCemuWupsPlatform();
 	CHECK(platform);
 	CHECK(!platform->SupportsMappedMemory());
+	CHECK(!platform->SupportsOwnerScopedHeapPointers());
 	CHECK(!platform->ValidateGuestRange(
 		0xfffffff0U, 0x20, WupsGuestAccess::Read));
 
@@ -148,13 +149,25 @@ int main()
 		}, error);
 	CHECK(callable && s_hle);
 	cpu.instructionPointer = *callable;
-	s_hle(&cpu);
+	{
+		WupsGuestOwnerScope ownerScope{{72, 1}};
+		s_hle(&cpu);
+	}
 	CHECK(calls == 1 && cpu.gpr[3] == 0x1234);
+
+	cpu.instructionPointer = *callable;
+	s_hle(&cpu);
+	CHECK(calls == 1);
+	CHECK(static_cast<std::int32_t>(cpu.gpr[3]) ==
+		static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
 
 	ModExecutionContext wrongOwner(99, 1, "wrong", 0x10000000, 4096);
 	cpu.modExecutionContext = &wrongOwner;
 	cpu.instructionPointer = *callable;
-	s_hle(&cpu);
+	{
+		WupsGuestOwnerScope ownerScope{{72, 1}};
+		s_hle(&cpu);
+	}
 	CHECK(static_cast<std::int32_t>(cpu.gpr[3]) ==
 		static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
 	cpu.modExecutionContext = nullptr;
@@ -183,7 +196,10 @@ int main()
 	CHECK(pinned);
 	PPCInterpreter_t workerCpu = cpu;
 	workerCpu.instructionPointer = *pinned;
-	auto executing = std::async(std::launch::async, [&] { s_hle(&workerCpu); });
+	auto executing = std::async(std::launch::async, [&] {
+		WupsGuestOwnerScope ownerScope{{72, 2}};
+		s_hle(&workerCpu);
+	});
 	entered.get_future().wait();
 	auto releasing = std::async(std::launch::async, [&] {
 		platform->ReleaseOwnerExports({72, 2});
