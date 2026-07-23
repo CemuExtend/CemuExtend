@@ -57,6 +57,8 @@ namespace
 			std::uint32_t failNextUnloads{};
 			std::atomic_uint32_t releaseCalls{};
 			std::atomic_uint32_t unloadCalls{};
+			std::atomic_uint32_t deactivationCalls{};
+			std::uint32_t failNextDeactivations{};
 			std::optional<std::uint32_t> failTarget;
 			std::function<void()> onMap;
 			std::function<void(WupsHookType)> onPrepare;
@@ -101,10 +103,25 @@ namespace
 			return true;
 		}
 
-		void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) override
+		bool DeactivatePlugin(std::uint64_t, std::uint32_t,
+			std::string& error) override
+		{
+			++m_log->deactivationCalls;
+			if (m_log->failNextDeactivations != 0)
+			{
+				--m_log->failNextDeactivations;
+				error = "injected patch restoration failure";
+				return false;
+			}
+			return true;
+		}
+
+		bool ReleaseOwnerResources(std::uint64_t owner,
+			std::uint32_t generation, std::string&) override
 		{
 			++m_log->releaseCalls;
 			m_log->releases.emplace_back(owner, generation);
+			return true;
 		}
 
 		bool IsProcessInScope(const CemodPackage&, std::string& reason) const override
@@ -315,14 +332,15 @@ namespace
 			WupsHookType::FiniWutMalloc,
 		});
 		CheckTargets(log->invokedTargets, completeOrder);
-		CHECK(log->releases.size() == 1);
-		CHECK(log->releases[0].first == 7);
-		CHECK(log->releases[0].second == 11);
+		CHECK(log->releases.empty());
 
 		runtime->Unload();
 		CHECK(runtime->State() == WupsPluginState::Unloaded);
 		CHECK(runtime->Generation() == 12);
 		CHECK(log->unloads == 1);
+		CHECK(log->releases.size() == 1);
+		CHECK(log->releases[0].first == 7);
+		CHECK(log->releases[0].second == 11);
 		const auto callbacksBeforeStaleEvents = log->invokedTargets.size();
 		runtime->OnReleaseForeground();
 		runtime->OnAcquiredForeground();
@@ -367,6 +385,52 @@ namespace
 			WupsHookType::FiniWutMalloc,
 		};
 		CheckTargets(log->invokedTargets, expected);
+	}
+
+	void TestApplicationRestartKeepsOwnerResources()
+	{
+		auto log = std::make_shared<RuntimeLog>();
+		auto services = std::make_shared<FakeServices>(log);
+		auto loader = std::make_shared<FakeModuleLoader>(log);
+		std::string error;
+		auto runtime = WupsPluginRuntime::Create(
+			Package("restart", "Restart"), 71, 12, services, loader, error);
+		CHECK(runtime);
+		CHECK(runtime->OnApplicationStarts(error));
+		CHECK(log->mappedOwners.size() == 1);
+		runtime->OnApplicationEnds();
+		CHECK(runtime->State() == WupsPluginState::Deinitialized);
+		CHECK(log->deactivationCalls == 1);
+		CHECK(log->releaseCalls == 0);
+		CHECK(runtime->OnApplicationStarts(error));
+		CHECK(log->mappedOwners.size() == 1);
+		runtime->OnApplicationEnds();
+		CHECK(log->deactivationCalls == 2);
+		CHECK(runtime->UnloadChecked(error));
+		CHECK(log->releaseCalls == 1);
+		CHECK(log->unloadCalls == 1);
+	}
+
+	void TestPatchRestoreFailureBlocksModuleUnload()
+	{
+		auto log = std::make_shared<RuntimeLog>();
+		auto services = std::make_shared<FakeServices>(log);
+		auto loader = std::make_shared<FakeModuleLoader>(log);
+		std::string error;
+		auto runtime = WupsPluginRuntime::Create(
+			Package("patch_retry", "Patch Retry"), 72, 13,
+			services, loader, error);
+		CHECK(runtime);
+		CHECK(runtime->OnApplicationStarts(error));
+		log->failNextDeactivations = 1;
+		CHECK(!runtime->UnloadChecked(error));
+		CHECK(error.find("patch restoration failure") != std::string::npos);
+		CHECK(runtime->State() == WupsPluginState::Failed);
+		CHECK(log->releaseCalls == 0);
+		CHECK(log->unloadCalls == 0);
+		CHECK(runtime->UnloadChecked(error));
+		CHECK(log->releaseCalls == 1);
+		CHECK(log->unloadCalls == 1);
 	}
 
 	void TestReentrantUnloadIsDeferred()
@@ -696,7 +760,7 @@ namespace
 			ExternalMappingViolation::Reason::RegionAddressOverflow);
 	}
 
-	void TestMissingBackendIsAnError()
+	void TestMissingBackendPermissionIsAnError()
 	{
 		const std::array hooks{WupsHookType::InitStorage};
 		auto log = std::make_shared<RuntimeLog>();
@@ -707,7 +771,8 @@ namespace
 			std::make_shared<AromaCompatibilityRuntime>(), loader, error);
 		CHECK(runtime);
 		CHECK(!runtime->OnApplicationStarts(error));
-		CHECK(error.find("not implemented") != std::string::npos);
+		CHECK(error.find("INIT_STORAGE requires homebrew_wupsbackend permission") !=
+			std::string::npos);
 		CHECK(runtime->State() == WupsPluginState::Failed);
 		CHECK(log->unloads == 1);
 	}
@@ -776,6 +841,8 @@ int main()
 {
 	TestLifecycleOrderAndUnloadBarrier();
 	TestLifecycleRollback();
+	TestApplicationRestartKeepsOwnerResources();
+	TestPatchRestoreFailureBlocksModuleUnload();
 	TestReentrantUnloadIsDeferred();
 	TestUnloadRevokesAndDrainsOtherThreadCallback();
 	TestUnloadDuringMappingDoesNotPublishStaleModule();
@@ -783,7 +850,7 @@ int main()
 	TestUnloadFailurePreservesRetryAuthority();
 	TestContiguousTlsTemplateMapping();
 	TestExternalModulePolicy();
-	TestMissingBackendIsAnError();
+	TestMissingBackendPermissionIsAnError();
 	TestProcessScopeSkipsMapping();
 	TestPluginIsolationAndReloadRollback();
 	std::cout << "WUPS runtime tests passed\n";

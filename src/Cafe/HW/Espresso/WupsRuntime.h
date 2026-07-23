@@ -4,6 +4,7 @@
 #include "Cafe/HW/Espresso/ModuleExportRegistry.h"
 #include "Cafe/HW/Espresso/WupsBinary.h"
 #include "Cafe/HW/Espresso/WupsFunctionPatcher.h"
+#include "Cafe/HW/Espresso/WupsServices.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,11 @@ class IWupsRuntimeServices
 {
 public:
 	virtual ~IWupsRuntimeServices() = default;
+	[[nodiscard]] virtual bool BeginOwner(const CemodPackage&,
+		const WupsMetadata&, std::uint64_t, std::uint32_t, std::string&)
+	{
+		return true;
+	}
 
 	[[nodiscard]] virtual std::optional<std::uint32_t> ResolveImport(
 		const CemodPackage& package, const WupsMetadata& metadata,
@@ -61,9 +67,20 @@ public:
 		const WupsMetadata& metadata, std::uint64_t owner,
 		std::uint32_t generation, std::span<const WupsPatchRequest> patches,
 		std::string& error) = 0;
-	virtual void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) = 0;
+	[[nodiscard]] virtual bool DeactivatePlugin(std::uint64_t,
+		std::uint32_t, std::string&)
+	{
+		return true;
+	}
+	[[nodiscard]] virtual bool ReleaseOwnerResources(std::uint64_t owner,
+		std::uint32_t generation, std::string& error) = 0;
 	[[nodiscard]] virtual bool IsProcessInScope(const CemodPackage& package,
 		std::string& reason) const = 0;
+	[[nodiscard]] virtual bool BindGuestInvoker(std::uint64_t,
+		std::uint32_t, WupsGuestInvoker, std::string&)
+	{
+		return true;
+	}
 };
 
 class IWupsModuleLoader
@@ -94,10 +111,9 @@ public:
 class AromaCompatibilityRuntime final : public IWupsRuntimeServices
 {
 public:
-	explicit AromaCompatibilityRuntime(WupsProcessKind process = WupsProcessKind::Game,
-		std::shared_ptr<ModuleExportRegistry> registry = {},
-		std::shared_ptr<WupsFunctionPatchManager> patchManager = {},
-		std::shared_ptr<IWupsPatchPlatform> patchPlatform = {});
+	explicit AromaCompatibilityRuntime(WupsProcessKind process = WupsProcessKind::Game);
+	explicit AromaCompatibilityRuntime(AromaRuntimeOptions options,
+		WupsProcessKind process = WupsProcessKind::Game);
 	~AromaCompatibilityRuntime() override;
 
 	void SetCurrentProcess(WupsProcessKind process);
@@ -115,9 +131,128 @@ public:
 		const WupsMetadata& metadata, std::uint64_t owner,
 		std::uint32_t generation, std::span<const WupsPatchRequest> patches,
 		std::string& error) override;
-	void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) override;
+	[[nodiscard]] bool DeactivatePlugin(std::uint64_t owner,
+		std::uint32_t generation, std::string& error) override;
+	[[nodiscard]] bool ReleaseOwnerResources(std::uint64_t owner,
+		std::uint32_t generation, std::string& error) override;
 	[[nodiscard]] bool IsProcessInScope(const CemodPackage& package,
 		std::string& reason) const override;
+	[[nodiscard]] bool BindGuestInvoker(std::uint64_t owner,
+		std::uint32_t generation, WupsGuestInvoker invoker,
+		std::string& error) override;
+	[[nodiscard]] bool BeginOwner(const CemodPackage& package,
+		const WupsMetadata& metadata, std::uint64_t owner,
+		std::uint32_t generation, std::string& error) override;
+
+	[[nodiscard]] bool RegisterOwner(const CemodPackage& package,
+		const WupsMetadata& metadata, WupsOwnerToken owner, std::string& error);
+	[[nodiscard]] bool IsOwnerActive(WupsOwnerToken owner) const;
+
+	[[nodiscard]] WupsServiceStatus StorageCreateSubItem(WupsOwnerToken owner,
+		std::uint32_t parent, std::string_view key, std::uint32_t& handle);
+	[[nodiscard]] WupsServiceStatus StorageGetSubItem(WupsOwnerToken owner,
+		std::uint32_t parent, std::string_view key, std::uint32_t& handle) const;
+	[[nodiscard]] WupsServiceStatus StorageStore(WupsOwnerToken owner,
+		std::uint32_t parent, std::string_view key, const WupsStorageValue& value);
+	[[nodiscard]] WupsServiceStatus StorageGet(WupsOwnerToken owner,
+		std::uint32_t parent, std::string_view key, WupsStorageValueType type,
+		WupsStorageValue& value) const;
+	[[nodiscard]] WupsServiceStatus StorageDelete(WupsOwnerToken owner,
+		std::uint32_t parent, std::string_view key);
+	[[nodiscard]] WupsServiceStatus StorageSave(WupsOwnerToken owner, bool force,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus StorageForceReload(WupsOwnerToken owner,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus StorageWipe(WupsOwnerToken owner,
+		std::string& error);
+
+	[[nodiscard]] WupsServiceStatus ConfigRegisterCallbacks(WupsOwnerToken owner,
+		std::string_view name, std::uint32_t openCallback,
+		std::uint32_t closeCallback);
+	[[nodiscard]] WupsServiceStatus ConfigCreateCategory(WupsOwnerToken owner,
+		std::string_view name, std::uint32_t& handle);
+	[[nodiscard]] WupsServiceStatus ConfigCreateItem(WupsOwnerToken owner,
+		WupsConfigItemModel item, std::uint32_t& handle);
+	[[nodiscard]] WupsServiceStatus ConfigAddCategory(WupsOwnerToken owner,
+		std::uint32_t parent, std::uint32_t child);
+	[[nodiscard]] WupsServiceStatus ConfigAddItem(WupsOwnerToken owner,
+		std::uint32_t category, std::uint32_t item);
+	[[nodiscard]] WupsServiceStatus ConfigDestroyCategory(WupsOwnerToken owner,
+		std::uint32_t handle);
+	[[nodiscard]] WupsServiceStatus ConfigDestroyItem(WupsOwnerToken owner,
+		std::uint32_t handle);
+	[[nodiscard]] WupsServiceStatus ConfigOpen(WupsOwnerToken owner,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus ConfigClose(WupsOwnerToken owner,
+		std::string& error);
+	[[nodiscard]] std::optional<WupsConfigModel> ConfigSnapshot(
+		WupsOwnerToken owner) const;
+
+	[[nodiscard]] WupsServiceStatus ButtonComboCreate(WupsOwnerToken owner,
+		const WupsButtonComboDefinition& definition, std::uint32_t& handle,
+		WupsButtonComboStatus& status);
+	[[nodiscard]] WupsServiceStatus ButtonComboUpdate(WupsOwnerToken owner,
+		std::uint32_t handle, const WupsButtonComboDefinition& definition,
+		WupsButtonComboStatus& status);
+	[[nodiscard]] WupsServiceStatus ButtonComboRemove(WupsOwnerToken owner,
+		std::uint32_t handle);
+	[[nodiscard]] WupsServiceStatus ButtonComboGet(WupsOwnerToken owner,
+		std::uint32_t handle, WupsButtonComboDefinition& definition,
+		WupsButtonComboStatus& status) const;
+	[[nodiscard]] WupsServiceStatus ButtonComboCheckAvailable(WupsOwnerToken owner,
+		const WupsButtonComboDefinition& definition,
+		WupsButtonComboStatus& status) const;
+	void SubmitButtonSample(const WupsButtonSample& sample);
+
+	[[nodiscard]] WupsServiceStatus ReentGet(WupsOwnerToken owner,
+		std::uint32_t pluginId, std::uint32_t& context) const;
+	[[nodiscard]] WupsServiceStatus ReentRegister(WupsOwnerToken owner,
+		std::uint32_t pluginId, std::uint32_t context,
+		std::uint32_t cleanupCallback);
+	[[nodiscard]] WupsServiceStatus ReentUnregisterThread(WupsOwnerToken owner,
+		std::uint64_t threadId, std::string& error);
+
+	[[nodiscard]] WupsServiceStatus MappedMemoryAllocate(WupsOwnerToken owner,
+		std::uint32_t size, std::uint32_t alignment, bool writable,
+		WupsMappedMemoryPurpose purpose, WupsMappedMemoryInfo& allocation,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus MappedMemoryFree(WupsOwnerToken owner,
+		std::uint32_t address, std::string& error);
+	[[nodiscard]] WupsServiceStatus MappedMemoryEffectiveToPhysical(
+		WupsOwnerToken owner, std::uint32_t effective,
+		std::uint32_t& physical) const;
+	[[nodiscard]] WupsServiceStatus MappedMemoryPhysicalToEffective(
+		WupsOwnerToken owner, std::uint32_t physical,
+		std::uint32_t& effective) const;
+
+	[[nodiscard]] WupsServiceStatus NotificationAdd(WupsOwnerToken owner,
+		WupsNotificationModel notification, std::uint32_t& handle,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus NotificationUpdate(WupsOwnerToken owner,
+		std::uint32_t handle, std::string_view text, std::string& error);
+	[[nodiscard]] WupsServiceStatus NotificationFinish(WupsOwnerToken owner,
+		std::uint32_t handle, std::string& error);
+	[[nodiscard]] std::vector<WupsNotificationModel> NotificationSnapshot(
+		WupsOwnerToken owner) const;
+
+	[[nodiscard]] WupsServiceStatus Log(WupsOwnerToken owner, WupsLogLevel level,
+		std::string_view moduleName, std::string_view source,
+		std::string_view message);
+
+	[[nodiscard]] WupsServiceStatus ContentRedirectAdd(WupsOwnerToken owner,
+		std::string_view virtualPath, const std::filesystem::path& sourcePath,
+		std::int32_t priority, bool writable, std::uint32_t& handle,
+		std::string& error);
+	[[nodiscard]] WupsServiceStatus ContentRedirectRemove(WupsOwnerToken owner,
+		std::uint32_t handle);
+	[[nodiscard]] WupsServiceStatus ContentRedirectSetActive(WupsOwnerToken owner,
+		std::uint32_t handle, bool active);
+	[[nodiscard]] std::optional<std::filesystem::path> ResolveContentPath(
+		WupsOwnerToken owner, std::string_view virtualPath, bool write,
+		std::string& error) const;
+
+	[[nodiscard]] WupsOwnerResourceCounts ResourceCounts(
+		WupsOwnerToken owner) const;
 
 	[[nodiscard]] std::shared_ptr<ModuleExportRegistry> ExportRegistry() const;
 	[[nodiscard]] std::shared_ptr<WupsFunctionPatchManager> PatchManager() const;

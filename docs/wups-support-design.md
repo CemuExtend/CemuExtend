@@ -638,6 +638,17 @@ and write atomically. Resource/count/size/rate limits exist per owner and
 globally. Logs avoid dumping secrets or arbitrary guest buffers. JIT and
 Interpreter share the same patch/cache and callback validation path.
 
+Component-wise `std::filesystem` checks do not close the path-check/path-open
+race when an untrusted process can mutate the host tree concurrently. The Task
+4 storage adapter is therefore suitable only for a private, emulator-owned
+storage root. A production adapter for an adversarial or shared root must walk
+and open relative to pinned directory handles (`openat`-style descriptors on
+POSIX and equivalent directory/file handles on Windows), with no symlink or
+reparse-point traversal. Path-based guest filesystem and content-redirection
+command families remain explicitly `Unsupported` until that handle-based VFS
+adapter exists; the current host-facing path model is not a production-safe
+guest filesystem API.
+
 ## 17. Testing contract
 
 Task 1 unit tests cover manifest v1/v2, both payload descriptors, missing and
@@ -693,8 +704,26 @@ The current implementation includes the container/SDK/parser work, external
 RPL lifetime and event integration, shared PPC callback path, WUPS state and
 lifecycle rollback, a generation-pinned module export registry, WUMS parsing
 and dependency/lifecycle runtime, and transactional FunctionPatcher with Cemu
-memory/JIT integration and dynamic-RPL restoration. Real backend arguments and
-resources, standard module service bodies, and full guest conformance/title
-integration remain separate dependencies and continue to fail explicitly when
-an unavailable provider is required; they are not reported as successful
-stubs.
+memory/JIT integration and dynamic-RPL restoration.
+
+Task 4 adds the owner/generation-scoped Aroma service runtime and host-facing
+models for Storage, Config, Button Combo, Reent, mapped memory, notifications,
+logging, and content redirection. The runtime registers an owner before RPL
+mapping, binds guest callback invocation only after a successful map, revokes
+exports/tasks before waiting for outstanding pins, and releases resources in
+an idempotent finalization pass. Storage uses bounded, checksummed serialization
+and atomic rename; content roots are canonicalized and traversal/symlink escape
+is rejected. Public guest exports are registered through `IWupsPlatform`, so
+the service layer never casts guest addresses to host functions. The production
+composition root supplies the concrete Cemu platform and Task 3 patcher facade;
+there is deliberately no success fallback when either service is unavailable.
+
+The currently exposed notification and content-redirection host models are
+complete for embedding adapters, while their public guest command families
+beyond version/readiness still return explicit unsupported results until the
+GUI/VFS adapters consume those models. In particular, the path model alone is
+not a supported production VFS implementation; production guest file access
+requires the handle-relative adapter described in section 16. Legacy
+FunctionPatcher export names,
+hardware physical mappings, USB serial transport, and kernel-only operations
+also remain explicitly unsupported rather than reporting success.

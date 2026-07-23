@@ -75,245 +75,6 @@ namespace
 	}
 }
 
-struct AromaCompatibilityRuntime::Impl
-{
-	Impl(WupsProcessKind initialProcess,
-		std::shared_ptr<ModuleExportRegistry> registry_,
-		std::shared_ptr<WupsFunctionPatchManager> patchManager_,
-		std::shared_ptr<IWupsPatchPlatform> patchPlatform_) :
-		process(initialProcess),
-		registry(registry_ ? std::move(registry_) :
-			std::make_shared<ModuleExportRegistry>()),
-		patchManager(std::move(patchManager_)),
-		patchPlatform(std::move(patchPlatform_))
-	{
-	}
-
-	std::atomic<WupsProcessKind> process;
-	std::shared_ptr<ModuleExportRegistry> registry;
-	std::shared_ptr<WupsFunctionPatchManager> patchManager;
-	std::shared_ptr<IWupsPatchPlatform> patchPlatform;
-	std::mutex mutex;
-	std::map<std::pair<std::uint64_t, std::uint32_t>,
-		std::vector<ModuleExportLease>> importLeases;
-	std::function<void()> detachModuleEvents;
-};
-
-AromaCompatibilityRuntime::AromaCompatibilityRuntime(WupsProcessKind process,
-	std::shared_ptr<ModuleExportRegistry> registry,
-	std::shared_ptr<WupsFunctionPatchManager> patchManager,
-	std::shared_ptr<IWupsPatchPlatform> patchPlatform) :
-	m_impl(std::make_unique<Impl>(process, std::move(registry),
-		std::move(patchManager), std::move(patchPlatform)))
-{
-	if (m_impl->patchPlatform)
-		m_impl->patchPlatform->SetCurrentProcess(
-			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx :
-			process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu :
-			WupsPatchProcess::Game);
-}
-
-AromaCompatibilityRuntime::~AromaCompatibilityRuntime()
-{
-	std::function<void()> detach;
-	{
-		std::lock_guard lock(m_impl->mutex);
-		detach = std::move(m_impl->detachModuleEvents);
-	}
-	if (detach)
-		detach();
-}
-
-void AromaCompatibilityRuntime::SetCurrentProcess(WupsProcessKind process)
-{
-	m_impl->process.store(process);
-	if (m_impl->patchPlatform)
-		m_impl->patchPlatform->SetCurrentProcess(
-			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx :
-			process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu :
-			WupsPatchProcess::Game);
-}
-
-WupsProcessKind AromaCompatibilityRuntime::CurrentProcess() const
-{
-	return m_impl->process.load();
-}
-
-std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
-	const CemodPackage& package, const WupsMetadata& metadata,
-	std::uint64_t owner, std::uint32_t generation,
-	std::string_view moduleName, std::string_view symbolName,
-	WupsSymbolKind kind, std::string& error)
-{
-	const ModuleProviderOwner requester{owner, generation, 1};
-	std::string registryError;
-	auto resolved = m_impl->registry->Resolve(
-		moduleName, symbolName, kind, requester, registryError);
-	if (!resolved)
-	{
-		error = fmt::format(
-			"package '{}' plugin '{}' (WUPS {}) has unresolved mandatory {} "
-			"import '{}.{}' for owner {} generation {}; normal Cafe RPL/HLE "
-			"resolution ran first, registry fallback failed: {}",
-			package.manifest.modId, metadata.name,
-			metadata.abiVersion.ToString(),
-			kind == WupsSymbolKind::Function ? "function" : "data",
-			moduleName, symbolName, owner, generation, registryError);
-		return std::nullopt;
-	}
-	const auto address = resolved->Address();
-	{
-		std::lock_guard lock(m_impl->mutex);
-		m_impl->importLeases[{owner, generation}].push_back(
-			std::move(*resolved));
-	}
-	return address;
-}
-
-bool AromaCompatibilityRuntime::PrepareHookInvocation(const CemodPackage& package,
-	const WupsMetadata& metadata, std::uint64_t owner, std::uint32_t generation,
-	WupsHookType type, WupsHookInvocation& invocation, std::string& error)
-{
-	invocation = {};
-	if (type == WupsHookType::InitReentFunctions &&
-		metadata.abiVersion <= WupsVersion{0, 9, 0})
-	{
-		invocation.skip = true;
-		return true;
-	}
-	if (type == WupsHookType::InitButtonCombo &&
-		metadata.abiVersion <= WupsVersion{0, 8, 1})
-	{
-		invocation.skip = true;
-		return true;
-	}
-	switch (type)
-	{
-	case WupsHookType::InitStorageDeprecated:
-	case WupsHookType::InitStorage:
-	case WupsHookType::InitConfig:
-	case WupsHookType::InitButtonCombo:
-	case WupsHookType::InitReentFunctions:
-		error = fmt::format(
-			"package '{}' plugin '{}' cannot call {} for owner {} generation {}: "
-			"WUPS backend argument provider is not implemented",
-			package.manifest.modId, metadata.name, HookName(type), owner, generation);
-		return false;
-	default:
-		return true;
-	}
-}
-
-bool AromaCompatibilityRuntime::ActivatePlugin(const CemodPackage& package,
-	const WupsMetadata& metadata, std::uint64_t owner,
-	std::uint32_t generation, std::span<const WupsPatchRequest> patches,
-	std::string& error)
-{
-	error.clear();
-	if (patches.empty())
-		return true;
-	if (!m_impl->patchManager)
-	{
-		error = fmt::format(
-			"package '{}' plugin '{}' requested {} function patch(es), but the "
-			"Cemu FunctionPatcher provider is unavailable",
-			package.manifest.modId, metadata.name, patches.size());
-		return false;
-	}
-	if (!m_impl->patchManager->Apply(patches, error))
-	{
-		error = fmt::format(
-			"package '{}' plugin '{}' owner {} generation {} patch transaction "
-			"failed: {}",
-			package.manifest.modId, metadata.name, owner, generation, error);
-		return false;
-	}
-	return true;
-}
-
-void AromaCompatibilityRuntime::ReleaseOwnerResources(
-	std::uint64_t owner, std::uint32_t generation)
-{
-	if (m_impl->patchManager)
-	{
-		std::string error;
-		if (!m_impl->patchManager->RemoveOwner(
-			WupsPatchOwner{owner, generation}, error))
-			cemuLog_log(LogType::Force,
-				"WUPS: failed to remove patches for owner {} generation {}: {}",
-				owner, generation, error);
-	}
-	std::lock_guard lock(m_impl->mutex);
-	m_impl->importLeases.erase({owner, generation});
-}
-
-bool AromaCompatibilityRuntime::IsProcessInScope(const CemodPackage& package,
-	std::string& reason) const
-{
-	reason.clear();
-	if (package.manifest.scope.type != CemodScopeType::Process)
-		return true;
-	const auto process = CurrentProcess();
-	for (const auto& rawTarget : package.manifest.scope.targets)
-	{
-		const auto target = Lower(rawTarget);
-		if (target == "all" ||
-			(target == "root_rpx" && process == WupsProcessKind::RootRpx) ||
-			(target == "game" && process == WupsProcessKind::Game) ||
-			(target == "wii_u_menu" && process == WupsProcessKind::WiiUMenu) ||
-			(target == "game_and_menu" &&
-				(process == WupsProcessKind::Game || process == WupsProcessKind::WiiUMenu)))
-			return true;
-	}
-	reason = "plugin process scope does not include the process currently emulated by Cemu";
-	return false;
-}
-
-std::shared_ptr<ModuleExportRegistry>
-AromaCompatibilityRuntime::ExportRegistry() const
-{
-	return m_impl->registry;
-}
-
-std::shared_ptr<WupsFunctionPatchManager>
-AromaCompatibilityRuntime::PatchManager() const
-{
-	return m_impl->patchManager;
-}
-
-void AromaCompatibilityRuntime::OnModuleLoaded(
-	std::string_view moduleName, std::uint64_t lifetimeId)
-{
-	if (!m_impl->patchManager)
-		return;
-	std::string error;
-	if (!m_impl->patchManager->OnModuleLoaded(
-		{std::string(moduleName), lifetimeId}, error))
-		cemuLog_log(LogType::Force,
-			"WUPS: dynamic module '{}' patch transaction failed: {}",
-			moduleName, error);
-}
-
-void AromaCompatibilityRuntime::OnModuleUnloading(
-	std::string_view moduleName, std::uint64_t lifetimeId)
-{
-	if (!m_impl->patchManager)
-		return;
-	std::string error;
-	if (!m_impl->patchManager->OnModuleUnloading(
-		{std::string(moduleName), lifetimeId}, error))
-		cemuLog_log(LogType::Force,
-			"WUPS: dynamic module '{}' pre-unload patch restoration failed: {}",
-			moduleName, error);
-}
-
-void AromaCompatibilityRuntime::SetModuleEventDetach(
-	std::function<void()> detach)
-{
-	std::lock_guard lock(m_impl->mutex);
-	m_impl->detachModuleEvents = std::move(detach);
-}
-
 struct WupsPluginRuntime::Impl
 {
 	CemodPackage package;
@@ -334,6 +95,7 @@ struct WupsPluginRuntime::Impl
 	bool foregroundReleased{};
 	bool exitRequested{};
 	bool backendResourcesReleased{};
+	bool pluginDeactivated{true};
 	bool teardownInProgress{};
 	bool deferredUnload{};
 	bool applicationEndsPending{};
@@ -501,35 +263,63 @@ struct WupsPluginRuntime::Impl
 		return Invoke(type, allowTeardown, invoked, error);
 	}
 
-	void ReleaseBackendResources()
+	bool DeactivateBackend(std::string& error)
 	{
-		bool release{};
+		bool deactivate{};
 		{
 			std::lock_guard lock(mutex);
-			if (!backendResourcesReleased)
-			{
-				backendResourcesReleased = true;
-				release = true;
-			}
+			deactivate = !pluginDeactivated;
 		}
-		if (release)
+		if (!deactivate)
+			return true;
+		try
 		{
-			try
-			{
-				services->ReleaseOwnerResources(owner, resourceGeneration);
-			}
-			catch (const std::exception& exception)
-			{
-				std::lock_guard lock(mutex);
-				lastError = fmt::format(
-					"owner resource release threw an exception: {}", exception.what());
-			}
-			catch (...)
-			{
-				std::lock_guard lock(mutex);
-				lastError = "owner resource release threw a non-standard exception";
-			}
+			if (!services->DeactivatePlugin(owner, resourceGeneration, error))
+				return false;
 		}
+		catch (const std::exception& exception)
+		{
+			error = fmt::format(
+				"plugin deactivation threw an exception: {}", exception.what());
+			return false;
+		}
+		catch (...)
+		{
+			error = "plugin deactivation threw a non-standard exception";
+			return false;
+		}
+		std::lock_guard lock(mutex);
+		pluginDeactivated = true;
+		return true;
+	}
+
+	bool ReleaseBackendResources(std::string& error)
+	{
+		{
+			std::lock_guard lock(mutex);
+			if (backendResourcesReleased)
+				return true;
+		}
+		try
+		{
+			if (!services->ReleaseOwnerResources(
+				owner, resourceGeneration, error))
+				return false;
+		}
+		catch (const std::exception& exception)
+		{
+			error = fmt::format(
+				"owner resource release threw an exception: {}", exception.what());
+			return false;
+		}
+		catch (...)
+		{
+			error = "owner resource release threw a non-standard exception";
+			return false;
+		}
+		std::lock_guard lock(mutex);
+		backendResourcesReleased = true;
+		return true;
 	}
 
 	void TeardownInitializers()
@@ -547,7 +337,6 @@ struct WupsPluginRuntime::Impl
 				if (!Invoke(*fini, true, hookError) && !hookError.empty())
 					cleanupError.append(cleanupError.empty() ? "" : "; ").append(hookError);
 			}
-		ReleaseBackendResources();
 		if (!cleanupError.empty())
 		{
 			std::lock_guard lock(mutex);
@@ -579,11 +368,19 @@ struct WupsPluginRuntime::Impl
 			lastError = applicationEndError;
 		}
 		TeardownInitializers();
+		std::string deactivateError;
+		const bool deactivated = DeactivateBackend(deactivateError);
 
 		bool finishDeferredUnload{};
 		{
 			std::lock_guard lock(mutex);
-			if (state != WupsPluginState::Unloading &&
+			if (!deactivated)
+			{
+				state = WupsPluginState::Failed;
+				lastError.append(lastError.empty() ? "" : "; ")
+					.append(deactivateError);
+			}
+			else if (state != WupsPluginState::Unloading &&
 				state != WupsPluginState::Unloaded)
 				state = WupsPluginState::Deinitialized;
 			lifecycleTransition = false;
@@ -624,6 +421,34 @@ struct WupsPluginRuntime::Impl
 				cleanupError = std::move(hookError);
 		}
 		TeardownInitializers();
+		std::string deactivateError;
+		if (!DeactivateBackend(deactivateError))
+		{
+			std::lock_guard lock(mutex);
+			teardownInProgress = false;
+			deferredUnload = false;
+			lifecycleTransition = false;
+			state = WupsPluginState::Failed;
+			lastError.append(lastError.empty() ? "" : "; ")
+				.append(deactivateError);
+			if (errorOut)
+				*errorOut = lastError;
+			return false;
+		}
+		std::string releaseError;
+		if (!ReleaseBackendResources(releaseError))
+		{
+			std::lock_guard lock(mutex);
+			teardownInProgress = false;
+			deferredUnload = false;
+			lifecycleTransition = false;
+			state = WupsPluginState::Failed;
+			lastError.append(lastError.empty() ? "" : "; ")
+				.append(releaseError);
+			if (errorOut)
+				*errorOut = lastError;
+			return false;
+		}
 		RPLModule* unloadModule{};
 		std::uint64_t unloadLifetime{};
 		{
@@ -861,6 +686,10 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		RPLModule* mappedModule{};
 		std::uint64_t lifetime{};
 		const auto moduleName = fmt::format("cemod_wups_{:016x}.wps", m_impl->owner);
+		if (!m_impl->services->BeginOwner(m_impl->package,
+			m_impl->inspection.metadata, m_impl->owner,
+			m_impl->resourceGeneration, error))
+			return m_impl->FailStart(error);
 		if (!m_impl->moduleLoader->Map(m_impl->package.PayloadBytes(), moduleName,
 			m_impl->owner, m_impl->resourceGeneration, m_impl->package,
 			m_impl->inspection.metadata, m_impl->services,
@@ -884,6 +713,15 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 				error.append("; WUPS unload failed: ").append(unloadError);
 			return false;
 		}
+		if (!m_impl->services->BindGuestInvoker(
+			m_impl->owner, m_impl->resourceGeneration,
+			[loader = m_impl->moduleLoader, mappedModule, lifetime](
+				std::uint32_t target, std::span<const std::uint32_t> arguments,
+				std::uint32_t& result, std::string& invokeError) {
+				return loader->Invoke(mappedModule, lifetime, target,
+					arguments, result, invokeError);
+				}, error))
+			return m_impl->FailStart(error);
 		if (!m_impl->moduleLoader->Relocate(mappedModule, lifetime, error))
 			return m_impl->FailStart(error);
 		{
@@ -980,6 +818,10 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		m_impl->owner, m_impl->resourceGeneration,
 		patchRequests, error))
 		return m_impl->FailStart(error);
+	{
+		std::lock_guard lock(m_impl->mutex);
+		m_impl->pluginDeactivated = false;
+	}
 
 	static constexpr std::array initializerOrder{
 		WupsHookType::InitReentFunctions,

@@ -255,9 +255,12 @@ std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 	auto patchPlatform = CreateCemuWupsPatchPlatform();
 	auto patchManager =
 		std::make_shared<WupsFunctionPatchManager>(patchPlatform);
+	AromaRuntimeOptions options;
+	options.exportRegistry = std::move(registry);
+	options.patchManager = std::move(patchManager);
+	options.patchPlatform = std::move(patchPlatform);
 	auto runtime = std::make_shared<AromaCompatibilityRuntime>(
-		WupsProcessKind::Game, std::move(registry),
-		std::move(patchManager), std::move(patchPlatform));
+		std::move(options), WupsProcessKind::Game);
 	const std::weak_ptr<AromaCompatibilityRuntime> weakRuntime = runtime;
 	const auto observer = RPLLoader_AddModuleEventObserver(
 		[weakRuntime](const RPLModuleEvent& event) {
