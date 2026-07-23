@@ -1,11 +1,11 @@
 # WUPS/WUMS support design and code contract
 
-Status: Task 1/7 package, inspection, and runtime-abstraction baseline. This
-document is the contract for the remaining runtime tasks; it is not a claim
-that the runtime described below is already present. Sections explicitly
-marked **implemented in Task 1** are available now. A WUPS payload that reaches
-`TrustedCemodRuntime` is deliberately rejected until `WupsPayloadRuntime`
-exists; no fake lifecycle, import, patch, or module API reports success.
+Status: Task 1/7 package/inspection baseline plus Task 2/7 external RPL and
+WUPS lifecycle runtime. This document is also the contract for the remaining
+runtime tasks; text about WUMS, FunctionPatcher, backend APIs, standard Aroma
+modules, and their GUI integration is not a claim that those later-task
+components exist. No unavailable lifecycle argument provider, import registry,
+patch manager, or backend API reports fake success.
 
 ## 1. Source baseline and license boundary
 
@@ -269,7 +269,8 @@ implement the independent inspection contract. Both parse a current public
 
 ## 5. RPL loader integration
 
-The future runtime extends the existing Cemu loader, not the host inspector:
+**Implemented in Task 2:** the runtime extends the existing Cemu loader, not
+the host inspector:
 
 ```cpp
 struct RPLLoadOptions {
@@ -278,53 +279,87 @@ struct RPLLoadOptions {
     bool useApplicationAllocator{};
     bool allowWupsMarker{};
     bool allowWumsMarker{};
-    RplOwnerHandle owner{};
+    uint64_t owner{};
+    uint32_t generation{};
+    RPLExternalImportResolver resolveImport;
 };
 
-RPLExternalModuleHandle RPLLoader_LoadExternalModuleFromMemory(
-    std::span<const std::byte> image, std::string_view name,
-    const RPLLoadOptions&, std::string& error);
-bool RPLLoader_UnloadExternalModule(RPLExternalModuleHandle,
+RPLModule* RPLLoader_LoadExternalModuleFromMemory(
+    std::span<const uint8_t> image, std::string_view name,
+    const RPLLoadOptions&, uint64_t& lifetimeId, std::string& error);
+bool RPLLoader_LinkExternalModule(RPLModule*, uint64_t lifetimeId,
+    std::string& error);
+bool RPLLoader_UnloadExternalModule(RPLModule*, uint64_t lifetimeId,
     std::string& error);
 ```
 
-The handle is generation-checked and owns module registration, text/data/BSS,
-TLS, trampoline blocks, dependencies, and link records. Loading has a prepare
-transaction and a publish step. Failure rolls back allocations in reverse
-order. External modules are not put into application dependency lists unless
-requested. WPS/WUMS markers are rejected by existing title paths unless the
-matching option is explicit. Normal RPL entrypoints are not WUPS/WUMS hooks and
-default to not being called. Unload first broadcasts a pre-unload event,
-rejects new references, removes dependants/exports, unlinks relocations, and
-then frees owned memory. Existing title APIs and behavior remain unchanged.
+The raw pointer is never sufficient authority: every runtime operation also
+checks a monotonic lifetime ID under the loader registry lock before any
+dereference. Address/SDA resolution and PPC dispatch use an RAII module lease,
+so check/use cannot race unload and a pointer reused for a later lifetime
+cannot authorize access. The module stores owner/generation, owns a stable copy
+of the source image, and owns its mapped sections, TLS identity, trampoline
+allocator, link state, and optional dependencies. Mapping failure releases
+every allocation reached by the existing loader. External modules are
+supported only after application memory control exists and only with
+`useApplicationAllocator=true`. The pre-application
+`useApplicationAllocator=false` path is rejected before mapping because
+Cemu's legacy bump allocator cannot reclaim an individual module; legacy title
+RPL loading keeps its existing behavior. Structural preflight adds widened
+section/range arithmetic, 64 MiB expansion limits, zlib completeness,
+CRC/FILEINFO shape, exact text/data/loader mapping-region containment,
+symbol/string/import/export bounds, relocation bounds/type checks, and an
+executable entrypoint check before the older RPL code sees the bytes.
+
+External modules are excluded from the title-wide `RPLLoader_Link()` and
+entrypoint loops. WUPS uses no title dependency registration: already-loaded
+Cafe RPLs and HLE exports resolve first, then its injected backend/WUMS
+registry runs. An external module with `registerDependency=false` is never
+visible to the ordinary module-name scan, even to another external importer;
+owner/generation-aware registries are the only path for backend/WUMS imports.
+This prevents a `homebrew_*` import from being mistaken for a title `.rpl`.
+Normal RPL entrypoints remain distinct and default to not being called. Title
+RPL public entrypoints keep their previous behavior.
 
 Dynamic load events are emitted after export publication and before a caller
 can execute the returned address. Pre-unload events occur while the module is
 still readable/executable. FunctionPatcher consumes these events to apply and
-remove module-scoped patches transactionally.
+remove module-scoped patches transactionally. Observers are snapshotted before
+dispatch, no observer-registry mutex is held during a callback, unloaded
+events contain copied identity rather than a dangling pointer, observer
+exceptions cannot strand the in-flight guard, and reentrant external unload
+from an event is rejected. Task 3 still supplies the actual patch consumer.
 
 ## 6. Guest calls, TLS, and reent
 
-All plugin/module code is invoked through a Cemu PPC callback service built on
+**Implemented in Task 2:** plugin lifecycle code is invoked through a Cemu PPC
+callback service built on
 `PPCCoreCallback`; a guest address is never cast to a host function pointer.
-The service accepts typed 32/64-bit integer, float, guest pointer, and bounded
-by-value struct arguments and returns captured PPC ABI registers. It prepares
-an aligned guest stack, LR/CTR, r2/r13, volatile registers, and the owning
-module's TOC/SDA state, and works identically for Interpreter and JIT. It maps
-guest exceptions, invalid instructions, and invalid return state to a
-per-owner error without `OSFatal`.
+The current lifecycle interface accepts up to 32 already-marshalled ABI words;
+Task 4 is responsible for validating and marshalling its versioned backend
+structures into those words/guest pointers. The callback verifies the live
+module lifetime and executable range, uses an aligned guest stack argument
+area, selects the module's mapped r2/r13, captures the result from r3, and
+restores GPRs, FPRs, CR, FPSCR, LR, CTR, XER, reservation state, stack spill
+words, and the prior memory-exception flag. `PPCCoreCallback` is the shared
+Interpreter/JIT entry path.
 
 Every callback token contains owner, generation, module, executable range,
-expected signature, current title/process, and permitted lifecycle states.
+current process scope, and permitted lifecycle states.
 Dispatch pins the owner under the registry lock, releases all runtime locks,
 calls guest code, then reacquires and revalidates generation. Unload marks the
 owner `Unloading`, closes queues, waits for pins without holding the registry
 lock, and rejects later tokens.
 
-TLS uses Cemu's RPL TLS templates and per-emulated-thread allocations. The
-external-module handle owns its template/index; thread creation/destruction and
-module unload add/remove instances. r2/r13 come from the linked module and
-thread context, never a host address.
+TLS sections now accept the ELF `SHF_TLS` bit while retaining Cemu's legacy
+RPL bit. Adjacent `.tdata`/`.tbss` or multiple TLS sections are validated as
+one contiguous virtual and mapped template, copied under the loader lock, and
+non-contiguous layouts are rejected. External TLS templates participate in
+Cemu's existing `RPLLoader_GetTLSDataByTLSIndex` path. r2/r13 come from the
+linked module, never a host address. Per-thread reent construction and the ABI
+0.9.1 callback arguments remain a Task 4 service: when a plugin actually
+defines a hook that needs that unavailable provider, the base compatibility
+runtime fails with an explicit package/plugin/owner/generation error.
 
 Reent has `(owner, generation, guest-thread)` identity. ABI 0.9.1 receives the
 current get/register context callbacks. 0.8.x/0.9.0 use the documented legacy
@@ -334,13 +369,13 @@ destroy contexts only after callbacks are revoked.
 
 ## 7. WUPS lifecycle and state machine
 
-Each plugin has one of:
+**Implemented in Task 2:** each plugin has one of the externally reported
+states:
 
 ```text
-Parsed -> Loaded -> Linked -> RuntimeInitialized -> PluginInitialized
-       -> ApplicationStarted -> ForegroundReleased -> ExitRequested
-       -> ApplicationEnded -> Unloading -> Unloaded
-any nonterminal state -> Failed -> Unloading -> Unloaded
+Installed -> Mapped -> Relocated -> Initialized -> Active
+          -> Deinitialized -> Unloading -> Unloaded
+any active transition may roll back to Failed
 ```
 
 Repeated foreground acquire/release is represented by a foreground flag and a
@@ -349,7 +384,7 @@ transitions are logged and rejected. Missing hooks are successful no-ops;
 invalid addresses or guest failures are plugin failures. A failure does not
 abort the title or another plugin.
 
-For a newly linked plugin the observable initialization order is:
+For a newly linked plugin the implemented observable initialization order is:
 
 1. `INIT_REENT_FUNCTIONS`
 2. `INIT_WUT_MALLOC`
@@ -359,20 +394,40 @@ For a newly linked plugin the observable initialization order is:
 6. `INIT_WUT_DEVOPTAB`
 7. `INIT_WUT_SOCKETS`
 8. `INIT_WRAPPER`
-9. open storage and create button-combo owner context
-10. `INIT_BUTTON_COMBO`, `INIT_CONFIG`, deprecated storage, current storage,
-    `INIT_PLUGIN`
-11. apply committed function patches
+9. `INIT_BUTTON_COMBO`
+10. `INIT_CONFIG`
+11. deprecated storage, current storage, `INIT_PLUGIN`
 12. `APPLICATION_STARTS`
 
-Devoptab and sockets may need per-application calls for already linked plugins,
-as in the current backend. Application exit dispatches requests-exit and ends
-once; application end then finishes sockets and devoptab for that application.
-Plugin removal invokes deinit plugin, fini wrapper, devoptab/sockets cleanup,
-revokes APIs/callbacks, restores patches, closes storage/button handles, clears
-reent/TLS, and releases memory. Initializer failure performs the exact reverse
-of completed transactional steps. Later implementation must verify this order
-against the pinned upstream revision with conformance trace tests.
+Hooks absent from the image are normal skips. ABI <=0.9.0 skips the newer reent
+hook and ABI <=0.8.1 skips button-combo initialization, matching the pinned
+backend compatibility branches. Foreground release/acquire and exit-request
+events are deduplicated. Application end runs once and then walks only the
+successfully invoked initializer journal in reverse, mapping init/fini pairs.
+The same journal performs failure rollback. Backend resource release is
+owner/generation keyed and exactly once. No runtime mutex is held while calling
+the service provider or guest PPC code. Unload first revokes the generation,
+then drains all already-authorized callbacks before `APPLICATION_ENDS`,
+reverse fini hooks, backend resource release, or RPL unload. The active-callback
+guard covers both argument preparation and guest execution and balances its
+in-flight count on failures and exceptions, so same-thread unload is deferred
+rather than waiting on itself and reports that deferral as an incomplete
+unload.
+
+`WupsPayloadRuntime` dispatches plugins in stable owner order, ends/unloads in
+reverse order, leaves one failed plugin isolated from the others, and reloads
+by creating a new generation. A failed replacement reconstructs the prior
+verified package in another new generation; if that also fails, the combined
+error reports both failures. If the module loader rejects unload, the plugin
+keeps its module pointer and lifetime, reports `Failed`, and remains owned for
+a checked retry; failed load cleanup, unload, reload, and unload-all never
+erase that authority.
+Destructor-only cleanup logs an unload failure. The RPL's injected resolver
+owns an immutable package/metadata context, so a rejected destructor unload
+cannot leave borrowed runtime data behind while the RPL waits for title-wide
+cleanup.
+Function patches and real backend resources are not inserted into this journal
+until their Task 3/4 providers exist.
 
 ## 8. Import resolution and module exports
 
@@ -621,6 +676,11 @@ owner failure must remain isolated.
 
 Task 1 meets only the container, manifest, signature, independent WPS
 inspection, SDK tooling, common interface, documentation, and parser fuzz/unit
-portion of that definition. RPL external-module lifetime, PPC callback runtime,
-lifecycle, FunctionPatcher, WUMS, backend APIs, standard modules, GUI runtime,
-and full conformance/integration execution remain dependencies of Tasks 2..7.
+portion of that definition. Task 2 adds external-module structural validation,
+mapping/link/unload lifetime and events, function/data import routing, TLS/SDA
+mapping, the shared PPC callback path, process scope, lifecycle ordering and
+rollback, owner/generation reload, plugin failure isolation, and deterministic
+unit traces. FunctionPatcher, WUMS registry/lifecycle, real backend arguments
+and resources, standard modules, GUI runtime, and full guest conformance/title
+integration execution remain dependencies of Tasks 3..7 and continue to fail
+explicitly where Task 2 reaches them.

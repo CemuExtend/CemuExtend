@@ -1,8 +1,91 @@
 #pragma once
 
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+
 struct RPLModule;
 
 #define RPL_INVALID_HANDLE		0xFFFFFFFF
+
+enum class RPLExternalMarker : uint8
+{
+	None,
+	Wups,
+	Wums,
+};
+
+enum class RPLModuleEventType : uint8
+{
+	Mapped,
+	Linked,
+	Unloading,
+	Unloaded,
+};
+
+enum class RPLModuleAddressKind : uint8
+{
+	Readable,
+	Writable,
+	Executable,
+};
+
+struct RPLModuleEvent
+{
+	RPLModuleEventType type{};
+	RPLModule* module{};
+	std::string moduleName;
+	uint64 lifetimeId{};
+	uint64 owner{};
+	uint32 generation{};
+	bool external{};
+};
+
+using RPLExternalImportResolver = std::function<std::optional<MPTR>(
+	std::string_view moduleName, std::string_view symbolName, bool isData, std::string& error)>;
+using RPLModuleEventCallback = std::function<void(const RPLModuleEvent&)>;
+
+struct RPLLoadOptions
+{
+	bool callEntrypoint{};
+	bool registerDependency{};
+	bool useApplicationAllocator{};
+	bool allowWupsMarker{};
+	bool allowWumsMarker{};
+	uint64 owner{};
+	uint32 generation{};
+	RPLExternalImportResolver resolveImport;
+};
+
+// A lease pins one external module lifetime against unload. The RPLModule*
+// supplied to acquisition is only an identity token and is never dereferenced
+// until the loader has matched both it and lifetimeId under its registry lock.
+class RPLModuleLease
+{
+public:
+	RPLModuleLease();
+	~RPLModuleLease();
+	RPLModuleLease(RPLModuleLease&&) noexcept;
+	RPLModuleLease& operator=(RPLModuleLease&&) noexcept;
+	RPLModuleLease(const RPLModuleLease&) = delete;
+	RPLModuleLease& operator=(const RPLModuleLease&) = delete;
+
+	[[nodiscard]] explicit operator bool() const;
+
+private:
+	struct Impl;
+	std::unique_ptr<Impl> m_impl;
+
+	friend bool RPLLoader_AcquireExternalModuleLease(RPLModule*, uint64,
+		RPLModuleLease&, std::string&);
+	friend bool RPLLoader_ResolveModuleAddress(const RPLModuleLease&, uint32,
+		uint32, RPLModuleAddressKind, MPTR&);
+	friend uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease&);
+	friend uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease&);
+};
 
 void RPLLoader_InitState();
 void RPLLoader_UnloadAll();
@@ -15,6 +98,22 @@ uint32 RPLLoader_GetMaxCodeOffset();
 uint32 RPLLoader_GetDataAllocatorAddr();
 
 RPLModule* RPLLoader_LoadFromMemory(uint8* rplData, sint32 size, std::string_view name);
+RPLModule* RPLLoader_LoadExternalModuleFromMemory(std::span<const uint8> image,
+	std::string_view name, const RPLLoadOptions& options, uint64& lifetimeId,
+	std::string& error);
+bool RPLLoader_LinkExternalModule(RPLModule* module, uint64 lifetimeId,
+	std::string& error);
+bool RPLLoader_UnloadExternalModule(RPLModule* module, uint64 lifetimeId,
+	std::string& error);
+bool RPLLoader_AcquireExternalModuleLease(RPLModule* module, uint64 lifetimeId,
+	RPLModuleLease& lease, std::string& error);
+bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualAddress,
+	uint32 size, RPLModuleAddressKind kind, MPTR& mappedAddress);
+bool RPLLoader_IsModuleAlive(const RPLModule* module, uint64 lifetimeId);
+uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease& lease);
+uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease& lease);
+uint64 RPLLoader_AddModuleEventObserver(RPLModuleEventCallback callback);
+bool RPLLoader_RemoveModuleEventObserver(uint64 observerId);
 uint32 rpl_mapHLEImport(RPLModule* rplLoaderContext, const char* rplName, const char* funcName, bool functionMustExist);
 void RPLLoader_Link();
 

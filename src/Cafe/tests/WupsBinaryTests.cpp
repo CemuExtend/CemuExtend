@@ -86,6 +86,17 @@ namespace
 		const auto crcOffset = WupsTestU32(image, 0x40 + crcIndex * 40 + 16);
 		image[crcOffset + 4] ^= std::byte{1};
 		CHECK(Rejected(image, "CRC"));
+
+		image = BuildWupsTestImage();
+		const auto sectionCount =
+			(static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(image[48])) << 8) |
+			std::to_integer<std::uint8_t>(image[49]);
+		const auto fileInfoHeader = 0x40 + (sectionCount - 1) * 40;
+		const auto fileInfoOffset = WupsTestU32(image, fileInfoHeader + 16);
+		// The final allocated data section ends at base + 0x324. A FILEINFO
+		// region one byte shorter must be rejected before the loader copies it.
+		WupsTestBe32(image, fileInfoOffset + 12, 0x323);
+		CHECK(Rejected(image, "FILEINFO mapping region"));
 	}
 
 	void TestDescriptorRejections()

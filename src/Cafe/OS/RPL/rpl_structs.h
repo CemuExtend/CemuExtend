@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Cafe/OS/RPL/rpl.h"
 #include "util/ChunkedHeap/ChunkedHeap.h"
 
 #define RPL_MODULE_NAME_LENGTH	64
@@ -26,7 +27,9 @@
 // flags
 #define SHF_EXECUTE				0x00000004
 #define SHF_RPL_COMPRESSED		0x08000000
-#define SHF_TLS					0x04000000
+#define SHF_TLS					0x00000400
+#define SHF_RPL_TLS_LEGACY		0x04000000
+#define SHF_TLS_MASK			(SHF_TLS | SHF_RPL_TLS_LEGACY)
 
 // relocs
 #define RPL_RELOC_ADDR32	1
@@ -170,6 +173,8 @@ struct RPLModule
 
 	uint32 tlsStartAddress;
 	uint32 tlsEndAddress;
+	uint32 mappedSda1Base{};
+	uint32 mappedSda2Base{};
 	uint32 regionSize_text;
 	uint32 regionOrigAddr_text;
 	uint32 regionSize_data;
@@ -228,9 +233,26 @@ struct RPLModule
 
 	// replaces rplData ptr
 	std::span<uint8> RPLRawData;
+	std::vector<uint8> ownedRPLRawData;
 
-	bool debugSectionLoadMask[128] = { false };
+	std::vector<bool> debugSectionLoadMask;
 	bool hasError{ false };
+
+	// External modules are lifecycle-owned by their caller and are deliberately
+	// skipped by the title-wide RPL link/entrypoint path.
+	bool externalModule{};
+	bool externalCallEntrypoint{};
+	bool externalRegisterDependency{};
+	bool externalUseApplicationAllocator{};
+	bool externalUnloading{};
+	bool externalEventInFlight{};
+	uint32 externalAccessCount{};
+	uint32 externalModuleHandle{};
+	uint64 externalLifetimeId{};
+	uint64 externalOwner{};
+	uint32 externalGeneration{};
+	std::string externalLinkError;
+	RPLExternalImportResolver externalImportResolver;
 
 };
 

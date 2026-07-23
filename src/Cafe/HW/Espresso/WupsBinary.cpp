@@ -1,6 +1,7 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/WupsBinary.h"
+#include "Cafe/OS/RPL/RPLExternalModulePolicy.h"
 
 #include <zlib.h>
 
@@ -454,33 +455,36 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 		error = "WPS RPL FILEINFO region sizes or alignments are invalid";
 		return std::nullopt;
 	}
+	std::vector<RPLLoaderInternal::ExternalSectionMapping> sectionMappings;
+	sectionMappings.reserve(sections.size());
 	for (const auto& section : sections)
 	{
-		if ((section.flags & kShfAlloc) == 0 || section.expandedSize == 0)
-			continue;
-		std::uint32_t base{};
-		std::uint32_t regionSize{};
-		if (section.address >= 0xc0000000U)
-		{
-			base = 0xc0000000U;
-			regionSize = loaderRegionSize;
-		}
-		else if ((section.flags & kShfExecute) != 0)
-		{
-			base = 0x02000000U;
-			regionSize = textRegionSize;
-		}
+		sectionMappings.push_back({
+			section.type, section.flags, section.address, section.expandedSize});
+	}
+	const RPLLoaderInternal::ExternalFileInfoMapping fileInfoMapping{
+		textRegionSize,
+		dataRegionSize,
+		loaderRegionSize,
+		trampolineAdjustment,
+		loaderAdjustment,
+	};
+	if (const auto violation = RPLLoaderInternal::FindExternalMappingViolation(
+		sectionMappings, fileInfoMapping))
+	{
+		if (violation->reason ==
+			RPLLoaderInternal::ExternalMappingViolation::Reason::RegionAddressOverflow)
+			error = fmt::format(
+				"WPS RPL FILEINFO mapping region for section '{}' overflows the "
+				"32-bit guest address space",
+				sections[violation->sectionIndex].name);
 		else
-		{
-			base = 0x10000000U;
-			regionSize = dataRegionSize;
-		}
-		if (section.address < base || section.address - base > regionSize ||
-			section.expandedSize > regionSize - (section.address - base))
-		{
-			error = fmt::format("WPS RPL section '{}' exceeds its FILEINFO region", section.name);
-			return std::nullopt;
-		}
+			error = fmt::format(
+				"WPS RPL section '{}' expanded range [0x{:08x}, 0x{:08x}) "
+				"exceeds its FILEINFO mapping region [0x{:08x}, 0x{:08x})",
+				sections[violation->sectionIndex].name, violation->sectionBegin,
+				violation->sectionEnd, violation->regionBegin, violation->regionEnd);
+		return std::nullopt;
 	}
 	for (std::size_t index = 0; index < sections.size(); ++index)
 	{
