@@ -107,7 +107,7 @@ namespace
 
 	bool ParseElf(const CemodPackage& package, ParsedElf& parsed, std::string& error)
 	{
-		const std::span<const std::byte> elf(package.elf);
+		const auto elf = package.PayloadBytes();
 		if (elf.size() < 52 || U16(elf, 16) != 3 || U16(elf, 18) != 20)
 		{
 			error = "trusted native executable must be an ET_DYN PPC ELF";
@@ -233,7 +233,7 @@ namespace
 	bool ApplyRelocations(const CemodPackage& package, const ParsedElf& parsed,
 		std::uint32_t loadBias, std::string& error)
 	{
-		const std::span<const std::byte> elf(package.elf);
+		const auto elf = package.PayloadBytes();
 		for (const auto& relocationSection : parsed.sections)
 		{
 			if (relocationSection.type != 4) continue;
@@ -414,6 +414,11 @@ std::optional<std::uint64_t> TrustedCemodRuntime::Load(CemodPackage package,
 {
 	std::lock_guard lock(m_impl->mutex);
 	if (!package.IsTrustedNative()) { error = "package is not trusted_native"; return std::nullopt; }
+	if (package.manifest.payload.format != CemodPayloadFormat::CemodElf)
+	{
+		error = "WUPS payload passed package validation but requires WupsPayloadRuntime";
+		return std::nullopt;
+	}
 	if (!m_impl->mods.empty() && m_impl->owner && m_impl->owner->TitleId() != package.targetTitleId)
 		{ error = "trusted runtime already belongs to another title"; return std::nullopt; }
 	for (const auto& [handle, mod] : m_impl->mods)
@@ -434,8 +439,9 @@ std::optional<std::uint64_t> TrustedCemodRuntime::Load(CemodPackage package,
 	for (const auto& segment : parsed.segments)
 	{
 		const auto destination = loadBias + segment.virtualAddress;
+		const auto payload = package.PayloadBytes();
 		std::memcpy(memory_getPointerFromVirtualOffset(destination),
-			package.elf.data() + segment.fileOffset, segment.fileSize);
+			payload.data() + segment.fileOffset, segment.fileSize);
 	}
 	if (!ApplyRelocations(package, parsed, loadBias, error))
 		{ release(); return std::nullopt; }

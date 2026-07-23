@@ -67,8 +67,11 @@ add_library(CemuCafe
   HW/Espresso/CemodPackage.h
   HW/Espresso/CemodRuntime.cpp
   HW/Espresso/CemodRuntime.h
+	HW/Espresso/ITrustedPayloadInstance.h
   HW/Espresso/TrustedCemodRuntime.cpp
   HW/Espresso/TrustedCemodRuntime.h
+	HW/Espresso/WupsBinary.cpp
+	HW/Espresso/WupsBinary.h
   HW/Espresso/ModExecutionContext.cpp
   HW/Espresso/ModExecutionContext.h
   HW/Espresso/PPCTimer.cpp
@@ -737,11 +740,20 @@ if(BUILD_TESTING)
 
 	add_executable(cemod_package_tests
 		HW/Espresso/CemodPackage.cpp
+		HW/Espresso/WupsBinary.cpp
 		tests/CemodPackageTests.cpp
 	)
 	target_include_directories(cemod_package_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-	target_link_libraries(cemod_package_tests PRIVATE OpenSSL::Crypto libzip::zip)
+	target_link_libraries(cemod_package_tests PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB)
 	add_test(NAME cemod_package_tests COMMAND cemod_package_tests)
+
+	add_executable(wups_binary_tests
+		HW/Espresso/WupsBinary.cpp
+		tests/WupsBinaryTests.cpp
+	)
+	target_include_directories(wups_binary_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+	target_link_libraries(wups_binary_tests PRIVATE ZLIB::ZLIB)
+	add_test(NAME wups_binary_tests COMMAND wups_binary_tests)
 
 	add_executable(cemod_runtime_tests
 		HW/Espresso/ModExecutionContext.cpp
@@ -767,11 +779,18 @@ if(BUILD_TESTING)
 		target_link_options(cex2_decoder_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 
 		add_executable(cemod_package_fuzzer
-			HW/Espresso/CemodPackage.cpp tests/CemodPackageFuzzer.cpp)
+			HW/Espresso/CemodPackage.cpp HW/Espresso/WupsBinary.cpp tests/CemodPackageFuzzer.cpp)
 		target_include_directories(cemod_package_fuzzer PRIVATE ${CMAKE_SOURCE_DIR}/src)
-		target_link_libraries(cemod_package_fuzzer PRIVATE OpenSSL::Crypto libzip::zip)
+		target_link_libraries(cemod_package_fuzzer PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB)
 		target_compile_options(cemod_package_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 		target_link_options(cemod_package_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
+
+		add_executable(wups_binary_fuzzer
+			HW/Espresso/WupsBinary.cpp tests/WupsBinaryFuzzer.cpp)
+		target_include_directories(wups_binary_fuzzer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+		target_link_libraries(wups_binary_fuzzer PRIVATE ZLIB::ZLIB)
+		target_compile_options(wups_binary_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
+		target_link_options(wups_binary_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 
 		add_executable(configuration_format_fuzzer
 			OS/libs/cemuextend/Cex2Storage.cpp tests/ConfigurationFormatFuzzer.cpp)

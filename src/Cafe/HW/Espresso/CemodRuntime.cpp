@@ -74,7 +74,7 @@ bool ParseElf(const CemodPackage& package, std::vector<Segment>& segments,
 	std::uint32_t& virtualBase, std::uint32_t& stackBase,
 	std::uint32_t& addressSpaceSize, std::string& error)
 {
-	const std::span<const std::byte> elf(package.elf);
+	const auto elf = package.PayloadBytes();
 	if (elf.size() < 52)
 		return false;
 	const auto programOffset = U32(elf, 28);
@@ -225,6 +225,7 @@ bool ParseElf(const CemodPackage& package, std::vector<Segment>& segments,
 bool BindHleImports(CemodPackage& package, const std::vector<Segment>& segments,
 	const std::vector<HleImport>& imports, std::string& error)
 {
+	auto payload = package.PayloadBytes();
 	for (const auto& import : imports)
 	{
 		const auto segment = std::ranges::find_if(segments, [&import](const Segment& candidate) {
@@ -237,16 +238,16 @@ bool BindHleImports(CemodPackage& package, const std::vector<Segment>& segments,
 		if (segment == segments.end() || import.address % 4 != 0)
 		{ error = "a CEX2 import stub is outside file-backed executable memory"; return false; }
 		const auto offset = segment->fileOffset + import.address - segment->address;
-		if (U32(package.elf, offset) != 0x0400ffffU)
+		if (U32(payload, offset) != 0x0400ffffU)
 		{ error = "a CEX2 import stub does not contain the required placeholder"; return false; }
 		const auto index = osLib_getFunctionIndex("cemuextend", import.name.c_str());
 		if (index < 0 || index > std::numeric_limits<std::uint16_t>::max())
 		{ error = "a CEX2 HLE import is unavailable"; return false; }
 		const auto opcode = 0x04000000U | static_cast<std::uint16_t>(index);
-		package.elf[offset] = static_cast<std::byte>(opcode >> 24);
-		package.elf[offset + 1] = static_cast<std::byte>(opcode >> 16);
-		package.elf[offset + 2] = static_cast<std::byte>(opcode >> 8);
-		package.elf[offset + 3] = static_cast<std::byte>(opcode);
+		payload[offset] = static_cast<std::byte>(opcode >> 24);
+		payload[offset + 1] = static_cast<std::byte>(opcode >> 16);
+		payload[offset + 2] = static_cast<std::byte>(opcode >> 8);
+		payload[offset + 3] = static_cast<std::byte>(opcode);
 	}
 	return true;
 }
@@ -291,7 +292,7 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	}
 	std::unique_lock lock(m_impl->mutex);
 	if (m_impl->mods.size() + m_impl->trusted.Size() >= kMaximumModsPerTitle) { error = "the title already has 16 loaded Mods"; return std::nullopt; }
-	if (package.principal.empty() || package.elf.empty() || package.manifest.codeBytes == 0 ||
+	if (package.principal.empty() || package.PayloadBytes().empty() || package.manifest.codeBytes == 0 ||
 		package.manifest.codeBytes > ModExecutionContext::kMaximumCodeBytes ||
 		package.manifest.privateBytes == 0 ||
 		package.manifest.privateBytes > ModExecutionContext::kMaximumPrivateBytes ||
@@ -323,7 +324,7 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	for (const auto& segment : segments)
 	{
 		if (!context->Map(segment.address,
-			std::span<const std::byte>(package.elf).subspan(segment.fileOffset, segment.fileSize),
+			package.PayloadBytes().subspan(segment.fileOffset, segment.fileSize),
 			segment.mappedSize, segment.permissions))
 		{
 			error = "PPC ELF segments overlap or violate W^X";

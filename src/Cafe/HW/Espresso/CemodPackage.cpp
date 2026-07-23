@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <vector>
 
 namespace {
@@ -24,23 +25,33 @@ struct ZipFileCloser { void operator()(zip_file_t* value) const { if (value) zip
 struct DigestCloser { void operator()(EVP_MD_CTX* value) const { EVP_MD_CTX_free(value); } };
 struct KeyCloser { void operator()(EVP_PKEY* value) const { EVP_PKEY_free(value); } };
 
-bool SafeEntryName(std::string_view name)
+std::optional<std::string> NormalizedEntryName(std::string_view name)
 {
 	if (name.empty() || name.size() > 255 || name.front() == '/' || name.front() == '\\' ||
-		name.find('\\') != std::string_view::npos || name.find('\0') != std::string_view::npos)
-		return false;
+		name.find('\\') != std::string_view::npos || name.find('\0') != std::string_view::npos ||
+		(name.size() >= 2 && std::isalpha(static_cast<unsigned char>(name[0])) && name[1] == ':'))
+		return std::nullopt;
+	std::string result;
 	std::size_t start{};
 	while (start <= name.size())
 	{
 		const auto end = name.find('/', start);
 		const auto component = name.substr(start, end == std::string_view::npos ? name.size() - start : end - start);
-		if (component.empty() || component == "." || component == "..")
-			return false;
+		if (component == "..")
+			return std::nullopt;
+		if (!component.empty() && component != ".")
+		{
+			if (!std::ranges::all_of(component, [](unsigned char c) { return c >= 0x20 && c != 0x7f; }))
+				return std::nullopt;
+			if (!result.empty()) result.push_back('/');
+			for (const unsigned char c : component)
+				result.push_back(static_cast<char>(std::tolower(c)));
+		}
 		if (end == std::string_view::npos)
 			break;
 		start = end + 1;
 	}
-	return true;
+	return result.empty() ? std::nullopt : std::optional<std::string>(std::move(result));
 }
 
 bool ReadEntry(zip_t* archive, zip_uint64_t index, std::uint64_t maximum,
@@ -48,7 +59,11 @@ bool ReadEntry(zip_t* archive, zip_uint64_t index, std::uint64_t maximum,
 {
 	zip_stat_t stat{};
 	if (zip_stat_index(archive, index, ZIP_FL_ENC_GUESS, &stat) != 0 ||
-		(stat.valid & ZIP_STAT_SIZE) == 0 || stat.size > maximum ||
+		(stat.valid & (ZIP_STAT_SIZE | ZIP_STAT_COMP_SIZE | ZIP_STAT_COMP_METHOD)) !=
+			(ZIP_STAT_SIZE | ZIP_STAT_COMP_SIZE | ZIP_STAT_COMP_METHOD) ||
+		stat.size > maximum || (stat.size != 0 && stat.comp_size == 0) ||
+		(stat.size > 4096 && (stat.size - 1) / stat.comp_size >= CemodPackage::kMaximumCompressionRatio) ||
+		(stat.comp_method != ZIP_CM_STORE && stat.comp_method != ZIP_CM_DEFLATE) ||
 		((stat.valid & ZIP_STAT_ENCRYPTION_METHOD) != 0 && stat.encryption_method != ZIP_EM_NONE))
 		return false;
 	std::unique_ptr<zip_file_t, ZipFileCloser> file(zip_fopen_index(archive, index, ZIP_FL_UNCHANGED));
@@ -63,7 +78,8 @@ bool ReadEntry(zip_t* archive, zip_uint64_t index, std::uint64_t maximum,
 			return false;
 		offset += static_cast<std::size_t>(read);
 	}
-	return true;
+	std::byte extra{};
+	return zip_fread(file.get(), &extra, 1) == 0;
 }
 
 Sha256 Hash(std::span<const std::byte> bytes)
@@ -129,7 +145,8 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	document.Parse(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	if (document.HasParseError() || !document.IsObject() ||
 		!document.HasMember("package_version") || !document["package_version"].IsUint() ||
-		document["package_version"].GetUint() != 1 || !document.HasMember("api_version") ||
+		(document["package_version"].GetUint() != 1 && document["package_version"].GetUint() != 2) ||
+		!document.HasMember("api_version") ||
 		!document["api_version"].IsUint() || document["api_version"].GetUint() != 2 ||
 		!document.HasMember("execution_mode") || !document["execution_mode"].IsString() ||
 		!document.HasMember("mod_id") || !document["mod_id"].IsString() ||
@@ -141,6 +158,46 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	}
 	manifest.packageVersion = document["package_version"].GetUint();
 	manifest.apiVersion = document["api_version"].GetUint();
+	if (manifest.packageVersion == 1)
+	{
+		if (document.HasMember("payload") || document.HasMember("scope") || document.HasMember("permissions"))
+		{
+			error = "package_version 1 must not contain version 2 payload, scope, or permissions";
+			return false;
+		}
+		manifest.payload = {CemodPayloadFormat::CemodElf, "mod.elf"};
+	}
+	else
+	{
+		if (!document.HasMember("payload") || !document["payload"].IsObject())
+		{
+			error = "package_version 2 requires a payload descriptor";
+			return false;
+		}
+		const auto& payload = document["payload"];
+		if (!payload.HasMember("format") || !payload["format"].IsString() ||
+			!payload.HasMember("path") || !payload["path"].IsString() || payload.MemberCount() != 2)
+		{
+			error = "payload descriptor must contain only string format and path fields";
+			return false;
+		}
+		const std::string_view format(payload["format"].GetString(), payload["format"].GetStringLength());
+		const std::string_view payloadPath(payload["path"].GetString(), payload["path"].GetStringLength());
+		if (format == "cemod_elf")
+			manifest.payload = {CemodPayloadFormat::CemodElf, "mod.elf"};
+		else if (format == "wups")
+			manifest.payload = {CemodPayloadFormat::Wups, "plugin.wps"};
+		else
+		{
+			error = fmt::format("unknown payload format '{}'", format);
+			return false;
+		}
+		if (payloadPath != manifest.payload.path)
+		{
+			error = fmt::format("payload path '{}' does not match format '{}'", payloadPath, format);
+			return false;
+		}
+	}
 	const std::string_view executionMode(document["execution_mode"].GetString(),
 		document["execution_mode"].GetStringLength());
 	if (executionMode == "isolated")
@@ -150,6 +207,12 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	else
 	{
 		error = "execution_mode must be isolated or trusted_native";
+		return false;
+	}
+	if (manifest.payload.format == CemodPayloadFormat::Wups &&
+		manifest.executionMode != CemodExecutionMode::TrustedNative)
+	{
+		error = "WUPS payloads require execution_mode trusted_native";
 		return false;
 	}
 	manifest.modId.assign(document["mod_id"].GetString(), document["mod_id"].GetStringLength());
@@ -194,6 +257,133 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 			return false;
 		}
 		manifest.requestedPermissions |= found->second;
+	}
+	if (manifest.packageVersion == 2 && document.HasMember("scope"))
+	{
+		if (!document["scope"].IsObject() || !document["scope"].HasMember("type") ||
+			!document["scope"]["type"].IsString())
+		{
+			error = "scope must be an object with a string type";
+			return false;
+		}
+		const auto& scope = document["scope"];
+		const std::string_view type(scope["type"].GetString(), scope["type"].GetStringLength());
+		if (type == "aroma_native")
+		{
+			if (scope.MemberCount() != 1)
+			{
+				error = "aroma_native scope must not contain targets";
+				return false;
+			}
+			manifest.scope.type = CemodScopeType::AromaNative;
+		}
+		else if (type == "process")
+		{
+			if (scope.MemberCount() != 2 || !scope.HasMember("targets") || !scope["targets"].IsArray() ||
+				scope["targets"].Empty() || scope["targets"].Size() > 16)
+			{
+				error = "process scope requires a non-empty targets array";
+				return false;
+			}
+			static const std::set<std::string_view> allowedTargets{
+				"all", "root_rpx", "wii_u_menu", "tvii", "e_manual", "home_menu", "error_display",
+				"mini_miiverse", "browser", "miiverse", "eshop", "download_manager", "game", "game_and_menu"};
+			std::set<std::string> targets;
+			for (const auto& value : scope["targets"].GetArray())
+			{
+				if (!value.IsString()) { error = "process scope contains a non-string target"; return false; }
+				std::string target(value.GetString(), value.GetStringLength());
+				if (!allowedTargets.contains(target) || !targets.insert(target).second)
+				{
+					error = "process scope contains an unknown or duplicate target";
+					return false;
+				}
+			}
+			manifest.scope.type = CemodScopeType::Process;
+			manifest.scope.targets.assign(targets.begin(), targets.end());
+		}
+		else
+		{
+			error = fmt::format("unknown scope type '{}'", type);
+			return false;
+		}
+	}
+	if (manifest.packageVersion == 2 && document.HasMember("permissions"))
+	{
+		if (!document["permissions"].IsObject())
+		{
+			error = "permissions must be an object";
+			return false;
+		}
+		const auto& permissions = document["permissions"];
+		static const std::set<std::string_view> allowedPermissionFields{
+			"native_memory", "function_patching", "physical_address_patching", "filesystem", "network",
+			"mapped_memory", "notifications", "content_redirection", "modules"};
+		for (auto member = permissions.MemberBegin(); member != permissions.MemberEnd(); ++member)
+			if (!allowedPermissionFields.contains(std::string_view(member->name.GetString(), member->name.GetStringLength())))
+			{
+				error = fmt::format("permissions contains unknown field '{}'", member->name.GetString());
+				return false;
+			}
+		auto boolean = [&](const char* name, bool& output) {
+			if (!permissions.HasMember(name)) return true;
+			if (!permissions[name].IsBool()) return false;
+			output = permissions[name].GetBool();
+			return true;
+		};
+		if (!boolean("native_memory", manifest.nativePermissions.nativeMemory) ||
+			!boolean("function_patching", manifest.nativePermissions.functionPatching) ||
+			!boolean("physical_address_patching", manifest.nativePermissions.physicalAddressPatching) ||
+			!boolean("network", manifest.nativePermissions.network) ||
+			!boolean("mapped_memory", manifest.nativePermissions.mappedMemory) ||
+			!boolean("notifications", manifest.nativePermissions.notifications) ||
+			!boolean("content_redirection", manifest.nativePermissions.contentRedirection))
+		{
+			error = "permissions boolean field has the wrong type";
+			return false;
+		}
+		if (permissions.HasMember("filesystem"))
+		{
+			const auto& filesystem = permissions["filesystem"];
+			if (!filesystem.IsObject() || filesystem.MemberCount() > 2 ||
+				(filesystem.HasMember("read") && !filesystem["read"].IsBool()) ||
+				(filesystem.HasMember("write") && !filesystem["write"].IsBool()))
+			{
+				error = "permissions.filesystem must contain only boolean read/write fields";
+				return false;
+			}
+			for (auto member = filesystem.MemberBegin(); member != filesystem.MemberEnd(); ++member)
+				if (std::string_view(member->name.GetString(), member->name.GetStringLength()) != "read" &&
+					std::string_view(member->name.GetString(), member->name.GetStringLength()) != "write")
+				{
+					error = "permissions.filesystem contains an unknown field";
+					return false;
+				}
+			if (filesystem.HasMember("read")) manifest.nativePermissions.filesystemRead = filesystem["read"].GetBool();
+			if (filesystem.HasMember("write")) manifest.nativePermissions.filesystemWrite = filesystem["write"].GetBool();
+		}
+		if (permissions.HasMember("modules"))
+		{
+			if (!permissions["modules"].IsArray() || permissions["modules"].Size() > 64)
+			{
+				error = "permissions.modules must be an array with at most 64 entries";
+				return false;
+			}
+			std::set<std::string> modules;
+			for (const auto& value : permissions["modules"].GetArray())
+			{
+				if (!value.IsString()) { error = "permissions.modules contains a non-string value"; return false; }
+				std::string module(value.GetString(), value.GetStringLength());
+				if (module.empty() || module.size() > 128 ||
+					!std::ranges::all_of(module, [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '.' || c == '-'; }) ||
+					!modules.insert(module).second)
+				{
+					error = "permissions.modules contains an invalid or duplicate module";
+					return false;
+				}
+			}
+			manifest.nativePermissions.modules.assign(modules.begin(), modules.end());
+		}
 	}
 	if (manifest.executionMode == CemodExecutionMode::TrustedNative)
 	{
@@ -495,13 +685,27 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 		return std::nullopt;
 	}
 	std::map<std::string, std::vector<std::byte>> entries;
+	std::set<std::string> normalizedNames;
 	std::uint64_t expandedBytes{};
+	static const std::set<std::string_view> allowedEntries{
+		"manifest.json", "mod.elf", "plugin.wps", "public_key.ed25519", "signature.ed25519"};
 	for (zip_int64_t index = 0; index < count; ++index)
 	{
 		const char* rawName = zip_get_name(archive.get(), index, ZIP_FL_ENC_STRICT);
-		if (!rawName || !SafeEntryName(rawName) || std::string_view(rawName).ends_with('/'))
+		const auto normalized = rawName ? NormalizedEntryName(rawName) : std::nullopt;
+		if (!rawName || !normalized || std::string_view(rawName).ends_with('/'))
 		{
 			error = "package contains an unsafe entry name";
+			return std::nullopt;
+		}
+		if (!normalizedNames.insert(*normalized).second)
+		{
+			error = "package contains a duplicate normalized entry name";
+			return std::nullopt;
+		}
+		if (!allowedEntries.contains(rawName))
+		{
+			error = fmt::format("package contains unknown mandatory entry '{}'", rawName);
 			return std::nullopt;
 		}
 		std::vector<std::byte> data;
@@ -518,19 +722,50 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 		}
 	}
 	const auto manifestEntry = entries.find("manifest.json");
-	const auto elfEntry = entries.find("mod.elf");
-	if (manifestEntry == entries.end() || elfEntry == entries.end())
+	if (manifestEntry == entries.end())
 	{
-		error = "package must contain manifest.json and mod.elf";
+		error = "package must contain manifest.json";
 		return std::nullopt;
 	}
 	CemodPackage result;
-	if (!ParseManifest(manifestEntry->second, result.manifest, error) ||
-		!ValidateElf(elfEntry->second, result.manifest, error))
+	if (!ParseManifest(manifestEntry->second, result.manifest, error))
 	{
 		return std::nullopt;
 	}
-	result.elf = elfEntry->second;
+	const auto elfEntry = entries.find("mod.elf");
+	const auto wpsEntry = entries.find("plugin.wps");
+	if ((elfEntry == entries.end()) == (wpsEntry == entries.end()))
+	{
+		error = "package must contain exactly one of mod.elf or plugin.wps";
+		return std::nullopt;
+	}
+	const auto expected = entries.find(result.manifest.payload.path);
+	if (expected == entries.end() ||
+		(result.manifest.payload.format == CemodPayloadFormat::CemodElf && wpsEntry != entries.end()) ||
+		(result.manifest.payload.format == CemodPayloadFormat::Wups && elfEntry != entries.end()))
+	{
+		error = "manifest payload descriptor does not match the packaged payload";
+		return std::nullopt;
+	}
+	if (expected->second.empty() || expected->second.size() > kMaximumPayloadBytes)
+	{
+		error = "package payload has an invalid size";
+		return std::nullopt;
+	}
+	if (result.manifest.payload.format == CemodPayloadFormat::CemodElf)
+	{
+		if (!ValidateElf(expected->second, result.manifest, error))
+			return std::nullopt;
+	}
+	else
+	{
+		result.wups = WupsBinaryInspector::Inspect(expected->second, error);
+		if (!result.wups)
+			return std::nullopt;
+	}
+	result.payload = expected->second;
+	if (result.manifest.payload.format == CemodPayloadFormat::CemodElf)
+		result.elf = result.payload; // Preserve the public legacy field for existing callers.
 
 	const auto signature = entries.find("signature.ed25519");
 	const auto publicKey = entries.find("public_key.ed25519");

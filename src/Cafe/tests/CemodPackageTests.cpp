@@ -1,4 +1,5 @@
 #include "Cafe/HW/Espresso/CemodPackage.h"
+#include "Cafe/tests/WupsTestImage.h"
 
 #include <zip.h>
 
@@ -102,7 +103,29 @@ void Add(zip_t* archive, const char* name, const void* data, std::size_t size)
 {
 	auto* source = zip_source_buffer(archive, data, size, 0);
 	CHECK(source != nullptr);
-	CHECK(zip_file_add(archive, name, source, ZIP_FL_ENC_UTF_8) >= 0);
+	const auto index = zip_file_add(archive, name, source, ZIP_FL_ENC_UTF_8);
+	CHECK(index >= 0);
+	CHECK(zip_set_file_compression(archive, index, ZIP_CM_DEFLATE, 9) == 0);
+}
+
+using Entry = std::pair<std::string, std::vector<std::byte>>;
+
+std::vector<std::byte> Bytes(std::string_view value)
+{
+	std::vector<std::byte> result(value.size());
+	std::memcpy(result.data(), value.data(), value.size());
+	return result;
+}
+
+void WriteEntries(const std::filesystem::path& path, const std::vector<Entry>& entries)
+{
+	std::filesystem::remove(path);
+	int error{};
+	auto* archive = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_EXCL, &error);
+	CHECK(archive != nullptr);
+	for (const auto& [name, data] : entries)
+		Add(archive, name.c_str(), data.data(), data.size());
+	CHECK(zip_close(archive) == 0);
 }
 
 std::filesystem::path PackagePath(std::string_view suffix)
@@ -130,6 +153,38 @@ constexpr std::string_view kTrustedManifest = R"({
  "mod_id":"org.example.native",
  "title_ids":["0005000012345678"],
  "requested_permissions":["read","write"]
+})";
+
+constexpr std::string_view kWupsManifest = R"({
+ "package_version":2,
+ "api_version":2,
+ "execution_mode":"trusted_native",
+ "payload":{"format":"wups","path":"plugin.wps"},
+ "scope":{"type":"process","targets":["game","wii_u_menu"]},
+ "permissions":{
+   "native_memory":true,
+   "function_patching":true,
+   "physical_address_patching":false,
+   "filesystem":{"read":true,"write":false},
+   "network":false,
+   "mapped_memory":true,
+   "notifications":true,
+   "content_redirection":false,
+   "modules":["homebrew_functionpatcher","homebrew_notifications"]
+ },
+ "mod_id":"org.example.wups",
+ "title_ids":["0005000012345678"],
+ "requested_permissions":[]
+})";
+
+constexpr std::string_view kElfV2Manifest = R"({
+ "package_version":2,
+ "api_version":2,
+ "execution_mode":"trusted_native",
+ "payload":{"format":"cemod_elf","path":"mod.elf"},
+ "mod_id":"org.example.native.v2",
+ "title_ids":["0005000012345678"],
+ "requested_permissions":["read"]
 })";
 
 void WritePackage(const std::filesystem::path& path, bool unsafe,
@@ -232,13 +287,106 @@ void TestTrustedValidation()
 	std::filesystem::remove(path);
 }
 
+void TestV2PayloadAndManifest()
+{
+	std::string error;
+	auto path = PackagePath("wups-v2");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()}, {"manifest.json", Bytes(kWupsManifest)}});
+	auto package = CemodPackage::Load(path, 0x0005000012345678ULL, error);
+	CHECK(package.has_value());
+	CHECK(package->manifest.packageVersion == 2);
+	CHECK(package->manifest.payload.format == CemodPayloadFormat::Wups);
+	CHECK(package->manifest.payload.path == "plugin.wps");
+	CHECK(package->manifest.scope.type == CemodScopeType::Process);
+	CHECK(package->manifest.scope.targets == std::vector<std::string>({"game", "wii_u_menu"}));
+	CHECK(package->manifest.nativePermissions.functionPatching);
+	CHECK(package->manifest.nativePermissions.filesystemRead);
+	CHECK(!package->manifest.nativePermissions.filesystemWrite);
+	CHECK(package->manifest.nativePermissions.modules.size() == 2);
+	CHECK(package->payload.size() == BuildWupsTestImage().size());
+	CHECK(package->elf.empty());
+	CHECK(package->wups && package->wups->metadata.name == "Test Plugin");
+	std::filesystem::remove(path);
+
+	path = PackagePath("elf-v2");
+	WriteEntries(path, {{"manifest.json", Bytes(kElfV2Manifest)}, {"mod.elf", TrustedElf()}});
+	package = CemodPackage::Load(path, 0x0005000012345678ULL, error);
+	CHECK(package && package->manifest.payload.format == CemodPayloadFormat::CemodElf);
+	CHECK(!package->wups);
+	CHECK(package->elf == package->payload);
+	std::filesystem::remove(path);
+}
+
+void TestPayloadAndZipRejections()
+{
+	std::string error;
+	auto path = PackagePath("payload-none");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("exactly one") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("payload-multiple");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)}, {"plugin.wps", BuildWupsTestImage()},
+		{"mod.elf", TrustedElf()}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("exactly one") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("descriptor-mismatch");
+	WriteEntries(path, {{"manifest.json", Bytes(kElfV2Manifest)}, {"plugin.wps", BuildWupsTestImage()}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("descriptor") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("normalized-duplicate");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)}, {"./manifest.json", Bytes(kWupsManifest)},
+		{"plugin.wps", BuildWupsTestImage()}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("normalized") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("absolute");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)}, {"/plugin.wps", BuildWupsTestImage()}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("unsafe") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("unknown-entry");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)}, {"plugin.wps", BuildWupsTestImage()},
+		{"required.future", Bytes("x")}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("unknown mandatory") != std::string::npos);
+	std::filesystem::remove(path);
+
+	path = PackagePath("compression-bomb");
+	WriteEntries(path, {{"manifest.json", Bytes(kWupsManifest)},
+		{"plugin.wps", std::vector<std::byte>(2U * 1024U * 1024U)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("expansion limit") != std::string::npos);
+	std::filesystem::remove(path);
+}
+
 } // namespace
 
 int main()
 {
+	if (const auto* path = std::getenv("CEMUEXTEND_CEMOD_CONFORMANCE_PACKAGE"))
+	{
+		std::string error;
+		const auto package = CemodPackage::Inspect(path, error);
+		if (!package) std::cerr << error << '\n';
+		CHECK(package.has_value());
+		CHECK(package->signedPackage);
+		CHECK(package->manifest.payload.format == CemodPayloadFormat::Wups);
+		CHECK(package->wups.has_value());
+		return 0;
+	}
 	TestUnsignedPrincipalAndValidation();
 	TestUnsafeEntryRejected();
 	TestLegacyManifestRejected();
 	TestTrustedValidation();
+	TestV2PayloadAndManifest();
+	TestPayloadAndZipRejections();
 	return 0;
 }
