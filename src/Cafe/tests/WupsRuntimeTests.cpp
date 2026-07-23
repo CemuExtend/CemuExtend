@@ -79,7 +79,7 @@ namespace
 			return std::nullopt;
 		}
 
-			bool PrepareHookInvocation(const CemodPackage&, const WupsMetadata&,
+		bool PrepareHookInvocation(const CemodPackage&, const WupsMetadata&,
 				std::uint64_t, std::uint32_t, WupsHookType type,
 				WupsHookInvocation& invocation, std::string&) override
 			{
@@ -92,6 +92,13 @@ namespace
 				}
 				invocation = {};
 				return true;
+		}
+
+		bool ActivatePlugin(const CemodPackage&, const WupsMetadata&,
+			std::uint64_t, std::uint32_t,
+			std::span<const WupsPatchRequest>, std::string&) override
+		{
+			return true;
 		}
 
 		void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) override
@@ -162,6 +169,15 @@ namespace
 				error = "injected guest callback failure";
 				return false;
 			}
+			return true;
+		}
+
+		bool ResolveAddress(RPLModule*, std::uint64_t,
+			std::uint32_t virtualAddress, std::uint32_t,
+			WupsSymbolKind, std::uint32_t& mappedAddress,
+			std::string&) override
+		{
+			mappedAddress = virtualAddress;
 			return true;
 		}
 
@@ -747,6 +763,11 @@ namespace
 // WupsRuntime.cpp references the production factory even when tests inject a
 // loader. Keep the test binary independent of Cemu's guest-memory subsystem.
 std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader()
+{
+	return {};
+}
+
+std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 {
 	return {};
 }

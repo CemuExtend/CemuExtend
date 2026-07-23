@@ -895,6 +895,13 @@ uint32 RPLLoader_MakePPCCallable(void(*ppcCallableExport)(PPCInterpreter_t* hCPU
 
 uint32 rpl_mapHLEImport(RPLModule* rplLoaderContext, const char* rplName, const char* funcName, bool functionMustExist)
 {
+	// External WUPS resolution intentionally has no title-RPL context.  A null
+	// context is valid here (and is only relevant to the legacy unsupported
+	// import path), but names always cross an untrusted RPL boundary.
+	if (!rplName || !funcName || rplName[0] == '\0' || funcName[0] == '\0')
+		return MPTR_NULL;
+	if (strnlen(rplName, 512) == 512 || strnlen(funcName, 1025) == 1025)
+		return MPTR_NULL;
 	// calculate import name hash
 	uint64 mappedImportHash1;
 	uint64 mappedImportHash2;
@@ -3293,6 +3300,92 @@ bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualA
 		return true;
 	}
 	return false;
+}
+
+bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
+	RPLMappedAddressInfo& info)
+{
+	std::lock_guard lock(g_rplLoaderMutex);
+	info = {};
+	if (size == 0 || address > std::numeric_limits<uint32>::max() - size)
+		return false;
+	for (sint32 moduleIndex = 0; moduleIndex < rplModuleCount; ++moduleIndex)
+	{
+		const auto* module = rplModuleList[moduleIndex];
+		for (uint32 sectionIndex = 0;
+			sectionIndex < static_cast<uint32>(
+				module->rplHeader.sectionTableEntryCount);
+			++sectionIndex)
+		{
+			const auto& section = module->sectionTablePtr[sectionIndex];
+			const uint32 flags = section.flags;
+			const uint32 sectionSize = section.sectionSize;
+			auto* sectionPointer = module->sectionAddressTable2[sectionIndex].ptr;
+			if ((flags & 2U) == 0 || sectionSize == 0 || !sectionPointer)
+				continue;
+			const MPTR mapped = memory_getVirtualOffsetFromPointer(sectionPointer);
+			if (address < mapped || address - mapped > sectionSize ||
+				size > sectionSize - (address - mapped))
+				continue;
+			info = {
+				module->moduleName,
+				module->externalLifetimeId,
+				flags,
+				module->externalModule,
+			};
+			return true;
+		}
+	}
+	return false;
+}
+
+bool RPLLoader_FindLoadedExport(std::string_view moduleName,
+	std::string_view symbolName, bool isData, RPLResolvedExport& result)
+{
+	std::lock_guard lock(g_rplLoaderMutex);
+	result = {};
+	if (moduleName.empty() || symbolName.empty() ||
+		moduleName.size() >= RPL_MODULE_PATH_LENGTH || symbolName.size() > 1024)
+		return false;
+	const auto slash = moduleName.find_last_of('/');
+	const auto basenameStart = slash == std::string_view::npos ? 0 : slash + 1;
+	const auto basenameEnd = moduleName.find('.', basenameStart);
+	if (basenameStart == moduleName.size() || basenameEnd == basenameStart)
+		return false;
+	const auto canonicalName = _RPLLoader_ExtractModuleNameFromPath(moduleName);
+	for (sint32 moduleIndex = 0; moduleIndex < rplModuleCount; ++moduleIndex)
+	{
+		auto* module = rplModuleList[moduleIndex];
+		// External WUPS/WUMS providers are resolved through the generation-
+		// pinned ModuleExportRegistry and must not shadow Cafe RPL exports.
+		if (module->externalModule || module->moduleName != canonicalName)
+			continue;
+		const std::string symbol(symbolName);
+		const auto address =
+			RPLLoader_FindRPLExport(module, symbol.c_str(), isData);
+		if (address == MPTR_NULL)
+			return false;
+		result = {
+			address, module->moduleName,
+			module->externalLifetimeId, false};
+		return true;
+	}
+	if (isData)
+	{
+		const auto address = osLib_getPointer(
+			canonicalName.c_str(), std::string(symbolName).c_str());
+		if (address == 0xFFFFFFFF || address == MPTR_NULL)
+			return false;
+		result = {address, canonicalName, 0, true};
+		return true;
+	}
+	const std::string symbol(symbolName);
+	const auto address = rpl_mapHLEImport(
+		nullptr, canonicalName.c_str(), symbol.c_str(), false);
+	if (address == MPTR_NULL)
+		return false;
+	result = {address, canonicalName, 0, true};
+	return true;
 }
 
 uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease& lease)

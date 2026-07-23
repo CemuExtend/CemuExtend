@@ -61,8 +61,10 @@ jobs:
       - name: Build isolation tests
         run: >-
           cmake --build build/security --target
+          cemod_gui_model_tests cemod_permission_tests
           cemod_execution_context_tests cemod_instruction_policy_tests
-          cex2_host_tests cemod_package_tests wups_binary_tests cemod_runtime_tests CemuCafe
+          cex2_host_tests cemod_package_tests wups_binary_tests wups_runtime_tests
+          wups_compatibility_tests cemod_runtime_tests CemuCafe
       - name: Run isolation tests
         run: ctest --test-dir build/security --output-on-failure -R 'cemod_|cex2_|wups_'
       - name: Build fuzz targets

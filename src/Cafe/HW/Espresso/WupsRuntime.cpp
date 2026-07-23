@@ -77,20 +77,61 @@ namespace
 
 struct AromaCompatibilityRuntime::Impl
 {
-	explicit Impl(WupsProcessKind initialProcess) : process(initialProcess) {}
+	Impl(WupsProcessKind initialProcess,
+		std::shared_ptr<ModuleExportRegistry> registry_,
+		std::shared_ptr<WupsFunctionPatchManager> patchManager_,
+		std::shared_ptr<IWupsPatchPlatform> patchPlatform_) :
+		process(initialProcess),
+		registry(registry_ ? std::move(registry_) :
+			std::make_shared<ModuleExportRegistry>()),
+		patchManager(std::move(patchManager_)),
+		patchPlatform(std::move(patchPlatform_))
+	{
+	}
+
 	std::atomic<WupsProcessKind> process;
+	std::shared_ptr<ModuleExportRegistry> registry;
+	std::shared_ptr<WupsFunctionPatchManager> patchManager;
+	std::shared_ptr<IWupsPatchPlatform> patchPlatform;
+	std::mutex mutex;
+	std::map<std::pair<std::uint64_t, std::uint32_t>,
+		std::vector<ModuleExportLease>> importLeases;
+	std::function<void()> detachModuleEvents;
 };
 
-AromaCompatibilityRuntime::AromaCompatibilityRuntime(WupsProcessKind process) :
-	m_impl(std::make_unique<Impl>(process))
+AromaCompatibilityRuntime::AromaCompatibilityRuntime(WupsProcessKind process,
+	std::shared_ptr<ModuleExportRegistry> registry,
+	std::shared_ptr<WupsFunctionPatchManager> patchManager,
+	std::shared_ptr<IWupsPatchPlatform> patchPlatform) :
+	m_impl(std::make_unique<Impl>(process, std::move(registry),
+		std::move(patchManager), std::move(patchPlatform)))
 {
+	if (m_impl->patchPlatform)
+		m_impl->patchPlatform->SetCurrentProcess(
+			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx :
+			process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu :
+			WupsPatchProcess::Game);
 }
 
-AromaCompatibilityRuntime::~AromaCompatibilityRuntime() = default;
+AromaCompatibilityRuntime::~AromaCompatibilityRuntime()
+{
+	std::function<void()> detach;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		detach = std::move(m_impl->detachModuleEvents);
+	}
+	if (detach)
+		detach();
+}
 
 void AromaCompatibilityRuntime::SetCurrentProcess(WupsProcessKind process)
 {
 	m_impl->process.store(process);
+	if (m_impl->patchPlatform)
+		m_impl->patchPlatform->SetCurrentProcess(
+			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx :
+			process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu :
+			WupsPatchProcess::Game);
 }
 
 WupsProcessKind AromaCompatibilityRuntime::CurrentProcess() const
@@ -104,13 +145,29 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	std::string_view moduleName, std::string_view symbolName,
 	WupsSymbolKind kind, std::string& error)
 {
-	error = fmt::format(
-		"package '{}' plugin '{}' (WUPS {}) has unresolved mandatory {} import "
-		"{}.{}; Aroma/WUPS backend provider is not installed for owner {} generation {}",
-		package.manifest.modId, metadata.name, metadata.abiVersion.ToString(),
-		kind == WupsSymbolKind::Function ? "function" : "data",
-		moduleName, symbolName, owner, generation);
-	return std::nullopt;
+	const ModuleProviderOwner requester{owner, generation, 1};
+	std::string registryError;
+	auto resolved = m_impl->registry->Resolve(
+		moduleName, symbolName, kind, requester, registryError);
+	if (!resolved)
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' (WUPS {}) has unresolved mandatory {} "
+			"import '{}.{}' for owner {} generation {}; normal Cafe RPL/HLE "
+			"resolution ran first, registry fallback failed: {}",
+			package.manifest.modId, metadata.name,
+			metadata.abiVersion.ToString(),
+			kind == WupsSymbolKind::Function ? "function" : "data",
+			moduleName, symbolName, owner, generation, registryError);
+		return std::nullopt;
+	}
+	const auto address = resolved->Address();
+	{
+		std::lock_guard lock(m_impl->mutex);
+		m_impl->importLeases[{owner, generation}].push_back(
+			std::move(*resolved));
+	}
+	return address;
 }
 
 bool AromaCompatibilityRuntime::PrepareHookInvocation(const CemodPackage& package,
@@ -147,10 +204,47 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(const CemodPackage& packag
 	}
 }
 
-void AromaCompatibilityRuntime::ReleaseOwnerResources(std::uint64_t, std::uint32_t)
+bool AromaCompatibilityRuntime::ActivatePlugin(const CemodPackage& package,
+	const WupsMetadata& metadata, std::uint64_t owner,
+	std::uint32_t generation, std::span<const WupsPatchRequest> patches,
+	std::string& error)
 {
-	// This base runtime owns no backend resources. Task 3/4 providers must
-	// release their real owner-tagged resources here.
+	error.clear();
+	if (patches.empty())
+		return true;
+	if (!m_impl->patchManager)
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' requested {} function patch(es), but the "
+			"Cemu FunctionPatcher provider is unavailable",
+			package.manifest.modId, metadata.name, patches.size());
+		return false;
+	}
+	if (!m_impl->patchManager->Apply(patches, error))
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' owner {} generation {} patch transaction "
+			"failed: {}",
+			package.manifest.modId, metadata.name, owner, generation, error);
+		return false;
+	}
+	return true;
+}
+
+void AromaCompatibilityRuntime::ReleaseOwnerResources(
+	std::uint64_t owner, std::uint32_t generation)
+{
+	if (m_impl->patchManager)
+	{
+		std::string error;
+		if (!m_impl->patchManager->RemoveOwner(
+			WupsPatchOwner{owner, generation}, error))
+			cemuLog_log(LogType::Force,
+				"WUPS: failed to remove patches for owner {} generation {}: {}",
+				owner, generation, error);
+	}
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->importLeases.erase({owner, generation});
 }
 
 bool AromaCompatibilityRuntime::IsProcessInScope(const CemodPackage& package,
@@ -173,6 +267,51 @@ bool AromaCompatibilityRuntime::IsProcessInScope(const CemodPackage& package,
 	}
 	reason = "plugin process scope does not include the process currently emulated by Cemu";
 	return false;
+}
+
+std::shared_ptr<ModuleExportRegistry>
+AromaCompatibilityRuntime::ExportRegistry() const
+{
+	return m_impl->registry;
+}
+
+std::shared_ptr<WupsFunctionPatchManager>
+AromaCompatibilityRuntime::PatchManager() const
+{
+	return m_impl->patchManager;
+}
+
+void AromaCompatibilityRuntime::OnModuleLoaded(
+	std::string_view moduleName, std::uint64_t lifetimeId)
+{
+	if (!m_impl->patchManager)
+		return;
+	std::string error;
+	if (!m_impl->patchManager->OnModuleLoaded(
+		{std::string(moduleName), lifetimeId}, error))
+		cemuLog_log(LogType::Force,
+			"WUPS: dynamic module '{}' patch transaction failed: {}",
+			moduleName, error);
+}
+
+void AromaCompatibilityRuntime::OnModuleUnloading(
+	std::string_view moduleName, std::uint64_t lifetimeId)
+{
+	if (!m_impl->patchManager)
+		return;
+	std::string error;
+	if (!m_impl->patchManager->OnModuleUnloading(
+		{std::string(moduleName), lifetimeId}, error))
+		cemuLog_log(LogType::Force,
+			"WUPS: dynamic module '{}' pre-unload patch restoration failed: {}",
+			moduleName, error);
+}
+
+void AromaCompatibilityRuntime::SetModuleEventDetach(
+	std::function<void()> detach)
+{
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->detachModuleEvents = std::move(detach);
 }
 
 struct WupsPluginRuntime::Impl
@@ -595,7 +734,11 @@ std::shared_ptr<WupsPluginRuntime> WupsPluginRuntime::Create(
 		inspection = *parsed;
 	}
 	if (!services)
-		services = std::make_shared<AromaCompatibilityRuntime>();
+	{
+		services = CreateRplAromaCompatibilityRuntime();
+		if (!services)
+			services = std::make_shared<AromaCompatibilityRuntime>();
+	}
 	if (!moduleLoader)
 		moduleLoader = CreateRplWupsModuleLoader();
 	if (!moduleLoader)
@@ -664,6 +807,26 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 	std::string scopeReason;
 	if (!m_impl->services->IsProcessInScope(m_impl->package, scopeReason))
 		return true;
+	if (!m_impl->inspection.replacements.empty() &&
+		!m_impl->package.manifest.nativePermissions.functionPatching)
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' contains function replacements but does "
+			"not declare function_patching permission",
+			m_impl->package.manifest.modId,
+			m_impl->inspection.metadata.name);
+		return m_impl->FailStart(error);
+	}
+	if (m_impl->inspection.usesFixedAddressPatches &&
+		!m_impl->package.manifest.nativePermissions.physicalAddressPatching)
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' contains fixed-address replacements but "
+			"does not declare physical_address_patching permission",
+			m_impl->package.manifest.modId,
+			m_impl->inspection.metadata.name);
+		return m_impl->FailStart(error);
+	}
 
 	WupsPluginState initialState;
 	std::uint32_t startGeneration{};
@@ -739,6 +902,84 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 			return false;
 		}
 	}
+
+	std::vector<WupsPatchRequest> patchRequests;
+	patchRequests.reserve(m_impl->inspection.replacements.size());
+	for (std::size_t index = 0;
+		index < m_impl->inspection.replacements.size(); ++index)
+	{
+		const auto& replacement = m_impl->inspection.replacements[index];
+		if (replacement.entryType == WupsLoadEntryType::LegacyExport)
+		{
+			error = fmt::format(
+				"package '{}' plugin '{}' uses unsupported legacy export "
+				"replacement '{}'; it is not treated as successful",
+				m_impl->package.manifest.modId,
+				m_impl->inspection.metadata.name, replacement.name);
+			return m_impl->FailStart(error);
+		}
+		std::uint32_t replacementAddress{};
+		std::uint32_t callThroughStorage{};
+		if (!m_impl->moduleLoader->ResolveAddress(
+			m_impl->module, m_impl->moduleLifetime,
+			replacement.target, 4, WupsSymbolKind::Function,
+			replacementAddress, error) ||
+			!m_impl->moduleLoader->ResolveAddress(
+				m_impl->module, m_impl->moduleLifetime,
+				replacement.callThroughStorage, 4, WupsSymbolKind::Data,
+				callThroughStorage, error))
+		{
+			error = fmt::format(
+				"package '{}' plugin '{}' replacement descriptor {} has a "
+				"stale or wrongly typed guest address: {}",
+				m_impl->package.manifest.modId,
+				m_impl->inspection.metadata.name, index, error);
+			return m_impl->FailStart(error);
+		}
+		WupsPatchRequest request;
+		request.owner = {
+			m_impl->owner, m_impl->resourceGeneration};
+		request.descriptorIndex = index;
+		request.mandatory = replacement.mandatory;
+		request.functionName = replacement.name;
+		request.replacementAddress = replacementAddress;
+		request.callThroughStorage = callThroughStorage;
+		request.process =
+			static_cast<WupsPatchProcess>(replacement.processTarget);
+		if (replacement.physicalAddress != 0)
+		{
+			request.targetKind = WupsPatchTargetKind::PhysicalAddress;
+			request.physicalAddress = replacement.physicalAddress;
+			request.virtualAddress = replacement.virtualAddress;
+		}
+		else if (replacement.virtualAddress != 0)
+		{
+			request.targetKind = WupsPatchTargetKind::VirtualAddress;
+			request.virtualAddress = replacement.virtualAddress;
+		}
+		else
+		{
+			request.targetKind = WupsPatchTargetKind::NamedFunction;
+			const auto library = WupsPatchLibraryName(replacement.library);
+			if (!library)
+			{
+				error = fmt::format(
+					"package '{}' plugin '{}' replacement descriptor {} has "
+					"unsupported library {}",
+					m_impl->package.manifest.modId,
+					m_impl->inspection.metadata.name,
+					index, replacement.library);
+				return m_impl->FailStart(error);
+			}
+			request.moduleName = *library;
+		}
+		patchRequests.push_back(std::move(request));
+	}
+	if (!m_impl->services->ActivatePlugin(
+		m_impl->package, m_impl->inspection.metadata,
+		m_impl->owner, m_impl->resourceGeneration,
+		patchRequests, error))
+		return m_impl->FailStart(error);
 
 	static constexpr std::array initializerOrder{
 		WupsHookType::InitReentFunctions,
@@ -962,7 +1203,9 @@ WupsPayloadRuntime::WupsPayloadRuntime(
 	m_impl(std::make_unique<Impl>())
 {
 	m_impl->services = services ? std::move(services) :
-		std::make_shared<AromaCompatibilityRuntime>();
+		CreateRplAromaCompatibilityRuntime();
+	if (!m_impl->services)
+		m_impl->services = std::make_shared<AromaCompatibilityRuntime>();
 	m_impl->moduleLoader = moduleLoader ? std::move(moduleLoader) :
 		CreateRplWupsModuleLoader();
 }

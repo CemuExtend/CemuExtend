@@ -328,7 +328,8 @@ remove module-scoped patches transactionally. Observers are snapshotted before
 dispatch, no observer-registry mutex is held during a callback, unloaded
 events contain copied identity rather than a dangling pointer, observer
 exceptions cannot strand the in-flight guard, and reentrant external unload
-from an event is rejected. Task 3 still supplies the actual patch consumer.
+from an event is rejected. The production compatibility runtime owns the
+observer subscription and detaches it before releasing its patch manager.
 
 ## 6. Guest calls, TLS, and reent
 
@@ -426,8 +427,9 @@ Destructor-only cleanup logs an unload failure. The RPL's injected resolver
 owns an immutable package/metadata context, so a rejected destructor unload
 cannot leave borrowed runtime data behind while the RPL waits for title-wide
 cleanup.
-Function patches and real backend resources are not inserted into this journal
-until their Task 3/4 providers exist.
+Function patches are activated only after the external RPL has linked and are
+released through the same owner/generation rollback boundary. Backend resources
+remain subject to the service-specific ledgers described below.
 
 ## 8. Import resolution and module exports
 
@@ -456,6 +458,14 @@ error. A function and data export never satisfy one another.
 pins module generations used by relocations. Module unload fails or first
 unloads dependants according to declared dependency semantics; it never leaves
 a relocated dangling address.
+
+The production Cafe lookup used by FunctionPatcher canonicalizes and bounds the
+module/symbol names, scans currently loaded RPL exports with the requested
+function/data kind, and only then asks the HLE registry. HLE lookup uses
+`functionMustExist=false`, so an unknown name never creates the legacy
+unsupported-import success trampoline. A null title-RPL context is intentional
+for this lookup and is safe: the mapping path does not dereference it, while
+the public helper rejects null/empty names before hashing or allocation.
 
 ## 9. WUMS runtime
 
@@ -574,6 +584,11 @@ No global/runtime lock is held across a guest callback. A callback obtains a
 pin, snapshots data, releases locks, invokes PPC, then revalidates owner and
 generation. Title end closes all queues before waiting for pins. Storage disk
 I/O snapshots under its lock and performs file operations after releasing it.
+WUMS graph mutations use a non-blocking operation gate: concurrent or reentrant
+load/unload/start is rejected, the module list is snapshotted under its state
+mutex, and that mutex is released before service preparation or guest hooks.
+Per-module lifecycle state and graph-level start/exit flags are atomic so GUI
+queries remain race-free while hooks execute.
 
 ## 14. Error handling and crash isolation
 
@@ -674,13 +689,12 @@ permissions and GUI/config/storage operate, and unload leaves no resources or
 callbacks. All malformed inputs and guest pointers must fail safely and one
 owner failure must remain isolated.
 
-Task 1 meets only the container, manifest, signature, independent WPS
-inspection, SDK tooling, common interface, documentation, and parser fuzz/unit
-portion of that definition. Task 2 adds external-module structural validation,
-mapping/link/unload lifetime and events, function/data import routing, TLS/SDA
-mapping, the shared PPC callback path, process scope, lifecycle ordering and
-rollback, owner/generation reload, plugin failure isolation, and deterministic
-unit traces. FunctionPatcher, WUMS registry/lifecycle, real backend arguments
-and resources, standard modules, GUI runtime, and full guest conformance/title
-integration execution remain dependencies of Tasks 3..7 and continue to fail
-explicitly where Task 2 reaches them.
+The current implementation includes the container/SDK/parser work, external
+RPL lifetime and event integration, shared PPC callback path, WUPS state and
+lifecycle rollback, a generation-pinned module export registry, WUMS parsing
+and dependency/lifecycle runtime, and transactional FunctionPatcher with Cemu
+memory/JIT integration and dynamic-RPL restoration. Real backend arguments and
+resources, standard module service bodies, and full guest conformance/title
+integration remain separate dependencies and continue to fail explicitly when
+an unavailable provider is required; they are not reported as successful
+stubs.

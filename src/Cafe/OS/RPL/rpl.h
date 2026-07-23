@@ -44,6 +44,22 @@ struct RPLModuleEvent
 	bool external{};
 };
 
+struct RPLMappedAddressInfo
+{
+	std::string moduleName;
+	uint64 lifetimeId{};
+	uint32 sectionFlags{};
+	bool external{};
+};
+
+struct RPLResolvedExport
+{
+	MPTR address{};
+	std::string moduleName;
+	uint64 lifetimeId{};
+	bool hle{};
+};
+
 using RPLExternalImportResolver = std::function<std::optional<MPTR>(
 	std::string_view moduleName, std::string_view symbolName, bool isData, std::string& error)>;
 using RPLModuleEventCallback = std::function<void(const RPLModuleEvent&)>;
@@ -109,6 +125,10 @@ bool RPLLoader_AcquireExternalModuleLease(RPLModule* module, uint64 lifetimeId,
 	RPLModuleLease& lease, std::string& error);
 bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualAddress,
 	uint32 size, RPLModuleAddressKind kind, MPTR& mappedAddress);
+bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
+	RPLMappedAddressInfo& info);
+bool RPLLoader_FindLoadedExport(std::string_view moduleName,
+	std::string_view symbolName, bool isData, RPLResolvedExport& result);
 bool RPLLoader_IsModuleAlive(const RPLModule* module, uint64 lifetimeId);
 uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease& lease);
 uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease& lease);

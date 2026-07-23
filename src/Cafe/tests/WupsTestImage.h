@@ -21,6 +21,7 @@ inline std::string DefaultWupsTestMetadata()
 struct WupsTestImageOptions
 {
 	std::string metadata{DefaultWupsTestMetadata()};
+	std::string dependencies;
 	std::uint32_t hookType{17};
 	std::uint32_t processTarget{16};
 	std::uint32_t relocationType{1};
@@ -30,6 +31,7 @@ struct WupsTestImageOptions
 	bool wrongImportKind{};
 	bool compressText{};
 	bool tls{};
+	bool wums{};
 };
 
 inline void WupsTestBe16(std::vector<std::byte>& bytes, std::size_t offset, std::uint16_t value)
@@ -99,26 +101,44 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	std::memcpy(data.data() + 16, replacementName.data(), replacementName.size());
 	sections.push_back({".data", progbits, alloc | write | (options.tls ? tls : 0), 0x10000000,
 		0, 0, 4, 0, std::move(data)});
-	sections.push_back({".wups.meta", progbits, alloc | write, 0x10000100,
+	sections.push_back({options.wums ? ".wums.meta" : ".wups.meta",
+		progbits, alloc | write, 0x10000100,
 		0, 0, 4, 0, WupsTestBytes(options.metadata)});
 	std::vector<std::byte> hooks(8);
 	WupsTestBe32(hooks, 0, options.hookType);
 	WupsTestBe32(hooks, 4, 0x02000000);
-	sections.push_back({".wups.hooks", progbits, alloc | write, 0x10000200,
+	sections.push_back({options.wums ? ".wums.hooks" : ".wups.hooks",
+		progbits, alloc | write, 0x10000200,
 		0, 0, 4, 0, std::move(hooks)});
 	if (options.includeLoad)
 	{
-		std::vector<std::byte> load(36);
-		WupsTestBe32(load, 0, 1);
-		WupsTestBe32(load, 12, 0x10000000);
-		WupsTestBe32(load, 16, 2);
-		WupsTestBe32(load, 20, 0x10000010);
-		WupsTestBe32(load, 24, 0x02000000);
-		WupsTestBe32(load, 28, 0x10000030);
-		WupsTestBe32(load, 32, options.processTarget);
-		sections.push_back({".wups.load", progbits, alloc | write, 0x10000300,
-			0, 0, 4, 0, std::move(load)});
+		if (options.wums)
+		{
+			std::vector<std::byte> exports(12);
+			WupsTestBe32(exports, 0, 0);
+			WupsTestBe32(exports, 4, 0x10000000);
+			WupsTestBe32(exports, 8, 0x02000000);
+			sections.push_back({".wums.exports", progbits, alloc | write,
+				0x10000300, 0, 0, 4, 0, std::move(exports)});
+		}
+		else
+		{
+			std::vector<std::byte> load(36);
+			WupsTestBe32(load, 0, 1);
+			WupsTestBe32(load, 12, 0x10000000);
+			WupsTestBe32(load, 16, 2);
+			WupsTestBe32(load, 20, 0x10000010);
+			WupsTestBe32(load, 24, 0x02000000);
+			WupsTestBe32(load, 28, 0x10000030);
+			WupsTestBe32(load, 32, options.processTarget);
+			sections.push_back({".wups.load", progbits, alloc | write,
+				0x10000300, 0, 0, 4, 0, std::move(load)});
+		}
 	}
+	if (options.wums && !options.dependencies.empty())
+		sections.push_back({".wums.dependencies", progbits, alloc | write,
+			0x10000400, 0, 0, 4, 0,
+			WupsTestBytes(options.dependencies)});
 	std::size_t importIndex{};
 	if (options.includeImport)
 	{
@@ -207,7 +227,9 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	std::vector<std::byte> image(cursor);
 	WupsTestBe32(image, 0, 0x7f454c46);
 	image[4] = std::byte{1}; image[5] = std::byte{2}; image[6] = std::byte{1};
-	image[7] = std::byte{0xca}; image[8] = std::byte{0xfe}; image[9] = std::byte{'P'}; image[10] = std::byte{'L'};
+	image[7] = std::byte{0xca}; image[8] = std::byte{0xfe};
+	image[9] = options.wums ? std::byte{0xaf} : std::byte{'P'};
+	image[10] = options.wums ? std::byte{0xfe} : std::byte{'L'};
 	WupsTestBe16(image, 16, 0xfe01); WupsTestBe16(image, 18, 20); WupsTestBe32(image, 20, 1);
 	WupsTestBe32(image, 24, 0x02000000); WupsTestBe32(image, 32, sectionTableOffset);
 	WupsTestBe16(image, 40, 52); WupsTestBe16(image, 46, 40);

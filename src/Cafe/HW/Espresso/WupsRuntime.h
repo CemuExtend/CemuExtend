@@ -1,10 +1,13 @@
 #pragma once
 
 #include "Cafe/HW/Espresso/ITrustedPayloadInstance.h"
+#include "Cafe/HW/Espresso/ModuleExportRegistry.h"
 #include "Cafe/HW/Espresso/WupsBinary.h"
+#include "Cafe/HW/Espresso/WupsFunctionPatcher.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -54,6 +57,10 @@ public:
 	[[nodiscard]] virtual bool PrepareHookInvocation(const CemodPackage& package,
 		const WupsMetadata& metadata, std::uint64_t owner, std::uint32_t generation,
 		WupsHookType type, WupsHookInvocation& invocation, std::string& error) = 0;
+	[[nodiscard]] virtual bool ActivatePlugin(const CemodPackage& package,
+		const WupsMetadata& metadata, std::uint64_t owner,
+		std::uint32_t generation, std::span<const WupsPatchRequest> patches,
+		std::string& error) = 0;
 	virtual void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) = 0;
 	[[nodiscard]] virtual bool IsProcessInScope(const CemodPackage& package,
 		std::string& reason) const = 0;
@@ -74,6 +81,10 @@ public:
 	[[nodiscard]] virtual bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
 		std::uint32_t& result, std::string& error) = 0;
+	[[nodiscard]] virtual bool ResolveAddress(RPLModule* module,
+		std::uint64_t lifetimeId, std::uint32_t virtualAddress,
+		std::uint32_t size, WupsSymbolKind kind,
+		std::uint32_t& mappedAddress, std::string& error) = 0;
 	[[nodiscard]] virtual bool Unload(RPLModule* module, std::uint64_t lifetimeId,
 		std::string& error) = 0;
 };
@@ -83,7 +94,10 @@ public:
 class AromaCompatibilityRuntime final : public IWupsRuntimeServices
 {
 public:
-	explicit AromaCompatibilityRuntime(WupsProcessKind process = WupsProcessKind::Game);
+	explicit AromaCompatibilityRuntime(WupsProcessKind process = WupsProcessKind::Game,
+		std::shared_ptr<ModuleExportRegistry> registry = {},
+		std::shared_ptr<WupsFunctionPatchManager> patchManager = {},
+		std::shared_ptr<IWupsPatchPlatform> patchPlatform = {});
 	~AromaCompatibilityRuntime() override;
 
 	void SetCurrentProcess(WupsProcessKind process);
@@ -97,9 +111,19 @@ public:
 	[[nodiscard]] bool PrepareHookInvocation(const CemodPackage& package,
 		const WupsMetadata& metadata, std::uint64_t owner, std::uint32_t generation,
 		WupsHookType type, WupsHookInvocation& invocation, std::string& error) override;
+	[[nodiscard]] bool ActivatePlugin(const CemodPackage& package,
+		const WupsMetadata& metadata, std::uint64_t owner,
+		std::uint32_t generation, std::span<const WupsPatchRequest> patches,
+		std::string& error) override;
 	void ReleaseOwnerResources(std::uint64_t owner, std::uint32_t generation) override;
 	[[nodiscard]] bool IsProcessInScope(const CemodPackage& package,
 		std::string& reason) const override;
+
+	[[nodiscard]] std::shared_ptr<ModuleExportRegistry> ExportRegistry() const;
+	[[nodiscard]] std::shared_ptr<WupsFunctionPatchManager> PatchManager() const;
+	void OnModuleLoaded(std::string_view moduleName, std::uint64_t lifetimeId);
+	void OnModuleUnloading(std::string_view moduleName, std::uint64_t lifetimeId);
+	void SetModuleEventDetach(std::function<void()> detach);
 
 private:
 	struct Impl;
@@ -171,3 +195,5 @@ private:
 // Production adapter implemented in WupsRplLoader.cpp. Tests can inject a
 // deterministic loader without initializing Cemu's guest address space.
 [[nodiscard]] std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader();
+[[nodiscard]] std::shared_ptr<IWupsRuntimeServices>
+	CreateRplAromaCompatibilityRuntime();

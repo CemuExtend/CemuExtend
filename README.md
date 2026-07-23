@@ -23,7 +23,7 @@ CEX2は`CEX2Query`、`CEX2Open`、`CEX2Submit`、`CEX2Poll`、`CEX2Cancel`、`CE
 
 `.cemod`はZIP containerで、`manifest.json`と正確に1つのpayload、任意のEd25519公開鍵と署名を格納します。package version 1は従来どおりPPC32 big-endian ELF (`mod.elf`)を暗黙に選択します。package version 2は`payload` descriptorで`cemod_elf/mod.elf`または`wups/plugin.wps`を選択し、WUPSは`trusted_native`だけで許可します。署名対象は各entryの名前・長さ・SHA-256を固定順に連結したdigestです。
 
-WPSについては現在、RPL section、CRC/FILEINFO、圧縮、symbol/relocation、`.wups.meta`、`.wups.hooks`、`.wups.load`を実行前にhost側で厳格にinspectionできます。WUPS runtime、lifecycle、FunctionPatcher、WUMS/backend APIは後続実装の対象であり、現時点の`TrustedCemodRuntime`はWPSを成功扱いせず明示的にロード拒否します。実装契約とlicense境界は[`docs/wups-support-design.md`](docs/wups-support-design.md)に記載しています。
+WPSはRPL section、CRC/FILEINFO、圧縮、symbol/relocation、`.wups.meta`、`.wups.hooks`、`.wups.load`を実行前にhost側で厳格にinspectionします。検証済みpluginは外部RPLとしてロードされ、owner/generation付きlifecycle、WUMS module graph/export、Cafe RPL/HLE優先のimport解決、transactional FunctionPatcher（named/fixed address、far trampoline、`real_*`、dynamic RPL追従）へ接続されます。Storage／Config等のbackend serviceと標準Aroma moduleの提供範囲を含む実装状況・明示的な非対応箇所・license境界は[`docs/wups-support-design.md`](docs/wups-support-design.md)に記載しています。
 
 署名済みprincipalはpublisher fingerprintとMod ID、未署名principalはpackage SHA-256です。未署名packageは内容が変わると再承認が必要です。署名済み更新も要求権限が増えた場合は再承認が必要です。署名だけで権限が増えることはありません。
 
