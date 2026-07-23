@@ -1,5 +1,7 @@
 #include "CemodPermissionDialog.h"
 
+#include "Cafe/OS/libs/cemuextend/cemuextend.h"
+
 #include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/scrolwin.h>
@@ -8,24 +10,37 @@
 #include <wx/statbox.h>
 #include <wx/stattext.h>
 
-namespace
-{
-	wxString PermissionName(std::size_t index)
-	{
-		switch (index)
+CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
+	std::vector<CemodPermissionRequest> requests)
+	: CemodPermissionDialog(parent, gameName, [&requests] {
+		std::vector<CemodPermissionDialogEntry> entries;
+		for (auto& request : requests)
 		{
-		case 0: return _("Read host state");
-		case 1: return _("Write Mod storage/logging");
-		case 2: return _("Input injection");
-		case 3: return _("Clipboard");
-		case 4: return _("Capture");
-		default: return {};
+			CemodPermissionDialogEntry entry{};
+			entry.modId = request.modId;
+			entry.principal = request.principal;
+			entry.approvalKey = request.principal;
+			entry.modIdentity = request.modId;
+			entry.executionMode = request.executionMode == CemodExecutionMode::TrustedNative ?
+				CemodGuiExecutionMode::TrustedNative : CemodGuiExecutionMode::Isolated;
+			entry.signedPackage = request.signedPackage;
+			static constexpr std::array labels{
+				"Read host state", "Write Mod storage/logging", "Input injection",
+				"Clipboard", "Capture"};
+			for (std::size_t index = 0; index < labels.size(); ++index)
+				if ((request.requestedPermissions & (1U << index)) != 0)
+					entry.permissions.push_back({static_cast<CemodGuiPermission>(index), labels[index],
+						1ULL << index, true, (request.grantedPermissions & (1U << index)) != 0,
+						index > 0, false});
+			entries.push_back(std::move(entry));
 		}
-	}
+		return entries;
+	}())
+{
 }
 
 CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
-	std::vector<CemodPermissionRequest> requests)
+	std::vector<CemodPermissionDialogEntry> entries)
 	: wxDialog(parent, wxID_ANY, _("Mod permissions required"), wxDefaultPosition,
 		wxSize(720, 600), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
@@ -43,16 +58,16 @@ CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& g
 	scroll->SetScrollRate(0, FromDIP(10));
 	auto* mods = new wxBoxSizer(wxVERTICAL);
 
-	for (auto& request : requests)
+	for (auto& entry : entries)
 	{
-		const auto mode = request.executionMode == CemodExecutionMode::TrustedNative ?
+		const auto mode = entry.executionMode == CemodGuiExecutionMode::TrustedNative ?
 			_("trusted native") : _("isolated");
-		const auto signature = request.signedPackage ? _("signed") : _("unsigned");
-		const auto packageLabel = wxString::FromUTF8(request.modId) + " — " + mode + " / " + signature;
+		const auto signature = entry.signedPackage ? _("signed") : _("unsigned");
+		const auto packageLabel = wxString::FromUTF8(entry.modId) + " — " + mode + " / " + signature;
 		auto* box = new wxStaticBoxSizer(wxVERTICAL, scroll, packageLabel);
 		auto* boxParent = box->GetStaticBox();
 
-		if (request.executionMode == CemodExecutionMode::TrustedNative)
+		if (entry.executionMode == CemodGuiExecutionMode::TrustedNative)
 		{
 			auto* warning = new wxStaticText(boxParent, wxID_ANY,
 				_("Warning: this trusted native Mod executes in the game address space and can access all game memory and Cafe/GX2 APIs."));
@@ -60,22 +75,43 @@ CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& g
 			box->Add(warning, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 		}
 
-		ModRow row{std::move(request)};
-		wxString missing;
-		for (std::size_t index = 0; index < row.permissions.size(); ++index)
+		ModRow row{std::move(entry)};
+		if (!row.entry.payloadDetails.empty())
+			box->Add(new wxStaticText(boxParent, wxID_ANY,
+				wxString::FromUTF8(row.entry.payloadDetails)), 0,
+				wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+		for (const auto* details : {&row.entry.metadataDetails, &row.entry.scopeDetails,
+			&row.entry.moduleDetails})
+			if (!details->empty())
+				box->Add(new wxStaticText(boxParent, wxID_ANY, wxString::FromUTF8(*details)), 0,
+					wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+		for (const auto& warningText : row.entry.warnings)
 		{
-			const auto bit = 1U << index;
-			if ((row.request.requestedPermissions & bit) == 0) continue;
-			auto* checkbox = new wxCheckBox(boxParent, wxID_ANY, PermissionName(index));
-			const bool granted = (row.request.grantedPermissions & bit) != 0;
-			checkbox->SetValue(granted);
-			row.permissions[index] = checkbox;
+			auto* warning = new wxStaticText(boxParent, wxID_ANY, wxString::FromUTF8(warningText));
+			warning->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT));
+			box->Add(warning, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+		}
+		wxString missing;
+		for (const auto& permission : row.entry.permissions)
+		{
+			auto label = wxString::FromUTF8(permission.label);
+			if (permission.dangerous) label += _(" (dangerous; denied by default)");
+			auto* checkbox = new wxCheckBox(boxParent, wxID_ANY, label);
+			checkbox->SetValue(permission.granted && !row.entry.headless);
+			row.permissions.push_back(checkbox);
 			box->Add(checkbox, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-			if (!granted)
+			if (!permission.granted)
 			{
 				if (!missing.empty()) missing += ", ";
-				missing += PermissionName(index);
+				missing += label;
 			}
+		}
+		if (row.entry.headless)
+		{
+			auto* denied = new wxStaticText(boxParent, wxID_ANY,
+				_("Headless contract: explicit approval is required in the GUI; this request is denied."));
+			denied->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT));
+			box->Add(denied, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 		}
 		if (!missing.empty())
 		{
@@ -121,11 +157,21 @@ void CemodPermissionDialog::SaveAndClose()
 	for (const auto& row : m_rows)
 	{
 		std::uint32_t granted{};
+		std::uint64_t grantedNative{};
 		for (std::size_t index = 0; index < row.permissions.size(); ++index)
 			if (row.permissions[index] && row.permissions[index]->IsChecked())
-				granted |= 1U << index;
-		m_selections.push_back({row.request.principal, row.request.requestedPermissions,
-			granted & row.request.requestedPermissions});
+			{
+				const auto bit = row.entry.permissions[index].bit;
+				grantedNative |= bit;
+				if (bit <= 0x10) granted |= static_cast<std::uint32_t>(bit);
+			}
+		std::uint32_t requestedLegacy{};
+		for (const auto& permission : row.entry.permissions)
+			if (permission.bit <= 0x10) requestedLegacy |= static_cast<std::uint32_t>(permission.bit);
+		m_selections.push_back({row.entry.principal, requestedLegacy, granted,
+			row.entry.approvalKey, row.entry.packageDigest, row.entry.modIdentity,
+			requestedLegacy == 0 ? 0 : static_cast<std::uint64_t>(requestedLegacy),
+			grantedNative, row.entry.headless});
 	}
 	EndModal(wxID_OK);
 }

@@ -4,6 +4,11 @@ add_library(CemuWxGui STATIC
   CemuApp.h
   CemuUpdateWindow.cpp
   CemuUpdateWindow.h
+#  CemuExtend GUI models and WUPS/Aroma management UI
+  CemodManagementModel.cpp
+  CemodManagementModel.h
+  CemodPluginManagerDialog.cpp
+  CemodPluginManagerDialog.h
   CemodPermissionDialog.cpp
   CemodPermissionDialog.h
   ChecksumTool.cpp
@@ -148,6 +153,18 @@ set_property(TARGET CemuWxGui PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CO
 
 cemu_use_precompiled_header(CemuWxGui)
 
+if(BUILD_TESTING)
+  add_executable(cemod_gui_model_tests
+    CemodManagementModel.cpp
+    "${CMAKE_SOURCE_DIR}/src/Cafe/HW/Espresso/CemodPackage.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Cafe/HW/Espresso/WupsBinary.cpp"
+    tests/CemodManagementModelTests.cpp
+  )
+  target_include_directories(cemod_gui_model_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  target_link_libraries(cemod_gui_model_tests PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB fmt::fmt)
+  add_test(NAME cemod_gui_model_tests COMMAND cemod_gui_model_tests)
+endif()
+
 
 target_include_directories(CemuWxGui PUBLIC "../")
 # PUBLIC because rapidjson/document.h is included in ChecksumTool.h
@@ -161,6 +178,7 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuComponents
   pugixml::pugixml
   CemuCafe
+  OpenSSL::Crypto
   cemuextend::wire
   PUBLIC
   CURL::libcurl

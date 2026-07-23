@@ -3,6 +3,7 @@
 #include "wxgui/GeneralSettings2.h"
 #include "wxgui/CemuApp.h"
 #include "wxgui/helpers/wxControlObject.h"
+#include "wxgui/CemodPluginManagerDialog.h"
 
 #include "util/helpers/helpers.h"
 
@@ -1045,8 +1046,10 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	permissionBox->Add(m_cemod_trust_updates, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
 	auto* modButtons = new wxBoxSizer(wxHORIZONTAL);
 	auto* import = new wxButton(permissionParent, wxID_ANY, _("Import legacy data…"));
+	auto* managePlugins = new wxButton(permissionParent, wxID_ANY, _("Aroma / WUPS details…"));
 	auto* saveMod = new wxButton(permissionParent, wxID_ANY, _("Save permissions"));
 	modButtons->Add(import, 0, wxRIGHT, 8);
+	modButtons->Add(managePlugins, 0, wxRIGHT, 8);
 	modButtons->AddStretchSpacer();
 	modButtons->Add(saveMod, 0);
 	permissionBox->Add(modButtons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
@@ -1098,6 +1101,18 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	});
 	saveMod->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { StoreCemodGrant(); });
 	import->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { ImportLegacyCemodData(); });
+	managePlugins->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		const auto titleId = SelectedCemuExtendTitle();
+		if (!titleId)
+		{
+			wxMessageBox(_("Select a title with an installed .cemod package first."),
+				_("CemuExtend"), wxOK | wxICON_WARNING, this);
+			return;
+		}
+		CemodPluginManagerDialog dialog(this, *titleId);
+		dialog.ShowModal();
+		RefreshCemodList();
+	});
 	RefreshCemuExtendTitles();
 	return panel;
 }

@@ -77,6 +77,34 @@ void CemuConfig::RemoveCemuExtendModTrustAnchor(uint64 titleId, std::string_view
 	if (title->second.empty()) cemuextend_mod_trust.erase(title);
 }
 
+std::optional<CemuExtendPermissionApproval> CemuConfig::GetCemuExtendPermissionApproval(
+	uint64 titleId, std::string_view approvalKey) const
+{
+	std::shared_lock lock(cemuextend_grants_mutex);
+	const auto title = cemuextend_permission_approvals.find(titleId);
+	if (title == cemuextend_permission_approvals.end()) return std::nullopt;
+	const auto approval = title->second.find(std::string(approvalKey));
+	return approval == title->second.end() ? std::nullopt : std::optional{approval->second};
+}
+
+void CemuConfig::SetCemuExtendPermissionApproval(uint64 titleId, std::string approvalKey,
+	CemuExtendPermissionApproval approval)
+{
+	if (titleId == 0 || approvalKey.empty() || approval.packageDigest.empty() ||
+		approval.modIdentity.empty()) return;
+	std::unique_lock lock(cemuextend_grants_mutex);
+	cemuextend_permission_approvals[titleId][std::move(approvalKey)] = std::move(approval);
+}
+
+void CemuConfig::RemoveCemuExtendPermissionApproval(uint64 titleId, std::string_view approvalKey)
+{
+	std::unique_lock lock(cemuextend_grants_mutex);
+	const auto title = cemuextend_permission_approvals.find(titleId);
+	if (title == cemuextend_permission_approvals.end()) return;
+	title->second.erase(std::string(approvalKey));
+	if (title->second.empty()) cemuextend_permission_approvals.erase(title);
+}
+
 void CemuConfig::SetMLCPath(fs::path path, bool save)
 {
 	mlc_path.SetValue(_pathToUtf8(path));
@@ -128,6 +156,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		cemuextend_grants.clear();
 		cemuextend_mod_grants.clear();
 		cemuextend_mod_trust.clear();
+		cemuextend_permission_approvals.clear();
 		auto bridge = parser.get("CemuExtend");
 		for (auto title = bridge.get("Title"); title.valid(); title = bridge.get("Title", title))
 		{
@@ -160,6 +189,23 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 			cemuextend_mod_trust[titleId][modId] = {
 				trust.get_attribute<uint32>("permissions", 0) & 0x1fU,
 				trust.get_attribute<uint32>("approved_requests", 0) & 0x1fU};
+		}
+		for (auto approval = bridge.get("PermissionApproval"); approval.valid();
+			approval = bridge.get("PermissionApproval", approval))
+		{
+			const auto titleId = approval.get_attribute<uint64>("title", 0);
+			const std::string key = approval.get_attribute("key", "");
+			const std::string digest = approval.get_attribute("package_digest", "");
+			const std::string identity = approval.get_attribute("mod_identity", "");
+			if (titleId == 0 || key.empty() || digest.empty() || identity.empty() ||
+				digest.size() > 128 || identity.size() > 256 || key.size() > 512)
+				continue;
+			cemuextend_permission_approvals[titleId][key] = {
+				digest, identity,
+				approval.get_attribute<uint64>("requested", 0),
+				approval.get_attribute<uint64>("granted", 0),
+				approval.get_attribute<bool>("approved", false),
+				approval.get_attribute<bool>("headless_denial", false)};
 		}
 	}
 
@@ -458,6 +504,19 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 				trust.set_attribute("mod_id", modId.c_str());
 				trust.set_attribute("permissions", anchor.permissions & 0x1fU);
 				trust.set_attribute("approved_requests", anchor.approved_request_mask & 0x1fU);
+			}
+		for (const auto& [titleId, approvals] : cemuextend_permission_approvals)
+			for (const auto& [key, approval] : approvals)
+			{
+				auto node = bridge.set("PermissionApproval");
+				node.set_attribute("title", static_cast<sint64>(titleId));
+				node.set_attribute("key", key.c_str());
+				node.set_attribute("package_digest", approval.packageDigest.c_str());
+				node.set_attribute("mod_identity", approval.modIdentity.c_str());
+				node.set_attribute("requested", static_cast<sint64>(approval.requestedPermissions));
+				node.set_attribute("granted", static_cast<sint64>(approval.grantedPermissions));
+				node.set_attribute("approved", approval.approved);
+				node.set_attribute("headless_denial", approval.explicitHeadlessDenial);
 			}
 	}
 

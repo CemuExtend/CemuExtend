@@ -85,6 +85,18 @@ struct CemuExtendModTrustAnchor
 	uint32 approved_request_mask{};
 };
 
+// GUI approval is keyed by package digest and mod identity. It is separate
+// from the legacy five-bit grant used by existing trusted/isolated mods.
+struct CemuExtendPermissionApproval
+{
+	std::string packageDigest;
+	std::string modIdentity;
+	uint64 requestedPermissions{};
+	uint64 grantedPermissions{};
+	bool approved{};
+	bool explicitHeadlessDenial{};
+};
+
 enum GraphicAPI
 {
 	kOpenGL = 0,
@@ -540,11 +552,17 @@ struct CemuConfig
 		std::string_view modId) const;
 	void SetCemuExtendModTrustAnchor(uint64 titleId, std::string modId, CemuExtendModTrustAnchor anchor);
 	void RemoveCemuExtendModTrustAnchor(uint64 titleId, std::string_view modId);
+	std::optional<CemuExtendPermissionApproval> GetCemuExtendPermissionApproval(uint64 titleId,
+		std::string_view approvalKey) const;
+	void SetCemuExtendPermissionApproval(uint64 titleId, std::string approvalKey,
+		CemuExtendPermissionApproval approval);
+	void RemoveCemuExtendPermissionApproval(uint64 titleId, std::string_view approvalKey);
 
 	mutable std::shared_mutex cemuextend_grants_mutex;
 	std::unordered_map<uint64, CemuExtendTitleGrant> cemuextend_grants;
 	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendModGrant>> cemuextend_mod_grants;
 	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendModTrustAnchor>> cemuextend_mod_trust;
+	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendPermissionApproval>> cemuextend_permission_approvals;
 
 	// debug
 	ConfigValueBounds<CrashDump> crash_dump{ CrashDump::Disabled };

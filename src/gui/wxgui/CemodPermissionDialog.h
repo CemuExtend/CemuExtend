@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
+#include "CemodManagementModel.h"
 
 #include <wx/dialog.h>
 
@@ -9,6 +10,8 @@
 #include <string>
 #include <vector>
 
+struct CemodPermissionRequest;
+
 class wxCheckBox;
 
 struct CemodPermissionSelection
@@ -16,6 +19,30 @@ struct CemodPermissionSelection
 	std::string principal;
 	std::uint32_t requestedPermissions{};
 	std::uint32_t grantedPermissions{};
+	std::string approvalKey;
+	std::string packageDigest;
+	std::string modIdentity;
+	std::uint64_t requestedNativePermissions{};
+	std::uint64_t grantedNativePermissions{};
+	bool explicitHeadlessDenial{};
+};
+
+struct CemodPermissionDialogEntry
+{
+	std::string modId;
+	std::string principal;
+	std::string approvalKey;
+	std::string packageDigest;
+	std::string modIdentity;
+	CemodGuiExecutionMode executionMode{CemodGuiExecutionMode::Isolated};
+	bool signedPackage{};
+	bool headless{};
+	std::vector<CemodGuiPermissionItem> permissions;
+	std::string payloadDetails;
+	std::string metadataDetails;
+	std::string scopeDetails;
+	std::string moduleDetails;
+	std::vector<std::string> warnings;
 };
 
 class CemodPermissionDialog final : public wxDialog
@@ -23,6 +50,8 @@ class CemodPermissionDialog final : public wxDialog
 public:
 	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
 		std::vector<CemodPermissionRequest> requests);
+	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
+		std::vector<CemodPermissionDialogEntry> entries);
 
 	[[nodiscard]] const std::vector<CemodPermissionSelection>& GetSelections() const
 	{
@@ -32,8 +61,8 @@ public:
 private:
 	struct ModRow
 	{
-		CemodPermissionRequest request;
-		std::array<wxCheckBox*, 5> permissions{};
+		CemodPermissionDialogEntry entry;
+		std::vector<wxCheckBox*> permissions;
 	};
 
 	void AllowAll();
