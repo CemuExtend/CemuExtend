@@ -259,6 +259,30 @@ struct WupsFunctionPatchManager::Impl
 	std::vector<PatchRecord> patches;
 	std::map<std::uint32_t, WupsPatchOwner> claimedTargets;
 
+	struct PreparedRequest
+	{
+		WupsPatchRequest request;
+		WupsResolvedPatchTarget target;
+		bool resolved{};
+		bool unavailable{};
+		std::string error;
+		PatchRecord patch;
+		std::uint32_t patchInstruction{};
+		std::uint64_t moduleRevision{};
+		bool built{};
+	};
+
+	struct ExecutableAllocation
+	{
+		std::uint32_t address{};
+		std::uint32_t size{};
+	};
+
+	// Preflight runs without the ledger lock because the production platform may
+	// enter the RPL loader. Events advance this revision so a preflight result
+	// cannot be committed after its module started loading or unloading.
+	std::map<std::string, std::uint64_t, std::less<>> moduleRevisions;
+
 	bool Resolve(const WupsPatchRequest& request,
 		WupsResolvedPatchTarget& target, bool& unavailable,
 		std::string& error)
@@ -297,7 +321,13 @@ struct WupsFunctionPatchManager::Impl
 		return false;
 	}
 
-	bool Restore(PatchRecord& patch, std::string& error)
+	static bool NeedsCleanup(const PatchRecord& patch)
+	{
+		return patch.targetWritten || patch.callThroughWritten;
+	}
+
+	bool Restore(PatchRecord& patch, std::string& error,
+		std::vector<ExecutableAllocation>& frees)
 	{
 		bool success = true;
 		if (patch.targetWritten)
@@ -332,8 +362,8 @@ struct WupsFunctionPatchManager::Impl
 		if (!patch.targetWritten && !patch.callThroughWritten &&
 			patch.trampolineAddress != 0)
 		{
-			platform->FreeExecutable(
-				patch.trampolineAddress, patch.trampolineSize);
+			frees.push_back(
+				{patch.trampolineAddress, patch.trampolineSize});
 			patch.trampolineAddress = 0;
 		}
 		// A failed instruction restore leaves live modified guest code. Keep the
@@ -344,9 +374,9 @@ struct WupsFunctionPatchManager::Impl
 		return success;
 	}
 
-	bool Build(const WupsPatchRequest& request,
+	bool PrepareBuild(const WupsPatchRequest& request,
 		const WupsResolvedPatchTarget& target, PatchRecord& patch,
-		std::string& error)
+		std::uint32_t& patchInstruction, std::string& error)
 	{
 		if ((target.address & 3U) != 0 ||
 			(request.replacementAddress & 3U) != 0 ||
@@ -359,15 +389,6 @@ struct WupsFunctionPatchManager::Impl
 				"patch descriptor {} has a non-executable/misaligned target or "
 				"replacement, or non-writable call-through storage",
 				request.descriptorIndex);
-			return false;
-		}
-		if (const auto conflict = claimedTargets.find(target.address);
-			conflict != claimedTargets.end())
-		{
-			error = fmt::format(
-				"patch descriptor {} overlaps address 0x{:08x} owned by {} generation {}",
-				request.descriptorIndex, target.address,
-				conflict->second.owner, conflict->second.generation);
 			return false;
 		}
 		std::array<std::uint32_t, PpcFunctionRelocator::kMaximumInputWords>
@@ -407,7 +428,6 @@ struct WupsFunctionPatchManager::Impl
 		platform->InvalidateCode(
 			trampoline, static_cast<std::uint32_t>(relocated.size() * 4));
 
-		std::uint32_t patchInstruction{};
 		if (!RelativeBranch(target.address, request.replacementAddress,
 			patchInstruction) &&
 			!RelativeBranch(target.address, bridgeAddress, patchInstruction) &&
@@ -425,21 +445,78 @@ struct WupsFunctionPatchManager::Impl
 		patch.oldCallThrough = oldStorage[0];
 		patch.trampolineAddress = trampoline;
 		patch.trampolineSize = kMaximumTrampolineBytes;
+		return true;
+	}
 
-		const std::array callThrough{trampoline};
+	std::vector<PreparedRequest> PrepareRequests(
+		std::span<const WupsPatchRequest> requests)
+	{
+		std::vector<PreparedRequest> prepared;
+		const auto process = platform->CurrentProcess();
+		for (const auto& request : requests)
+		{
+			if (!WupsFunctionPatchManager::ProcessMatches(
+				request.process, process))
+				continue;
+			PreparedRequest item;
+			item.request = request;
+			{
+				std::lock_guard lock(mutex);
+				item.moduleRevision = moduleRevisions[request.moduleName];
+			}
+			item.resolved = Resolve(item.request, item.target,
+				item.unavailable, item.error);
+			if (item.resolved)
+				item.built = PrepareBuild(item.request, item.target,
+					item.patch, item.patchInstruction, item.error);
+			prepared.push_back(std::move(item));
+		}
+		return prepared;
+	}
+
+	bool CommitBuild(PreparedRequest& prepared, std::string& error,
+		std::vector<ExecutableAllocation>& frees)
+	{
+		const auto& request = prepared.request;
+		const auto& target = prepared.target;
+		if (const auto conflict = claimedTargets.find(target.address);
+			conflict != claimedTargets.end())
+		{
+			error = fmt::format(
+				"patch descriptor {} overlaps address 0x{:08x} owned by {} generation {}",
+				request.descriptorIndex, target.address,
+				conflict->second.owner, conflict->second.generation);
+			return false;
+		}
+		if (moduleRevisions[request.moduleName] != prepared.moduleRevision)
+		{
+			error = fmt::format(
+				"patch descriptor {} target module '{}' lifetime {} changed or began unloading while the patch was prepared",
+				request.descriptorIndex, target.moduleName,
+				target.moduleLifetime);
+			return false;
+		}
+		if (!prepared.built)
+		{
+			error = prepared.error;
+			return false;
+		}
+		auto& patch = prepared.patch;
+
+		const std::array callThrough{patch.trampolineAddress};
 		if (!platform->WriteWords(
 			request.callThroughStorage, callThrough, error))
 		{
-			platform->FreeExecutable(trampoline, kMaximumTrampolineBytes);
+			frees.push_back({patch.trampolineAddress, patch.trampolineSize});
 			patch.trampolineAddress = 0;
 			return false;
 		}
 		patch.callThroughWritten = true;
-		const std::array targetWrite{patchInstruction};
+		const std::array targetWrite{prepared.patchInstruction};
 		if (!platform->WriteWords(target.address, targetWrite, error))
 		{
 			std::string rollbackError;
-			Restore(patch, rollbackError);
+			Restore(patch, rollbackError, frees);
 			if (!rollbackError.empty())
 				error.append("; rollback: ").append(rollbackError);
 			return false;
@@ -450,22 +527,53 @@ struct WupsFunctionPatchManager::Impl
 		return true;
 	}
 
-	bool ApplyRequests(std::span<const WupsPatchRequest> requests,
-		bool allowPending, std::string& error)
+	void Free(std::span<const ExecutableAllocation> frees)
+	{
+		// The production executable allocator also enters the RPL loader. Every
+		// caller invokes this only after releasing the patch ledger mutex.
+		for (const auto& allocation : frees)
+			platform->FreeExecutable(allocation.address, allocation.size);
+	}
+
+	void DiscardPrepared(std::span<PreparedRequest> prepared,
+		std::vector<ExecutableAllocation>& frees)
+	{
+		for (auto& item : prepared)
+		{
+			if (item.patch.trampolineAddress != 0)
+				frees.push_back({item.patch.trampolineAddress,
+					item.patch.trampolineSize});
+			item.patch.trampolineAddress = 0;
+		}
+	}
+
+	void Rollback(std::vector<PatchRecord>& committed, std::string& error,
+		std::vector<ExecutableAllocation>& frees)
+	{
+		for (auto& patch : std::ranges::reverse_view(committed))
+		{
+			std::string rollbackError;
+			Restore(patch, rollbackError, frees);
+			if (!rollbackError.empty())
+				error.append("; rollback: ").append(rollbackError);
+		}
+		for (auto& patch : committed)
+			if (NeedsCleanup(patch))
+				patches.push_back(std::move(patch));
+	}
+
+	bool ApplyRequests(std::span<PreparedRequest> requests,
+		bool allowPending, std::string& error,
+		std::vector<ExecutableAllocation>& frees)
 	{
 		std::vector<PatchRecord> committed;
 		std::vector<WupsPatchRequest> newPending;
-		for (const auto& request : requests)
+		for (auto& prepared : requests)
 		{
-			if (!WupsFunctionPatchManager::ProcessMatches(
-				request.process, platform->CurrentProcess()))
-				continue;
-			WupsResolvedPatchTarget target;
-			bool unavailable{};
-			std::string resolveError;
-			if (!Resolve(request, target, unavailable, resolveError))
+			const auto& request = prepared.request;
+			if (!prepared.resolved)
 			{
-				if (allowPending && unavailable && !request.mandatory)
+				if (allowPending && prepared.unavailable && !request.mandatory)
 				{
 					newPending.push_back(request);
 					continue;
@@ -474,29 +582,25 @@ struct WupsFunctionPatchManager::Impl
 					"patch descriptor {} ({}) resolution failed: {}",
 					request.descriptorIndex,
 					request.mandatory ? "mandatory" : "optional",
-					resolveError.empty() ? "target is not loaded" : resolveError);
-				for (auto& patch : std::ranges::reverse_view(committed))
-				{
-					std::string rollbackError;
-					Restore(patch, rollbackError);
-					if (!rollbackError.empty())
-						error.append("; rollback: ").append(rollbackError);
-				}
+					prepared.error.empty() ?
+						"target is not loaded" : prepared.error);
+				Rollback(committed, error, frees);
+				DiscardPrepared(requests, frees);
 				return false;
 			}
-			PatchRecord patch;
-			if (!Build(request, target, patch, error))
+			if (!CommitBuild(prepared, error, frees))
 			{
-				for (auto& applied : std::ranges::reverse_view(committed))
+				if (NeedsCleanup(prepared.patch))
 				{
-					std::string rollbackError;
-					Restore(applied, rollbackError);
-					if (!rollbackError.empty())
-						error.append("; rollback: ").append(rollbackError);
+					patches.push_back(std::move(prepared.patch));
+					prepared.patch = {};
 				}
+				Rollback(committed, error, frees);
+				DiscardPrepared(requests, frees);
 				return false;
 			}
-			committed.push_back(std::move(patch));
+			committed.push_back(std::move(prepared.patch));
+			prepared.patch = {};
 		}
 		patches.insert(patches.end(),
 			std::make_move_iterator(committed.begin()),
@@ -551,17 +655,26 @@ bool WupsFunctionPatchManager::Apply(
 		error = "function patch transaction has invalid or mixed owner generations";
 		return false;
 	}
-	std::lock_guard lock(m_impl->mutex);
+	auto prepared = m_impl->PrepareRequests(requests);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	if (std::ranges::any_of(m_impl->patches, [&](const auto& patch) {
-		return patch.request.owner == owner;
-	}) || std::ranges::any_of(m_impl->pending, [&](const auto& request) {
-		return request.owner == owner;
-	}))
+			return patch.request.owner == owner;
+		}) || std::ranges::any_of(m_impl->pending, [&](const auto& request) {
+			return request.owner == owner;
+		}))
 	{
 		error = "function patch owner generation is already registered";
+		m_impl->DiscardPrepared(prepared, frees);
+		lock.unlock();
+		m_impl->Free(frees);
 		return false;
 	}
-	return m_impl->ApplyRequests(requests, true, error);
+	const auto success = m_impl->ApplyRequests(
+		prepared, true, error, frees);
+	lock.unlock();
+	m_impl->Free(frees);
+	return success;
 }
 
 bool WupsFunctionPatchManager::Add(
@@ -578,7 +691,10 @@ bool WupsFunctionPatchManager::Add(
 		error = "dynamic function patch has an invalid owner generation";
 		return false;
 	}
-	std::lock_guard lock(m_impl->mutex);
+	const auto preparedRequest = std::span{&request, 1};
+	auto prepared = m_impl->PrepareRequests(preparedRequest);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	const auto sameIdentity = [&](const auto& candidate) {
 		return candidate.request.owner == request.owner &&
 			candidate.request.descriptorIndex == request.descriptorIndex;
@@ -590,15 +706,23 @@ bool WupsFunctionPatchManager::Add(
 		}))
 	{
 		error = "dynamic function patch descriptor identity already exists";
+		m_impl->DiscardPrepared(prepared, frees);
+		lock.unlock();
+		m_impl->Free(frees);
 		return false;
 	}
-	return m_impl->ApplyRequests(std::span{&request, 1}, true, error);
+	const auto success = m_impl->ApplyRequests(
+		prepared, true, error, frees);
+	lock.unlock();
+	m_impl->Free(frees);
+	return success;
 }
 
 bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
 	std::size_t descriptorIndex, std::string& error)
 {
-	std::lock_guard lock(m_impl->mutex);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	error.clear();
 	bool found{};
 	for (auto iterator = m_impl->patches.rbegin();
@@ -608,8 +732,12 @@ bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
 			iterator->request.descriptorIndex != descriptorIndex)
 			continue;
 		found = true;
-		if (!m_impl->Restore(*iterator, error))
+		if (!m_impl->Restore(*iterator, error, frees))
+		{
+			lock.unlock();
+			m_impl->Free(frees);
 			return false;
+		}
 		break;
 	}
 	const auto oldPending = m_impl->pending.size();
@@ -621,19 +749,24 @@ bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
 	if (!found)
 	{
 		error = "dynamic function patch descriptor was not found";
+		lock.unlock();
+		m_impl->Free(frees);
 		return false;
 	}
 	std::erase_if(m_impl->patches, [&](const auto& patch) {
 		return patch.request.owner == owner &&
 			patch.request.descriptorIndex == descriptorIndex;
 	});
+	lock.unlock();
+	m_impl->Free(frees);
 	return true;
 }
 
 bool WupsFunctionPatchManager::RemoveOwner(
 	const WupsPatchOwner& owner, std::string& error)
 {
-	std::lock_guard lock(m_impl->mutex);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	error.clear();
 	bool success = true;
 	for (auto iterator = m_impl->patches.rbegin();
@@ -642,7 +775,7 @@ bool WupsFunctionPatchManager::RemoveOwner(
 		if (iterator->request.owner != owner)
 			continue;
 		std::string restoreError;
-		if (!m_impl->Restore(*iterator, restoreError))
+		if (!m_impl->Restore(*iterator, restoreError, frees))
 		{
 			success = false;
 			error.append(error.empty() ? "" : "; ").append(restoreError);
@@ -655,38 +788,72 @@ bool WupsFunctionPatchManager::RemoveOwner(
 	std::erase_if(m_impl->pending, [&](const auto& request) {
 		return request.owner == owner;
 	});
+	lock.unlock();
+	m_impl->Free(frees);
 	return success;
 }
 
 bool WupsFunctionPatchManager::OnModuleLoaded(
 	const WupsPatchModuleEvent& event, std::string& error)
 {
-	std::lock_guard lock(m_impl->mutex);
 	std::vector<WupsPatchRequest> candidates;
-	for (const auto& request : m_impl->pending)
-		if (request.targetKind == WupsPatchTargetKind::NamedFunction &&
-			request.moduleName == event.moduleName)
-			candidates.push_back(request);
+	{
+		std::lock_guard lock(m_impl->mutex);
+		++m_impl->moduleRevisions[event.moduleName];
+		for (const auto& request : m_impl->pending)
+			if (request.targetKind == WupsPatchTargetKind::NamedFunction &&
+				request.moduleName == event.moduleName)
+				candidates.push_back(request);
+	}
 	if (candidates.empty())
 	{
 		error.clear();
 		return true;
 	}
-	if (!m_impl->ApplyRequests(candidates, false, error))
-		return false;
-	for (const auto& request : candidates)
-		std::erase_if(m_impl->pending, [&](const auto& pending) {
-			return pending.owner == request.owner &&
-				pending.descriptorIndex == request.descriptorIndex;
+	auto prepared = m_impl->PrepareRequests(candidates);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
+	std::erase_if(prepared, [&](const auto& item) {
+		const bool removed = std::ranges::none_of(
+			m_impl->pending, [&](const auto& pending) {
+			return pending.owner == item.request.owner &&
+				pending.descriptorIndex == item.request.descriptorIndex;
 		});
+		if (removed && item.patch.trampolineAddress != 0)
+			frees.push_back({item.patch.trampolineAddress,
+				item.patch.trampolineSize});
+		return removed;
+	});
+	if (prepared.empty())
+	{
+		error.clear();
+		lock.unlock();
+		m_impl->Free(frees);
+		return true;
+	}
+	if (!m_impl->ApplyRequests(prepared, false, error, frees))
+	{
+		lock.unlock();
+		m_impl->Free(frees);
+		return false;
+	}
+	for (const auto& item : prepared)
+		std::erase_if(m_impl->pending, [&](const auto& pending) {
+			return pending.owner == item.request.owner &&
+				pending.descriptorIndex == item.request.descriptorIndex;
+		});
+	lock.unlock();
+	m_impl->Free(frees);
 	return true;
 }
 
 bool WupsFunctionPatchManager::OnModuleUnloading(
 	const WupsPatchModuleEvent& event, std::string& error)
 {
-	std::lock_guard lock(m_impl->mutex);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	error.clear();
+	++m_impl->moduleRevisions[event.moduleName];
 	bool success = true;
 	std::vector<WupsPatchRequest> restoredPending;
 	for (auto iterator = m_impl->patches.rbegin();
@@ -697,7 +864,7 @@ bool WupsFunctionPatchManager::OnModuleUnloading(
 				iterator->target.moduleLifetime != event.moduleLifetime))
 			continue;
 		std::string restoreError;
-		if (!m_impl->Restore(*iterator, restoreError))
+		if (!m_impl->Restore(*iterator, restoreError, frees))
 		{
 			success = false;
 			error.append(error.empty() ? "" : "; ").append(restoreError);
@@ -706,7 +873,11 @@ bool WupsFunctionPatchManager::OnModuleUnloading(
 			restoredPending.push_back(iterator->request);
 	}
 	if (!success)
+	{
+		lock.unlock();
+		m_impl->Free(frees);
 		return false;
+	}
 	for (const auto& request : restoredPending)
 		m_impl->pending.push_back(request);
 	std::erase_if(m_impl->patches, [&](const auto& patch) {
@@ -714,18 +885,21 @@ bool WupsFunctionPatchManager::OnModuleUnloading(
 			(event.moduleLifetime == 0 ||
 				patch.target.moduleLifetime == event.moduleLifetime);
 	});
+	lock.unlock();
+	m_impl->Free(frees);
 	return true;
 }
 
 bool WupsFunctionPatchManager::RemoveAll(std::string& error)
 {
-	std::lock_guard lock(m_impl->mutex);
+	std::vector<Impl::ExecutableAllocation> frees;
+	std::unique_lock lock(m_impl->mutex);
 	error.clear();
 	bool success = true;
 	for (auto& patch : std::ranges::reverse_view(m_impl->patches))
 	{
 		std::string restoreError;
-		if (!m_impl->Restore(patch, restoreError))
+		if (!m_impl->Restore(patch, restoreError, frees))
 		{
 			success = false;
 			error.append(error.empty() ? "" : "; ").append(restoreError);
@@ -734,6 +908,8 @@ bool WupsFunctionPatchManager::RemoveAll(std::string& error)
 	if (success)
 		m_impl->patches.clear();
 	m_impl->pending.clear();
+	lock.unlock();
+	m_impl->Free(frees);
 	return success;
 }
 

@@ -107,6 +107,15 @@ namespace
 			std::string_view module, std::string_view function,
 			std::string& error) override
 		{
+			if (onResolve)
+				onResolve();
+			if (synchronizeResolves)
+			{
+				std::unique_lock lock(resolveMutex);
+				++resolveWaiters;
+				resolveCv.notify_all();
+				resolveCv.wait(lock, [&] { return resolveWaiters >= 2; });
+			}
 			error.clear();
 			const auto found = symbols.find(
 				{std::string(module), std::string(function)});
@@ -131,6 +140,8 @@ namespace
 		bool IsExecutable(std::uint32_t address,
 			std::uint32_t size) const override
 		{
+			if (onExecutableCheck)
+				onExecutableCheck();
 			return Contains(executable, address, size);
 		}
 
@@ -162,7 +173,10 @@ namespace
 			std::span<const std::uint32_t> input,
 			std::string& error) override
 		{
-			if (failWriteAddress == address)
+			const auto attempt = ++writeAttempts[address];
+			if (failWriteAddress == address ||
+				(failWriteAttempt.contains(address) &&
+					failWriteAttempt[address] == attempt))
 			{
 				error = "injected write failure";
 				return false;
@@ -245,6 +259,14 @@ namespace
 		std::vector<std::pair<std::uint32_t, std::uint32_t>> invalidations;
 		std::uint32_t nextAllocation{0x01800000};
 		std::optional<std::uint32_t> failWriteAddress;
+		std::map<std::uint32_t, std::size_t> writeAttempts;
+		std::map<std::uint32_t, std::size_t> failWriteAttempt;
+		std::function<void()> onResolve;
+		std::function<void()> onExecutableCheck;
+		std::mutex resolveMutex;
+		std::condition_variable resolveCv;
+		std::size_t resolveWaiters{};
+		bool synchronizeResolves{};
 	};
 
 	WupsPatchRequest NamedPatch(
@@ -389,6 +411,130 @@ namespace
 		CHECK(platform->words[0x02010100] == 0x7c0802a6);
 		CHECK(manager.PendingCount() == 1);
 		CHECK(manager.RemoveOwner({4, 1}, error));
+	}
+
+	void TestPatchResolutionReentryAndConcurrentAdd()
+	{
+		auto platform = std::make_shared<FakePatchPlatform>();
+		platform->AddFunction(
+			"coreinit", "OSReport", 0x02010000, 0x9421fff0);
+		platform->AddFunction(
+			"coreinit", "OSFatal", 0x02010100, 0x7c0802a6);
+		platform->AddReplacement(0x09000000);
+		platform->AddReplacement(0x09000100);
+		platform->AddStorage(0x10001000, 0xaaaaaaaa);
+		platform->AddStorage(0x10001004, 0xbbbbbbbb);
+		WupsFunctionPatchManager manager(platform);
+
+		bool observedReentry{};
+		platform->onResolve = [&] {
+			std::string eventError;
+			observedReentry = manager.OnModuleLoaded(
+				{"unrelated", 91}, eventError);
+		};
+		const auto first = NamedPatch(
+			{9, 1}, 0, "OSReport", 0x09000000, 0x10001000);
+		std::string error;
+		CHECK(manager.Add(first, error));
+		CHECK(observedReentry);
+		platform->onResolve = {};
+
+		const auto duplicate = NamedPatch(
+			{9, 1}, 1, "OSFatal", 0x09000100, 0x10001004);
+		platform->synchronizeResolves = true;
+		bool firstResult{};
+		bool secondResult{};
+		std::string firstError;
+		std::string secondError;
+		std::thread firstAdd([&] {
+			firstResult = manager.Add(duplicate, firstError);
+		});
+		std::thread secondAdd([&] {
+			secondResult = manager.Add(duplicate, secondError);
+		});
+		firstAdd.join();
+		secondAdd.join();
+		CHECK(firstResult != secondResult);
+		CHECK((firstError.find("already exists") != std::string::npos) !=
+			(secondError.find("already exists") != std::string::npos));
+		CHECK(manager.Applied().size() == 2);
+		CHECK(manager.RemoveOwner({9, 1}, error));
+	}
+
+	void TestPatchRollbackRetainsCleanupLedger()
+	{
+		auto platform = std::make_shared<FakePatchPlatform>();
+		platform->AddFunction(
+			"coreinit", "OSReport", 0x02010000, 0x9421fff0);
+		platform->AddFunction(
+			"coreinit", "OSFatal", 0x02010100, 0x7c0802a6);
+		platform->AddReplacement(0x09000000);
+		platform->AddReplacement(0x09000100);
+		platform->AddStorage(0x10001000, 0xaaaaaaaa);
+		platform->AddStorage(0x10001004, 0xbbbbbbbb);
+		WupsFunctionPatchManager manager(platform);
+		const WupsPatchOwner owner{10, 1};
+		const std::array transaction{
+			NamedPatch(owner, 0, "OSReport", 0x09000000, 0x10001000),
+			NamedPatch(owner, 1, "OSFatal", 0x09000100, 0x10001004),
+		};
+		// The second patch fails to install. Its call-through rollback and the
+		// first patch's target rollback then fail independently.
+		platform->failWriteAttempt[0x02010100] = 1;
+		platform->failWriteAttempt[0x10001004] = 2;
+		platform->failWriteAttempt[0x02010000] = 2;
+		std::string error;
+		CHECK(!manager.Apply(transaction, error));
+		CHECK(error.find("rollback") != std::string::npos);
+		CHECK(manager.Applied().size() == 2);
+		CHECK(platform->allocations.size() == 2);
+		CHECK(platform->words[0x02010000] != 0x9421fff0);
+		CHECK(platform->words[0x10001004] != 0xbbbbbbbb);
+
+		const auto conflict = NamedPatch(
+			{11, 1}, 0, "OSReport", 0x09000100, 0x10001000);
+		CHECK(!manager.Apply(std::span{&conflict, 1}, error));
+		CHECK(error.find("overlaps") != std::string::npos);
+
+		platform->failWriteAttempt.clear();
+		CHECK(manager.RemoveOwner(owner, error));
+		CHECK(manager.Applied().empty());
+		CHECK(platform->allocations.empty());
+		CHECK(platform->words[0x02010000] == 0x9421fff0);
+		CHECK(platform->words[0x10001000] == 0xaaaaaaaa);
+		CHECK(platform->words[0x10001004] == 0xbbbbbbbb);
+	}
+
+	void TestPatchModuleUnloadDuringAdd()
+	{
+		auto platform = std::make_shared<FakePatchPlatform>();
+		platform->AddFunction(
+			"coreinit", "OSReport", 0x02010000, 0x9421fff0);
+		platform->AddReplacement(0x09000000);
+		platform->AddStorage(0x10001000, 0xaaaaaaaa);
+		WupsFunctionPatchManager manager(platform);
+		std::once_flag unloadOnce;
+		platform->onExecutableCheck = [&] {
+			std::call_once(unloadOnce, [&] {
+				std::string eventError;
+				CHECK(manager.OnModuleUnloading(
+					{"coreinit", 44}, eventError));
+			});
+		};
+		const auto patch = NamedPatch(
+			{12, 1}, 0, "OSReport", 0x09000000, 0x10001000);
+		std::string error;
+		CHECK(!manager.Add(patch, error));
+		CHECK(error.find("unloading") != std::string::npos);
+		CHECK(manager.Applied().empty());
+		CHECK(platform->allocations.empty());
+		CHECK(platform->words[0x02010000] == 0x9421fff0);
+		CHECK(platform->words[0x10001000] == 0xaaaaaaaa);
+
+		platform->onExecutableCheck = {};
+		CHECK(manager.OnModuleLoaded({"coreinit", 44}, error));
+		CHECK(manager.Add(patch, error));
+		CHECK(manager.RemoveOwner({12, 1}, error));
 	}
 
 	class FacadeGuestPlatform final : public IWupsPlatform
@@ -811,6 +957,9 @@ int main()
 	TestRegistryCollisionKindsAndLifetime();
 	TestPpcRelocationBranches();
 	TestPatchApplyConflictRollbackAndDynamicEvents();
+	TestPatchResolutionReentryAndConcurrentAdd();
+	TestPatchRollbackRetainsCleanupLedger();
+	TestPatchModuleUnloadDuringAdd();
 	TestFunctionPatcherFacadeIncrementalDescriptors();
 	TestWumsParserAndDependencyGraph();
 	TestWumsRuntimeOrderingRollbackAndUnload();
