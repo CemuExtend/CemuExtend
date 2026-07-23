@@ -117,6 +117,7 @@ namespace
 				resolveCv.wait(lock, [&] { return resolveWaiters >= 2; });
 			}
 			error.clear();
+			std::lock_guard lock(memoryMutex);
 			const auto found = symbols.find(
 				{std::string(module), std::string(function)});
 			if (found == symbols.end())
@@ -142,12 +143,14 @@ namespace
 		{
 			if (onExecutableCheck)
 				onExecutableCheck();
+			std::lock_guard lock(memoryMutex);
 			return Contains(executable, address, size);
 		}
 
 		bool IsWritable(std::uint32_t address,
 			std::uint32_t size) const override
 		{
+			std::lock_guard lock(memoryMutex);
 			return Contains(writable, address, size);
 		}
 
@@ -155,6 +158,7 @@ namespace
 			std::span<std::uint32_t> output,
 			std::string& error) override
 		{
+			std::lock_guard lock(memoryMutex);
 			for (std::size_t index = 0; index < output.size(); ++index)
 			{
 				const auto found = words.find(
@@ -173,6 +177,7 @@ namespace
 			std::span<const std::uint32_t> input,
 			std::string& error) override
 		{
+			std::lock_guard lock(memoryMutex);
 			const auto attempt = ++writeAttempts[address];
 			if (failWriteAddress == address ||
 				(failWriteAttempt.contains(address) &&
@@ -192,6 +197,7 @@ namespace
 			std::uint32_t size, std::uint32_t,
 			std::uint32_t& address, std::string&) override
 		{
+			std::lock_guard lock(memoryMutex);
 			address = nextAllocation;
 			nextAllocation += size;
 			allocations.emplace(address, size);
@@ -204,6 +210,7 @@ namespace
 		void FreeExecutable(
 			std::uint32_t address, std::uint32_t size) override
 		{
+			std::lock_guard lock(memoryMutex);
 			const auto found = allocations.find(address);
 			CHECK(found != allocations.end());
 			CHECK(found->second == size);
@@ -213,12 +220,14 @@ namespace
 		void InvalidateCode(
 			std::uint32_t address, std::uint32_t size) override
 		{
+			std::lock_guard lock(memoryMutex);
 			invalidations.emplace_back(address, size);
 		}
 
 		void AddFunction(std::string module, std::string function,
 			std::uint32_t address, std::uint32_t instruction)
 		{
+			std::lock_guard lock(memoryMutex);
 			symbols.emplace(
 				std::pair{std::move(module), std::move(function)}, address);
 			words[address] = instruction;
@@ -227,12 +236,14 @@ namespace
 
 		void AddReplacement(std::uint32_t address)
 		{
+			std::lock_guard lock(memoryMutex);
 			words[address] = 0x4e800020;
 			executable.emplace_back(address, 4);
 		}
 
 		void AddStorage(std::uint32_t address, std::uint32_t value = 0)
 		{
+			std::lock_guard lock(memoryMutex);
 			words[address] = value;
 			writable.emplace_back(address, 4);
 		}
@@ -267,6 +278,7 @@ namespace
 		std::condition_variable resolveCv;
 		std::size_t resolveWaiters{};
 		bool synchronizeResolves{};
+		mutable std::mutex memoryMutex;
 	};
 
 	WupsPatchRequest NamedPatch(

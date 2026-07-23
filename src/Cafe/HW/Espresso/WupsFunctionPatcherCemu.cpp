@@ -142,6 +142,10 @@ namespace
 				error = "invalid executable trampoline allocation";
 				return false;
 			}
+			// Patch preflight intentionally runs without the manager mutex so RPL
+			// events can re-enter it. Serialize the underlying code-cave heap here;
+			// RPLLoader_AllocateCodeCaveMem itself has no loader lock.
+			std::lock_guard lock(m_mutex);
 			const auto allocation =
 				RPLLoader_AllocateCodeCaveMem(alignment, size);
 			if (!allocation)
@@ -150,7 +154,6 @@ namespace
 				return false;
 			}
 			address = allocation.GetMPTR();
-			std::lock_guard lock(m_mutex);
 			if (!m_allocations.emplace(address, size).second)
 			{
 				RPLLoader_ReleaseCodeCaveMem(allocation);
@@ -164,16 +167,13 @@ namespace
 		void FreeExecutable(std::uint32_t address,
 			std::uint32_t size) override
 		{
-			bool owned{};
+			std::lock_guard lock(m_mutex);
+			const auto found = m_allocations.find(address);
+			if (found != m_allocations.end() && found->second == size)
 			{
-				std::lock_guard lock(m_mutex);
-				const auto found = m_allocations.find(address);
-				owned = found != m_allocations.end() && found->second == size;
-				if (owned)
-					m_allocations.erase(found);
-			}
-			if (owned)
+				m_allocations.erase(found);
 				RPLLoader_ReleaseCodeCaveMem(MEMPTR<void>{address});
+			}
 		}
 
 		void InvalidateCode(std::uint32_t address,
