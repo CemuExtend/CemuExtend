@@ -327,6 +327,7 @@ namespace
 		case WupsServiceStatus::PermissionDenied: return -0x10;
 		case WupsServiceStatus::NotFound:
 		case WupsServiceStatus::StaleGeneration: return -0x11;
+		case WupsServiceStatus::UnsupportedVersion: return -0x12;
 		case WupsServiceStatus::Unsupported: return -0x21;
 		default: return -0x1000;
 		}
@@ -340,7 +341,7 @@ namespace
 			return 2;
 		}
 
-		WupsServiceStatus AddPatch(WupsOwnerToken, std::uint32_t,
+		WupsServiceStatus AddPatch(WupsOwnerToken, std::uint32_t, bool,
 			std::uint32_t&, bool&, std::string& error) override
 		{
 			error = "FunctionPatcher provider is not connected";
@@ -667,7 +668,7 @@ struct AromaCompatibilityRuntime::Impl
 		}
 		std::uint32_t end{};
 		if (!AddU32(address, static_cast<std::uint32_t>(output.size()), end) ||
-			!options.platform->ValidateGuestRange(address,
+			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
 				static_cast<std::uint32_t>(output.size()), access) ||
 			!options.platform->ReadGuest(address, output))
 		{
@@ -694,7 +695,7 @@ struct AromaCompatibilityRuntime::Impl
 		}
 		std::uint32_t end{};
 		if (!AddU32(address, static_cast<std::uint32_t>(input.size()), end) ||
-			!options.platform->ValidateGuestRange(address,
+			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
 				static_cast<std::uint32_t>(input.size()), WupsGuestAccess::Write) ||
 			!options.platform->WriteGuest(address, input))
 		{
@@ -723,7 +724,7 @@ struct AromaCompatibilityRuntime::Impl
 		{
 			std::uint32_t current{};
 			if (!AddU32(address, static_cast<std::uint32_t>(index), current) ||
-				!options.platform->ValidateGuestRange(
+				!options.platform->ValidateGuestRangeForOwner(owner.token,
 					current, 1, WupsGuestAccess::Read))
 			{
 				error = fmt::format(
@@ -790,7 +791,7 @@ struct AromaCompatibilityRuntime::Impl
 		if (address == 0)
 			return true;
 		if (!options.platform || (address & 3U) != 0 ||
-			!options.platform->ValidateGuestRange(
+			!options.platform->ValidateGuestRangeForOwner(owner.token,
 				address, 4, WupsGuestAccess::Execute))
 		{
 			error = fmt::format(
@@ -3272,6 +3273,16 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 			moduleName, symbolName, ownerId, generation, registryError);
 		return std::nullopt;
 	}
+	if (moduleName == "homebrew_memorymapping" &&
+		(!m_impl->options.platform ||
+			!m_impl->options.platform->SupportsMappedMemory()))
+	{
+		error = fmt::format(
+			"package '{}' plugin '{}' cannot resolve '{}.{}': Cemu has no "
+			"safe guest effective/physical mapped-memory allocator",
+			package.manifest.modId, metadata.name, moduleName, symbolName);
+		return std::nullopt;
+	}
 	if (!PermissionForModule(*owner.owner, moduleName, error))
 		return std::nullopt;
 
@@ -4233,7 +4244,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 		if (symbolName == "NMGetVersion")
 			return 2;
 		if (symbolName == "NMIsOverlayReady")
-			return 1;
+			return 0;
 		error = fmt::format(
 			"notification ABI command '{}' is not implemented by the Cemu "
 			"overlay adapter", symbolName);
@@ -4268,7 +4279,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			std::uint32_t handle{};
 			bool applied{};
 			const auto status = options.functionPatcher->AddPatch(
-				token, arguments[0], handle, applied, error);
+				token, arguments[0],
+				owner->permissions.physicalAddressPatching,
+				handle, applied, error);
 			if (status == WupsServiceStatus::Success &&
 				(!WriteGuestU32(*owner, arguments[1], handle, error) ||
 					!WriteGuestU32(*owner, arguments[2],

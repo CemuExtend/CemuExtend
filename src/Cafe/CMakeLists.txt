@@ -79,11 +79,13 @@ add_library(CemuCafe
 	HW/Espresso/WupsFunctionPatcher.cpp
 	HW/Espresso/WupsFunctionPatcher.h
 	HW/Espresso/WupsFunctionPatcherCemu.cpp
+	HW/Espresso/WupsFunctionPatcherFacade.cpp
 	HW/Espresso/WupsRplLoader.cpp
 	HW/Espresso/WupsRuntime.cpp
 	HW/Espresso/WupsRuntime.h
 	HW/Espresso/WupsServices.cpp
 	HW/Espresso/WupsServices.h
+	HW/Espresso/WupsServicesCemu.cpp
 	HW/Espresso/WumsBinary.cpp
 	HW/Espresso/WumsBinary.h
 	HW/Espresso/WumsRuntime.cpp
@@ -791,6 +793,7 @@ if(BUILD_TESTING)
 		HW/Espresso/WumsBinary.cpp
 		HW/Espresso/WumsRuntime.cpp
 		HW/Espresso/WupsFunctionPatcher.cpp
+		HW/Espresso/WupsFunctionPatcherFacade.cpp
 		tests/WupsCompatibilityTests.cpp
 	)
 	target_include_directories(wups_compatibility_tests PRIVATE
@@ -810,6 +813,17 @@ if(BUILD_TESTING)
 	target_include_directories(wups_services_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 	target_link_libraries(wups_services_tests PRIVATE ZLIB::ZLIB fmt::fmt)
 	add_test(NAME wups_services_tests COMMAND wups_services_tests)
+
+	add_executable(wups_production_adapter_tests
+		HW/Espresso/ModExecutionContext.cpp
+		HW/Espresso/WupsServicesCemu.cpp
+		tests/WupsProductionAdapterTests.cpp
+	)
+	target_include_directories(wups_production_adapter_tests PRIVATE
+		${CMAKE_SOURCE_DIR}/src)
+	target_link_libraries(wups_production_adapter_tests PRIVATE fmt::fmt)
+	add_test(NAME wups_production_adapter_tests
+		COMMAND wups_production_adapter_tests)
 
 	add_executable(cemod_runtime_tests
 		HW/Espresso/ModExecutionContext.cpp

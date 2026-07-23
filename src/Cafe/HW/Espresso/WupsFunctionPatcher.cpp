@@ -564,6 +564,72 @@ bool WupsFunctionPatchManager::Apply(
 	return m_impl->ApplyRequests(requests, true, error);
 }
 
+bool WupsFunctionPatchManager::Add(
+	const WupsPatchRequest& request, std::string& error)
+{
+	error.clear();
+	if (!m_impl->platform)
+	{
+		error = "function patch platform is unavailable";
+		return false;
+	}
+	if (request.owner.owner == 0 || request.owner.generation == 0)
+	{
+		error = "dynamic function patch has an invalid owner generation";
+		return false;
+	}
+	std::lock_guard lock(m_impl->mutex);
+	const auto sameIdentity = [&](const auto& candidate) {
+		return candidate.request.owner == request.owner &&
+			candidate.request.descriptorIndex == request.descriptorIndex;
+	};
+	if (std::ranges::any_of(m_impl->patches, sameIdentity) ||
+		std::ranges::any_of(m_impl->pending, [&](const auto& candidate) {
+			return candidate.owner == request.owner &&
+				candidate.descriptorIndex == request.descriptorIndex;
+		}))
+	{
+		error = "dynamic function patch descriptor identity already exists";
+		return false;
+	}
+	return m_impl->ApplyRequests(std::span{&request, 1}, true, error);
+}
+
+bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
+	std::size_t descriptorIndex, std::string& error)
+{
+	std::lock_guard lock(m_impl->mutex);
+	error.clear();
+	bool found{};
+	for (auto iterator = m_impl->patches.rbegin();
+		iterator != m_impl->patches.rend(); ++iterator)
+	{
+		if (iterator->request.owner != owner ||
+			iterator->request.descriptorIndex != descriptorIndex)
+			continue;
+		found = true;
+		if (!m_impl->Restore(*iterator, error))
+			return false;
+		break;
+	}
+	const auto oldPending = m_impl->pending.size();
+	std::erase_if(m_impl->pending, [&](const auto& request) {
+		return request.owner == owner &&
+			request.descriptorIndex == descriptorIndex;
+	});
+	found = found || oldPending != m_impl->pending.size();
+	if (!found)
+	{
+		error = "dynamic function patch descriptor was not found";
+		return false;
+	}
+	std::erase_if(m_impl->patches, [&](const auto& patch) {
+		return patch.request.owner == owner &&
+			patch.request.descriptorIndex == descriptorIndex;
+	});
+	return true;
+}
+
 bool WupsFunctionPatchManager::RemoveOwner(
 	const WupsPatchOwner& owner, std::string& error)
 {

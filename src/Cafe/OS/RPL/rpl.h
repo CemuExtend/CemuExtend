@@ -48,6 +48,8 @@ struct RPLMappedAddressInfo
 {
 	std::string moduleName;
 	uint64 lifetimeId{};
+	uint64 owner{};
+	uint32 generation{};
 	uint32 sectionFlags{};
 	bool external{};
 };

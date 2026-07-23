@@ -134,6 +134,12 @@ public:
 
 	[[nodiscard]] bool Apply(std::span<const WupsPatchRequest> requests,
 		std::string& error);
+	// Dynamic FunctionPatcher descriptors share the owner's static .wups.load
+	// transaction. Descriptor indices are stable owner-local identities.
+	[[nodiscard]] bool Add(const WupsPatchRequest& request,
+		std::string& error);
+	[[nodiscard]] bool Remove(const WupsPatchOwner& owner,
+		std::size_t descriptorIndex, std::string& error);
 	[[nodiscard]] bool RemoveOwner(const WupsPatchOwner& owner,
 		std::string& error);
 	[[nodiscard]] bool OnModuleLoaded(const WupsPatchModuleEvent& event,

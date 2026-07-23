@@ -553,6 +553,56 @@ it never reports dummy success.
 Backend imports are not themselves permission grants. Required permission
 inference is an inspection warning; load approval remains manifest-driven.
 
+### Production Cemu adapter
+
+`CreateRplAromaCompatibilityRuntime` constructs one shared export registry,
+Cemu platform, patch platform, patch manager, and FunctionPatcher facade. The
+same objects are supplied to `AromaCompatibilityRuntime`; this is important
+because static `.wups.load` replacements, dynamic `FPAddFunctionPatch`
+descriptors, late-RPL events, and owner teardown must observe one patch ledger.
+The module-event observer is detached by the runtime destructor.
+
+Guest backend functions are direct PPC-callable code-cave thunks. They are not
+registered as guest-selected global `osLib` exports. A generic HLE dispatcher
+uses the currently executing stub address to find an owner-generation record,
+pins that record across the host handler, gathers r3-r10 plus the valid PPC
+stack argument area, and returns through `osLib_returnFromFunction`. Revocation
+removes lookup visibility first, waits for executing pins, invalidates JIT code,
+and only then frees the code cave. RPL sections carry their external owner and
+generation into mapped-range queries, so a dispatched plugin cannot use a
+backend API to read or write another external module's sections or allocations.
+
+The adapter's CPU-task contract is intentionally strict: a task submitted on
+an emulated CPU thread runs synchronously; submission from any other thread
+returns an explicit error. Cemu currently exposes no suitable cross-thread
+queue with synchronous cancellation ownership guarantees, so no success stub
+is published. Notification guest commands which need a GUI adapter remain
+explicitly unsupported; host notification models and logging use the Cemu log
+fallback.
+
+Cemu does not currently expose an owner-scoped allocator which simultaneously
+provides the effective/physical mapping and GX2 lifetime semantics required by
+MemoryMappingModule. The production platform therefore reports mapped memory
+as unsupported, and `ResolveImport` refuses `homebrew_memorymapping` imports
+instead of publishing an API which only returns null. Hardware physical
+addresses are never interpreted as host pointers.
+
+FunctionPatcher accepts the public API version 2 and descriptor struct versions
+2 and 3. It validates descriptor range/alignment, NUL-terminated function name,
+replacement execute permission, call-through write permission, process enum,
+library enum, owner generation, and the separate physical-address permission.
+The v3 executable-name/title-filter descriptor variants are explicitly
+unsupported until Cemu can provide their full title/version selection
+contract. Owner-local incremental add/remove identities allow dynamic patches
+to coexist with the static transaction; release is idempotent if lifecycle
+deactivation already removed the manager records.
+
+Persistent storage defaults to `<Cemu user data>/cemuextend/wups/storage` and
+content roots are confined below the Cemu user-data tree. If the configured
+user-data path is absent, the platform temp directory is used as a safe,
+explicit fallback; if neither is available, persistent storage remains
+unavailable rather than using an implicit relative working-directory path.
+
 ## 12. Resource ownership and rollback
 
 `PayloadOwner` is `(package principal, mod_id, title ID, owner handle,

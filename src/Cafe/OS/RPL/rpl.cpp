@@ -3330,6 +3330,8 @@ bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
 			info = {
 				module->moduleName,
 				module->externalLifetimeId,
+				module->externalOwner,
+				module->externalGeneration,
 				flags,
 				module->externalModule,
 			};

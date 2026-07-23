@@ -5,6 +5,7 @@
 #include "Cafe/HW/Espresso/WupsGuestCallback.h"
 #include "Cafe/HW/Espresso/WumsRuntime.h"
 #include "Cafe/OS/RPL/rpl.h"
+#include "config/ActiveSettings.h"
 
 namespace
 {
@@ -255,10 +256,32 @@ std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 	auto patchPlatform = CreateCemuWupsPatchPlatform();
 	auto patchManager =
 		std::make_shared<WupsFunctionPatchManager>(patchPlatform);
+	auto platform = CreateCemuWupsPlatform();
 	AromaRuntimeOptions options;
-	options.exportRegistry = std::move(registry);
-	options.patchManager = std::move(patchManager);
-	options.patchPlatform = std::move(patchPlatform);
+	auto userDataRoot = ActiveSettings::GetUserDataPath();
+	if (userDataRoot.empty())
+	{
+		std::error_code pathError;
+		userDataRoot = std::filesystem::temp_directory_path(pathError);
+		if (!pathError)
+			userDataRoot /= "cemuextend-user-data";
+		else
+			userDataRoot.clear();
+	}
+	if (!userDataRoot.empty())
+	{
+		options.storageRoot = userDataRoot / "cemuextend/wups/storage";
+		options.contentRoots = {
+			userDataRoot / "cemuextend/wups/content",
+			userDataRoot / "sdcard",
+		};
+	}
+	options.platform = platform;
+	options.functionPatcher = CreateWupsFunctionPatcherFacade(
+		platform, patchManager);
+	options.exportRegistry = registry;
+	options.patchManager = patchManager;
+	options.patchPlatform = patchPlatform;
 	auto runtime = std::make_shared<AromaCompatibilityRuntime>(
 		std::move(options), WupsProcessKind::Game);
 	const std::weak_ptr<AromaCompatibilityRuntime> weakRuntime = runtime;

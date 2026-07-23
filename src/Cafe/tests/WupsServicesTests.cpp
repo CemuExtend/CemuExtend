@@ -89,6 +89,7 @@ namespace
 			}
 			++taskCancellations;
 		}
+		bool SupportsMappedMemory() const override { return supportsMappedMemory; }
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(WupsOwnerToken,
 			std::uint32_t size, std::uint32_t alignment, bool writable,
 			WupsMappedMemoryPurpose purpose, std::string&) override
@@ -140,6 +141,7 @@ namespace
 		std::uint32_t nextData{0x18000}, nextFunction{0x4000};
 		std::uint32_t nextMapping{0x8000000}, nextPhysical{0x1000000};
 		bool forceOverlap{};
+		bool supportsMappedMemory{true};
 		std::uint32_t mappingSizeExtra{};
 		std::atomic_bool failFree{};
 		std::atomic_size_t mappingFrees{}, guestFrees{}, exportReleases{}, logs{},
@@ -246,6 +248,17 @@ namespace
 		CHECK(platform->logs == 1);
 		CHECK(runtime.ReleaseOwnerResources(3, 1, error));
 		CHECK(platform->mappingFrees >= 3);
+
+		auto unsupportedPlatform = std::make_shared<FakePlatform>();
+		unsupportedPlatform->supportsMappedMemory = false;
+		AromaRuntimeOptions unsupportedOptions{
+			.storageRoot = root, .platform = unsupportedPlatform};
+		AromaCompatibilityRuntime unsupportedRuntime(unsupportedOptions);
+		CHECK(!unsupportedRuntime.ResolveImport(allowed, metadata, 30, 1,
+			"homebrew_memorymapping", "MEMAllocFromMappedMemory",
+			WupsSymbolKind::Data, error));
+		CHECK(error.find("no safe guest effective/physical") !=
+			std::string::npos);
 	}
 
 	void TestContentTraversalAndCleanup(const std::filesystem::path& root)

@@ -51,6 +51,7 @@ enum class WupsServiceStatus : std::int32_t
 	Unsupported = -12,
 	Busy = -13,
 	InternalError = -14,
+	UnsupportedVersion = -15,
 };
 
 enum class WupsStorageValueType : std::uint32_t
@@ -236,6 +237,12 @@ public:
 
 	[[nodiscard]] virtual bool ValidateGuestRange(std::uint32_t address,
 		std::uint32_t size, WupsGuestAccess access) const = 0;
+	[[nodiscard]] virtual bool ValidateGuestRangeForOwner(WupsOwnerToken,
+		std::uint32_t address, std::uint32_t size,
+		WupsGuestAccess access) const
+	{
+		return ValidateGuestRange(address, size, access);
+	}
 	[[nodiscard]] virtual bool ReadGuest(std::uint32_t address,
 		std::span<std::byte> output) const = 0;
 	[[nodiscard]] virtual bool WriteGuest(std::uint32_t address,
@@ -257,6 +264,10 @@ public:
 	// Must synchronously destroy every queued (not currently executing) task
 	// owned by this token before returning. Tasks already executing may finish.
 	virtual void CancelCpuTasks(WupsOwnerToken owner) = 0;
+	// A platform which cannot map host-owned memory into Cafe's effective and
+	// physical address spaces must say so. Import resolution then fails instead
+	// of publishing a callable API which can only return null.
+	[[nodiscard]] virtual bool SupportsMappedMemory() const { return true; }
 
 	[[nodiscard]] virtual std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
 		WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,
@@ -278,7 +289,8 @@ public:
 
 	[[nodiscard]] virtual std::uint32_t ApiVersion() const = 0;
 	[[nodiscard]] virtual WupsServiceStatus AddPatch(WupsOwnerToken owner,
-		std::uint32_t descriptorAddress, std::uint32_t& handle,
+		std::uint32_t descriptorAddress, bool allowPhysicalAddress,
+		std::uint32_t& handle,
 		bool& applied, std::string& error) = 0;
 	[[nodiscard]] virtual WupsServiceStatus RemovePatch(WupsOwnerToken owner,
 		std::uint32_t handle, std::string& error) = 0;
@@ -320,3 +332,10 @@ struct WupsOwnerResourceCounts
 // Task 3 patcher/platform implementation link-safe in either build order.
 [[nodiscard]] std::shared_ptr<IWupsFunctionPatcherFacade>
 CreateUnsupportedFunctionPatcherFacade();
+
+// Production Cemu adapters. The platform publishes direct owner-scoped HLE
+// thunks and never adds guest-selected names to Cemu's global osLib registry.
+[[nodiscard]] std::shared_ptr<IWupsPlatform> CreateCemuWupsPlatform();
+[[nodiscard]] std::shared_ptr<IWupsFunctionPatcherFacade>
+CreateWupsFunctionPatcherFacade(std::shared_ptr<IWupsPlatform> platform,
+	std::shared_ptr<WupsFunctionPatchManager> manager);

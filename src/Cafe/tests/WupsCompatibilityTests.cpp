@@ -4,6 +4,7 @@
 #include "Cafe/HW/Espresso/WumsBinary.h"
 #include "Cafe/HW/Espresso/WumsRuntime.h"
 #include "Cafe/HW/Espresso/WupsFunctionPatcher.h"
+#include "Cafe/HW/Espresso/WupsServices.h"
 #include "Cafe/tests/WupsTestImage.h"
 #include "Cemu/Logging/CemuLogging.h"
 
@@ -390,6 +391,125 @@ namespace
 		CHECK(manager.RemoveOwner({4, 1}, error));
 	}
 
+	class FacadeGuestPlatform final : public IWupsPlatform
+	{
+	public:
+		bool ValidateGuestRange(std::uint32_t address, std::uint32_t size,
+			WupsGuestAccess access) const override
+		{
+			if (size == 0 || address > 0x20000000U - size) return false;
+			if (access == WupsGuestAccess::Execute)
+				return address >= 0x09000000 && address + size <= 0x09001000;
+			if (access == WupsGuestAccess::Write)
+				return address >= 0x10001000 && address + size <= 0x10002000;
+			return memory.contains(address) &&
+				memory.lower_bound(address + size - 1) != memory.end();
+		}
+		bool ReadGuest(std::uint32_t address,
+			std::span<std::byte> output) const override
+		{
+			for (std::size_t i = 0; i < output.size(); ++i)
+			{
+				const auto found = memory.find(address + i);
+				if (found == memory.end()) return false;
+				output[i] = found->second;
+			}
+			return true;
+		}
+		bool WriteGuest(std::uint32_t,
+			std::span<const std::byte>) override { return true; }
+		std::optional<std::uint32_t> AllocateGuestData(WupsOwnerToken,
+			std::uint32_t, std::uint32_t, std::string&) override { return {}; }
+		void FreeGuestData(WupsOwnerToken, std::uint32_t) override {}
+		std::optional<std::uint32_t> RegisterFunction(WupsOwnerToken,
+			std::string_view, std::string_view, WupsHostExportHandler,
+			std::string&) override { return {}; }
+		void ReleaseOwnerExports(WupsOwnerToken) override {}
+		std::uint64_t CurrentGuestThreadId() const override { return 1; }
+		bool QueueCpuTask(WupsOwnerToken, std::function<void()> task,
+			std::string&) override { task(); return true; }
+		void CancelCpuTasks(WupsOwnerToken) override {}
+		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(WupsOwnerToken,
+			std::uint32_t, std::uint32_t, bool, WupsMappedMemoryPurpose,
+			std::string&) override { return {}; }
+		bool FreeMappedMemory(WupsOwnerToken, const WupsMappedMemoryInfo&,
+			std::string&) override { return false; }
+		void ShowNotification(WupsOwnerToken,
+			const WupsNotificationModel&) override {}
+		void Log(WupsOwnerToken, WupsLogLevel, std::string_view,
+			std::string_view, std::string_view) override {}
+
+		void U32(std::uint32_t address, std::uint32_t value)
+		{
+			for (unsigned shift = 0; shift < 32; shift += 8)
+				memory[address + shift / 8] = std::byte{
+					static_cast<unsigned char>(value >> (24 - shift))};
+		}
+		void String(std::uint32_t address, std::string_view value)
+		{
+			for (std::size_t i = 0; i < value.size(); ++i)
+				memory[address + i] = std::byte{
+					static_cast<unsigned char>(value[i])};
+			memory[address + value.size()] = std::byte{};
+		}
+
+		std::map<std::uint32_t, std::byte> memory;
+	};
+
+	void TestFunctionPatcherFacadeIncrementalDescriptors()
+	{
+		auto patchPlatform = std::make_shared<FakePatchPlatform>();
+		patchPlatform->AddFunction("coreinit", "OSReport",
+			0x02010000, 0x9421fff0);
+		patchPlatform->AddFunction("coreinit", "OSFatal",
+			0x02010100, 0x7c0802a6);
+		patchPlatform->AddReplacement(0x09000000);
+		patchPlatform->AddReplacement(0x09000100);
+		patchPlatform->AddStorage(0x10001000);
+		patchPlatform->AddStorage(0x10001004);
+		auto manager = std::make_shared<WupsFunctionPatchManager>(patchPlatform);
+		const WupsPatchOwner patchOwner{41, 3};
+		const auto staticPatch = NamedPatch(patchOwner, 0, "OSFatal",
+			0x09000100, 0x10001004);
+		std::string error;
+		CHECK(manager->Apply(std::span{&staticPatch, 1}, error));
+
+		auto guest = std::make_shared<FacadeGuestPlatform>();
+		constexpr std::uint32_t descriptor = 0x1000;
+		constexpr std::uint32_t name = 0x1100;
+		guest->U32(descriptor + 0, 3); // v3
+		guest->U32(descriptor + 4, 0); // RPL by library/name
+		guest->U32(descriptor + 8, 0);
+		guest->U32(descriptor + 12, 0);
+		guest->U32(descriptor + 16, 0x09000000);
+		guest->U32(descriptor + 20, 0x10001000);
+		guest->U32(descriptor + 24,
+			static_cast<std::uint32_t>(WupsPatchProcess::Game));
+		guest->U32(descriptor + 28, name);
+		guest->U32(descriptor + 32, 2); // LIBRARY_COREINIT
+		guest->String(name, "OSReport");
+
+		auto facade = CreateWupsFunctionPatcherFacade(guest, manager);
+		CHECK(facade && facade->ApiVersion() == 2);
+		std::uint32_t handle{};
+		bool applied{};
+		CHECK(facade->AddPatch({41, 3}, descriptor, false,
+			handle, applied, error) == WupsServiceStatus::Success);
+		CHECK(handle != 0 && applied);
+		CHECK(manager->Applied().size() == 2);
+		CHECK(facade->IsPatchApplied({41, 3}, handle, applied, error) ==
+			WupsServiceStatus::Success && applied);
+		CHECK(facade->IsPatchApplied({41, 2}, handle, applied, error) ==
+			WupsServiceStatus::StaleGeneration);
+		CHECK(facade->RemovePatch({99, 3}, handle, error) ==
+			WupsServiceStatus::OwnerMismatch);
+		CHECK(facade->RemovePatch({41, 3}, handle, error) ==
+			WupsServiceStatus::Success);
+		CHECK(manager->Applied().size() == 1);
+		facade->ReleaseOwner({41, 3});
+		CHECK(manager->RemoveOwner(patchOwner, error));
+	}
+
 	WumsInspection Module(std::string name, std::string version = "1.0.0")
 	{
 		WumsInspection result;
@@ -691,6 +811,7 @@ int main()
 	TestRegistryCollisionKindsAndLifetime();
 	TestPpcRelocationBranches();
 	TestPatchApplyConflictRollbackAndDynamicEvents();
+	TestFunctionPatcherFacadeIncrementalDescriptors();
 	TestWumsParserAndDependencyGraph();
 	TestWumsRuntimeOrderingRollbackAndUnload();
 	std::cout << "WUPS compatibility tests passed\n";
