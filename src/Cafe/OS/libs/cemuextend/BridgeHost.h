@@ -42,4 +42,30 @@ namespace cemuextend_hle
 		Cex2Host::Instance().KeyboardFocusLost();
 	}
 
+	inline void TextEvent(uint32 codepoint, bool repeat)
+	{
+		Cex2Host::Instance().TextEvent(codepoint, repeat);
+	}
+
+	inline void MouseEvent(cemuextend::wire::PointerSurface surface,
+		sint32 x, sint32 y, sint32 deltaX, sint32 deltaY,
+		sint32 wheelX, sint32 wheelY, uint32 buttons, uint32 changedButtons,
+		sint32 contentWidth, sint32 contentHeight, bool insideContent, bool focused,
+		uint8 flags = 0)
+	{
+		Cex2Host::Instance().MouseEvent(surface, x, y, deltaX, deltaY,
+			wheelX, wheelY, buttons, changedButtons, contentWidth, contentHeight,
+			insideContent, focused, flags);
+	}
+
+	inline void PointerFocusChanged(bool focused)
+	{
+		Cex2Host::Instance().PointerFocusChanged(focused);
+	}
+
+	[[nodiscard]] inline cemuextend::wire::PointerPolicyPayload EffectivePointerPolicy()
+	{
+		return Cex2Host::Instance().EffectivePointerPolicy();
+	}
+
 }

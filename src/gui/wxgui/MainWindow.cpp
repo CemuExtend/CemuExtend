@@ -62,9 +62,16 @@
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
+#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 
 #include <wx/app.h>
 #include <wx/thread.h>
+
+#include <vector>
+
+#if BOOST_OS_WINDOWS
+#include <windows.h>
+#endif
 
 #include "Cafe/HW/Latte/Renderer/Renderer.h" // For renderer API checks
 
@@ -299,6 +306,36 @@ private:
 	MainWindow* m_window;
 };
 
+namespace
+{
+	std::uint32_t CemuExtendMouseButtons(const wxMouseEvent& event)
+	{
+		using cemuextend::wire::MouseButton;
+		return (event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
+			(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
+			(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U) |
+			(event.Aux1IsDown() ? static_cast<std::uint32_t>(MouseButton::X1) : 0U) |
+			(event.Aux2IsDown() ? static_cast<std::uint32_t>(MouseButton::X2) : 0U);
+	}
+
+	wxStockCursor CemuExtendCursor(std::uint8_t cursor)
+	{
+		using cemuextend::wire::PointerCursor;
+		switch (static_cast<PointerCursor>(cursor))
+		{
+		case PointerCursor::TextInput: return wxCURSOR_IBEAM;
+		case PointerCursor::ResizeAll: return wxCURSOR_SIZING;
+		case PointerCursor::ResizeNS: return wxCURSOR_SIZENS;
+		case PointerCursor::ResizeEW: return wxCURSOR_SIZEWE;
+		case PointerCursor::ResizeNESW: return wxCURSOR_SIZENESW;
+		case PointerCursor::ResizeNWSE: return wxCURSOR_SIZENWSE;
+		case PointerCursor::Hand: return wxCURSOR_HAND;
+		case PointerCursor::NotAllowed: return wxCURSOR_NO_ENTRY;
+		default: return wxCURSOR_ARROW;
+		}
+	}
+}
+
 MainWindow::MainWindow()
 	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER)
 {
@@ -386,6 +423,7 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
+	UpdateCemuExtendPointerConfinement(false);
 	if (m_padView)
 	{
 		m_padView->Destroy();
@@ -841,6 +879,60 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 		if (wParam == DBT_DEVNODES_CHANGED)
 		{
 			InputManager::instance().on_device_changed();
+		}
+	}
+	else if (nMsg == WM_INPUT && m_cemuextend_raw_mouse_requested &&
+		m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
+			cemuextend::wire::PointerMode::CapturedRelative))
+	{
+		UINT size{};
+		if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, nullptr,
+			&size, sizeof(RAWINPUTHEADER)) == 0 && size >= sizeof(RAWINPUTHEADER))
+		{
+			std::vector<std::byte> storage(size);
+			if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT,
+				storage.data(), &size, sizeof(RAWINPUTHEADER)) == size)
+			{
+				const auto& raw = *reinterpret_cast<const RAWINPUT*>(storage.data());
+				if (raw.header.dwType == RIM_TYPEMOUSE)
+				{
+					using cemuextend::wire::MouseButton;
+					std::uint32_t changed{};
+					const auto updateButton = [this, &changed](USHORT flags,
+						USHORT downFlag, USHORT upFlag, MouseButton button)
+					{
+						const auto mask = static_cast<std::uint32_t>(button);
+						if ((flags & downFlag) != 0 && (m_cemuextend_mouse_buttons & mask) == 0)
+						{
+							m_cemuextend_mouse_buttons |= mask;
+							changed |= mask;
+						}
+						if ((flags & upFlag) != 0 && (m_cemuextend_mouse_buttons & mask) != 0)
+						{
+							m_cemuextend_mouse_buttons &= ~mask;
+							changed |= mask;
+						}
+					};
+					const auto flags = raw.data.mouse.usButtonFlags;
+					updateButton(flags, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP,
+						MouseButton::Left);
+					updateButton(flags, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
+						MouseButton::Right);
+					updateButton(flags, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP,
+						MouseButton::Middle);
+					updateButton(flags, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP,
+						MouseButton::X1);
+					updateButton(flags, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP,
+						MouseButton::X2);
+
+					if ((raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
+					{
+						m_cemuextend_raw_mouse_seen = true;
+						EmitCemuExtendRawMouseEvent(raw.data.mouse.lLastX,
+							raw.data.mouse.lLastY, changed);
+					}
+				}
+			}
 		}
 	}
 
@@ -1380,21 +1472,237 @@ void MainWindow::SaveSettings()
 	g_wxConfig.Save();
 }
 
+void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t wheelX,
+	std::int32_t wheelY, std::uint32_t changedButtons)
+{
+	if (!m_render_canvas)
+		return;
+	const auto logicalPosition = event.GetPosition();
+	const auto physicalPosition = ToPhys(logicalPosition);
+	const auto clientSize = m_render_canvas->GetClientSize();
+	const auto physicalWidth = ToPhys(clientSize.GetWidth());
+	const auto physicalHeight = ToPhys(clientSize.GetHeight());
+	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
+		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
+	auto eventButtons = m_cemuextend_mouse_buttons;
+	// Button callbacks are the authoritative transitions. In particular,
+	// synthetic/private-desktop motion can report wx's aggregate state as
+	// released even while a button is held. Preserve the confirmed mask for
+	// motion/wheel events so a drag cannot turn into a spurious ButtonUp.
+	if (event.ButtonDown())
+		eventButtons |= changedButtons;
+	else if (event.ButtonUp())
+		eventButtons &= ~changedButtons;
+	else if (changedButtons != 0)
+	{
+		const auto aggregateButtons = CemuExtendMouseButtons(event);
+		eventButtons = (eventButtons & ~changedButtons) |
+			(aggregateButtons & changedButtons);
+	}
+	const auto actualChanged = (m_cemuextend_mouse_buttons ^ eventButtons) & changedButtons;
+	m_cemuextend_mouse_buttons = eventButtons;
+
+	wxPoint delta{};
+	if (m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
+		cemuextend::wire::PointerMode::CapturedRelative))
+	{
+		const bool rawMouseAvailable =
+			m_cemuextend_raw_mouse_requested && EnsureCemuExtendRawMouse();
+		if (m_cemuextend_suppress_next_captured_wx_motion)
+		{
+			// ApplyCemuExtendPointerPolicy enters capture from the wx event that
+			// still contains the pre-capture cursor position. Suppress only that
+			// transition event instead of disabling the wx fallback wholesale.
+			m_cemuextend_suppress_next_captured_wx_motion = false;
+		}
+		else if (!rawMouseAvailable || !m_cemuextend_raw_mouse_seen)
+		{
+			// Keep wx motion as a fallback until the first WM_INPUT arrives.
+			// This also preserves deterministic input on private desktops and
+			// other synthetic-input paths that do not produce raw packets.
+			const wxPoint center{clientSize.GetWidth() / 2, clientSize.GetHeight() / 2};
+			delta = physicalPosition - ToPhys(center);
+		}
+	}
+	else if (m_cemuextend_mouse_position_valid)
+	{
+		delta = physicalPosition - m_cemuextend_last_mouse_position;
+	}
+
+	m_cemuextend_last_mouse_position = physicalPosition;
+	m_cemuextend_mouse_position_valid = true;
+	const auto flags = m_cemuextend_raw_mouse_requested && m_cemuextend_raw_mouse_seen
+		? static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative)
+		: static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::None);
+	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Tv,
+		physicalPosition.x, physicalPosition.y, delta.x, delta.y,
+		wheelX, wheelY, m_cemuextend_mouse_buttons, actualChanged,
+		physicalWidth, physicalHeight, inside, g_window_info.app_active.load(), flags);
+}
+
+void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
+	std::uint32_t changedButtons)
+{
+	if (!m_render_canvas)
+		return;
+	const auto logicalPosition = m_render_canvas->ScreenToClient(wxGetMousePosition());
+	const auto physicalPosition = ToPhys(logicalPosition);
+	const auto clientSize = m_render_canvas->GetClientSize();
+	const auto physicalWidth = ToPhys(clientSize.GetWidth());
+	const auto physicalHeight = ToPhys(clientSize.GetHeight());
+	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
+		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
+	m_cemuextend_last_mouse_position = physicalPosition;
+	m_cemuextend_mouse_position_valid = true;
+	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Tv,
+		physicalPosition.x, physicalPosition.y, deltaX, deltaY, 0, 0,
+		m_cemuextend_mouse_buttons, changedButtons, physicalWidth, physicalHeight,
+		inside, g_window_info.app_active.load(),
+		static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative));
+}
+
+bool MainWindow::EnsureCemuExtendRawMouse()
+{
+#if BOOST_OS_WINDOWS
+	if (m_cemuextend_raw_mouse_registered)
+		return true;
+	RAWINPUTDEVICE device{};
+	device.usUsagePage = 0x01;
+	device.usUsage = 0x02;
+	device.dwFlags = RIDEV_INPUTSINK;
+	device.hwndTarget = reinterpret_cast<HWND>(GetHandle());
+	m_cemuextend_raw_mouse_registered =
+		RegisterRawInputDevices(&device, 1, sizeof(device)) != FALSE;
+	return m_cemuextend_raw_mouse_registered;
+#else
+	return false;
+#endif
+}
+
+void MainWindow::UpdateCemuExtendPointerConfinement(bool confine)
+{
+#if BOOST_OS_WINDOWS
+	if (!confine || !m_render_canvas)
+	{
+		if (m_cemuextend_pointer_confined)
+			ClipCursor(nullptr);
+		m_cemuextend_pointer_confined = false;
+		return;
+	}
+
+	const auto window = reinterpret_cast<HWND>(m_render_canvas->GetHandle());
+	RECT client{};
+	POINT upperLeft{};
+	POINT lowerRight{};
+	if (!window || !::GetClientRect(window, &client) ||
+		client.right <= client.left || client.bottom <= client.top)
+	{
+		UpdateCemuExtendPointerConfinement(false);
+		return;
+	}
+	upperLeft.x = client.left;
+	upperLeft.y = client.top;
+	lowerRight.x = client.right;
+	lowerRight.y = client.bottom;
+	if (!::ClientToScreen(window, &upperLeft) ||
+		!::ClientToScreen(window, &lowerRight))
+	{
+		UpdateCemuExtendPointerConfinement(false);
+		return;
+	}
+	RECT screen{upperLeft.x, upperLeft.y, lowerRight.x, lowerRight.y};
+	m_cemuextend_pointer_confined = ClipCursor(&screen) != FALSE;
+#else
+	(void)confine;
+	m_cemuextend_pointer_confined = false;
+#endif
+}
+
+bool MainWindow::ApplyCemuExtendPointerPolicy()
+{
+	using cemuextend::wire::PointerMode;
+	const auto policy = cemuextend_hle::EffectivePointerPolicy();
+	const auto previousMode = m_cemuextend_pointer_mode;
+	m_cemuextend_pointer_mode = policy.mode;
+	const auto mode = static_cast<PointerMode>(policy.mode);
+	const auto flags = policy.flags.get();
+	m_cemuextend_raw_mouse_requested =
+		(flags & static_cast<std::uint32_t>(
+			cemuextend::wire::PointerPolicyFlag::DisableRawMouse)) == 0;
+	const bool confine = mode != PointerMode::Default &&
+		(flags & static_cast<std::uint32_t>(
+			cemuextend::wire::PointerPolicyFlag::ConfineToContent)) != 0 &&
+		g_window_info.app_active.load() && m_render_canvas;
+	UpdateCemuExtendPointerConfinement(confine);
+
+	if (mode == PointerMode::Default)
+	{
+		if (previousMode != static_cast<std::uint8_t>(PointerMode::Default))
+		{
+			ShowCursor(true);
+			if (m_render_canvas)
+				m_render_canvas->SetCursor(wxCursor(wxCURSOR_ARROW));
+			m_cemuextend_mouse_position_valid = false;
+		}
+		m_cemuextend_suppress_next_captured_wx_motion = false;
+		return false;
+	}
+
+	if (mode == PointerMode::VisibleAbsolute)
+	{
+		ShowCursor(true);
+		if (m_render_canvas)
+			m_render_canvas->SetCursor(wxCursor(CemuExtendCursor(policy.cursor)));
+	}
+	else
+	{
+		ShowCursor(false);
+	}
+
+	if (mode == PointerMode::CapturedRelative &&
+		previousMode != static_cast<std::uint8_t>(PointerMode::CapturedRelative) &&
+		m_render_canvas)
+	{
+		m_cemuextend_raw_mouse_seen = false;
+		m_cemuextend_suppress_next_captured_wx_motion = true;
+		if (m_cemuextend_raw_mouse_requested)
+			EnsureCemuExtendRawMouse();
+		const auto size = m_render_canvas->GetClientSize();
+		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
+		m_render_canvas->WarpPointer(center.x, center.y);
+		m_cemuextend_last_mouse_position = ToPhys(center);
+		m_cemuextend_mouse_position_valid = true;
+	}
+	return true;
+}
+
 void MainWindow::OnMouseMove(wxMouseEvent& event)
 {
 	event.Skip();
 
 	m_last_mouse_move_time = std::chrono::steady_clock::now();
 	m_mouse_position = wxGetMousePosition();
-	ShowCursor(true);
+	const bool bridgeOwnsPointer = ApplyCemuExtendPointerPolicy();
+	if (!bridgeOwnsPointer)
+		ShowCursor(true);
 
 	auto& instance = InputManager::instance();
 	std::unique_lock lock(instance.m_main_mouse.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
 	instance.m_main_mouse.position = { physPos.x, physPos.y };
 	lock.unlock();
+	EmitCemuExtendMouseEvent(event);
 
-	if (!IsFullScreen())
+	if (m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
+		cemuextend::wire::PointerMode::CapturedRelative) && m_render_canvas)
+	{
+		const auto size = m_render_canvas->GetClientSize();
+		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
+		if (event.GetPosition() != center)
+			m_render_canvas->WarpPointer(center.x, center.y);
+	}
+
+	if (bridgeOwnsPointer || !IsFullScreen())
 		return;
 
 	const auto& config = GetWxGUIConfig();
@@ -1406,13 +1714,16 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 void MainWindow::OnMouseLeft(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
-
-	std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-	instance.m_main_mouse.left_down = event.ButtonDown(wxMOUSE_BTN_LEFT);
-	auto physPos = ToPhys(event.GetPosition());
-	instance.m_main_mouse.position = { physPos.x, physPos.y };
-	if (event.ButtonDown(wxMOUSE_BTN_LEFT))
-		instance.m_main_mouse.left_down_toggle = true;
+	{
+		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
+		instance.m_main_mouse.left_down = event.ButtonDown(wxMOUSE_BTN_LEFT);
+		auto physPos = ToPhys(event.GetPosition());
+		instance.m_main_mouse.position = { physPos.x, physPos.y };
+		if (event.ButtonDown(wxMOUSE_BTN_LEFT))
+			instance.m_main_mouse.left_down_toggle = true;
+	}
+	EmitCemuExtendMouseEvent(event, 0, 0,
+		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Left));
 
 	event.Skip();
 }
@@ -1420,14 +1731,35 @@ void MainWindow::OnMouseLeft(wxMouseEvent& event)
 void MainWindow::OnMouseRight(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
+	{
+		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
+		instance.m_main_mouse.right_down = event.ButtonDown(wxMOUSE_BTN_RIGHT);
+		auto physPos = ToPhys(event.GetPosition());
+		instance.m_main_mouse.position = { physPos.x, physPos.y };
+		if(event.ButtonDown(wxMOUSE_BTN_RIGHT))
+			instance.m_main_mouse.right_down_toggle = true;
+	}
+	EmitCemuExtendMouseEvent(event, 0, 0,
+		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Right));
 
-	std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-	instance.m_main_mouse.right_down = event.ButtonDown(wxMOUSE_BTN_RIGHT);
-	auto physPos = ToPhys(event.GetPosition());
-	instance.m_main_mouse.position = { physPos.x, physPos.y };
-	if(event.ButtonDown(wxMOUSE_BTN_RIGHT))
-		instance.m_main_mouse.right_down_toggle = true;
+	event.Skip();
+}
 
+void MainWindow::OnMouseMiddle(wxMouseEvent& event)
+{
+	EmitCemuExtendMouseEvent(event, 0, 0,
+		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Middle));
+	event.Skip();
+}
+
+void MainWindow::OnMouseAux(wxMouseEvent& event)
+{
+	std::uint32_t changed{};
+	if (event.GetButton() == wxMOUSE_BTN_AUX1)
+		changed = static_cast<std::uint32_t>(cemuextend::wire::MouseButton::X1);
+	else if (event.GetButton() == wxMOUSE_BTN_AUX2)
+		changed = static_cast<std::uint32_t>(cemuextend::wire::MouseButton::X2);
+	EmitCemuExtendMouseEvent(event, 0, 0, changed);
 	event.Skip();
 }
 
@@ -1622,6 +1954,12 @@ void MainWindow::CreateCanvas()
 	m_render_canvas->Bind(wxEVT_LEFT_UP, &MainWindow::OnMouseLeft, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_DOWN, &MainWindow::OnMouseRight, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_UP, &MainWindow::OnMouseRight, this);
+	m_render_canvas->Bind(wxEVT_MIDDLE_DOWN, &MainWindow::OnMouseMiddle, this);
+	m_render_canvas->Bind(wxEVT_MIDDLE_UP, &MainWindow::OnMouseMiddle, this);
+	m_render_canvas->Bind(wxEVT_AUX1_DOWN, &MainWindow::OnMouseAux, this);
+	m_render_canvas->Bind(wxEVT_AUX1_UP, &MainWindow::OnMouseAux, this);
+	m_render_canvas->Bind(wxEVT_AUX2_DOWN, &MainWindow::OnMouseAux, this);
+	m_render_canvas->Bind(wxEVT_AUX2_UP, &MainWindow::OnMouseAux, this);
 
 	m_render_canvas->Bind(wxEVT_GESTURE_PAN, &MainWindow::OnGesturePan, this);
 
@@ -1642,6 +1980,7 @@ void MainWindow::CreateCanvas()
 
 void MainWindow::DestroyCanvas()
 {
+	UpdateCemuExtendPointerConfinement(false);
 	if (m_padView)
 	{
 		m_padView->DestroyCanvas();
@@ -1743,6 +2082,11 @@ void MainWindow::OnMouseWheel(wxMouseEvent& event)
 	instance.m_mouse_wheel = (delta / 120.0f);
 	instance.m_mouse_wheel_cumulative.fetch_add(static_cast<sint32>(delta / 120.0f),
 		std::memory_order_relaxed);
+	const auto steps = static_cast<std::int32_t>(delta / 120.0f);
+	if (event.GetWheelAxis() == wxMOUSE_WHEEL_HORIZONTAL)
+		EmitCemuExtendMouseEvent(event, steps, 0);
+	else
+		EmitCemuExtendMouseEvent(event, 0, steps);
 
 	event.Skip();
 }
@@ -1863,6 +2207,12 @@ void MainWindow::OnTimer(wxTimerEvent& event)
 
 		m_update_available = {};
 	}
+
+	// A connected Mod owns visibility/capture while its pointer policy is active.
+	// Returning to Default (focus loss, title stop, or session close) restores
+	// Cemu's regular fullscreen auto-hide behavior.
+	if (ApplyCemuExtendPointerPolicy())
+		return;
 
 	if (!IsFullScreen() || m_menu_visible)
 		return;

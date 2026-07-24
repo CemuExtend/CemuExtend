@@ -2,6 +2,8 @@
 
 #include <wx/frame.h>
 
+#include <cstdint>
+
 #define WM_CREATE_PAD	(WM_USER+1)
 #define WM_DESTROY_PAD	(WM_USER+2)
 
@@ -33,6 +35,9 @@ private:
 	void OnMoveEvent(wxMoveEvent& event);
 	void OnGesturePan(wxPanGestureEvent& event);
 	void OnSetWindowTitle(wxCommandEvent& event);
+	void EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t changedButtons = 0);
 
 	wxWindow* m_render_canvas = nullptr;
+	wxPoint m_cemuextend_last_mouse_position{};
+	bool m_cemuextend_mouse_position_valid{};
 };

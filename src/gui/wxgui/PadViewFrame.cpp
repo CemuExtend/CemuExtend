@@ -6,6 +6,7 @@
 
 #include "config/ActiveSettings.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
+#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 #ifdef ENABLE_OPENGL
 #include "wxgui/canvas/OpenGLCanvas.h"
 #endif
@@ -193,6 +194,35 @@ void PadViewFrame::OnChar(wxKeyEvent& event)
 	event.Skip();
 }
 
+void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t changedButtons)
+{
+	if (!m_render_canvas)
+		return;
+	using cemuextend::wire::MouseButton;
+	const auto logicalPosition = event.GetPosition();
+	const auto physicalPosition = ToPhys(logicalPosition);
+	const auto size = m_render_canvas->GetClientSize();
+	auto buttons =
+		(event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
+		(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
+		(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U);
+	if (event.ButtonDown())
+		buttons |= changedButtons;
+	else if (event.ButtonUp())
+		buttons &= ~changedButtons;
+	wxPoint delta{};
+	if (m_cemuextend_mouse_position_valid)
+		delta = physicalPosition - m_cemuextend_last_mouse_position;
+	m_cemuextend_last_mouse_position = physicalPosition;
+	m_cemuextend_mouse_position_valid = true;
+	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
+		logicalPosition.x < size.GetWidth() && logicalPosition.y < size.GetHeight();
+	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Drc,
+		physicalPosition.x, physicalPosition.y, delta.x, delta.y, 0, 0,
+		buttons, changedButtons, ToPhys(size.GetWidth()), ToPhys(size.GetHeight()),
+		inside, g_window_info.app_active.load());
+}
+
 void PadViewFrame::OnMouseMove(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
@@ -200,6 +230,7 @@ void PadViewFrame::OnMouseMove(wxMouseEvent& event)
 	std::scoped_lock lock(instance.m_pad_touch.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
 	instance.m_pad_mouse.position = { physPos.x, physPos.y };
+	EmitCemuExtendMouseEvent(event);
 
 	event.Skip();
 }
@@ -214,6 +245,8 @@ void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 	instance.m_pad_mouse.position = { physPos.x, physPos.y };
 	if (event.ButtonDown(wxMOUSE_BTN_LEFT))
 		instance.m_pad_mouse.left_down_toggle = true;
+	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
+		cemuextend::wire::MouseButton::Left));
 
 }
 
@@ -227,6 +260,8 @@ void PadViewFrame::OnMouseRight(wxMouseEvent& event)
 	instance.m_pad_mouse.position = { physPos.x, physPos.y };
 	if (event.ButtonDown(wxMOUSE_BTN_RIGHT))
 		instance.m_pad_mouse.right_down_toggle = true;
+	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
+		cemuextend::wire::MouseButton::Right));
 }
 
 void PadViewFrame::OnSetWindowTitle(wxCommandEvent& event)
