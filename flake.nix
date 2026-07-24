@@ -12,13 +12,9 @@
       flake = false;
     };
 
-    # Git flakes do not copy an initialized submodule worktree into the Nix
-    # source automatically. Fetch the public repository at the same immutable
-    # revision as the submodule so standalone/clean CemuExtend clones work.
-    libcemuextend-src = {
-      url = "git+https://github.com/PinkDiamondTeam/libcemuextend.git?rev=83729235e892ae93d7780eff2d46cfd55114dbe2";
-      flake = false;
-    };
+    # Fetch this flake's own git submodules (including libcemuextend) rather
+    # than pinning them to a separate, manually-updated input revision.
+    self.submodules = true;
   };
 
   outputs =
@@ -26,7 +22,6 @@
       self,
       nixpkgs,
       imgui-src,
-      libcemuextend-src,
       ...
     }:
     let
@@ -136,11 +131,9 @@
         '';
 
         preConfigure = ''
-          rm -rf dependencies/imgui dependencies/Vulkan-Headers dependencies/libcemuextend
+          rm -rf dependencies/imgui dependencies/Vulkan-Headers
           ln -s ${imgui-src} dependencies/imgui
           ln -s ${pkgs.vulkan-headers} dependencies/Vulkan-Headers
-          cp -r ${libcemuextend-src} dependencies/libcemuextend
-          chmod -R u+w dependencies/libcemuextend
 
           substituteInPlace dependencies/gamemode/lib/gamemode_client.h \
             --replace-fail "libgamemode.so.0" \
@@ -150,8 +143,8 @@
         installPhase = ''
           runHook preInstall
 
-          install -Dm755 ../bin/Cemu_release $out/bin/Cemu
-          ln -s Cemu $out/bin/cemu
+          install -Dm755 ../bin/Cemu_release $out/bin/Cemu_release
+          ln -s Cemu_release $out/bin/cemu
 
           install -d $out/share/Cemu
           cp -r ../bin/resources ../bin/gameProfiles $out/share/Cemu/
