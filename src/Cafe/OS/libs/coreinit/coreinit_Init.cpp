@@ -12,6 +12,7 @@
 #include "Cafe/OS/libs/coreinit/coreinit_FG.h"
 #include "Cafe/CafeSystem.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
+#include "Cafe/OS/libs/cemuextend/cemuextend.h"
 
 extern MPTR _entryPoint;
 extern RPLModule* applicationRPX;
@@ -223,6 +224,12 @@ void coreinit_start(PPCInterpreter_t* hCPU)
 			}
 		}
 	}
+
+	// WUPS plugins are started later, from GX2Init (see GX2_Misc.cpp): the plugin's
+	// WUT initialisers allocate through the application's default heap, whose
+	// allocator (e.g. the game's dlmalloc and its mutex) is only fully constructed
+	// once the title's own static initializers have run - which happens after this
+	// coreinit bootstrap hands control to the title entrypoint.
 
 	// continue at main executable entrypoint
 	hCPU->gpr[4] = memory_getVirtualOffsetFromPointer(_coreinitInfo->argv);

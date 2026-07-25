@@ -2,6 +2,10 @@
 
 #include "Cafe/HW/Espresso/WupsServices.h"
 
+#include "Cafe/HW/Espresso/WupsGuestMemoryOwnership.h"
+#include "Cafe/HW/Espresso/WupsHeapInterception.h"
+#include "Cafe/HW/Espresso/WupsOwnerScopedHeap.h"
+#include "Cafe/HW/Espresso/WupsPluginHeap.h"
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
@@ -159,8 +163,24 @@ namespace
 	class CemuWupsPlatform final : public IWupsPlatform
 	{
 	public:
+		CemuWupsPlatform(
+			std::shared_ptr<WupsGuestMemoryOwnershipRegistry> ownershipRegistry,
+			std::shared_ptr<WupsOwnerScopedHeapTracker> heapTracker,
+			std::shared_ptr<WupsPluginHeap> pluginHeap)
+			: m_ownershipRegistry(std::move(ownershipRegistry)),
+				m_heapTracker(std::move(heapTracker)),
+				m_pluginHeap(std::move(pluginHeap))
+		{
+		}
+
 		~CemuWupsPlatform() override
 		{
+			// Detach from the heap-interception/plugin-heap bridges before our
+			// registry/tracker members are torn down; the tracker holds a
+			// reference to the registry, and the plugin heap holds a reference to
+			// the tracker.
+			cafe::wups::SetActiveHeapTracker(nullptr);
+			cafe::wups::SetActivePluginHeap(nullptr);
 			std::vector<WupsOwnerToken> owners;
 			{
 				std::lock_guard lock(m_mutex);
@@ -208,6 +228,20 @@ namespace
 				(access != WupsGuestAccess::Execute &&
 					!memory_isAddressRangeAccessible(address, size)))
 				return false;
+			// Consult the unified ownership registry first: it authoritatively
+			// covers tracked heap allocations, owner-created heap backings and
+			// (in Phase 2) mapped-memory ranges, all owner/generation scoped.
+			if (hasScopedOwner && m_ownershipRegistry)
+			{
+				const auto policy = access == WupsGuestAccess::Execute ?
+					WupsGuestPointerPolicy::ExecutableCallback :
+					access == WupsGuestAccess::Write ?
+						WupsGuestPointerPolicy::WritableOwnedMemory :
+						WupsGuestPointerPolicy::AnyOwnedMemory;
+				if (m_ownershipRegistry->BelongsTo(scopedOwner, address, size,
+					access, policy))
+					return true;
+			}
 			{
 				std::lock_guard lock(m_mutex);
 				for (const auto& [base, allocation] : m_allocations)
@@ -409,6 +443,16 @@ namespace
 					address + kCallableStubSize);
 				RPLLoader_ReleaseCodeCaveMem(MEMPTR<void>{address});
 			}
+			// Drop this owner's heap bookkeeping and owned ranges. Ranges are hidden
+			// from new lookups first, drained of in-flight pins, then reclaimed.
+			if (m_heapTracker)
+				m_heapTracker->ReleaseOwner(owner);
+			if (m_ownershipRegistry)
+			{
+				m_ownershipRegistry->RevokeOwner(owner);
+				m_ownershipRegistry->WaitForOwnerPins(owner);
+				m_ownershipRegistry->ReleaseOwner(owner);
+			}
 		}
 
 		std::uint64_t CurrentGuestThreadId() const override
@@ -446,7 +490,34 @@ namespace
 		}
 
 		bool SupportsMappedMemory() const override { return false; }
-		bool SupportsOwnerScopedHeapPointers() const override { return false; }
+		// Heap-taking ABIs are honoured once the unified ownership registry and
+		// owner-scoped heap tracker are wired: every pointer they accept has its
+		// owner/generation proven against a registered range, and anything
+		// untracked is rejected. Phase 1 supplies both in the production adapter.
+		bool SupportsOwnerScopedHeapPointers() const override
+		{
+			return m_ownershipRegistry != nullptr && m_heapTracker != nullptr;
+		}
+
+		bool SupportsPluginHeap() const override
+		{
+			return m_pluginHeap != nullptr;
+		}
+
+		std::uint32_t AllocatePluginHeapMemory(WupsOwnerToken owner,
+			std::uint32_t size, std::int32_t alignment) override
+		{
+			if (!m_pluginHeap)
+				return 0;
+			return m_pluginHeap->AllocEx(owner, size, alignment);
+		}
+
+		void FreePluginHeapMemory(WupsOwnerToken owner,
+			std::uint32_t address) override
+		{
+			if (m_pluginHeap)
+				m_pluginHeap->Free(owner, address);
+		}
 
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
 			WupsOwnerToken, std::uint32_t, std::uint32_t, bool,
@@ -530,10 +601,28 @@ namespace
 		mutable std::unordered_map<std::uint64_t, std::uint32_t>
 			m_latestGeneration;
 		std::map<std::uint32_t, Allocation> m_allocations;
+		std::shared_ptr<WupsGuestMemoryOwnershipRegistry> m_ownershipRegistry;
+		std::shared_ptr<WupsOwnerScopedHeapTracker> m_heapTracker;
+		std::shared_ptr<WupsPluginHeap> m_pluginHeap;
 	};
 }
 
 std::shared_ptr<IWupsPlatform> CreateCemuWupsPlatform()
 {
-	return std::make_shared<CemuWupsPlatform>();
+	// The registry and tracker are shared: the platform owns them, the heap
+	// interception bridge forwards coreinit allocations into the tracker, and
+	// (Phase 2) the mapped-memory manager will register into the same registry.
+	auto registry = std::make_shared<WupsGuestMemoryOwnershipRegistry>();
+	auto heapTracker = std::make_shared<WupsOwnerScopedHeapTracker>(*registry);
+	cafe::wups::SetActiveHeapTracker(heapTracker);
+	// The plugin heap is shared the same way: WupsServices.cpp's coreinit
+	// default-heap data-import redirection and CemodRuntime's
+	// OnApplicationStarts hook both reach it through the cafe::wups bridge
+	// rather than through the IWupsPlatform interface, so no other
+	// IWupsPlatform implementation (tests, unsupported facades) needs to know
+	// about it.
+	auto pluginHeap = std::make_shared<WupsPluginHeap>(heapTracker);
+	cafe::wups::SetActivePluginHeap(pluginHeap);
+	return std::make_shared<CemuWupsPlatform>(std::move(registry),
+		std::move(heapTracker), std::move(pluginHeap));
 }

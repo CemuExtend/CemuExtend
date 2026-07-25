@@ -4,6 +4,8 @@
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/TrustedCemodRuntime.h"
+#include "Cafe/HW/Espresso/WupsPluginHeap.h"
+#include "Cafe/HW/Espresso/WupsRuntime.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
@@ -266,12 +268,25 @@ struct CemodRuntime::Impl
 		Entrypoints entrypoints;
 		std::uint32_t stackTop{};
 	};
+	static constexpr std::uint64_t kWupsHandleMask = 1ULL << 62;
 	mutable std::mutex mutex;
 	std::map<std::uint64_t, Instance> mods;
 	std::uint64_t nextHandle{1};
 	std::uint32_t generation{1};
 	TrustedCemodRuntime trusted;
+	// Lazily constructed on first WUPS load so titles without WUPS cemods never
+	// pay for the Aroma compatibility runtime. Guarded by mutex during creation.
+	std::unique_ptr<WupsPayloadRuntime> wups;
+	bool applicationStarted{}; // guards the once-per-title WUPS OnApplicationStarts
 	std::chrono::microseconds titleTime{};
+
+	WupsPayloadRuntime& EnsureWups()
+	{
+		if (!wups)
+			wups = std::make_unique<WupsPayloadRuntime>(
+				CreateRplAromaCompatibilityRuntime(), CreateRplWupsModuleLoader());
+		return *wups;
+	}
 };
 
 CemodRuntime::CemodRuntime() : m_impl(std::make_unique<Impl>()) {}
@@ -281,6 +296,21 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	std::uint32_t userPermissions, std::uint32_t titlePermissions, std::string& error,
 	const ModServicePermissions* servicePermissions)
 {
+	if (package.manifest.payload.format == CemodPayloadFormat::Wups)
+	{
+		// WUPS plugins run under the Aroma compatibility runtime, not the sandboxed
+		// PPC/trusted-ELF paths. The approval gate in LoadCemodsForTitle has already
+		// authorized this package by the time we get here.
+		if (Size() >= kMaximumModsPerTitle)
+			{ error = "the title already has 16 loaded Mods"; return std::nullopt; }
+		WupsPayloadRuntime* wups = nullptr;
+		{
+			std::lock_guard lock(m_impl->mutex);
+			wups = &m_impl->EnsureWups();
+		}
+		auto handle = wups->Load(std::move(package), error);
+		return handle ? std::optional{*handle | Impl::kWupsHandleMask} : std::nullopt;
+	}
 	if (package.IsTrustedNative())
 	{
 		const ModServicePermissions services = servicePermissions ? *servicePermissions : ModServicePermissions{};
@@ -421,6 +451,8 @@ bool CemodRuntime::Invoke(std::uint64_t handle, CemodLifecycle lifecycle,
 
 bool CemodRuntime::Unload(std::uint64_t handle)
 {
+	if ((handle & Impl::kWupsHandleMask) != 0)
+		return m_impl->wups && m_impl->wups->Unload(handle & ~Impl::kWupsHandleMask);
 	if ((handle & Impl::kTrustedHandleMask) != 0)
 		return m_impl->trusted.Unload(handle & ~Impl::kTrustedHandleMask);
 	(void)Invoke(handle, CemodLifecycle::Shutdown);
@@ -467,6 +499,37 @@ void CemodRuntime::EventAll(std::uint32_t event)
 		(void)Invoke(handle, CemodLifecycle::Event, event, 0);
 }
 
+void CemodRuntime::OnApplicationStarts()
+{
+	// Must be called from an emulated PPC/CPU thread with a ready application heap
+	// (see GX2Init): loading a WUPS plugin's external RPL and running its WUT
+	// initialisers allocates from the application heap and installs function
+	// patches, all of which require a live PPCInterpreter instance. Fires once per
+	// title; UnloadAll() clears the guard for the next title.
+	if (m_impl->applicationStarted || !m_impl->wups)
+		return;
+	m_impl->applicationStarted = true;
+	// The plugin heap backing must exist before any plugin init hook runs: a
+	// plugin's earliest libc allocations (via the redirected coreinit
+	// MEMAllocFromDefaultHeap(Ex)/MEMFreeToDefaultHeap data imports, see
+	// WupsPluginHeap.h) happen during WUPS/WUT initialisation, which is driven
+	// by wups->OnApplicationStarts() below. This call is the one and only
+	// point where that backing is carved out of the *game*'s default heap, and
+	// it must happen from this clean PPC thread context - not from inside a
+	// plugin's own init code, which may already be racing the game's heap.
+	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+	{
+		std::string heapError;
+		if (!pluginHeap->EnsureInitialized(heapError))
+			cemuLog_log(LogType::Force,
+				"WUPS: plugin heap initialization failed, plugin libc "
+				"allocations will be rejected: {}", heapError);
+	}
+	std::string error;
+	if (!m_impl->wups->OnApplicationStarts(error))
+		cemuLog_log(LogType::Force, "WUPS: OnApplicationStarts reported errors: {}", error);
+}
+
 void CemodRuntime::UpdatePermissions(std::string_view principal, std::uint32_t permissions,
 	const ModServicePermissions& services)
 {
@@ -499,6 +562,15 @@ void CemodRuntime::UnloadAll()
 {
 	for (;;) { std::uint64_t handle{}; { std::lock_guard lock(m_impl->mutex); if (m_impl->mods.empty()) break; handle = m_impl->mods.begin()->first; } (void)Unload(handle); }
 	m_impl->trusted.UnloadAll();
+	// UnloadChecked() flags a pending application-ends teardown for any plugin that
+	// was still Active/Initialized, so a plain UnloadAll() is a clean title shutdown.
+	if (m_impl->wups) m_impl->wups->UnloadAll();
+	m_impl->applicationStarted = false; // re-arm for the next title
+	// The plugin heap's backing lived inside this title's game heap, which no
+	// longer exists; drop it so the next title's OnApplicationStarts lazily
+	// carves a fresh one out of its own default heap.
+	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+		pluginHeap->Reset();
 }
 
 ModExecutionContext* CemodRuntime::Context(std::uint64_t handle)
@@ -518,7 +590,8 @@ PPCInterpreter_t* CemodRuntime::Cpu(std::uint64_t handle)
 std::size_t CemodRuntime::Size() const
 {
 	std::lock_guard lock(m_impl->mutex);
-	return m_impl->mods.size() + m_impl->trusted.Size();
+	return m_impl->mods.size() + m_impl->trusted.Size() +
+		(m_impl->wups ? m_impl->wups->Size() : 0);
 }
 
 cemuextend_hle::Cex2Owner* CemodRuntime::TrustedOwner()

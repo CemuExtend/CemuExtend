@@ -4,13 +4,14 @@
 
 #include "Cafe/HW/Espresso/PPCCallback.h"
 #include "Cafe/OS/RPL/rpl.h"
+#include "Cemu/Logging/CemuLogging.h"
 
 #include <array>
 #include <cstring>
 
 bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
-	std::uint32_t& result, std::string& error)
+	std::uint32_t& result, std::string& error, bool aggregateByReference)
 {
 	error.clear();
 	result = 0;
@@ -37,9 +38,14 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		error = "guest callback requires an emulated CPU thread";
 		return false;
 	}
-	if ((cpu->gpr[1] & 0xfU) != 0 || cpu->gpr[1] < 64)
+	// A PPC EABI callback needs a 16-byte aligned stack with headroom for the
+	// argument save area. Cemu thread stacks are only 8-byte aligned (see
+	// __OSThreadInit), and the caller (e.g. coreinit_start) may hand us any valid
+	// r1, so we align a working copy of the stack pointer down into the unused
+	// region below the current frame and restore the caller's r1 afterwards.
+	if (cpu->gpr[1] < 128)
 	{
-		error = "guest callback stack is not 16-byte aligned";
+		error = "guest callback stack pointer is too low to build a frame";
 		return false;
 	}
 
@@ -47,6 +53,9 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	std::array<FPR_t, 32> savedFpr;
 	std::array<std::uint8_t, 32> savedCr;
 	std::memcpy(savedGpr.data(), cpu->gpr, sizeof(cpu->gpr));
+	// Align down for the duration of the callback; savedGpr already captured the
+	// caller's original r1, which is restored below.
+	cpu->gpr[1] &= ~static_cast<std::uint32_t>(0xFU);
 	std::memcpy(savedFpr.data(), cpu->fpr, sizeof(cpu->fpr));
 	std::memcpy(savedCr.data(), cpu->cr, sizeof(cpu->cr));
 	const auto savedFpscr = cpu->fpscr;
@@ -60,23 +69,29 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	const auto savedReservationValue = cpu->reservedMemValue;
 	const auto hadMemoryException = cpu->memoryException;
 
-	const std::size_t stackWordCount = argumentWords.size() > 8 ? argumentWords.size() - 8 : 0;
-	std::array<std::uint32_t, 24> savedStackWords{};
-	const MPTR stackArgumentBase = cpu->gpr[1] - 64 + 8;
-	if (stackWordCount != 0 &&
-		!memory_isAddressRangeAccessible(stackArgumentBase,
-			static_cast<std::uint32_t>(stackWordCount * sizeof(std::uint32_t))))
-	{
-		error = "guest callback ABI argument area is outside mapped memory";
-		return false;
-	}
-	for (std::size_t index = 0; index < stackWordCount; ++index)
-		savedStackWords[index] = memory_readU32(
-			stackArgumentBase + static_cast<MPTR>(index * sizeof(std::uint32_t)));
-
+	// devkitPPC hands a WUPS hook its wups_loader_*_args_t by reference: the caller
+	// materialises the struct in memory and passes its address in r3, regardless of
+	// how small the struct is (an 8-byte wups_loader_init_config_args_t is passed
+	// exactly like a 60-byte button-combo struct). Only the hook path sets
+	// aggregateByReference; plain guest callbacks take scalars in registers.
 	PPCCoreCallbackData_t callbackData{};
-	for (const auto word : argumentWords)
-		_PPCCoreCallback_writeGPRArg(callbackData, cpu, word);
+	if (aggregateByReference && !argumentWords.empty())
+	{
+		const std::uint32_t structBytes =
+			static_cast<std::uint32_t>(argumentWords.size() * sizeof(std::uint32_t));
+		cpu->gpr[1] -= (structBytes + 15u) & ~15u; // preserve 16-byte alignment
+		const MPTR structAddress = cpu->gpr[1];
+		for (std::size_t index = 0; index < argumentWords.size(); ++index)
+			memory_writeU32(structAddress +
+				static_cast<MPTR>(index * sizeof(std::uint32_t)),
+				argumentWords[index]);
+		_PPCCoreCallback_writeGPRArg(callbackData, cpu, structAddress);
+	}
+	else
+	{
+		for (const auto word : argumentWords)
+			_PPCCoreCallback_writeGPRArg(callbackData, cpu, word);
+	}
 	if (const auto sda2 = RPLLoader_GetModuleSDA2Base(moduleLease))
 		cpu->gpr[2] = sda2;
 	if (const auto sda1 = RPLLoader_GetModuleSDA1Base(moduleLease))
@@ -85,9 +100,7 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	result = PPCCoreCallback(callbackAddress, callbackData);
 	const bool memoryException = !hadMemoryException && cpu->memoryException;
 
-	for (std::size_t index = 0; index < stackWordCount; ++index)
-		memory_writeU32(stackArgumentBase + static_cast<MPTR>(
-			index * sizeof(std::uint32_t)), savedStackWords[index]);
+	// Restoring savedGpr rewinds r1 (undoing any by-reference struct reservation).
 	std::memcpy(cpu->gpr, savedGpr.data(), sizeof(cpu->gpr));
 	std::memcpy(cpu->fpr, savedFpr.data(), sizeof(cpu->fpr));
 	std::memcpy(cpu->cr, savedCr.data(), sizeof(cpu->cr));

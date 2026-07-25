@@ -2391,18 +2391,42 @@ WupsServiceStatus AromaCompatibilityRuntime::ReentRegister(
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
 	if (!owner)
+	{
+		cemuLog_log(LogType::Force,
+			"WUPS ReentRegister: owner {}:{} pin failed (status {})", token.owner,
+			token.generation, static_cast<int>(status));
 		return status;
+	}
 	if (!m_impl->ModuleAllowed(*owner.owner, "homebrew_wupsbackend"))
+	{
+		cemuLog_log(LogType::Force,
+			"WUPS ReentRegister: owner {}:{} lacks homebrew_wupsbackend",
+			token.owner, token.generation);
 		return WupsServiceStatus::PermissionDenied;
+	}
 	if (!m_impl->options.platform || pluginId == 0 || context == 0)
+	{
+		cemuLog_log(LogType::Force,
+			"WUPS ReentRegister: invalid args pluginId=0x{:08x} context=0x{:08x}",
+			pluginId, context);
 		return WupsServiceStatus::InvalidArgument;
+	}
 	std::string error;
 	if (!m_impl->ValidateGuestCallback(
 		*owner.owner, cleanupCallback, error))
+	{
+		cemuLog_log(LogType::Force,
+			"WUPS ReentRegister: cleanup callback 0x{:08x} rejected: {}",
+			cleanupCallback, error);
 		return WupsServiceStatus::InvalidArgument;
+	}
 	const auto thread = m_impl->options.platform->CurrentGuestThreadId();
 	if (thread == 0)
+	{
+		cemuLog_log(LogType::Force,
+			"WUPS ReentRegister: no current guest thread");
 		return WupsServiceStatus::InvalidArgument;
+	}
 	std::lock_guard lock(owner->mutex);
 	const auto key = std::pair{thread, pluginId};
 	if (owner->reent.contains(key))
@@ -3241,13 +3265,75 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 		error = "WUPS import module or symbol name is invalid";
 		return std::nullopt;
 	}
-	if (!m_impl->ModuleAllowed(*owner.owner, moduleName))
+	// Only WUMS/homebrew modules are gated by the manifest's module-permission
+	// list. Base OS modules (coreinit, gx2, vpad, nn_*, ...) are resolved through
+	// the normal Cafe RPL/HLE path and must never require an explicit homebrew
+	// permission - every WUT plugin imports coreinit and gx2 unconditionally.
+	if (moduleName.starts_with("homebrew_") &&
+		!m_impl->ModuleAllowed(*owner.owner, moduleName))
 	{
 		error = fmt::format(
 			"package '{}' has no permission for WUPS module '{}'",
 			package.manifest.modId, moduleName);
 		return std::nullopt;
 	}
+
+	// A WUT plugin loaded as an external RPL imports coreinit's default-heap
+	// data exports the same way any Cafe RPL does, which would otherwise
+	// resolve to the *game*'s own gCoreinitData->MEMAllocFromDefaultHeap*
+	// function-pointer slots (see WupsPluginHeap.h for the full story on why
+	// that is unsafe). Redirect these three data exports to a dedicated,
+	// isolated plugin heap before any other resolution path sees them. This
+	// takes priority even over normal Cafe RPL/HLE resolution; in practice
+	// normal resolution never reaches here for these symbols anyway (coreinit
+	// registers them as ordinary virtual-pointer data exports), but the
+	// redirection must win unconditionally regardless of how it got here.
+	if (kind == WupsSymbolKind::Data && moduleName == "coreinit" &&
+		(symbolName == "MEMAllocFromDefaultHeap" ||
+			symbolName == "MEMAllocFromDefaultHeapEx" ||
+			symbolName == "MEMFreeToDefaultHeap"))
+	{
+		if (!m_impl->options.platform ||
+			!m_impl->options.platform->SupportsPluginHeap())
+		{
+			error = fmt::format(
+				"package '{}' plugin '{}' cannot resolve 'coreinit.{}': this "
+				"platform has no isolated WUPS plugin heap to redirect libc "
+				"allocations into",
+				package.manifest.modId, metadata.name, symbolName);
+			return std::nullopt;
+		}
+		const auto key = std::pair{std::string(moduleName), std::string(symbolName)};
+		{
+			std::lock_guard lock(owner->mutex);
+			if (const auto found = owner->dataExports.find(key);
+				found != owner->dataExports.end())
+				return found->second;
+		}
+		std::uint32_t target{};
+		if (!m_impl->EnsureFunctionExport(owner.owner, "__cemu_wups_data",
+			symbolName, target, error))
+			return std::nullopt;
+		const auto cell = m_impl->options.platform->AllocateGuestData(
+			token, 4, 4, error);
+		if (!cell)
+			return std::nullopt;
+		if (!m_impl->WriteGuestU32(*owner.owner, *cell, target, error))
+		{
+			m_impl->options.platform->FreeGuestData(token, *cell);
+			return std::nullopt;
+		}
+		{
+			std::lock_guard lock(owner->mutex);
+			owner->dataExports.emplace(key, *cell);
+			owner->guestData.push_back(*cell);
+		}
+		cemuLog_log(LogType::Force,
+			"WUPS: redirected coreinit.{} -> cell 0x{:08x} (thunk 0x{:08x})",
+			symbolName, *cell, target);
+		return *cell;
+	}
+
 	bool backendKnown{};
 	bool standardKnown{};
 	if (kind == WupsSymbolKind::Function)
@@ -3472,7 +3558,12 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 		if (!requireHeapProvenance())
 			return false;
 		invocation.argumentWords = {1, owner->pluginIdentifier};
-		invocation.requireZeroResult = true;
+		// libwups' config library resolves its backend through
+		// OSDynLoad_Acquire("homebrew_wupsbackend"), which this runtime does not
+		// publish as an acquirable module, so the call reports
+		// WUPSCONFIG_API_RESULT_MODULE_NOT_FOUND. The configuration menu is an
+		// optional surface - record the status but let the plugin start.
+		invocation.reportNonZeroResult = true;
 		return true;
 	case WupsHookType::InitButtonCombo:
 	{
@@ -3907,15 +3998,25 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 
 		if (symbolName == "ReentGet")
 		{
-			if (!require(2) || arguments[0] != owner->pluginIdentifier ||
+			// arguments[0] is an opaque, plugin-chosen reentrancy key (in
+			// practice the guest address of one of the plugin's own static
+			// variables), not this owner's WUPS pluginIdentifier handle - it
+			// only needs to be non-zero and is scoped per {thread, key} below,
+			// which already prevents cross-owner collisions.
+			if (!require(2) || arguments[0] == 0 ||
 				arguments[1] == 0 || !options.platform)
 				return 0;
 			const auto thread = options.platform->CurrentGuestThreadId();
 			std::lock_guard lock(owner->mutex);
 			const auto found =
 				owner->reent.find({thread, arguments[0]});
+			// "No context registered for this thread yet" is a successful query
+			// that yields a null context, not a backend failure: libwups only
+			// allocates and registers a fresh _reent when this returns true with
+			// a null out-pointer. Returning false makes it fall back to
+			// _GLOBAL_REENT forever, which then has no devoptab device data.
 			if (found == owner->reent.end())
-				return 0;
+				return WriteGuestU32(*owner, arguments[1], 0, error) ? 1 : 0;
 			if (!WriteGuestU32(*owner, arguments[1],
 				found->second.context, error))
 				return 0;
@@ -3923,7 +4024,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 		}
 		if (symbolName == "ReentAdd")
 		{
-			if (!require(3) || arguments[0] != owner->pluginIdentifier ||
+			// See ReentGet above: arguments[0] is the plugin's own opaque
+			// reentrancy key, not owner->pluginIdentifier.
+			if (!require(3) || arguments[0] == 0 ||
 				arguments[1] == 0 || !options.platform ||
 				!ValidateGuestCallback(*owner, arguments[2], error))
 				return 0;
@@ -4212,6 +4315,35 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 
 	if (moduleName == "__cemu_wups_data")
 	{
+		if (symbolName == "MEMAllocFromDefaultHeap" ||
+			symbolName == "MEMAllocFromDefaultHeapEx")
+		{
+			// Serviced entirely from the platform's isolated WUPS plugin heap
+			// (see WupsPluginHeap.h): this never touches the game's own
+			// default heap or re-enters guest code.
+			const bool ex = symbolName == "MEMAllocFromDefaultHeapEx";
+			if (!require(ex ? 2 : 1) || !options.platform || arguments[0] == 0)
+				return 0;
+			// MEMAllocFromDefaultHeapEx's alignment is a signed word (a
+			// negative value requests a tail allocation); the plain variant
+			// matches the real default heap's implicit 0x40 alignment.
+			const auto alignment = ex ?
+				static_cast<std::int32_t>(arguments[1]) : std::int32_t{0x40};
+			const auto allocated = options.platform->AllocatePluginHeapMemory(
+				token, arguments[0], alignment);
+			cemuLog_log(LogType::Force,
+				"WUPS: pluginheap alloc size 0x{:x} align {} -> 0x{:08x}",
+				arguments[0], alignment, allocated);
+			return static_cast<std::int32_t>(allocated);
+		}
+		if (symbolName == "MEMFreeToDefaultHeap")
+		{
+			if (!require(1))
+				return 0;
+			if (options.platform && arguments[0] != 0)
+				options.platform->FreePluginHeapMemory(token, arguments[0]);
+			return 0;
+		}
 		if (symbolName == "MEMFreeToMappedMemory")
 		{
 			if (!require(1))

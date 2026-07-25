@@ -297,6 +297,35 @@ public:
 		return true;
 	}
 
+	// A platform-owned heap that WUPS plugin libc allocations are redirected
+	// into (see the "coreinit"."MEMAllocFromDefaultHeap"(Ex)/
+	// "MEMFreeToDefaultHeap" data-import handling in WupsServices.cpp), kept
+	// structurally separate from the game's own default heap. False unless the
+	// platform actually has one; the redirection is then withheld and those
+	// data imports fail to resolve rather than silently falling back to the
+	// game's heap.
+	[[nodiscard]] virtual bool SupportsPluginHeap() const { return false; }
+	// Allocates `size` bytes from the platform's plugin heap on behalf of
+	// `owner`. `alignment` mirrors MEMAllocFromExpHeapEx's own signed
+	// alignment ABI (negative requests a tail allocation). Returns 0 on any
+	// failure (no plugin heap, not yet initialised, OOM, bad arguments).
+	[[nodiscard]] virtual std::uint32_t AllocatePluginHeapMemory(
+		WupsOwnerToken owner, std::uint32_t size, std::int32_t alignment)
+	{
+		(void)owner;
+		(void)size;
+		(void)alignment;
+		return 0;
+	}
+	// Frees `address` on behalf of `owner`. Must be a no-op (aside from
+	// logging) for any address the plugin heap did not itself hand out.
+	virtual void FreePluginHeapMemory(WupsOwnerToken owner,
+		std::uint32_t address)
+	{
+		(void)owner;
+		(void)address;
+	}
+
 	[[nodiscard]] virtual std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
 		WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,
 		bool writable, WupsMappedMemoryPurpose purpose, std::string& error) = 0;

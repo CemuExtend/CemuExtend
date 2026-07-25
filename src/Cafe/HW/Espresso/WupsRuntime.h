@@ -42,6 +42,9 @@ struct WupsHookInvocation
 {
 	std::vector<std::uint32_t> argumentWords;
 	bool requireZeroResult{};
+	// Logs a non-zero result instead of failing the hook, for optional
+	// subsystems whose absence must not abort plugin start-up.
+	bool reportNonZeroResult{};
 	bool skip{};
 };
 
@@ -95,9 +98,12 @@ public:
 		RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) = 0;
 	[[nodiscard]] virtual bool Relocate(RPLModule* module, std::uint64_t lifetimeId,
 		std::string& error) = 0;
+	// aggregateByReference is set for WUPS hook invocations, whose argument words
+	// form a single wups_loader_*_args_t struct that devkitPPC passes by address.
 	[[nodiscard]] virtual bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
-		std::uint32_t& result, std::string& error) = 0;
+		std::uint32_t& result, std::string& error,
+		bool aggregateByReference = false) = 0;
 	[[nodiscard]] virtual bool ResolveAddress(RPLModule* module,
 		std::uint64_t lifetimeId, std::uint32_t virtualAddress,
 		std::uint32_t size, WupsSymbolKind kind,

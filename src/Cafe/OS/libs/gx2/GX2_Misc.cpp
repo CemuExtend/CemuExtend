@@ -12,6 +12,7 @@
 #include "GX2_Misc.h"
 #include "GX2_Memory.h"
 #include "GX2_Texture.h"
+#include "Cafe/OS/libs/cemuextend/cemuextend.h"
 
 void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 {
@@ -160,6 +161,12 @@ namespace GX2
 		LatteGPUState.gx2InitCalled++;
 		// run tests
 		_test_AddrLib();
+		// Start WUPS plugins now that we are on the title's own PPC thread with a
+		// fully constructed application heap and an initialized GX2. This is the
+		// first point after the title's static initializers where guest allocation
+		// and graphics resource creation are safe; the call is a no-op after the
+		// first time per title.
+		cemuextend_hle::NotifyApplicationStarts();
 	}
 
 	void GX2Shutdown()

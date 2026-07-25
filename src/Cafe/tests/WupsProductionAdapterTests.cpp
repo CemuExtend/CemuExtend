@@ -103,7 +103,9 @@ int main()
 	auto platform = CreateCemuWupsPlatform();
 	CHECK(platform);
 	CHECK(!platform->SupportsMappedMemory());
-	CHECK(!platform->SupportsOwnerScopedHeapPointers());
+	// The production adapter now wires the unified ownership registry and heap
+	// tracker, so owner-scoped heap pointers are supported.
+	CHECK(platform->SupportsOwnerScopedHeapPointers());
 	CHECK(!platform->ValidateGuestRange(
 		0xfffffff0U, 0x20, WupsGuestAccess::Read));
 

@@ -33,6 +33,8 @@ public:
 	void BeginFrame();
 	void TickAll();
 	void EventAll(std::uint32_t event);
+	// Drives WUPS plugin OnApplicationStarts. Must run on an emulated PPC/CPU thread.
+	void OnApplicationStarts();
 	void UpdatePermissions(std::string_view principal, std::uint32_t permissions,
 		const ModServicePermissions& services);
 	void UpdateTitlePermissions(const ModServicePermissions& services);

@@ -1005,6 +1005,36 @@ MPTR RPLLoader_FindRPLExport(RPLModule* rplLoaderContext, const char* symbolName
 
 MPTR _findHLEExport(RPLModule* rplLoaderContext, RPLSharedImportTracking* sharedImportTrackingEntry, char* libname, char* symbolName, bool isData)
 {
+	// WUPS plugin RPLs must not receive the ordinary coreinit default-heap
+	// data-export slots for these three symbols: those slots are the *game*'s
+	// own gCoreinitData function pointers (registered via
+	// osLib_addVirtualPointer in coreinit.cpp), and letting a plugin's libc
+	// allocate through them shares the game's heap with the plugin, which can
+	// deadlock a title's own reentrant heap locking against unrelated Cemu
+	// HLE plumbing (see WupsPluginHeap.h for the full story). Give the
+	// external import resolver first refusal for these specific data exports,
+	// *before* the normal osLib_getPointer virtual-pointer lookup below ever
+	// sees them, so it can redirect them into an isolated plugin heap instead.
+	// If the resolver declines (no isolated heap available on this platform),
+	// resolution falls through to the normal path below exactly as before.
+	if (isData && rplLoaderContext->externalModule &&
+		rplLoaderContext->externalImportResolver &&
+		strcmp(libname, "coreinit") == 0 &&
+		(strcmp(symbolName, "MEMAllocFromDefaultHeap") == 0 ||
+			strcmp(symbolName, "MEMAllocFromDefaultHeapEx") == 0 ||
+			strcmp(symbolName, "MEMFreeToDefaultHeap") == 0))
+	{
+		std::string resolverError;
+		const auto resolved = rplLoaderContext->externalImportResolver(
+			libname, symbolName, isData, resolverError);
+		if (resolved && *resolved != MPTR_NULL)
+			return *resolved;
+		cemuLog_log(LogType::Force,
+			"WUPS: heap-import intercept for coreinit.{} did NOT redirect ({})",
+			symbolName, resolverError.empty() ? "resolver returned null" : resolverError);
+		if (!resolverError.empty())
+			rplLoaderContext->externalLinkError = std::move(resolverError);
+	}
 	if (isData)
 	{
 		// data export
@@ -1456,6 +1486,11 @@ bool RPLLoader_ApplyRelocs(RPLModule* rplLoaderContext, sint32 relaSectionIndex,
 	uint32 symbolCount = symtabSectionSize / symbolEntrySize;
 	cemu_assert(symbolCount >= 2);
 	uint8* symtabData = (uint8*)rplLoaderContext->sectionAddressTable2[symtabSectionIndex].ptr;
+	const uint32 diagStrtabIndex = symtabSection->symtabSectionIndex;
+	uint8* diagStrtabData = diagStrtabIndex < (uint32)rplLoaderContext->rplHeader.sectionTableEntryCount ?
+		(uint8*)rplLoaderContext->sectionAddressTable2[diagStrtabIndex].ptr : nullptr;
+	const uint32 diagStrtabSize = diagStrtabData ?
+		(uint32)rplLoaderContext->sectionTablePtr[diagStrtabIndex].sectionSize : 0;
 	// decompress reloc section if needed
 	uint8* relocData;
 	uint32 relocSize;
@@ -1557,6 +1592,19 @@ bool RPLLoader_ApplyRelocs(RPLModule* rplLoaderContext, sint32 relaSectionIndex,
 			tlsModuleIndex = rplLoaderContext->fileInfo.tlsModuleIndex;
 		}
 		uint32 relocOffset = (uint32)reloc->relocOffset - (uint32)rplLoaderContext->sectionTablePtr[relocTargetSectionIndex].virtualAddress;
+		if (rplLoaderContext->externalModule && diagStrtabData)
+		{
+			const uint32 diagNameOffset = sym->ukn00;
+			if (diagNameOffset != 0 && diagNameOffset < diagStrtabSize)
+			{
+				const char* diagName = (const char*)diagStrtabData + diagNameOffset;
+				if (symbolAddress == 0 || strncmp(diagName, "__wrap_", 7) == 0)
+					cemuLog_log(LogType::Force,
+						"RPLreloc: sym '{}' secIdx {} symAddr 0x{:08x} type {} site 0x{:08x}",
+						diagName, (uint32)sym->sectionIndex, symbolAddress, relocType,
+						memory_getVirtualOffsetFromPointer(relocTargetSectionAddress) + relocOffset);
+			}
+		}
 		RPLLoader_ApplySingleReloc(rplLoaderContext, 0, relocTargetSectionAddress, relocType, symbolBinding == 2, relocOffset, reloc->relocAddend, symbolAddress, tlsModuleIndex);
 
 		// next reloc
@@ -2897,45 +2945,24 @@ bool RPLLoader_GetTLSDataByTLSIndex(sint16 tlsModuleIndex, uint8** tlsData, sint
 			}
 	if (rplLoaderContext == nullptr)
 		return false;
-	std::vector<RPLLoaderInternal::TLSSectionMapping> tlsSections;
-	for (uint32 index = 0;
-		index < static_cast<uint32>(rplLoaderContext->rplHeader.sectionTableEntryCount);
-		++index)
-	{
-		const auto& section = rplLoaderContext->sectionTablePtr[index];
-		const uint32 type = section.type;
-		const uint32 flags = section.flags;
-		const uint32 sectionSize = section.sectionSize;
-		if ((flags & SHF_TLS_MASK) == 0 || sectionSize == 0)
-			continue;
-		if ((type != SHT_PROGBITS && type != SHT_NOBITS) ||
-			(flags & 3U) != 3U ||
-			!rplLoaderContext->sectionAddressTable2[index].ptr)
-			return false;
-		const uint32 virtualAddress = section.virtualAddress;
-		if (virtualAddress > std::numeric_limits<uint32>::max() - sectionSize)
-			return false;
-		const MPTR mappedAddress = memory_getVirtualOffsetFromPointer(
-			rplLoaderContext->sectionAddressTable2[index].ptr);
-		if (mappedAddress > std::numeric_limits<uint32>::max() - sectionSize ||
-			!memory_isAddressRangeAccessible(mappedAddress, sectionSize))
-			return false;
-		tlsSections.push_back({virtualAddress, sectionSize, mappedAddress});
-	}
-	const auto mapping = RPLLoaderInternal::ResolveContiguousTLSMapping(tlsSections);
-	if (!mapping ||
-		mapping->virtualAddress != rplLoaderContext->tlsStartAddress ||
-		mapping->size != rplLoaderContext->tlsEndAddress -
-			rplLoaderContext->tlsStartAddress ||
-		mapping->size >= 0x10000 ||
-		mapping->size > static_cast<uint32>(std::numeric_limits<sint32>::max()) ||
-		!memory_isAddressRangeAccessible(mapping->mappedAddress, mapping->size))
+	// The module's TLS template spans its .tdata/.tbss sections. Their combined extent
+	// (by virtual address) is already resolved when the module is loaded, so trust the
+	// cached tlsStartAddress/tlsEndAddress here. The previous WUPS rewrite re-derived it
+	// from the section table with a strict mapped-address contiguity requirement plus a
+	// hard 64KB size limit; that rejected legitimate TLS layouts (e.g. Minecraft: Wii U
+	// Edition, whose .tdata/.tbss are not mapped contiguously) and returned false, which
+	// then tripped the fatal cemu_assert in coreinit::__tls_get_addr (SIGTRAP on boot).
+	if (rplLoaderContext->tlsEndAddress <= rplLoaderContext->tlsStartAddress)
+		return false; // module has no TLS data
+	const uint32 tlsDataSize = rplLoaderContext->tlsEndAddress - rplLoaderContext->tlsStartAddress;
+	cemu_assert_debug(tlsDataSize < 0x10000); // suspiciously large TLS area (non-fatal, informational)
+	if (tlsDataSize > static_cast<uint32>(std::numeric_limits<sint32>::max()))
 		return false;
-	g_rplTlsTemplateScratch.resize(mapping->size);
+	g_rplTlsTemplateScratch.resize(tlsDataSize);
 	std::memcpy(g_rplTlsTemplateScratch.data(),
-		memory_getPointerFromVirtualOffset(mapping->mappedAddress), mapping->size);
+		memory_getPointerFromVirtualOffset(rplLoaderContext->tlsStartAddress), tlsDataSize);
 	*tlsData = g_rplTlsTemplateScratch.data();
-	*tlsSize = static_cast<sint32>(mapping->size);
+	*tlsSize = static_cast<sint32>(tlsDataSize);
 	return true;
 }
 

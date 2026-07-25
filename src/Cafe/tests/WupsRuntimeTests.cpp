@@ -292,13 +292,13 @@ namespace
 		CHECK(log->relocations == 1);
 
 		const std::vector<WupsHookType> startOrder{
-			WupsHookType::InitReentFunctions,
 			WupsHookType::InitWutMalloc,
+			WupsHookType::InitReentFunctions,
 			WupsHookType::InitWutNewlib,
 			WupsHookType::InitWutStdcpp,
-			WupsHookType::InitWutThread,
 			WupsHookType::InitWutDevoptab,
 			WupsHookType::InitWutSockets,
+			WupsHookType::InitWutThread,
 			WupsHookType::InitWrapper,
 			WupsHookType::InitButtonCombo,
 			WupsHookType::InitConfig,

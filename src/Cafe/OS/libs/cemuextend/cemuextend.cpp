@@ -397,6 +397,11 @@ namespace cemuextend_hle
 		runtime.EventAll(1); // title loaded
 	}
 
+	void NotifyApplicationStarts()
+	{
+		GetCemodRuntime().OnApplicationStarts();
+	}
+
 	void TickCemods()
 	{
 		GetCemodRuntime().TickAll();

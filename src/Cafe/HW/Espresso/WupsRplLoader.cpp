@@ -66,10 +66,11 @@ namespace
 		bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
 			std::uint32_t targetVirtualAddress,
 			std::span<const std::uint32_t> argumentWords,
-			std::uint32_t& result, std::string& error) override
+			std::uint32_t& result, std::string& error,
+			bool aggregateByReference = false) override
 		{
 			return WupsGuestCallback::Invoke(module, lifetimeId, targetVirtualAddress,
-				argumentWords, result, error);
+				argumentWords, result, error, aggregateByReference);
 		}
 
 		bool ResolveAddress(RPLModule* module, std::uint64_t lifetimeId,
@@ -181,6 +182,8 @@ namespace
 			std::span<const std::uint32_t> arguments,
 			std::uint32_t& result, std::string& error) override
 		{
+			// WUMS module entrypoints take scalar arguments, not a
+			// wups_loader_*_args_t aggregate.
 			return WupsGuestCallback::Invoke(
 				module, lifetimeId, target, arguments, result, error);
 		}

@@ -223,9 +223,16 @@ struct WupsPluginRuntime::Impl
 		{
 			try
 			{
+				cemuLog_log(LogType::Force,
+					"WUPS: invoking hook {} target 0x{:08x} argc {}",
+					HookName(type), found->second, invocation.argumentWords.size());
 				WupsGuestOwnerScope ownerScope{{owner, resourceGeneration}};
+				// A hook's argument words are one wups_loader_*_args_t struct,
+				// which devkitPPC passes by address rather than in registers.
 				called = moduleLoader->Invoke(callbackModule, callbackLifetime,
-					found->second, invocation.argumentWords, result, error);
+					found->second, invocation.argumentWords, result, error, true);
+				cemuLog_log(LogType::Force, "WUPS: hook {} returned {} result 0x{:08x}",
+					HookName(type), called, result);
 			}
 			catch (const std::exception& exception)
 			{
@@ -237,10 +244,19 @@ struct WupsPluginRuntime::Impl
 				error = fmt::format("{} guest callback threw a non-standard exception",
 					HookName(type));
 			}
-			if (called && invocation.requireZeroResult && result != 0)
+			if (called && result != 0 &&
+				(invocation.requireZeroResult || invocation.reportNonZeroResult))
 			{
-				error = fmt::format("{} returned error 0x{:08x}", HookName(type), result);
-				called = false;
+				if (invocation.requireZeroResult)
+				{
+					error = fmt::format("{} returned error 0x{:08x}",
+						HookName(type), result);
+					called = false;
+				}
+				else
+					cemuLog_log(LogType::Force,
+						"WUPS: {} returned 0x{:08x}; continuing without it",
+						HookName(type), result);
 			}
 		}
 
@@ -831,14 +847,24 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		m_impl->pluginDeactivated = false;
 	}
 
+	// WUT/WUPS initialisers must run in dependency order:
+	//  1. InitWutMalloc establishes the plugin heap first, because both the
+	//     reentrancy setup and newlib may allocate.
+	//  2. InitReentFunctions installs __getreent next, because every newlib
+	//     entry point (used by newlib/devoptab init and beyond) resolves _REENT
+	//     through it; running it later left devoptab's chd() dereferencing an
+	//     uninitialised reent and jumping through a null pointer.
+	//  3. The remaining WUT subsystems, then the WUPS wrapper/config/plugin hooks.
+	// The relative order of malloc/newlib/stdcpp/devoptab/sockets/wrapper is the
+	// reverse of the finaliser order asserted by the runtime tests.
 	static constexpr std::array initializerOrder{
-		WupsHookType::InitReentFunctions,
 		WupsHookType::InitWutMalloc,
+		WupsHookType::InitReentFunctions,
 		WupsHookType::InitWutNewlib,
 		WupsHookType::InitWutStdcpp,
-		WupsHookType::InitWutThread,
 		WupsHookType::InitWutDevoptab,
 		WupsHookType::InitWutSockets,
+		WupsHookType::InitWutThread,
 		WupsHookType::InitWrapper,
 		WupsHookType::InitButtonCombo,
 		WupsHookType::InitConfig,

@@ -46,6 +46,9 @@ namespace cemuextend_hle
 	std::vector<CemodPackageInfo> DiscoverCemods(std::uint64_t titleId);
 	std::vector<CemodPermissionRequest> PendingCemodPermissionRequests(std::uint64_t titleId);
 	void LoadCemodsForTitle(std::uint64_t titleId);
+	// Called from coreinit_start on the application's PPC thread, once heaps are ready
+	// and before the title entrypoint runs, to start WUPS plugins in guest context.
+	void NotifyApplicationStarts();
 	void TickCemods();
 	void ReloadCemodPermissions(std::uint64_t titleId, std::string_view principal);
 	void ReloadCemodTitlePermissions(std::uint64_t titleId);

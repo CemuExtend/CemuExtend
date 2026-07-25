@@ -74,6 +74,14 @@ add_library(CemuCafe
 	HW/Espresso/WupsBinary.h
 	HW/Espresso/WupsGuestCallback.cpp
 	HW/Espresso/WupsGuestCallback.h
+	HW/Espresso/WupsGuestMemoryOwnership.cpp
+	HW/Espresso/WupsGuestMemoryOwnership.h
+	HW/Espresso/WupsOwnerScopedHeap.cpp
+	HW/Espresso/WupsOwnerScopedHeap.h
+	HW/Espresso/WupsHeapInterception.cpp
+	HW/Espresso/WupsHeapInterception.h
+	HW/Espresso/WupsPluginHeap.cpp
+	HW/Espresso/WupsPluginHeap.h
 	HW/Espresso/ModuleExportRegistry.cpp
 	HW/Espresso/ModuleExportRegistry.h
 	HW/Espresso/WupsFunctionPatcher.cpp
@@ -790,6 +798,14 @@ if(BUILD_TESTING)
 	target_link_libraries(wups_runtime_tests PRIVATE ZLIB::ZLIB fmt::fmt)
 	add_test(NAME wups_runtime_tests COMMAND wups_runtime_tests)
 
+	add_executable(wups_guest_memory_ownership_tests
+		HW/Espresso/WupsGuestMemoryOwnership.cpp
+		HW/Espresso/WupsOwnerScopedHeap.cpp
+		tests/WupsGuestMemoryOwnershipTests.cpp
+	)
+	target_include_directories(wups_guest_memory_ownership_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+	add_test(NAME wups_guest_memory_ownership_tests COMMAND wups_guest_memory_ownership_tests)
+
 	add_executable(wups_compatibility_tests
 		HW/Espresso/ModuleExportRegistry.cpp
 		HW/Espresso/WupsBinary.cpp
@@ -820,6 +836,10 @@ if(BUILD_TESTING)
 	add_executable(wups_production_adapter_tests
 		HW/Espresso/ModExecutionContext.cpp
 		HW/Espresso/WupsServicesCemu.cpp
+		HW/Espresso/WupsGuestMemoryOwnership.cpp
+		HW/Espresso/WupsOwnerScopedHeap.cpp
+		HW/Espresso/WupsHeapInterception.cpp
+		HW/Espresso/WupsPluginHeap.cpp
 		tests/WupsProductionAdapterTests.cpp
 	)
 	target_include_directories(wups_production_adapter_tests PRIVATE
@@ -831,6 +851,7 @@ if(BUILD_TESTING)
 	add_executable(cemod_runtime_tests
 		HW/Espresso/ModExecutionContext.cpp
 		HW/Espresso/CemodRuntime.cpp
+		HW/Espresso/WupsPluginHeap.cpp
 		OS/libs/cemuextend/Cex2Host.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/TrustedCemodRuntimeStub.cpp

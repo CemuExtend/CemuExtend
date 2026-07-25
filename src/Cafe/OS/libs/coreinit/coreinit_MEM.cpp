@@ -6,6 +6,7 @@
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MEM_FrmHeap.h"
 #include "coreinit_DynLoad.h"
+#include "Cafe/HW/Espresso/WupsHeapInterception.h"
 
 // the system area is a block of memory that exists only in the emulator. It is used to simplify dynamic memory allocation for system data
 // this partially overlaps with the system heap from coreinit_SysHeap.cpp -> Use SysHeap for everything
@@ -465,6 +466,9 @@ namespace coreinit
 	{
 		void* mem = MEMAllocFromExpHeapEx(gDefaultHeap, size, 0x40);
 		cemuLog_logDebug(LogType::CoreinitMem, "MEMAllocFromDefaultHeap(0x{:08x}) Result: 0x{:08x}", size, memory_getVirtualOffsetFromPointer(mem));
+		if (mem)
+			cafe::wups::NotifyHeapAllocation(WupsHeapAllocatorKind::DefaultHeap, 0,
+				memory_getVirtualOffsetFromPointer(mem), size, size, 0x40);
 		return mem;
 	}
 
@@ -479,6 +483,10 @@ namespace coreinit
 	{
 		void* mem = MEMAllocFromExpHeapEx(gDefaultHeap, size, alignment);
 		cemuLog_logDebug(LogType::CoreinitMem, "MEMAllocFromDefaultHeap(0x{:08x},{}) Result: 0x{:08x}", size, alignment, memory_getVirtualOffsetFromPointer(mem));
+		if (mem)
+			cafe::wups::NotifyHeapAllocation(WupsHeapAllocatorKind::DefaultHeap, 0,
+				memory_getVirtualOffsetFromPointer(mem), size, size,
+				static_cast<std::uint32_t>(alignment < 0 ? -alignment : alignment));
 		return mem;
 	}
 
@@ -492,6 +500,8 @@ namespace coreinit
 
 	void default_MEMFreeToDefaultHeap(void* mem)
 	{
+		if (mem)
+			cafe::wups::NotifyHeapFree(memory_getVirtualOffsetFromPointer(mem));
 		MEMFreeToExpHeap(gDefaultHeap, mem);
 	}
 
