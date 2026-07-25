@@ -17,10 +17,6 @@ CEX2は`CEX2Query`、`CEX2Open`、`CEX2Submit`、`CEX2Poll`、`CEX2Cancel`、`CE
 
 提供サービスはCore、Input、Logging、Configuration、File、Clipboard、Window、Capture、Diagnosticsです。FileとConfigurationはownerごとのnamespaceを使用し、path・quota・型・pagination・async completionをhost側で検証します。
 
-CEX2 ABI 2.1のInput／Windowサービスは、USB HID keyboard、UTF-32 text、通常mouseとWindows Raw Inputによる相対mouse移動を配信します。guestはpointer policyでOS cursorの表示、absolute GUI操作、captured relative視点操作、Raw Mouseの優先／無効化を切り替えられます。focusを失った場合はhostが押下状態を解放し、pointer policyを一時的にDefaultへ戻します。
-
-mapped VPAD入力では`MappedInputFlag::ReplacePhysical`を指定できます。有効な注入が存在する間、通常のCemu controller profileから来るボタンと左右stickだけを消去してからmapped入力を適用し、touch・gyroなどのsensor状態は保持します。これにより、Mod独自のkeyboard/mouse割り当てと既存profileの二重入力を防止できます。
-
 `isolated` ownerはMod principal単位です。`trusted_native` ownerは`trusted-title:<titleId>`であり、同じタイトルの承認済みnative ModはCEX2 session、権限、File／Configuration namespaceを共有します。
 
 ## `.cemod` package

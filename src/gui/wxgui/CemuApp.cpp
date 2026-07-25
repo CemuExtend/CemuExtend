@@ -462,24 +462,6 @@ void CemuApp::OnAssertFailure(const wxChar* file, int line, const wxChar* func, 
 static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 {
 	const auto key = event.GetKeyCode();
-	const auto rawKey = fix_raw_keycode(event.GetRawKeyCode(), event.GetRawKeyFlags());
-	// wxWidgets collapses left/right modifier keys to WXK_SHIFT/WXK_CONTROL/
-	// WXK_ALT.  The bridge transports USB HID usages, so preserve the side
-	// reported by the native key event before handling the generic wx key.
-#if BOOST_OS_WINDOWS
-	switch (rawKey)
-	{
-	case 160: return 0xe1; // VK_LSHIFT
-	case 161: return 0xe5; // VK_RSHIFT
-	case 162: return 0xe0; // VK_LCONTROL
-	case 163: return 0xe4; // VK_RCONTROL
-	case 164: return 0xe2; // VK_LMENU
-	case 165: return 0xe6; // VK_RMENU
-	default: break;
-	}
-#else
-	(void)rawKey;
-#endif
 	if (key >= 'A' && key <= 'Z')
 		return static_cast<uint16>(0x04 + key - 'A');
 	if (key >= 'a' && key <= 'z')
@@ -564,17 +546,9 @@ int CemuApp::FilterEvent(wxEvent& event)
 		cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), false,
 			CemuExtendKeyModifiers(key_event));
 	}
-	else if(event.GetEventType() == wxEVT_CHAR)
-	{
-		const auto& key_event = (wxKeyEvent&)event;
-		const auto codepoint = key_event.GetUnicodeKey();
-		if (codepoint >= 0x20 && codepoint != 0x7f && codepoint <= 0x10ffff)
-			cemuextend_hle::TextEvent(static_cast<uint32>(codepoint), key_event.IsAutoRepeat());
-	}
 	else if(event.GetEventType() == wxEVT_ACTIVATE_APP)
 	{
 		const auto& activate_event = (wxActivateEvent&)event;
-		cemuextend_hle::PointerFocusChanged(activate_event.GetActive());
 		if(!activate_event.GetActive())
 		{
 			g_window_info.set_keystatesup();

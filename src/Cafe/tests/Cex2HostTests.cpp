@@ -17,7 +17,6 @@
 #include <iostream>
 #include <limits>
 #include <span>
-#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -427,194 +426,16 @@ void TestObservedInputSnapshot()
 	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 }
 
-void TestMappedInputReplacement()
-{
-	using namespace cemuextend::wire;
-	auto& host = cemuextend_hle::Cex2Host::Instance(); host.CloseAll();
-	ModExecutionContext context(33, 1, "mapped-replacement-principal");
-	context.SetGrantedPermissions(5);
-	context.SetServicePermissions({0x1ffU, 0, 0x1ffU});
-	const auto session = Open(host, context);
-
-	auto inject = [&](std::uint32_t correlation, const ObservedVpadState& state) {
-		std::vector<std::byte> payload(1 + sizeof(state));
-		payload[0] = std::byte{0};
-		std::memcpy(payload.data() + 1, &state, sizeof(state));
-		auto request = Request(correlation, static_cast<std::uint16_t>(
-			InputOperation::InjectMapped), payload, ServiceId::Input);
-		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
-		return PollUntil(host, context, session);
-	};
-
-	ObservedVpadState exclusive{};
-	exclusive.hold = 0x11;
-	exclusive.trigger = 0x10;
-	exclusive.release = 0x20;
-	exclusive.leftX = -0.25f; exclusive.leftY = 0.5f;
-	exclusive.rightX = 0.75f; exclusive.rightY = -1.0f;
-	exclusive.flags = static_cast<std::uint8_t>(MappedInputFlag::ReplacePhysical);
-	auto response = inject(1, exclusive);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::Ok));
-
-	VPADStatus status{};
-	status.hold = 0x1000; status.trig = 0x2000; status.release = 0x4000;
-	status.leftStick.x = 0.9f; status.leftStick.y = 0.8f;
-	status.rightStick.x = 0.7f; status.rightStick.y = 0.6f;
-	status.gyroChange.x = 12.0f;
-	status.tpData.x = 321; status.tpData.y = 123; status.tpData.touch = 1;
-	host.ApplyMappedVpad(0, status);
-	CHECK(status.hold == 0x11 && status.trig == 0x10 && status.release == 0x20);
-	CHECK(status.leftStick.x == -0.25f && status.leftStick.y == 0.5f);
-	CHECK(status.rightStick.x == 0.75f && status.rightStick.y == -1.0f);
-	CHECK(status.gyroChange.x == 12.0f);
-	CHECK(status.tpData.x == 321 && status.tpData.y == 123 && status.tpData.touch == 1);
-
-	ObservedVpadState additive{};
-	additive.hold = 0x01; additive.trigger = 0x02; additive.release = 0x04;
-	additive.leftX = 0.1f; additive.leftY = 0.2f;
-	additive.rightX = 0.3f; additive.rightY = 0.4f;
-	response = inject(2, additive);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::Ok));
-	status = {};
-	status.hold = 0x100; status.trig = 0x200; status.release = 0x400;
-	host.ApplyMappedVpad(0, status);
-	CHECK(status.hold == 0x101 && status.trig == 0x202 && status.release == 0x404);
-	CHECK(status.leftStick.x == 0.1f && status.rightStick.y == 0.4f);
-
-	ObservedVpadState invalid{};
-	invalid.flags = 0x80;
-	response = inject(3, invalid);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::InvalidArgument));
-	invalid = {};
-	invalid.reserved[0] = std::byte{1};
-	response = inject(4, invalid);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::InvalidArgument));
-	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
-}
-
-void TestMouseAndPointerPolicy()
-{
-	using namespace cemuextend::wire;
-	auto& host = cemuextend_hle::Cex2Host::Instance(); host.CloseAll();
-	ModExecutionContext context(32, 1, "mouse-pointer-principal");
-	context.SetGrantedPermissions(5);
-	const auto session = Open(host, context);
-
-	Encoder subscription;
-	subscription.U16(static_cast<std::uint16_t>(ServiceId::Input));
-	auto request = Request(1, static_cast<std::uint16_t>(CoreOperation::Subscribe),
-		subscription.data());
-	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
-	auto response = PollUntil(host, context, session);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::Ok));
-
-	PointerPolicyPayload policy{};
-	policy.mode = static_cast<std::uint8_t>(PointerMode::CapturedRelative);
-	policy.cursor = static_cast<std::uint8_t>(PointerCursor::Arrow);
-	policy.surface = static_cast<std::uint8_t>(PointerSurface::Tv);
-	policy.flags = static_cast<std::uint32_t>(PointerPolicyFlag::PreferRawMouse) |
-		static_cast<std::uint32_t>(PointerPolicyFlag::ConfineToContent);
-	request = Request(2, static_cast<std::uint16_t>(WindowOperation::SetPointerPolicy),
-		{reinterpret_cast<const std::byte*>(&policy), sizeof(policy)}, ServiceId::Window);
-	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
-	response = PollUntil(host, context, session);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::Ok));
-	CHECK(host.EffectivePointerPolicy().mode == policy.mode);
-	CHECK((host.EffectivePointerPolicy().flags.get() & static_cast<std::uint32_t>(
-		PointerPolicyFlag::ConfineToContent)) != 0);
-
-	VPADStatus physicalVpad{};
-	physicalVpad.hold = 0x1234;
-	host.ObserveVpad(0, physicalVpad, 0, 1);
-	std::array<std::byte, cemuextend::transport::kMaximumMessageSize> noEvent{};
-	std::uint32_t noEventSize{};
-	CHECK(host.Poll(context, session, noEvent, noEventSize) ==
-		static_cast<std::int32_t>(Error::NotFound));
-	CHECK(noEventSize == 0);
-
-	host.MouseEvent(PointerSurface::Tv, 640, 360, 7, -4, 0, 1,
-		static_cast<std::uint32_t>(MouseButton::Left),
-		static_cast<std::uint32_t>(MouseButton::Left), 1280, 720, true, true,
-		static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
-	response = PollUntil(host, context, session);
-	const auto* eventHeader = reinterpret_cast<const ResponseHeader*>(response.data());
-	CHECK(eventHeader->flags.get() == static_cast<std::uint16_t>(
-		cemuextend::transport::ResponseFlag::Event));
-	CHECK(eventHeader->operation.get() == static_cast<std::uint16_t>(InputEvent::MouseV2));
-	CHECK(response.size() == sizeof(ResponseHeader) + sizeof(MouseEventPayloadV2));
-	const auto& mouseEvent = *reinterpret_cast<const MouseEventPayloadV2*>(
-		response.data() + sizeof(ResponseHeader));
-	CHECK(mouseEvent.x.get() == 640 && mouseEvent.y.get() == 360);
-	CHECK(mouseEvent.deltaX.get() == 7 && mouseEvent.deltaY.get() == -4);
-	CHECK(mouseEvent.normalizedX.get() == 0.5f && mouseEvent.normalizedY.get() == 0.5f);
-	CHECK(mouseEvent.buttons.get() == static_cast<std::uint32_t>(MouseButton::Left));
-	CHECK(mouseEvent.flags == static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
-
-	request = Request(3, static_cast<std::uint16_t>(InputOperation::GetHostMouse),
-		{}, ServiceId::Input);
-	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
-	response = PollUntil(host, context, session);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-		static_cast<std::uint16_t>(Status::Ok));
-	const auto& snapshot = *reinterpret_cast<const MouseEventPayloadV2*>(
-		response.data() + sizeof(ResponseHeader));
-	CHECK(snapshot.x.get() == 640 && snapshot.buttons.get() ==
-		static_cast<std::uint32_t>(MouseButton::Left));
-	CHECK(snapshot.flags == static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
-
-	host.TextEvent(0x3042, false);
-	response = PollUntil(host, context, session);
-	const auto* textHeader = reinterpret_cast<const ResponseHeader*>(response.data());
-	CHECK(textHeader->operation.get() == static_cast<std::uint16_t>(InputEvent::Text));
-	CHECK(response.size() == sizeof(ResponseHeader) + sizeof(TextEventPayload));
-	const auto& textEvent = *reinterpret_cast<const TextEventPayload*>(
-		response.data() + sizeof(ResponseHeader));
-	CHECK(textEvent.codepoint.get() == 0x3042 && !textEvent.repeat);
-
-	host.PointerFocusChanged(false);
-	response = PollUntil(host, context, session);
-	const auto& released = *reinterpret_cast<const MouseEventPayloadV2*>(
-		response.data() + sizeof(ResponseHeader));
-	CHECK(!released.focused && released.buttons.get() == 0);
-	CHECK(released.changedButtons.get() == static_cast<std::uint32_t>(MouseButton::Left));
-	CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
-
-	host.PointerFocusChanged(true);
-	response = PollUntil(host, context, session);
-	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->flags.get() ==
-		static_cast<std::uint16_t>(cemuextend::transport::ResponseFlag::Event));
-	CHECK(host.EffectivePointerPolicy().mode == policy.mode);
-	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
-	CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
-}
-
 } // namespace
 
-int main(int argc, char** argv)
+int main()
 {
-	const bool pointerOnly = argc == 2 && std::string_view(argv[1]) == "--pointer-only";
-	if (pointerOnly)
-	{
-		TestMappedInputReplacement();
-		TestMouseAndPointerPolicy();
-	}
-	else
-	{
-		TestOwnershipCopyAndCancel();
-		TestBackpressureAndProtocolReap();
-		TestExactOnceAdmission();
-		TestPrincipalStorageAndPagination();
-		TestTitleServicePermissionsAndRevocation();
-		TestObservedInputSnapshot();
-		TestMappedInputReplacement();
-		TestMouseAndPointerPolicy();
-	}
+	TestOwnershipCopyAndCancel();
+	TestBackpressureAndProtocolReap();
+	TestExactOnceAdmission();
+	TestPrincipalStorageAndPagination();
+	TestTitleServicePermissionsAndRevocation();
+	TestObservedInputSnapshot();
 	cemuextend_hle::Cex2Host::Instance().ShutdownForTesting();
 	// OpenSSL keeps provider/configuration state alive until process shutdown.
 	// Release it explicitly so LeakSanitizer can distinguish product leaks from

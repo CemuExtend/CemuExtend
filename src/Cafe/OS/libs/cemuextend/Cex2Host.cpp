@@ -48,14 +48,12 @@ void LogGuestRecord(std::string_view principal, std::uint8_t level, std::string_
 #endif
 }
 
-void AuditSensitiveUse(std::string_view principal, std::string_view action,
-	bool showNotification = true)
+void AuditSensitiveUse(std::string_view principal, std::string_view action)
 {
 #ifndef CEMU_CEX2_TESTING
 	const auto message = fmt::format("CemuExtend Mod [{}]: {}", principal, action);
 	cemuLog_log(LogType::Force, "AUDIT {}", message);
-	if (showNotification)
-		LatteOverlay_pushNotification(message, 3000);
+	LatteOverlay_pushNotification(message, 3000);
 #endif
 }
 
@@ -110,7 +108,6 @@ constexpr std::array kOperations{
 	OperationDefinition{2,1,1,4,sizeof(cemuextend::wire::ControllerEventPayload),0,0,0,Handler::Input},
 	OperationDefinition{2,2,1,4,1+sizeof(cemuextend::wire::ObservedVpadState),0,0,0,Handler::Input},
 	OperationDefinition{2,3,1,1,1,sizeof(cemuextend::wire::ObservedVpadState),0,0,Handler::Input},
-	OperationDefinition{2,4,1,1,0,sizeof(cemuextend::wire::MouseEventPayloadV2),0,0,Handler::Input},
 	OperationDefinition{3,1,1,2,4096+5,0,20,50,Handler::Logging},
 	OperationDefinition{4,1,1,1,260,65520,0,0,Handler::Configuration},
 	OperationDefinition{4,2,1,2,65520,0,0,0,Handler::Configuration},
@@ -126,8 +123,6 @@ constexpr std::array kOperations{
 	OperationDefinition{6,1,1,8,0,65520,0,0,Handler::Clipboard},
 	OperationDefinition{6,2,1,8,65520,0,0,0,Handler::Clipboard},
 	OperationDefinition{7,1,1,1,0,sizeof(cemuextend::wire::WindowStatePayload),0,0,Handler::Window},
-	OperationDefinition{7,2,1,4,sizeof(cemuextend::wire::PointerPolicyPayload),sizeof(cemuextend::wire::PointerPolicyPayload),0,0,Handler::Window},
-	OperationDefinition{7,3,1,1,0,sizeof(cemuextend::wire::PointerPolicyPayload),0,0,Handler::Window},
 	OperationDefinition{8,1,1,16,1,64,0,0,Handler::Capture},
 	OperationDefinition{8,2,1,16,8,65520,0,0,Handler::Capture},
 	OperationDefinition{8,3,1,16,4,0,0,0,Handler::Capture},
@@ -212,8 +207,6 @@ struct Cex2Host::Impl
 		double loggingTokens{50.0};
 		std::chrono::steady_clock::time_point loggingLastRefill{std::chrono::steady_clock::now()};
 		std::set<std::uint16_t> pressedKeyboardUsages;
-		cemuextend::wire::PointerPolicyPayload pointerPolicy{};
-		std::uint64_t pointerPolicySequence{};
 		std::array<cemuextend::wire::ObservedVpadState, 2> observedVpad{};
 		std::array<bool, 2> hasObservedVpad{};
 		std::array<cemuextend::wire::ObservedVpadState, 2> mappedInjection{};
@@ -235,8 +228,6 @@ struct Cex2Host::Impl
 	std::mutex mutex;
 	std::unordered_map<std::uint32_t, Session> sessions;
 	std::uint32_t nextSession{1};
-	std::uint64_t nextPointerPolicySequence{1};
-	cemuextend::wire::MouseEventPayloadV2 hostMouse{};
 	std::mutex workMutex;
 	std::condition_variable workReady;
 	std::deque<std::function<void()>> work;
@@ -245,7 +236,6 @@ struct Cex2Host::Impl
 
 	Impl()
 	{
-		hostMouse.focused = 1;
 		for (auto& worker : workers)
 			worker = std::thread([this] {
 				for (;;)
@@ -314,43 +304,6 @@ struct Cex2Host::Impl
 		return (permission == 0 ||
 			(session.owner->GrantedPermissions() & permission) == permission) &&
 			(service == 0 || session.owner->IsServiceAllowed(service, permission, operation));
-	}
-
-	static bool IsValidPointerPolicy(const cemuextend::wire::PointerPolicyPayload& policy)
-	{
-		using namespace cemuextend::wire;
-		const auto flags = policy.flags.get();
-		const auto rawModeFlags =
-			static_cast<std::uint32_t>(PointerPolicyFlag::PreferRawMouse) |
-			static_cast<std::uint32_t>(PointerPolicyFlag::DisableRawMouse);
-		const auto allowedFlags = rawModeFlags |
-			static_cast<std::uint32_t>(PointerPolicyFlag::ConfineToContent);
-		return policy.mode <= static_cast<std::uint8_t>(PointerMode::CapturedRelative) &&
-			policy.cursor <= static_cast<std::uint8_t>(PointerCursor::NotAllowed) &&
-			policy.surface <= static_cast<std::uint8_t>(PointerSurface::Drc) &&
-			policy.reserved == 0 &&
-			(flags & ~allowedFlags) == 0 &&
-			(flags & rawModeFlags) != rawModeFlags;
-	}
-
-	[[nodiscard]] cemuextend::wire::PointerPolicyPayload EffectivePointerPolicyLocked() const
-	{
-		using namespace cemuextend::wire;
-		PointerPolicyPayload result{};
-		if (!hostMouse.focused)
-			return result;
-		std::uint64_t newest{};
-		for (const auto& [id, session] : sessions)
-		{
-			if (session.pointerPolicy.mode == static_cast<std::uint8_t>(PointerMode::Default) ||
-				session.pointerPolicySequence <= newest ||
-				!HasPermission(session, 4, static_cast<std::uint16_t>(ServiceId::Window),
-					static_cast<std::uint16_t>(WindowOperation::SetPointerPolicy)))
-				continue;
-			newest = session.pointerPolicySequence;
-			result = session.pointerPolicy;
-		}
-		return result;
 	}
 
 	static bool AdmitCorrelation(Session& session, std::uint32_t correlation)
@@ -433,28 +386,6 @@ struct Cex2Host::Impl
 		session.responses.push_back(std::move(result));
 	}
 
-	void EmitMouseEventLocked(const cemuextend::wire::MouseEventPayloadV2& state)
-	{
-		using namespace cemuextend::wire;
-		hostMouse = state;
-		for (auto& [id, session] : sessions)
-		{
-			if (!HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input),
-				static_cast<std::uint16_t>(InputEvent::MouseV2)))
-				continue;
-			auto event = state;
-			event.identity.eventId = session.nextInputEventId++;
-			event.identity.parentEventId = 0;
-			event.identity.origin = static_cast<std::uint8_t>(InputOrigin::Physical);
-			event.identity.channel = static_cast<std::uint8_t>(InputChannel::Mouse);
-			event.identity.deviceId = static_cast<std::uint16_t>(event.surface);
-			event.identity.frameNumber = static_cast<std::uint32_t>(CurrentFrameNumber());
-			EmitEvent(session, ServiceId::Input,
-				static_cast<std::uint16_t>(InputEvent::MouseV2),
-				{reinterpret_cast<const std::byte*>(&event), sizeof(event)});
-		}
-	}
-
 	std::vector<std::byte> Dispatch(Session& session, const RequestHeader& request,
 		std::span<const std::byte> payload)
 	{
@@ -472,13 +403,6 @@ struct Cex2Host::Impl
 
 		if (definition->handler == Handler::Input)
 		{
-			if (request.operation.get() == static_cast<std::uint16_t>(InputOperation::GetHostMouse))
-			{
-				if (!payload.empty())
-					return MakeResponse(request, Status::InvalidArgument);
-				return MakeResponse(request, Status::Ok,
-					{reinterpret_cast<const std::byte*>(&hostMouse), sizeof(hostMouse)});
-			}
 			if (request.operation.get() == static_cast<std::uint16_t>(InputOperation::GetObserved))
 			{
 				Decoder decoder(payload);
@@ -524,10 +448,6 @@ struct Cex2Host::Impl
 			if (channel >= 2) return MakeResponse(request, Status::InvalidArgument);
 			ObservedVpadState injected{};
 			std::memcpy(&injected, payload.data() + 1, sizeof(injected));
-			const auto allowedFlags = static_cast<std::uint8_t>(MappedInputFlag::ReplacePhysical);
-			if ((injected.flags & ~allowedFlags) != 0 ||
-				injected.reserved[0] != std::byte{} || injected.reserved[1] != std::byte{})
-				return MakeResponse(request, Status::InvalidArgument);
 			const std::array sticks{injected.leftX.get(), injected.leftY.get(),
 				injected.rightX.get(), injected.rightY.get()};
 			if (!std::ranges::all_of(sticks, [](float value) { return std::isfinite(value); }))
@@ -536,16 +456,10 @@ struct Cex2Host::Impl
 			injected.leftY = std::clamp(injected.leftY.get(), -1.0f, 1.0f);
 			injected.rightX = std::clamp(injected.rightX.get(), -1.0f, 1.0f);
 			injected.rightY = std::clamp(injected.rightY.get(), -1.0f, 1.0f);
-			const auto now = std::chrono::steady_clock::now();
-			const bool startsLease =
-				!session.hasMappedInjection[channel] ||
-				now - session.mappedInjectionTime[channel] >
-					std::chrono::milliseconds(250);
 			session.mappedInjection[channel] = injected;
 			session.hasMappedInjection[channel] = true;
-			session.mappedInjectionTime[channel] = now;
-			if (startsLease)
-				AuditSensitiveUse(session.owner->Principal(), "Mapped Input Inject", false);
+			session.mappedInjectionTime[channel] = std::chrono::steady_clock::now();
+			AuditSensitiveUse(session.owner->Principal(), "Mapped Input Inject");
 			return MakeResponse(request, Status::Ok);
 		}
 		if (definition->handler == Handler::Logging)
@@ -587,31 +501,7 @@ struct Cex2Host::Impl
 		}
 		if (definition->handler == Handler::Window)
 		{
-			if (request.operation.get() == static_cast<std::uint16_t>(WindowOperation::SetPointerPolicy))
-			{
-				if (payload.size() != sizeof(PointerPolicyPayload))
-					return MakeResponse(request, Status::InvalidArgument);
-				PointerPolicyPayload policy{};
-				std::memcpy(&policy, payload.data(), sizeof(policy));
-				if (!IsValidPointerPolicy(policy))
-					return MakeResponse(request, Status::InvalidArgument);
-				session.pointerPolicy = policy;
-				session.pointerPolicySequence = nextPointerPolicySequence++;
-				AuditSensitiveUse(session.owner->Principal(), "Pointer Policy", false);
-				return MakeResponse(request, Status::Ok,
-					{reinterpret_cast<const std::byte*>(&session.pointerPolicy),
-						sizeof(session.pointerPolicy)});
-			}
-			if (request.operation.get() == static_cast<std::uint16_t>(WindowOperation::GetPointerPolicy))
-			{
-				if (!payload.empty()) return MakeResponse(request, Status::InvalidArgument);
-				return MakeResponse(request, Status::Ok,
-					{reinterpret_cast<const std::byte*>(&session.pointerPolicy),
-						sizeof(session.pointerPolicy)});
-			}
-			if (request.operation.get() != static_cast<std::uint16_t>(WindowOperation::Get) ||
-				!payload.empty())
-				return MakeResponse(request, Status::InvalidArgument);
+			if (!payload.empty()) return MakeResponse(request, Status::InvalidArgument);
 			WindowStatePayload state{};
 			state.frameNumber = CurrentFrameNumber();
 #ifndef CEMU_CEX2_TESTING
@@ -1170,15 +1060,7 @@ void Cex2Host::ObserveVpad(std::int32_t channel, const VPADStatus& status,
 		observed.touched = status.tpData.touch != 0;
 		session.observedVpad[channel] = observed;
 		session.hasObservedVpad[channel] = sampleCount > 0;
-		// A client that owns the pointer is operating in keyboard/mouse mode.
-		// Keep the observed VPAD snapshot available for explicit queries, but
-		// do not flood its service-wide input subscription with controller
-		// events it intentionally disabled. Besides matching the input policy,
-		// this keeps mouse button down/up pairs from being displaced by the
-		// high-frequency VPAD stream.
-		if (sampleCount > 0 &&
-			session.pointerPolicy.mode ==
-				static_cast<std::uint8_t>(cemuextend::wire::PointerMode::Default))
+		if (sampleCount > 0)
 		{
 			cemuextend::wire::ControllerEventPayload event{};
 			event.identity.eventId = session.nextInputEventId++;
@@ -1202,36 +1084,17 @@ void Cex2Host::ApplyMappedVpad(std::int32_t channel, VPADStatus& status)
 {
 	if (channel < 0 || channel >= 2) return;
 	std::lock_guard lock(m_impl->mutex);
-	const auto now = std::chrono::steady_clock::now();
-	bool replacePhysical{};
 	for (auto& [id, session] : m_impl->sessions)
 	{
 		if (!Impl::HasPermission(session, 4, static_cast<std::uint16_t>(ServiceId::Input),
 			static_cast<std::uint16_t>(cemuextend::wire::InputOperation::InjectMapped)) ||
 			!session.hasMappedInjection[channel] ||
-			now - session.mappedInjectionTime[channel] >
+			std::chrono::steady_clock::now() - session.mappedInjectionTime[channel] >
 				std::chrono::milliseconds(250))
 		{
 			session.hasMappedInjection[channel] = false;
 			continue;
 		}
-		const auto flags = session.mappedInjection[channel].flags;
-		replacePhysical |= (flags & static_cast<std::uint8_t>(
-			cemuextend::wire::MappedInputFlag::ReplacePhysical)) != 0;
-	}
-	if (replacePhysical)
-	{
-		// Keep physical touch, gyro, acceleration, and other sensors intact. Only
-		// replace the controller-profile state owned by mapped input.
-		status.hold = 0;
-		status.trig = 0;
-		status.release = 0;
-		status.leftStick = {};
-		status.rightStick = {};
-	}
-	for (auto& [id, session] : m_impl->sessions)
-	{
-		if (!session.hasMappedInjection[channel]) continue;
 		auto& injected = session.mappedInjection[channel];
 		status.hold |= injected.hold.get(); status.trig |= injected.trigger.get();
 		status.release |= injected.release.get();
@@ -1283,92 +1146,6 @@ void Cex2Host::KeyboardFocusLost()
 	}
 }
 
-void Cex2Host::TextEvent(std::uint32_t codepoint, bool repeat)
-{
-	if (codepoint > 0x10ffffU || (codepoint >= 0xd800U && codepoint <= 0xdfffU))
-		return;
-	std::lock_guard lock(m_impl->mutex);
-	for (auto& [id, session] : m_impl->sessions)
-	{
-		if (!Impl::HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input)))
-			continue;
-		cemuextend::wire::TextEventPayload event{};
-		event.identity.eventId = session.nextInputEventId++;
-		event.identity.origin = static_cast<std::uint8_t>(cemuextend::wire::InputOrigin::Physical);
-		event.identity.channel = static_cast<std::uint8_t>(cemuextend::wire::InputChannel::Keyboard);
-		event.identity.frameNumber = CurrentFrameNumber();
-		event.codepoint = codepoint;
-		event.repeat = repeat;
-		m_impl->EmitEvent(session, ServiceId::Input,
-			static_cast<std::uint16_t>(cemuextend::wire::InputEvent::Text),
-			{reinterpret_cast<const std::byte*>(&event), sizeof(event)});
-	}
-}
-
-void Cex2Host::MouseEvent(cemuextend::wire::PointerSurface surface,
-	std::int32_t x, std::int32_t y, std::int32_t deltaX, std::int32_t deltaY,
-	std::int32_t wheelX, std::int32_t wheelY, std::uint32_t buttons,
-	std::uint32_t changedButtons, std::int32_t contentWidth,
-	std::int32_t contentHeight, bool insideContent, bool focused, std::uint8_t flags)
-{
-	using namespace cemuextend::wire;
-	MouseEventPayloadV2 state{};
-	state.identity.origin = static_cast<std::uint8_t>(InputOrigin::Physical);
-	state.identity.channel = static_cast<std::uint8_t>(InputChannel::Mouse);
-	state.identity.deviceId = static_cast<std::uint16_t>(surface);
-	state.identity.frameNumber = static_cast<std::uint32_t>(CurrentFrameNumber());
-	state.x = x;
-	state.y = y;
-	state.deltaX = deltaX;
-	state.deltaY = deltaY;
-	state.wheelX = wheelX;
-	state.wheelY = wheelY;
-	state.buttons = buttons;
-	state.changedButtons = changedButtons;
-	state.contentWidth = std::max(0, contentWidth);
-	state.contentHeight = std::max(0, contentHeight);
-	state.normalizedX = contentWidth > 0 ?
-		std::clamp(static_cast<float>(x) / static_cast<float>(contentWidth), 0.0f, 1.0f) : 0.0f;
-	state.normalizedY = contentHeight > 0 ?
-		std::clamp(static_cast<float>(y) / static_cast<float>(contentHeight), 0.0f, 1.0f) : 0.0f;
-	state.surface = static_cast<std::uint8_t>(surface);
-	state.insideContent = insideContent;
-	state.focused = focused;
-	state.flags = flags;
-	std::lock_guard lock(m_impl->mutex);
-	m_impl->EmitMouseEventLocked(state);
-}
-
-void Cex2Host::PointerFocusChanged(bool focused)
-{
-	std::lock_guard lock(m_impl->mutex);
-	auto state = m_impl->hostMouse;
-	state.identity.frameNumber = static_cast<std::uint32_t>(CurrentFrameNumber());
-	state.deltaX = 0;
-	state.deltaY = 0;
-	state.wheelX = 0;
-	state.wheelY = 0;
-	state.focused = focused;
-	if (!focused)
-	{
-		state.insideContent = 0;
-		state.changedButtons = state.buttons.get();
-		state.buttons = 0;
-		state.flags = 0;
-	}
-	else
-	{
-		state.changedButtons = 0;
-	}
-	m_impl->EmitMouseEventLocked(state);
-}
-
-cemuextend::wire::PointerPolicyPayload Cex2Host::EffectivePointerPolicy()
-{
-	std::lock_guard lock(m_impl->mutex);
-	return m_impl->EffectivePointerPolicyLocked();
-}
-
 void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 {
 	std::lock_guard lock(m_impl->mutex);
@@ -1413,9 +1190,6 @@ void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 		}
 		if (!Impl::HasPermission(session, 4, static_cast<std::uint16_t>(ServiceId::Input)))
 			session.hasMappedInjection.fill(false);
-		if (!Impl::HasPermission(session, 4, static_cast<std::uint16_t>(ServiceId::Window),
-			static_cast<std::uint16_t>(cemuextend::wire::WindowOperation::SetPointerPolicy)))
-			session.pointerPolicy = {};
 		if (!Impl::HasPermission(session, 16, static_cast<std::uint16_t>(ServiceId::Capture)))
 			session.capture = {};
 		for (auto pending = session.pending.begin(); pending != session.pending.end();)

@@ -763,9 +763,6 @@ if(BUILD_TESTING)
 		${CMAKE_SOURCE_DIR}/dependencies/libcemuextend/include
 	)
 	target_compile_definitions(cex2_host_tests PRIVATE CEMU_CEX2_TESTING)
-	if(MSVC)
-		target_compile_options(cex2_host_tests PRIVATE /utf-8)
-	endif()
 	target_link_libraries(cex2_host_tests PRIVATE OpenSSL::Crypto)
 	add_test(NAME cex2_host_tests COMMAND cex2_host_tests)
 

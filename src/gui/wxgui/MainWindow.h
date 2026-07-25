@@ -13,7 +13,6 @@
 #include "wxgui/components/wxGameList.h"
 
 #include <future>
-#include <cstdint>
 #include "Cafe/HW/Espresso/Debugger/GDBStub.h"
 #include "Cafe/CafeSystem.h"
 
@@ -119,8 +118,6 @@ public:
 	void OnMouseMove(wxMouseEvent& event);
 	void OnMouseLeft(wxMouseEvent& event);
 	void OnMouseRight(wxMouseEvent& event);
-	void OnMouseMiddle(wxMouseEvent& event);
-	void OnMouseAux(wxMouseEvent& event);
 	void OnGameListBeginUpdate(wxCommandEvent& event);
 	void OnGameListEndUpdate(wxCommandEvent& event);
 	void OnAccountListRefresh(wxCommandEvent& event);
@@ -157,13 +154,6 @@ private:
 	bool InstallUpdate(const fs::path& metaFilePath);
 
 	void OnTimer(wxTimerEvent& event);
-	void EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t wheelX = 0,
-		std::int32_t wheelY = 0, std::uint32_t changedButtons = 0);
-	void EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
-		std::uint32_t changedButtons = 0);
-	bool EnsureCemuExtendRawMouse();
-	void UpdateCemuExtendPointerConfinement(bool confine);
-	bool ApplyCemuExtendPointerPolicy();
 
 	// CafeSystem implementation
 	void CafeRecreateCanvas() override;
@@ -184,15 +174,6 @@ private:
 	wxTimer* m_timer;
 	wxPoint m_mouse_position{};
 	std::chrono::steady_clock::time_point m_last_mouse_move_time;
-	wxPoint m_cemuextend_last_mouse_position{};
-	bool m_cemuextend_mouse_position_valid{};
-	std::uint8_t m_cemuextend_pointer_mode{};
-	std::uint32_t m_cemuextend_mouse_buttons{};
-	bool m_cemuextend_raw_mouse_requested{true};
-	bool m_cemuextend_raw_mouse_registered{};
-	bool m_cemuextend_raw_mouse_seen{};
-	bool m_cemuextend_suppress_next_captured_wx_motion{};
-	bool m_cemuextend_pointer_confined{};
 	wxSize m_restored_size;
 	wxPoint m_restored_position;
 

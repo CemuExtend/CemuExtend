@@ -5,8 +5,6 @@
 #include <memory>
 #include <span>
 
-#include "cemuextend/services.hpp"
-
 namespace cemuextend_hle { class Cex2Owner; }
 struct VPADStatus;
 
@@ -34,16 +32,7 @@ public:
 		std::int32_t sampleCount);
 	void ApplyMappedVpad(std::int32_t channel, VPADStatus& status);
 	void KeyboardEvent(std::uint16_t usbHidUsage, bool pressed, std::uint8_t modifiers);
-	void TextEvent(std::uint32_t codepoint, bool repeat);
 	void KeyboardFocusLost();
-	void MouseEvent(cemuextend::wire::PointerSurface surface,
-		std::int32_t x, std::int32_t y, std::int32_t deltaX, std::int32_t deltaY,
-		std::int32_t wheelX, std::int32_t wheelY, std::uint32_t buttons,
-		std::uint32_t changedButtons, std::int32_t contentWidth,
-		std::int32_t contentHeight, bool insideContent, bool focused,
-		std::uint8_t flags = 0);
-	void PointerFocusChanged(bool focused);
-	[[nodiscard]] cemuextend::wire::PointerPolicyPayload EffectivePointerPolicy();
 	void PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions);
 #ifdef CEMU_CEX2_TESTING
 	void ShutdownForTesting();
