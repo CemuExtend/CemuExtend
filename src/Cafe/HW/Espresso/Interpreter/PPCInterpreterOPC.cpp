@@ -3,6 +3,7 @@
 #include "PPCInterpreterHelper.h"
 
 #include "Cafe/OS/libs/coreinit/coreinit_CodeGen.h"
+#include "Cafe/HW/MMU/MMU.h"
 
 #include "../Recompiler/PPCRecompiler.h"
 
@@ -329,7 +330,34 @@ void PPCInterpreter_EIEIO(PPCInterpreter_t* hCPU, uint32 Opcode)
 
 void PPCInterpreter_SC(PPCInterpreter_t* hCPU, uint32 Opcode)
 {
-	cemuLog_logDebug(LogType::Force, "SC executed at 0x{:08x}", hCPU->instructionPointer);
+	// Homebrew environments install syscall 0x25 as KernelCopyData. WUPS plugins
+	// use it to patch executable guest code even when the destination is mapped
+	// read-only by the Cafe OS. Cemu has no LLE Cafe kernel to dispatch this
+	// syscall, so emulate the established ABI here.
+	if (hCPU->gpr[0] == 0x2500)
+	{
+		const uint32 destination = hCPU->gpr[3];
+		const uint32 source = hCPU->gpr[4];
+		const uint32 size = hCPU->gpr[5];
+		const bool wraps = size > UINT32_MAX - destination || size > UINT32_MAX - source;
+		if (!wraps && memory_isAddressRangeAccessible(destination, size) &&
+			memory_isAddressRangeAccessible(source, size))
+		{
+			memmove(memory_getPointerFromPhysicalOffset(destination),
+				memory_getPointerFromPhysicalOffset(source), size);
+		}
+		else
+		{
+			cemuLog_log(LogType::Force,
+				"KernelCopyData rejected invalid range dst 0x{:08x} src 0x{:08x} size 0x{:x}",
+				destination, source, size);
+		}
+	}
+	else
+	{
+		cemuLog_logDebug(LogType::Force, "SC 0x{:08x} executed at 0x{:08x}",
+			hCPU->gpr[0], hCPU->instructionPointer);
+	}
 	// next instruction
 	PPCInterpreter_nextInstruction(hCPU);
 }

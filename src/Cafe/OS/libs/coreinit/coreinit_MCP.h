@@ -1,44 +1,27 @@
 #pragma once
 
+#pragma pack(push, 1)
 struct SysProdSettings
 {
-	uint8 ukn00;			// 0x00
-	uint8 ukn01;			// 0x01
-	uint8 ukn02;			// 0x02
-	uint8 platformRegion;	// 0x03
-	uint8 ukn04;
-	uint8 ukn05;
-	uint8 ukn06;
-	uint8 ukn07;
-	uint8 prevBlock;
-	uint8 ukn09;
-	uint8 ukn0A;
-	uint8 gameRegion;		// game region?
-	uint8 nextBlock;
-	uint8 ukn0D;
-	uint8 ukn0E;
-	uint8 ukn0F;
-	uint8 ukn10;
-	uint8 ukn11;
-	uint8 ukn12;
-	uint8 ukn13;
-	uint8 ukn14[4];
-	uint8 ukn18[4];
-	uint8 ukn1C[4];
-	uint8 ukn20[4];
-	uint8 ukn24[4];
-	uint8 ukn28[4];
-	uint8 ukn2C[4];
-	uint8 ukn30[4];
-	uint8 ukn34[4];
-	uint8 ukn38[4];
-	uint8 ukn3C[4];
-	uint8 ukn40[4];
-	uint8 ukn44;
-	uint8 ukn45;
+	uint32be platformRegion;		// 0x00 (product_area)
+	uint16be eepromVersion;		// 0x04
+	uint8 padding06[2];
+	uint32be gameRegion;		// 0x08
+	uint8 unknown0C[4];
+	char ntscPal[5];			// 0x10
+	char wifi5GhzCountryCode[4];	// 0x15
+	uint8 wifi5GhzCountryCodeRevision;
+	char codeId[8];				// 0x1A
+	char serialId[12];			// 0x22
+	uint8 unknown2E[4];
+	char modelNumber[16];		// 0x32
+	uint32be version;			// 0x42
 };
+#pragma pack(pop)
 
 static_assert(sizeof(SysProdSettings) == 0x46);
+static_assert(offsetof(SysProdSettings, codeId) == 0x1A);
+static_assert(offsetof(SysProdSettings, serialId) == 0x22);
 
 typedef uint32 MCPHANDLE;
 

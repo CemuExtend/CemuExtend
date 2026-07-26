@@ -8,6 +8,7 @@
 #include "Cafe/HW/Espresso/Debugger/GDBStub.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
+#include "Cafe/HW/Espresso/WupsServices.h"
 
 #include "util/helpers/Semaphore.h"
 #include "util/helpers/ConcurrentQueue.h"
@@ -81,7 +82,7 @@ namespace coreinit
 	struct OSHostThread
 	{
 		OSHostThread(OSThread_t* thread) : m_thread(thread), m_fiber((void(*)(void*))__OSFiberThreadEntry, this, this),
-			ppcInstance{}
+			ppcInstance{}, wupsOwner(WupsGuestOwnerScope::Current())
 		{
 		}
 
@@ -93,6 +94,7 @@ namespace coreinit
 		uint8  padding[1024 * 128];
 		PPCInterpreter_t ppcInstance;
 		uint32 selectedCore;
+		std::optional<WupsOwnerToken> wupsOwner;
 	};
 
 	std::unordered_map<OSThread_t*, OSHostThread*> s_threadToFiber;
@@ -990,6 +992,76 @@ namespace coreinit
 		return true;
 	}
 
+	bool OSSetThreadRunQuantum(OSThread_t* thread, uint32 quantum)
+	{
+		if (!thread || !thread->IsValidMagic())
+			return false;
+		thread->quantumTicks = quantum == 0 ? ppcThreadQuantum : quantum;
+		return true;
+	}
+
+	MPTR* GetThreadExceptionCallbackSlot(OSThread_t* thread,
+		uint32 exceptionType, uint32 coreIndex)
+	{
+		if (!thread || coreIndex >= Espresso::CORE_COUNT)
+			return nullptr;
+		switch (exceptionType)
+		{
+		case 2: return &thread->dsiCallback[coreIndex];
+		case 3: return &thread->isiCallback[coreIndex];
+		case 5: return reinterpret_cast<MPTR*>(
+			&thread->alignmentExceptionCallback[coreIndex]);
+		case 6: return &thread->programCallback[coreIndex];
+		case 11: return &thread->perfMonCallback[coreIndex];
+		default: return nullptr;
+		}
+	}
+
+	MPTR OSSetExceptionCallbackEx(uint32 mode, uint32 exceptionType,
+		MPTR callback)
+	{
+		OSThread_t* currentThread = OSGetCurrentThread();
+		const uint32 currentCore = OSGetCoreId();
+		MPTR* currentSlot = GetThreadExceptionCallbackSlot(
+			currentThread, exceptionType, currentCore);
+		if (!currentSlot)
+			return MPTR_NULL;
+		const MPTR previous = *currentSlot;
+
+		const bool allCores = mode == 3 || mode == 4;
+		const bool global = mode == 0 || mode == 2 || mode == 4;
+		auto assign = [&](OSThread_t* thread) {
+			const uint32 firstCore = allCores ? 0 : currentCore;
+			const uint32 endCore = allCores ? Espresso::CORE_COUNT : currentCore + 1;
+			for (uint32 core = firstCore; core < endCore; ++core)
+				if (MPTR* slot = GetThreadExceptionCallbackSlot(
+					thread, exceptionType, core))
+					*slot = callback;
+		};
+
+		if (!global)
+			assign(currentThread);
+		else
+		{
+			srwlock_activeThreadList.LockWrite();
+			for (sint32 index = 0; index < activeThreadCount; ++index)
+				assign(MEMPTR<OSThread_t>{activeThread[index]}.GetPtr());
+			srwlock_activeThreadList.UnlockWrite();
+		}
+		return previous;
+	}
+
+	MPTR OSSetExceptionCallback(uint32 exceptionType, MPTR callback)
+	{
+		return OSSetExceptionCallbackEx(2, exceptionType, callback);
+	}
+
+	OSContext_t* OSGetCurrentContext()
+	{
+		OSThread_t* thread = OSGetCurrentThread();
+		return thread ? &thread->context : nullptr;
+	}
+
 	sint32 OSGetThreadPriority(OSThread_t* thread)
 	{
 		sint32 threadPriority = thread->basePriority;
@@ -1162,11 +1234,13 @@ namespace coreinit
 		PPCInterpreter_setCurrentInstance(nullptr);
 	}
 
-	void __OSLoadThread(OSThread_t* thread, PPCInterpreter_t* hCPU, uint32 coreIndex)
+	void __OSLoadThread(OSThread_t* thread, PPCInterpreter_t* hCPU,
+		uint32 coreIndex, std::optional<WupsOwnerToken> wupsOwner)
 	{
 		// Cafe OS title threads always use the normal title address space. The
 		// separately allocated .cemod CPUs are never scheduled through this path.
 		hCPU->modExecutionContext = nullptr;
+		WupsGuestOwnerScope::SetScheduled(wupsOwner);
 		hCPU->LSQE = 1;
 		hCPU->PSE = 1;
 		hCPU->reservedMemAddr = MPTR_NULL;
@@ -1177,7 +1251,8 @@ namespace coreinit
 		OSSetCurrentThread(OSGetCoreId(), thread);
 		__OSThreadLoadContext(hCPU, thread);
 		thread->context.upir = coreIndex;
-		thread->quantumTicks = ppcThreadQuantum;
+		if (thread->quantumTicks == 0)
+			thread->quantumTicks = ppcThreadQuantum;
 		// statistics
 		thread->wakeUpTime = PPCInterpreter_getMainCoreCycleCounter();
 		thread->wakeUpCount = thread->wakeUpCount + 1;
@@ -1189,7 +1264,8 @@ namespace coreinit
 	{
 		uint32 coreIndex = PPCInterpreter_getCoreIndex(hCPU);
 		// run one timeslice
-		hCPU->remainingCycles = ppcThreadQuantum;
+		hCPU->remainingCycles = static_cast<uint32>(std::min<uint64>(
+			thread->quantumTicks, std::numeric_limits<uint32>::max()));
 		hCPU->skippedCycles = 0;
 		// we add a slight randomized variance to the thread quantum to avoid getting stuck in repeated code sequences where one or multiple threads always unload inside a lock
 		// this was seen in Mario Party 10 during early boot where several OSLockMutex operations would align in such a way that one thread would never successfully acquire the lock
@@ -1338,7 +1414,8 @@ namespace coreinit
 		cemu_assert_debug(g_isMulticoreMode == false || hostThread->selectedCore == t_assignedCoreIndex);
 
 		// received next time slice, load self again
-		__OSLoadThread(hostThread->m_thread, &hostThread->ppcInstance, hostThread->selectedCore);
+		__OSLoadThread(hostThread->m_thread, &hostThread->ppcInstance,
+			hostThread->selectedCore, hostThread->wupsOwner);
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 	}
 
@@ -1355,7 +1432,8 @@ namespace coreinit
 		enableFlushDenormalsToZero();
 
 		PPCInterpreter_t* hCPU = &hostThread->ppcInstance;
-		__OSLoadThread(hostThread->m_thread, hCPU, hostThread->selectedCore);
+		__OSLoadThread(hostThread->m_thread, hCPU, hostThread->selectedCore,
+			hostThread->wupsOwner);
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 		__OSUnlockScheduler(); // lock is always held when switching to a fiber, so we need to unlock it here
 		while (true)
@@ -1627,6 +1705,10 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSSetThreadDeallocator, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSSetThreadCleanupCallback, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSSetThreadPriority, LogType::CoreinitThread);
+		cafeExportRegister("coreinit", OSSetThreadRunQuantum, LogType::CoreinitThread);
+		cafeExportRegister("coreinit", OSSetExceptionCallback, LogType::CoreinitThread);
+		cafeExportRegister("coreinit", OSSetExceptionCallbackEx, LogType::CoreinitThread);
+		cafeExportRegister("coreinit", OSGetCurrentContext, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSGetThreadPriority, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSSetThreadAffinity, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSGetThreadAffinity, LogType::CoreinitThread);

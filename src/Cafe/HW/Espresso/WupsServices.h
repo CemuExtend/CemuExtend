@@ -41,12 +41,18 @@ public:
 
 	[[nodiscard]] static std::optional<WupsOwnerToken> Current()
 	{
-		return s_current;
+		return s_current ? s_current : s_scheduled;
+	}
+
+	static void SetScheduled(std::optional<WupsOwnerToken> owner)
+	{
+		s_scheduled = owner;
 	}
 
 private:
 	std::optional<WupsOwnerToken> m_previous;
 	inline static thread_local std::optional<WupsOwnerToken> s_current;
+	inline static thread_local std::optional<WupsOwnerToken> s_scheduled;
 };
 
 enum class WupsGuestAccess : std::uint8_t

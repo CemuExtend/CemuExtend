@@ -28,6 +28,22 @@ typedef struct
 	/* +0x10 */ MEMPTR<uint8> mii;
 }sysMiiStudioArguments_t;
 
+typedef struct
+{
+	/* +0x00 */ sysStandardArguments_t standardArguments;
+	/* +0x08 */ uint32be slot_id;
+	/* +0x0C */ MEMPTR<uint8> mii;
+}sysPublicMiiStudioArguments_t;
+static_assert(sizeof(sysPublicMiiStudioArguments_t) == 0x10);
+
+typedef struct
+{
+	/* +0x00 */ sysStandardArguments_t standardArguments;
+	/* +0x08 */ MEMPTR<char> url;
+	/* +0x0C */ uint32be urlSize;
+}sysBrowserArguments_t;
+static_assert(sizeof(sysBrowserArguments_t) == 0x10);
+
 typedef struct  
 {
 	// used for getting arguments
@@ -437,12 +453,27 @@ void __LaunchMiiMaker(sysMiiStudioArguments_t* args, uint32 platformRegion)
 	}
 	_SYSAppendCallerInfo();
 	uint64 titleIdToLaunch = _SYSGetSystemApplicationTitleIdByProdArea(4, platformRegion);
-	cemu_assert_unimplemented();
+	coreinit::OSLaunchTitlel(titleIdToLaunch, 0);
 }
 
 void _SYSLaunchMiiStudio(sysMiiStudioArguments_t* args)
 {
 	__LaunchMiiMaker(args, (uint32)CafeSystem::GetPlatformRegion());
+}
+
+void SYSLaunchMiiStudio(sysPublicMiiStudioArguments_t* args)
+{
+	if (!args)
+	{
+		__LaunchMiiMaker(nullptr, (uint32)CafeSystem::GetPlatformRegion());
+		return;
+	}
+	sysMiiStudioArguments_t translated{};
+	translated.standardArguments = args->standardArguments;
+	translated.mode = 0;
+	translated.slot_id = args->slot_id;
+	translated.mii = args->mii;
+	__LaunchMiiMaker(&translated, (uint32)CafeSystem::GetPlatformRegion());
 }
 
 void sysappExport__SYSLaunchMiiStudio(PPCInterpreter_t* hCPU)
@@ -660,13 +691,29 @@ namespace sysapp
 		_SYSSwitchToEManual(&args);
 	}
 
+	sint32 SYSSwitchToBrowserForViewer(sysBrowserArguments_t* args)
+	{
+		coreinit::__OSClearCopyData();
+		if (args)
+		{
+			_SYSSerializeStandardArgsIn(&args->standardArguments);
+			if (args->url && args->urlSize != 0)
+				SYSSerializeSysArgs("url", args->url.GetPtr(), args->urlSize);
+		}
+		_SYSAppendCallerInfo();
+		coreinit::StartBackgroundForegroundTransition();
+		return 0;
+	}
+
 	void load()
 	{
 		cafeExportRegisterFunc(SYSClearSysArgs, "sysapp", "SYSClearSysArgs", LogType::Placeholder);
 		cafeExportRegisterFunc(_SYSLaunchTitleByPathFromLauncher, "sysapp", "_SYSLaunchTitleByPathFromLauncher", LogType::Placeholder);
 		cafeExportRegisterFunc(SYSRelaunchTitle, "sysapp", "SYSRelaunchTitle", LogType::Placeholder);
+		cafeExportRegister("sysapp", SYSLaunchMiiStudio, LogType::Placeholder);
 		cafeExportRegister("sysapp", _SYSSwitchToEManual, LogType::Placeholder);
 		cafeExportRegister("sysapp", SYSSwitchToEManual, LogType::Placeholder);
+		cafeExportRegister("sysapp", SYSSwitchToBrowserForViewer, LogType::Placeholder);
 	}
 }
 

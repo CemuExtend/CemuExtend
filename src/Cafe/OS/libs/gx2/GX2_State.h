@@ -103,6 +103,13 @@ namespace GX2
 
 	static_assert(sizeof(GX2PointSizeReg) == 4);
 
+	struct GX2LineWidthReg
+	{
+		uint32be reg;
+	};
+
+	static_assert(sizeof(GX2LineWidthReg) == 4);
+
 	struct GX2PointLimitsReg
 	{
 		betype<Latte::LATTE_PA_SU_POINT_MINMAX> reg;

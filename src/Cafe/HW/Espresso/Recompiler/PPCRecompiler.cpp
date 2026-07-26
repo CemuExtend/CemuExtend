@@ -862,6 +862,7 @@ void PPCRecompiler_init()
 #endif
     PPCRecompiler_allocateRange(0, 0x1000); // the first entry is used for fallback to interpreter
     PPCRecompiler_allocateRange(mmuRange_TRAMPOLINE_AREA.getBase(), mmuRange_TRAMPOLINE_AREA.getSize());
+    PPCRecompiler_allocateRange(mmuRange_LEGACY_OS.getBase(), mmuRange_LEGACY_OS.getSize());
     PPCRecompiler_allocateRange(mmuRange_CODECAVE.getBase(), mmuRange_CODECAVE.getSize());
 
     PPCRecompiler_initPlatform();

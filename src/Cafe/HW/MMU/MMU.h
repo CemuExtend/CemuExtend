@@ -22,6 +22,7 @@ enum class MMU_MEM_AREA_ID
 {
 	CODE_LOW0,
 	CODE_TRAMPOLINE,
+	CODE_LEGACY_OS,
 	CODE_CAVE,
 	CODE_MAIN,
 	MEM2_DATA,
@@ -121,6 +122,7 @@ struct MMURange
 
 extern MMURange mmuRange_LOW0;
 extern MMURange mmuRange_TRAMPOLINE_AREA;
+extern MMURange mmuRange_LEGACY_OS;
 extern MMURange mmuRange_CODECAVE;
 extern MMURange mmuRange_TEXT_AREA;
 extern MMURange mmuRange_MEM2;

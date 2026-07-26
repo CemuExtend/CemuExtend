@@ -2154,7 +2154,9 @@ bool PPCRecompiler_decodePPCInstruction(ppcImlGenContext_t* ppcImlGenContext)
 	case 17:
 		if (PPC_getBits(opcode, 30, 1) == 1)
 		{
-			// SC -> no-op
+			// Cafe kernel syscalls need interpreter-side dispatch. In particular,
+			// WUPS code uses syscall 0x25 (KernelCopyData) for executable patches.
+			unsupportedInstructionFound = true;
 		}
 		else
 		{

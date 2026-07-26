@@ -28,6 +28,21 @@ namespace
 		{
 			module = nullptr;
 			lifetimeId = 0;
+			// WUPS plugins can use absolute title addresses as executable trampoline
+			// pools (libhookevent is one example). Placing a relocated external WPS
+			// immediately after the title's code can overlap such a pool and let the
+			// plugin overwrite its own text. Aroma keeps plugin text separate from
+			// title code, so reserve equivalent separation before the first WPS map.
+			if (!m_reservedTitleCodeGuard)
+			{
+				constexpr std::uint32_t kTitleCodeGuardSize = 16U * 1024U * 1024U;
+				if (RPLLoader_AllocateCodeSpace(kTitleCodeGuardSize, 0x1000) == MPTR_NULL)
+				{
+					error = "failed to reserve title/WUPS executable-address separation";
+					return false;
+				}
+				m_reservedTitleCodeGuard = true;
+			}
 			// RPL unload can be rejected (for example when no emulated CPU thread
 			// is available). The module then remains registered until a checked
 			// retry or title-wide cleanup, so its resolver must not borrow runtime
@@ -58,6 +73,11 @@ namespace
 				bytes, moduleName, options, lifetimeId, error);
 			return module != nullptr && lifetimeId != 0;
 		}
+
+	private:
+		bool m_reservedTitleCodeGuard{};
+
+	public:
 
 		bool Relocate(RPLModule* module, std::uint64_t lifetimeId,
 			std::string& error) override

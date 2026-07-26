@@ -110,6 +110,12 @@ void MMURange::unmapMem()
 
 MMURange mmuRange_LOW0					{ 0x00010000, 0x000F0000, MMU_MEM_AREA_ID::CODE_LOW0, "CODE_LOW0" }; // code cave (Cemuhook)
 MMURange mmuRange_TRAMPOLINE_AREA		{ 0x00E00000, 0x00200000, MMU_MEM_AREA_ID::CODE_TRAMPOLINE, "TRAMPOLINE_AREA" }; // code area for trampolines and imports
+// Real Cafe OS occupies this low-memory window. Legacy Wii U homebrew can use
+// fixed firmware entrypoints, writable OS globals and a code-handler area in
+// it instead of importing/allocating each address. Cemu implements the OS as
+// HLE, so retain a zero-initialized compatibility window and populate the
+// known HLE entrypoint aliases after linking.
+MMURange mmuRange_LEGACY_OS				{ 0x01000000, 0x00800000, MMU_MEM_AREA_ID::CODE_LEGACY_OS, "LEGACY_OS" };
 MMURange mmuRange_CODECAVE				{ 0x01800000, MEMORY_CODECAVEAREA_SIZE, MMU_MEM_AREA_ID::CODE_CAVE, "CODECAVE" }; // shared trusted cemod code cave
 MMURange mmuRange_TEXT_AREA				{ 0x02000000, 0x0C000000, MMU_MEM_AREA_ID::CODE_MAIN, "TEXT_AREA" }; // module text sections go here (0x02000000 to 0x10000000, 224MiB)
 MMURange mmuRange_CEMU_AREA				{ 0x0E000000, 0x02000000, MMU_MEM_AREA_ID::CEMU_PRIVATE, "CEMU_AREA", MMURange::MFLAG::FLAG_MAP_EARLY }; // Cemu-only, 32MiB. Should be allocated early for SysAllocator

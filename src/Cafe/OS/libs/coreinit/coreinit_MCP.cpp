@@ -1,4 +1,5 @@
 #include "Cafe/OS/common/OSCommon.h"
+#include "Cafe/IOSU/legacy/iosu_crypto.h"
 #include "Cafe/IOSU/legacy/iosu_ioctl.h"
 #include "Cafe/IOSU/legacy/iosu_mcp.h"
 #include "Cafe/OS/libs/coreinit/coreinit_IOS.h"
@@ -62,10 +63,21 @@ sint32 MCP_GetSysProdSettings(MCPHANDLE mcpHandle, SysProdSettings* sysProdSetti
 	memset(sysProdSettings, 0x00, sizeof(SysProdSettings));
 	// todo: Other fields are currently unknown
 
-	sysProdSettings->gameRegion = (uint8)CafeSystem::GetForegroundTitleRegion();
-	sysProdSettings->platformRegion = (uint8)CafeSystem::GetPlatformRegion();
+	sysProdSettings->gameRegion = (uint32)CafeSystem::GetForegroundTitleRegion();
+	sysProdSettings->platformRegion = (uint32)CafeSystem::GetPlatformRegion();
 
-	// contains Wii U serial parts at +0x1A and +0x22?
+	// SEEPROM stores the three-character console code and the numeric serial in
+	// adjacent fields. Nintendo APIs commonly expose their concatenation, while
+	// MCPSysProdSettings keeps them split at 0x1A and 0x22 respectively.
+	char deviceSerial[128]{};
+	iosuCrypto_getDeviceSerialString(deviceSerial);
+	const std::string_view serial{deviceSerial};
+	const auto codeLength = std::min<std::size_t>(3, serial.size());
+	const auto serialLength = std::min<std::size_t>(
+		serial.size() - codeLength, sizeof(sysProdSettings->serialId) - 1);
+	std::memcpy(sysProdSettings->codeId, serial.data(), codeLength);
+	std::memcpy(sysProdSettings->serialId,
+		serial.data() + codeLength, serialLength);
 	return 0;
 }
 

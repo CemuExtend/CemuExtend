@@ -45,6 +45,8 @@ namespace
 	{
 		WupsOwnerToken owner;
 		WupsHostExportHandler handler;
+		std::int32_t authenticationFailureResult{
+			static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch)};
 		std::mutex mutex;
 		std::condition_variable idle;
 		std::size_t executing{};
@@ -57,6 +59,23 @@ namespace
 	std::once_flag s_dispatcherOnce;
 	std::uint16_t s_dispatcherHle{};
 	thread_local std::optional<WupsOwnerToken> s_dispatchOwner;
+
+	[[nodiscard]] std::optional<WupsOwnerToken> MappedWupsCaller(
+		const PPCInterpreter_t& cpu)
+	{
+		// A function replacement normally enters from an existing title thread,
+		// which has no WupsGuestOwnerScope. The link register still identifies the
+		// external WPS text that issued the call, so use the RPL mapping as the
+		// owner provenance at this host-export boundary.
+		for (const auto address : {cpu.spr.LR, cpu.instructionPointer})
+		{
+			RPLMappedAddressInfo info;
+			if (address != 0 && RPLLoader_QueryMappedAddress(address, 4, info) &&
+				info.external && info.owner != 0 && info.generation != 0)
+				return WupsOwnerToken{info.owner, info.generation};
+		}
+		return std::nullopt;
+	}
 
 	void CemuWupsExportDispatcher(PPCInterpreter_t* cpu)
 	{
@@ -88,14 +107,21 @@ namespace
 				return;
 			}
 			const auto scopedOwner = WupsGuestOwnerScope::Current();
-			if (!scopedOwner || *scopedOwner != record->owner ||
-				(cpu->modExecutionContext &&
-				(cpu->modExecutionContext->AddressSpaceId() != record->owner.owner ||
-					cpu->modExecutionContext->Generation() != record->owner.generation)))
+			const auto mappedOwner = MappedWupsCaller(*cpu);
+			const std::optional<WupsOwnerToken> contextOwner =
+				cpu->modExecutionContext ?
+					std::optional<WupsOwnerToken>{WupsOwnerToken{
+						cpu->modExecutionContext->AddressSpaceId(),
+						cpu->modExecutionContext->Generation()}} :
+					std::nullopt;
+			const bool hasProvenance = scopedOwner || mappedOwner || contextOwner;
+			if (!hasProvenance ||
+				(scopedOwner && *scopedOwner != record->owner) ||
+				(mappedOwner && *mappedOwner != record->owner) ||
+				(contextOwner && *contextOwner != record->owner))
 			{
 				osLib_returnFromFunction(cpu,
-					static_cast<std::uint32_t>(static_cast<std::int32_t>(
-						WupsServiceStatus::OwnerMismatch)));
+					static_cast<std::uint32_t>(record->authenticationFailureResult));
 				return;
 			}
 			++record->executing;
@@ -387,6 +413,15 @@ namespace
 			auto record = std::make_shared<CallableRecord>();
 			record->owner = owner;
 			record->handler = std::move(handler);
+			// These exports return a pointer or a C bool. A negative service-status
+			// rejection would be interpreted as a valid non-null value by guest code
+			// and can turn an authorization failure into an invalid memory access.
+			if ((moduleName == "__cemu_wups_data" &&
+					(symbolName == "MEMAllocFromDefaultHeap" ||
+						symbolName == "MEMAllocFromDefaultHeapEx")) ||
+				(moduleName == "homebrew_wupsbackend" &&
+					(symbolName == "ReentGet" || symbolName == "ReentAdd")))
+				record->authenticationFailureResult = 0;
 			{
 				std::scoped_lock lock(m_mutex, s_callableMutex);
 				if (!m_allocations.emplace(address,

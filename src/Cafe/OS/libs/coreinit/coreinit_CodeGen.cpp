@@ -58,6 +58,10 @@ namespace coreinit
 	{
 		uint32 ea = startAddress & ~0x1F;
 		uint32 eaEnd = (startAddress + size + 0x1F)&~0x1F;
+		// I-cache invalidation applies to executable title/RPL code as well as the
+		// OS codegen arena. Guest patchers rely on this to discard already compiled
+		// blocks after changing an instruction in the main executable.
+		PPCRecompiler_invalidateRange(ea, eaEnd);
 		while (ea <= eaEnd)
 		{
 			codeGenHandleICBI(ea);

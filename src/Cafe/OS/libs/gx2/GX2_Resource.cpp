@@ -182,6 +182,36 @@ namespace GX2
 		return true;
 	}
 
+	bool GX2RInvalidateSurface(GX2Surface* surface, sint32 mipLevel,
+		uint32 resFlags)
+	{
+		(void)resFlags;
+		if (!GX2RSurfaceExists(surface) || mipLevel < 0 ||
+			static_cast<uint32>(mipLevel) >= static_cast<uint32>(surface->numLevels))
+			return false;
+
+		uint32 address{};
+		uint32 size{};
+		if (mipLevel == 0)
+		{
+			address = surface->imagePtr;
+			size = surface->imageSize;
+		}
+		else
+		{
+			const uint32 offset = surface->mipOffset[mipLevel - 1];
+			const uint32 nextOffset =
+				static_cast<uint32>(mipLevel + 1) < static_cast<uint32>(surface->numLevels) ?
+				static_cast<uint32>(surface->mipOffset[mipLevel]) :
+				static_cast<uint32>(surface->mipSize);
+			address = static_cast<uint32>(surface->mipPtr) + offset;
+			size = nextOffset > offset ? nextOffset - offset : 0;
+		}
+		if (address != MPTR_NULL && size != 0)
+			LatteBufferCache_notifyDCFlush(address, size);
+		return true;
+	}
+
 	void* GX2RLockSurfaceEx(GX2Surface* surface, uint32 mipLevel, uint32 resFlags)
 	{
 		// todo: handle invalidation
@@ -243,6 +273,7 @@ namespace GX2
 		cafeExportRegister("gx2", GX2RCreateSurfaceUserMemory, LogType::GX2);
 		cafeExportRegister("gx2", GX2RDestroySurfaceEx, LogType::GX2);
 		cafeExportRegister("gx2", GX2RSurfaceExists, LogType::GX2);
+		cafeExportRegister("gx2", GX2RInvalidateSurface, LogType::GX2);
 		cafeExportRegister("gx2", GX2RLockSurfaceEx, LogType::GX2);
 		cafeExportRegister("gx2", GX2RUnlockSurfaceEx, LogType::GX2);
 

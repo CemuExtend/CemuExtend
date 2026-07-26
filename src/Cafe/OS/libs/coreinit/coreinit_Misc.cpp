@@ -712,6 +712,14 @@ namespace coreinit
 		CafeSystem::NotifyPPCProcessExit(status);
 	}
 
+	bool OSShutdown()
+	{
+		std::thread shutdownThread(OSShutdownThread, 0);
+		shutdownThread.detach();
+		OSSuspendThread(OSGetCurrentThread());
+		return true;
+	}
+
 	uint32 __LaunchByTitleId(uint64 titleId, uint32 argc, MEMPTR<char>* argv)
 	{
 		// prepare argument buffer
@@ -787,6 +795,14 @@ namespace coreinit
 		}
 		__LaunchByTitleId(titleId, 0, nullptr);
 		return 0;
+	}
+
+	void OSLaunchTitlel(uint64 titleId, uint32 argc)
+	{
+		if (argc != 0)
+			cemuLog_log(LogType::Force,
+				"OSLaunchTitlel: variadic launch arguments are not supported");
+		__LaunchByTitleId(titleId, 0, nullptr);
 	}
 
 	uint32 OSRestartGame(uint32 argc, MEMPTR<char>* argv)
@@ -910,7 +926,9 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSEnableHomeButtonMenu, LogType::CoreinitThread);
 
 		cafeExportRegister("coreinit", OSLaunchTitleByPathl, LogType::Placeholder);
+		cafeExportRegister("coreinit", OSLaunchTitlel, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSRestartGame, LogType::Placeholder);
+		cafeExportRegister("coreinit", OSShutdown, LogType::Placeholder);
 
 		cafeExportRegister("coreinit", OSReleaseForeground, LogType::Placeholder);
 

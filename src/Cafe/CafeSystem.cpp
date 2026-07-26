@@ -408,6 +408,7 @@ void cemu_initForGame()
 	uint32 linkTimeStart = GetTickCount();
 	RPLLoader_UpdateDependencies();
 	RPLLoader_Link();
+	RPLLoader_InstallLegacyCoreinitEntrypoints();
 	RPLLoader_NotifyControlPassedToApplication();
 	uint32 linkTime = GetTickCount() - linkTimeStart;
 	cemuLog_log(LogType::Force, "RPL link time: {}ms", linkTime);

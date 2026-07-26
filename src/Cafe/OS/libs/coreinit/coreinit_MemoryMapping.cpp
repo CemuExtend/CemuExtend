@@ -25,6 +25,20 @@ namespace coreinit
 
 	std::vector<OSVirtMemoryEntry> s_allocatedVirtMemory;
 
+	bool OSIsAddressValid(uint32 virtualAddress)
+	{
+		return memory_isAddressRangeAccessible(virtualAddress, 1);
+	}
+
+	bool __OSValidateAddressSpaceRange(sint32 unused, uint32 virtualAddress,
+		uint32 size)
+	{
+		(void)unused;
+		if (size != 0 && virtualAddress > UINT32_MAX - (size - 1))
+			return false;
+		return memory_isAddressRangeAccessible(virtualAddress, size);
+	}
+
 	MPTR _OSAllocVirtAddr(uint32 size, uint32 alignment)
 	{
 		std::lock_guard _l(s_memMappingMtx);
@@ -154,6 +168,8 @@ namespace coreinit
 	void InitializeMemoryMapping()
 	{
 		s_allocatedVirtMemory.clear();
+		cafeExportRegister("coreinit", OSIsAddressValid, LogType::CoreinitMemoryMapping);
+		cafeExportRegister("coreinit", __OSValidateAddressSpaceRange, LogType::CoreinitMemoryMapping);
 		cafeExportRegister("coreinit", OSGetAvailPhysAddrRange, LogType::CoreinitMemoryMapping);
 		cafeExportRegister("coreinit", OSAllocVirtAddr, LogType::CoreinitMemoryMapping);
 		cafeExportRegister("coreinit", OSFreeVirtAddr, LogType::CoreinitMemoryMapping);

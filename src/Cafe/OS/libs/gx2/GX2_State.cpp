@@ -540,6 +540,39 @@ namespace GX2
 		reg->reg = Latte::LATTE_PA_SU_POINT_SIZE().set_WIDTH(widthI).set_HEIGHT(heightI);
 	}
 
+	void GX2InitLineWidthReg(GX2LineWidthReg* reg, float width)
+	{
+		if (!reg)
+			return;
+		const float clampedWidth = std::clamp(width, 0.0f, 8191.875f);
+		reg->reg = static_cast<uint32>(clampedWidth * 8.0f) & 0xFFFF;
+	}
+
+	void GX2GetLineWidthReg(GX2LineWidthReg* reg, float32be* width)
+	{
+		if (!reg || !width)
+			return;
+		*width = static_cast<float>(static_cast<uint32>(reg->reg) & 0xFFFF) / 8.0f;
+	}
+
+	void GX2SetLineWidthReg(GX2LineWidthReg* reg)
+	{
+		if (!reg)
+			return;
+		GX2ReserveCmdSpace(3);
+		gx2WriteGather_submit(
+			pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+			0x282,
+			reg->reg);
+	}
+
+	void GX2SetLineWidth(float width)
+	{
+		GX2LineWidthReg reg{};
+		GX2InitLineWidthReg(&reg, width);
+		GX2SetLineWidthReg(&reg);
+	}
+
 	void GX2SetPointSizeReg(GX2PointSizeReg* reg)
 	{
 		GX2ReserveCmdSpace(3);
@@ -714,6 +747,10 @@ namespace GX2
 		cafeExportRegister("gx2", GX2InitHiStencilInfoRegs, LogType::GX2);
 
 		cafeExportRegister("gx2", GX2InitPointSizeReg, LogType::GX2);
+		cafeExportRegister("gx2", GX2InitLineWidthReg, LogType::GX2);
+		cafeExportRegister("gx2", GX2GetLineWidthReg, LogType::GX2);
+		cafeExportRegister("gx2", GX2SetLineWidthReg, LogType::GX2);
+		cafeExportRegister("gx2", GX2SetLineWidth, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetPointSizeReg, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetPointSize, LogType::GX2);
 		cafeExportRegister("gx2", GX2InitPointLimitsReg, LogType::GX2);

@@ -44,6 +44,9 @@ bool strcpy_whole(char* dst, size_t dstLength, const char* src)
 
 namespace coreinit
 {
+	FSClientBody_t* __FSGetClientBody(FSClient_t* fsClient);
+	FSA_RESULT FSAUnmount(FSAClientHandle client, const char* mountedTarget,
+		uint32 flags);
 	SysAllocator<OSMutex> s_fsGlobalMutex;
 
 	inline void FSLockMutex()
@@ -149,6 +152,18 @@ namespace coreinit
 		}
 
 		return FS_RESULT::SUCCESS;
+	}
+
+	FS_RESULT FSUnmount(FSClient_t* fsClient, FSCmdBlock_t*, const char* target,
+		FS_ERROR_MASK)
+	{
+		if (!fsClient || !target)
+			return FS_RESULT::ERR_PLACEHOLDER;
+		FSClientBody_t* body = __FSGetClientBody(fsClient);
+		if (!body)
+			return FS_RESULT::ERR_PLACEHOLDER;
+		return FSAUnmount(body->iosuFSAHandle, target, 0) == FSA_RESULT::OK ?
+			FS_RESULT::SUCCESS : FS_RESULT::ERR_PLACEHOLDER;
 	}
 
 	FS_RESULT FSBindMount(FSClient_t* fsClient, FSCmdBlock_t* fsCmdBlock, char* mountPathSrc, char* mountPathOut, FS_ERROR_MASK errMask)
@@ -2656,6 +2671,7 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSGetMountSourceNext, LogType::CoreinitFile);
 
 		cafeExportRegister("coreinit", FSMount, LogType::CoreinitFile);
+		cafeExportRegister("coreinit", FSUnmount, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSBindMount, LogType::CoreinitFile);
 
 		// client management
@@ -2675,6 +2691,8 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSOpenFileEx, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSCloseFileAsync, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSCloseFile, LogType::CoreinitFile);
+		cafeExportRegister("coreinit", FSFlushFileAsync, LogType::CoreinitFile);
+		cafeExportRegister("coreinit", FSFlushFile, LogType::CoreinitFile);
 
 		cafeExportRegister("coreinit", FSReadFileAsync, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSReadFile, LogType::CoreinitFile);
@@ -2718,6 +2736,8 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSReadDir, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSCloseDirAsync, LogType::CoreinitFile);
 		cafeExportRegister("coreinit", FSCloseDir, LogType::CoreinitFile);
+		cafeExportRegister("coreinit", FSRewindDirAsync, LogType::CoreinitFile);
+		cafeExportRegister("coreinit", FSRewindDir, LogType::CoreinitFile);
 
 		// stat
 		cafeExportRegister("coreinit", FSGetFreeSpaceSizeAsync, LogType::CoreinitFile);

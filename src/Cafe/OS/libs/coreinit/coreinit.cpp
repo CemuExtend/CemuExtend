@@ -1,6 +1,7 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "Common/SysAllocator.h"
 #include "Cafe/OS/RPL/rpl_symbol_storage.h"
+#include "Cemu/PPCAssembler/ppcAssembler.h"
 
 #include "Cafe/OS/libs/coreinit/coreinit_Misc.h"
 
@@ -224,6 +225,107 @@ namespace coreinit
 		return PPCInterpreter_getCurrentInstance()->gpr[1];
 	}
 
+	uint32 OSGetSymbolName(uint32 address, char* symbolNameBuffer,
+		uint32 symbolNameBufferSize)
+	{
+		if (!symbolNameBuffer || symbolNameBufferSize == 0)
+			return 0;
+
+		symbolNameBuffer[0] = '\0';
+		const RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(address);
+		if (!symbol)
+			return 0;
+
+		const auto* symbolName = static_cast<const char*>(symbol->symbolName);
+		if (!symbolName)
+			return 0;
+		std::snprintf(symbolNameBuffer, symbolNameBufferSize, "%s", symbolName);
+		return symbol->address;
+	}
+
+	bool DisassemblePPCOpcode(const uint32be* opcode, char* outputBuffer,
+		uint32 outputBufferSize, MPTR findSymbolFunction, uint32 flags)
+	{
+		if (!opcode || !outputBuffer || outputBufferSize == 0)
+			return false;
+
+		(void)findSymbolFunction;
+		(void)flags;
+		const uint32 address = memory_getVirtualOffsetFromPointer(
+			const_cast<uint32be*>(opcode));
+		PPCDisassembledInstruction instruction{};
+		ppcAssembler_disassemble(address, *opcode, &instruction);
+		if (instruction.ppcAsmCode == PPCASM_OP_UKN)
+		{
+			outputBuffer[0] = '\0';
+			return false;
+		}
+
+		std::string text = ppcAssembler_getInstructionName(
+			instruction.ppcAsmCode);
+		std::transform(text.begin(), text.end(), text.begin(),
+			[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+		bool firstOperand = true;
+		for (uint32 index = 0; index < PPCASM_OPERAND_COUNT; ++index)
+		{
+			if ((instruction.operandMask & (1u << index)) == 0)
+				continue;
+			text += firstOperand ? " " : ", ";
+			firstOperand = false;
+			const auto& operand = instruction.operand[index];
+			switch (operand.type)
+			{
+			case PPCASM_OPERAND_TYPE_GPR:
+				text += fmt::format("r{}", operand.registerIndex);
+				break;
+			case PPCASM_OPERAND_TYPE_FPR:
+				text += fmt::format("f{}", operand.registerIndex);
+				break;
+			case PPCASM_OPERAND_TYPE_SPR:
+				text += fmt::format("spr{}", operand.registerIndex);
+				break;
+			case PPCASM_OPERAND_TYPE_CR:
+				text += fmt::format("cr{}", operand.registerIndex);
+				break;
+			case PPCASM_OPERAND_TYPE_CR_BIT:
+				text += fmt::format("4*cr{}+{}",
+					operand.registerIndex / 4,
+					std::array{"lt", "gt", "eq", "so"}[operand.registerIndex & 3]);
+				break;
+			case PPCASM_OPERAND_TYPE_IMM:
+			{
+				sint32 value = operand.immS32;
+				if (operand.isSignedImm && operand.immWidth == 16)
+					value = static_cast<sint16>(value);
+				text += operand.isSignedImm ? fmt::format("{}", value) :
+					fmt::format("0x{:x}", operand.immU32);
+				break;
+			}
+			case PPCASM_OPERAND_TYPE_CIMM:
+			{
+				const auto* symbol = rplSymbolStorage_getByAddress(operand.immU32);
+				text += symbol && symbol->symbolName ?
+					static_cast<const char*>(symbol->symbolName) :
+					fmt::format("0x{:08x}", operand.immU32);
+				break;
+			}
+			case PPCASM_OPERAND_TYPE_MEM:
+				text += fmt::format("{}(r{})", operand.immS32,
+					operand.registerIndex);
+				break;
+			case PPCASM_OPERAND_TYPE_PSQMODE:
+				text += operand.immS32 ? "single" : "paired";
+				break;
+			default:
+				text += "?";
+				break;
+			}
+		}
+
+		std::snprintf(outputBuffer, outputBufferSize, "%s", text.c_str());
+		return text.size() < outputBufferSize;
+	}
+
 	void coreinitExport_ENVGetEnvironmentVariable(PPCInterpreter_t* hCPU)
 	{
 		cemuLog_logDebug(LogType::Force, "ENVGetEnvironmentVariable(\"{}\",0x08x,0x{:x})", (char*)memory_getPointerFromVirtualOffset(hCPU->gpr[3]), hCPU->gpr[4], hCPU->gpr[5]);
@@ -277,6 +379,8 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSGetMainCoreId, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSIsMainCore, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSGetStackPointer, LogType::CoreinitThread);
+		cafeExportRegister("coreinit", OSGetSymbolName, LogType::Placeholder);
+		cafeExportRegister("coreinit", DisassemblePPCOpcode, LogType::Placeholder);
 
 		osLib_addFunction("coreinit", "ENVGetEnvironmentVariable", coreinitExport_ENVGetEnvironmentVariable);
 

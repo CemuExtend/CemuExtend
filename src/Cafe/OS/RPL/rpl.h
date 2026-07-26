@@ -157,6 +157,7 @@ uint64 RPLLoader_AddModuleEventObserver(RPLModuleEventCallback callback);
 bool RPLLoader_RemoveModuleEventObserver(uint64 observerId);
 uint32 rpl_mapHLEImport(RPLModule* rplLoaderContext, const char* rplName, const char* funcName, bool functionMustExist);
 void RPLLoader_Link();
+void RPLLoader_InstallLegacyCoreinitEntrypoints();
 
 MPTR RPLLoader_FindRPLExport(RPLModule* rplLoaderContext, const char* symbolName, bool isData);
 uint32 RPLLoader_GetModuleEntrypoint(RPLModule* rplLoaderContext);

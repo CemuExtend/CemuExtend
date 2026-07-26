@@ -931,9 +931,15 @@ uint32 rpl_mapHLEImport(RPLModule* rplLoaderContext, const char* rplName, const 
 	sint32 functionIndex = osLib_getFunctionIndex(libName, funcName);
 	if (functionIndex >= 0)
 	{
-		MPTR codeAddr = memory_getVirtualOffsetFromPointer(RPLLoader_AllocateTrampolineCodeSpace(4));
+		// Keep a writable instruction-sized prologue in front of the virtual HLE
+		// opcode. Legacy homebrew may temporarily restore/patch the first firmware
+		// instruction to bypass an on-console hook. A one-instruction Cemu stub
+		// would lose its dispatch opcode and fall through into the next unrelated
+		// export; the padded form preserves the real function's observable shape.
+		MPTR codeAddr = memory_getVirtualOffsetFromPointer(RPLLoader_AllocateTrampolineCodeSpace(8));
 		uint32 opcode = (1 << 26) | functionIndex;
-		memory_write<uint32>(codeAddr, opcode);
+		memory_write<uint32>(codeAddr, 0x60000000); // nop / patchable prologue
+		memory_write<uint32>(codeAddr + 4, opcode);
 		// register mapped import
 		mappedFunctionImport_t newImport;
 		newImport.hash1 = mappedImportHash1;
@@ -979,6 +985,33 @@ uint32 rpl_mapHLEImport(RPLModule* rplLoaderContext, const char* rplName, const 
 	rplSymbolStorage_store(libName, funcName, codeStart);
 	// return address of code start
 	return codeStart;
+}
+
+void RPLLoader_InstallLegacyCoreinitEntrypoints()
+{
+	// These are the public Café OS 5.x entrypoints used by legacy ELF/WUPS
+	// loaders on hardware. Copy Cemu's virtual-HLE opcode to those addresses so
+	// indirect calls through the firmware constants have the same ABI here.
+	static constexpr std::array aliases{
+		std::pair{0x0102A3B4U, "OSDynLoad_Acquire"},
+		std::pair{0x0102B828U, "OSDynLoad_FindExport"},
+	};
+	for (const auto& [alias, symbol] : aliases)
+	{
+		const auto target = rpl_mapHLEImport(nullptr, "coreinit", symbol, true);
+		if (target == MPTR_NULL ||
+			!memory_isAddressRangeAccessible(alias, sizeof(std::uint32_t)) ||
+			!memory_isAddressRangeAccessible(target, sizeof(std::uint32_t)))
+		{
+			cemuLog_log(LogType::Force,
+				"Unable to install legacy coreinit entrypoint {} at 0x{:08x}",
+				symbol, alias);
+			continue;
+		}
+		memory_writeU32(alias, memory_readU32(target));
+		memory_writeU32(alias + 4, memory_readU32(target + 4));
+		PPCRecompiler_invalidateRange(alias, alias + 2 * sizeof(std::uint32_t));
+	}
 }
 
 MPTR RPLLoader_FindRPLExport(RPLModule* rplLoaderContext, const char* symbolName, bool isData)
