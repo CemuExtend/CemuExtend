@@ -7,7 +7,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     VCPKG_FORCE_SYSTEM_BINARIES=1 \
-    VCPKG_DEFAULT_BINARY_CACHE=/root/.cache/vcpkg/archives
+    VCPKG_DEFAULT_BINARY_CACHE=/root/.cache/vcpkg/archives \
+    VCPKG_DOWNLOADS=/root/.cache/vcpkg/downloads
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
@@ -58,7 +59,7 @@ RUN apt-get update \
         zip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+RUN mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE" "$VCPKG_DOWNLOADS"
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
@@ -90,16 +91,23 @@ WORKDIR /workspace/CemuExtend
 # out, while CMake/Ninja state is retained in the cache mount.
 RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
+    --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
     --mount=type=cache,id=cemu-extend-cmake,target=/workspace/CemuExtend/build/docker,sharing=locked \
     bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
-    && cmake -S . -B build/docker \
-        -G Ninja \
-        -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-        -DGIT_HASH=${GIT_HASH} \
-        -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
-        -DENABLE_VCPKG=ON \
-        -DALLOW_PORTABLE=OFF \
-        -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
+    && for attempt in 1 2 3; do \
+        cmake -S . -B build/docker \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DGIT_HASH=${GIT_HASH} \
+            -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
+            -DENABLE_VCPKG=ON \
+            -DALLOW_PORTABLE=OFF \
+            -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
+        && break; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        echo "CMake configure failed (attempt $attempt/3); retrying in 5 seconds..."; \
+        sleep 5; \
+    done \
     && cmake --build build/docker --parallel \
     && ctest --test-dir build/docker --output-on-failure \
     && cp bin/Cemu_release /Cemu_release

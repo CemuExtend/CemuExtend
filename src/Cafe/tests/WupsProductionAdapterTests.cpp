@@ -4,6 +4,7 @@
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/OS/RPL/rpl.h"
+#include "Cafe/OS/libs/coreinit/coreinit_MEM_ExpHeap.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cemu/Logging/CemuLogging.h"
 
@@ -26,6 +27,12 @@ namespace
 uint64 s_loggingFlagMask = 1ULL << static_cast<uint64>(LogType::Force);
 bool cemuLog_log(LogType, std::string_view) { return true; }
 bool cemuLog_log(LogType, std::u8string_view) { return true; }
+
+namespace coreinit
+{
+	void* MEMAllocFromExpHeapEx(MEMHeapHandle, uint32, sint32) { return nullptr; }
+	void MEMFreeToExpHeap(MEMHeapHandle, void*) {}
+}
 
 PPCInterpreter_t* PPCInterpreter_getCurrentInstance() { return s_cpu; }
 namespace coreinit { OSThread_t* OSGetCurrentThread() { return &s_thread; } }

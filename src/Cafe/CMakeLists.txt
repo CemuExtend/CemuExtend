@@ -865,6 +865,7 @@ if(BUILD_TESTING)
 		OS/libs/cemuextend/Cex2Host.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/TrustedCemodRuntimeStub.cpp
+		tests/WupsRuntimeStub.cpp
 		tests/CemodRuntimeTests.cpp
 	)
 	target_compile_definitions(cemod_runtime_tests PRIVATE CEMU_CEX2_TESTING)
