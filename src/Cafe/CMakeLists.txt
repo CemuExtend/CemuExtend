@@ -80,6 +80,12 @@ add_library(CemuCafe
 	HW/Espresso/WupsOwnerScopedHeap.h
 	HW/Espresso/WupsHeapInterception.cpp
 	HW/Espresso/WupsHeapInterception.h
+	HW/Espresso/WupsBackendAbi.cpp
+	HW/Espresso/WupsBackendAbi.h
+	HW/Espresso/WupsBackendManagement.cpp
+	HW/Espresso/WupsBackendManagement.h
+	HW/Espresso/WupsDynLoadInterception.cpp
+	HW/Espresso/WupsDynLoadInterception.h
 	HW/Espresso/WupsPluginHeap.cpp
 	HW/Espresso/WupsPluginHeap.h
 	HW/Espresso/ModuleExportRegistry.cpp
@@ -788,6 +794,8 @@ if(BUILD_TESTING)
 
 	add_executable(wups_runtime_tests
 		HW/Espresso/WupsBinary.cpp
+		HW/Espresso/WupsBackendAbi.cpp
+		HW/Espresso/WupsBackendManagement.cpp
 		HW/Espresso/ModuleExportRegistry.cpp
 		HW/Espresso/WupsFunctionPatcher.cpp
 		HW/Espresso/WupsRuntime.cpp
@@ -824,6 +832,8 @@ if(BUILD_TESTING)
 	add_executable(wups_services_tests
 		HW/Espresso/ModuleExportRegistry.cpp
 		HW/Espresso/WupsBinary.cpp
+		HW/Espresso/WupsBackendAbi.cpp
+		HW/Espresso/WupsBackendManagement.cpp
 		HW/Espresso/WupsFunctionPatcher.cpp
 		HW/Espresso/WupsRuntime.cpp
 		HW/Espresso/WupsServices.cpp

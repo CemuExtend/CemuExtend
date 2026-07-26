@@ -5,6 +5,7 @@
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/TrustedCemodRuntime.h"
 #include "Cafe/HW/Espresso/WupsPluginHeap.h"
+#include "Cafe/HW/Espresso/WupsBackendManagement.h"
 #include "Cafe/HW/Espresso/WupsRuntime.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
@@ -277,6 +278,8 @@ struct CemodRuntime::Impl
 	// Lazily constructed on first WUPS load so titles without WUPS cemods never
 	// pay for the Aroma compatibility runtime. Guarded by mutex during creation.
 	std::unique_ptr<WupsPayloadRuntime> wups;
+	std::shared_ptr<WupsBackendManagementRuntime> wupsManagement{
+		std::make_shared<WupsBackendManagementRuntime>()};
 	bool applicationStarted{}; // guards the once-per-title WUPS OnApplicationStarts
 	std::chrono::microseconds titleTime{};
 
@@ -284,7 +287,8 @@ struct CemodRuntime::Impl
 	{
 		if (!wups)
 			wups = std::make_unique<WupsPayloadRuntime>(
-				CreateRplAromaCompatibilityRuntime(), CreateRplWupsModuleLoader());
+				CreateRplAromaCompatibilityRuntime(wupsManagement),
+				CreateRplWupsModuleLoader(), wupsManagement);
 		return *wups;
 	}
 };
@@ -307,6 +311,7 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 		{
 			std::lock_guard lock(m_impl->mutex);
 			wups = &m_impl->EnsureWups();
+			wups->SetProcessKey(WupsProcessKind::Game, package.targetTitleId);
 		}
 		auto handle = wups->Load(std::move(package), error);
 		return handle ? std::optional{*handle | Impl::kWupsHandleMask} : std::nullopt;

@@ -1,5 +1,6 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/HW/Espresso/PPCCallback.h"
+#include "Cafe/HW/Espresso/WupsDynLoadInterception.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/coreinit/coreinit_DynLoad.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MEM.h"
@@ -61,6 +62,15 @@ namespace coreinit
 
 	uint32 OSDynLoad_AcquireInternal(const char* libName, uint32be* moduleHandleOut, bool checkOnly)
 	{
+		// "homebrew_*" are virtual WUPS modules, never real RPLs; some libwups
+		// helper libraries (e.g. the config API) resolve their backend this way
+		// instead of through a static RPL import. See WupsDynLoadInterception.h.
+		std::uint32_t syntheticHandle{};
+		if (cafe::wups::TryAcquireHomebrewModule(libName, syntheticHandle))
+		{
+			*moduleHandleOut = syntheticHandle;
+			return 0;
+		}
 		// truncate path
 		sint32 fileNameStartIndex = 0;
 		sint32 tempLen = (sint32)strlen(libName);
@@ -120,6 +130,11 @@ namespace coreinit
 	{
 		if (moduleHandle == RPL_INVALID_HANDLE)
 			return;
+		if (cafe::wups::IsHomebrewModuleHandle(moduleHandle))
+		{
+			cafe::wups::ReleaseHomebrewModule(moduleHandle);
+			return;
+		}
 		RPLLoader_RemoveDependency(moduleHandle);
 		RPLLoader_UpdateDependencies();
 	}
@@ -131,6 +146,17 @@ namespace coreinit
 
 	uint32 OSDynLoad_FindExport(uint32 moduleHandle, uint32 isData, const char* exportName, betype<MPTR>* addrOut)
 	{
+		if (cafe::wups::IsHomebrewModuleHandle(moduleHandle))
+		{
+			std::uint32_t address{};
+			if (cafe::wups::TryFindHomebrewExport(moduleHandle, isData != 0, exportName, address))
+			{
+				*addrOut = address;
+				return 0;
+			}
+			*addrOut = MPTR_NULL;
+			return 0xFFFFFFFF;
+		}
 		if (moduleHandle == 0xFFFFFFFF)
 		{
 			// main module

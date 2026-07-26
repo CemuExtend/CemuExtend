@@ -145,7 +145,8 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	document.Parse(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	if (document.HasParseError() || !document.IsObject() ||
 		!document.HasMember("package_version") || !document["package_version"].IsUint() ||
-		(document["package_version"].GetUint() != 1 && document["package_version"].GetUint() != 2) ||
+		(document["package_version"].GetUint() != 1 && document["package_version"].GetUint() != 2 &&
+			document["package_version"].GetUint() != 3) ||
 		!document.HasMember("api_version") ||
 		!document["api_version"].IsUint() || document["api_version"].GetUint() != 2 ||
 		!document.HasMember("execution_mode") || !document["execution_mode"].IsString() ||
@@ -171,7 +172,7 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	{
 		if (!document.HasMember("payload") || !document["payload"].IsObject())
 		{
-			error = "package_version 2 requires a payload descriptor";
+			error = "package_version 2 or 3 requires a payload descriptor";
 			return false;
 		}
 		const auto& payload = document["payload"];
@@ -258,7 +259,7 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 		}
 		manifest.requestedPermissions |= found->second;
 	}
-	if (manifest.packageVersion == 2 && document.HasMember("scope"))
+	if (manifest.packageVersion >= 2 && document.HasMember("scope"))
 	{
 		if (!document["scope"].IsObject() || !document["scope"].HasMember("type") ||
 			!document["scope"]["type"].IsString())
@@ -308,7 +309,7 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 			return false;
 		}
 	}
-	if (manifest.packageVersion == 2 && document.HasMember("permissions"))
+	if (manifest.packageVersion >= 2 && document.HasMember("permissions"))
 	{
 		if (!document["permissions"].IsObject())
 		{
@@ -316,9 +317,16 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 			return false;
 		}
 		const auto& permissions = document["permissions"];
+		if (manifest.packageVersion < 3 &&
+			permissions.HasMember("plugin_management"))
+		{
+			error = "plugin_management requires package_version 3";
+			return false;
+		}
 		static const std::set<std::string_view> allowedPermissionFields{
 			"native_memory", "function_patching", "physical_address_patching", "filesystem", "network",
-			"mapped_memory", "notifications", "content_redirection", "modules"};
+			"mapped_memory", "notifications", "content_redirection", "modules",
+			"plugin_management"};
 		for (auto member = permissions.MemberBegin(); member != permissions.MemberEnd(); ++member)
 			if (!allowedPermissionFields.contains(std::string_view(member->name.GetString(), member->name.GetStringLength())))
 			{
@@ -337,7 +345,8 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 			!boolean("network", manifest.nativePermissions.network) ||
 			!boolean("mapped_memory", manifest.nativePermissions.mappedMemory) ||
 			!boolean("notifications", manifest.nativePermissions.notifications) ||
-			!boolean("content_redirection", manifest.nativePermissions.contentRedirection))
+			!boolean("content_redirection", manifest.nativePermissions.contentRedirection) ||
+			!boolean("plugin_management", manifest.nativePermissions.pluginManagement))
 		{
 			error = "permissions boolean field has the wrong type";
 			return false;

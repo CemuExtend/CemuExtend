@@ -69,11 +69,7 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	const auto savedReservationValue = cpu->reservedMemValue;
 	const auto hadMemoryException = cpu->memoryException;
 
-	// devkitPPC hands a WUPS hook its wups_loader_*_args_t by reference: the caller
-	// materialises the struct in memory and passes its address in r3, regardless of
-	// how small the struct is (an 8-byte wups_loader_init_config_args_t is passed
-	// exactly like a 60-byte button-combo struct). Only the hook path sets
-	// aggregateByReference; plain guest callbacks take scalars in registers.
+	// The WUPS hook ABI hands loader argument aggregates by reference.
 	PPCCoreCallbackData_t callbackData{};
 	if (aggregateByReference && !argumentWords.empty())
 	{

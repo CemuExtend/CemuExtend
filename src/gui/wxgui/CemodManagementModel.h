@@ -42,6 +42,7 @@ enum class CemodGuiPermission : std::uint8_t
 	Notifications,
 	ContentRedirection,
 	Modules,
+	PluginManagement,
 };
 
 struct CemodGuiPermissionItem

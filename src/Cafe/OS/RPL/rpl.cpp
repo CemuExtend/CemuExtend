@@ -3329,6 +3329,51 @@ bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualA
 	return false;
 }
 
+bool RPLLoader_QueryMappedLayout(const RPLModuleLease& lease,
+	RPLMappedLayoutSnapshot& layout)
+{
+	layout = {};
+	if (!lease.m_impl)
+		return false;
+	const auto* module = lease.m_impl->module;
+	if (!module || !module->sectionTablePtr)
+		return false;
+	layout.textBase = module->regionMappingBase_text.GetMPTR();
+	layout.dataBase = module->regionMappingBase_data;
+	const uint32 sectionCount = module->rplHeader.sectionTableEntryCount;
+	const uint32 namesIndex = module->rplHeader.nameSectionIndex;
+	const char* names{};
+	uint32 namesSize{};
+	if (namesIndex < sectionCount &&
+		module->sectionAddressTable2[namesIndex].ptr)
+	{
+		names = static_cast<const char*>(
+			module->sectionAddressTable2[namesIndex].ptr);
+		namesSize = module->sectionTablePtr[namesIndex].sectionSize;
+	}
+	for (uint32 index = 0; index < sectionCount; ++index)
+	{
+		const auto& section = module->sectionTablePtr[index];
+		const uint32 flags = section.flags;
+		const uint32 size = section.sectionSize;
+		auto* pointer = module->sectionAddressTable2[index].ptr;
+		if ((flags & 2U) == 0 || size == 0 || !pointer)
+			continue;
+		std::string name;
+		const uint32 nameOffset = section.nameOffset;
+		if (names && nameOffset < namesSize)
+		{
+			const auto maximum = namesSize - nameOffset;
+			const auto length = strnlen(names + nameOffset, maximum);
+			if (length < maximum)
+				name.assign(names + nameOffset, length);
+		}
+		layout.sections.push_back({std::move(name),
+			memory_getVirtualOffsetFromPointer(pointer), size, flags});
+	}
+	return true;
+}
+
 bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
 	RPLMappedAddressInfo& info)
 {

@@ -1,6 +1,8 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/WupsRuntime.h"
+#include "Cafe/HW/Espresso/WupsBackendAbi.h"
+#include "Cafe/HW/Espresso/WupsBackendManagement.h"
 #include "Cemu/Logging/CemuLogging.h"
 
 #include <cstdlib>
@@ -251,6 +253,90 @@ namespace
 		CHECK(reload.RegisterOwner(package, metadata, {1, 2}, error));
 		CHECK(reload.StorageGet({1, 2}, 0, "value", WupsStorageValueType::String,
 			loaded) == WupsServiceStatus::CorruptData);
+	}
+
+	void TestBackendDescriptorAndPendingPlan()
+	{
+		const auto descriptors = WupsBackendExportDescriptors();
+		CHECK(descriptors.size() == 18);
+		std::set<std::string_view> names;
+		for (const auto& descriptor : descriptors)
+		{
+			CHECK(descriptor.kind == WupsSymbolKind::Function);
+			CHECK(names.insert(descriptor.name).second);
+			CHECK(FindWupsBackendExport(descriptor.name) == &descriptor);
+		}
+
+		WupsBackendManagementRuntime management;
+		auto first = Package("dynamic.first", {"homebrew_wupsbackend"});
+		first.manifest.packageVersion = 3;
+		first.manifest.nativePermissions.pluginManagement = true;
+		first.payload = {std::byte{1}, std::byte{2}};
+		first.wups.emplace();
+		first.wups->metadata.name = "First";
+		first.wups->metadata.author = "Author";
+		auto duplicate = first;
+		duplicate.manifest.modId = "dynamic.duplicate";
+		duplicate.payload = {std::byte{3}};
+		auto second = first;
+		second.manifest.modId = "dynamic.second";
+		second.wups->metadata.name = "Second";
+		const auto firstHandle = management.CreatePluginData(std::move(first));
+		const auto duplicateHandle = management.CreatePluginData(std::move(duplicate));
+		const auto secondHandle = management.CreatePluginData(std::move(second));
+		CHECK(firstHandle && duplicateHandle && secondHandle);
+		const std::array handles{*firstHandle, 0xffffffffU,
+			*duplicateHandle, *secondHandle};
+		const WupsProcessKey key{2, 0x0005000012345678ULL};
+		CHECK(management.ScheduleNextLaunch(key, handles));
+		CHECK(management.HasPendingPlan(key));
+		const std::array deleted{*firstHandle, *duplicateHandle, *secondHandle};
+		management.DeletePluginData(deleted);
+		CHECK(!management.FindPluginData(*firstHandle));
+		auto plan = management.ConsumePendingPlan(key);
+		CHECK(plan && plan->size() == 2);
+		CHECK((*plan)[0].wups->metadata.name == "First");
+		CHECK((*plan)[1].wups->metadata.name == "Second");
+		CHECK(!management.HasPendingPlan(key));
+		CHECK(!management.ConsumePendingPlan(key));
+	}
+
+	void TestBackendExportsAndVersionDispatch(const std::filesystem::path& root)
+	{
+		auto platform = std::make_shared<FakePlatform>();
+		auto management = std::make_shared<WupsBackendManagementRuntime>();
+		AromaRuntimeOptions options{.storageRoot = root, .platform = platform,
+			.backendManagement = management};
+		AromaCompatibilityRuntime runtime(options);
+		auto package = Package("backend", {"homebrew_wupsbackend"});
+		package.manifest.packageVersion = 3;
+		package.manifest.nativePermissions.pluginManagement = true;
+		package.targetTitleId = 0x0005000012345678ULL;
+		WupsMetadata metadata; metadata.name = "Backend";
+		std::string error;
+		const WupsOwnerToken owner{90, 1};
+		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
+		std::uint32_t apiVersionExport{};
+		for (const auto& descriptor : WupsBackendExportDescriptors())
+		{
+			const auto address = runtime.ResolveRuntimeModuleExport(owner,
+				"homebrew_wupsbackend", descriptor.name,
+				WupsSymbolKind::Function, error);
+			CHECK(address);
+			if (descriptor.id == WupsBackendExportId::GetApiVersion)
+				apiVersionExport = *address;
+		}
+		CHECK(apiVersionExport != 0);
+		const std::array<std::uint32_t, 1> versionArguments{0x1100};
+		CHECK(platform->Dispatch(apiVersionExport, versionArguments, error) == 0);
+		CHECK(ReadGuestU32(*platform, 0x1100) == kWupsBackendApiVersion);
+
+		auto denied = Package("backend-denied", {"homebrew_wupsbackend"});
+		CHECK(runtime.RegisterOwner(denied, metadata, {91, 1}, error));
+		CHECK(!runtime.ResolveRuntimeModuleExport({91, 1},
+			"homebrew_wupsbackend", "WUPSGetAPIVersion",
+			WupsSymbolKind::Function, error));
+		CHECK(error.find("plugin_management") != std::string::npos);
 	}
 
 	void TestPermissionsMappingAndDispatch(const std::filesystem::path& root)
@@ -725,6 +811,8 @@ int main()
 	TestRuntimeDestructionWithQueuedCallback(root);
 	TestConcurrentMappingAccounting(root);
 	TestExportRegistrationCleanupRace(root);
+	TestBackendDescriptorAndPendingPlan();
+	TestBackendExportsAndVersionDispatch(root);
 	std::error_code code; std::filesystem::remove_all(root, code);
 	std::cout << "WUPS services tests passed\n";
 }

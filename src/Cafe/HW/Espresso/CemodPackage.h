@@ -52,6 +52,7 @@ struct CemodNativePermissions
 	bool mappedMemory{};
 	bool notifications{};
 	bool contentRedirection{};
+	bool pluginManagement{};
 	std::vector<std::string> modules;
 };
 

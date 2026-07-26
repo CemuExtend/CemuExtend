@@ -317,6 +317,37 @@ void TestV2PayloadAndManifest()
 	std::filesystem::remove(path);
 }
 
+void TestV3PluginManagementPermission()
+{
+	std::string v3(kWupsManifest);
+	v3.replace(v3.find("\"package_version\":2"),
+		std::string_view("\"package_version\":2").size(),
+		"\"package_version\":3");
+	const auto permissionsEnd = v3.find("\n },", v3.find("\"permissions\""));
+	CHECK(permissionsEnd != std::string::npos);
+	v3.insert(permissionsEnd, ",\n   \"plugin_management\":true");
+	std::string error;
+	auto path = PackagePath("wups-v3-management");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+		{"manifest.json", Bytes(v3)}});
+	auto package = CemodPackage::Load(path, 0x0005000012345678ULL, error);
+	CHECK(package.has_value());
+	CHECK(package->manifest.packageVersion == 3);
+	CHECK(package->manifest.nativePermissions.pluginManagement);
+	std::filesystem::remove(path);
+
+	std::string v2(kWupsManifest);
+	const auto v2PermissionsEnd = v2.find("\n },", v2.find("\"permissions\""));
+	CHECK(v2PermissionsEnd != std::string::npos);
+	v2.insert(v2PermissionsEnd, ",\n   \"plugin_management\":false");
+	path = PackagePath("wups-v2-management-rejected");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+		{"manifest.json", Bytes(v2)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("package_version 3") != std::string::npos);
+	std::filesystem::remove(path);
+}
+
 void TestPayloadAndZipRejections()
 {
 	std::string error;
@@ -387,6 +418,7 @@ int main()
 	TestLegacyManifestRejected();
 	TestTrustedValidation();
 	TestV2PayloadAndManifest();
+	TestV3PluginManagementPermission();
 	TestPayloadAndZipRejections();
 	return 0;
 }

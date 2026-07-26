@@ -23,6 +23,7 @@ namespace
 		CemodGuiPermission::Notifications,
 		CemodGuiPermission::ContentRedirection,
 		CemodGuiPermission::Modules,
+		CemodGuiPermission::PluginManagement,
 	};
 
 	std::string HexDigest(const unsigned char* digest, std::size_t size)
@@ -138,6 +139,7 @@ std::string CemodGuiAdapter::PermissionName(CemodGuiPermission permission)
 	case CemodGuiPermission::Notifications: return "Notifications";
 	case CemodGuiPermission::ContentRedirection: return "Content redirection";
 	case CemodGuiPermission::Modules: return "Aroma/WUMS modules";
+	case CemodGuiPermission::PluginManagement: return "WUPS plugin management";
 	}
 	return "Unknown permission";
 }
@@ -228,7 +230,8 @@ CemodPluginView CemodGuiAdapter::InspectPlugin(const CemodGuiPackageInfo& info,
 			declared.nativeMemory, declared.functionPatching,
 			declared.physicalAddressPatching, declared.filesystemRead,
 			declared.filesystemWrite, declared.network, declared.mappedMemory,
-			declared.notifications, declared.contentRedirection, !declared.modules.empty()};
+			declared.notifications, declared.contentRedirection, !declared.modules.empty(),
+			declared.pluginManagement};
 		requestedPermissions = 0;
 		for (std::size_t index = 0; index < requested.size(); ++index)
 			if (requested[index]) requestedPermissions |= 1ULL << index;
@@ -263,7 +266,8 @@ CemodPluginView CemodGuiAdapter::InspectPlugin(const CemodGuiPackageInfo& info,
 		permissions.nativeMemory, permissions.functionPatching,
 		permissions.physicalAddressPatching, permissions.filesystemRead,
 		permissions.filesystemWrite, permissions.network, permissions.mappedMemory,
-		permissions.notifications, permissions.contentRedirection, !permissions.modules.empty()};
+		permissions.notifications, permissions.contentRedirection, !permissions.modules.empty(),
+		permissions.pluginManagement};
 	for (const auto permission : kPermissions)
 	{
 		const auto bit = PermissionBit(permission);

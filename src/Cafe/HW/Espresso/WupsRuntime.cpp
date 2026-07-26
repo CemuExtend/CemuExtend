@@ -1,6 +1,7 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/WupsRuntime.h"
+#include "Cafe/HW/Espresso/WupsBackendManagement.h"
 
 #include <algorithm>
 #include <array>
@@ -227,10 +228,11 @@ struct WupsPluginRuntime::Impl
 					"WUPS: invoking hook {} target 0x{:08x} argc {}",
 					HookName(type), found->second, invocation.argumentWords.size());
 				WupsGuestOwnerScope ownerScope{{owner, resourceGeneration}};
-				// A hook's argument words are one wups_loader_*_args_t struct,
-				// which devkitPPC passes by address rather than in registers.
+				// WUPS loader hook arguments are materialized as one aggregate and
+				// passed by address by the SDK hook ABI.
 				called = moduleLoader->Invoke(callbackModule, callbackLifetime,
-					found->second, invocation.argumentWords, result, error, true);
+					found->second, invocation.argumentWords, result, error,
+					true);
 				cemuLog_log(LogType::Force, "WUPS: hook {} returned {} result 0x{:08x}",
 					HookName(type), called, result);
 			}
@@ -641,6 +643,24 @@ CemodPackage WupsPluginRuntime::PackageCopy() const
 {
 	std::lock_guard lock(m_impl->mutex);
 	return m_impl->package;
+}
+
+bool WupsPluginRuntime::QueryMappedLayout(WupsMappedLayout& layout,
+	std::string& error) const
+{
+	layout = {};
+	std::lock_guard lock(m_impl->mutex);
+	if (!m_impl->module || m_impl->teardownInProgress ||
+		m_impl->state == WupsPluginState::Installed ||
+		m_impl->state == WupsPluginState::Unloading ||
+		m_impl->state == WupsPluginState::Unloaded ||
+		m_impl->state == WupsPluginState::Failed)
+	{
+		error = "WUPS mapped layout is unavailable for this lifecycle state";
+		return false;
+	}
+	return m_impl->moduleLoader->QueryMappedLayout(m_impl->module,
+		m_impl->moduleLifetime, layout, error);
 }
 
 bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
@@ -1068,6 +1088,8 @@ struct WupsPayloadRuntime::Impl
 	std::map<std::uint64_t, std::shared_ptr<WupsPluginRuntime>> plugins;
 	std::shared_ptr<IWupsRuntimeServices> services;
 	std::shared_ptr<IWupsModuleLoader> moduleLoader;
+	std::shared_ptr<WupsBackendManagementRuntime> management;
+	WupsProcessKey processKey{static_cast<std::uint8_t>(WupsProcessKind::Game), 0};
 	std::uint64_t nextHandle{1};
 	std::uint32_t nextGeneration{1};
 	bool applicationActive{};
@@ -1075,7 +1097,8 @@ struct WupsPayloadRuntime::Impl
 
 WupsPayloadRuntime::WupsPayloadRuntime(
 	std::shared_ptr<IWupsRuntimeServices> services,
-	std::shared_ptr<IWupsModuleLoader> moduleLoader) :
+	std::shared_ptr<IWupsModuleLoader> moduleLoader,
+	std::shared_ptr<WupsBackendManagementRuntime> management) :
 	m_impl(std::make_unique<Impl>())
 {
 	m_impl->services = services ? std::move(services) :
@@ -1084,6 +1107,7 @@ WupsPayloadRuntime::WupsPayloadRuntime(
 		m_impl->services = std::make_shared<AromaCompatibilityRuntime>();
 	m_impl->moduleLoader = moduleLoader ? std::move(moduleLoader) :
 		CreateRplWupsModuleLoader();
+	m_impl->management = std::move(management);
 }
 
 WupsPayloadRuntime::~WupsPayloadRuntime()
@@ -1253,6 +1277,9 @@ bool WupsPayloadRuntime::Unload(std::uint64_t handle, std::string& error)
 		}
 		plugin = found->second;
 	}
+	if (m_impl->management)
+		m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
+			plugin->Generation());
 	if (!plugin->UnloadChecked(error))
 		return false;
 	{
@@ -1286,6 +1313,9 @@ bool WupsPayloadRuntime::UnloadAll(std::string& error)
 	bool success = true;
 	for (const auto& [handle, plugin] : plugins)
 	{
+		if (m_impl->management)
+			m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
+				plugin->Generation());
 		std::string pluginError;
 		if (!plugin->UnloadChecked(pluginError))
 		{
@@ -1304,6 +1334,36 @@ bool WupsPayloadRuntime::UnloadAll(std::string& error)
 
 bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
 {
+	error.clear();
+	bool success = true;
+	if (m_impl->management)
+	{
+		auto pending = m_impl->management->ConsumePendingPlan(m_impl->processKey);
+		if (pending)
+		{
+			std::vector<std::shared_ptr<WupsPluginRuntime>> previous;
+			{
+				std::lock_guard lock(m_impl->mutex);
+				for (const auto& [handle, plugin] : m_impl->plugins)
+					previous.push_back(plugin);
+				m_impl->plugins.clear();
+			}
+			for (const auto& plugin : previous)
+			{
+				std::string unloadError;
+				(void)plugin->UnloadChecked(unloadError);
+			}
+			for (auto& package : *pending)
+			{
+				std::string loadError;
+				if (!Load(std::move(package), loadError))
+				{
+					success = false;
+					error.append(error.empty() ? "" : "; ").append(loadError);
+				}
+			}
+		}
+	}
 	std::vector<std::shared_ptr<WupsPluginRuntime>> plugins;
 	{
 		std::lock_guard lock(m_impl->mutex);
@@ -1311,8 +1371,6 @@ bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
 			plugins.push_back(plugin);
 		m_impl->applicationActive = true;
 	}
-	bool success = true;
-	error.clear();
 	for (const auto& plugin : plugins)
 	{
 		std::string pluginError;
@@ -1322,8 +1380,17 @@ bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
 			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name)
 				.append(": ").append(pluginError);
 		}
+		else if (m_impl->management)
+			(void)m_impl->management->PublishContainer(plugin);
 	}
 	return success;
+}
+
+void WupsPayloadRuntime::SetProcessKey(WupsProcessKind process,
+	std::uint64_t titleId)
+{
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->processKey = {static_cast<std::uint8_t>(process), titleId};
 }
 
 void WupsPayloadRuntime::OnReleaseForeground()

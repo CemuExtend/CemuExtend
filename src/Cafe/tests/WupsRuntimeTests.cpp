@@ -372,11 +372,10 @@ namespace
 		CHECK(log->releases[0].first == 8);
 		CHECK(log->releases[0].second == 20);
 		const std::vector<WupsHookType> expected{
-			WupsHookType::InitReentFunctions,
 			WupsHookType::InitWutMalloc,
+			WupsHookType::InitReentFunctions,
 			WupsHookType::InitWutNewlib,
 			WupsHookType::InitWutStdcpp,
-			WupsHookType::InitWutThread,
 			WupsHookType::InitWutDevoptab,
 			WupsHookType::InitWutSockets,
 			WupsHookType::FiniWutDevoptab,

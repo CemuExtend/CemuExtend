@@ -17,6 +17,7 @@
 #include <vector>
 
 struct RPLModule;
+class WupsBackendManagementRuntime;
 
 enum class WupsPluginState : std::uint8_t
 {
@@ -46,6 +47,21 @@ struct WupsHookInvocation
 	// subsystems whose absence must not abort plugin start-up.
 	bool reportNonZeroResult{};
 	bool skip{};
+};
+
+struct WupsMappedSection
+{
+	std::string name;
+	std::uint32_t address{};
+	std::uint32_t size{};
+	std::uint32_t flags{};
+};
+
+struct WupsMappedLayout
+{
+	std::vector<WupsMappedSection> sections;
+	std::uint32_t textBase{};
+	std::uint32_t dataBase{};
 };
 
 class IWupsRuntimeServices
@@ -98,16 +114,33 @@ public:
 		RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) = 0;
 	[[nodiscard]] virtual bool Relocate(RPLModule* module, std::uint64_t lifetimeId,
 		std::string& error) = 0;
-	// aggregateByReference is set for WUPS hook invocations, whose argument words
-	// form a single wups_loader_*_args_t struct that devkitPPC passes by address.
+	// aggregateByReference is set for WUPS hook argument aggregates.
+	[[nodiscard]] virtual bool Invoke(RPLModule*, std::uint64_t,
+		std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&,
+		std::string& error)
+	{
+		error = "guest invocation is unsupported by this module loader";
+		return false;
+	}
 	[[nodiscard]] virtual bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
 		std::uint32_t& result, std::string& error,
-		bool aggregateByReference = false) = 0;
+		bool aggregateByReference)
+	{
+		(void)aggregateByReference;
+		return Invoke(module, lifetimeId, targetVirtualAddress, argumentWords,
+			result, error);
+	}
 	[[nodiscard]] virtual bool ResolveAddress(RPLModule* module,
 		std::uint64_t lifetimeId, std::uint32_t virtualAddress,
 		std::uint32_t size, WupsSymbolKind kind,
 		std::uint32_t& mappedAddress, std::string& error) = 0;
+	[[nodiscard]] virtual bool QueryMappedLayout(RPLModule*, std::uint64_t,
+		WupsMappedLayout&, std::string& error)
+	{
+		error = "mapped-layout queries are unsupported by this module loader";
+		return false;
+	}
 	[[nodiscard]] virtual bool Unload(RPLModule* module, std::uint64_t lifetimeId,
 		std::string& error) = 0;
 };
@@ -130,6 +163,14 @@ public:
 		std::uint64_t owner, std::uint32_t generation,
 		std::string_view moduleName, std::string_view symbolName,
 		WupsSymbolKind kind, std::string& error) override;
+	// Resolves a "homebrew_*" virtual module export for an already-running
+	// plugin, for symbols libwups resolves dynamically via
+	// OSDynLoad_Acquire/OSDynLoad_FindExport instead of a static RPL import
+	// (e.g. WUPSConfigAPI_*). See WupsDynLoadInterception.h for the coreinit
+	// bridge that calls this.
+	[[nodiscard]] std::optional<std::uint32_t> ResolveRuntimeModuleExport(
+		WupsOwnerToken owner, std::string_view moduleName,
+		std::string_view symbolName, WupsSymbolKind kind, std::string& error);
 	[[nodiscard]] bool PrepareHookInvocation(const CemodPackage& package,
 		const WupsMetadata& metadata, std::uint64_t owner, std::uint32_t generation,
 		WupsHookType type, WupsHookInvocation& invocation, std::string& error) override;
@@ -287,6 +328,8 @@ public:
 	[[nodiscard]] WupsMetadata Metadata() const;
 	[[nodiscard]] std::string LastError() const;
 	[[nodiscard]] CemodPackage PackageCopy() const;
+	[[nodiscard]] bool QueryMappedLayout(WupsMappedLayout& layout,
+		std::string& error) const;
 
 	bool OnApplicationStarts(std::string& error) override;
 	void OnReleaseForeground() override;
@@ -307,7 +350,8 @@ class WupsPayloadRuntime
 public:
 	explicit WupsPayloadRuntime(
 		std::shared_ptr<IWupsRuntimeServices> services = {},
-		std::shared_ptr<IWupsModuleLoader> moduleLoader = {});
+		std::shared_ptr<IWupsModuleLoader> moduleLoader = {},
+		std::shared_ptr<WupsBackendManagementRuntime> management = {});
 	~WupsPayloadRuntime();
 
 	[[nodiscard]] std::optional<std::uint64_t> Load(CemodPackage package,
@@ -324,6 +368,7 @@ public:
 	void OnAcquiredForeground();
 	void OnApplicationRequestsExit();
 	void OnApplicationEnds();
+	void SetProcessKey(WupsProcessKind process, std::uint64_t titleId);
 
 	[[nodiscard]] std::shared_ptr<WupsPluginRuntime> Find(std::uint64_t handle) const;
 	[[nodiscard]] std::size_t Size() const;
@@ -338,3 +383,6 @@ private:
 [[nodiscard]] std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader();
 [[nodiscard]] std::shared_ptr<IWupsRuntimeServices>
 	CreateRplAromaCompatibilityRuntime();
+[[nodiscard]] std::shared_ptr<IWupsRuntimeServices>
+	CreateRplAromaCompatibilityRuntime(
+		std::shared_ptr<WupsBackendManagementRuntime> management);

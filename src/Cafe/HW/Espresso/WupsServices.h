@@ -17,6 +17,7 @@
 class ModuleExportRegistry;
 class WupsFunctionPatchManager;
 class IWupsPatchPlatform;
+class WupsBackendManagementRuntime;
 
 struct WupsOwnerToken
 {
@@ -365,6 +366,7 @@ struct AromaRuntimeOptions
 	std::shared_ptr<ModuleExportRegistry> exportRegistry;
 	std::shared_ptr<WupsFunctionPatchManager> patchManager;
 	std::shared_ptr<IWupsPatchPlatform> patchPlatform;
+	std::shared_ptr<WupsBackendManagementRuntime> backendManagement;
 	std::size_t maximumStorageBytes{1024U * 1024U};
 	std::size_t maximumStorageItems{1024};
 	std::size_t maximumMappedBytes{64U * 1024U * 1024U};

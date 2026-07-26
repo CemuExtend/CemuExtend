@@ -1,6 +1,8 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/WupsRuntime.h"
+#include "Cafe/HW/Espresso/WupsBackendAbi.h"
+#include "Cafe/HW/Espresso/WupsBackendManagement.h"
 #include "Cemu/Logging/CemuLogging.h"
 
 #include <algorithm>
@@ -438,6 +440,7 @@ struct AromaCompatibilityRuntime::Impl
 	struct Owner
 	{
 		WupsOwnerToken token;
+		CemodPackage package;
 		CemodNativePermissions permissions;
 		std::string packageId;
 		std::string principal;
@@ -1392,6 +1395,10 @@ struct AromaCompatibilityRuntime::Impl
 	[[nodiscard]] std::int32_t Dispatch(const std::shared_ptr<Owner>& owner,
 		std::string_view moduleName, std::string_view symbolName,
 		std::span<const std::uint32_t> arguments, std::string& error);
+	[[nodiscard]] std::int32_t DispatchBackend(
+		const std::shared_ptr<Owner>& owner,
+		const WupsBackendExportDescriptor& export_,
+		std::span<const std::uint32_t> arguments, std::string& error);
 	[[nodiscard]] bool QueueCallback(WupsOwnerToken token,
 		std::uint32_t callback, std::vector<std::uint32_t> arguments,
 		std::string& error);
@@ -1486,6 +1493,7 @@ bool AromaCompatibilityRuntime::RegisterOwner(const CemodPackage& package,
 	}
 	auto owner = std::make_shared<Impl::Owner>();
 	owner->token = token;
+	owner->package = package;
 	owner->permissions = package.manifest.nativePermissions;
 	owner->packageId = package.manifest.modId;
 	owner->principal = package.principal;
@@ -3168,7 +3176,7 @@ namespace
 		return std::ranges::find(values, value) != values.end();
 	}
 
-	constexpr std::array kWupsExports{
+	constexpr std::array kWupsConfigExports{
 		std::string_view{"WUPSConfigAPI_GetVersion"},
 		std::string_view{"WUPSConfigAPI_InitEx"},
 		std::string_view{"WUPSConfigAPI_Category_CreateEx"},
@@ -3339,7 +3347,8 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	if (kind == WupsSymbolKind::Function)
 	{
 		backendKnown = moduleName == "homebrew_wupsbackend" &&
-			Contains(kWupsExports, symbolName);
+			(Contains(kWupsConfigExports, symbolName) ||
+				FindWupsBackendExport(symbolName, kind) != nullptr);
 		standardKnown =
 			(moduleName == "homebrew_memorymapping" &&
 				Contains(kMemoryFunctions, symbolName)) ||
@@ -3382,6 +3391,13 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 			metadata.abiVersion.ToString(),
 			kind == WupsSymbolKind::Function ? "function" : "data",
 			moduleName, symbolName, ownerId, generation, registryError);
+		return std::nullopt;
+	}
+	if (moduleName == "homebrew_wupsbackend" &&
+		FindWupsBackendExport(symbolName, kind) &&
+		!owner->permissions.pluginManagement)
+	{
+		error = "plugin_management permission is required for the WUPS management API";
 		return std::nullopt;
 	}
 	if ((moduleName == "homebrew_wupsbackend" ||
@@ -3432,6 +3448,134 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 		return std::nullopt;
 	const auto cell = m_impl->options.platform->AllocateGuestData(
 		token, 4, 4, error);
+	if (!cell)
+		return std::nullopt;
+	if (!m_impl->WriteGuestU32(*owner.owner, *cell, target, error))
+	{
+		m_impl->options.platform->FreeGuestData(token, *cell);
+		return std::nullopt;
+	}
+	{
+		std::lock_guard lock(owner->mutex);
+		owner->dataExports.emplace(key, *cell);
+		owner->guestData.push_back(*cell);
+	}
+	return *cell;
+}
+
+std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveRuntimeModuleExport(
+	WupsOwnerToken token, std::string_view moduleName, std::string_view symbolName,
+	WupsSymbolKind kind, std::string& error)
+{
+	// Mirrors the tail of ResolveImport() for symbols a plugin resolves
+	// dynamically via OSDynLoad_Acquire/OSDynLoad_FindExport instead of a
+	// static RPL import - libwups' config API does this for
+	// "homebrew_wupsbackend" rather than importing WUPSConfigAPI_* directly.
+	// Unlike ResolveImport this never registers a brand-new owner: the plugin
+	// is already running, so the owner must already be pinned.
+	error.clear();
+	WupsServiceStatus pinStatus;
+	auto owner = m_impl->Pin(token, pinStatus);
+	if (!owner)
+	{
+		error = "WUPS runtime export resolution rejected a stale owner generation";
+		return std::nullopt;
+	}
+	if (!ValidAbiName(moduleName) || !ValidAbiName(symbolName))
+	{
+		error = "WUPS import module or symbol name is invalid";
+		return std::nullopt;
+	}
+	if (moduleName.starts_with("homebrew_") &&
+		!m_impl->ModuleAllowed(*owner.owner, moduleName))
+	{
+		error = fmt::format(
+			"owner {} generation {} has no permission for WUPS module '{}'",
+			token.owner, token.generation, moduleName);
+		return std::nullopt;
+	}
+
+	bool backendKnown{};
+	bool standardKnown{};
+	if (kind == WupsSymbolKind::Function)
+	{
+		backendKnown = moduleName == "homebrew_wupsbackend" &&
+			(Contains(kWupsConfigExports, symbolName) ||
+				FindWupsBackendExport(symbolName, kind) != nullptr);
+		standardKnown =
+			(moduleName == "homebrew_memorymapping" &&
+				Contains(kMemoryFunctions, symbolName)) ||
+			(moduleName == "homebrew_notifications" &&
+				Contains(kNotificationExports, symbolName)) ||
+			(moduleName == "homebrew_logging" &&
+				symbolName == "WUMSLogWrite") ||
+			(moduleName == "homebrew_content_redirection" &&
+				Contains(kContentExports, symbolName)) ||
+			(moduleName == "homebrew_functionpatcher" &&
+				Contains(kFunctionPatcherExports, symbolName));
+	}
+	else
+		standardKnown = moduleName == "homebrew_memorymapping" &&
+			Contains(kMemoryData, symbolName);
+
+	if (!backendKnown && !standardKnown)
+	{
+		error = fmt::format(
+			"owner {} generation {} requested unknown WUPS runtime export "
+			"'{}.{}'", token.owner, token.generation, moduleName, symbolName);
+		return std::nullopt;
+	}
+	if (moduleName == "homebrew_wupsbackend" &&
+		FindWupsBackendExport(symbolName, kind) &&
+		!owner->permissions.pluginManagement)
+	{
+		error = "plugin_management permission is required for the WUPS management API";
+		return std::nullopt;
+	}
+	if ((moduleName == "homebrew_wupsbackend" ||
+			moduleName == "homebrew_logging") &&
+		(!m_impl->options.platform ||
+			!m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
+	{
+		error = fmt::format(
+			"cannot resolve '{}.{}': this platform cannot attribute arbitrary "
+			"WUT heap pointers to an owner generation; the heap-taking ABI is "
+			"explicitly unsupported", moduleName, symbolName);
+		return std::nullopt;
+	}
+	if (moduleName == "homebrew_memorymapping" &&
+		(!m_impl->options.platform ||
+			!m_impl->options.platform->SupportsMappedMemory()))
+	{
+		error = fmt::format(
+			"cannot resolve '{}.{}': Cemu has no safe guest effective/physical "
+			"mapped-memory allocator", moduleName, symbolName);
+		return std::nullopt;
+	}
+	if (!PermissionForModule(*owner.owner, moduleName, error))
+		return std::nullopt;
+
+	if (kind == WupsSymbolKind::Function)
+	{
+		std::uint32_t address{};
+		if (!m_impl->EnsureFunctionExport(
+			owner.owner, moduleName, symbolName, address, error))
+			return std::nullopt;
+		return address;
+	}
+
+	const auto key = std::pair{std::string(moduleName), std::string(symbolName)};
+	{
+		std::lock_guard lock(owner->mutex);
+		if (const auto found = owner->dataExports.find(key);
+			found != owner->dataExports.end())
+			return found->second;
+	}
+	std::uint32_t target{};
+	if (!m_impl->EnsureFunctionExport(owner.owner, "__cemu_wups_data",
+		symbolName, target, error))
+		return std::nullopt;
+	const auto cell = m_impl->options.platform->AllocateGuestData(token, 4, 4, error);
 	if (!cell)
 		return std::nullopt;
 	if (!m_impl->WriteGuestU32(*owner.owner, *cell, target, error))
@@ -3558,11 +3702,13 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 		if (!requireHeapProvenance())
 			return false;
 		invocation.argumentWords = {1, owner->pluginIdentifier};
-		// libwups' config library resolves its backend through
-		// OSDynLoad_Acquire("homebrew_wupsbackend"), which this runtime does not
-		// publish as an acquirable module, so the call reports
-		// WUPSCONFIG_API_RESULT_MODULE_NOT_FOUND. The configuration menu is an
-		// optional surface - record the status but let the plugin start.
+		// libwups' config library resolves its backend dynamically through
+		// OSDynLoad_Acquire("homebrew_wupsbackend")/OSDynLoad_FindExport rather
+		// than a static RPL import (see WupsDynLoadInterception.h), so a
+		// well-formed plugin should now see WUPSCONFIG_API_RESULT_SUCCESS here.
+		// The configuration menu is still an optional surface though - record a
+		// non-zero status but let the plugin start rather than failing the whole
+		// load over it.
 		invocation.reportNonZeroResult = true;
 		return true;
 	case WupsHookType::InitButtonCombo:
@@ -3740,6 +3886,436 @@ void AromaCompatibilityRuntime::SetModuleEventDetach(
 	m_impl->detachModuleEvents = std::move(detach);
 }
 
+std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
+	const std::shared_ptr<Owner>& owner,
+	const WupsBackendExportDescriptor& export_,
+	std::span<const std::uint32_t> arguments, std::string& error)
+{
+	const auto result = [](WupsBackendApiError value) {
+		return static_cast<std::int32_t>(static_cast<std::uint32_t>(value));
+	};
+	const auto require = [&](std::size_t count) {
+		if (arguments.size() >= count)
+			return true;
+		error = fmt::format("{}.{} requires {} ABI words, received {}",
+			"homebrew_wupsbackend", export_.name, count, arguments.size());
+		return false;
+	};
+	if (!owner->permissions.pluginManagement || !options.backendManagement)
+		return result(WupsBackendApiError::UnsupportedCommand);
+
+	auto readHandles = [&](std::uint32_t address, std::uint32_t count,
+		std::vector<std::uint32_t>& handles) {
+		handles.clear();
+		if (count == 0)
+			return true;
+		if (address == 0 || count > WupsBackendManagementRuntime::kMaximumDataHandles ||
+			static_cast<std::uint64_t>(count) * 4 >
+				std::numeric_limits<std::uint32_t>::max())
+			return false;
+		std::vector<std::byte> bytes(static_cast<std::size_t>(count) * 4);
+		if (!ReadGuest(*owner, address, bytes, WupsGuestAccess::Read, error))
+			return false;
+		handles.reserve(count);
+		for (std::uint32_t index = 0; index < count; ++index)
+			handles.push_back(ReadU32(bytes, index * 4));
+		return true;
+	};
+	auto writeHandles = [&](std::uint32_t address,
+		std::span<const std::uint32_t> handles) {
+		if (handles.empty())
+			return true;
+		if (address == 0 || handles.size() >
+			std::numeric_limits<std::uint32_t>::max() / 4)
+			return false;
+		std::vector<std::byte> bytes(handles.size() * 4);
+		for (std::size_t index = 0; index < handles.size(); ++index)
+		{
+			const auto value = handles[index];
+			bytes[index * 4] = static_cast<std::byte>(value >> 24);
+			bytes[index * 4 + 1] = static_cast<std::byte>(value >> 16);
+			bytes[index * 4 + 2] = static_cast<std::byte>(value >> 8);
+			bytes[index * 4 + 3] = static_cast<std::byte>(value);
+		}
+		return WriteGuest(*owner, address, bytes, error);
+	};
+	auto copyString = [](std::span<std::byte> output, std::string_view input) {
+		std::ranges::fill(output, std::byte{});
+		const auto count = std::min(input.size(), output.size() - 1);
+		std::memcpy(output.data(), input.data(), count);
+	};
+	auto putU32 = [](std::span<std::byte> output, std::uint32_t value) {
+		output[0] = static_cast<std::byte>(value >> 24);
+		output[1] = static_cast<std::byte>(value >> 16);
+		output[2] = static_cast<std::byte>(value >> 8);
+		output[3] = static_cast<std::byte>(value);
+	};
+	auto writeInformation = [&](std::uint32_t address,
+		const CemodPackage& package) {
+		GuestWupsPluginInformationV2 wire{};
+		putU32(wire.informationVersion,
+			kWupsBackendPluginInformationVersion);
+		const auto& metadata = package.wups->metadata;
+		copyString(wire.name, metadata.name);
+		copyString(wire.author, metadata.author);
+		copyString(wire.buildTimestamp, metadata.buildTimestamp);
+		copyString(wire.description, metadata.description);
+		copyString(wire.license, metadata.license);
+		copyString(wire.version, metadata.version);
+		copyString(wire.storageId, metadata.storageId);
+		putU32(wire.size, static_cast<std::uint32_t>(package.PayloadBytes().size()));
+		return WriteGuest(*owner, address,
+			std::as_bytes(std::span{&wire, 1}), error);
+	};
+	auto loadBytes = [&](WupsBackendInputType inputType,
+		std::uint32_t pathAddress, std::uint32_t bufferAddress,
+		std::uint32_t size, std::vector<std::byte>& bytes) {
+		bytes.clear();
+		if (inputType == WupsBackendInputType::Buffer)
+		{
+			if (bufferAddress == 0 || size == 0 ||
+				size > CemodPackage::kMaximumPayloadBytes)
+				return WupsBackendApiError::InvalidArgument;
+			bytes.resize(size);
+			if (!ReadGuest(*owner, bufferAddress, bytes,
+				WupsGuestAccess::Read, error))
+				return WupsBackendApiError::InvalidArgument;
+			return WupsBackendApiError::None;
+		}
+		if (inputType != WupsBackendInputType::Path || pathAddress == 0)
+			return WupsBackendApiError::InvalidArgument;
+		if (!owner->permissions.filesystemRead)
+			return WupsBackendApiError::UnsupportedCommand;
+		std::string guestPath;
+		if (!ReadGuestString(*owner, pathAddress, kMaximumContentPath,
+			guestPath, error))
+			return WupsBackendApiError::InvalidArgument;
+		std::string relative = guestPath;
+		if (const auto marker = relative.find("/vol/external01/");
+			marker != std::string::npos)
+			relative.erase(0, marker + std::string_view("/vol/external01/").size());
+		else if (const auto scheme = relative.find(":/");
+			scheme != std::string::npos)
+			relative.erase(0, scheme + 2);
+		while (!relative.empty() && (relative.front() == '/' || relative.front() == '\\'))
+			relative.erase(relative.begin());
+		const std::filesystem::path requested(relative);
+		if (requested.empty() || requested.is_absolute() ||
+			std::ranges::find(requested, "..") != requested.end())
+			return WupsBackendApiError::InvalidArgument;
+		for (const auto& configuredRoot : options.contentRoots)
+		{
+			std::error_code code;
+			const auto root = std::filesystem::weakly_canonical(configuredRoot, code);
+			if (code)
+				continue;
+			const auto path = std::filesystem::weakly_canonical(root / requested, code);
+			if (code || !PathStartsWith(path, root) ||
+				!std::filesystem::is_regular_file(path, code) || code)
+				continue;
+			const auto fileSize = std::filesystem::file_size(path, code);
+			if (code || fileSize == 0 || fileSize > CemodPackage::kMaximumPayloadBytes)
+				return WupsBackendApiError::InvalidSize;
+			std::ifstream stream(path, std::ios::binary);
+			if (!stream)
+				continue;
+			bytes.resize(static_cast<std::size_t>(fileSize));
+			stream.read(reinterpret_cast<char*>(bytes.data()),
+				static_cast<std::streamsize>(bytes.size()));
+			if (!stream)
+			{
+				bytes.clear();
+				return WupsBackendApiError::FileNotFound;
+			}
+			return WupsBackendApiError::None;
+		}
+		return WupsBackendApiError::FileNotFound;
+	};
+	auto inspectInput = [&](WupsBackendInputType inputType,
+		std::uint32_t pathAddress, std::uint32_t bufferAddress,
+		std::uint32_t size, CemodPackage& package,
+		WupsBackendParseError& parseError) {
+		parseError = WupsBackendParseError::Unknown;
+		std::vector<std::byte> bytes;
+		const auto loadResult = loadBytes(inputType, pathAddress, bufferAddress,
+			size, bytes);
+		if (loadResult != WupsBackendApiError::None)
+			return loadResult;
+		std::string inspectError;
+		auto inspection = WupsBinaryInspector::Inspect(bytes, inspectError);
+		if (!inspection)
+		{
+			if (inspectError.find("version") != std::string::npos ||
+				inspectError.find("ABI") != std::string::npos)
+				parseError = WupsBackendParseError::IncompatibleVersion;
+			return WupsBackendApiError::FileNotFound;
+		}
+		parseError = WupsBackendParseError::None;
+		package = MakeDynamicWupsPackage(std::move(bytes),
+			std::move(*inspection), owner->package);
+		return WupsBackendApiError::None;
+	};
+	const WupsProcessKey processKey{
+		static_cast<std::uint8_t>(process.load()), owner->titleId};
+
+	switch (export_.id)
+	{
+	case WupsBackendExportId::GetApiVersion:
+		if (!require(1) || arguments[0] == 0 ||
+			!WriteGuestU32(*owner, arguments[0], kWupsBackendApiVersion, error))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	case WupsBackendExportId::GetNumberOfLoadedPlugins:
+		if (!require(1) || arguments[0] == 0 ||
+			!WriteGuestU32(*owner, arguments[0], static_cast<std::uint32_t>(
+				options.backendManagement->LoadedContainers().size()), error))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	case WupsBackendExportId::WillReloadPluginsOnNextLaunch:
+		if (!require(1) || arguments[0] == 0 ||
+			!WriteGuestBool(*owner, arguments[0],
+				options.backendManagement->HasPendingPlan(processKey), error))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	case WupsBackendExportId::GetLoadedPlugins:
+	{
+		if (!require(4) || arguments[3] == 0 ||
+			(arguments[1] != 0 && arguments[0] == 0))
+			return result(WupsBackendApiError::InvalidArgument);
+		if (!WriteGuestU32(*owner, arguments[3],
+			kWupsBackendPluginInformationVersion, error))
+			return result(WupsBackendApiError::InvalidArgument);
+		const auto loaded = options.backendManagement->LoadedContainers();
+		const auto count = std::min<std::size_t>(loaded.size(), arguments[1]);
+		std::vector<std::uint32_t> handles;
+		handles.reserve(count);
+		for (std::size_t index = 0; index < count; ++index)
+			handles.push_back(loaded[index].publicHandle);
+		if (!writeHandles(arguments[0], handles) ||
+			(arguments[2] != 0 && !WriteGuestU32(*owner, arguments[2],
+				static_cast<std::uint32_t>(count), error)))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::LoadAndLinkByDataHandle:
+	{
+		if (!require(2) || arguments[0] == 0 || arguments[1] == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		std::vector<std::uint32_t> handles;
+		if (!readHandles(arguments[0], arguments[1], handles))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(options.backendManagement->ScheduleNextLaunch(
+			processKey, handles) ? WupsBackendApiError::None :
+			WupsBackendApiError::InvalidSize);
+	}
+	case WupsBackendExportId::DeletePluginData:
+	{
+		if (!require(2))
+			return result(WupsBackendApiError::InvalidArgument);
+		if (arguments[0] == 0 || arguments[1] == 0)
+			return result(WupsBackendApiError::None);
+		std::vector<std::uint32_t> handles;
+		if (!readHandles(arguments[0], arguments[1], handles))
+			return result(WupsBackendApiError::InvalidArgument);
+		options.backendManagement->DeletePluginData(handles);
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::LoadPluginAsDataByPath:
+	case WupsBackendExportId::LoadPluginAsDataByBuffer:
+	case WupsBackendExportId::LoadPluginAsData:
+	{
+		WupsBackendInputType inputType{};
+		std::uint32_t path{}, buffer{}, size{}, output{};
+		if (export_.id == WupsBackendExportId::LoadPluginAsData)
+		{
+			if (!require(5) || arguments[0] > 1)
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = static_cast<WupsBackendInputType>(arguments[0]);
+			path = arguments[1]; buffer = arguments[2]; size = arguments[3];
+			output = arguments[4];
+		}
+		else if (export_.id == WupsBackendExportId::LoadPluginAsDataByPath)
+		{
+			if (!require(2)) return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Path; output = arguments[0];
+			path = arguments[1];
+		}
+		else
+		{
+			if (!require(3)) return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Buffer; output = arguments[0];
+			buffer = arguments[1]; size = arguments[2];
+		}
+		if (output == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		CemodPackage package;
+		WupsBackendParseError parseError;
+		const auto status = inspectInput(inputType, path, buffer, size,
+			package, parseError);
+		if (status != WupsBackendApiError::None)
+			return result(status);
+		const auto handle = options.backendManagement->CreatePluginData(
+			std::move(package));
+		if (!handle)
+			return result(WupsBackendApiError::FailedAllocation);
+		if (!WriteGuestU32(*owner, output, *handle, error))
+		{
+			const std::array handles{*handle};
+			options.backendManagement->DeletePluginData(handles);
+			return result(WupsBackendApiError::InvalidArgument);
+		}
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::GetPluginMetaInformation:
+	case WupsBackendExportId::GetPluginMetaInformationByPath:
+	case WupsBackendExportId::GetPluginMetaInformationByBuffer:
+	case WupsBackendExportId::GetPluginMetaInformationByPathEx:
+	case WupsBackendExportId::GetPluginMetaInformationByBufferEx:
+	{
+		WupsBackendInputType inputType{};
+		std::uint32_t path{}, buffer{}, size{}, output{}, parseOutput{};
+		if (export_.id == WupsBackendExportId::GetPluginMetaInformation)
+		{
+			if (!require(5) || arguments[0] > 1)
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = static_cast<WupsBackendInputType>(arguments[0]);
+			path = arguments[1]; buffer = arguments[2]; size = arguments[3];
+			output = arguments[4];
+		}
+		else if (export_.id == WupsBackendExportId::GetPluginMetaInformationByPath ||
+			export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx)
+		{
+			if (!require(export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx ? 3 : 2))
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Path; output = arguments[0];
+			path = arguments[1];
+			if (export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx)
+				parseOutput = arguments[2];
+		}
+		else
+		{
+			const bool extended = export_.id == WupsBackendExportId::GetPluginMetaInformationByBufferEx;
+			if (!require(extended ? 4 : 3))
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Buffer; output = arguments[0];
+			buffer = arguments[1]; size = arguments[2];
+			if (extended) parseOutput = arguments[3];
+		}
+		if (output == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		CemodPackage package;
+		WupsBackendParseError parseError;
+		const auto status = inspectInput(inputType, path, buffer, size,
+			package, parseError);
+		if (parseOutput != 0 && !WriteGuestU32(*owner, parseOutput,
+			static_cast<std::uint32_t>(static_cast<std::int32_t>(parseError)), error))
+			return result(WupsBackendApiError::InvalidArgument);
+		if (status != WupsBackendApiError::None)
+			return result(status);
+		return result(writeInformation(output, package) ?
+			WupsBackendApiError::None : WupsBackendApiError::InvalidArgument);
+	}
+	case WupsBackendExportId::GetMetaInformation:
+	{
+		if (!require(3) || arguments[0] == 0 || arguments[1] == 0 ||
+			arguments[2] == 0 || arguments[2] >
+				WupsBackendManagementRuntime::kMaximumDataHandles)
+			return result(WupsBackendApiError::InvalidArgument);
+		std::vector<std::uint32_t> handles;
+		if (!readHandles(arguments[0], arguments[2], handles))
+			return result(WupsBackendApiError::InvalidArgument);
+		const std::uint64_t total = static_cast<std::uint64_t>(arguments[2]) *
+			kWupsBackendPluginInformationSize;
+		if (total > std::numeric_limits<std::uint32_t>::max())
+			return result(WupsBackendApiError::InvalidSize);
+		std::vector<std::byte> zeros(static_cast<std::size_t>(total));
+		if (!WriteGuest(*owner, arguments[1], zeros, error))
+			return result(WupsBackendApiError::InvalidArgument);
+		for (std::size_t index = 0; index < handles.size(); ++index)
+		{
+			const auto container = options.backendManagement->FindContainer(handles[index]);
+			if (!container)
+				continue;
+			if (!writeInformation(arguments[1] + static_cast<std::uint32_t>(index) *
+				kWupsBackendPluginInformationSize, *container->package))
+				return result(WupsBackendApiError::InvalidArgument);
+		}
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::GetPluginDataForContainerHandles:
+	{
+		if (!require(3) || arguments[0] == 0 || arguments[1] == 0 ||
+			arguments[2] == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		std::vector<std::uint32_t> containers;
+		if (!readHandles(arguments[0], arguments[2], containers))
+			return result(WupsBackendApiError::InvalidArgument);
+		for (std::size_t index = 0; index < containers.size(); ++index)
+		{
+			const auto container = options.backendManagement->FindContainer(containers[index]);
+			if (!container)
+				return result(WupsBackendApiError::InvalidHandle);
+			const auto data = options.backendManagement->CreatePluginData(*container->package);
+			if (!data)
+				return result(WupsBackendApiError::FailedAllocation);
+			if (!WriteGuestU32(*owner, arguments[1] + static_cast<std::uint32_t>(index * 4),
+				*data, error))
+				return result(WupsBackendApiError::InvalidArgument);
+		}
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::GetSectionInformationForPlugin:
+	{
+		if (!require(4)) return result(WupsBackendApiError::InvalidArgument);
+		if (arguments[3] != 0 && !WriteGuestU32(*owner, arguments[3], 0, error))
+			return result(WupsBackendApiError::InvalidArgument);
+		if (!owner->permissions.nativeMemory)
+			return result(WupsBackendApiError::UnsupportedCommand);
+		if (arguments[0] == 0 || arguments[1] == 0 || arguments[2] == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		const auto container = options.backendManagement->FindContainer(arguments[0]);
+		if (!container) return result(WupsBackendApiError::InvalidHandle);
+		WupsMappedLayout layout;
+		if (!container->runtime->QueryMappedLayout(layout, error))
+			return result(WupsBackendApiError::InvalidHandle);
+		const auto count = std::min<std::size_t>(layout.sections.size(), arguments[2]);
+		for (std::size_t index = 0; index < count; ++index)
+		{
+			GuestWupsPluginSectionInfoV1 wire{};
+			putU32(wire.informationVersion, kWupsBackendSectionInformationVersion);
+			copyString(wire.name, layout.sections[index].name);
+			putU32(wire.address, layout.sections[index].address);
+			putU32(wire.size, layout.sections[index].size);
+			if (!WriteGuest(*owner, arguments[1] + static_cast<std::uint32_t>(index) *
+				kWupsBackendSectionInformationSize,
+				std::as_bytes(std::span{&wire, 1}), error))
+				return result(WupsBackendApiError::InvalidArgument);
+		}
+		if (arguments[3] != 0 && !WriteGuestU32(*owner, arguments[3],
+			static_cast<std::uint32_t>(count), error))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	}
+	case WupsBackendExportId::GetSectionMemoryAddresses:
+	{
+		if (!require(3) || arguments[0] == 0 || arguments[1] == 0 || arguments[2] == 0)
+			return result(WupsBackendApiError::InvalidArgument);
+		if (!owner->permissions.nativeMemory)
+			return result(WupsBackendApiError::UnsupportedCommand);
+		const auto container = options.backendManagement->FindContainer(arguments[0]);
+		if (!container) return result(WupsBackendApiError::InvalidHandle);
+		WupsMappedLayout layout;
+		if (!container->runtime->QueryMappedLayout(layout, error))
+			return result(WupsBackendApiError::InvalidHandle);
+		if (!WriteGuestU32(*owner, arguments[1], layout.textBase, error) ||
+			!WriteGuestU32(*owner, arguments[2], layout.dataBase, error))
+			return result(WupsBackendApiError::InvalidArgument);
+		return result(WupsBackendApiError::None);
+	}
+	}
+	return result(WupsBackendApiError::UnsupportedCommand);
+}
+
 std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 	const std::shared_ptr<Owner>& owner, std::string_view moduleName,
 	std::string_view symbolName, std::span<const std::uint32_t> arguments,
@@ -3757,6 +4333,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 		return ReadGuestString(*owner, address, maximum, output, error);
 	};
 	const auto token = owner->token;
+	if (moduleName == "homebrew_wupsbackend")
+		if (const auto* export_ = FindWupsBackendExport(symbolName))
+			return DispatchBackend(owner, *export_, arguments, error);
 
 	if (moduleName == "__cemu_wups_hook")
 	{

@@ -22,6 +22,8 @@ int main()
 	const auto notifications = CemodGuiAdapter::PermissionBit(CemodGuiPermission::Notifications);
 	CHECK(functionPatch != 0);
 	CHECK(CemodGuiAdapter::PermissionName(CemodGuiPermission::Modules) == "Aroma/WUMS modules");
+	CHECK(CemodGuiAdapter::PermissionName(CemodGuiPermission::PluginManagement) ==
+		"WUPS plugin management");
 	CHECK(CemodGuiAdapter::MakeApprovalKey("org.example.plugin", "abc") ==
 		"org.example.plugin|sha256:abc");
 	CHECK(CemodGuiAdapter::DefaultGrantedPermissions(functionPatch | notifications) == notifications);

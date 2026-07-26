@@ -2,6 +2,8 @@
 
 #include "Cafe/HW/Espresso/WupsRuntime.h"
 
+#include "Cafe/HW/Espresso/WupsBackendManagement.h"
+#include "Cafe/HW/Espresso/WupsDynLoadInterception.h"
 #include "Cafe/HW/Espresso/WupsGuestCallback.h"
 #include "Cafe/HW/Espresso/WumsRuntime.h"
 #include "Cafe/OS/RPL/rpl.h"
@@ -98,6 +100,29 @@ namespace
 				return false;
 			}
 			mappedAddress = resolved;
+			return true;
+		}
+
+		bool QueryMappedLayout(RPLModule* module, std::uint64_t lifetimeId,
+			WupsMappedLayout& layout, std::string& error) override
+		{
+			layout = {};
+			RPLModuleLease lease;
+			if (!RPLLoader_AcquireExternalModuleLease(
+				module, lifetimeId, lease, error))
+				return false;
+			RPLMappedLayoutSnapshot snapshot;
+			if (!RPLLoader_QueryMappedLayout(lease, snapshot))
+			{
+				error = "external RPL mapped layout is unavailable";
+				return false;
+			}
+			layout.textBase = snapshot.textBase;
+			layout.dataBase = snapshot.dataBase;
+			layout.sections.reserve(snapshot.sections.size());
+			for (auto& section : snapshot.sections)
+				layout.sections.push_back({std::move(section.name), section.address,
+					section.size, section.flags});
 			return true;
 		}
 
@@ -255,6 +280,12 @@ std::shared_ptr<IWumsRuntimeServices> CreateRplWumsRuntimeServices()
 
 std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 {
+	return CreateRplAromaCompatibilityRuntime({});
+}
+
+std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime(
+	std::shared_ptr<WupsBackendManagementRuntime> management)
+{
 	auto registry = std::make_shared<ModuleExportRegistry>();
 	auto patchPlatform = CreateCemuWupsPatchPlatform();
 	auto patchManager =
@@ -285,9 +316,15 @@ std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 	options.exportRegistry = registry;
 	options.patchManager = patchManager;
 	options.patchPlatform = patchPlatform;
+	options.backendManagement = std::move(management);
 	auto runtime = std::make_shared<AromaCompatibilityRuntime>(
 		std::move(options), WupsProcessKind::Game);
 	const std::weak_ptr<AromaCompatibilityRuntime> weakRuntime = runtime;
+	// Lets coreinit's OSDynLoad_Acquire/FindExport resolve "homebrew_*"
+	// virtual modules dynamically, for libwups helper libraries (e.g. the
+	// config API) that don't resolve their backend through a static RPL
+	// import. See WupsDynLoadInterception.h.
+	cafe::wups::SetActiveRuntime(weakRuntime);
 	const auto observer = RPLLoader_AddModuleEventObserver(
 		[weakRuntime](const RPLModuleEvent& event) {
 			const auto locked = weakRuntime.lock();

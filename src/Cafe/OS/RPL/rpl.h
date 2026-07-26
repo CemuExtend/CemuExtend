@@ -62,6 +62,21 @@ struct RPLResolvedExport
 	bool hle{};
 };
 
+struct RPLMappedSectionSnapshot
+{
+	std::string name;
+	uint32 address{};
+	uint32 size{};
+	uint32 flags{};
+};
+
+struct RPLMappedLayoutSnapshot
+{
+	std::vector<RPLMappedSectionSnapshot> sections;
+	uint32 textBase{};
+	uint32 dataBase{};
+};
+
 using RPLExternalImportResolver = std::function<std::optional<MPTR>(
 	std::string_view moduleName, std::string_view symbolName, bool isData, std::string& error)>;
 using RPLModuleEventCallback = std::function<void(const RPLModuleEvent&)>;
@@ -103,6 +118,8 @@ private:
 		uint32, RPLModuleAddressKind, MPTR&);
 	friend uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease&);
 	friend uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease&);
+	friend bool RPLLoader_QueryMappedLayout(const RPLModuleLease&,
+		RPLMappedLayoutSnapshot&);
 };
 
 void RPLLoader_InitState();
@@ -127,6 +144,8 @@ bool RPLLoader_AcquireExternalModuleLease(RPLModule* module, uint64 lifetimeId,
 	RPLModuleLease& lease, std::string& error);
 bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualAddress,
 	uint32 size, RPLModuleAddressKind kind, MPTR& mappedAddress);
+bool RPLLoader_QueryMappedLayout(const RPLModuleLease& lease,
+	RPLMappedLayoutSnapshot& layout);
 bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
 	RPLMappedAddressInfo& info);
 bool RPLLoader_FindLoadedExport(std::string_view moduleName,
