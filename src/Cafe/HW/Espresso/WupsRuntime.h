@@ -18,6 +18,7 @@
 
 struct RPLModule;
 class WupsBackendManagementRuntime;
+namespace cemuextend_hle { class Cex2Owner; }
 
 enum class WupsPluginState : std::uint8_t
 {
@@ -194,6 +195,8 @@ public:
 	[[nodiscard]] bool RegisterOwner(const CemodPackage& package,
 		const WupsMetadata& metadata, WupsOwnerToken owner, std::string& error);
 	[[nodiscard]] bool IsOwnerActive(WupsOwnerToken owner) const;
+	[[nodiscard]] std::shared_ptr<cemuextend_hle::Cex2Owner> Cex2OwnerFor(
+		WupsOwnerToken owner) const;
 
 	[[nodiscard]] WupsServiceStatus StorageCreateSubItem(WupsOwnerToken owner,
 		std::uint32_t parent, std::string_view key, std::uint32_t& handle);

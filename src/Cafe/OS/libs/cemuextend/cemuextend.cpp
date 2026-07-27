@@ -9,6 +9,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
+#include "Cafe/HW/Espresso/WupsDynLoadInterception.h"
 #include "Cafe/HW/Espresso/CemodRuntime.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/MMU/MMU.h"
@@ -38,7 +39,11 @@ namespace cemuextend_hle
 				return nullptr;
 			if (hCPU->modExecutionContext)
 				return hCPU->modExecutionContext->Resolve(address, size, Permission);
-			if (!GetCemodRuntime().TrustedOwner() || !memory_isAddressRangeAccessible(address, size))
+			// Trusted ELF and WUPS callers are authenticated by CurrentOwner before
+			// any CEX2 entrypoint reaches this helper. Both use the title's normal
+			// Cafe address space, so requiring the legacy trusted-ELF owner here
+			// incorrectly rejects valid WUPS buffers.
+			if (!memory_isAddressRangeAccessible(address, size))
 				return nullptr;
 			return reinterpret_cast<std::byte*>(memory_getPointerFromVirtualOffset(address));
 		}
@@ -46,6 +51,11 @@ namespace cemuextend_hle
 		Cex2Owner* CurrentOwner(PPCInterpreter_t* hCPU)
 		{
 			if (hCPU->modExecutionContext) return hCPU->modExecutionContext;
+			thread_local std::shared_ptr<Cex2Owner> wupsOwner;
+			wupsOwner = cafe::wups::ResolveCurrentCex2Owner();
+			if (wupsOwner && wupsOwner->TitleId() == CafeSystem::GetForegroundTitleId() &&
+				!wupsOwner->IsStopped())
+				return wupsOwner.get();
 			auto* owner = GetCemodRuntime().TrustedOwner();
 			return owner && owner->TitleId() == CafeSystem::GetForegroundTitleId() && !owner->IsStopped() ? owner : nullptr;
 		}

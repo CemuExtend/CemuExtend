@@ -5,6 +5,7 @@
 #include <string_view>
 
 class AromaCompatibilityRuntime;
+namespace cemuextend_hle { class Cex2Owner; }
 
 // Thin decoupling bridge between coreinit's OSDynLoad_Acquire/FindExport HLE
 // and the active title's WUPS runtime. A plugin's statically declared RPL
@@ -23,6 +24,8 @@ namespace cafe::wups
 // Installed by CreateRplAromaCompatibilityRuntime() for the lifetime of a
 // title's WUPS runtime instance; pass an empty weak_ptr on teardown.
 void SetActiveRuntime(std::weak_ptr<AromaCompatibilityRuntime> runtime);
+
+std::shared_ptr<cemuextend_hle::Cex2Owner> ResolveCurrentCex2Owner();
 
 // Mirrors OSDynLoad_Acquire(): if moduleName is a "homebrew_*" virtual
 // module reachable by the WUPS plugin currently executing, returns true and

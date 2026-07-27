@@ -90,6 +90,11 @@ struct CemodPackage
 	std::string principal;
 	std::uint64_t targetTitleId{};
 	bool signedPackage{};
+	// Runtime-only grants populated after package approval.
+	std::uint32_t grantedPermissions{};
+	std::uint32_t serviceReadMask{};
+	std::uint32_t serviceWriteMask{};
+	std::uint32_t serviceInjectMask{};
 
 	[[nodiscard]] bool IsTrustedNative() const
 	{

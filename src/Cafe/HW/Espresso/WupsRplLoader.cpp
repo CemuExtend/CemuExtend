@@ -6,6 +6,7 @@
 #include "Cafe/HW/Espresso/WupsDynLoadInterception.h"
 #include "Cafe/HW/Espresso/WupsGuestCallback.h"
 #include "Cafe/HW/Espresso/WumsRuntime.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "config/ActiveSettings.h"
 
@@ -337,6 +338,9 @@ std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime(
 	options.patchManager = patchManager;
 	options.patchPlatform = patchPlatform;
 	options.backendManagement = std::move(management);
+	options.closeCex2Owner = [](cemuextend_hle::Cex2Owner& owner) {
+		cemuextend_hle::Cex2Host::Instance().CloseOwner(owner);
+	};
 	auto runtime = std::make_shared<AromaCompatibilityRuntime>(
 		std::move(options), WupsProcessKind::Game);
 	const std::weak_ptr<AromaCompatibilityRuntime> weakRuntime = runtime;

@@ -3,6 +3,7 @@
 #include "Cafe/HW/Espresso/WupsRuntime.h"
 #include "Cafe/HW/Espresso/WupsBackendAbi.h"
 #include "Cafe/HW/Espresso/WupsBackendManagement.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cemu/Logging/CemuLogging.h"
 
 #include <algorithm>
@@ -437,7 +438,7 @@ struct AromaCompatibilityRuntime::Impl
 		std::uint32_t cleanup{};
 	};
 
-	struct Owner
+	struct Owner final : cemuextend_hle::Cex2Owner
 	{
 		WupsOwnerToken token;
 		CemodPackage package;
@@ -473,6 +474,40 @@ struct AromaCompatibilityRuntime::Impl
 		std::size_t mappedBytes{};
 		std::size_t mappedBytesReserved{};
 		std::size_t pendingCallbacks{};
+		std::atomic_bool stopped{};
+		std::atomic_uint32_t grantedPermissions{};
+
+		std::uint64_t AddressSpaceId() const override
+		{
+			return 0x4000000000000000ULL | token.owner;
+		}
+		std::uint32_t Generation() const override { return token.generation; }
+		const std::string& Principal() const override { return principal; }
+		std::uint64_t TitleId() const override { return titleId; }
+		bool IsStopped() const override { return stopped.load(std::memory_order_acquire); }
+		std::uint32_t GrantedPermissions() const override
+		{
+			return grantedPermissions.load(std::memory_order_acquire);
+		}
+		void SetGrantedPermissions(std::uint32_t value) override
+		{
+			grantedPermissions.store(value, std::memory_order_release);
+		}
+		bool IsServiceAllowed(std::uint16_t service, std::uint32_t permission,
+			std::uint16_t operation) const override
+		{
+			if (service == 1 || permission == 0) return true;
+			if (service < 2 || service > 9) return false;
+			const auto bit = 1U << (service - 1U);
+			if (permission == 1) return (package.serviceReadMask & bit) != 0;
+			if (permission == 2) return (package.serviceWriteMask & bit) != 0;
+			if (permission == 4) return (package.serviceInjectMask & bit) != 0;
+			if (permission == 8)
+				return (((operation == 1 ? package.serviceReadMask :
+					package.serviceWriteMask) & bit) != 0);
+			if (permission == 16) return (package.serviceReadMask & bit) != 0;
+			return false;
+		}
 	};
 
 	struct PendingCallback
@@ -1299,6 +1334,8 @@ struct AromaCompatibilityRuntime::Impl
 				return;
 			owner->finalized = true;
 		}
+		if (options.closeCex2Owner)
+			options.closeCex2Owner(*owner);
 
 		bool storageWasLoaded{};
 		{
@@ -1370,6 +1407,7 @@ struct AromaCompatibilityRuntime::Impl
 			{
 				std::lock_guard ownerLock(owner->mutex);
 				owner->closing = true;
+				owner->stopped.store(true, std::memory_order_release);
 			}
 			owners.erase(found);
 		}
@@ -1494,6 +1532,8 @@ bool AromaCompatibilityRuntime::RegisterOwner(const CemodPackage& package,
 	auto owner = std::make_shared<Impl::Owner>();
 	owner->token = token;
 	owner->package = package;
+	owner->grantedPermissions.store(package.grantedPermissions,
+		std::memory_order_release);
 	owner->permissions = package.manifest.nativePermissions;
 	owner->packageId = package.manifest.modId;
 	owner->principal = package.principal;
@@ -1512,6 +1552,20 @@ bool AromaCompatibilityRuntime::IsOwnerActive(WupsOwnerToken token) const
 		return false;
 	std::lock_guard ownerLock(found->second->mutex);
 	return found->second->token == token && !found->second->closing;
+}
+
+std::shared_ptr<cemuextend_hle::Cex2Owner>
+AromaCompatibilityRuntime::Cex2OwnerFor(WupsOwnerToken token) const
+{
+	std::lock_guard lock(m_impl->registryMutex);
+	const auto found = m_impl->owners.find(token.owner);
+	if (found == m_impl->owners.end())
+		return {};
+	const auto& owner = found->second;
+	std::lock_guard ownerLock(owner->mutex);
+	if (owner->token != token || owner->closing || owner->IsStopped())
+		return {};
+	return std::static_pointer_cast<cemuextend_hle::Cex2Owner>(owner);
 }
 
 bool AromaCompatibilityRuntime::BindGuestInvoker(std::uint64_t owner,

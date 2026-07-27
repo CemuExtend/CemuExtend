@@ -307,6 +307,14 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 		// authorized this package by the time we get here.
 		if (Size() >= kMaximumModsPerTitle)
 			{ error = "the title already has 16 loaded Mods"; return std::nullopt; }
+		package.grantedPermissions = package.manifest.requestedPermissions &
+			userPermissions & titlePermissions;
+		if (servicePermissions)
+		{
+			package.serviceReadMask = servicePermissions->readMask;
+			package.serviceWriteMask = servicePermissions->writeMask;
+			package.serviceInjectMask = servicePermissions->injectMask;
+		}
 		WupsPayloadRuntime* wups = nullptr;
 		{
 			std::lock_guard lock(m_impl->mutex);

@@ -59,6 +59,19 @@ void SetActiveRuntime(std::weak_ptr<AromaCompatibilityRuntime> runtime)
 	g_nextHandle = kSyntheticHandleBase;
 }
 
+std::shared_ptr<cemuextend_hle::Cex2Owner> ResolveCurrentCex2Owner()
+{
+	const auto owner = ResolveCaller();
+	if (!owner)
+		return {};
+	std::shared_ptr<AromaCompatibilityRuntime> runtime;
+	{
+		std::lock_guard lock(g_mutex);
+		runtime = g_runtime.lock();
+	}
+	return runtime ? runtime->Cex2OwnerFor(*owner) : nullptr;
+}
+
 bool TryAcquireHomebrewModule(std::string_view moduleName,
 	std::uint32_t& handleOut)
 {

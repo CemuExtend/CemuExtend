@@ -3,6 +3,7 @@
 #include "Cafe/HW/Espresso/WupsRuntime.h"
 #include "Cafe/HW/Espresso/WupsBackendAbi.h"
 #include "Cafe/HW/Espresso/WupsBackendManagement.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cemu/Logging/CemuLogging.h"
 
 #include <cstdlib>
@@ -210,6 +211,32 @@ namespace
 		package.manifest.modId = std::move(id);
 		package.manifest.nativePermissions.modules = std::move(modules);
 		return package;
+	}
+
+	void TestCex2OwnerIdentityAndGrants()
+	{
+		AromaCompatibilityRuntime runtime;
+		auto package = Package("cex2-owner", {"homebrew_wupsbackend"});
+		package.principal = "test-principal";
+		package.targetTitleId = 0x00050000101dbe00ULL;
+		package.grantedPermissions = 0x15;
+		package.serviceReadMask = 0x02;
+		package.serviceInjectMask = 0x02;
+		WupsMetadata metadata; metadata.name = "CEX2 owner";
+		std::string error; const WupsOwnerToken token{77, 3};
+		CHECK(runtime.RegisterOwner(package, metadata, token, error));
+		auto owner = runtime.Cex2OwnerFor(token);
+		CHECK(owner);
+		CHECK(owner->Generation() == token.generation);
+		CHECK(owner->Principal() == package.principal);
+		CHECK(owner->TitleId() == package.targetTitleId);
+		CHECK(owner->GrantedPermissions() == package.grantedPermissions);
+		CHECK(owner->IsServiceAllowed(2, 1));
+		CHECK(!owner->IsServiceAllowed(2, 2));
+		CHECK(owner->IsServiceAllowed(2, 4));
+		CHECK(runtime.ReleaseOwnerResources(token.owner, token.generation, error));
+		CHECK(owner->IsStopped());
+		CHECK(!runtime.Cex2OwnerFor(token));
 	}
 
 	void TestStorageAndOwnerGeneration(const std::filesystem::path& root)
@@ -803,6 +830,7 @@ int main()
 		fmt::format("cemuext-wups-services-{}", std::uint64_t{std::random_device{}()});
 	std::filesystem::create_directories(root);
 	TestStorageAndOwnerGeneration(root);
+	TestCex2OwnerIdentityAndGrants();
 	TestPermissionsMappingAndDispatch(root);
 	TestFunctionPatcherAbiOutputs(root);
 	TestContentTraversalAndCleanup(root);
