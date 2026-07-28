@@ -574,12 +574,10 @@ void GraphicPack2::ApplyPatchGroups(std::vector<PatchGroup*>& groups, const RPLM
 		if (patchGroup->codeCaveSize > 0)
 		{
 			auto codeCaveMem = RPLLoader_AllocateCodeCaveMem(256, patchGroup->codeCaveSize);
-			cemuLog_log(LogType::Force, "Applying patch group \'{}\' (Codecave: {:08x}-{:08x})", patchGroup->name, codeCaveMem.GetMPTR(), codeCaveMem.GetMPTR() + patchGroup->codeCaveSize);
 			patchGroup->codeCaveMem = codeCaveMem;
 		}
 		else
 		{
-			cemuLog_log(LogType::Force, "Applying patch group \'{}\'", patchGroup->name);
 			patchGroup->codeCaveMem = nullptr;
 		}
 	}
@@ -688,8 +686,6 @@ void GraphicPack2::UndoPatchGroups(std::vector<PatchGroup*>& groups, const RPLMo
 
 void GraphicPack2::NotifyModuleLoaded(const RPLModule* rpl)
 {
-	cemuLog_log(LogType::Force, "Loaded module \'{}\' with checksum 0x{:08x}", rpl->moduleName, rpl->patchCRC);
-
 	std::lock_guard<std::recursive_mutex> lock(mtx_patches);
 	list_modules.emplace_back(rpl);
 

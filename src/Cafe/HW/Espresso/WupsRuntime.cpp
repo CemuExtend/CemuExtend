@@ -224,17 +224,12 @@ struct WupsPluginRuntime::Impl
 		{
 			try
 			{
-				cemuLog_log(LogType::Force,
-					"WUPS: invoking hook {} target 0x{:08x} argc {}",
-					HookName(type), found->second, invocation.argumentWords.size());
 				WupsGuestOwnerScope ownerScope{{owner, resourceGeneration}};
 				// WUPS loader hook arguments are materialized as one aggregate and
 				// passed by address by the SDK hook ABI.
 				called = moduleLoader->Invoke(callbackModule, callbackLifetime,
 					found->second, invocation.argumentWords, result, error,
 					true);
-				cemuLog_log(LogType::Force, "WUPS: hook {} returned {} result 0x{:08x}",
-					HookName(type), called, result);
 			}
 			catch (const std::exception& exception)
 			{

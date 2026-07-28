@@ -635,7 +635,6 @@ namespace H264
 
 	uint32 H264DECExecute(void* workMemory, void* imageOutput)
 	{
-		cemuLog_log(LogType::Force, "H264DECExecute(): [BEGIN]");
 		BenchmarkTimer bt;
 		bt.Start();
 		H264Context* ctx = (H264Context*)workMemory;

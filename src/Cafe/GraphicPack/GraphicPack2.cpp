@@ -203,31 +203,7 @@ void GraphicPack2::ActivateForCurrentTitle()
 		if (!gp->ContainsTitleId(titleId))
 			continue;
 
-		if (GraphicPack2::ActivateGraphicPack(gp))
-		{
-			if (gp->GetPresets().empty())
-			{
-				cemuLog_log(LogType::Force, "Activate graphic pack: {}", gp->GetVirtualPath());
-			}
-			else
-			{
-				std::string logLine;
-				logLine.assign(fmt::format("Activate graphic pack: {} [Presets: ", gp->GetVirtualPath()));
-				bool isFirst = true;
-				for (auto& itr : gp->GetPresets())
-				{
-					if (!itr->active)
-						continue;
-					if (isFirst)
-						isFirst = false;
-					else
-						logLine.append(",");
-					logLine.append(itr->name);
-				}
-				logLine.append("]");
-				cemuLog_log(LogType::Force, logLine);
-			}
-		}
+		GraphicPack2::ActivateGraphicPack(gp);
 	}
 	s_isReady = true;
 }
@@ -1090,7 +1066,6 @@ bool GraphicPack2::Activate()
 		}
 		else
 		{
-			cemuLog_log(LogType::Force, "Set vsync frequency to {} (graphic pack {})", customVsyncFreq, GetVirtualPath());
 			LatteTiming_setCustomVsyncFrequency(customVsyncFreq);
 		}
 	}

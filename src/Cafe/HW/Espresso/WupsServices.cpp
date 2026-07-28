@@ -4964,9 +4964,6 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				static_cast<std::int32_t>(arguments[1]) : std::int32_t{0x40};
 			const auto allocated = options.platform->AllocatePluginHeapMemory(
 				token, arguments[0], alignment);
-			cemuLog_log(LogType::Force,
-				"WUPS: pluginheap alloc size 0x{:x} align {} -> 0x{:08x}",
-				arguments[0], alignment, allocated);
 			return static_cast<std::int32_t>(allocated);
 		}
 		if (symbolName == "MEMFreeToDefaultHeap")

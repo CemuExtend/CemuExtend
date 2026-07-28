@@ -96,8 +96,6 @@ bool TryAcquireHomebrewModule(std::string_view moduleName,
 	const auto handle = g_nextHandle++;
 	g_handleToModule.emplace(handle, VirtualModule{std::string(moduleName), *owner});
 	handleOut = handle;
-	cemuLog_log(LogType::Force, "WUPS: virtual acquire '{}' owner {} generation {} -> 0x{:08x}",
-		moduleName, owner->owner, owner->generation, handle);
 	return true;
 }
 
@@ -149,9 +147,6 @@ bool TryFindHomebrewExport(std::uint32_t handle, bool isData,
 		return false;
 	}
 	addressOut = *resolved;
-	cemuLog_log(LogType::Force,
-		"WUPS: virtual export '{}.{}' owner {} generation {} -> 0x{:08x}",
-		module.name, exportName, scoped->owner, scoped->generation, addressOut);
 	return true;
 }
 } // namespace cafe::wups
