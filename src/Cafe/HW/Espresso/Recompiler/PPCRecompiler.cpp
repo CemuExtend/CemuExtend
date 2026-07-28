@@ -65,6 +65,8 @@ void ATTR_MS_ABI (*PPCRecompiler_leaveRecompilerCode_unvisited)();
 
 PPCRecompilerInstanceData_t* ppcRecompilerInstanceData;
 
+static bool PPCRecompiler_allocateRangeInternal(uint32 startAddress, uint32 size, bool* didReserveBlock);
+
 #if PPCREC_FORCE_SYNCHRONOUS_COMPILATION
 static std::mutex s_singleRecompilationMutex;
 #endif
@@ -534,6 +536,41 @@ bool PPCRecompiler_ApplyIMLPasses(ppcImlGenContext_t& ppcImlGenContext)
 
 bool PPCRecompiler_makeRecompiledFunctionActive(uint32 initialEntryPoint, PPCFunctionBoundaryTracker::PPCRange_t& range, PPCRecFunction_t* ppcRecFunc, std::vector<std::pair<MPTR, uint32>>& entryPoints)
 {
+	// Lookup-table blocks are committed without the recompiler spinlock. Keeping
+	// these locks unnested avoids blocking the loader behind a long table fill.
+	bool didReserveBlock = false;
+	if (!PPCRecompiler_allocateRangeInternal(range.startAddress, range.length, &didReserveBlock))
+	{
+		cemuLog_log(LogType::Force, "Recompiler: unable to reserve jump table range 0x{:08x}+0x{:x} while activating 0x{:08x}", range.startAddress, range.length, initialEntryPoint);
+		return false;
+	}
+	if (didReserveBlock)
+		cemuLog_log(LogType::Force, "Recompiler: committed a missing jump table block for range 0x{:08x}+0x{:x}", range.startAddress, range.length);
+
+	if ((initialEntryPoint & 3) != 0 ||
+		!PPCRecompiler_allocateRangeInternal(initialEntryPoint, sizeof(uint32), &didReserveBlock))
+	{
+		cemuLog_log(LogType::Force, "Recompiler: invalid initial entry point 0x{:08x}", initialEntryPoint);
+		return false;
+	}
+	if (didReserveBlock)
+		cemuLog_log(LogType::Force, "Recompiler: committed a missing jump table block for initial entry point 0x{:08x}", initialEntryPoint);
+
+	for (auto& itr : entryPoints)
+	{
+		const uint32 entryPoint = itr.first;
+		if (entryPoint == initialEntryPoint)
+			continue;
+		if ((entryPoint & 3) != 0 ||
+			!PPCRecompiler_allocateRangeInternal(entryPoint, sizeof(uint32), &didReserveBlock))
+		{
+			cemuLog_log(LogType::Force, "Recompiler: invalid entry point 0x{:08x} while activating 0x{:08x}", entryPoint, initialEntryPoint);
+			return false;
+		}
+		if (didReserveBlock)
+			cemuLog_log(LogType::Force, "Recompiler: committed a missing jump table block for entry point 0x{:08x} while activating 0x{:08x}", entryPoint, initialEntryPoint);
+	}
+
 	// update jump table
 	s_ppcRecompilerState.recompilerSpinlock.lock();
 
@@ -674,42 +711,68 @@ constexpr uint32 PPCRecompiler_GetNumAddressSpaceBlocks()
     return (MEMORY_CODEAREA_ADDR + MEMORY_CODEAREA_SIZE + PPC_REC_ALLOC_BLOCK_SIZE - 1) / PPC_REC_ALLOC_BLOCK_SIZE;
 }
 
-std::bitset<PPCRecompiler_GetNumAddressSpaceBlocks()> ppcRecompiler_reservedBlockMask;
+static std::bitset<PPCRecompiler_GetNumAddressSpaceBlocks()> ppcRecompiler_reservedBlockMask;
+static std::mutex s_lookupTableAllocationMutex;
 
-void PPCRecompiler_reserveLookupTableBlock(uint32 offset)
+static bool PPCRecompiler_reserveLookupTableBlock(uint32 offset, bool& didReserveBlock)
 {
-	uint32 blockIndex = offset / PPC_REC_ALLOC_BLOCK_SIZE;
+	const uint32 blockIndex = offset / PPC_REC_ALLOC_BLOCK_SIZE;
+	if (blockIndex >= PPCRecompiler_GetNumAddressSpaceBlocks())
+		return false;
+
+	// Do not acquire this mutex while holding recompilerSpinlock.
+	std::lock_guard<std::mutex> lock(s_lookupTableAllocationMutex);
 	offset = blockIndex * PPC_REC_ALLOC_BLOCK_SIZE;
 
 	if (ppcRecompiler_reservedBlockMask[blockIndex])
-		return;
-	ppcRecompiler_reservedBlockMask[blockIndex] = true;
+		return true;
 
 	void* p = MemMapper::AllocateMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), MemMapper::PAGE_PERMISSION::P_RW, true);
 	if( !p )
 	{
 		cemuLog_log(LogType::Force, "Failed to allocate memory for recompiler (0x{:08x})", offset);
-		cemu_assert(false);
-		return;
+		return false;
 	}
 	for(uint32 i=0; i<PPC_REC_ALLOC_BLOCK_SIZE/4; i++)
 	{
 		ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4+i] = PPCRecompiler_leaveRecompilerCode_unvisited;
 	}
+	ppcRecompiler_reservedBlockMask[blockIndex] = true;
+	didReserveBlock = true;
+	return true;
 }
 
-void PPCRecompiler_allocateRange(uint32 startAddress, uint32 size)
+static bool PPCRecompiler_allocateRangeInternal(uint32 startAddress, uint32 size, bool* didReserveBlock)
 {
+	if (didReserveBlock)
+		*didReserveBlock = false;
 	if (ppcRecompilerInstanceData == nullptr)
-		return;
-	uint32 endAddress = (startAddress + size + PPC_REC_ALLOC_BLOCK_SIZE - 1) & ~(PPC_REC_ALLOC_BLOCK_SIZE-1);
-	startAddress = (startAddress) & ~(PPC_REC_ALLOC_BLOCK_SIZE-1);
-	startAddress = std::min(startAddress, (uint32)MEMORY_CODEAREA_ADDR + MEMORY_CODEAREA_SIZE);
-	endAddress = std::min(endAddress, (uint32)MEMORY_CODEAREA_ADDR + MEMORY_CODEAREA_SIZE);
-	for (uint32 i = startAddress; i < endAddress; i += PPC_REC_ALLOC_BLOCK_SIZE)
+		return false;
+	if (size == 0)
+		return true;
+
+	constexpr uint64 addressSpaceEnd = PPC_REC_CODE_AREA_END;
+	const uint64 rangeEnd = static_cast<uint64>(startAddress) + size;
+	if (startAddress >= addressSpaceEnd || rangeEnd > addressSpaceEnd)
+		return false;
+
+	constexpr uint64 blockMask = ~static_cast<uint64>(PPC_REC_ALLOC_BLOCK_SIZE - 1);
+	const uint64 alignedStart = static_cast<uint64>(startAddress) & blockMask;
+	const uint64 alignedEnd = (rangeEnd + PPC_REC_ALLOC_BLOCK_SIZE - 1) & blockMask;
+	bool reservedAnyBlock = false;
+	for (uint64 offset = alignedStart; offset < alignedEnd; offset += PPC_REC_ALLOC_BLOCK_SIZE)
 	{
-		PPCRecompiler_reserveLookupTableBlock(i);
+		if (!PPCRecompiler_reserveLookupTableBlock(static_cast<uint32>(offset), reservedAnyBlock))
+			return false;
 	}
+	if (didReserveBlock)
+		*didReserveBlock = reservedAnyBlock;
+	return true;
+}
+
+bool PPCRecompiler_allocateRange(uint32 startAddress, uint32 size)
+{
+	return PPCRecompiler_allocateRangeInternal(startAddress, size, nullptr);
 }
 
 bool PPCRecompiler_findFuncRanges(uint32 addr, ppcRecompilerFuncRange* rangesOut, size_t* countInOut)
@@ -890,17 +953,20 @@ void PPCRecompiler_Shutdown()
     // clean range store
     s_ppcRecompilerState.functionStorage.clear();
     // clean up memory
-    uint32 numBlocks = PPCRecompiler_GetNumAddressSpaceBlocks();
-    for(uint32 i=0; i<numBlocks; i++)
-    {
-        if(!ppcRecompiler_reservedBlockMask[i])
-            continue;
-        // deallocate
-        uint64 offset = i * PPC_REC_ALLOC_BLOCK_SIZE;
-        MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), true);
-        // mark as unmapped
-        ppcRecompiler_reservedBlockMask[i] = false;
-    }
+	{
+		std::lock_guard<std::mutex> lock(s_lookupTableAllocationMutex);
+		uint32 numBlocks = PPCRecompiler_GetNumAddressSpaceBlocks();
+		for(uint32 i=0; i<numBlocks; i++)
+		{
+			if(!ppcRecompiler_reservedBlockMask[i])
+				continue;
+			// deallocate
+			uint64 offset = i * PPC_REC_ALLOC_BLOCK_SIZE;
+			MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), true);
+			// mark as unmapped
+			ppcRecompiler_reservedBlockMask[i] = false;
+		}
+	}
 	s_ppcRecompilerState.recompilerEnableCount = 0;
 	s_ppcRecompilerState.initialized = false;
 }

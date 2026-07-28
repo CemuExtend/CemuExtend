@@ -193,8 +193,8 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 		output.push_back(branchBack);
 	else
 	{
-		const auto far = FarJump(continuation);
-		output.insert(output.end(), far.begin(), far.end());
+		const auto farJump = FarJump(continuation);
+		output.insert(output.end(), farJump.begin(), farJump.end());
 	}
 
 	for (const auto& stub : stubs)
@@ -223,8 +223,8 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 			error = "PPC branch repair stub is out of REL24 range";
 			return false;
 		}
-		const auto far = FarJump(stub.target);
-		output.insert(output.end(), far.begin(), far.end());
+		const auto farJump = FarJump(stub.target);
+		output.insert(output.end(), farJump.begin(), farJump.end());
 	}
 	if (output.size() * sizeof(std::uint32_t) > kMaximumTrampolineBytes)
 	{

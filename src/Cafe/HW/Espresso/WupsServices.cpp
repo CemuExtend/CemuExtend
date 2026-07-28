@@ -911,7 +911,7 @@ struct AromaCompatibilityRuntime::Impl
 		auto current = options.storageRoot;
 		const auto relative = path.parent_path().lexically_relative(
 			options.storageRoot);
-		if (relative.empty() || relative.native().starts_with(".."))
+		if (relative.empty() || relative.native().starts_with(L".."))
 		{
 			error = "storage namespace escaped the configured root";
 			return false;
