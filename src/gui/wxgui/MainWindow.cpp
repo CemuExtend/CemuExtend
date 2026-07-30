@@ -2077,16 +2077,27 @@ void MainWindow::OnMemorySearcherClose(wxCloseEvent& event)
 
 void MainWindow::OnMouseWheel(wxMouseEvent& event)
 {
-	const float delta = event.GetWheelRotation(); // in 120 steps -> max reached ~480 (?)
+	const auto rotation = event.GetWheelRotation();
+	const auto reportedDelta = event.GetWheelDelta();
+	const auto wheelDelta = reportedDelta > 0 ? reportedDelta : 120;
+	const bool horizontal = event.GetWheelAxis() == wxMOUSE_WHEEL_HORIZONTAL;
+	auto& remainder = horizontal ? m_cemuextend_wheel_remainder_x :
+		m_cemuextend_wheel_remainder_y;
+	const auto accumulated = static_cast<std::int64_t>(remainder) + rotation;
+	const auto steps = static_cast<std::int32_t>(accumulated / wheelDelta);
+	remainder = static_cast<std::int32_t>(accumulated % wheelDelta);
+
 	auto& instance = InputManager::instance();
-	instance.m_mouse_wheel = (delta / 120.0f);
-	instance.m_mouse_wheel_cumulative.fetch_add(static_cast<sint32>(delta / 120.0f),
-		std::memory_order_relaxed);
-	const auto steps = static_cast<std::int32_t>(delta / 120.0f);
-	if (event.GetWheelAxis() == wxMOUSE_WHEEL_HORIZONTAL)
-		EmitCemuExtendMouseEvent(event, steps, 0);
-	else
-		EmitCemuExtendMouseEvent(event, 0, steps);
+	instance.m_mouse_wheel = static_cast<float>(rotation) /
+		static_cast<float>(wheelDelta);
+	if (steps != 0)
+	{
+		instance.m_mouse_wheel_cumulative.fetch_add(steps, std::memory_order_relaxed);
+		if (horizontal)
+			EmitCemuExtendMouseEvent(event, steps, 0);
+		else
+			EmitCemuExtendMouseEvent(event, 0, steps);
+	}
 
 	event.Skip();
 }

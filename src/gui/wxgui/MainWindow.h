@@ -188,6 +188,8 @@ private:
 	bool m_cemuextend_mouse_position_valid{};
 	std::uint8_t m_cemuextend_pointer_mode{};
 	std::uint32_t m_cemuextend_mouse_buttons{};
+	std::int32_t m_cemuextend_wheel_remainder_x{};
+	std::int32_t m_cemuextend_wheel_remainder_y{};
 	bool m_cemuextend_raw_mouse_requested{true};
 	bool m_cemuextend_raw_mouse_registered{};
 	bool m_cemuextend_raw_mouse_seen{};

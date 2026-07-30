@@ -475,15 +475,28 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	case 163: return 0xe4; // VK_RCONTROL
 	case 164: return 0xe2; // VK_LMENU
 	case 165: return 0xe6; // VK_RMENU
+	case 91: return 0xe3;  // VK_LWIN
+	case 92: return 0xe7;  // VK_RWIN
+	case 93: return 0x65;  // VK_APPS
 	default: break;
 	}
 #else
 	(void)rawKey;
 #endif
-	if (key >= 'A' && key <= 'Z')
-		return static_cast<uint16>(0x04 + key - 'A');
-	if (key >= 'a' && key <= 'z')
-		return static_cast<uint16>(0x04 + key - 'a');
+	const auto letterUsage = [](const auto value) -> uint16 {
+		if (value >= 'A' && value <= 'Z')
+			return static_cast<uint16>(0x04 + value - 'A');
+		if (value >= 'a' && value <= 'z')
+			return static_cast<uint16>(0x04 + value - 'a');
+		return 0;
+	};
+	// Depending on the platform and active layout, wxWidgets may expose a
+	// letter through the logical key, Unicode key or native key code. Ctrl+A..
+	// Ctrl+Z can even turn the logical key into control character 1..26, so use
+	// all three non-ambiguous representations before handling special keys.
+	if (const uint16 usage = letterUsage(key)) return usage;
+	if (const uint16 usage = letterUsage(event.GetUnicodeKey())) return usage;
+	if (const uint16 usage = letterUsage(rawKey)) return usage;
 	if (key >= '1' && key <= '9')
 		return static_cast<uint16>(0x1e + key - '1');
 	if (key == '0')
@@ -520,6 +533,7 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	case WXK_F11: return 0x44;
 	case WXK_F12: return 0x45;
 	case WXK_PRINT: return 0x46;
+	case WXK_SNAPSHOT: return 0x46;
 	case WXK_SCROLL: return 0x47;
 	case WXK_PAUSE: return 0x48;
 	case WXK_INSERT: return 0x49;
@@ -533,6 +547,71 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	case WXK_DOWN: return 0x51;
 	case WXK_UP: return 0x52;
 	case WXK_NUMLOCK: return 0x53;
+	case WXK_DIVIDE:
+	case WXK_NUMPAD_DIVIDE: return 0x54;
+	case WXK_MULTIPLY:
+	case WXK_NUMPAD_MULTIPLY: return 0x55;
+	case WXK_SUBTRACT:
+	case WXK_NUMPAD_SUBTRACT: return 0x56;
+	case WXK_ADD:
+	case WXK_NUMPAD_ADD: return 0x57;
+	case WXK_NUMPAD_ENTER: return 0x58;
+	case WXK_NUMPAD_SPACE: return 0x2c;
+	case WXK_NUMPAD_TAB: return 0x2b;
+	case WXK_NUMPAD_F1: return 0x3a;
+	case WXK_NUMPAD_F2: return 0x3b;
+	case WXK_NUMPAD_F3: return 0x3c;
+	case WXK_NUMPAD_F4: return 0x3d;
+	case WXK_NUMPAD1:
+	case WXK_NUMPAD_END: return 0x59;
+	case WXK_NUMPAD2:
+	case WXK_NUMPAD_DOWN: return 0x5a;
+	case WXK_NUMPAD3:
+	case WXK_NUMPAD_PAGEDOWN: return 0x5b;
+	case WXK_NUMPAD4:
+	case WXK_NUMPAD_LEFT: return 0x5c;
+	case WXK_NUMPAD5:
+	case WXK_NUMPAD_BEGIN: return 0x5d;
+	case WXK_NUMPAD6:
+	case WXK_NUMPAD_RIGHT: return 0x5e;
+	case WXK_NUMPAD7:
+	case WXK_NUMPAD_HOME: return 0x5f;
+	case WXK_NUMPAD8:
+	case WXK_NUMPAD_UP: return 0x60;
+	case WXK_NUMPAD9:
+	case WXK_NUMPAD_PAGEUP: return 0x61;
+	case WXK_NUMPAD0:
+	case WXK_NUMPAD_INSERT: return 0x62;
+	case WXK_DECIMAL:
+	case WXK_NUMPAD_DECIMAL:
+	case WXK_NUMPAD_DELETE: return 0x63;
+	case WXK_WINDOWS_MENU:
+	case WXK_MENU: return 0x65;
+	case WXK_NUMPAD_EQUAL: return 0x67;
+	case WXK_F13: return 0x68;
+	case WXK_F14: return 0x69;
+	case WXK_F15: return 0x6a;
+	case WXK_F16: return 0x6b;
+	case WXK_F17: return 0x6c;
+	case WXK_F18: return 0x6d;
+	case WXK_F19: return 0x6e;
+	case WXK_F20: return 0x6f;
+	case WXK_F21: return 0x70;
+	case WXK_F22: return 0x71;
+	case WXK_F23: return 0x72;
+	case WXK_F24: return 0x73;
+	case WXK_EXECUTE: return 0x74;
+	case WXK_HELP: return 0x75;
+	case WXK_SELECT: return 0x77;
+	case WXK_CANCEL: return 0x9b;
+	case WXK_CLEAR: return 0x9c;
+	case WXK_SEPARATOR:
+	case WXK_NUMPAD_SEPARATOR: return 0x85;
+	case WXK_VOLUME_MUTE: return 0x7f;
+	case WXK_VOLUME_UP: return 0x80;
+	case WXK_VOLUME_DOWN: return 0x81;
+	case WXK_WINDOWS_LEFT: return 0xe3;
+	case WXK_WINDOWS_RIGHT: return 0xe7;
 	case WXK_CONTROL: return 0xe0;
 	case WXK_SHIFT: return 0xe1;
 	case WXK_ALT: return 0xe2;

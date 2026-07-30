@@ -65,9 +65,9 @@ uint32 fix_raw_keycode(uint32 keycode, uint32 raw_flags)
 	}
 	else if (keycode == VK_MENU)
 	{
-		if ((flags & 0xFF) == 0x38)
+		if (flags == 0x38)
 			return 164;
-		else if ((flags & 0xFF) == 0x38)
+		else if (flags == 0x138)
 			return 165;
 	}
 #endif
