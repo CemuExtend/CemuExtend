@@ -111,6 +111,7 @@ constexpr std::array kOperations{
 	OperationDefinition{2,2,1,4,1+sizeof(cemuextend::wire::ObservedVpadState),0,0,0,Handler::Input},
 	OperationDefinition{2,3,1,1,1,sizeof(cemuextend::wire::ObservedVpadState),0,0,Handler::Input},
 	OperationDefinition{2,4,1,1,0,sizeof(cemuextend::wire::MouseEventPayloadV2),0,0,Handler::Input},
+	OperationDefinition{2,5,1,1,sizeof(cemuextend::wire::TextInputRequestHeader)+4096,0,0,0,Handler::Input},
 	OperationDefinition{3,1,1,2,4096+5,0,20,50,Handler::Logging},
 	OperationDefinition{4,1,1,1,260,65520,0,0,Handler::Configuration},
 	OperationDefinition{4,2,1,2,65520,0,0,0,Handler::Configuration},
@@ -214,6 +215,7 @@ struct Cex2Host::Impl
 		std::set<std::uint16_t> pressedKeyboardUsages;
 		cemuextend::wire::PointerPolicyPayload pointerPolicy{};
 		std::uint64_t pointerPolicySequence{};
+		Cex2HostTextInputState textInput{};
 		std::array<cemuextend::wire::ObservedVpadState, 2> observedVpad{};
 		std::array<bool, 2> hasObservedVpad{};
 		std::array<cemuextend::wire::ObservedVpadState, 2> mappedInjection{};
@@ -233,6 +235,8 @@ struct Cex2Host::Impl
 	};
 
 	std::mutex mutex;
+	std::uint64_t nextTextInputSequence{1};
+	void (*textInputWakeCallback)(){};
 	std::unordered_map<std::uint32_t, Session> sessions;
 	std::uint32_t nextSession{1};
 	std::uint64_t nextPointerPolicySequence{1};
@@ -472,6 +476,39 @@ struct Cex2Host::Impl
 
 		if (definition->handler == Handler::Input)
 		{
+			if (request.operation.get() == static_cast<std::uint16_t>(InputOperation::SetTextInput))
+			{
+				if (payload.size() < sizeof(TextInputRequestHeader))
+					return MakeResponse(request, Status::InvalidArgument);
+				TextInputRequestHeader header{};
+				std::memcpy(&header, payload.data(), sizeof(header));
+				const auto textBytes = header.textBytes.get();
+				const auto allowedFlags = static_cast<std::uint8_t>(TextInputFlag::Active) |
+					static_cast<std::uint8_t>(TextInputFlag::Multiline);
+				if (payload.size() != sizeof(header) + textBytes ||
+					(header.flags & ~allowedFlags) != 0 ||
+					header.reserved != std::array<std::byte, 3>{} ||
+					header.maximumLength.get() > 4096 || header.lineHeight.get() < 0)
+					return MakeResponse(request, Status::InvalidArgument);
+				const std::string_view text{
+					reinterpret_cast<const char*>(payload.data() + sizeof(header)), textBytes};
+				if (!IsValidUtf8(text)) return MakeResponse(request, Status::InvalidArgument);
+				const bool active = (header.flags &
+					static_cast<std::uint8_t>(TextInputFlag::Active)) != 0;
+				const auto requestId = header.requestId.get();
+				if (active && (!session.textInput.active ||
+					session.textInput.requestId != requestId))
+					session.textInput.sequence = nextTextInputSequence++;
+				session.textInput.active = active;
+				session.textInput.requestId = header.requestId.get();
+				session.textInput.maximumLength = header.maximumLength.get();
+				session.textInput.caretX = header.caretX.get();
+				session.textInput.caretY = header.caretY.get();
+				session.textInput.lineHeight = header.lineHeight.get();
+				session.textInput.initialText.assign(text);
+				if (textInputWakeCallback) textInputWakeCallback();
+				return MakeResponse(request, Status::Ok);
+			}
 			if (request.operation.get() == static_cast<std::uint16_t>(InputOperation::GetHostMouse))
 			{
 				if (!payload.empty())
@@ -1116,24 +1153,37 @@ std::int32_t Cex2Host::Close(Cex2Owner& owner, std::uint32_t sessionId)
 		return static_cast<std::int32_t>(Error::NotFound);
 	if (!Impl::Owns(found->second, owner))
 		return static_cast<std::int32_t>(Error::PermissionDenied);
+	const bool hadTextInput = found->second.textInput.active;
 	m_impl->sessions.erase(found);
+	if (hadTextInput && m_impl->textInputWakeCallback)
+		m_impl->textInputWakeCallback();
 	return static_cast<std::int32_t>(Error::Ok);
 }
 
 void Cex2Host::CloseOwner(Cex2Owner& owner)
 {
 	std::lock_guard lock(m_impl->mutex);
-	std::erase_if(m_impl->sessions, [&owner](const auto& entry) {
+	bool hadTextInput{};
+	std::erase_if(m_impl->sessions, [&owner, &hadTextInput](const auto& entry) {
 		const auto& session = entry.second;
-		return session.owner == &owner && session.addressSpaceId == owner.AddressSpaceId() &&
+		const bool remove = session.owner == &owner &&
+			session.addressSpaceId == owner.AddressSpaceId() &&
 			session.generation == owner.Generation();
+		hadTextInput |= remove && session.textInput.active;
+		return remove;
 	});
+	if (hadTextInput && m_impl->textInputWakeCallback)
+		m_impl->textInputWakeCallback();
 }
 
 void Cex2Host::CloseAll()
 {
 	std::lock_guard lock(m_impl->mutex);
+	const bool hadTextInput = std::ranges::any_of(m_impl->sessions,
+		[](const auto& entry) { return entry.second.textInput.active; });
 	m_impl->sessions.clear();
+	if (hadTextInput && m_impl->textInputWakeCallback)
+		m_impl->textInputWakeCallback();
 }
 
 #ifdef CEMU_CEX2_TESTING
@@ -1305,6 +1355,69 @@ void Cex2Host::TextEvent(std::uint32_t codepoint, bool repeat)
 	}
 }
 
+Cex2HostTextInputState Cex2Host::EffectiveTextInput()
+{
+	std::lock_guard lock(m_impl->mutex);
+	Cex2HostTextInputState result{};
+	for (const auto& [id, session] : m_impl->sessions)
+	{
+		if (session.textInput.active && session.textInput.sequence > result.sequence &&
+			Impl::HasPermission(session, 1,
+				static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Input),
+				static_cast<std::uint16_t>(cemuextend::wire::InputOperation::SetTextInput)))
+			result = session.textInput;
+	}
+	return result;
+}
+
+void Cex2Host::TextCompositionEvent(std::string_view text,
+	std::string_view preedit, std::uint32_t preeditStart,
+	std::uint32_t preeditCursor)
+{
+	using namespace cemuextend::wire;
+	std::lock_guard lock(m_impl->mutex);
+	Impl::Session* target{};
+	for (auto& [id, session] : m_impl->sessions)
+		if (session.textInput.active &&
+			Impl::HasPermission(session, 1,
+				static_cast<std::uint16_t>(ServiceId::Input),
+				static_cast<std::uint16_t>(InputOperation::SetTextInput)) &&
+			(target == nullptr || session.textInput.sequence > target->textInput.sequence))
+			target = &session;
+	if (target == nullptr || text.size() + preedit.size() > 4096 ||
+		preeditStart > text.size() || preeditCursor > preedit.size() ||
+		!Impl::IsValidUtf8(text) || !Impl::IsValidUtf8(preedit)) return;
+
+	TextCompositionEventHeader event{};
+	event.identity.eventId = target->nextInputEventId++;
+	event.identity.origin = static_cast<std::uint8_t>(InputOrigin::Physical);
+	event.identity.channel = static_cast<std::uint8_t>(InputChannel::Keyboard);
+	event.identity.frameNumber = CurrentFrameNumber();
+	event.requestId = target->textInput.requestId;
+	event.revision = static_cast<std::uint32_t>(event.identity.eventId.get());
+	event.committedBytes = static_cast<std::uint32_t>(text.size());
+	event.preeditBytes = static_cast<std::uint32_t>(preedit.size());
+	event.preeditStart = preeditStart;
+	event.preeditCursor = preeditCursor;
+	event.selectionStart = static_cast<std::uint32_t>(text.size());
+	event.selectionEnd = static_cast<std::uint32_t>(text.size());
+	event.flags = static_cast<std::uint8_t>(TextInputFlag::Active);
+	std::vector<std::byte> payload(sizeof(event) + text.size() + preedit.size());
+	std::memcpy(payload.data(), &event, sizeof(event));
+	if (!text.empty()) std::memcpy(payload.data() + sizeof(event), text.data(), text.size());
+	if (!preedit.empty())
+		std::memcpy(payload.data() + sizeof(event) + text.size(),
+			preedit.data(), preedit.size());
+	m_impl->EmitEvent(*target, ServiceId::Input,
+		static_cast<std::uint16_t>(InputEvent::TextComposition), payload);
+}
+
+void Cex2Host::SetTextInputWakeCallback(void (*callback)())
+{
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->textInputWakeCallback = callback;
+}
+
 void Cex2Host::MouseEvent(cemuextend::wire::PointerSurface surface,
 	std::int32_t x, std::int32_t y, std::int32_t deltaX, std::int32_t deltaY,
 	std::int32_t wheelX, std::int32_t wheelY, std::uint32_t buttons,
@@ -1372,6 +1485,9 @@ cemuextend::wire::PointerPolicyPayload Cex2Host::EffectivePointerPolicy()
 void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 {
 	std::lock_guard lock(m_impl->mutex);
+	bool hadTextInput{};
+	for (const auto& [id, session] : m_impl->sessions)
+		hadTextInput |= session.owner == &owner && session.textInput.active;
 	owner.SetGrantedPermissions(permissions);
 	for (auto& [id, session] : m_impl->sessions)
 	{
@@ -1431,6 +1547,8 @@ void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 			--session.reservedResponses;
 		}
 	}
+	if (hadTextInput && m_impl->textInputWakeCallback)
+		m_impl->textInputWakeCallback();
 }
 
 } // namespace cemuextend_hle

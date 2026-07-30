@@ -594,6 +594,103 @@ void TestMouseAndPointerPolicy()
 	CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
 }
 
+void TestTextInputComposition()
+{
+	using namespace cemuextend::wire;
+	auto& host = cemuextend_hle::Cex2Host::Instance();
+	host.CloseAll();
+	ModExecutionContext context(33, 1, "text-input-principal");
+	context.SetGrantedPermissions(5);
+	const auto session = Open(host, context);
+
+	Encoder subscription;
+	subscription.U16(static_cast<std::uint16_t>(ServiceId::Input));
+	auto request = Request(1, static_cast<std::uint16_t>(CoreOperation::Subscribe),
+		subscription.data());
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	auto response = PollUntil(host, context, session);
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::Ok));
+
+	constexpr std::string_view initial = "search";
+	TextInputRequestHeader input{};
+	input.requestId = 42;
+	input.maximumLength = 128;
+	input.caretX = 320;
+	input.caretY = 180;
+	input.lineHeight = 22;
+	input.textBytes = static_cast<std::uint32_t>(initial.size());
+	input.flags = static_cast<std::uint8_t>(TextInputFlag::Active);
+	std::vector<std::byte> payload(sizeof(input) + initial.size());
+	std::memcpy(payload.data(), &input, sizeof(input));
+	std::memcpy(payload.data() + sizeof(input), initial.data(), initial.size());
+	request = Request(2, static_cast<std::uint16_t>(InputOperation::SetTextInput),
+		payload, ServiceId::Input);
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	response = PollUntil(host, context, session);
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::Ok));
+	const auto state = host.EffectiveTextInput();
+	CHECK(state.active && state.requestId == 42 && state.maximumLength == 128);
+	CHECK(state.caretX == 320 && state.caretY == 180 && state.lineHeight == 22);
+	CHECK(state.initialText == initial);
+	const auto sequence = state.sequence;
+
+	// Caret/preedit updates for the same Aqua field must not create a new
+	// native session: doing so resets the OS composition after a few keys.
+	input.caretX = 340;
+	request = Request(3, static_cast<std::uint16_t>(InputOperation::SetTextInput),
+		payload, ServiceId::Input);
+	std::memcpy(request.data() + sizeof(RequestHeader), &input, sizeof(input));
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	response = PollUntil(host, context, session);
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::Ok));
+	CHECK(host.EffectiveTextInput().sequence == sequence);
+	CHECK(host.EffectiveTextInput().caretX == 340);
+
+	constexpr std::string_view committed = "search";
+	constexpr std::string_view preedit = "\xE6\x97\xA5\xE6\x9C\xAC";
+	host.TextCompositionEvent(committed, preedit,
+		static_cast<std::uint32_t>(committed.size()),
+		static_cast<std::uint32_t>(preedit.size()));
+	response = PollUntil(host, context, session);
+	const auto* eventResponse = reinterpret_cast<const ResponseHeader*>(response.data());
+	CHECK(eventResponse->flags.get() == static_cast<std::uint16_t>(
+		cemuextend::transport::ResponseFlag::Event));
+	CHECK(eventResponse->operation.get() ==
+		static_cast<std::uint16_t>(InputEvent::TextComposition));
+	CHECK(response.size() == sizeof(ResponseHeader) +
+		sizeof(TextCompositionEventHeader) + committed.size() + preedit.size());
+	const auto* event = reinterpret_cast<const TextCompositionEventHeader*>(
+		response.data() + sizeof(ResponseHeader));
+	CHECK(event->requestId.get() == 42);
+	CHECK(event->committedBytes.get() == committed.size());
+	CHECK(event->preeditBytes.get() == preedit.size());
+	CHECK(event->preeditStart.get() == committed.size());
+	CHECK(event->preeditCursor.get() == preedit.size());
+	const std::string_view returned{
+		reinterpret_cast<const char*>(response.data() + sizeof(ResponseHeader) + sizeof(*event)),
+		committed.size()};
+	CHECK(returned == committed);
+	const std::string_view returnedPreedit{
+		reinterpret_cast<const char*>(response.data() + sizeof(ResponseHeader) +
+			sizeof(*event) + committed.size()),
+		preedit.size()};
+	CHECK(returnedPreedit == preedit);
+
+	input.flags = 0;
+	input.textBytes = 0;
+	request = Request(4, static_cast<std::uint16_t>(InputOperation::SetTextInput),
+		{reinterpret_cast<const std::byte*>(&input), sizeof(input)}, ServiceId::Input);
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	response = PollUntil(host, context, session);
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::Ok));
+	CHECK(!host.EffectiveTextInput().active);
+	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -603,6 +700,7 @@ int main(int argc, char** argv)
 	{
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
+		TestTextInputComposition();
 	}
 	else
 	{

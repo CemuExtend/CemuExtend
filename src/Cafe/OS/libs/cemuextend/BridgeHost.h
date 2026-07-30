@@ -3,6 +3,7 @@
 #include "cemuextend/services.hpp"
 
 #include <cstdint>
+#include <string_view>
 
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 
@@ -45,6 +46,19 @@ namespace cemuextend_hle
 	inline void TextEvent(uint32 codepoint, bool repeat)
 	{
 		Cex2Host::Instance().TextEvent(codepoint, repeat);
+	}
+
+	inline Cex2HostTextInputState EffectiveTextInput()
+	{
+		return Cex2Host::Instance().EffectiveTextInput();
+	}
+
+	inline void TextCompositionEvent(std::string_view text,
+		std::string_view preedit = {}, uint32 preeditStart = 0,
+		uint32 preeditCursor = 0)
+	{
+		Cex2Host::Instance().TextCompositionEvent(
+			text, preedit, preeditStart, preeditCursor);
 	}
 
 	inline void MouseEvent(cemuextend::wire::PointerSurface surface,

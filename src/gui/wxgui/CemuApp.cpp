@@ -629,25 +629,36 @@ static uint8 CemuExtendKeyModifiers(const wxKeyEvent& event)
 
 int CemuApp::FilterEvent(wxEvent& event)
 {
+	// Native text controls own their key stream while an OS IME session is
+	// active. Do not mirror those keys into CEX2's raw keyboard service: the
+	// control publishes the resulting committed/preedit text separately. If
+	// native focus acquisition fails, events still target the render canvas and
+	// naturally fall back to the ordinary raw/text path instead of deadlocking
+	// the guest input field.
+	const bool native_text_input_event = g_mainFrame != nullptr &&
+		g_mainFrame->IsCemuExtendTextInputEvent(event);
 	if(event.GetEventType() == wxEVT_KEY_DOWN)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
-		cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), true,
-			CemuExtendKeyModifiers(key_event));
+		if (!native_text_input_event)
+			cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), true,
+				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_KEY_UP)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
-		cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), false,
-			CemuExtendKeyModifiers(key_event));
+		if (!native_text_input_event)
+			cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), false,
+				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_CHAR)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto codepoint = key_event.GetUnicodeKey();
-		if (codepoint >= 0x20 && codepoint != 0x7f && codepoint <= 0x10ffff)
+		if (!native_text_input_event &&
+			codepoint >= 0x20 && codepoint != 0x7f && codepoint <= 0x10ffff)
 			cemuextend_hle::TextEvent(static_cast<uint32>(codepoint), key_event.IsAutoRepeat());
 	}
 	else if(event.GetEventType() == wxEVT_ACTIVATE_APP)

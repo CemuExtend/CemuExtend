@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
+#include <string_view>
 
 #include "cemuextend/services.hpp"
 
@@ -11,6 +13,18 @@ namespace cemuextend_hle { class Cex2Owner; }
 struct VPADStatus;
 
 namespace cemuextend_hle {
+
+struct Cex2HostTextInputState
+{
+	bool active{};
+	std::uint64_t sequence{};
+	std::uint32_t requestId{};
+	std::uint32_t maximumLength{};
+	std::int32_t caretX{};
+	std::int32_t caretY{};
+	std::int32_t lineHeight{};
+	std::string initialText;
+};
 
 class Cex2Host
 {
@@ -35,6 +49,11 @@ public:
 	void ApplyMappedVpad(std::int32_t channel, VPADStatus& status);
 	void KeyboardEvent(std::uint16_t usbHidUsage, bool pressed, std::uint8_t modifiers);
 	void TextEvent(std::uint32_t codepoint, bool repeat);
+	[[nodiscard]] Cex2HostTextInputState EffectiveTextInput();
+	void TextCompositionEvent(std::string_view text,
+		std::string_view preedit = {}, std::uint32_t preeditStart = 0,
+		std::uint32_t preeditCursor = 0);
+	void SetTextInputWakeCallback(void (*callback)());
 	void KeyboardFocusLost();
 	void MouseEvent(cemuextend::wire::PointerSurface surface,
 		std::int32_t x, std::int32_t y, std::int32_t deltaX, std::int32_t deltaY,

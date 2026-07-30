@@ -137,6 +137,8 @@ public:
 	void OnGameLoaded();
 
 	void AsyncSetTitle(std::string_view windowTitle);
+	void RefreshCemuExtendTextInput();
+	bool IsCemuExtendTextInputEvent(const wxEvent& event) const;
 
 	void CreateCanvas();
 	void DestroyCanvas();
@@ -157,6 +159,11 @@ private:
 	bool InstallUpdate(const fs::path& metaFilePath);
 
 	void OnTimer(wxTimerEvent& event);
+	void OnCemuExtendTextChanged(wxCommandEvent& event);
+	void OnCemuExtendTextPreedit(std::string_view preedit);
+	void PublishCemuExtendTextComposition();
+	void EnsureCemuExtendTextInputFocus(std::uint64_t sequence);
+	bool HasCemuExtendTextInputNativeFocus() const;
 	void EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t wheelX = 0,
 		std::int32_t wheelY = 0, std::uint32_t changedButtons = 0);
 	void EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
@@ -222,6 +229,14 @@ private:
 
 	// panels
 	wxPanel* m_main_panel{}, * m_game_panel{};
+	wxTextCtrl* m_cemuextend_text_input{};
+	std::uint64_t m_cemuextend_text_input_sequence{};
+	bool m_cemuextend_text_input_updating{};
+	std::string m_cemuextend_text_input_preedit;
+	unsigned m_cemuextend_text_input_focus_retries{};
+	bool m_cemuextend_text_input_focus_logged{};
+	bool m_cemuextend_text_input_focus_failure_logged{};
+	bool m_cemuextend_text_input_preedit_logged{};
 
 	// rendering
 	wxWindow* m_render_canvas{};

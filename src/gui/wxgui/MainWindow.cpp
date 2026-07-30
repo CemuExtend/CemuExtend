@@ -23,6 +23,10 @@
 #include "helpers/wxHelpers.h"
 #include "PadViewFrame.h"
 
+#if defined(__WXGTK__)
+#include <gtk/gtk.h>
+#endif
+
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
 #endif
@@ -346,6 +350,12 @@ MainWindow::MainWindow()
 #endif
 	g_window_info.window_main = initHandleContextFromWxWidgetsWindow(this);
 	g_mainFrame = this;
+	cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(+[] {
+		if (wxTheApp == nullptr) return;
+		wxTheApp->CallAfter([] {
+			if (g_mainFrame != nullptr) g_mainFrame->RefreshCemuExtendTextInput();
+		});
+	});
 	CafeSystem::SetImplementation(this);
 
 	RecreateMenu();
@@ -423,6 +433,7 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
+	cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(nullptr);
 	UpdateCemuExtendPointerConfinement(false);
 	if (m_padView)
 	{
@@ -1917,6 +1928,184 @@ void MainWindow::AsyncSetTitle(std::string_view windowTitle)
 	g_mainFrame->QueueEvent(set_title_event.Clone());
 }
 
+bool MainWindow::IsCemuExtendTextInputEvent(const wxEvent& event) const
+{
+	return m_cemuextend_text_input != nullptr &&
+		(HasCemuExtendTextInputNativeFocus() ||
+			event.GetEventObject() == m_cemuextend_text_input);
+}
+
+bool MainWindow::HasCemuExtendTextInputNativeFocus() const
+{
+	if (m_cemuextend_text_input == nullptr) return false;
+#if defined(__WXGTK__)
+	GtkWidget* entry =
+		static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
+	return GTK_IS_WIDGET(entry) && gtk_widget_has_focus(entry);
+#else
+	return m_cemuextend_text_input->HasFocus();
+#endif
+}
+
+void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
+{
+	if (m_cemuextend_text_input == nullptr ||
+		m_cemuextend_text_input_sequence != sequence ||
+		!m_cemuextend_text_input->IsShown())
+		return;
+	if (HasCemuExtendTextInputNativeFocus())
+	{
+		m_cemuextend_text_input_focus_retries = 0;
+		if (!m_cemuextend_text_input_focus_logged)
+		{
+			m_cemuextend_text_input_focus_logged = true;
+			cemuLog_log(LogType::Force,
+				"CemuExtend text input: native IME focus acquired");
+		}
+		return;
+	}
+
+	m_cemuextend_text_input->Raise();
+	m_cemuextend_text_input->SetFocus();
+#if defined(__WXGTK__)
+	GtkWidget* entry =
+		static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
+	if (GTK_IS_WIDGET(entry) && gtk_widget_get_mapped(entry))
+		gtk_widget_grab_focus(entry);
+#endif
+	if (HasCemuExtendTextInputNativeFocus())
+	{
+		EnsureCemuExtendTextInputFocus(sequence);
+		return;
+	}
+	if (m_cemuextend_text_input_focus_retries >= 4)
+	{
+		if (!m_cemuextend_text_input_focus_failure_logged)
+		{
+			m_cemuextend_text_input_focus_failure_logged = true;
+			cemuLog_log(LogType::Force,
+				"CemuExtend text input: failed to acquire native IME focus");
+		}
+		return;
+	}
+	++m_cemuextend_text_input_focus_retries;
+	wxTheApp->CallAfter([this, sequence] {
+		if (g_mainFrame == this)
+			EnsureCemuExtendTextInputFocus(sequence);
+	});
+}
+
+void MainWindow::PublishCemuExtendTextComposition()
+{
+	if (m_cemuextend_text_input_updating || m_cemuextend_text_input == nullptr)
+		return;
+	const std::string committed =
+		m_cemuextend_text_input->GetValue().utf8_string();
+	const long insertion = m_cemuextend_text_input->GetInsertionPoint();
+	const std::string prefix = m_cemuextend_text_input
+		->GetRange(0, insertion).utf8_string();
+	cemuextend_hle::TextCompositionEvent(
+		committed, m_cemuextend_text_input_preedit,
+		static_cast<uint32>(prefix.size()),
+		static_cast<uint32>(m_cemuextend_text_input_preedit.size()));
+}
+
+void MainWindow::OnCemuExtendTextChanged(wxCommandEvent& event)
+{
+	PublishCemuExtendTextComposition();
+}
+
+void MainWindow::OnCemuExtendTextPreedit(std::string_view preedit)
+{
+	m_cemuextend_text_input_preedit.assign(preedit);
+	if (!preedit.empty() && !m_cemuextend_text_input_preedit_logged)
+	{
+		m_cemuextend_text_input_preedit_logged = true;
+		cemuLog_log(LogType::Force,
+			"CemuExtend text input: native IME preedit received");
+	}
+	PublishCemuExtendTextComposition();
+}
+
+void MainWindow::RefreshCemuExtendTextInput()
+{
+	if (m_cemuextend_text_input == nullptr || m_render_canvas == nullptr) return;
+	const auto state = cemuextend_hle::EffectiveTextInput();
+	if (!state.active)
+	{
+		if (m_cemuextend_text_input->IsShown())
+		{
+#if defined(__WXGTK__)
+			GtkWidget* entry = static_cast<GtkWidget*>(
+				m_cemuextend_text_input->GetHandle());
+			if (GTK_IS_ENTRY(entry))
+				gtk_entry_reset_im_context(GTK_ENTRY(entry));
+#endif
+			m_cemuextend_text_input->Hide();
+			m_render_canvas->SetFocus();
+		}
+		m_cemuextend_text_input_sequence = 0;
+		m_cemuextend_text_input_focus_retries = 0;
+		m_cemuextend_text_input_focus_logged = false;
+		m_cemuextend_text_input_focus_failure_logged = false;
+		m_cemuextend_text_input_preedit_logged = false;
+		m_cemuextend_text_input_preedit.clear();
+		return;
+	}
+	const wxSize canvas = m_render_canvas->GetClientSize();
+	const int x = std::clamp(state.caretX * canvas.GetWidth() / 1280,
+		0, std::max(0, canvas.GetWidth() - 1));
+	const int y = std::clamp(state.caretY * canvas.GetHeight() / 720,
+		0, std::max(0, canvas.GetHeight() - 1));
+	// Moving the native widget while an IME owns a preedit can reset some IM
+	// modules. Keep its anchor stable until that composition ends.
+	if (m_cemuextend_text_input_preedit.empty())
+		m_cemuextend_text_input->SetPosition(
+			m_render_canvas->GetPosition() + wxPoint{x, y});
+#if defined(__WXGTK__)
+	// GTK IM modules derive their candidate position and activation state from
+	// the focused widget's allocation. A 1x1 allocation is rejected by some
+	// IBus/Fcitx input modules. Keep a normal line height but make the widget
+	// itself fully transparent; the IME candidate popup is a separate window
+	// and remains visible at this anchor.
+	const int nativeLineHeight = std::clamp(
+		state.lineHeight * canvas.GetHeight() / 720, 20, 64);
+	m_cemuextend_text_input->SetSize(wxSize{2, nativeLineHeight});
+#else
+	m_cemuextend_text_input->SetSize(wxSize{1, 1});
+#endif
+	const bool startingSession =
+		state.sequence != m_cemuextend_text_input_sequence;
+	if (startingSession)
+	{
+		m_cemuextend_text_input_updating = true;
+		m_cemuextend_text_input_preedit.clear();
+		m_cemuextend_text_input_focus_retries = 0;
+		m_cemuextend_text_input_focus_logged = false;
+		m_cemuextend_text_input_focus_failure_logged = false;
+		m_cemuextend_text_input_preedit_logged = false;
+		m_cemuextend_text_input->ChangeValue(
+			wxString::FromUTF8(state.initialText.data(), state.initialText.size()));
+		m_cemuextend_text_input->SetMaxLength(state.maximumLength);
+		m_cemuextend_text_input->SetInsertionPointEnd();
+		m_cemuextend_text_input_updating = false;
+		m_cemuextend_text_input_sequence = state.sequence;
+		// Release any key held by the render canvas before the native control
+		// starts owning key events. Otherwise its key-up would be intentionally
+		// filtered and the guest could retain a stuck raw key.
+		cemuextend_hle::KeyboardFocusLost();
+		m_cemuextend_text_input->Show();
+		// This native control exists only to own the OS IME session and its
+		// candidate window. Its one-pixel surface is effectively invisible, but
+		// it must remain above the render canvas or some native backends refuse
+		// to give their IM context real keyboard focus.
+	}
+	// A render-canvas click can steal native focus without changing the guest's
+	// request id. Verify ownership on every wake, using the platform's real
+	// focus state rather than wxWindow's pending-focus cache.
+	EnsureCemuExtendTextInputFocus(state.sequence);
+}
+
 void MainWindow::CreateCanvas()
 {
     // create panel for canvas
@@ -1970,6 +2159,57 @@ void MainWindow::CreateCanvas()
 
 	m_render_canvas->SetDropTarget(new wxAmiiboDropTarget(this));
 	m_game_panel->GetSizer()->Add(m_render_canvas, 1, wxEXPAND, 0, nullptr);
+	m_cemuextend_text_input = new wxTextCtrl(m_game_panel, wxID_ANY, wxEmptyString,
+		wxPoint(0, 0), wxSize(1, 1), wxBORDER_NONE | wxTE_PROCESS_ENTER);
+	m_cemuextend_text_input->Hide();
+	m_cemuextend_text_input->Bind(wxEVT_TEXT,
+		&MainWindow::OnCemuExtendTextChanged, this);
+#if defined(__WXGTK__)
+	GtkWidget* entry = static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
+	if (GTK_IS_ENTRY(entry))
+	{
+		GdkDisplay* display = gtk_widget_get_display(entry);
+		const char* backend = display != nullptr
+			? G_OBJECT_TYPE_NAME(display) : "unknown";
+		const char* configuredModule = g_getenv("GTK_IM_MODULE");
+		const char* selectedModule = configuredModule != nullptr
+			? configuredModule : "default";
+		// steam-run and similar game environments commonly force XIM for X11
+		// games. wxGTK may nevertheless select its Wayland backend. XIM cannot
+		// create an input context on a Wayland GdkDisplay, so override only this
+		// incompatible pairing for the native text proxy. Preserve explicit
+		// fcitx/ibus modules and the normal GTK default everywhere else.
+		if (g_strrstr(backend, "Wayland") != nullptr &&
+			configuredModule != nullptr &&
+			g_strcmp0(configuredModule, "xim") == 0)
+		{
+			selectedModule = "wayland";
+			g_object_set(entry, "im-module", selectedModule, nullptr);
+		}
+		else if (g_strrstr(backend, "X11") != nullptr &&
+			configuredModule != nullptr &&
+			g_strcmp0(configuredModule, "wayland") == 0)
+		{
+			selectedModule = "xim";
+			g_object_set(entry, "im-module", selectedModule, nullptr);
+		}
+		cemuLog_log(LogType::Force,
+			"CemuExtend text input: GTK backend {}, IM module {} (environment {})",
+			backend, selectedModule,
+			configuredModule != nullptr ? configuredModule : "unset");
+		gtk_entry_set_has_frame(GTK_ENTRY(entry), FALSE);
+		gtk_entry_set_input_purpose(GTK_ENTRY(entry), GTK_INPUT_PURPOSE_FREE_FORM);
+		gtk_entry_set_input_hints(GTK_ENTRY(entry), GTK_INPUT_HINT_NONE);
+		// Opacity affects only the proxy widget. IBus/Fcitx candidate windows are
+		// separate native windows and therefore remain visible.
+		gtk_widget_set_opacity(entry, 0.0);
+		g_signal_connect(entry, "preedit-changed",
+			G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
+				static_cast<MainWindow*>(data)->OnCemuExtendTextPreedit(
+					preedit != nullptr ? std::string_view{preedit} : std::string_view{});
+			}), this);
+	}
+#endif
 
 	GetSizer()->Layout();
 	m_render_canvas->SetFocus();
@@ -1980,6 +2220,17 @@ void MainWindow::CreateCanvas()
 
 void MainWindow::DestroyCanvas()
 {
+	if (m_cemuextend_text_input)
+	{
+		m_cemuextend_text_input->Destroy();
+		m_cemuextend_text_input = nullptr;
+		m_cemuextend_text_input_sequence = 0;
+		m_cemuextend_text_input_focus_retries = 0;
+		m_cemuextend_text_input_focus_logged = false;
+		m_cemuextend_text_input_focus_failure_logged = false;
+		m_cemuextend_text_input_preedit_logged = false;
+		m_cemuextend_text_input_preedit.clear();
+	}
 	UpdateCemuExtendPointerConfinement(false);
 	if (m_padView)
 	{
