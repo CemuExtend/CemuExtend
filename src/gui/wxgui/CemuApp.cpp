@@ -640,17 +640,29 @@ int CemuApp::FilterEvent(wxEvent& event)
 	if(event.GetEventType() == wxEVT_KEY_DOWN)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
+		const auto usage = CemuExtendUsbHidUsage(key_event);
 		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
-		if (!native_text_input_event)
-			cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), true,
+		// A single-line native IME owns ordinary editing keys, but Enter is
+		// also the guest field's submit action. Mirror Enter only after any
+		// preedit has been committed; the first Enter used to accept a Japanese
+		// conversion candidate must remain private to the OS IME.
+		const bool native_submit = native_text_input_event &&
+			(usage == 0x28 || usage == 0x58) &&
+			g_mainFrame->CanSubmitCemuExtendTextInput();
+		if (!native_text_input_event || native_submit)
+			cemuextend_hle::KeyboardEvent(usage, true,
 				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_KEY_UP)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
+		const auto usage = CemuExtendUsbHidUsage(key_event);
 		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
-		if (!native_text_input_event)
-			cemuextend_hle::KeyboardEvent(CemuExtendUsbHidUsage(key_event), false,
+		const bool native_submit = native_text_input_event &&
+			(usage == 0x28 || usage == 0x58) &&
+			g_mainFrame->CanSubmitCemuExtendTextInput();
+		if (!native_text_input_event || native_submit)
+			cemuextend_hle::KeyboardEvent(usage, false,
 				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_CHAR)

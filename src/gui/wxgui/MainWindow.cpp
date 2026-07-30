@@ -1935,6 +1935,15 @@ bool MainWindow::IsCemuExtendTextInputEvent(const wxEvent& event) const
 			event.GetEventObject() == m_cemuextend_text_input);
 }
 
+bool MainWindow::CanSubmitCemuExtendTextInput() const
+{
+	// Enter must remain owned by the OS IME while a preedit/candidate is
+	// active. Once it is committed, a subsequent Enter may be mirrored to the
+	// guest as the single-line field's submit action.
+	return m_cemuextend_text_input != nullptr &&
+		m_cemuextend_text_input_preedit.empty();
+}
+
 bool MainWindow::HasCemuExtendTextInputNativeFocus() const
 {
 	if (m_cemuextend_text_input == nullptr) return false;

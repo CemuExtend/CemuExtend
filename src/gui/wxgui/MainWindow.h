@@ -139,6 +139,7 @@ public:
 	void AsyncSetTitle(std::string_view windowTitle);
 	void RefreshCemuExtendTextInput();
 	bool IsCemuExtendTextInputEvent(const wxEvent& event) const;
+	bool CanSubmitCemuExtendTextInput() const;
 
 	void CreateCanvas();
 	void DestroyCanvas();
