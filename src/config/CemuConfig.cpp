@@ -438,6 +438,13 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	framebuffer_fetch = debug.get("FramebufferFetch", true);
 #endif
 
+	// tcpgecko
+	auto tcpGeckoNode = parser.get("TcpGecko");
+	tcpgecko.enabled = tcpGeckoNode.get("Enabled", tcpgecko.enabled);
+	tcpgecko.port = tcpGeckoNode.get("Port", tcpgecko.port);
+	tcpgecko.allow_lan = tcpGeckoNode.get("AllowLan", tcpgecko.allow_lan);
+	tcpgecko.handler_version = tcpGeckoNode.get("HandlerVersion", tcpgecko.handler_version);
+
 	// input
 	auto input = parser.get("Input");
 	auto dsuc = input.get("DSUC");
@@ -646,6 +653,13 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	debug.set("GPUCaptureDir", gpu_capture_dir);
 	debug.set("FramebufferFetch", framebuffer_fetch);
 #endif
+
+	// tcpgecko
+	auto tcpGeckoNode = config.set("TcpGecko");
+	tcpGeckoNode.set("Enabled", tcpgecko.enabled.GetValue());
+	tcpGeckoNode.set("Port", tcpgecko.port.GetValue());
+	tcpGeckoNode.set("AllowLan", tcpgecko.allow_lan.GetValue());
+	tcpGeckoNode.set("HandlerVersion", tcpgecko.handler_version.GetValue());
 
 	// input
 	auto input = config.set("Input");

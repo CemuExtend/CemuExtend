@@ -1430,6 +1430,63 @@ wxPanel* GeneralSettings2::AddDebugPage(wxNotebook* notebook)
 	return panel;
 }
 
+wxPanel* GeneralSettings2::AddTcpGeckoPage(wxNotebook* notebook)
+{
+	auto* panel = new wxPanel(notebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+	auto* panel_sizer = new wxBoxSizer(wxVERTICAL);
+
+	{
+		auto* row = new wxFlexGridSizer(0, 2, 0, 0);
+		row->SetFlexibleDirection(wxBOTH);
+		row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+		m_tcpgecko_enabled = new wxCheckBox(panel, wxID_ANY, _("Enable TCPGecko server"));
+		m_tcpgecko_enabled->SetToolTip(_("Runs a built-in TCPGecko-compatible server so external tools can read/write the running title's memory and send Gecko-style cheat codes, the same way real TCPGecko homebrew works on console. Off by default: this grants remote memory access and code execution to whatever can reach the port."));
+		row->Add(m_tcpgecko_enabled, 0, wxALL | wxEXPAND, 5);
+		panel_sizer->Add(row, 0, wxALL | wxEXPAND, 5);
+	}
+
+	{
+		auto* row = new wxFlexGridSizer(0, 2, 0, 0);
+		row->SetFlexibleDirection(wxBOTH);
+		row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+		row->Add(new wxStaticText(panel, wxID_ANY, _("Port")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		m_tcpgecko_port = new wxSpinCtrl(panel, wxID_ANY, "7331", wxDefaultPosition, wxDefaultSize, 0, 1, 65535);
+		m_tcpgecko_port->SetToolTip(_("TCP port the TCPGecko server listens on. 7331 matches the port real TCPGecko clients expect."));
+		row->Add(m_tcpgecko_port, 0, wxALL | wxEXPAND, 5);
+		panel_sizer->Add(row, 0, wxALL | wxEXPAND, 5);
+	}
+
+	{
+		auto* row = new wxFlexGridSizer(0, 2, 0, 0);
+		row->SetFlexibleDirection(wxBOTH);
+		row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+		m_tcpgecko_allow_lan = new wxCheckBox(panel, wxID_ANY, _("Allow connections from other devices on the network"));
+		m_tcpgecko_allow_lan->SetToolTip(_("When unchecked, the server only accepts connections from this PC (127.0.0.1). Check this to allow other devices on your network to connect, matching real TCPGecko's default behavior."));
+		row->Add(m_tcpgecko_allow_lan, 0, wxALL | wxEXPAND, 5);
+		panel_sizer->Add(row, 0, wxALL | wxEXPAND, 5);
+	}
+
+	{
+		auto* row = new wxFlexGridSizer(0, 2, 0, 0);
+		row->SetFlexibleDirection(wxBOTH);
+		row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+		row->Add(new wxStaticText(panel, wxID_ANY, _("Code handler version")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		wxString handler_choices[] = {_("General"), _("Latest")};
+		m_tcpgecko_handler_version = new wxChoice(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, std::size(handler_choices), handler_choices);
+		m_tcpgecko_handler_version->SetSelection(1);
+		m_tcpgecko_handler_version->SetToolTip(_("Which ported Gecko code handler binary to install. \"Latest\" supports the newest set of Gecko code types; \"General\" is the older, more broadly compatible handler. Takes effect the next time a title boots."));
+		row->Add(m_tcpgecko_handler_version, 0, wxALL | wxEXPAND, 5);
+		panel_sizer->Add(row, 0, wxALL | wxEXPAND, 5);
+	}
+
+	panel->SetSizerAndFit(panel_sizer);
+	return panel;
+}
+
 GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched)
 	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER), m_game_launched(game_launched)
 {
@@ -1445,6 +1502,7 @@ GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched)
 	notebook->AddPage(AddAccountPage(notebook), _("Account"));
 	notebook->AddPage(AddCemuExtendPage(notebook), _("CemuExtend"));
 	notebook->AddPage(AddDebugPage(notebook), _("Debug"));
+	notebook->AddPage(AddTcpGeckoPage(notebook), _("TCPGecko"));
 
 	Bind(wxEVT_CLOSE_WINDOW, &GeneralSettings2::OnClose, this);
 
@@ -1662,6 +1720,12 @@ void GeneralSettings2::StoreConfig()
 	config.gpu_capture_dir = m_gpu_capture_dir->GetValue().utf8_string();
 	config.framebuffer_fetch = m_framebuffer_fetch->IsChecked();
 #endif
+
+	// tcpgecko
+	config.tcpgecko.enabled = m_tcpgecko_enabled->IsChecked();
+	config.tcpgecko.port = (uint16)m_tcpgecko_port->GetValue();
+	config.tcpgecko.allow_lan = m_tcpgecko_allow_lan->IsChecked();
+	config.tcpgecko.handler_version = (TcpGeckoHandlerVersion)m_tcpgecko_handler_version->GetSelection();
 
 	GetConfigHandle().Save();
 }
@@ -2430,6 +2494,12 @@ void GeneralSettings2::ApplyConfig()
 	m_gpu_capture_dir->SetValue(wxString::FromUTF8(config.gpu_capture_dir.GetValue()));
 	m_framebuffer_fetch->SetValue(config.framebuffer_fetch);
 #endif
+
+	// tcpgecko
+	m_tcpgecko_enabled->SetValue(config.tcpgecko.enabled);
+	m_tcpgecko_port->SetValue(config.tcpgecko.port.GetValue());
+	m_tcpgecko_allow_lan->SetValue(config.tcpgecko.allow_lan);
+	m_tcpgecko_handler_version->SetSelection((int)config.tcpgecko.handler_version.GetValue());
 }
 
 void GeneralSettings2::OnAudioAPISelected(wxCommandEvent& event)

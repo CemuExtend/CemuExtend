@@ -28,6 +28,7 @@
 #include "Common/FileStream.h"
 #include "GamePatch.h"
 #include "HW/Espresso/Debugger/GDBStub.h"
+#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 
 #include "Cafe/IOSU/legacy/iosu_ioctl.h"
 #include "Cafe/IOSU/legacy/iosu_act.h"
@@ -433,6 +434,7 @@ void cemu_initForGame()
         g_gdbstub->Initialize();
     }
 	debugger_handleEntryBreakpoint(_entryPoint);
+	TcpGecko::OnTitleBoot();
 	// load graphic packs
 	cemuLog_log(LogType::Force, "------- Activate graphic packs -------");
 	GraphicPack2::ActivateForCurrentTitle();
@@ -1098,6 +1100,7 @@ namespace CafeSystem
 	{
 		if(!sSystemRunning)
 			return;
+		TcpGecko::OnTitleShutdown();
 		coreinit::OSSchedulerEnd();
 		Latte_Stop();
 		// reset Cafe OS userspace modules

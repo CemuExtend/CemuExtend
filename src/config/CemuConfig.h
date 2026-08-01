@@ -245,6 +245,15 @@ enum class CrashDump
 ENABLE_ENUM_ITERATORS(CrashDump, CrashDump::Disabled, CrashDump::Enabled);
 #endif
 
+// version of the ported TCPGecko PPC code handler binary to install into
+// the running title. See src/Cafe/HW/Espresso/TcpGecko/TcpGeckoCodeHandlerBinaries.h
+enum class TcpGeckoHandlerVersion
+{
+	General = 0,
+	Latest = 1,
+};
+ENABLE_ENUM_ITERATORS(TcpGeckoHandlerVersion, TcpGeckoHandlerVersion::General, TcpGeckoHandlerVersion::Latest);
+
 template <>
 struct fmt::formatter<PrecompiledShaderOption> : formatter<string_view> {
 	template <typename FormatContext>
@@ -540,6 +549,15 @@ struct CemuConfig
 		ConfigValue<std::string> host{"127.0.0.1"};
 		ConfigValue<uint16> port{ 26760 };
 	}dsu_client{};
+
+	// Built-in TCPGecko-protocol server. Off/loopback-only by default: grants remote memory access and code execution.
+	struct
+	{
+		ConfigValue<bool> enabled{ false };
+		ConfigValue<uint16> port{ 7331 };
+		ConfigValue<bool> allow_lan{ false };
+		ConfigValue<TcpGeckoHandlerVersion> handler_version{ TcpGeckoHandlerVersion::Latest };
+	}tcpgecko{};
 
 	std::optional<CemuExtendTitleGrant> GetCemuExtendGrant(uint64 titleId) const;
 	void SetCemuExtendGrant(uint64 titleId, CemuExtendTitleGrant grant);

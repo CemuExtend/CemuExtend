@@ -46,6 +46,13 @@ add_library(CemuCafe
   HW/Espresso/Debugger/GDBStub.cpp
   HW/Espresso/Debugger/GDBBreakpoints.cpp
   HW/Espresso/Debugger/GDBBreakpoints.h
+  HW/Espresso/TcpGecko/TcpGeckoCodeHandlerBinaries.h
+  HW/Espresso/TcpGecko/TcpGeckoCodeHandler.h
+  HW/Espresso/TcpGecko/TcpGeckoCodeHandler.cpp
+  HW/Espresso/TcpGecko/TcpGeckoGuestJobs.h
+  HW/Espresso/TcpGecko/TcpGeckoGuestJobs.cpp
+  HW/Espresso/TcpGecko/TcpGeckoServer.h
+  HW/Espresso/TcpGecko/TcpGeckoServer.cpp
   HW/Espresso/EspressoISA.h
   HW/Espresso/Interpreter/PPCInterpreterALU.hpp
   HW/Espresso/Interpreter/PPCInterpreterFPU.cpp

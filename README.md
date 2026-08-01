@@ -58,6 +58,16 @@ trusted ELFはASM適用後に`mod_id`順で共有8 MiB codecaveへ配置され�
 
 Minecraft向けの参照実装は隣接する`mcwiiu-client-template`にあり、描画hook、Minecraft allocator、ImGui、GX2 backend、`libhookevent`、CEX2 Clientを組み合わせた署名可能なtrusted `.cemod`をDockerで生成します。
 
+## TCPGecko
+
+CemuExtendには[tcpgecko](https://github.com/BullyWiiPlaza/tcpgecko)互換の内蔵serverがあります。実機ではWii U本体で動くhomebrewが必要ですが、CemuExtend自体がgame memoryへ直接accessできるため、同じnetwork protocolをホスト側(Cemu本体)で実装しています。動作確認しているclientはIranjin/ZaqroUのみです。
+
+- `Options` → `General settings` → `TCPGecko`で有効化・port番号(既定7331)・LAN許可・code handler versionを設定します。既定は無効、有効時もloopbackのみで、LAN許可は別途必要です。
+- Code handlerはtcpgecko由来の実PPC binary(`General`/`Latest`)をtitleごとにmemory上へ展開し、毎frame実行します。既存のGecko/Ocarina形式cheat codeとの互換性を保つためです。
+- code送信・client接続/切断時はnotification overlayにログが表示されます。
+
+`src/Cafe/HW/Espresso/TcpGecko/`はtcpgeckoの実装を移植しているため、CemuExtend全体のMPL-2.0ではなく[GPLv3](src/Cafe/HW/Espresso/TcpGecko/LICENSE)です(`dependencies/`と同様、file単位の別license)。
+
 ## Docker build
 
 サブモジュールを取得後、次を実行します。
@@ -86,6 +96,7 @@ scriptはRelease buildとCTestを実行し、両方が成功した場合だけ�
 | `src/gui/wxgui/GeneralSettings2.cpp` | package承認、実行モード・署名・権限表示 |
 | `src/gui/wxgui/CemodPermissionDialog.cpp` | ゲーム起動前のMod権限確認 |
 | `dependencies/libcemuextend/` | ABI 2 SDKとwire schema |
+| `src/Cafe/HW/Espresso/TcpGecko/` | TCPGecko互換server、code handler、guest job marshaling (GPLv3) |
 
 ## License
 

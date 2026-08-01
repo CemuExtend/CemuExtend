@@ -48,6 +48,7 @@ private:
 	wxPanel* AddAccountPage(wxNotebook* notebook);
 	wxPanel* AddCemuExtendPage(wxNotebook* notebook);
 	wxPanel* AddDebugPage(wxNotebook* notebook);
+	wxPanel* AddTcpGeckoPage(wxNotebook* notebook);
 
 	// General
 	wxChoice * m_language;
@@ -133,6 +134,12 @@ private:
 	wxTextCtrl* m_gpu_capture_dir;
 	wxCheckBox* m_framebuffer_fetch;
 #endif
+
+	// TCPGecko
+	wxCheckBox* m_tcpgecko_enabled;
+	wxSpinCtrl* m_tcpgecko_port;
+	wxCheckBox* m_tcpgecko_allow_lan;
+	wxChoice* m_tcpgecko_handler_version;
 
 	void OnAccountCreate(wxCommandEvent& event);
 	void OnAccountDelete(wxCommandEvent& event);

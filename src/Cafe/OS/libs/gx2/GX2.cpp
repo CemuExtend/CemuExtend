@@ -7,6 +7,7 @@
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
+#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 
 #include "GX2_Command.h"
 #include "GX2_State.h"
@@ -49,6 +50,8 @@ uint64 lastSwapTime = 0;
 void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::GX2, "GX2SwapScanBuffers()");
+
+	TcpGecko::Tick();
 
 	bool isPokken = false;
 
