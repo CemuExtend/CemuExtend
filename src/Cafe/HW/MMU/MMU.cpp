@@ -8,6 +8,92 @@
 uint8* memory_base = NULL; // base address of the reserved 4GB space
 uint8* memory_elfCodeArena = NULL;
 
+namespace
+{
+	struct GuestMappedMemoryRecord
+	{
+		uint32 requestedSize{};
+		uint32 committedSize{};
+		bool writable{};
+	};
+
+	std::mutex s_guestMappedMemoryMutex;
+	std::map<uint32, GuestMappedMemoryRecord> s_guestMappedMemory;
+	bool s_guestMappedMemoryReady{};
+
+	[[nodiscard]] uint64 AlignUp(uint64 value, uint64 alignment)
+	{
+		return (value + alignment - 1) & ~(alignment - 1);
+	}
+
+	[[nodiscard]] bool IsPowerOfTwo(uint32 value)
+	{
+		return value != 0 && (value & (value - 1)) == 0;
+	}
+
+	void PrepareGuestMappedMemoryForTitle()
+	{
+		std::lock_guard lock(s_guestMappedMemoryMutex);
+		s_guestMappedMemory.clear();
+		s_guestMappedMemoryReady = false;
+		const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
+			MEMORY_MAPPED_AREA_SIZE;
+		if (!memory_base)
+		{
+			cemuLog_log(LogType::Force, "WUPS mapped-memory arena has no guest base");
+			return;
+		}
+		for (const auto* range : memory_getMMURanges())
+		{
+			if (MEMORY_MAPPED_AREA_ADDR < range->getEnd() &&
+				arenaEnd > range->getBase())
+			{
+				cemuLog_log(LogType::Force,
+					"WUPS mapped-memory arena overlaps active range {}", range->getName());
+				return;
+			}
+		}
+		// The 4 GiB guest reservation starts inaccessible. Decommit the whole
+		// arena again at each title boundary as a last-resort cleanup for any
+		// owner whose normal teardown did not run.
+		s_guestMappedMemoryReady = MemMapper::FreeMemory(
+			memory_base + MEMORY_MAPPED_AREA_ADDR, MEMORY_MAPPED_AREA_SIZE, true);
+		if (!s_guestMappedMemoryReady)
+			cemuLog_log(LogType::Force,
+				"Unable to decommit the WUPS mapped-memory arena");
+	}
+
+	void ReleaseGuestMappedMemoryForTitle()
+	{
+		std::lock_guard lock(s_guestMappedMemoryMutex);
+		s_guestMappedMemory.clear();
+		s_guestMappedMemoryReady = false;
+		if (memory_base)
+			(void)MemMapper::FreeMemory(memory_base + MEMORY_MAPPED_AREA_ADDR,
+				MEMORY_MAPPED_AREA_SIZE, true);
+	}
+
+	[[nodiscard]] bool IsGuestMappedMemoryRangeAccessible(uint32 address,
+		uint32 size)
+	{
+		const uint64 end = static_cast<uint64>(address) + size;
+		const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
+			MEMORY_MAPPED_AREA_SIZE;
+		if (size == 0 || address < MEMORY_MAPPED_AREA_ADDR || end > arenaEnd)
+			return false;
+		std::lock_guard lock(s_guestMappedMemoryMutex);
+		if (!s_guestMappedMemoryReady)
+			return false;
+		auto found = s_guestMappedMemory.upper_bound(address);
+		if (found == s_guestMappedMemory.begin())
+			return false;
+		--found;
+		const uint64 allocationEnd = static_cast<uint64>(found->first) +
+			found->second.requestedSize;
+		return address >= found->first && end <= allocationEnd;
+	}
+}
+
 void checkMemAlloc(void* result)
 {
 	if (result == nullptr)
@@ -104,7 +190,7 @@ void MMURange::mapMem()
 
 void MMURange::unmapMem()
 {
-    MemMapper::FreeMemory(memory_base + baseAddress, size, true);
+	(void)MemMapper::FreeMemory(memory_base + baseAddress, size, true);
 	m_isMapped = false;
 }
 
@@ -201,15 +287,17 @@ void memory_mapForCurrentTitle()
 		if (!itr->isOptional() && !itr->isMappedEarly())
 			itr->mapMem();
 	}
+	PrepareGuestMappedMemoryForTitle();
 }
 
 void memory_unmapForCurrentTitle()
 {
-    for (auto& itr : g_mmuRanges)
-    {
-        if (itr->isMapped() && !itr->isMappedEarly())
-            itr->unmapMem();
-    }
+	ReleaseGuestMappedMemoryForTitle();
+	for (auto& itr : g_mmuRanges)
+	{
+		if (itr->isMapped() && !itr->isMappedEarly())
+			itr->unmapMem();
+	}
 }
 
 void memory_logModifiedMemoryRanges()
@@ -260,6 +348,14 @@ void memory_enableHBLELFCodeArea()
 
 bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size)
 {
+	if (size == 0 || static_cast<uint64>(virtualAddress) + size >
+		std::numeric_limits<uint32>::max() + uint64{1})
+		return false;
+	const uint64 rangeEnd = static_cast<uint64>(virtualAddress) + size;
+	const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
+		MEMORY_MAPPED_AREA_SIZE;
+	if (virtualAddress < arenaEnd && rangeEnd > MEMORY_MAPPED_AREA_ADDR)
+		return IsGuestMappedMemoryRangeAccessible(virtualAddress, size);
 	for (auto& itr : g_mmuRanges)
 	{
 		if(!itr->isMapped())
@@ -271,6 +367,115 @@ bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size)
 		}
 	}
 	return false;
+}
+
+std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
+	uint32 size, uint32 alignment, bool writable, std::string& error)
+{
+	error.clear();
+	if (size == 0 || !IsPowerOfTwo(alignment))
+	{
+		error = "mapped-memory size or alignment is invalid";
+		return std::nullopt;
+	}
+	const uint64 pageSize = MemMapper::GetPageSize();
+	if (!IsPowerOfTwo(static_cast<uint32>(pageSize)) ||
+		pageSize > std::numeric_limits<uint32>::max())
+	{
+		error = "host page size is unsupported";
+		return std::nullopt;
+	}
+	const uint64 effectiveAlignment = std::max<uint64>(alignment, pageSize);
+	const uint64 committedSize = AlignUp(size, pageSize);
+	if (committedSize > MEMORY_MAPPED_AREA_SIZE)
+	{
+		error = "mapped-memory request exceeds the Cemu arena";
+		return std::nullopt;
+	}
+
+	std::lock_guard lock(s_guestMappedMemoryMutex);
+	if (!s_guestMappedMemoryReady)
+	{
+		error = "mapped-memory arena is not available for the current title";
+		return std::nullopt;
+	}
+	uint64 candidate = AlignUp(MEMORY_MAPPED_AREA_ADDR, effectiveAlignment);
+	const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
+		MEMORY_MAPPED_AREA_SIZE;
+	for (const auto& [address, record] : s_guestMappedMemory)
+	{
+		if (candidate + committedSize <= address)
+			break;
+		candidate = AlignUp(static_cast<uint64>(address) + record.committedSize,
+			effectiveAlignment);
+	}
+	if (candidate + committedSize > arenaEnd)
+	{
+		error = "Cemu mapped-memory arena is exhausted";
+		return std::nullopt;
+	}
+
+	auto* hostAddress = memory_base + static_cast<uint32>(candidate);
+	if (!MemMapper::AllocateMemory(hostAddress, committedSize,
+		MemMapper::PAGE_PERMISSION::P_RW, true))
+	{
+		error = "unable to commit mapped-memory backing pages";
+		return std::nullopt;
+	}
+	std::memset(hostAddress, 0, committedSize);
+	if (!writable && !MemMapper::SetMemoryPermission(hostAddress, committedSize,
+		MemMapper::PAGE_PERMISSION::P_READ))
+	{
+		(void)MemMapper::FreeMemory(hostAddress, committedSize, true);
+		error = "unable to protect read-only mapped-memory pages";
+		return std::nullopt;
+	}
+	const auto address = static_cast<uint32>(candidate);
+	const bool inserted = s_guestMappedMemory.emplace(address,
+		GuestMappedMemoryRecord{size, static_cast<uint32>(committedSize), writable})
+		.second;
+	if (!inserted)
+	{
+		(void)MemMapper::FreeMemory(hostAddress, committedSize, true);
+		error = "mapped-memory allocator produced a duplicate address";
+		return std::nullopt;
+	}
+	return GuestMappedMemoryAllocation{address, memory_virtualToPhysical(address),
+		size};
+}
+
+bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
+	std::string& error)
+{
+	error.clear();
+	std::lock_guard lock(s_guestMappedMemoryMutex);
+	const auto found = s_guestMappedMemory.find(allocation.address);
+	if (found == s_guestMappedMemory.end() ||
+		allocation.physicalAddress != memory_virtualToPhysical(allocation.address) ||
+		allocation.size != found->second.requestedSize)
+	{
+		error = "mapped-memory allocation does not match a live Cemu range";
+		return false;
+	}
+	auto* hostAddress = memory_base + allocation.address;
+	if (!found->second.writable &&
+		!MemMapper::SetMemoryPermission(hostAddress, found->second.committedSize,
+			MemMapper::PAGE_PERMISSION::P_RW))
+	{
+		error = "unable to make mapped-memory pages writable for zeroing";
+		return false;
+	}
+	std::memset(hostAddress, 0, found->second.committedSize);
+	if (!MemMapper::FreeMemory(hostAddress, found->second.committedSize, true))
+	{
+		if (!found->second.writable)
+			(void)MemMapper::SetMemoryPermission(hostAddress,
+				found->second.committedSize, MemMapper::PAGE_PERMISSION::P_READ);
+		error = "unable to decommit mapped-memory backing pages";
+		return false;
+	}
+	s_guestMappedMemory.erase(found);
+	return true;
 }
 
 uint32 memory_virtualToPhysical(uint32 virtualOffset)

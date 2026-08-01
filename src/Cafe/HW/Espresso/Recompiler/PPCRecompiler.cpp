@@ -104,7 +104,7 @@ namespace
 		~SandboxJitBlock()
 		{
 			if (code)
-				MemMapper::FreeMemory(code, allocationSize);
+				(void)MemMapper::FreeMemory(code, allocationSize);
 		}
 	};
 
@@ -962,7 +962,7 @@ void PPCRecompiler_Shutdown()
 				continue;
 			// deallocate
 			uint64 offset = i * PPC_REC_ALLOC_BLOCK_SIZE;
-			MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), true);
+			(void)MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), true);
 			// mark as unmapped
 			ppcRecompiler_reservedBlockMask[i] = false;
 		}

@@ -20,7 +20,9 @@ namespace MemMapper
 	DWORD GetPageProtection(PAGE_PERMISSION permissionFlags)
 	{
 		DWORD p = 0;
-		if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
+		if (permissionFlags == PAGE_PERMISSION::P_NONE)
+			p = PAGE_NOACCESS;
+		else if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
 			p = PAGE_EXECUTE_READWRITE;
 		else if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && !HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
 			p = PAGE_READWRITE;
@@ -52,12 +54,11 @@ namespace MemMapper
 		return r;
 	}
 
-	void FreeMemory(void* baseAddr, size_t size, bool fromReservation)
+	bool FreeMemory(void* baseAddr, size_t size, bool fromReservation)
 	{
 		if(fromReservation)
-			VirtualFree(baseAddr, size, MEM_DECOMMIT);
-		else
-			VirtualFree(baseAddr, 0, MEM_RELEASE);
+			return VirtualFree(baseAddr, size, MEM_DECOMMIT) != FALSE;
+		return VirtualFree(baseAddr, 0, MEM_RELEASE) != FALSE;
 	}
 
 	bool SetMemoryPermission(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags)

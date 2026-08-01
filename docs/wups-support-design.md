@@ -580,21 +580,25 @@ is published. Notification guest commands which need a GUI adapter remain
 explicitly unsupported; host notification models and logging use the Cemu log
 fallback.
 
-Cemu does not currently expose an owner-scoped allocator which simultaneously
-provides the effective/physical mapping and GX2 lifetime semantics required by
-MemoryMappingModule. The production platform therefore reports mapped memory
-as unsupported, and `ResolveImport` refuses `homebrew_memorymapping` imports
-instead of publishing an API which only returns null. Hardware physical
-addresses are never interpreted as host pointers.
+Cemu reserves a 64 MiB guest window immediately above MEM2, outside every
+normal Cafe range and without reducing the title's default heap, for
+owner-scoped mapped memory. Allocations are page-backed on demand, zeroed before
+publication, and represented by the same effective and physical address under
+Cemu's current 1:1 guest model. The normal renderer upload/cache paths accept
+that extended physical window; Metal's MEM2-only direct host-buffer mode is
+disabled in favour of its device-shared cache. Unallocated and freed pages are
+decommitted. Each live range is registered with its owner generation; free and
+unload first hide the range from new lookups, wait for outstanding access
+leases, verify the full allocation identity, zero the pages, and only then
+decommit them. Consequently the production platform can publish
+`homebrew_memorymapping` without treating hardware physical addresses as host
+pointers.
 
-The production adapter also cannot currently attribute arbitrary WUT heap
-pointers to a plugin owner generation. It therefore withholds the
-`homebrew_wupsbackend` and `homebrew_logging` guest imports, plus the storage,
-config, button-combo, and reent initialization hooks, instead of publishing
-heap-taking APIs whose pointer checks would reject valid plugin allocations.
-Lifecycle calls and later guest callbacks establish an explicit thread-local
-owner-generation scope; the host-export dispatcher rejects calls with a
-missing or mismatched scope even when Cafe has no `ModExecutionContext`.
+The production adapter attributes supported WUT heap pointers through the
+unified owner-scoped heap tracker. Lifecycle calls and later guest callbacks
+establish an explicit thread-local owner-generation scope; the host-export
+dispatcher rejects calls with a missing or mismatched scope even when Cafe has
+no `ModExecutionContext`.
 
 FunctionPatcher accepts the public API version 2 and descriptor struct versions
 2 and 3. It validates descriptor range/alignment, NUL-terminated function name,

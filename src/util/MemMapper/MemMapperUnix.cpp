@@ -19,7 +19,9 @@ namespace MemMapper
 	int GetProt(PAGE_PERMISSION permissionFlags)
 	{
 		int  p = 0;
-		if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
+		if (permissionFlags == PAGE_PERMISSION::P_NONE)
+			p = PROT_NONE;
+		else if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
 			p = PROT_READ | PROT_WRITE | PROT_EXEC;
 		else if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && !HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
 			p = PROT_READ | PROT_WRITE;
@@ -59,12 +61,11 @@ namespace MemMapper
 		return r;
 	}
 
-	void FreeMemory(void* baseAddr, size_t size, bool fromReservation)
+	bool FreeMemory(void* baseAddr, size_t size, bool fromReservation)
 	{
 		if (fromReservation)
-			mprotect(baseAddr, size, PROT_NONE);
-		else
-			munmap(baseAddr, size);
+			return mprotect(baseAddr, size, PROT_NONE) == 0;
+		return munmap(baseAddr, size) == 0;
 	}
 
 	bool SetMemoryPermission(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags)

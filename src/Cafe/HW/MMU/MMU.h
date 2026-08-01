@@ -16,6 +16,21 @@ uint8* memory_getPointerFromPhysicalOffset(uint32 physicalOffset);
 uint32 memory_virtualToPhysical(uint32 virtualOffset);
 uint32 memory_physicalToVirtual(uint32 physicalOffset);
 
+struct GuestMappedMemoryAllocation
+{
+	uint32 address{};
+	uint32 physicalAddress{};
+	uint32 size{};
+};
+
+// Allocates owner-managed guest memory from a dedicated window immediately
+// above MEM2. The returned range is page-backed only for its lifetime and uses
+// Cemu's current 1:1 effective/physical address model.
+std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
+	uint32 size, uint32 alignment, bool writable, std::string& error);
+bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
+	std::string& error);
+
 extern uint8* memory_base; // points to base of PowerPC address space
 
 enum class MMU_MEM_AREA_ID
@@ -155,6 +170,12 @@ bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size);
 
 #define MEMORY_DATA_AREA_ADDR				(0x10000000)
 #define MEMORY_DATA_AREA_SIZE				(0x40000000)
+
+// A bounded guest window outside every normal Cafe range. Keeping this above
+// MEM2 preserves the title's full default heap while giving mapped GX2
+// resources unique physical identities inside Cemu.
+#define MEMORY_MAPPED_AREA_ADDR				(0x50000000)
+#define MEMORY_MAPPED_AREA_SIZE				(0x10000000)
 
 #define MEMORY_FGBUCKET_AREA_ADDR			(0xE0000000) // actual offset is 0xE0000000 according to PPC kernel
 #define MEMORY_FGBUCKET_AREA_SIZE			(0x04000000) // 64MB split up into multiple subareas, size is verified with value from PPC kernel

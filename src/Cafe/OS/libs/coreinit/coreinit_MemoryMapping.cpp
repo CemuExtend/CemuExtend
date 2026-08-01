@@ -161,7 +161,7 @@ namespace coreinit
 
 		uint8* virtualPtr = memory_getPointerFromVirtualOffset(virtualAddress);
 
-		MemMapper::FreeMemory(virtualPtr, size, true);
+		(void)MemMapper::FreeMemory(virtualPtr, size, true);
 		return 1;
 	}
 

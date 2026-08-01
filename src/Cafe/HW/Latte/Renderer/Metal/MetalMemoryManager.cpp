@@ -63,6 +63,18 @@ void MetalMemoryManager::InitBufferCache(size_t size)
         }
     }
 
+    // Host mode imports only MEM2 as one Metal buffer. Cemu's owner-scoped
+    // mapped-memory window intentionally lives above MEM2, so that mode cannot
+    // represent every valid GX2 physical address. Use the normal cache path,
+    // which uploads from memory_getPointerFromPhysicalOffset() and therefore
+    // supports both MEM2 and mapped allocations.
+    if (m_metalBufferCacheMode == MetalBufferCacheMode::Host)
+    {
+        cemuLog_log(LogType::Force,
+            "Metal host buffer cache is incompatible with extended mapped memory; using device shared mode");
+        m_metalBufferCacheMode = MetalBufferCacheMode::DeviceShared;
+    }
+
     // First, try to import the host memory as a buffer
     if (m_metalBufferCacheMode == MetalBufferCacheMode::Host)
     {

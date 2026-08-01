@@ -377,7 +377,7 @@ struct AromaRuntimeOptions
 	std::function<void(cemuextend_hle::Cex2Owner&)> closeCex2Owner;
 	std::size_t maximumStorageBytes{1024U * 1024U};
 	std::size_t maximumStorageItems{1024};
-	std::size_t maximumMappedBytes{64U * 1024U * 1024U};
+	std::size_t maximumMappedBytes{256U * 1024U * 1024U};
 	std::size_t maximumNotifications{64};
 };
 

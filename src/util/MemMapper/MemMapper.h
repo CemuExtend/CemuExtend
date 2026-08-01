@@ -21,5 +21,6 @@ namespace MemMapper
 
 	void* AllocateMemory(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags, bool fromReservation = false);
 	bool SetMemoryPermission(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags);
-	void FreeMemory(void* baseAddr, size_t size, bool fromReservation = false);
+	[[nodiscard]] bool FreeMemory(void* baseAddr, size_t size,
+		bool fromReservation = false);
 };

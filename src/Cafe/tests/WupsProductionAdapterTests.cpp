@@ -3,6 +3,7 @@
 #include "Cafe/HW/Espresso/WupsServices.h"
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
+#include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MEM_ExpHeap.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
@@ -21,6 +22,7 @@ namespace
 	std::uint32_t s_nextCodeCave{0x10000};
 	std::mutex s_fakeMutex;
 	std::set<std::uint32_t> s_allocations;
+	std::map<std::uint32_t, GuestMappedMemoryAllocation> s_mappedAllocations;
 	OSThread_t s_thread{};
 }
 
@@ -45,6 +47,48 @@ bool memory_isAddressRangeAccessible(MPTR address, uint32 size)
 {
 	return size != 0 && address < s_memory.size() &&
 		size <= s_memory.size() - address;
+}
+std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
+	uint32 size, uint32 alignment, bool, std::string& error)
+{
+	std::lock_guard lock(s_fakeMutex);
+	if (size == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0)
+	{
+		error = "invalid test mapped-memory request";
+		return std::nullopt;
+	}
+	std::uint32_t address = (0x30000U + alignment - 1) & ~(alignment - 1);
+	for (const auto& [base, allocation] : s_mappedAllocations)
+	{
+		if (static_cast<std::uint64_t>(address) + size <= base)
+			break;
+		address = (base + allocation.size + alignment - 1) & ~(alignment - 1);
+	}
+	if (address >= s_memory.size() || size > s_memory.size() - address)
+	{
+		error = "test mapped-memory arena exhausted";
+		return std::nullopt;
+	}
+	std::memset(s_memory.data() + address, 0, size);
+	GuestMappedMemoryAllocation allocation{address, address, size};
+	s_mappedAllocations.emplace(address, allocation);
+	return allocation;
+}
+bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
+	std::string& error)
+{
+	std::lock_guard lock(s_fakeMutex);
+	const auto found = s_mappedAllocations.find(allocation.address);
+	if (found == s_mappedAllocations.end() ||
+		found->second.physicalAddress != allocation.physicalAddress ||
+		found->second.size != allocation.size)
+	{
+		error = "test mapped-memory allocation mismatch";
+		return false;
+	}
+	std::memset(s_memory.data() + allocation.address, 0, allocation.size);
+	s_mappedAllocations.erase(found);
+	return true;
 }
 uint8* memory_getPointerFromVirtualOffset(uint32 address)
 {
@@ -109,7 +153,7 @@ int main()
 {
 	auto platform = CreateCemuWupsPlatform();
 	CHECK(platform);
-	CHECK(!platform->SupportsMappedMemory());
+	CHECK(platform->SupportsMappedMemory());
 	// The production adapter now wires the unified ownership registry and heap
 	// tracker, so owner-scoped heap pointers are supported.
 	CHECK(platform->SupportsOwnerScopedHeapPointers());
@@ -228,9 +272,31 @@ int main()
 
 	WupsMappedMemoryInfo allocation;
 	error.clear();
-	CHECK(!platform->AllocateMappedMemory({72, 1}, 4096, 4096, true,
-		WupsMappedMemoryPurpose::Cpu, error));
-	CHECK(error.find("unavailable") != std::string::npos);
+	const auto mapped = platform->AllocateMappedMemory({73, 1}, 0x1800, 0x1000,
+		true, WupsMappedMemoryPurpose::Gx2, error);
+	CHECK(mapped);
+	CHECK((mapped->address & 0xfffU) == 0);
+	CHECK(mapped->physicalAddress == mapped->address);
+	CHECK(mapped->size == 0x1800 && mapped->alignment == 0x1000);
+	CHECK(mapped->writable && mapped->purpose == WupsMappedMemoryPurpose::Gx2);
+	CHECK(platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
+		mapped->size, WupsGuestAccess::Read));
+	CHECK(platform->ValidateGuestRangeForOwner({73, 1}, mapped->address + 4,
+		16, WupsGuestAccess::Write));
+	CHECK(!platform->ValidateGuestRangeForOwner({74, 1}, mapped->address,
+		4, WupsGuestAccess::Read));
+	CHECK(!platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
+		4, WupsGuestAccess::Execute));
+	error.clear();
+	CHECK(!platform->FreeMappedMemory({74, 1}, *mapped, error));
+	CHECK(error.find("owner") != std::string::npos);
+	CHECK(platform->FreeMappedMemory({73, 1}, *mapped, error));
+	CHECK(s_mappedAllocations.empty());
+	CHECK(!platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
+		4, WupsGuestAccess::Read));
+	error.clear();
+	CHECK(!platform->FreeMappedMemory({73, 1}, *mapped, error));
+	CHECK(error.find("owner") != std::string::npos);
 
 	platform->CancelCpuTasks({71, 2});
 	platform->ReleaseOwnerExports({71, 2});

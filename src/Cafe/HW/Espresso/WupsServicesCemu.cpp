@@ -207,6 +207,17 @@ namespace
 			// the tracker.
 			cafe::wups::SetActiveHeapTracker(nullptr);
 			cafe::wups::SetActivePluginHeap(nullptr);
+			std::vector<std::pair<WupsOwnerToken, WupsMappedMemoryInfo>> mappings;
+			{
+				std::lock_guard lock(m_mutex);
+				for (const auto& [address, allocation] : m_mappedAllocations)
+					mappings.emplace_back(allocation.owner, allocation.info);
+			}
+			for (const auto& [owner, allocation] : mappings)
+			{
+				std::string ignored;
+				(void)FreeMappedMemory(owner, allocation, ignored);
+			}
 			std::vector<WupsOwnerToken> owners;
 			{
 				std::lock_guard lock(m_mutex);
@@ -308,9 +319,18 @@ namespace
 			std::span<std::byte> output) const override
 		{
 			if (output.empty() || output.size() >
-				std::numeric_limits<std::uint32_t>::max() ||
-				!ValidateGuestRange(address, static_cast<std::uint32_t>(output.size()),
-					WupsGuestAccess::Read))
+				std::numeric_limits<std::uint32_t>::max())
+				return false;
+			const auto size = static_cast<std::uint32_t>(output.size());
+			std::optional<WupsGuestRangeLease> lease;
+			if (s_dispatchOwner && m_ownershipRegistry)
+			{
+				std::string ignored;
+				lease = m_ownershipRegistry->PinRange(*s_dispatchOwner, address, size,
+					WupsGuestAccess::Read, WupsGuestPointerPolicy::AnyOwnedMemory,
+					ignored);
+			}
+			if (!lease && !ValidateGuestRange(address, size, WupsGuestAccess::Read))
 				return false;
 			std::memcpy(output.data(), memory_getPointerFromVirtualOffset(address),
 				output.size());
@@ -321,9 +341,18 @@ namespace
 			std::span<const std::byte> input) override
 		{
 			if (input.empty() || input.size() >
-				std::numeric_limits<std::uint32_t>::max() ||
-				!ValidateGuestRange(address, static_cast<std::uint32_t>(input.size()),
-					WupsGuestAccess::Write))
+				std::numeric_limits<std::uint32_t>::max())
+				return false;
+			const auto size = static_cast<std::uint32_t>(input.size());
+			std::optional<WupsGuestRangeLease> lease;
+			if (s_dispatchOwner && m_ownershipRegistry)
+			{
+				std::string ignored;
+				lease = m_ownershipRegistry->PinRange(*s_dispatchOwner, address, size,
+					WupsGuestAccess::Write,
+					WupsGuestPointerPolicy::WritableOwnedMemory, ignored);
+			}
+			if (!lease && !ValidateGuestRange(address, size, WupsGuestAccess::Write))
 				return false;
 			std::memcpy(memory_getPointerFromVirtualOffset(address), input.data(),
 				input.size());
@@ -524,7 +553,10 @@ namespace
 			// callable or captured RAII state when this method returns.
 		}
 
-		bool SupportsMappedMemory() const override { return false; }
+		bool SupportsMappedMemory() const override
+		{
+			return m_ownershipRegistry != nullptr;
+		}
 		// Heap-taking ABIs are honoured once the unified ownership registry and
 		// owner-scoped heap tracker are wired: every pointer they accept has its
 		// owner/generation proven against a registered range, and anything
@@ -555,18 +587,130 @@ namespace
 		}
 
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(
-			WupsOwnerToken, std::uint32_t, std::uint32_t, bool,
-			WupsMappedMemoryPurpose, std::string& error) override
+			WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,
+			bool writable, WupsMappedMemoryPurpose purpose,
+			std::string& error) override
 		{
-			error = "Cemu mapped-memory effective/physical allocator is unavailable";
-			return std::nullopt;
+			error.clear();
+			if (!ValidOwner(owner, error) || size == 0 ||
+				!IsPowerOfTwo(alignment) || alignment > 1024U * 1024U ||
+				!m_ownershipRegistry)
+			{
+				if (error.empty()) error = "invalid WUPS mapped-memory allocation";
+				return std::nullopt;
+			}
+			auto backing = memory_allocateMappedMemory(size, alignment, writable,
+				error);
+			if (!backing)
+				return std::nullopt;
+			WupsMappedMemoryInfo info{
+				backing->address,
+				backing->physicalAddress,
+				backing->size,
+				alignment,
+				writable,
+				purpose,
+			};
+			WupsOwnedGuestRange ownedRange;
+			ownedRange.owner = owner;
+			ownedRange.base = info.address;
+			ownedRange.size = info.size;
+			ownedRange.kind = purpose == WupsMappedMemoryPurpose::Gx2 ?
+				WupsOwnedRangeKind::MappedGx2 : WupsOwnedRangeKind::MappedCpu;
+			ownedRange.readable = true;
+			ownedRange.writable = writable;
+			ownedRange.executable = false;
+			ownedRange.heapEligible = false;
+			ownedRange.acceptsInteriorPointers = true;
+			ownedRange.activelyReleasedOnUnload = true;
+			auto rangeId = m_ownershipRegistry->RegisterRange(ownedRange, error);
+			if (!rangeId)
+			{
+				std::string ignored;
+				(void)memory_freeMappedMemory(*backing, ignored);
+				return std::nullopt;
+			}
+			if (!m_ownershipRegistry->CommitRange(*rangeId, error))
+			{
+				std::string ignored;
+				(void)m_ownershipRegistry->UnregisterRange(*rangeId, ignored);
+				(void)memory_freeMappedMemory(*backing, ignored);
+				return std::nullopt;
+			}
+			{
+				std::lock_guard lock(m_mutex);
+				if (!m_mappedAllocations.emplace(info.address,
+					MappedAllocation{owner, info, *rangeId}).second)
+				{
+					std::string ignored;
+					(void)m_ownershipRegistry->RetireRangeAndWait(*rangeId, ignored);
+					(void)memory_freeMappedMemory(*backing, ignored);
+					error = "Cemu returned a duplicate mapped-memory address";
+					return std::nullopt;
+				}
+			}
+			return info;
 		}
 
-		bool FreeMappedMemory(WupsOwnerToken,
-			const WupsMappedMemoryInfo&, std::string& error) override
+		bool FreeMappedMemory(WupsOwnerToken owner,
+			const WupsMappedMemoryInfo& allocation, std::string& error) override
 		{
-			error = "Cemu mapped-memory allocator is unavailable";
-			return false;
+			error.clear();
+			std::uint64_t rangeId{};
+			bool ownershipRetired{};
+			{
+				std::lock_guard lock(m_mutex);
+				const auto found = m_mappedAllocations.find(allocation.address);
+				if (found == m_mappedAllocations.end() ||
+					found->second.owner != owner || found->second.info.address != allocation.address ||
+					found->second.info.physicalAddress != allocation.physicalAddress ||
+					found->second.info.size != allocation.size ||
+					found->second.info.alignment != allocation.alignment ||
+					found->second.info.writable != allocation.writable ||
+					found->second.info.purpose != allocation.purpose)
+				{
+					error = "mapped-memory free does not match its owner and allocation";
+					return false;
+				}
+				if (found->second.freeing)
+				{
+					error = "mapped-memory allocation is already being freed";
+					return false;
+				}
+				found->second.freeing = true;
+				rangeId = found->second.rangeId;
+				ownershipRetired = found->second.ownershipRetired;
+			}
+			if (!ownershipRetired &&
+				!m_ownershipRegistry->RetireRangeAndWait(rangeId, error))
+			{
+				std::lock_guard lock(m_mutex);
+				if (auto found = m_mappedAllocations.find(allocation.address);
+					found != m_mappedAllocations.end())
+					found->second.freeing = false;
+				return false;
+			}
+			{
+				std::lock_guard lock(m_mutex);
+				if (auto found = m_mappedAllocations.find(allocation.address);
+					found != m_mappedAllocations.end())
+					found->second.ownershipRetired = true;
+			}
+			const GuestMappedMemoryAllocation backing{
+				allocation.address, allocation.physicalAddress, allocation.size};
+			if (!memory_freeMappedMemory(backing, error))
+			{
+				std::lock_guard lock(m_mutex);
+				if (auto found = m_mappedAllocations.find(allocation.address);
+					found != m_mappedAllocations.end())
+					found->second.freeing = false;
+				return false;
+			}
+			{
+				std::lock_guard lock(m_mutex);
+				m_mappedAllocations.erase(allocation.address);
+			}
+			return true;
 		}
 
 		void ShowNotification(WupsOwnerToken owner,
@@ -597,6 +741,14 @@ namespace
 			std::uint32_t size{};
 			AllocationKind kind{};
 		};
+		struct MappedAllocation
+		{
+			WupsOwnerToken owner;
+			WupsMappedMemoryInfo info;
+			std::uint64_t rangeId{};
+			bool freeing{};
+			bool ownershipRetired{};
+		};
 
 		bool ValidOwner(WupsOwnerToken owner, std::string& error) const
 		{
@@ -615,7 +767,10 @@ namespace
 					const bool hasOldAllocations = std::ranges::any_of(
 						m_allocations, [&](const auto& entry) {
 							return entry.second.owner.owner == owner.owner;
-						});
+						}) || std::ranges::any_of(m_mappedAllocations,
+							[&](const auto& entry) {
+								return entry.second.owner.owner == owner.owner;
+							});
 					if (hasOldAllocations)
 					{
 						error = "WUPS owner has live resources from an older generation";
@@ -636,6 +791,7 @@ namespace
 		mutable std::unordered_map<std::uint64_t, std::uint32_t>
 			m_latestGeneration;
 		std::map<std::uint32_t, Allocation> m_allocations;
+		std::map<std::uint32_t, MappedAllocation> m_mappedAllocations;
 		std::shared_ptr<WupsGuestMemoryOwnershipRegistry> m_ownershipRegistry;
 		std::shared_ptr<WupsOwnerScopedHeapTracker> m_heapTracker;
 		std::shared_ptr<WupsPluginHeap> m_pluginHeap;

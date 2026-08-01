@@ -155,6 +155,11 @@ public:
 	// released.
 	[[nodiscard]] bool UnregisterRange(std::uint64_t rangeId, std::string& error);
 
+	// Hides a range from new lookups and waits for every existing lease before
+	// removing it. Backing storage may be reclaimed only after this returns.
+	[[nodiscard]] bool RetireRangeAndWait(std::uint64_t rangeId,
+		std::string& error);
+
 	// Pins the most specific live range owned by `owner` that fully contains
 	// [address, address+size) and satisfies `access` and `policy`. Returns an
 	// empty optional (and sets error) on any mismatch.

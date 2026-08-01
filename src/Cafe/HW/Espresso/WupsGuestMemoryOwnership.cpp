@@ -430,6 +430,30 @@ bool WupsGuestMemoryOwnershipRegistry::UnregisterRange(std::uint64_t rangeId,
 	return true;
 }
 
+bool WupsGuestMemoryOwnershipRegistry::RetireRangeAndWait(
+	std::uint64_t rangeId, std::string& error)
+{
+	std::unique_lock lock(m_impl->mutex);
+	auto found = m_impl->ranges.find(rangeId);
+	if (found == m_impl->ranges.end())
+	{
+		error = "ownership range does not exist";
+		return false;
+	}
+	found->second.state = WupsOwnedRangeState::Retiring;
+	m_impl->pinCv.wait(lock, [&] {
+		const auto current = m_impl->ranges.find(rangeId);
+		return current == m_impl->ranges.end() || current->second.pinCount == 0;
+	});
+	found = m_impl->ranges.find(rangeId);
+	if (found != m_impl->ranges.end())
+	{
+		m_impl->tree.Erase({found->second.base, rangeId});
+		m_impl->ranges.erase(found);
+	}
+	return true;
+}
+
 std::optional<WupsGuestRangeLease> WupsGuestMemoryOwnershipRegistry::PinRange(
 	WupsOwnerToken owner, std::uint32_t address, std::uint32_t size,
 	WupsGuestAccess access, WupsGuestPointerPolicy policy, std::string& error)
