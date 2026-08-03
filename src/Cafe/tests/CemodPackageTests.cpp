@@ -348,6 +348,36 @@ void TestV3PluginManagementPermission()
 	std::filesystem::remove(path);
 }
 
+void TestV3Mem2ExpansionRequest()
+{
+	std::string v3(kWupsManifest);
+	v3.replace(v3.find("\"package_version\":2"),
+		std::string_view("\"package_version\":2").size(),
+		"\"package_version\":3");
+	const auto payload = v3.find("\n \"payload\"");
+	CHECK(payload != std::string::npos);
+	v3.insert(payload, "\n \"memory\":{\"mem2_expansion_bytes\":268435456},");
+	std::string error;
+	auto path = PackagePath("wups-v3-mem2");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+		{"manifest.json", Bytes(v3)}});
+	auto package = CemodPackage::Load(path, 0x0005000012345678ULL, error);
+	CHECK(package.has_value());
+	CHECK(package->manifest.mem2ExpansionBytes == 256U * 1024U * 1024U);
+	std::filesystem::remove(path);
+
+	std::string v2(kWupsManifest);
+	const auto v2Payload = v2.find("\n \"payload\"");
+	CHECK(v2Payload != std::string::npos);
+	v2.insert(v2Payload, "\n \"memory\":{\"mem2_expansion_bytes\":4096},");
+	path = PackagePath("wups-v2-mem2-rejected");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+		{"manifest.json", Bytes(v2)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("package_version 3") != std::string::npos);
+	std::filesystem::remove(path);
+}
+
 void TestPayloadAndZipRejections()
 {
 	std::string error;
@@ -419,6 +449,7 @@ int main()
 	TestTrustedValidation();
 	TestV2PayloadAndManifest();
 	TestV3PluginManagementPermission();
+	TestV3Mem2ExpansionRequest();
 	TestPayloadAndZipRejections();
 	return 0;
 }

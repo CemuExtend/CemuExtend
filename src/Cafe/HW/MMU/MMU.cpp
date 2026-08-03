@@ -5,6 +5,8 @@
 #include "util/MemMapper/MemMapper.h"
 #include "config/ActiveSettings.h"
 
+#include <algorithm>
+
 uint8* memory_base = NULL; // base address of the reserved 4GB space
 uint8* memory_elfCodeArena = NULL;
 
@@ -20,6 +22,11 @@ namespace
 	std::mutex s_guestMappedMemoryMutex;
 	std::map<uint32, GuestMappedMemoryRecord> s_guestMappedMemory;
 	bool s_guestMappedMemoryReady{};
+	uint32 s_requestedMem2End = MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE;
+
+	static_assert(MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE < MEMORY_MAPPED_AREA_ADDR);
+	static_assert(static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) + MEMORY_MAPPED_AREA_SIZE ==
+		MEMORY_OVERLAY_AREA_OFFSET);
 
 	[[nodiscard]] uint64 AlignUp(uint64 value, uint64 alignment)
 	{
@@ -98,6 +105,24 @@ void checkMemAlloc(void* result)
 {
 	if (result == nullptr)
 		assert_dbg();
+}
+
+bool memory_requestMem2End(uint32 endAddress, std::string& error)
+{
+	error.clear();
+	constexpr uint32 defaultEnd = MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE;
+	if (mmuRange_MEM2.isMapped())
+	{
+		error = "MEM2 requests must be made before the title memory map is created";
+		return false;
+	}
+	if ((endAddress & 0xFFF) != 0 || endAddress < defaultEnd || endAddress > MEMORY_MAPPED_AREA_ADDR)
+	{
+		error = "MEM2 end is outside the supported page-aligned range";
+		return false;
+	}
+	s_requestedMem2End = endAddress;
+	return true;
 }
 
 void memory_initPhysicalLayout()
@@ -243,6 +268,23 @@ void memory_mapForCurrentTitle()
 			itr->resetConfig();
 	// expand ranges
 	auto gfxPackMappings = GraphicPack2::GetActiveRAMMappings();
+	constexpr uint32 defaultMem2End = MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE;
+	const uint32 requestedMem2End = s_requestedMem2End;
+	s_requestedMem2End = defaultMem2End;
+	if (requestedMem2End > defaultMem2End)
+	{
+		bool merged{};
+		for (auto& mapping : gfxPackMappings)
+		{
+			if (mapping.first != MEMORY_DATA_AREA_ADDR)
+				continue;
+			mapping.second = std::max(mapping.second, requestedMem2End);
+			merged = true;
+			break;
+		}
+		if (!merged)
+			gfxPackMappings.emplace_back(MEMORY_DATA_AREA_ADDR, requestedMem2End);
+	}
 	for (auto& mapping : gfxPackMappings)
 	{
 		MMURange* mmuRange = nullptr;

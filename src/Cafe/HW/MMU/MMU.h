@@ -5,6 +5,11 @@ void memory_mapForCurrentTitle();
 void memory_unmapForCurrentTitle();
 void memory_logModifiedMemoryRanges();
 
+// Stages an opt-in MEM2 end for the next title mapping. The request is
+// consumed by memory_mapForCurrentTitle() and can only use the gap before the
+// owner-managed mapped-memory window.
+bool memory_requestMem2End(uint32 endAddress, std::string& error);
+
 void memory_enableOverlayArena();
 void memory_enableHBLELFCodeArea();
 uint32 memory_getVirtualOffsetFromPointer(void* ptr);
@@ -171,11 +176,12 @@ bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size);
 #define MEMORY_DATA_AREA_ADDR				(0x10000000)
 #define MEMORY_DATA_AREA_SIZE				(0x40000000)
 
-// A bounded guest window outside every normal Cafe range. Keeping this above
-// MEM2 preserves the title's full default heap while giving mapped GX2
-// resources unique physical identities inside Cemu.
-#define MEMORY_MAPPED_AREA_ADDR				(0x50000000)
-#define MEMORY_MAPPED_AREA_SIZE				(0x10000000)
+// Owner-managed GX2 resources live after the largest supported opt-in MEM2
+// mapping and before the optional overlay arena. Pages are committed on
+// demand, so reserving this 1 GiB guest window does not eagerly consume 1 GiB
+// of host memory.
+#define MEMORY_MAPPED_AREA_ADDR				(0x60000000)
+#define MEMORY_MAPPED_AREA_SIZE				(0x40000000)
 
 #define MEMORY_FGBUCKET_AREA_ADDR			(0xE0000000) // actual offset is 0xE0000000 according to PPC kernel
 #define MEMORY_FGBUCKET_AREA_SIZE			(0x04000000) // 64MB split up into multiple subareas, size is verified with value from PPC kernel

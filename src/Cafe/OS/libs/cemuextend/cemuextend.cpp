@@ -71,16 +71,29 @@ namespace cemuextend_hle
 			auto* owner = CurrentOwner(hCPU);
 			if (!owner)
 				return Return(hCPU, wire::Error::PermissionDenied);
-			if (hCPU->gpr[5] < sizeof(transport::Info))
+			std::uint32_t outputSize{};
+			switch (static_cast<transport::Query>(hCPU->gpr[3]))
+			{
+			case transport::Query::Info:
+				outputSize = sizeof(transport::Info);
+				break;
+			case transport::Query::MemoryLayout:
+				outputSize = sizeof(transport::MemoryLayout);
+				break;
+			default:
+				return Return(hCPU, wire::Error::NotSupported);
+			}
+			if (hCPU->gpr[5] < outputSize)
 				return Return(hCPU, wire::Error::InvalidArgument);
-			auto* output = ResolveGuest<ModMemoryPermission::Write>(hCPU, hCPU->gpr[4], sizeof(transport::Info));
+			auto* output = ResolveGuest<ModMemoryPermission::Write>(
+				hCPU, hCPU->gpr[4], outputSize);
 			if (!output)
 				return Return(hCPU, wire::Error::InvalidArgument);
 			std::array<std::byte, sizeof(transport::Info)> hostOutput{};
 			const auto result = static_cast<wire::Error>(Cex2Host::Instance().Query(
-				*owner, hCPU->gpr[3], hostOutput));
+				*owner, hCPU->gpr[3], {hostOutput.data(), outputSize}));
 			if (result == wire::Error::Ok)
-				std::memcpy(output, hostOutput.data(), hostOutput.size());
+				std::memcpy(output, hostOutput.data(), outputSize);
 			Return(hCPU, result);
 		}
 
@@ -296,7 +309,9 @@ namespace cemuextend_hle
 			}
 			result.push_back({path, package->manifest.modId, package->principal,
 				package->manifest.requestedPermissions, package->manifest.executionMode,
-				package->signedPackage, package->manifest.titleIds, {}});
+				package->signedPackage, package->manifest.titleIds, {},
+				package->manifest.mem2ExpansionBytes,
+				package->manifest.nativePermissions.mappedMemory});
 		}
 		return result;
 	}
@@ -311,6 +326,40 @@ namespace cemuextend_hle
 				result.push_back(std::move(package));
 		}
 		return result;
+	}
+
+	void ConfigureMemoryForTitle(std::uint64_t titleId)
+	{
+		std::uint32_t expansionBytes{};
+		std::string requestingMod;
+		for (const auto& package : DiscoverCemods(titleId))
+		{
+			if (!package.error.empty() ||
+				package.executionMode != CemodExecutionMode::TrustedNative ||
+				!package.mappedMemory || package.mem2ExpansionBytes == 0)
+				continue;
+			const auto grant = ResolveCemodGrant(titleId, package.modId,
+				package.principal, package.requestedPermissions & kCemodPermissionMask);
+			if (!grant.approved || package.mem2ExpansionBytes <= expansionBytes)
+				continue;
+			expansionBytes = package.mem2ExpansionBytes;
+			requestingMod = package.modId;
+		}
+
+		constexpr std::uint32_t defaultMem2End =
+			MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE;
+		std::string error;
+		if (!memory_requestMem2End(defaultMem2End + expansionBytes, error))
+		{
+			cemuLog_log(LogType::Force,
+				"CemuExtend rejected the MEM2 request for title {:016x}: {}",
+				titleId, error);
+			return;
+		}
+		if (expansionBytes != 0)
+			cemuLog_log(LogType::Force,
+				"CemuExtend: '{}' requested {} MiB of additional MEM2 for title {:016x}",
+				requestingMod, expansionBytes / (1024U * 1024U), titleId);
 	}
 
 	std::vector<CemodPermissionRequest> PendingCemodPermissionRequests(std::uint64_t titleId)

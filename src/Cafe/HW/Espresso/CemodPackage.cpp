@@ -396,10 +396,34 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	}
 	if (manifest.executionMode == CemodExecutionMode::TrustedNative)
 	{
-		if (document.HasMember("memory") || document.HasMember("cpu") || document.HasMember("entrypoint"))
+		if (document.HasMember("cpu") || document.HasMember("entrypoint"))
 		{
 			error = "trusted_native manifests must not contain isolated resource or lifecycle fields";
 			return false;
+		}
+		if (document.HasMember("memory"))
+		{
+			if (manifest.packageVersion < 3 || !document["memory"].IsObject())
+			{
+				error = "trusted_native memory requests require package_version 3";
+				return false;
+			}
+			const auto& memory = document["memory"];
+			if (memory.MemberCount() != 1 || !memory.HasMember("mem2_expansion_bytes") ||
+				!memory["mem2_expansion_bytes"].IsUint())
+			{
+				error = "trusted_native memory must contain only mem2_expansion_bytes";
+				return false;
+			}
+			manifest.mem2ExpansionBytes = memory["mem2_expansion_bytes"].GetUint();
+			constexpr std::uint32_t maximumExpansion = 256U * 1024U * 1024U;
+			if (manifest.mem2ExpansionBytes == 0 ||
+				manifest.mem2ExpansionBytes > maximumExpansion ||
+				(manifest.mem2ExpansionBytes & 0xFFFU) != 0)
+			{
+				error = "mem2_expansion_bytes must be page-aligned and at most 256 MiB";
+				return false;
+			}
 		}
 		manifest.codeBytes = 8U * 1024U * 1024U;
 		return true;

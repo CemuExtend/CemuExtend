@@ -100,7 +100,21 @@ void TestOwnershipCopyAndCancel()
 		static_cast<std::int32_t>(Error::Ok));
 	const auto& info = *reinterpret_cast<const cemuextend::transport::Info*>(infoBytes.data());
 	CHECK(info.abiMajor.get() == 2);
+	CHECK(info.abiMinor.get() == 3);
 	CHECK(info.maximumMessageSize.get() == 64U * 1024U);
+	CHECK((info.features.get() & static_cast<std::uint64_t>(
+		cemuextend::transport::Feature::MemoryLayoutQuery)) != 0);
+
+	std::array<std::byte, sizeof(cemuextend::transport::MemoryLayout)> layoutBytes{};
+	CHECK(host.Query(first,
+		static_cast<std::uint32_t>(cemuextend::transport::Query::MemoryLayout),
+		layoutBytes) == static_cast<std::int32_t>(Error::Ok));
+	const auto& layout =
+		*reinterpret_cast<const cemuextend::transport::MemoryLayout*>(layoutBytes.data());
+	CHECK(layout.mem2Base.get() == 0x10000000);
+	CHECK(layout.mem2End.get() == 0x50000000);
+	CHECK(layout.mappedMemoryBase.get() == 0x60000000);
+	CHECK(layout.mappedMemoryEnd.get() == 0xa0000000);
 
 	const auto session = Open(host, first);
 	const cemuextend::wire::Be64 cookie{0x1122334455667788ULL};

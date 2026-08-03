@@ -72,6 +72,7 @@ struct CemodManifest
 	std::uint32_t stackBytes{};
 	std::uint32_t instructionsPerFrame{};
 	std::uint32_t timeMicrosecondsPerFrame{};
+	std::uint32_t mem2ExpansionBytes{};
 	std::string entrypoint;
 };
 

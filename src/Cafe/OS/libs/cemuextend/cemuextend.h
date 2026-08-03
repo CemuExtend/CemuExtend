@@ -23,6 +23,8 @@ struct CemodPackageInfo
 	bool signedPackage{};
 	std::vector<std::uint64_t> titleIds;
 	std::string error;
+	std::uint32_t mem2ExpansionBytes{};
+	bool mappedMemory{};
 };
 
 struct CemodPermissionRequest
@@ -45,6 +47,7 @@ namespace cemuextend_hle
 	std::vector<CemodPackageInfo> DiscoverCemodCatalog();
 	std::vector<CemodPackageInfo> DiscoverCemods(std::uint64_t titleId);
 	std::vector<CemodPermissionRequest> PendingCemodPermissionRequests(std::uint64_t titleId);
+	void ConfigureMemoryForTitle(std::uint64_t titleId);
 	void LoadCemodsForTitle(std::uint64_t titleId);
 	// Called from coreinit_start on the application's PPC thread, once heaps are ready
 	// and before the title entrypoint runs, to start WUPS plugins in guest context.

@@ -6,6 +6,7 @@
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #ifndef CEMU_CEX2_TESTING
+#include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
@@ -799,9 +800,30 @@ Cex2Host::~Cex2Host() = default;
 std::int32_t Cex2Host::Query(Cex2Owner& owner, std::uint32_t query,
 	std::span<std::byte> output)
 {
-	if (owner.IsStopped() || query != static_cast<std::uint32_t>(cemuextend::transport::Query::Info) ||
-		output.size() < sizeof(cemuextend::transport::Info))
+	if (owner.IsStopped())
 		return static_cast<std::int32_t>(Error::InvalidArgument);
+	if (query == static_cast<std::uint32_t>(cemuextend::transport::Query::MemoryLayout))
+	{
+		if (output.size() < sizeof(cemuextend::transport::MemoryLayout))
+			return static_cast<std::int32_t>(Error::InvalidArgument);
+		cemuextend::transport::MemoryLayout layout{};
+#ifdef CEMU_CEX2_TESTING
+		layout.mem2Base = 0x10000000;
+		layout.mem2End = 0x50000000;
+		layout.mappedMemoryBase = 0x60000000;
+		layout.mappedMemoryEnd = 0xa0000000;
+#else
+		layout.mem2Base = mmuRange_MEM2.getBase();
+		layout.mem2End = mmuRange_MEM2.getEnd();
+		layout.mappedMemoryBase = MEMORY_MAPPED_AREA_ADDR;
+		layout.mappedMemoryEnd = MEMORY_MAPPED_AREA_ADDR + MEMORY_MAPPED_AREA_SIZE;
+#endif
+		std::memcpy(output.data(), &layout, sizeof(layout));
+		return static_cast<std::int32_t>(Error::Ok);
+	}
+	if (query != static_cast<std::uint32_t>(cemuextend::transport::Query::Info) ||
+		output.size() < sizeof(cemuextend::transport::Info))
+		return static_cast<std::int32_t>(Error::NotSupported);
 	cemuextend::transport::Info info{};
 	info.abiMajor = cemuextend::transport::kAbiMajor;
 	info.abiMinor = cemuextend::transport::kAbiMinor;
@@ -812,7 +834,8 @@ std::int32_t Cex2Host::Query(Cex2Owner& owner, std::uint32_t query,
 	info.features = static_cast<std::uint64_t>(cemuextend::transport::Feature::CopyTransport) |
 		static_cast<std::uint64_t>(cemuextend::transport::Feature::Cancellation) |
 		static_cast<std::uint64_t>(cemuextend::transport::Feature::Pagination) |
-		static_cast<std::uint64_t>(cemuextend::transport::Feature::PermissionRevocation);
+		static_cast<std::uint64_t>(cemuextend::transport::Feature::PermissionRevocation) |
+		static_cast<std::uint64_t>(cemuextend::transport::Feature::MemoryLayoutQuery);
 	info.coreServiceVersion = 1;
 	std::memcpy(output.data(), &info, sizeof(info));
 	return static_cast<std::int32_t>(Error::Ok);

@@ -879,6 +879,7 @@ namespace CafeSystem
 			return r;
 		gameProfile_load();
 		// setup memory space and PPC recompiler
+		cemuextend_hle::ConfigureMemoryForTitle(titleId);
         SetupMemorySpace();
         PPCRecompiler_init();
 		r = PrepareExecutable(); // load RPX
@@ -928,6 +929,7 @@ namespace CafeSystem
 		sForegroundTitleId = *standaloneTitleId;
 		cemuLog_log(LogType::Force, "Generated placeholder TitleId: {:016x}", sForegroundTitleId);
 		// setup memory space and ppc recompiler
+		cemuextend_hle::ConfigureMemoryForTitle(*standaloneTitleId);
         SetupMemorySpace();
         PPCRecompiler_init();
         // load executable
