@@ -19,7 +19,7 @@ namespace
 	constexpr std::uint32_t kBootstrapMagic = 0x434d4231U; // CMB1
 	constexpr std::uint16_t kBootstrapVersion = 1;
 	constexpr std::uint16_t kBootstrapRecordSize = 24;
-	constexpr std::uint32_t kMaximumImageSize = 8U * 1024U * 1024U;
+	constexpr std::uint32_t kMaximumImageSize = MEMORY_CODECAVEAREA_SIZE;
 
 	std::uint16_t U16(std::span<const std::byte> bytes, std::size_t offset)
 	{

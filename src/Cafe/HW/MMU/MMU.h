@@ -167,11 +167,17 @@ bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size);
 #define MEMORY_CODE_TRAMPOLINE_AREA_ADDR	(0x00E00000) // code area for trampolines and imports
 #define MEMORY_CODE_TRAMPOLINE_AREA_SIZE	(0x00200000) // 2MB
 
-#define MEMORY_CODECAVEAREA_ADDR			(0x01800000)
-#define MEMORY_CODECAVEAREA_SIZE			(0x00800000) // 8MB, up to the code-area boundary
+#define MEMORY_LEGACY_OS_AREA_ADDR			(0x01000000)
+#define MEMORY_LEGACY_OS_AREA_SIZE			(0x00600000) // 6MB, includes known firmware aliases and TCPGecko buffers
+
+#define MEMORY_CODECAVEAREA_ADDR			(0x01600000)
+#define MEMORY_CODECAVEAREA_SIZE			(0x00A00000) // 10MB, up to the code-area boundary
 
 #define MEMORY_CODEAREA_ADDR				(0x02000000)
 #define MEMORY_CODEAREA_SIZE				(0x0E000000) // 224MB
+
+static_assert(MEMORY_LEGACY_OS_AREA_ADDR + MEMORY_LEGACY_OS_AREA_SIZE == MEMORY_CODECAVEAREA_ADDR);
+static_assert(MEMORY_CODECAVEAREA_ADDR + MEMORY_CODECAVEAREA_SIZE == MEMORY_CODEAREA_ADDR);
 
 #define MEMORY_DATA_AREA_ADDR				(0x10000000)
 #define MEMORY_DATA_AREA_SIZE				(0x40000000)

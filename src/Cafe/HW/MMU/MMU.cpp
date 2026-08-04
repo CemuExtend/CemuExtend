@@ -226,8 +226,8 @@ MMURange mmuRange_TRAMPOLINE_AREA		{ 0x00E00000, 0x00200000, MMU_MEM_AREA_ID::CO
 // it instead of importing/allocating each address. Cemu implements the OS as
 // HLE, so retain a zero-initialized compatibility window and populate the
 // known HLE entrypoint aliases after linking.
-MMURange mmuRange_LEGACY_OS				{ 0x01000000, 0x00800000, MMU_MEM_AREA_ID::CODE_LEGACY_OS, "LEGACY_OS" };
-MMURange mmuRange_CODECAVE				{ 0x01800000, MEMORY_CODECAVEAREA_SIZE, MMU_MEM_AREA_ID::CODE_CAVE, "CODECAVE" }; // shared trusted cemod code cave
+MMURange mmuRange_LEGACY_OS				{ MEMORY_LEGACY_OS_AREA_ADDR, MEMORY_LEGACY_OS_AREA_SIZE, MMU_MEM_AREA_ID::CODE_LEGACY_OS, "LEGACY_OS" };
+MMURange mmuRange_CODECAVE				{ MEMORY_CODECAVEAREA_ADDR, MEMORY_CODECAVEAREA_SIZE, MMU_MEM_AREA_ID::CODE_CAVE, "CODECAVE" }; // shared trusted cemod code cave
 MMURange mmuRange_TEXT_AREA				{ 0x02000000, 0x0C000000, MMU_MEM_AREA_ID::CODE_MAIN, "TEXT_AREA" }; // module text sections go here (0x02000000 to 0x10000000, 224MiB)
 MMURange mmuRange_CEMU_AREA				{ 0x0E000000, 0x02000000, MMU_MEM_AREA_ID::CEMU_PRIVATE, "CEMU_AREA", MMURange::MFLAG::FLAG_MAP_EARLY }; // Cemu-only, 32MiB. Should be allocated early for SysAllocator
 MMURange mmuRange_MEM2					{ 0x10000000, 0x40000000, MMU_MEM_AREA_ID::MEM2_DATA, "MEM2" }; // main memory area (1GB)
