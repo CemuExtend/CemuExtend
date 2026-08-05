@@ -228,18 +228,64 @@ namespace coreinit
 
 	// Zero-filled block handed out when a TLS lookup cannot be satisfied. Returning
 	// it keeps the emulator alive (and the guest reading zeroes) instead of taking
-	// the whole process down through a debug trap.
-	SysAllocator<uint8, 64> g_tlsFallbackBlock;
+	// the whole process down through a debug trap. It is allocated on demand so it
+	// always maps to a real guest address - handing out guest address zero here
+	// would only move the crash into the recompiled code that dereferences it.
+	std::mutex g_tlsFallbackMutex;
+	std::atomic<MPTR> g_tlsFallbackBlock{MPTR_NULL};
 
-	// Diagnostics for broken tls_index objects are logged once per address so a
-	// per-frame lookup cannot flood the log.
+	static void* GetTLSFallbackBlock()
+	{
+		MPTR address = g_tlsFallbackBlock.load();
+		if (address == MPTR_NULL)
+		{
+			std::lock_guard lock(g_tlsFallbackMutex);
+			address = g_tlsFallbackBlock.load();
+			if (address == MPTR_NULL)
+			{
+				constexpr uint32 fallbackSize = 0x100;
+				address = coreinit_allocFromSysArea(fallbackSize, 32);
+				memset(memory_getPointerFromVirtualOffset(address), 0, fallbackSize);
+				g_tlsFallbackBlock.store(address);
+			}
+		}
+		return memory_getPointerFromVirtualOffset(address);
+	}
+
+	// Diagnostics for broken tls_index objects are logged once per address and
+	// reason so a per-frame lookup cannot flood the log.
+	enum class TLSDiagnostic
+	{
+		MissingModuleIndex,
+		MissingTemplate,
+		UnusableAddress
+	};
+
 	std::mutex g_tlsDiagnosticsMutex;
-	std::set<MPTR> g_tlsDiagnosticsReported;
+	std::set<std::pair<MPTR, TLSDiagnostic>> g_tlsDiagnosticsReported;
 
-	static bool ShouldReportTLSIndex(MPTR indexAddress)
+	static bool ShouldReportTLSIndex(MPTR indexAddress, TLSDiagnostic reason)
 	{
 		std::lock_guard lock(g_tlsDiagnosticsMutex);
-		return g_tlsDiagnosticsReported.insert(indexAddress).second;
+		return g_tlsDiagnosticsReported.insert({indexAddress, reason}).second;
+	}
+
+	// The caller immediately dereferences whatever comes back, so a TLS address that
+	// does not resolve to mapped guest memory would just relocate the crash into the
+	// recompiled code. Check the result and substitute the fallback block instead.
+	static void* ReturnTLSAddress(TLS_Index* tlsIndex, MPTR blockAddress)
+	{
+		const MPTR address = blockAddress + _swapEndianU32(tlsIndex->ukn04);
+		if (blockAddress != MPTR_NULL && memory_isAddressRangeAccessible(address, 4))
+			return memory_getPointerFromVirtualOffset(address);
+		const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
+		if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::UnusableAddress))
+		{
+			cemuLog_log(LogType::Force,
+				"coreinit.__tls_get_addr: tls_index at 0x{:08x} resolves to unusable address 0x{:08x} (block 0x{:08x}, offset 0x{:08x})",
+				indexAddress, address, blockAddress, _swapEndianU32(tlsIndex->ukn04));
+		}
+		return GetTLSFallbackBlock();
 	}
 
 	void* __tls_get_addr(TLS_Index* tlsIndex)
@@ -254,14 +300,14 @@ namespace coreinit
 			// owner can be recovered from its address and the entry repaired in place.
 			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
 			const sint16 recoveredIndex = RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress);
-			if (ShouldReportTLSIndex(indexAddress))
+			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingModuleIndex))
 			{
 				cemuLog_log(LogType::Force,
 					"coreinit.__tls_get_addr: tls_index at 0x{:08x} has module index 0 (thread 0x{:08x}) - recovered module index {}",
 					indexAddress, memory_getVirtualOffsetFromPointer(currentThread), (sint32)recoveredIndex);
 			}
 			if (recoveredIndex <= 0)
-				return g_tlsFallbackBlock.GetPtr();
+				return GetTLSFallbackBlock();
 			tlsIndex->tlsModuleIndex = _swapEndianU16((uint16)recoveredIndex);
 		}
 
@@ -281,10 +327,12 @@ namespace coreinit
 		}
 		// look up TLS address based on moduleIndex
 		OSTLSBlock* tlsBlock = (OSTLSBlock*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(currentThread->tlsBlocksMPTR) + sizeof(OSTLSBlock) * (uint32)_swapEndianU16(tlsIndex->tlsModuleIndex));
+		if (!tlsBlock)
+			return ReturnTLSAddress(tlsIndex, MPTR_NULL);
 		if (tlsBlock->addr != _swapEndianU32(MPTR_NULL))
 		{
 			//osLib_returnFromFunction(hCPU, _swapEndianU32(tlsBlock->addr)+_swapEndianU32(tlsIndex->ukn04));
-			return memory_getPointerFromVirtualOffset(_swapEndianU32(tlsBlock->addr) + _swapEndianU32(tlsIndex->ukn04));
+			return ReturnTLSAddress(tlsIndex, _swapEndianU32(tlsBlock->addr));
 		}
 		// alloc data for TLS block
 		uint8* tlsSectionData = nullptr;
@@ -294,19 +342,19 @@ namespace coreinit
 		if (!r || tlsSize <= 0)
 		{
 			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
-			if (ShouldReportTLSIndex(indexAddress))
+			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingTemplate))
 			{
 				cemuLog_log(LogType::Force,
-					"coreinit.__tls_get_addr: no TLS template for module index {} (tls_index at 0x{:08x})",
-					(sint32)(sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), indexAddress);
+					"coreinit.__tls_get_addr: no TLS template for module index {} (tls_index at 0x{:08x}, lookup {}, size {})",
+					(sint32)(sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), indexAddress, r, tlsSize);
 			}
-			return g_tlsFallbackBlock.GetPtr();
+			return GetTLSFallbackBlock();
 		}
 
 		MPTR tlsData = coreinit_allocFromSysArea(tlsSize, 32);
 		memcpy(memory_getPointerFromVirtualOffset(tlsData), tlsSectionData, tlsSize);
 		tlsBlock->addr = _swapEndianU32(tlsData);
-		return memory_getPointerFromVirtualOffset(_swapEndianU32(tlsBlock->addr) + _swapEndianU32(tlsIndex->ukn04));
+		return ReturnTLSAddress(tlsIndex, tlsData);
 	}
 
 	void InitializeGHS()
