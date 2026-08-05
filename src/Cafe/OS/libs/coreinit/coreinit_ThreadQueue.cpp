@@ -4,6 +4,23 @@
 namespace coreinit
 {
 
+	bool OSThreadQueue_IsThreadPointerValid(MPTR address)
+	{
+		if (address == MPTR_NULL)
+			return false;
+		if (memory_isAddressRangeAccessible(address, sizeof(OSThread_t)))
+			return true;
+		static std::atomic<uint32> s_reportCount{0};
+		const uint32 reportIndex = s_reportCount.fetch_add(1);
+		if (reportIndex < 20)
+		{
+			cemuLog_log(LogType::Force,
+				"OSThreadQueue: dropping thread pointer 0x{:08x} which is not mapped guest memory{}",
+				address, reportIndex == 19 ? " (further reports suppressed)" : "");
+		}
+		return false;
+	}
+
 	// puts the thread on the waiting queue and changes state to WAITING
 	// relinquishes timeslice
 	// always uses thread->waitQueueLink
@@ -44,6 +61,12 @@ namespace coreinit
 	{
 		cemu_assert_debug(__OSHasSchedulerLock());
 		size_t linkOffset = getLinkOffset(thread, threadLink);
+		if (!tail.IsNull() && !OSThreadQueue_IsThreadPointerValid(tail.GetMPTR()))
+		{
+			// corrupted chain, restart the queue with this thread as its only entry
+			head = nullptr;
+			tail = nullptr;
+		}
 		// insert after tail
 		if (tail.IsNull())
 		{
@@ -67,6 +90,14 @@ namespace coreinit
 		cemu_assert_debug(tail.IsNull() == head.IsNull()); // either must be set or none at all
 		cemu_assert_debug(__OSHasSchedulerLock());
 		size_t linkOffset = getLinkOffset(thread, threadLink);
+		if (!tail.IsNull() &&
+			(!OSThreadQueue_IsThreadPointerValid(tail.GetMPTR()) ||
+				!OSThreadQueue_IsThreadPointerValid(head.GetMPTR())))
+		{
+			// corrupted chain, restart the queue with this thread as its only entry
+			head = nullptr;
+			tail = nullptr;
+		}
 		if (tail.IsNull())
 		{
 			threadLink->next = nullptr;
@@ -79,7 +110,16 @@ namespace coreinit
 			// insert towards tail based on priority
 			OSThread_t* threadItr = tail.GetPtr();
 			while (threadItr && threadItr->effectivePriority > thread->effectivePriority)
-				threadItr = _getThreadLink(threadItr, linkOffset)->prev.GetPtr();
+			{
+				MEMPTR<OSThread_t> previousThread = _getThreadLink(threadItr, linkOffset)->prev;
+				if (!previousThread.IsNull() &&
+					!OSThreadQueue_IsThreadPointerValid(previousThread.GetMPTR()))
+				{
+					// corrupted chain, stop here and insert after the last valid entry
+					break;
+				}
+				threadItr = previousThread.GetPtr();
+			}
 			if (threadItr == nullptr)
 			{
 				// insert in front
@@ -90,11 +130,19 @@ namespace coreinit
 			}
 			else
 			{
-				threadLink->prev = threadItr;
-				threadLink->next = _getThreadLink(threadItr, linkOffset)->next;
-				if (_getThreadLink(threadItr, linkOffset)->next)
+				MEMPTR<OSThread_t> nextThread = _getThreadLink(threadItr, linkOffset)->next;
+				if (!nextThread.IsNull() && !OSThreadQueue_IsThreadPointerValid(nextThread.GetMPTR()))
 				{
-					OSThread_t* threadAfterItr = _getThreadLink(threadItr, linkOffset)->next.GetPtr();
+					// corrupted chain, terminate it after the last valid entry
+					nextThread = nullptr;
+					_getThreadLink(threadItr, linkOffset)->next = nullptr;
+					tail = threadItr;
+				}
+				threadLink->prev = threadItr;
+				threadLink->next = nextThread;
+				if (!nextThread.IsNull())
+				{
+					OSThread_t* threadAfterItr = nextThread.GetPtr();
 					_getThreadLink(threadAfterItr, linkOffset)->prev = thread;
 					_getThreadLink(threadItr, linkOffset)->next = thread;
 				}
@@ -113,6 +161,10 @@ namespace coreinit
 		cemu_assert_debug(__OSHasSchedulerLock());
 		size_t linkOffset = getLinkOffset(thread, threadLink);
 		_debugCheckChain(thread, threadLink);
+		if (!threadLink->prev.IsNull() && !OSThreadQueue_IsThreadPointerValid(threadLink->prev.GetMPTR()))
+			threadLink->prev = nullptr;
+		if (!threadLink->next.IsNull() && !OSThreadQueue_IsThreadPointerValid(threadLink->next.GetMPTR()))
+			threadLink->next = nullptr;
 		if (threadLink->prev)
 			_getThreadLink(threadLink->prev.GetPtr(), linkOffset)->next = threadLink->next;
 		else

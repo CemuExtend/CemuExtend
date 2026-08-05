@@ -105,6 +105,13 @@ namespace coreinit
 
 	static_assert(sizeof(OSThreadLink) == 8);
 
+	// Thread queues live in guest memory, so a faulty title (or a plugin injected
+	// into it) can leave a queue pointing at an address that is not mapped at all.
+	// Walking such a chain would dereference outside the guest arena and take the
+	// whole emulator down with a segfault, so every guest thread pointer is checked
+	// before it is followed.
+	bool OSThreadQueue_IsThreadPointerValid(MPTR address);
+
 	struct OSThreadQueueInternal
 	{
 		MEMPTR<OSThread_t> head;
@@ -137,6 +144,13 @@ namespace coreinit
 			cemu_assert_debug(__OSHasSchedulerLock());
 			if (head == nullptr)
 				return nullptr;
+			if (!OSThreadQueue_IsThreadPointerValid(head.GetMPTR()))
+			{
+				// corrupted chain, drop it instead of following it into unmapped memory
+				head = nullptr;
+				tail = nullptr;
+				return nullptr;
+			}
 			OSThread_t* thread = head.GetPtr();
 			OSThreadLink* link = _getThreadLink(thread, linkOffset);
 			removeThread(thread, link);
