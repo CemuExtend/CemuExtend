@@ -6,6 +6,7 @@
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "config/CemuConfig.h"
 #include "Cafe/CafeSystem.h"
+#include "Cafe/OS/RPL/rpl.h"
 
 sint32 s_customVsyncFrequency = -1;
 
@@ -81,6 +82,15 @@ void LatteTiming_signalVsync()
 
 	if (!LatteGPUState.gx2InitCalled)
 		return;
+	// a few times per second, make sure nothing has written into module data that
+	// is supposed to stay constant after linking
+	static HRTick s_lastReadOnlyDataCheck = 0;
+	const HRTick now = HighResolutionTimer::now().getTick();
+	if (now - s_lastReadOnlyDataCheck >= HighResolutionTimer::getFrequency() / 4)
+	{
+		s_lastReadOnlyDataCheck = now;
+		RPLLoader_VerifyReadOnlyData();
+	}
 	s_vsyncIntervalCounter++;
 	uint32 swapInterval = 1;
 	if (LatteGPUState.sharedArea)

@@ -270,6 +270,9 @@ struct RPLDependency
 	sint16 tlsModuleIndex; // tls module index assigned to this dependency
 };
 
+void RPLLoader_SnapshotReadOnlyData(RPLModule* rpl);
+void RPLLoader_ForgetReadOnlyData(const RPLModule* rpl);
+
 RPLModule* RPLLoader_FindModuleByCodeAddr(uint32 addr);
 RPLModule* RPLLoader_FindModuleByDataAddr(uint32 addr);
 RPLModule* RPLLoader_FindModuleByName(std::string module);

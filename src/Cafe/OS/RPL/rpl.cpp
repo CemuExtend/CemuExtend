@@ -2595,6 +2595,7 @@ void RPLLoader_DestroyModule(RPLModule* rpl, RPLDependency* rplDependency,
 		return;
 	}
 	rpl->externalUnloading = rpl->externalModule;
+	RPLLoader_ForgetReadOnlyData(rpl);
 	RPLLoader_EmitModuleEvent(RPLModuleEventType::Unloading, rpl);
 	// decrease reference counters of all dependencies
 	if (!rpl->externalModule || rpl->externalRegisterDependency)
@@ -2712,6 +2713,8 @@ void RPLLoader_Link()
 		GraphicPack2::NotifyModuleLoaded(rplModuleList[i]);
 		g_debuggerDispatcher.NotifyModuleLoaded(rplModuleList[i]);
 		RPLLoader_EmitModuleEvent(RPLModuleEventType::Linked, rplModuleList[i]);
+		// take the reference copy last so that graphic pack patches are part of it
+		RPLLoader_SnapshotReadOnlyData(rplModuleList[i]);
 	}
 }
 
@@ -2950,6 +2953,115 @@ uint32 RPLLoader_GetMaxTLSModuleIndex()
 {
 	std::lock_guard lock(g_rplLoaderMutex);
 	return rplLoader_currentTlsModuleIndex - 1;
+}
+
+// Read-only module data must not change once a module is linked. Code running
+// inside the emulated title can still write there, and the damage only surfaces
+// much later as a seemingly unrelated failure - a zeroed tls_index or a wrecked
+// OSFastMutex wait queue, for example. Keeping a copy of those sections lets the
+// loader spot such writes, report the exact address and undo them before anything
+// starts depending on the corrupted value.
+struct RPLReadOnlyDataSnapshot
+{
+	const RPLModule* module;
+	std::string moduleName;
+	MPTR address;
+	std::vector<uint8> data;
+};
+
+std::mutex g_rplReadOnlyDataMutex;
+std::vector<RPLReadOnlyDataSnapshot> g_rplReadOnlyData;
+uint32 g_rplReadOnlyDataReportCount = 0;
+
+static std::string_view RPLLoader_GetSectionName(const RPLModule* rpl, uint32 sectionIndex)
+{
+	const uint32 nameSectionIndex = rpl->rplHeader.nameSectionIndex;
+	if (nameSectionIndex >= (uint32)rpl->rplHeader.sectionTableEntryCount ||
+		nameSectionIndex >= rpl->sectionAddressTable2.size())
+		return {};
+	const auto* nameData = (const char*)rpl->sectionAddressTable2[nameSectionIndex].ptr;
+	const uint32 nameDataSize = rpl->sectionTablePtr[nameSectionIndex].sectionSize;
+	const uint32 nameOffset = rpl->sectionTablePtr[sectionIndex].nameOffset;
+	if (!nameData || nameOffset >= nameDataSize)
+		return {};
+	const std::string_view available(nameData + nameOffset, nameDataSize - nameOffset);
+	const size_t length = available.find('\0');
+	return length == std::string_view::npos ? available : available.substr(0, length);
+}
+
+void RPLLoader_SnapshotReadOnlyData(RPLModule* rpl)
+{
+	if (!rpl || rpl->externalModule)
+		return;
+	std::lock_guard lock(g_rplReadOnlyDataMutex);
+	for (uint32 sectionIndex = 0;
+		sectionIndex < (uint32)rpl->rplHeader.sectionTableEntryCount; ++sectionIndex)
+	{
+		const auto* section = rpl->sectionTablePtr + sectionIndex;
+		if (section->type == SHT_NOBITS || section->sectionSize == 0)
+			continue;
+		if (RPLLoader_GetSectionName(rpl, sectionIndex) != ".rodata")
+			continue;
+		const auto* sectionPointer = (const uint8*)rpl->sectionAddressTable2[sectionIndex].ptr;
+		if (!sectionPointer)
+			continue;
+		RPLReadOnlyDataSnapshot snapshot;
+		snapshot.module = rpl;
+		snapshot.moduleName = rpl->moduleName;
+		snapshot.address = memory_getVirtualOffsetFromPointer((void*)sectionPointer);
+		snapshot.data.assign(sectionPointer, sectionPointer + (uint32)section->sectionSize);
+		cemuLog_log(LogType::Force,
+			"RPLLoader: guarding {} bytes of read-only data at 0x{:08x} in {}",
+			snapshot.data.size(), snapshot.address, snapshot.moduleName);
+		g_rplReadOnlyData.push_back(std::move(snapshot));
+	}
+}
+
+void RPLLoader_ForgetReadOnlyData(const RPLModule* rpl)
+{
+	std::lock_guard lock(g_rplReadOnlyDataMutex);
+	std::erase_if(g_rplReadOnlyData,
+		[rpl](const RPLReadOnlyDataSnapshot& snapshot) { return snapshot.module == rpl; });
+}
+
+void RPLLoader_VerifyReadOnlyData()
+{
+	std::lock_guard lock(g_rplReadOnlyDataMutex);
+	for (RPLReadOnlyDataSnapshot& snapshot : g_rplReadOnlyData)
+	{
+		uint8* live = memory_getPointerFromVirtualOffsetAllowNull(snapshot.address);
+		if (!live || memcmp(live, snapshot.data.data(), snapshot.data.size()) == 0)
+			continue;
+		uint32 reportedRanges = 0;
+		size_t index = 0;
+		while (index < snapshot.data.size())
+		{
+			if (live[index] == snapshot.data[index])
+			{
+				++index;
+				continue;
+			}
+			const size_t rangeStart = index;
+			while (index < snapshot.data.size() && live[index] != snapshot.data[index])
+				++index;
+			const size_t rangeSize = index - rangeStart;
+			if (reportedRanges < 8 && g_rplReadOnlyDataReportCount < 64)
+			{
+				++g_rplReadOnlyDataReportCount;
+				++reportedRanges;
+				cemuLog_log(LogType::Force,
+					"RPLLoader: read-only data in {} was modified at 0x{:08x} ({} bytes) - expected {:02x} {:02x} {:02x} {:02x}, found {:02x} {:02x} {:02x} {:02x}. Restoring",
+					snapshot.moduleName, snapshot.address + (uint32)rangeStart, rangeSize,
+					snapshot.data[rangeStart], rangeSize > 1 ? snapshot.data[rangeStart + 1] : 0,
+					rangeSize > 2 ? snapshot.data[rangeStart + 2] : 0,
+					rangeSize > 3 ? snapshot.data[rangeStart + 3] : 0,
+					live[rangeStart], rangeSize > 1 ? live[rangeStart + 1] : 0,
+					rangeSize > 2 ? live[rangeStart + 2] : 0,
+					rangeSize > 3 ? live[rangeStart + 3] : 0);
+			}
+			memcpy(live + rangeStart, snapshot.data.data() + rangeStart, rangeSize);
+		}
+	}
 }
 
 // Resolve the TLS module index of the module that owns a data address. Used to
