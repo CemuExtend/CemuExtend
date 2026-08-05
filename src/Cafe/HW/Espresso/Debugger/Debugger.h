@@ -96,6 +96,10 @@ struct DebuggerBreakpoint
 	mutable bool enabled;
 	mutable std::wstring comment;
 	mutable uint8 dbType = DEBUGGER_BP_T_DEBUGGER;
+	// Logging breakpoints set up from the configuration file exist to answer
+	// "who reaches this address", so they always report the call stack instead of
+	// depending on the advanced PPC logging option being on.
+	mutable bool alwaysLogStackTrace = false;
 
 	DebuggerBreakpoint(uint32 address, uint32 originalOpcode, uint8 bpType = 0, bool enabled = true, std::wstring comment = std::wstring())
 		:address(address), originalOpcodeValue(originalOpcode), bpType(bpType), enabled(enabled), comment(std::move(comment)) 
@@ -156,6 +160,9 @@ void debugger_createCodeBreakpoint(uint32 address, uint8 bpType);
 void debugger_createMemoryBreakpoint(uint32 address, bool onRead, bool onWrite);
 void debugger_toggleExecuteBreakpoint(uint32 address); // create/remove execute breakpoint
 void debugger_toggleLoggingBreakpoint(uint32 address); // create/remove logging breakpoint
+// Installs the logging breakpoints listed in CEMU_LOGGING_BREAKPOINTS. Call once
+// the title's modules are linked, so the addresses are backed by loaded code.
+void debugger_createConfiguredLoggingBreakpoints();
 void debugger_toggleBreakpoint(uint32 address, bool state, DebuggerBreakpoint* bp);
 void debugger_deleteBreakpoint(BreakpointId bpId);
 std::vector<DebuggerBreakpoint*>& debugger_lockBreakpoints();

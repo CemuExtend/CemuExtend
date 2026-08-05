@@ -412,6 +412,9 @@ void cemu_initForGame()
 	RPLLoader_Link();
 	RPLLoader_InstallLegacyCoreinitEntrypoints();
 	RPLLoader_NotifyControlPassedToApplication();
+	// the title's code is mapped by now, so any address the user asked us to watch
+	// can be patched
+	debugger_createConfiguredLoggingBreakpoints();
 	uint32 linkTime = GetTickCount() - linkTimeStart;
 	cemuLog_log(LogType::Force, "RPL link time: {}ms", linkTime);
 	// for HBL ELF: Setup OS-specifics struct

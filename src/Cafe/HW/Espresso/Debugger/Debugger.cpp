@@ -9,6 +9,12 @@
 #include "OS/RPL/rpl.h"
 #include "util/helpers/helpers.h"
 
+#include "config/ActiveSettings.h"
+
+#include <charconv>
+#include <cstdlib>
+#include <fstream>
+
 #if BOOST_OS_WINDOWS
 #include <Windows.h>
 #endif
@@ -368,6 +374,72 @@ void debugger_toggleExecuteBreakpoint(uint32 address)
 	}
 }
 
+// Tracking down which guest code reaches a given address otherwise means opening
+// the debugger UI and clicking through it, which is not an option when the title
+// has to run normally for the problem to show up. Addresses listed in the
+// CEMU_LOGGING_BREAKPOINTS environment variable or in logging_breakpoints.txt
+// next to the other user data become logging breakpoints that report the caller
+// and the argument registers. The file exists because the environment of a
+// desktop launcher is not always ours to set.
+static void debugger_createConfiguredLoggingBreakpoint(std::string_view entry)
+{
+	while (!entry.empty() && (entry.front() == ' ' || entry.front() == '\t'))
+		entry.remove_prefix(1);
+	while (!entry.empty() && (entry.back() == ' ' || entry.back() == '\t' || entry.back() == '\r'))
+		entry.remove_suffix(1);
+	if (entry.empty() || entry.front() == '#')
+		return;
+	if (entry.starts_with("0x") || entry.starts_with("0X"))
+		entry.remove_prefix(2);
+	uint32 address = 0;
+	const auto result = std::from_chars(entry.data(), entry.data() + entry.size(), address, 16);
+	if (result.ec != std::errc{} || result.ptr != entry.data() + entry.size())
+	{
+		cemuLog_log(LogType::Force, "Logging breakpoints: ignoring malformed address '{}'", entry);
+		return;
+	}
+	if (!memory_isAddressRangeAccessible(address, 4))
+	{
+		cemuLog_log(LogType::Force, "Logging breakpoints: 0x{:08x} is not mapped, skipping", address);
+		return;
+	}
+	{
+		std::unique_lock _l(s_debuggerState.breakpointsMtx);
+		debugger_createCodeBreakpoint(address, DEBUGGER_BP_T_LOGGING);
+		if (DebuggerBreakpoint* bp = debugger_getFirstBP(address, DEBUGGER_BP_T_LOGGING))
+		{
+			bp->comment = boost::nowide::widen(fmt::format(
+				"0x{:08X} r3={{r3}} r4={{r4}} r5={{r5}} r6={{r6}} r7={{r7}}", address));
+			bp->alwaysLogStackTrace = true;
+		}
+	}
+	cemuLog_log(LogType::Force, "Logging breakpoints: logging every execution of 0x{:08x}", address);
+}
+
+void debugger_createConfiguredLoggingBreakpoints()
+{
+	if (const char* configuration = std::getenv("CEMU_LOGGING_BREAKPOINTS"))
+	{
+		std::string_view remaining(configuration);
+		while (!remaining.empty())
+		{
+			const size_t separator = remaining.find(',');
+			debugger_createConfiguredLoggingBreakpoint(remaining.substr(0, separator));
+			if (separator == std::string_view::npos)
+				break;
+			remaining = remaining.substr(separator + 1);
+		}
+	}
+	const fs::path listPath = ActiveSettings::GetUserDataPath("logging_breakpoints.txt");
+	std::ifstream listFile(listPath);
+	if (!listFile.is_open())
+		return;
+	cemuLog_log(LogType::Force, "Logging breakpoints: reading {}", _pathToUtf8(listPath));
+	std::string line;
+	while (std::getline(listFile, line))
+		debugger_createConfiguredLoggingBreakpoint(line);
+}
+
 void debugger_toggleLoggingBreakpoint(uint32 address)
 {
 	std::unique_lock _l(s_debuggerState.breakpointsMtx);
@@ -648,9 +720,10 @@ void debugger_handleLoggingBreakpoint(PPCInterpreter_t* hCPU, DebuggerBreakpoint
 	});
 
 	std::string logName = "Breakpoint '" + comment + "'";
-	std::string logContext = fmt::format("Thread: {:08x} LR: 0x{:08x}", MEMPTR<OSThread_t>(coreinit::OSGetCurrentThread()).GetMPTR(), hCPU->spr.LR, cemuLog_advancedPPCLoggingEnabled() ? " Stack Trace:" : "");
+	const bool logStackTrace = cemuLog_advancedPPCLoggingEnabled() || bp->alwaysLogStackTrace;
+	std::string logContext = fmt::format("Thread: {:08x} LR: 0x{:08x}{}", MEMPTR<OSThread_t>(coreinit::OSGetCurrentThread()).GetMPTR(), hCPU->spr.LR, logStackTrace ? " Stack Trace:" : "");
 	cemuLog_log(LogType::Force, "[Debugger] {} was executed! {}", logName, logContext);
-	if (cemuLog_advancedPPCLoggingEnabled())
+	if (logStackTrace)
 		DebugLogStackTrace(coreinit::OSGetCurrentThread(), hCPU->gpr[1]);
 }
 
