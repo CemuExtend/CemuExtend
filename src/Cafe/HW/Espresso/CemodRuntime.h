@@ -39,6 +39,9 @@ public:
 		const ModServicePermissions& services);
 	void UpdateTitlePermissions(const ModServicePermissions& services);
 	void UnloadAll();
+	// Fail-safe title teardown for a stopped scheduler. WUPS guest finalizers
+	// are skipped; host resources are revoked before title-wide RPL cleanup.
+	void AbandonAllForTitleShutdown();
 
 	[[nodiscard]] ModExecutionContext* Context(std::uint64_t handle);
 	[[nodiscard]] PPCInterpreter_t* Cpu(std::uint64_t handle);

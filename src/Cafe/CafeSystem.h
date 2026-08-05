@@ -48,6 +48,9 @@ namespace CafeSystem
 	CosCapabilityBits GetForegroundTitleCosCapabilities(CosCapabilityGroup group);
 	std::optional<sint32> GetForegroundTitleReturnStatus(); // valid once the foreground title exited gracefully via coreinit exit
 
+	// Completes CEMod/WUPS guest lifecycle callbacks before title CPU threads
+	// and their stacks are destroyed. Safe to call repeatedly.
+	bool PrepareTitleShutdown();
 	void ShutdownTitle();
 
 	std::string GetMlcStoragePath(TitleId titleId);

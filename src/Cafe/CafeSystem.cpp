@@ -20,6 +20,7 @@
 #include "Cafe/TitleList/TitleList.h"
 #include "Cafe/TitleList/GameInfo.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
@@ -1098,11 +1099,30 @@ namespace CafeSystem
         fsc_unmount("/internal/code/", FSC_PRIORITY_BASE);
 	}
 
+	bool PrepareTitleShutdown()
+	{
+		auto& runtime = cemuextend_hle::GetCemodRuntime();
+		if (runtime.Size() == 0)
+			return true;
+		const bool ran = coreinit::OSRunOnEmulatedCpuThread([&runtime] {
+			runtime.UnloadAll();
+		});
+		return ran && runtime.Size() == 0;
+	}
+
 	void ShutdownTitle()
 	{
 		if(!sSystemRunning)
 			return;
 		TcpGecko::OnTitleShutdown();
+		const bool modsUnloaded = PrepareTitleShutdown();
+		if (!modsUnloaded)
+		{
+			cemuLog_log(LogType::Force,
+				"CemuExtend could not run title shutdown callbacks on an emulated CPU; "
+				"title-wide RPL cleanup will discard the remaining modules");
+			cemuextend_hle::GetCemodRuntime().AbandonAllForTitleShutdown();
+		}
 		coreinit::OSSchedulerEnd();
 		Latte_Stop();
 		// reset Cafe OS userspace modules
@@ -1111,9 +1131,8 @@ namespace CafeSystem
 		GX2::_GX2DriverReset();
 		nn::save::ResetToDefaultState();
 		coreinit::__OSDeleteAllActivePPCThreads();
-		// Restore trusted native bootstrap instructions while RPL mappings still
-		// exist, then close all isolated/trusted sessions.
-		cemuextend_hle::GetCemodRuntime().UnloadAll();
+		// All CEMod/WUPS ownership has already been released above. Discard any
+		// remaining title RPL mappings while their backing memory still exists.
 		RPLLoader_UnloadAll();
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->TitleStop();

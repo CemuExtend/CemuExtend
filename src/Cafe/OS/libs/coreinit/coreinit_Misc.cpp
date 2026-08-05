@@ -714,6 +714,7 @@ namespace coreinit
 
 	bool OSShutdown()
 	{
+		(void)CafeSystem::PrepareTitleShutdown();
 		std::thread shutdownThread(OSShutdownThread, 0);
 		shutdownThread.detach();
 		OSSuspendThread(OSGetCurrentThread());
@@ -750,6 +751,7 @@ namespace coreinit
 		for(uint32 i=0; i<argc; i++)
 			argArray.emplace_back(argv[i]);
 		CafeSystem::SetOverrideArgs(argArray);
+		(void)CafeSystem::PrepareTitleShutdown();
 		// spawn launcher thread (this current thread will be destroyed during relaunch)
 		std::thread launcherThread(OSLauncherThread, titleId);
 		launcherThread.detach();

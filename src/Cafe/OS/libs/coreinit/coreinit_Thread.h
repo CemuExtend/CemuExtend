@@ -2,6 +2,8 @@
 #include "Cafe/HW/Espresso/Const.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Scheduler.h"
 
+#include <functional>
+
 struct OSThread_t;
 
 struct OSContextRegFPSCR_t
@@ -611,6 +613,12 @@ namespace coreinit
 	void OSSchedulerBegin(sint32 numCPUEmulationThreads);
 	void OSSchedulerEnd();
 	bool OSIsSchedulerActive();
+	// Runs a host task synchronously at a title-thread timeslice boundary while
+	// PPCInterpreter_getCurrentInstance() and OSGetCurrentThread() are valid.
+	// Calls made by an emulated CPU thread execute inline. Host callers wait up
+	// to timeoutMilliseconds for a title thread to accept the task.
+	bool OSRunOnEmulatedCpuThread(std::function<void()> task,
+		uint32 timeoutMilliseconds = 2000);
 
 	// internal
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread);

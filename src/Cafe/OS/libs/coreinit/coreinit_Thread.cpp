@@ -69,6 +69,74 @@ namespace coreinit
 	std::vector<std::thread> sSchedulerThreads;
 	std::mutex sSchedulerStateMtx;
 
+	enum class HostCpuTaskState
+	{
+		Queued,
+		Running,
+		Completed,
+		Cancelled,
+	};
+
+	struct HostCpuTask
+	{
+		explicit HostCpuTask(std::function<void()> callback) : callback(std::move(callback)) {}
+
+		std::function<void()> callback;
+		HostCpuTaskState state{HostCpuTaskState::Queued};
+		bool succeeded{};
+	};
+
+	std::mutex sHostCpuTaskMutex;
+	std::condition_variable sHostCpuTaskCondition;
+	std::deque<std::shared_ptr<HostCpuTask>> sHostCpuTasks;
+
+	void __OSProcessHostCpuTask()
+	{
+		std::shared_ptr<HostCpuTask> task;
+		{
+			std::lock_guard lock(sHostCpuTaskMutex);
+			if (sHostCpuTasks.empty())
+				return;
+			task = std::move(sHostCpuTasks.front());
+			sHostCpuTasks.pop_front();
+			task->state = HostCpuTaskState::Running;
+		}
+		bool succeeded = true;
+		try
+		{
+			task->callback();
+		}
+		catch (const std::exception& exception)
+		{
+			succeeded = false;
+			cemuLog_log(LogType::Force,
+				"Emulated CPU host task threw an exception: {}", exception.what());
+		}
+		catch (...)
+		{
+			succeeded = false;
+			cemuLog_log(LogType::Force,
+				"Emulated CPU host task threw a non-standard exception");
+		}
+		{
+			std::lock_guard lock(sHostCpuTaskMutex);
+			task->succeeded = succeeded;
+			task->state = HostCpuTaskState::Completed;
+		}
+		sHostCpuTaskCondition.notify_all();
+	}
+
+	void __OSCancelHostCpuTasks()
+	{
+		{
+			std::lock_guard lock(sHostCpuTaskMutex);
+			for (const auto& task : sHostCpuTasks)
+				task->state = HostCpuTaskState::Cancelled;
+			sHostCpuTasks.clear();
+		}
+		sHostCpuTaskCondition.notify_all();
+	}
+
 	SysAllocator<OSThreadQueue> g_activeThreadQueue; // list of all threads (can include non-detached inactive threads)
 
 	SysAllocator<OSThreadQueue, 3> g_coreRunQueue;
@@ -1451,6 +1519,11 @@ namespace coreinit
 			hCPU->reservedMemAddr = 0;
 			hCPU->reservedMemValue = 0;
 
+			// Host lifecycle work which calls guest code must run while this title
+			// thread and its PPC stack are still installed. Process one task per
+			// timeslice so normal guest scheduling cannot be starved.
+			__OSProcessHostCpuTask();
+
 			// reschedule
 			__OSLockScheduler();
 			__OSThreadSwitchToNext();
@@ -1518,6 +1591,7 @@ namespace coreinit
 		std::unique_lock _lock(sSchedulerStateMtx);
 		if (sSchedulerActive.exchange(true))
 			return;
+		__OSCancelHostCpuTasks();
 		cemu_assert_debug(numCPUEmulationThreads == 1 || numCPUEmulationThreads == 3);
 		g_isMulticoreMode = numCPUEmulationThreads > 1;
 		if (numCPUEmulationThreads == 1)
@@ -1538,6 +1612,7 @@ namespace coreinit
 	{
 		std::unique_lock _lock(sSchedulerStateMtx);
 		sSchedulerActive.store(false);
+		__OSCancelHostCpuTasks();
 		for (size_t i = 0; i < Espresso::CORE_COUNT; i++)
 			g_coreRunQueueThreadCount[i].increment(); // make sure to wake up cores if they are paused and waiting for runnable threads
 		// wait for threads to stop execution
@@ -1568,6 +1643,52 @@ namespace coreinit
 	bool OSIsSchedulerActive()
 	{
 		return sSchedulerActive;
+	}
+
+	bool OSRunOnEmulatedCpuThread(std::function<void()> callback,
+		uint32 timeoutMilliseconds)
+	{
+		if (!callback)
+			return false;
+		if (PPCInterpreter_getCurrentInstance())
+		{
+			callback();
+			return true;
+		}
+
+		auto task = std::make_shared<HostCpuTask>(std::move(callback));
+		{
+			std::lock_guard schedulerLock(sSchedulerStateMtx);
+			if (!sSchedulerActive.load(std::memory_order_acquire))
+				return false;
+			std::lock_guard taskLock(sHostCpuTaskMutex);
+			sHostCpuTasks.emplace_back(task);
+		}
+
+		std::unique_lock lock(sHostCpuTaskMutex);
+		const bool accepted = sHostCpuTaskCondition.wait_for(lock,
+			std::chrono::milliseconds(timeoutMilliseconds), [&task] {
+				return task->state != HostCpuTaskState::Queued;
+			});
+		if (!accepted)
+		{
+			const auto found = std::ranges::find(sHostCpuTasks, task);
+			if (found != sHostCpuTasks.end())
+				sHostCpuTasks.erase(found);
+			task->state = HostCpuTaskState::Cancelled;
+			return false;
+		}
+		if (task->state == HostCpuTaskState::Cancelled)
+			return false;
+
+		// Once a CPU thread has accepted a lifecycle task it is unsafe for the
+		// caller to tear down title memory concurrently. Wait for completion;
+		// the bounded wait above only covers acceptance by a live title thread.
+		sHostCpuTaskCondition.wait(lock, [&task] {
+			return task->state == HostCpuTaskState::Completed ||
+				task->state == HostCpuTaskState::Cancelled;
+		});
+		return task->state == HostCpuTaskState::Completed && task->succeeded;
 	}
 
 	SysAllocator<OSThread_t, PPC_CORE_COUNT> s_defaultThreads;

@@ -341,6 +341,10 @@ public:
 	void OnApplicationEnds() override;
 	void Unload() override;
 	[[nodiscard]] bool UnloadChecked(std::string& error);
+	// Emergency title teardown used only when no emulated CPU thread can run
+	// guest finalizers. Host resources are revoked and the RPL mapping is left
+	// for title-wide RPL cleanup, which skips PPC callbacks.
+	void AbandonForTitleShutdown();
 
 private:
 	struct Impl;
@@ -365,6 +369,7 @@ public:
 	[[nodiscard]] bool Unload(std::uint64_t handle, std::string& error);
 	void UnloadAll();
 	[[nodiscard]] bool UnloadAll(std::string& error);
+	void AbandonAllForTitleShutdown();
 
 	[[nodiscard]] bool OnApplicationStarts(std::string& error);
 	void OnReleaseForeground();

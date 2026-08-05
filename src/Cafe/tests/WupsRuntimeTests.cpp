@@ -670,6 +670,31 @@ namespace
 		CHECK(manager.Size() == 0);
 	}
 
+	void TestTitleShutdownAbandonSkipsGuestAndModuleCallbacks()
+	{
+		auto log = std::make_shared<RuntimeLog>();
+		auto services = std::make_shared<FakeServices>(log);
+		auto loader = std::make_shared<FakeModuleLoader>(log);
+		WupsPayloadRuntime manager(services, loader);
+		std::string error;
+		const std::array hooks{
+			WupsHookType::ApplicationStarts,
+			WupsHookType::ApplicationEnds,
+		};
+		const auto handle = manager.Load(
+			Package("abandon", "Shutdown Abandon", hooks), error);
+		CHECK(handle);
+		CHECK(manager.OnApplicationStarts(error));
+		const auto invocations = log->invokedTargets.size();
+		const auto unloads = log->unloadCalls.load();
+		manager.AbandonAllForTitleShutdown();
+		CHECK(manager.Size() == 0);
+		CHECK(log->invokedTargets.size() == invocations);
+		CHECK(log->unloadCalls.load() == unloads);
+		CHECK(log->deactivationCalls.load() == 1);
+		CHECK(log->releaseCalls.load() == 1);
+	}
+
 	void TestContiguousTlsTemplateMapping()
 	{
 		using RPLLoaderInternal::ResolveContiguousTLSMapping;
@@ -847,6 +872,7 @@ int main()
 	TestUnloadDuringMappingDoesNotPublishStaleModule();
 	TestPrepareReentrantUnloadAndExceptionBalance();
 	TestUnloadFailurePreservesRetryAuthority();
+	TestTitleShutdownAbandonSkipsGuestAndModuleCallbacks();
 	TestContiguousTlsTemplateMapping();
 	TestExternalModulePolicy();
 	TestMissingBackendPermissionIsAnError();

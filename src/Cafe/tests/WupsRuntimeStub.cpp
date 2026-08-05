@@ -36,6 +36,7 @@ bool WupsPayloadRuntime::Unload(std::uint64_t, std::string& error)
 
 void WupsPayloadRuntime::UnloadAll() {}
 bool WupsPayloadRuntime::UnloadAll(std::string&) { return true; }
+void WupsPayloadRuntime::AbandonAllForTitleShutdown() {}
 bool WupsPayloadRuntime::OnApplicationStarts(std::string&) { return true; }
 void WupsPayloadRuntime::OnReleaseForeground() {}
 void WupsPayloadRuntime::OnAcquiredForeground() {}

@@ -586,6 +586,27 @@ void CemodRuntime::UnloadAll()
 		pluginHeap->Reset();
 }
 
+void CemodRuntime::AbandonAllForTitleShutdown()
+{
+	for (;;)
+	{
+		std::uint64_t handle{};
+		{
+			std::lock_guard lock(m_impl->mutex);
+			if (m_impl->mods.empty())
+				break;
+			handle = m_impl->mods.begin()->first;
+		}
+		(void)Unload(handle);
+	}
+	m_impl->trusted.UnloadAll();
+	if (m_impl->wups)
+		m_impl->wups->AbandonAllForTitleShutdown();
+	m_impl->applicationStarted = false;
+	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+		pluginHeap->Reset();
+}
+
 ModExecutionContext* CemodRuntime::Context(std::uint64_t handle)
 {
 	std::lock_guard lock(m_impl->mutex);

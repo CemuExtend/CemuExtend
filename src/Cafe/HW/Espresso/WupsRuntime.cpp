@@ -1077,6 +1077,46 @@ bool WupsPluginRuntime::UnloadChecked(std::string& error)
 	return m_impl->FinishUnload(false, &error);
 }
 
+void WupsPluginRuntime::AbandonForTitleShutdown()
+{
+	if (!m_impl)
+		return;
+	{
+		std::unique_lock lock(m_impl->mutex);
+		if (m_impl->state == WupsPluginState::Unloaded)
+			return;
+		m_impl->state = WupsPluginState::Unloading;
+		++m_impl->generation;
+		m_impl->callbacksFinished.wait(lock, [this] {
+			return m_impl->callbacksInFlight == 0;
+		});
+	}
+
+	std::string cleanupError;
+	std::string error;
+	if (!m_impl->DeactivateBackend(error))
+		cleanupError = std::move(error);
+	error.clear();
+	if (!m_impl->ReleaseBackendResources(error))
+		cleanupError.append(cleanupError.empty() ? "" : "; ").append(error);
+
+	std::lock_guard lock(m_impl->mutex);
+	// RPLLoader_UnloadAll() owns the remaining mapping and deliberately skips
+	// its PPC entrypoint/free calls during title-wide destruction.
+	m_impl->module = nullptr;
+	m_impl->moduleLifetime = 0;
+	m_impl->applicationEndsPending = false;
+	m_impl->deferredApplicationEnd = false;
+	m_impl->deferredUnload = false;
+	m_impl->teardownInProgress = false;
+	m_impl->lifecycleTransition = false;
+	m_impl->foregroundTransition = false;
+	m_impl->exitRequestInProgress = false;
+	m_impl->state = WupsPluginState::Unloaded;
+	if (!cleanupError.empty())
+		m_impl->lastError = std::move(cleanupError);
+}
+
 struct WupsPayloadRuntime::Impl
 {
 	mutable std::mutex mutex;
@@ -1325,6 +1365,26 @@ bool WupsPayloadRuntime::UnloadAll(std::string& error)
 			m_impl->plugins.erase(found);
 	}
 	return success;
+}
+
+void WupsPayloadRuntime::AbandonAllForTitleShutdown()
+{
+	std::vector<std::shared_ptr<WupsPluginRuntime>> plugins;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		for (const auto& [handle, plugin] : std::ranges::reverse_view(m_impl->plugins))
+			plugins.push_back(plugin);
+		m_impl->applicationActive = false;
+	}
+	for (const auto& plugin : plugins)
+	{
+		if (m_impl->management)
+			m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
+				plugin->Generation());
+		plugin->AbandonForTitleShutdown();
+	}
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->plugins.clear();
 }
 
 bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
