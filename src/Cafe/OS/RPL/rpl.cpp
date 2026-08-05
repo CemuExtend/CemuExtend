@@ -2952,6 +2952,18 @@ uint32 RPLLoader_GetMaxTLSModuleIndex()
 	return rplLoader_currentTlsModuleIndex - 1;
 }
 
+// Resolve the TLS module index of the module that owns a data address. Used to
+// recover a tls_index object whose R_PPC_DTPMOD32 value is missing or clobbered,
+// since such an object always lives in the data region of the module that owns
+// the thread-local variable it describes.
+sint16 RPLLoader_FindTLSModuleIndexByDataAddr(uint32 address)
+{
+	RPLModule* module = RPLLoader_FindModuleByDataAddr(address);
+	if (!module)
+		return -1;
+	return module->fileInfo.tlsModuleIndex;
+}
+
 bool RPLLoader_GetTLSDataByTLSIndex(sint16 tlsModuleIndex, uint8** tlsData, sint32* tlsSize)
 {
 	std::lock_guard lock(g_rplLoaderMutex);

@@ -226,12 +226,44 @@ namespace coreinit
 		MPTR   ukn04;
 	};
 
+	// Zero-filled block handed out when a TLS lookup cannot be satisfied. Returning
+	// it keeps the emulator alive (and the guest reading zeroes) instead of taking
+	// the whole process down through a debug trap.
+	SysAllocator<uint8, 64> g_tlsFallbackBlock;
+
+	// Diagnostics for broken tls_index objects are logged once per address so a
+	// per-frame lookup cannot flood the log.
+	std::mutex g_tlsDiagnosticsMutex;
+	std::set<MPTR> g_tlsDiagnosticsReported;
+
+	static bool ShouldReportTLSIndex(MPTR indexAddress)
+	{
+		std::lock_guard lock(g_tlsDiagnosticsMutex);
+		return g_tlsDiagnosticsReported.insert(indexAddress).second;
+	}
+
 	void* __tls_get_addr(TLS_Index* tlsIndex)
 	{
 		OSThread_t* currentThread = coreinit::OSGetCurrentThread();
 
 		if (_swapEndianU16(tlsIndex->tlsModuleIndex) == 0)
-			assert_dbg();
+		{
+			// A tls_index with module index 0 means its R_PPC_DTPMOD32 value is either
+			// missing or was overwritten at runtime. The index object itself always lives
+			// in the data region of the module owning the thread-local variable, so the
+			// owner can be recovered from its address and the entry repaired in place.
+			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
+			const sint16 recoveredIndex = RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress);
+			if (ShouldReportTLSIndex(indexAddress))
+			{
+				cemuLog_log(LogType::Force,
+					"coreinit.__tls_get_addr: tls_index at 0x{:08x} has module index 0 (thread 0x{:08x}) - recovered module index {}",
+					indexAddress, memory_getVirtualOffsetFromPointer(currentThread), (sint32)recoveredIndex);
+			}
+			if (recoveredIndex <= 0)
+				return g_tlsFallbackBlock.GetPtr();
+			tlsIndex->tlsModuleIndex = _swapEndianU16((uint16)recoveredIndex);
+		}
 
 		// check if we need to allocate additional TLS blocks for this thread
 		if (_swapEndianU16(tlsIndex->tlsModuleIndex) >= _swapEndianU32(currentThread->numAllocatedTLSBlocks))
@@ -259,8 +291,17 @@ namespace coreinit
 		sint32 tlsSize = 0;
 
 		bool r = RPLLoader_GetTLSDataByTLSIndex((sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), &tlsSectionData, &tlsSize);
-		cemu_assert(r);
-		cemu_assert(tlsSize != 0);
+		if (!r || tlsSize <= 0)
+		{
+			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
+			if (ShouldReportTLSIndex(indexAddress))
+			{
+				cemuLog_log(LogType::Force,
+					"coreinit.__tls_get_addr: no TLS template for module index {} (tls_index at 0x{:08x})",
+					(sint32)(sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), indexAddress);
+			}
+			return g_tlsFallbackBlock.GetPtr();
+		}
 
 		MPTR tlsData = coreinit_allocFromSysArea(tlsSize, 32);
 		memcpy(memory_getPointerFromVirtualOffset(tlsData), tlsSectionData, tlsSize);

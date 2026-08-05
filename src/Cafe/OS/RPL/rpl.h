@@ -179,6 +179,7 @@ void RPLLoader_LoadCoreinit();
 uint32 RPLLoader_GetHandleByModuleName(const char* name);
 uint32 RPLLoader_GetMaxTLSModuleIndex();
 bool RPLLoader_GetTLSDataByTLSIndex(sint16 tlsModuleIndex, uint8** tlsData, sint32* tlsSize);
+sint16 RPLLoader_FindTLSModuleIndexByDataAddr(uint32 address);
 
 uint32 RPLLoader_FindModuleOrHLEExport(uint32 moduleHandle, bool isData, const char* exportName);
 
