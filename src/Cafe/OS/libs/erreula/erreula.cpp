@@ -308,8 +308,37 @@ namespace erreula
 		osLib_returnFromFunction(hCPU, 0);
 	}
 
+	// Reads a UTF-16BE string out of guest memory. Only used for logging, so it
+	// stops at a sane length and simply drops anything outside of ASCII rather
+	// than pulling a full transcoder into this path.
+	static std::string ReadGuestDialogText(MEMPTR<uint16be> text)
+	{
+		if (text.IsNull())
+			return {};
+		std::string result;
+		const uint16be* characters = text.GetPtr();
+		for (uint32 index = 0; index < 256; ++index)
+		{
+			const uint16 character = characters[index];
+			if (character == 0)
+				break;
+			result.push_back(character < 0x80 ? (char)character : '?');
+		}
+		return result;
+	}
+
 	void ErrEulaAppearError(AppearArg* arg)
 	{
+		// The title only shows this dialog when something went wrong badly enough
+		// to interrupt the user, and it is the one failure mode that leaves no
+		// trace in the log at all. Record what it says and where it came from.
+		cemuLog_log(LogType::Force,
+			"ErrEula: title raised error dialog (type {}, code {}) title \"{}\" text \"{}\"",
+			(uint32)arg->errorType.value(), (uint32)arg->errorCode,
+			ReadGuestDialogText(arg->title), ReadGuestDialogText(arg->text));
+		if (PPCInterpreter_t* interpreter = PPCInterpreter_getCurrentInstance())
+			DebugLogStackTrace(coreinit::OSGetCurrentThread(), interpreter->gpr[1]);
+
 		g_errEula.currentDialog = *arg;
 		if(g_errEula.errEulaInstance)
 			g_errEula.errEulaInstance->DoAppearError(arg);
