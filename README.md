@@ -80,7 +80,7 @@ git submodule update --init --recursive
 scriptはRelease buildとCTestを実行し、両方が成功した場合だけ最終実行ファイルを次の固定先へ原子的に配置します。
 
 ```text
-/home/umi/Workspace/wiiu/CemuExtend/result/bin/Cemu_release
+CemuExtend/result/bin/Cemu_release
 ```
 
 一般的な依存関係と非Docker buildは[BUILD.md](BUILD.md)を参照してください。
