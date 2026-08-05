@@ -1623,6 +1623,15 @@ bool RPLLoader_ApplyRelocs(RPLModule* rplLoaderContext, sint32 relaSectionIndex,
 				cemu_assert_debug(false); // module not a TLS-module
 			}
 			tlsModuleIndex = rplLoaderContext->fileInfo.tlsModuleIndex;
+			// A tls_index that keeps module index 0 makes every thread-local lookup
+			// in the module fail at runtime, so record what is actually written.
+			if (relocType == R_PPC_DTPMOD32 && !rplLoaderContext->loggedTLSModuleIndexReloc)
+			{
+				rplLoaderContext->loggedTLSModuleIndexReloc = true;
+				cemuLog_log(LogType::Force,
+					"RPLLoader: writing TLS module index {} into {}'s tls_index entries",
+					(sint32)tlsModuleIndex, rplLoaderContext->moduleName);
+			}
 		}
 		uint32 relocOffset = (uint32)reloc->relocOffset - (uint32)rplLoaderContext->sectionTablePtr[relocTargetSectionIndex].virtualAddress;
 		if (rplLoaderContext->externalModule && diagStrtabData)
@@ -2681,7 +2690,16 @@ void RPLLoader_FixModuleTLSIndex(RPLModule* rplLoaderContext)
 			break;
 		}
 	}
-	cemu_assert(tlsModuleIndex != -1);
+	if (tlsModuleIndex == -1)
+	{
+		// Leaving the index unresolved makes every TLS relocation in this module
+		// write a bogus module index, which only shows up much later as a broken
+		// __tls_get_addr lookup. Say so instead of failing silently.
+		cemuLog_log(LogType::Force,
+			"RPLLoader: no dependency entry for module '{}', its TLS module index stays unresolved",
+			rplLoaderContext->moduleName);
+		return;
+	}
 	rplLoaderContext->fileInfo.tlsModuleIndex = tlsModuleIndex;
 }
 

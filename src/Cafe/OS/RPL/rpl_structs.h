@@ -237,6 +237,7 @@ struct RPLModule
 
 	std::vector<bool> debugSectionLoadMask;
 	bool hasError{ false };
+	bool loggedTLSModuleIndexReloc{ false };
 
 	// External modules are lifecycle-owned by their caller and are deliberately
 	// skipped by the title-wide RPL link/entrypoint path.

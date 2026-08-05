@@ -294,21 +294,20 @@ namespace coreinit
 
 		if (_swapEndianU16(tlsIndex->tlsModuleIndex) == 0)
 		{
-			// A tls_index with module index 0 means its R_PPC_DTPMOD32 value is either
-			// missing or was overwritten at runtime. The index object itself always lives
-			// in the data region of the module owning the thread-local variable, so the
-			// owner can be recovered from its address and the entry repaired in place.
+			// A tls_index whose R_PPC_DTPMOD32 value never got resolved keeps module
+			// index 0. Rewriting it here would be wrong: the guest has been using
+			// slot 0 as its thread-local storage all along, and moving it to another
+			// slot mid-run hands every thread a freshly zeroed block, losing whatever
+			// it had already stored there. Keep the slot the guest is using and only
+			// resolve the template from the module that owns the tls_index instead.
 			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
-			const sint16 recoveredIndex = RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress);
 			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingModuleIndex))
 			{
 				cemuLog_log(LogType::Force,
-					"coreinit.__tls_get_addr: tls_index at 0x{:08x} has module index 0 (thread 0x{:08x}) - recovered module index {}",
-					indexAddress, memory_getVirtualOffsetFromPointer(currentThread), (sint32)recoveredIndex);
+					"coreinit.__tls_get_addr: tls_index at 0x{:08x} has an unresolved module index, owning module index is {} (thread 0x{:08x})",
+					indexAddress, (sint32)RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress),
+					memory_getVirtualOffsetFromPointer(currentThread));
 			}
-			if (recoveredIndex <= 0)
-				return GetTLSFallbackBlock();
-			tlsIndex->tlsModuleIndex = _swapEndianU16((uint16)recoveredIndex);
 		}
 
 		// check if we need to allocate additional TLS blocks for this thread
@@ -338,10 +337,19 @@ namespace coreinit
 		uint8* tlsSectionData = nullptr;
 		sint32 tlsSize = 0;
 
+		const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
 		bool r = RPLLoader_GetTLSDataByTLSIndex((sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), &tlsSectionData, &tlsSize);
 		if (!r || tlsSize <= 0)
 		{
-			const MPTR indexAddress = memory_getVirtualOffsetFromPointer(tlsIndex);
+			// The index does not name a module (an unresolved tls_index, for
+			// example), so fall back to the module the tls_index itself lives in -
+			// that is by definition the module owning this thread-local variable.
+			const sint16 owningIndex = RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress);
+			if (owningIndex > 0)
+				r = RPLLoader_GetTLSDataByTLSIndex(owningIndex, &tlsSectionData, &tlsSize);
+		}
+		if (!r || tlsSize <= 0)
+		{
 			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingTemplate))
 			{
 				cemuLog_log(LogType::Force,
