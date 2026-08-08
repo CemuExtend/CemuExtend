@@ -1,7 +1,9 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
+#include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include "cemuextend/services.hpp"
 #include "cemuextend/transport.hpp"
@@ -705,6 +707,98 @@ void TestTextInputComposition()
 	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 }
 
+std::vector<std::byte> HttpStartPayload(std::string_view url)
+{
+	cemuextend::wire::HttpStartRequest request{};
+	request.timeoutMs = 1000;
+	request.maximumBodyBytes = 4096;
+	request.urlBytes = static_cast<std::uint32_t>(url.size());
+	std::vector<std::byte> payload(sizeof(request) + url.size());
+	std::memcpy(payload.data(), &request, sizeof(request));
+	std::memcpy(payload.data() + sizeof(request), url.data(), url.size());
+	return payload;
+}
+
+void TestHttpValidationAndOwnership()
+{
+	using cemuextend::wire::HttpOperation;
+	using cemuextend::wire::HttpPollRequest;
+	using cemuextend::wire::HttpPollResponse;
+	using cemuextend::wire::HttpState;
+
+	constexpr std::uint64_t session = 0x1122;
+	constexpr std::uint64_t otherSession = 0x3344;
+	CHECK(cemuextend_hle::Cex2Http::ActiveTransfers() == 0);
+	auto invalid = HttpStartPayload("file:///etc/passwd");
+	auto result = cemuextend_hle::Cex2Http::Dispatch(session, "http-test",
+		static_cast<std::uint16_t>(HttpOperation::Start), invalid);
+	CHECK(result.status == Status::InvalidArgument);
+	CHECK(cemuextend_hle::Cex2Http::ActiveTransfers() == 0);
+
+	auto start = HttpStartPayload("https://example.invalid/profile");
+	result = cemuextend_hle::Cex2Http::Dispatch(session, "http-test",
+		static_cast<std::uint16_t>(HttpOperation::Start), start);
+	CHECK(result.status == Status::Ok);
+	CHECK(result.payload.size() == sizeof(cemuextend::wire::HttpStartResponse));
+	const auto* started =
+		reinterpret_cast<const cemuextend::wire::HttpStartResponse*>(result.payload.data());
+	const std::uint32_t handle = started->handle.get();
+	CHECK(handle != 0 && cemuextend_hle::Cex2Http::ActiveTransfers() == 1);
+
+	HttpPollRequest poll{};
+	poll.handle = handle;
+	poll.length = 64;
+	const auto pollBytes =
+		std::span<const std::byte>(reinterpret_cast<const std::byte*>(&poll), sizeof(poll));
+	result = cemuextend_hle::Cex2Http::Dispatch(otherSession, "other",
+		static_cast<std::uint16_t>(HttpOperation::Poll), pollBytes);
+	CHECK(result.status == Status::NotFound);
+	result = cemuextend_hle::Cex2Http::Dispatch(session, "http-test",
+		static_cast<std::uint16_t>(HttpOperation::Poll), pollBytes);
+	CHECK(result.status == Status::Ok && result.payload.size() == sizeof(HttpPollResponse));
+	const auto* polled = reinterpret_cast<const HttpPollResponse*>(result.payload.data());
+	CHECK(static_cast<HttpState>(polled->state) == HttpState::Failed);
+	CHECK(polled->error.get() == static_cast<std::int32_t>(Status::NotSupported));
+
+	cemuextend::wire::Be32 releaseHandle{handle};
+	const auto releaseBytes = std::span<const std::byte>(
+		reinterpret_cast<const std::byte*>(&releaseHandle), sizeof(releaseHandle));
+	result = cemuextend_hle::Cex2Http::Dispatch(session, "http-test",
+		static_cast<std::uint16_t>(HttpOperation::Release), releaseBytes);
+	CHECK(result.status == Status::Ok);
+	CHECK(cemuextend_hle::Cex2Http::ActiveTransfers() == 0);
+}
+
+void TestHttpPermissionGate()
+{
+	using cemuextend::wire::HttpOperation;
+	using cemuextend::wire::ServiceId;
+
+	auto& host = cemuextend_hle::Cex2Host::Instance();
+	host.CloseAll();
+	ModExecutionContext context(90, 1, "http-permission-principal");
+	const auto session = Open(host, context);
+	auto payload = HttpStartPayload("file:///etc/passwd");
+
+	auto request = Request(1, static_cast<std::uint16_t>(HttpOperation::Start),
+		payload, ServiceId::Http);
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	auto response = PollUntil(host, context, session);
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::PermissionDenied));
+
+	context.SetGrantedPermissions(cemuextend_hle::kCemodNetworkPermission);
+	request = Request(2, static_cast<std::uint16_t>(HttpOperation::Start),
+		payload, ServiceId::Http);
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	response = PollUntil(host, context, session);
+	// Reaching URL validation proves Network did not get rejected by the
+	// unrelated title-wide service mask.
+	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+		static_cast<std::uint16_t>(Status::InvalidArgument));
+	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -726,6 +820,8 @@ int main(int argc, char** argv)
 		TestObservedInputSnapshot();
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
+		TestHttpValidationAndOwnership();
+		TestHttpPermissionGate();
 	}
 	cemuextend_hle::Cex2Host::Instance().ShutdownForTesting();
 	// OpenSSL keeps provider/configuration state alive until process shutdown.

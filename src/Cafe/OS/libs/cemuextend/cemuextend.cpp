@@ -370,7 +370,8 @@ namespace cemuextend_hle
 			if (!package.error.empty()) continue;
 			const auto grant = ResolveCemodGrant(titleId, package.modId, package.principal,
 				package.requestedPermissions & kCemodPermissionMask);
-			if (!grant.approved) continue;
+			// An unapproved package, including an already-trusted mod that added a
+			// permission, is exactly what this list must surface to the prompt.
 			auto found = grouped.try_emplace(package.principal,
 				CemodPermissionRequest{package.modId, package.principal, 0,
 					grant.permissions & kCemodPermissionMask, package.executionMode,
@@ -449,7 +450,8 @@ namespace cemuextend_hle
 			if (runtime.Size() >= CemodRuntime::kMaximumModsPerTitle) break;
 			std::string error;
 			const auto effective = item.package.IsTrustedNative() ? trustedPermissions : item.permissions;
-			if (!runtime.Load(std::move(item.package), effective, 0x1fU, error, &services))
+			if (!runtime.Load(std::move(item.package), effective, kCemodPermissionMask,
+				error, &services))
 				cemuLog_log(LogType::Force, "CemuExtend failed to load cemod '{}': {}",
 					_pathToUtf8(item.path), error);
 		}

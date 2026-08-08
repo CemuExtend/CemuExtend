@@ -3,6 +3,7 @@
 #include "Cafe/HW/Espresso/CemodRuntime.h"
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
+#include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -107,6 +108,14 @@ void TestLoadLifecycleAndPermissionIntersection()
 	CHECK(runtime.Invoke(*handle,CemodLifecycle::Event,0,0));
 	CHECK(runtime.Unload(*handle));
 	CHECK(runtime.Size()==0);
+
+	auto networkPackage=Package("principal:network");
+	networkPackage.manifest.requestedPermissions=cemuextend_hle::kCemodNetworkPermission;
+	const auto network=runtime.Load(std::move(networkPackage),cemuextend_hle::kCemodPermissionMask,
+		cemuextend_hle::kCemodPermissionMask,error);
+	CHECK(network.has_value());
+	CHECK(runtime.Context(*network)->GrantedPermissions()==cemuextend_hle::kCemodNetworkPermission);
+	CHECK(runtime.Unload(*network));
 }
 
 void TestLimitsAndIsolation()

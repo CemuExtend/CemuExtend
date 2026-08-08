@@ -1032,8 +1032,9 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 
 	auto* permissionBox = new wxStaticBoxSizer(wxVERTICAL, modParent, _("Selected Mod permissions"));
 	auto* permissionParent = permissionBox->GetStaticBox();
-	const std::array<const char*, 5> permissionNames{
-		"Read host state", "Write Mod storage/logging", "Input injection", "Clipboard", "Capture"
+	const std::array<const char*, 6> permissionNames{
+		"Read host state", "Write Mod storage/logging", "Input injection", "Clipboard", "Capture",
+		"Network"
 	};
 	for (std::size_t index = 0; index < permissionNames.size(); ++index)
 	{

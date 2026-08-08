@@ -271,6 +271,8 @@ add_library(CemuCafe
   OS/libs/camera/camera.cpp
   OS/libs/camera/camera.h
   OS/libs/cemuextend/Cex2Host.cpp
+  OS/libs/cemuextend/Cex2Http.cpp
+  OS/libs/cemuextend/Cex2Http.h
   OS/libs/cemuextend/Cex2Owner.h
   OS/libs/cemuextend/Cex2Storage.cpp
   OS/libs/cemuextend/BridgeHost.h
@@ -768,6 +770,7 @@ if(BUILD_TESTING)
 	add_executable(cex2_host_tests
 		HW/Espresso/ModExecutionContext.cpp
 		OS/libs/cemuextend/Cex2Host.cpp
+		OS/libs/cemuextend/Cex2Http.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/Cex2HostTests.cpp
 	)
@@ -870,6 +873,7 @@ if(BUILD_TESTING)
 		HW/Espresso/CemodRuntime.cpp
 		HW/Espresso/WupsPluginHeap.cpp
 		OS/libs/cemuextend/Cex2Host.cpp
+		OS/libs/cemuextend/Cex2Http.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/TrustedCemodRuntimeStub.cpp
 		tests/WupsRuntimeStub.cpp

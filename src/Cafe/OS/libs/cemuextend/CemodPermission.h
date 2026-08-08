@@ -4,7 +4,9 @@
 
 namespace cemuextend_hle
 {
-	constexpr std::uint32_t kCemodPermissionMask = 0x1fU;
+	// read | write | inject | clipboard | capture | network
+	constexpr std::uint32_t kCemodNetworkPermission = 1U << 5U;
+	constexpr std::uint32_t kCemodPermissionMask = 0x3fU;
 
 	[[nodiscard]] constexpr bool NeedsCemodPermissionPrompt(std::uint32_t requested,
 		std::uint32_t granted, std::uint32_t approvedRequests, bool enabled)

@@ -242,6 +242,7 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	}
 	static const std::map<std::string_view, std::uint32_t> permissionBits{
 		{"read", 1U}, {"write", 2U}, {"inject", 4U}, {"clipboard", 8U}, {"capture", 16U},
+		{"network", 32U},
 	};
 	for (const auto& value : document["requested_permissions"].GetArray())
 	{

@@ -26,7 +26,7 @@ CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& g
 			entry.signedPackage = request.signedPackage;
 			static constexpr std::array labels{
 				"Read host state", "Write Mod storage/logging", "Input injection",
-				"Clipboard", "Capture"};
+				"Clipboard", "Capture", "Network"};
 			for (std::size_t index = 0; index < labels.size(); ++index)
 				if ((request.requestedPermissions & (1U << index)) != 0)
 					entry.permissions.push_back({static_cast<CemodGuiPermission>(index), labels[index],
@@ -163,11 +163,11 @@ void CemodPermissionDialog::SaveAndClose()
 			{
 				const auto bit = row.entry.permissions[index].bit;
 				grantedNative |= bit;
-				if (bit <= 0x10) granted |= static_cast<std::uint32_t>(bit);
+				if (bit <= 0x20) granted |= static_cast<std::uint32_t>(bit);
 			}
 		std::uint32_t requestedLegacy{};
 		for (const auto& permission : row.entry.permissions)
-			if (permission.bit <= 0x10) requestedLegacy |= static_cast<std::uint32_t>(permission.bit);
+			if (permission.bit <= 0x20) requestedLegacy |= static_cast<std::uint32_t>(permission.bit);
 		m_selections.push_back({row.entry.principal, requestedLegacy, granted,
 			row.entry.approvalKey, row.entry.packageDigest, row.entry.modIdentity,
 			requestedLegacy == 0 ? 0 : static_cast<std::uint64_t>(requestedLegacy),

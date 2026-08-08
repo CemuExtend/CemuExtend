@@ -176,8 +176,8 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 			if (titleId == 0 || principal.empty() || principal.size() > 256)
 				continue;
 			cemuextend_mod_grants[titleId][principal] = {
-				mod.get_attribute<uint32>("permissions", 0) & 0x1fU,
-				mod.get_attribute<uint32>("approved_requests", 0) & 0x1fU,
+				mod.get_attribute<uint32>("permissions", 0) & 0x3fU,
+				mod.get_attribute<uint32>("approved_requests", 0) & 0x3fU,
 				mod.get_attribute<bool>("approved", false)};
 		}
 		for (auto trust = bridge.get("ModTrust"); trust.valid(); trust = bridge.get("ModTrust", trust))
@@ -187,8 +187,8 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 			if (titleId == 0 || modId.empty() || modId.size() > 128)
 				continue;
 			cemuextend_mod_trust[titleId][modId] = {
-				trust.get_attribute<uint32>("permissions", 0) & 0x1fU,
-				trust.get_attribute<uint32>("approved_requests", 0) & 0x1fU};
+				trust.get_attribute<uint32>("permissions", 0) & 0x3fU,
+				trust.get_attribute<uint32>("approved_requests", 0) & 0x3fU};
 		}
 		for (auto approval = bridge.get("PermissionApproval"); approval.valid();
 			approval = bridge.get("PermissionApproval", approval))
@@ -499,8 +499,8 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 				auto mod = bridge.set("Mod");
 				mod.set_attribute("title", static_cast<sint64>(titleId));
 				mod.set_attribute("principal", principal.c_str());
-				mod.set_attribute("permissions", grant.permissions & 0x1fU);
-				mod.set_attribute("approved_requests", grant.approved_request_mask & 0x1fU);
+				mod.set_attribute("permissions", grant.permissions & 0x3fU);
+				mod.set_attribute("approved_requests", grant.approved_request_mask & 0x3fU);
 				mod.set_attribute("approved", grant.approved);
 			}
 		for (const auto& [titleId, mods] : cemuextend_mod_trust)
@@ -509,8 +509,8 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 				auto trust = bridge.set("ModTrust");
 				trust.set_attribute("title", static_cast<sint64>(titleId));
 				trust.set_attribute("mod_id", modId.c_str());
-				trust.set_attribute("permissions", anchor.permissions & 0x1fU);
-				trust.set_attribute("approved_requests", anchor.approved_request_mask & 0x1fU);
+				trust.set_attribute("permissions", anchor.permissions & 0x3fU);
+				trust.set_attribute("approved_requests", anchor.approved_request_mask & 0x3fU);
 			}
 		for (const auto& [titleId, approvals] : cemuextend_permission_approvals)
 			for (const auto& [key, approval] : approvals)

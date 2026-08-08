@@ -1,7 +1,9 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
+#include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
@@ -86,6 +88,7 @@ enum class Handler : std::uint8_t
 	Window,
 	Capture,
 	Diagnostics,
+	Http,
 };
 
 struct OperationDefinition
@@ -134,6 +137,9 @@ constexpr std::array kOperations{
 	OperationDefinition{8,2,1,16,8,65520,0,0,Handler::Capture},
 	OperationDefinition{8,3,1,16,4,0,0,0,Handler::Capture},
 	OperationDefinition{9,1,1,1,0,sizeof(cemuextend::wire::DiagnosticsPayload),0,0,Handler::Diagnostics},
+	OperationDefinition{10,1,1,kCemodNetworkPermission,sizeof(cemuextend::wire::HttpStartRequest)+2048,sizeof(cemuextend::wire::HttpStartResponse),0,0,Handler::Http},
+	OperationDefinition{10,2,1,kCemodNetworkPermission,sizeof(cemuextend::wire::HttpPollRequest),65520,0,0,Handler::Http},
+	OperationDefinition{10,3,1,kCemodNetworkPermission,4,0,0,0,Handler::Http},
 };
 
 const OperationDefinition* FindOperation(std::uint16_t service, std::uint16_t operation)
@@ -154,6 +160,7 @@ constexpr std::array kServices{
 	ServiceDefinition{7, 1, 1, 64, 256},
 	ServiceDefinition{8, 1, 16, 64, 64U * 1024U},
 	ServiceDefinition{9, 1, 1, 64, 4U * 1024U},
+	ServiceDefinition{10, 1, 32, 64U * 1024U, 64U * 1024U},
 };
 
 struct WireServiceDefinition
@@ -316,9 +323,15 @@ struct Cex2Host::Impl
 	static bool HasPermission(const Session& session, std::uint32_t permission,
 		std::uint16_t service = 0, std::uint16_t operation = 0)
 	{
-		return (permission == 0 ||
-			(session.owner->GrantedPermissions() & permission) == permission) &&
-			(service == 0 || session.owner->IsServiceAllowed(service, permission, operation));
+		const bool granted = permission == 0 ||
+			(session.owner->GrantedPermissions() & permission) == permission;
+		// HTTP is authorized by the dedicated per-Mod Network grant. It is not
+		// part of the legacy title-wide read/write/inject service matrix.
+		const bool networkService =
+			service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Http) &&
+			permission == kCemodNetworkPermission;
+		return granted && (service == 0 || networkService ||
+			session.owner->IsServiceAllowed(service, permission, operation));
 	}
 
 	static bool IsValidPointerPolicy(const cemuextend::wire::PointerPolicyPayload& policy)
@@ -682,6 +695,16 @@ struct Cex2Host::Impl
 			diagnostics.bytesCopied = session.bytesCopied;
 			return MakeResponse(request, Status::Ok,
 				{reinterpret_cast<const std::byte*>(&diagnostics), sizeof(diagnostics)});
+		}
+		if (definition->handler == Handler::Http)
+		{
+			if (request.operation.get() == static_cast<std::uint16_t>(HttpOperation::Start))
+				AuditSensitiveUse(session.owner->Principal(), "Network Fetch", false);
+			auto result = Cex2Http::Dispatch(session.addressSpaceId,
+				session.owner->Principal(), request.operation.get(), payload);
+			if (result.status != Status::Ok)
+				return MakeResponse(request, result.status);
+			return MakeResponse(request, Status::Ok, result.payload);
 		}
 		if (definition->handler == Handler::Configuration || definition->handler == Handler::File)
 		{
@@ -1195,6 +1218,9 @@ void Cex2Host::CloseOwner(Cex2Owner& owner)
 		hadTextInput |= remove && session.textInput.active;
 		return remove;
 	});
+	// Transfers are scoped to the address space, so they outlive one session of
+	// it but never the owner that started them.
+	Cex2Http::ReleaseSession(owner.AddressSpaceId());
 	if (hadTextInput && m_impl->textInputWakeCallback)
 		m_impl->textInputWakeCallback();
 }
@@ -1204,6 +1230,8 @@ void Cex2Host::CloseAll()
 	std::lock_guard lock(m_impl->mutex);
 	const bool hadTextInput = std::ranges::any_of(m_impl->sessions,
 		[](const auto& entry) { return entry.second.textInput.active; });
+	for (const auto& entry : m_impl->sessions)
+		Cex2Http::ReleaseSession(entry.second.addressSpaceId);
 	m_impl->sessions.clear();
 	if (hadTextInput && m_impl->textInputWakeCallback)
 		m_impl->textInputWakeCallback();
