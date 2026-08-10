@@ -4,6 +4,14 @@
 #include "Cafe/OS/libs/coreinit/coreinit_FG.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Misc.h"
 
+#include <chrono>
+#include <mutex>
+#include <string>
+#include <utility>
+
+#include <wx/app.h>
+#include <wx/utils.h>
+
 typedef struct  
 {
 	MEMPTR<char> argStr;
@@ -693,15 +701,56 @@ namespace sysapp
 
 	sint32 SYSSwitchToBrowserForViewer(sysBrowserArguments_t* args)
 	{
-		coreinit::__OSClearCopyData();
-		if (args)
+		constexpr uint32 kMaxBrowserUrlSize = 4096;
+		if (!args || !args->url || args->urlSize == 0 || args->urlSize > kMaxBrowserUrlSize)
 		{
-			_SYSSerializeStandardArgsIn(&args->standardArguments);
-			if (args->url && args->urlSize != 0)
-				SYSSerializeSysArgs("url", args->url.GetPtr(), args->urlSize);
+			cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer called with invalid URL arguments");
+			return -1;
 		}
-		_SYSAppendCallerInfo();
-		coreinit::StartBackgroundForegroundTransition();
+
+		const char* urlPtr = args->url.GetPtr();
+		if (!urlPtr)
+			return -1;
+
+		std::string url(urlPtr, args->urlSize);
+		if (const auto nul = url.find('\0'); nul != std::string::npos)
+			url.resize(nul);
+		if (!url.starts_with("http://") && !url.starts_with("https://"))
+		{
+			cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer rejected unsupported URL scheme");
+			return -1;
+		}
+
+		// Opening the host browser moves focus away from Cemu. A guest UI can
+		// consequently miss the mouse-button release and request the same URL
+		// again. Treat close-together requests for one URL as a single action,
+		// while allowing a later deliberate click after the burst has stopped.
+		static std::mutex browserRequestMutex;
+		static std::string lastBrowserUrl;
+		static std::chrono::steady_clock::time_point lastBrowserRequest;
+		const auto now = std::chrono::steady_clock::now();
+		{
+			std::scoped_lock lock(browserRequestMutex);
+			const bool duplicateRequest =
+				url == lastBrowserUrl &&
+				now - lastBrowserRequest < std::chrono::seconds(15);
+			lastBrowserUrl = url;
+			lastBrowserRequest = now;
+			if (duplicateRequest)
+				return 0;
+		}
+
+		if (!wxTheApp)
+		{
+			cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer could not access the host UI");
+			return -1;
+		}
+
+		cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer opening {} in the host browser", url);
+		wxTheApp->CallAfter([url = std::move(url)] {
+			if (!wxLaunchDefaultBrowser(wxString::FromUTF8(url)))
+				cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer failed to open the host browser");
+		});
 		return 0;
 	}
 
