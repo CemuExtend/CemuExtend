@@ -34,6 +34,10 @@ namespace coreinit
 {
 	void* MEMAllocFromExpHeapEx(MEMHeapHandle, uint32, sint32) { return nullptr; }
 	void MEMFreeToExpHeap(MEMHeapHandle, void*) {}
+	// Referenced by WupsPluginHeap::CreateBackingLocked. Reserving a backing
+	// must fail here so the plugin heap stays in its fail-closed state.
+	MEMHeapHandle MEMCreateExpHeapEx(void*, uint32, uint32) { return nullptr; }
+	void* _weak_MEMAllocFromDefaultHeapEx(uint32, sint32) { return nullptr; }
 }
 
 PPCInterpreter_t* PPCInterpreter_getCurrentInstance() { return s_cpu; }

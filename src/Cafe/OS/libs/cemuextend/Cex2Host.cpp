@@ -44,6 +44,27 @@ std::uint64_t CurrentFrameNumber()
 #endif
 }
 
+cemuextend::wire::GraphicsApi CurrentGraphicsApi()
+{
+#ifdef CEMU_CEX2_TESTING
+	return cemuextend::wire::GraphicsApi::Unknown;
+#else
+	if (!g_renderer)
+		return cemuextend::wire::GraphicsApi::Unknown;
+	switch (g_renderer->GetType())
+	{
+	case RendererAPI::OpenGL:
+		return cemuextend::wire::GraphicsApi::OpenGL;
+	case RendererAPI::Vulkan:
+		return cemuextend::wire::GraphicsApi::Vulkan;
+	case RendererAPI::Metal:
+		return cemuextend::wire::GraphicsApi::Metal;
+	default:
+		return cemuextend::wire::GraphicsApi::Unknown;
+	}
+#endif
+}
+
 void LogGuestRecord(std::string_view principal, std::uint8_t level, std::string_view message)
 {
 #ifndef CEMU_CEX2_TESTING
@@ -693,6 +714,7 @@ struct Cex2Host::Impl
 			diagnostics.requests = session.acceptedRequests;
 			diagnostics.responses = session.completedResponses;
 			diagnostics.bytesCopied = session.bytesCopied;
+			diagnostics.graphicsApi = static_cast<std::uint32_t>(CurrentGraphicsApi());
 			return MakeResponse(request, Status::Ok,
 				{reinterpret_cast<const std::byte*>(&diagnostics), sizeof(diagnostics)});
 		}

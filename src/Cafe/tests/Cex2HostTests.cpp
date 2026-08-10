@@ -138,6 +138,27 @@ void TestOwnershipCopyAndCancel()
 	CHECK(host.Close(first, session) == static_cast<std::int32_t>(Error::Ok));
 }
 
+void TestDiagnosticsGraphicsApi()
+{
+	using namespace cemuextend::wire;
+	auto& host = cemuextend_hle::Cex2Host::Instance();
+	host.CloseAll();
+	ModExecutionContext context(91, 1, "diagnostics-graphics-api");
+	context.SetGrantedPermissions(1);
+	const auto session = Open(host, context);
+	auto request = Request(1, static_cast<std::uint16_t>(DiagnosticsOperation::Get),
+		{}, ServiceId::Diagnostics);
+	CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+	auto response = PollUntil(host, context, session);
+	const auto* header = reinterpret_cast<const ResponseHeader*>(response.data());
+	CHECK(header->status.get() == static_cast<std::uint16_t>(Status::Ok));
+	CHECK(response.size() == sizeof(ResponseHeader) + sizeof(DiagnosticsPayload));
+	const auto* diagnostics = reinterpret_cast<const DiagnosticsPayload*>(
+		response.data() + sizeof(ResponseHeader));
+	CHECK(static_cast<GraphicsApi>(diagnostics->graphicsApi.get()) == GraphicsApi::Unknown);
+	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+}
+
 void TestBackpressureAndProtocolReap()
 {
 	auto& host = cemuextend_hle::Cex2Host::Instance();
@@ -804,7 +825,13 @@ void TestHttpPermissionGate()
 int main(int argc, char** argv)
 {
 	const bool pointerOnly = argc == 2 && std::string_view(argv[1]) == "--pointer-only";
-	if (pointerOnly)
+	const bool diagnosticsOnly =
+		argc == 2 && std::string_view(argv[1]) == "--diagnostics-only";
+	if (diagnosticsOnly)
+	{
+		TestDiagnosticsGraphicsApi();
+	}
+	else if (pointerOnly)
 	{
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
@@ -822,6 +849,7 @@ int main(int argc, char** argv)
 		TestMouseAndPointerPolicy();
 		TestHttpValidationAndOwnership();
 		TestHttpPermissionGate();
+		TestDiagnosticsGraphicsApi();
 	}
 	cemuextend_hle::Cex2Host::Instance().ShutdownForTesting();
 	// OpenSSL keeps provider/configuration state alive until process shutdown.

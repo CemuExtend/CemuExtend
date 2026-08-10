@@ -56,6 +56,11 @@ public:
 
 	[[nodiscard]] bool IsUsable() const;
 
+	// True once EnsureInitialized() has run for the current title, whether it
+	// succeeded or failed. Reset() clears it again. Used to tell "this title
+	// never needed the plugin heap" apart from "the reservation was tried".
+	[[nodiscard]] bool WasInitializationAttempted() const;
+
 	// Allocates from the plugin ExpHeap on behalf of `owner`. Never calls back
 	// into guest code. Returns 0 on failure (heap not usable, OOM, or bad
 	// arguments).

@@ -530,13 +530,24 @@ void CemodRuntime::OnApplicationStarts()
 	// point where that backing is carved out of the *game*'s default heap, and
 	// it must happen from this clean PPC thread context - not from inside a
 	// plugin's own init code, which may already be racing the game's heap.
-	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+	//
+	// Reserving it costs the title WupsPluginHeap::kBackingSize of its own
+	// default heap for the rest of its run, so only do it when this title
+	// really is going to start plugin code. A live WupsPayloadRuntime does not
+	// imply that: CemodRuntime is a process-wide singleton and UnloadAll()
+	// only empties the plugin list, so once any title has loaded a WUPS cemod
+	// every later title would otherwise hand 32 MiB of its own heap to a
+	// runtime with nothing to run.
+	if (m_impl->wups->WillStartPlugins())
 	{
-		std::string heapError;
-		if (!pluginHeap->EnsureInitialized(heapError))
-			cemuLog_log(LogType::Force,
-				"WUPS: plugin heap initialization failed, plugin libc "
-				"allocations will be rejected: {}", heapError);
+		if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+		{
+			std::string heapError;
+			if (!pluginHeap->EnsureInitialized(heapError))
+				cemuLog_log(LogType::Force,
+					"WUPS: plugin heap initialization failed, plugin libc "
+					"allocations will be rejected: {}", heapError);
+		}
 	}
 	std::string error;
 	if (!m_impl->wups->OnApplicationStarts(error))

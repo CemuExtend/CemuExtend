@@ -4,6 +4,7 @@
 #include "Cafe/Filesystem/fsc.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/RPL/RPLExternalModulePolicy.h"
+#include "Cafe/OS/RPL/RPLReadOnlySections.h"
 #include "Cafe/OS/RPL/RPLTLSMapping.h"
 #include "Cafe/OS/RPL/rpl_structs.h"
 #include "Cafe/OS/RPL/rpl_symbol_storage.h"
@@ -3016,10 +3017,19 @@ void RPLLoader_SnapshotReadOnlyData(RPLModule* rpl)
 		sectionIndex < (uint32)rpl->rplHeader.sectionTableEntryCount; ++sectionIndex)
 	{
 		const auto* section = rpl->sectionTablePtr + sectionIndex;
-		if (section->type == SHT_NOBITS || section->sectionSize == 0)
+		const std::string_view sectionName = RPLLoader_GetSectionName(rpl, sectionIndex);
+		if (!rpl_sections::IsGuardableReadOnlySection(section->type, section->flags,
+			section->sectionSize, sectionName))
+		{
+			if (rpl_sections::IsWritableRodataSection(section->type, section->flags,
+				section->sectionSize, sectionName))
+			{
+				cemuLog_log(LogType::Force,
+					"RPLLoader: not guarding writable .rodata (flags 0x{:08x}) in {}",
+					(uint32)section->flags, rpl->moduleName);
+			}
 			continue;
-		if (RPLLoader_GetSectionName(rpl, sectionIndex) != ".rodata")
-			continue;
+		}
 		const auto* sectionPointer = (const uint8*)rpl->sectionAddressTable2[sectionIndex].ptr;
 		if (!sectionPointer)
 			continue;

@@ -1441,6 +1441,20 @@ bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
 	return success;
 }
 
+bool WupsPayloadRuntime::WillStartPlugins() const
+{
+	WupsProcessKey processKey;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		if (!m_impl->plugins.empty())
+			return true;
+		processKey = m_impl->processKey;
+	}
+	// A management plan queued for this process is loaded by
+	// OnApplicationStarts() below, so those plugins also run init hooks.
+	return m_impl->management && m_impl->management->HasPendingPlan(processKey);
+}
+
 void WupsPayloadRuntime::SetProcessKey(WupsProcessKind process,
 	std::uint64_t titleId)
 {

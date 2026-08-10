@@ -1,5 +1,21 @@
 #include "Cafe/HW/Espresso/WupsRuntime.h"
 
+#include "WupsRuntimeStub.h"
+
+namespace wups_runtime_stub
+{
+std::size_t g_pluginCount = 0;
+std::function<void()> g_onApplicationStarts;
+std::size_t g_applicationStartCount = 0;
+
+void Reset()
+{
+	g_pluginCount = 0;
+	g_onApplicationStarts = {};
+	g_applicationStartCount = 0;
+}
+} // namespace wups_runtime_stub
+
 struct WupsPayloadRuntime::Impl {};
 
 WupsPayloadRuntime::WupsPayloadRuntime(
@@ -37,7 +53,18 @@ bool WupsPayloadRuntime::Unload(std::uint64_t, std::string& error)
 void WupsPayloadRuntime::UnloadAll() {}
 bool WupsPayloadRuntime::UnloadAll(std::string&) { return true; }
 void WupsPayloadRuntime::AbandonAllForTitleShutdown() {}
-bool WupsPayloadRuntime::OnApplicationStarts(std::string&) { return true; }
+bool WupsPayloadRuntime::OnApplicationStarts(std::string&)
+{
+	if (wups_runtime_stub::g_onApplicationStarts)
+		wups_runtime_stub::g_onApplicationStarts();
+	++wups_runtime_stub::g_applicationStartCount;
+	return true;
+}
+
+bool WupsPayloadRuntime::WillStartPlugins() const
+{
+	return wups_runtime_stub::g_pluginCount != 0;
+}
 void WupsPayloadRuntime::OnReleaseForeground() {}
 void WupsPayloadRuntime::OnAcquiredForeground() {}
 void WupsPayloadRuntime::OnApplicationRequestsExit() {}
@@ -49,7 +76,10 @@ std::shared_ptr<WupsPluginRuntime> WupsPayloadRuntime::Find(std::uint64_t) const
 	return {};
 }
 
-std::size_t WupsPayloadRuntime::Size() const { return 0; }
+std::size_t WupsPayloadRuntime::Size() const
+{
+	return wups_runtime_stub::g_pluginCount;
+}
 
 std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader() { return {}; }
 

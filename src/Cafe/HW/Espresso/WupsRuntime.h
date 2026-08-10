@@ -372,6 +372,13 @@ public:
 	void AbandonAllForTitleShutdown();
 
 	[[nodiscard]] bool OnApplicationStarts(std::string& error);
+	// True when the next OnApplicationStarts() actually has plugin code to run,
+	// i.e. a plugin is loaded or the management backend has a plan queued for
+	// this process. The runtime object outlives a title, so a live runtime on
+	// its own says nothing about whether the current title uses WUPS at all.
+	// Callers use this to avoid paying a title-lifetime cost (see the plugin
+	// heap in CemodRuntime::OnApplicationStarts) for a title without plugins.
+	[[nodiscard]] bool WillStartPlugins() const;
 	void OnReleaseForeground();
 	void OnAcquiredForeground();
 	void OnApplicationRequestsExit();

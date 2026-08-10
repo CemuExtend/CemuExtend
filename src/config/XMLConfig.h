@@ -42,6 +42,8 @@ public:
 			return element->IntText(default_value);
 		else if constexpr (std::is_same_v<T, uint32>)
 			return element->UnsignedText(default_value);
+		else if constexpr (std::is_same_v<T, uint16>)
+			return static_cast<uint16>(element->UnsignedText(default_value));
 		else if constexpr (std::is_same_v<T, sint64>)
 			return element->Int64Text(default_value);
 		else if constexpr (std::is_same_v<T, uint64>) // doesnt support real uint64...

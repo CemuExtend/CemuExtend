@@ -3,7 +3,13 @@
 #include "Cafe/HW/Espresso/CemodRuntime.h"
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
+#include "Cafe/HW/Espresso/WupsPluginHeap.h"
+#include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
+#include "Cafe/OS/libs/coreinit/coreinit_MEM.h"
+#include "Cafe/OS/libs/coreinit/coreinit_MEM_ExpHeap.h"
+#include "Cemu/Logging/CemuLogging.h"
+#include "WupsRuntimeStub.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -158,6 +164,89 @@ void TestCex2ImportBinding()
 	CHECK(std::to_integer<std::uint8_t>(instruction[3])==0x2a);
 }
 
+CemodPackage WupsPackage(std::string principal)
+{
+	auto package = Package(std::move(principal));
+	package.manifest.payload.format = CemodPayloadFormat::Wups;
+	package.manifest.payload.path = "plugin.wps";
+	return package;
+}
+
+// Brings a CemodRuntime into the state it is in for a title that has, at some
+// point in this Cemu process, seen a WUPS cemod: the lazily created
+// WupsPayloadRuntime exists from here on and is never destroyed again. The stub
+// runtime rejects the load itself, which is exactly the interesting case - the
+// runtime object outlives every individual plugin.
+void EnsureWupsRuntime(CemodRuntime& runtime)
+{
+	std::string error;
+	CHECK(!runtime.Load(WupsPackage("principal:wups"), 7, 7, error).has_value());
+}
+
+// A title without WUPS plugins must not hand any of its default heap to the
+// plugin heap. Before this was gated, every title launched after the first
+// WUPS-using one reserved WupsPluginHeap::kBackingSize out of its own heap for
+// a runtime with nothing to run.
+void TestPluginHeapIsNotReservedWithoutPlugins()
+{
+	wups_runtime_stub::Reset();
+	auto heap = std::make_shared<WupsPluginHeap>(nullptr);
+	cafe::wups::SetActivePluginHeap(heap);
+
+	CemodRuntime runtime;
+	EnsureWupsRuntime(runtime);
+	wups_runtime_stub::g_pluginCount = 0;
+	runtime.OnApplicationStarts();
+
+	CHECK(wups_runtime_stub::g_applicationStartCount == 1);
+	CHECK(!heap->WasInitializationAttempted());
+	CHECK(!heap->IsUsable());
+
+	// A second title start in the same process must stay just as clean.
+	runtime.UnloadAll();
+	runtime.OnApplicationStarts();
+	CHECK(!heap->WasInitializationAttempted());
+
+	cafe::wups::SetActivePluginHeap(nullptr);
+	wups_runtime_stub::Reset();
+}
+
+// A title that does start plugins must still get the reservation, it must
+// happen before any plugin init hook runs, and a failed reservation must leave
+// the heap unusable instead of falling back to the game's own heap.
+void TestPluginHeapIsReservedBeforePluginStart()
+{
+	wups_runtime_stub::Reset();
+	auto heap = std::make_shared<WupsPluginHeap>(nullptr);
+	cafe::wups::SetActivePluginHeap(heap);
+
+	CemodRuntime runtime;
+	EnsureWupsRuntime(runtime);
+	wups_runtime_stub::g_pluginCount = 1;
+	bool attemptedBeforePluginStart = false;
+	wups_runtime_stub::g_onApplicationStarts = [&] {
+		attemptedBeforePluginStart = heap->WasInitializationAttempted();
+	};
+	runtime.OnApplicationStarts();
+
+	CHECK(wups_runtime_stub::g_applicationStartCount == 1);
+	CHECK(attemptedBeforePluginStart);
+	CHECK(heap->WasInitializationAttempted());
+	// No emulated CPU thread here, so carving the backing out of the game heap
+	// cannot succeed - the heap must fail closed rather than serve plugin
+	// allocations from anywhere else.
+	CHECK(!heap->IsUsable());
+	CHECK(heap->Alloc(WupsOwnerToken{1, 1}, 16) == 0);
+	CHECK(heap->AllocEx(WupsOwnerToken{1, 1}, 16, 0x40) == 0);
+
+	// Title teardown re-arms the reservation for the next title.
+	runtime.UnloadAll();
+	CHECK(!heap->WasInitializationAttempted());
+
+	cafe::wups::SetActivePluginHeap(nullptr);
+	wups_runtime_stub::Reset();
+}
+
 } // namespace
 
 PPCInterpreter_t* PPCInterpreter_getCurrentInstance(){return gCurrentCpu;}
@@ -186,10 +275,36 @@ sint32 osLib_getFunctionIndex(const char* libraryName,const char* functionName)
 
 namespace cemuextend_hle { void ConfigureCex2HleAccess(ModExecutionContext&) {} }
 
+// CemodRuntime.cpp and WupsPluginHeap.cpp reach into Cemu's logging, guest
+// address space and coreinit heaps. None of that is linked into this isolated
+// test, so provide the same kind of inert stand-ins the other Cafe unit tests
+// use. The plugin heap must never manage to reserve a backing here, which is
+// exactly the fail-closed path the plugin-heap tests assert on.
+uint64 s_loggingFlagMask = 0;
+bool cemuLog_log(LogType, std::string_view) { return true; }
+bool cemuLog_log(LogType, std::u8string_view) { return true; }
+
+uint8* memory_getPointerFromVirtualOffset(uint32) { return nullptr; }
+uint32 memory_getVirtualOffsetFromPointer(void*) { return 0; }
+
+namespace coreinit
+{
+	MEMHeapHandle MEMCreateExpHeapEx(void*, uint32, uint32) { return nullptr; }
+	void* MEMAllocFromExpHeapEx(MEMHeapHandle, uint32, sint32) { return nullptr; }
+	void MEMFreeToExpHeap(MEMHeapHandle, void*) {}
+	void* _weak_MEMAllocFromDefaultHeapEx(uint32, sint32) { return nullptr; }
+}
+
+void WupsOwnerScopedHeapTracker::OnAllocation(WupsOwnerToken, WupsHeapAllocatorKind,
+	std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t) {}
+void WupsOwnerScopedHeapTracker::OnFree(WupsOwnerToken, std::uint32_t) {}
+
 int main()
 {
 	TestLoadLifecycleAndPermissionIntersection();
 	TestLimitsAndIsolation();
 	TestCex2ImportBinding();
+	TestPluginHeapIsNotReservedWithoutPlugins();
+	TestPluginHeapIsReservedBeforePluginStart();
 	return 0;
 }

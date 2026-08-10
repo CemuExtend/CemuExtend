@@ -94,6 +94,12 @@ bool WupsPluginHeap::IsUsable() const
 	return m_usable;
 }
 
+bool WupsPluginHeap::WasInitializationAttempted() const
+{
+	std::lock_guard lock(m_mutex);
+	return m_attempted;
+}
+
 std::uint32_t WupsPluginHeap::Alloc(WupsOwnerToken owner, std::uint32_t size)
 {
 	return AllocEx(owner, size, kDefaultAlignment);
