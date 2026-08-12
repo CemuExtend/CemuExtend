@@ -267,6 +267,16 @@ namespace
 		return package;
 	}
 
+	CemodPackage LateReleasePackage(std::string id, std::string name,
+									std::span<const WupsHookType> hooks = {})
+	{
+		auto package = Package(std::move(id), std::move(name), hooks);
+		package.manifest.packageVersion = 3;
+		package.manifest.unloadPolicy =
+			CemodUnloadPolicy::AfterTitleThreadsStop;
+		return package;
+	}
+
 	void CheckTargets(const std::vector<std::uint32_t>& actual,
 		std::span<const WupsHookType> expected)
 	{
@@ -695,6 +705,117 @@ namespace
 		CHECK(log->releaseCalls.load() == 1);
 	}
 
+	void TestLateReleaseWupsStaysOwnedUntilTitleThreadsStop()
+	{
+		auto log = std::make_shared<RuntimeLog>();
+		auto services = std::make_shared<FakeServices>(log);
+		auto loader = std::make_shared<FakeModuleLoader>(log);
+		WupsPayloadRuntime manager(services, loader);
+		std::string error;
+		const std::array hooks{
+			WupsHookType::ApplicationStarts,
+			WupsHookType::ApplicationRequestsExit,
+			WupsHookType::ApplicationEnds,
+			WupsHookType::DeinitPlugin,
+		};
+		const auto handle = manager.Load(
+			LateReleasePackage("late", "Late Release", hooks), error);
+		CHECK(handle);
+		CHECK(manager.OnApplicationStarts(error));
+		auto plugin = manager.Find(*handle);
+		CHECK(plugin);
+		CHECK(!plugin->UnloadChecked(error));
+		CHECK(error.find("deferred until all title PPC threads stop") !=
+			  std::string::npos);
+		CHECK(log->deactivationCalls.load() == 0);
+		CHECK(log->releaseCalls.load() == 0);
+		CHECK(log->unloadCalls.load() == 0);
+
+		CHECK(manager.PrepareTitleShutdown(error));
+		CHECK(manager.TitleShutdownPrepared());
+		CHECK(manager.Size() == 1);
+		CHECK(plugin->State() == WupsPluginState::LateReleasePending);
+		CHECK(log->deactivationCalls.load() == 0);
+		CHECK(log->releaseCalls.load() == 0);
+		CHECK(log->unloadCalls.load() == 0);
+		const std::vector<WupsHookType> expected{
+			WupsHookType::ApplicationStarts,
+			WupsHookType::ApplicationRequestsExit,
+			WupsHookType::ApplicationEnds,
+		};
+		CheckTargets(log->invokedTargets, expected);
+
+		CHECK(manager.ReleaseAfterTitleThreadsStopped(error));
+		CHECK(manager.Size() == 0);
+		CHECK(log->deactivationCalls.load() == 1);
+		CHECK(log->releaseCalls.load() == 1);
+		// The late phase raw-abandons the guest image. RPLLoader_UnloadAll owns
+		// its mapping immediately afterwards, so no guest deinitializer or
+		// per-module unload callback is legal here.
+		CHECK(log->unloadCalls.load() == 0);
+		CHECK(std::ranges::find(log->invokedTargets,
+								HookTarget(WupsHookType::DeinitPlugin)) == log->invokedTargets.end());
+	}
+
+	void TestLateReleasePreparationDrainsExistingCallback()
+	{
+		const std::array hooks{
+			WupsHookType::ApplicationStarts,
+			WupsHookType::ReleaseForeground,
+			WupsHookType::ApplicationEnds,
+		};
+		auto log = std::make_shared<RuntimeLog>();
+		auto services = std::make_shared<FakeServices>(log);
+		auto loader = std::make_shared<FakeModuleLoader>(log);
+		std::string error;
+		auto runtime = WupsPluginRuntime::Create(
+			LateReleasePackage("late_drain", "Late Drain", hooks), 97, 31,
+			services, loader, error);
+		CHECK(runtime);
+		CHECK(runtime->OnApplicationStarts(error));
+
+		std::mutex callbackMutex;
+		std::condition_variable callbackChanged;
+		bool callbackEntered{};
+		bool releaseCallback{};
+		log->onInvoke = [&](std::uint32_t target) {
+			if (target != HookTarget(WupsHookType::ReleaseForeground))
+				return;
+			std::unique_lock lock(callbackMutex);
+			callbackEntered = true;
+			callbackChanged.notify_all();
+			callbackChanged.wait(lock, [&] { return releaseCallback; });
+		};
+
+		std::thread callbackThread([&] { runtime->OnReleaseForeground(); });
+		{
+			std::unique_lock lock(callbackMutex);
+			callbackChanged.wait(lock, [&] { return callbackEntered; });
+		}
+		std::atomic_bool preparationFinished{};
+		bool preparationResult{};
+		std::string preparationError;
+		std::thread prepareThread([&] {
+			preparationResult = runtime->PrepareTitleShutdown(preparationError);
+			preparationFinished = true;
+		});
+		while (runtime->State() != WupsPluginState::LateReleasePending)
+			std::this_thread::yield();
+		CHECK(!preparationFinished.load());
+		{
+			std::lock_guard lock(callbackMutex);
+			releaseCallback = true;
+		}
+		callbackChanged.notify_all();
+		callbackThread.join();
+		prepareThread.join();
+		log->onInvoke = {};
+		CHECK(preparationResult);
+		CHECK(preparationError.empty());
+		CHECK(runtime->TitleShutdownPrepared());
+		CHECK(runtime->ReleaseAfterTitleThreadsStopped(error));
+	}
+
 	void TestContiguousTlsTemplateMapping()
 	{
 		using RPLLoaderInternal::ResolveContiguousTLSMapping;
@@ -873,6 +994,8 @@ int main()
 	TestPrepareReentrantUnloadAndExceptionBalance();
 	TestUnloadFailurePreservesRetryAuthority();
 	TestTitleShutdownAbandonSkipsGuestAndModuleCallbacks();
+	TestLateReleaseWupsStaysOwnedUntilTitleThreadsStop();
+	TestLateReleasePreparationDrainsExistingCallback();
 	TestContiguousTlsTemplateMapping();
 	TestExternalModulePolicy();
 	TestMissingBackendPermissionIsAnError();

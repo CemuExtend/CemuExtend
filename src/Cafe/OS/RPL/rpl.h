@@ -123,7 +123,7 @@ private:
 };
 
 void RPLLoader_InitState();
-void RPLLoader_UnloadAll();
+[[nodiscard]] bool RPLLoader_UnloadAll();
 
 uint8* RPLLoader_AllocateTrampolineCodeSpace(sint32 size);
 

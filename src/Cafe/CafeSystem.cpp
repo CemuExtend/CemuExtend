@@ -1121,13 +1121,14 @@ namespace CafeSystem
 	bool PrepareTitleShutdown()
 	{
 		auto& runtime = cemuextend_hle::GetCemodRuntime();
+		std::string error;
 		if (runtime.Size() == 0)
-		{
-			runtime.UnloadAll();
-			return runtime.TitleShutdownPrepared();
-		}
+			return runtime.PrepareTitleShutdown(error);
 		const bool ran = coreinit::OSRunOnEmulatedCpuThread([&runtime] {
-			runtime.UnloadAll();
+			std::string prepareError;
+			if (!runtime.PrepareTitleShutdown(prepareError))
+				cemuLog_log(LogType::Force,
+							"CemuExtend title shutdown preparation failed: {}", prepareError);
 		});
 		return ran && runtime.TitleShutdownPrepared();
 	}
@@ -1136,48 +1137,69 @@ namespace CafeSystem
 	{
 		if(!sSystemRunning)
 			return;
-		TcpGecko::OnTitleShutdown();
-		const bool modsUnloaded = PrepareTitleShutdown();
-		if (!modsUnloaded)
+		auto& cemodRuntime = cemuextend_hle::GetCemodRuntime();
+		if (!cemodRuntime.TitleRplUnloadPending())
 		{
-			cemuLog_log(LogType::Force,
-						"CemuExtend could not run title shutdown callbacks on an emulated CPU; "
-						"sandbox/WUPS guest callbacks will be abandoned and trusted release deferred");
-			cemuextend_hle::GetCemodRuntime().AbandonAllForTitleShutdown();
+			TcpGecko::OnTitleShutdown();
+			const bool modsUnloaded = PrepareTitleShutdown();
+			if (!modsUnloaded)
+			{
+				cemuLog_log(LogType::Force,
+							"CemuExtend could not run title shutdown callbacks on an emulated CPU; "
+							"sandbox/WUPS guest callbacks will be abandoned and trusted release deferred");
+				cemodRuntime.AbandonAllForTitleShutdown();
+			}
+			coreinit::OSSchedulerEnd();
+			Latte_Stop();
+			// reset Cafe OS userspace modules
+			snd_core::reset();
+			coreinit::OSAlarm_Shutdown();
+			GX2::_GX2DriverReset();
+			nn::save::ResetToDefaultState();
+			coreinit::__OSDeleteAllActivePPCThreads();
+			std::string trustedReleaseError;
+			if (!cemodRuntime.MarkTrustedTitleThreadsStopped(trustedReleaseError))
+			{
+				cemuLog_log(LogType::Force,
+							"CemuExtend could not enter late trusted CEMod release: {}",
+							trustedReleaseError);
+				cemu_assert_debug(false);
+				// Keep the old RPL map and memory space intact. Preparing another title
+				// will fail closed until a later shutdown attempt completes this phase.
+				return;
+			}
+			// No PPC thread can reach a trusted branch now. Restore its bootstrap and
+			// release the codecave while the old RPL mapping is still addressable.
+			if (!cemodRuntime.ReleaseTrustedAfterTitleThreadsStopped(trustedReleaseError))
+			{
+				cemuLog_log(LogType::Force,
+							"CemuExtend late trusted CEMod release failed: {}", trustedReleaseError);
+				cemu_assert_debug(false);
+				return;
+			}
+			if (!cemodRuntime.ReleaseWupsAfterTitleThreadsStopped(trustedReleaseError))
+			{
+				cemuLog_log(LogType::Force,
+							"CemuExtend late WUPS release failed: {}", trustedReleaseError);
+				cemu_assert_debug(false);
+				return;
+			}
+			cemodRuntime.MarkTitleRplUnloadPending();
 		}
-		coreinit::OSSchedulerEnd();
-		Latte_Stop();
-		// reset Cafe OS userspace modules
-		snd_core::reset();
-		coreinit::OSAlarm_Shutdown();
-		GX2::_GX2DriverReset();
-		nn::save::ResetToDefaultState();
-		coreinit::__OSDeleteAllActivePPCThreads();
-		std::string trustedReleaseError;
-		if (!cemuextend_hle::GetCemodRuntime().MarkTrustedTitleThreadsStopped(
-				trustedReleaseError))
+		// Ordinary sandbox/WUPS owners were released before scheduler stop. Late
+		// WUPS and trusted-native owners were released only after every PPC thread
+		// disappeared. Discard title RPL mappings after both late phases.
+		if (!RPLLoader_UnloadAll())
 		{
 			cemuLog_log(LogType::Force,
-						"CemuExtend could not enter late trusted CEMod release: {}",
-						trustedReleaseError);
+						"CemuExtend could not unload the old title RPL map because an external "
+						"module lease or callback is still active");
 			cemu_assert_debug(false);
-			// Keep the old RPL map and memory space intact. Preparing another title
-			// will fail closed until a later shutdown attempt completes this phase.
+			// Do not destroy memory or mount the next title over a retained WPS
+			// image. A later shutdown attempt may complete after the lease drains.
 			return;
 		}
-		// No PPC thread can reach a trusted branch now. Restore its bootstrap and
-		// release the codecave while the old RPL mapping is still addressable.
-		if (!cemuextend_hle::GetCemodRuntime().ReleaseTrustedAfterTitleThreadsStopped(
-				trustedReleaseError))
-		{
-			cemuLog_log(LogType::Force,
-						"CemuExtend late trusted CEMod release failed: {}", trustedReleaseError);
-			cemu_assert_debug(false);
-			return;
-		}
-		// Sandbox/WUPS ownership was released before scheduler stop. Discard title
-		// RPL mappings only after the trusted-native late phase above.
-		RPLLoader_UnloadAll();
+		cemodRuntime.MarkTitleRplUnloadComplete();
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->TitleStop();
 		// reset Cemu subsystems

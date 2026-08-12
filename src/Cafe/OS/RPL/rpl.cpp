@@ -1725,7 +1725,9 @@ void RPLLoader_InitState()
 	rplLoaderHeap_codeArea2.setHeapBase(memory_getPointerFromVirtualOffset(MEMORY_CODEAREA_ADDR));
 	rplLoaderHeap_workarea.setHeapBase(memory_getPointerFromVirtualOffset(MEMORY_RPLLOADER_AREA_ADDR));
 	g_heapTrampolineArea.setBaseAllocator(&rplLoaderHeap_lowerAreaCodeMem2);
-    RPLLoader_UnloadAll();
+	if (!RPLLoader_UnloadAll())
+		cemuLog_log(LogType::Force,
+					"RPLLoader: init retained a module with an outstanding external lease");
 }
 
 void RPLLoader_BeginCemuhookCRC(RPLModule* rpl)
@@ -3783,7 +3785,7 @@ void RPLLoader_ReleaseCodeCaveMem(MEMPTR<void> addr)
 	heapCodeCaveArea.free(addr.GetMPTR());
 }
 
-void RPLLoader_UnloadAll()
+bool RPLLoader_UnloadAll()
 {
 	std::lock_guard lock(g_rplLoaderMutex);
 	for (sint32 index = 0; index < rplModuleCount; ++index)
@@ -3793,7 +3795,7 @@ void RPLLoader_UnloadAll()
 			cemuLog_log(LogType::Force,
 				"RPLLoader: unload-all deferred because external module '{}' is active",
 				rplModuleList[index]->moduleName);
-			return;
+			return false;
 		}
 	// unload all RPL modules
 	while (rplModuleCount > 0)
@@ -3834,4 +3836,5 @@ void RPLLoader_UnloadAll()
 	rplLoader_sdataAddr = MPTR_NULL;
 	rplLoader_sdata2Addr = MPTR_NULL;
 	rplLoader_mainModule = nullptr;
+	return true;
 }

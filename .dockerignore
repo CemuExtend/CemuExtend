@@ -15,3 +15,7 @@ result/
 bin/Cemu_*
 bin/*.pdb
 bin/*.ilk
+dependencies/vcpkg/buildtrees/
+dependencies/vcpkg/packages/
+dependencies/vcpkg/downloads/
+dependencies/vcpkg/installed/

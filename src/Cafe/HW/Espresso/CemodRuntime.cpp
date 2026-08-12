@@ -278,6 +278,7 @@ struct CemodRuntime::Impl
 	// Lazily constructed on first WUPS load so titles without WUPS cemods never
 	// pay for the Aroma compatibility runtime. Guarded by mutex during creation.
 	std::unique_ptr<WupsPayloadRuntime> wups;
+	bool titleRplUnloadPending{};
 	std::shared_ptr<WupsBackendManagementRuntime> wupsManagement{
 		std::make_shared<WupsBackendManagementRuntime>()};
 	bool applicationStarted{}; // guards the once-per-title WUPS OnApplicationStarts
@@ -311,6 +312,11 @@ bool CemodRuntime::ReadyForNextTitle(std::string& error) const
 	error.clear();
 	{
 		std::lock_guard lock(m_impl->mutex);
+		if (m_impl->titleRplUnloadPending)
+		{
+			error = "the previous title RPL map is still waiting for external leases to drain";
+			return false;
+		}
 		if (!m_impl->mods.empty() || (m_impl->wups && m_impl->wups->Size() != 0))
 		{
 			error = "CEMod payloads from the previous title are still loaded";
@@ -318,6 +324,24 @@ bool CemodRuntime::ReadyForNextTitle(std::string& error) const
 		}
 	}
 	return m_impl->trusted.ReadyForNextTitle(error);
+}
+
+void CemodRuntime::MarkTitleRplUnloadPending()
+{
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->titleRplUnloadPending = true;
+}
+
+void CemodRuntime::MarkTitleRplUnloadComplete()
+{
+	std::lock_guard lock(m_impl->mutex);
+	m_impl->titleRplUnloadPending = false;
+}
+
+bool CemodRuntime::TitleRplUnloadPending() const
+{
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->titleRplUnloadPending;
 }
 
 std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
@@ -617,8 +641,34 @@ void CemodRuntime::UnloadAll()
 	// The plugin heap's backing lived inside this title's game heap, which no
 	// longer exists; drop it so the next title's OnApplicationStarts lazily
 	// carves a fresh one out of its own default heap.
-	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
-		pluginHeap->Reset();
+	if ((!m_impl->wups || m_impl->wups->Size() == 0))
+		if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+			pluginHeap->Reset();
+}
+
+bool CemodRuntime::PrepareTitleShutdown(std::string& error)
+{
+	error.clear();
+	for (;;)
+	{
+		std::uint64_t handle{};
+		{
+			std::lock_guard lock(m_impl->mutex);
+			if (m_impl->mods.empty())
+				break;
+			handle = m_impl->mods.begin()->first;
+		}
+		if (!Unload(handle))
+		{
+			error = "sandbox CEMod title shutdown failed";
+			return false;
+		}
+	}
+	m_impl->trusted.UnloadAll();
+	if (m_impl->wups && !m_impl->wups->PrepareTitleShutdown(error))
+		return false;
+	m_impl->applicationStarted = false;
+	return TitleShutdownPrepared();
 }
 
 void CemodRuntime::AbandonAllForTitleShutdown()
@@ -638,14 +688,15 @@ void CemodRuntime::AbandonAllForTitleShutdown()
 	if (m_impl->wups)
 		m_impl->wups->AbandonAllForTitleShutdown();
 	m_impl->applicationStarted = false;
-	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
-		pluginHeap->Reset();
+	if ((!m_impl->wups || m_impl->wups->Size() == 0))
+		if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+			pluginHeap->Reset();
 }
 
 bool CemodRuntime::TitleShutdownPrepared() const
 {
 	std::lock_guard lock(m_impl->mutex);
-	return m_impl->mods.empty() && (!m_impl->wups || m_impl->wups->Size() == 0) &&
+	return m_impl->mods.empty() && (!m_impl->wups || m_impl->wups->TitleShutdownPrepared()) &&
 		   m_impl->trusted.TitleShutdownPrepared();
 }
 
@@ -657,6 +708,15 @@ bool CemodRuntime::MarkTrustedTitleThreadsStopped(std::string& error)
 bool CemodRuntime::ReleaseTrustedAfterTitleThreadsStopped(std::string& error)
 {
 	return m_impl->trusted.ReleaseAfterTitleThreadsStopped(error);
+}
+
+bool CemodRuntime::ReleaseWupsAfterTitleThreadsStopped(std::string& error)
+{
+	if (m_impl->wups && !m_impl->wups->ReleaseAfterTitleThreadsStopped(error))
+		return false;
+	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
+		pluginHeap->Reset();
+	return true;
 }
 
 ModExecutionContext* CemodRuntime::Context(std::uint64_t handle)

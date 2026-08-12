@@ -43,12 +43,19 @@ public:
 	// Completes sandbox/WUPS teardown and requests trusted release. Trusted code
 	// remains mapped until the explicit post-thread late phase.
 	void UnloadAll();
+	[[nodiscard]] bool PrepareTitleShutdown(std::string& error);
 	// Fail-safe title teardown for a stopped scheduler. WUPS guest finalizers
 	// are skipped; host resources are revoked before title-wide RPL cleanup.
 	void AbandonAllForTitleShutdown();
 	[[nodiscard]] bool TitleShutdownPrepared() const;
 	[[nodiscard]] bool MarkTrustedTitleThreadsStopped(std::string& error);
 	[[nodiscard]] bool ReleaseTrustedAfterTitleThreadsStopped(std::string& error);
+	[[nodiscard]] bool ReleaseWupsAfterTitleThreadsStopped(std::string& error);
+	// The WUPS runtime is erased before the title-wide RPL map can be released.
+	// Keep this phase visible to the next-title gate until unload-all succeeds.
+	void MarkTitleRplUnloadPending();
+	void MarkTitleRplUnloadComplete();
+	[[nodiscard]] bool TitleRplUnloadPending() const;
 
 	[[nodiscard]] ModExecutionContext* Context(std::uint64_t handle);
 	[[nodiscard]] PPCInterpreter_t* Cpu(std::uint64_t handle);

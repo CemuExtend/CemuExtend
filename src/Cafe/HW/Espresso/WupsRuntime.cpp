@@ -104,6 +104,7 @@ struct WupsPluginRuntime::Impl
 	bool lifecycleTransition{};
 	bool foregroundTransition{};
 	bool exitRequestInProgress{};
+	bool lateReleasePrepared{};
 	std::string lastError;
 
 	Impl(CemodPackage package_, WupsInspection inspection_, std::uint64_t owner_,
@@ -169,12 +170,13 @@ struct WupsPluginRuntime::Impl
 		std::uint32_t callbackGeneration{};
 		{
 			std::lock_guard lock(mutex);
-			const bool permitted = allowTeardown ?
-				(state == WupsPluginState::Unloading || state == WupsPluginState::Failed ||
-					state == WupsPluginState::Active || state == WupsPluginState::Initialized ||
-					state == WupsPluginState::Relocated || state == WupsPluginState::Deinitialized) :
-				(state != WupsPluginState::Unloading && state != WupsPluginState::Unloaded &&
-					state != WupsPluginState::Failed);
+			const bool permitted = allowTeardown ? (state == WupsPluginState::Unloading || state == WupsPluginState::Failed ||
+													state == WupsPluginState::Active || state == WupsPluginState::Initialized ||
+													state == WupsPluginState::Relocated || state == WupsPluginState::Deinitialized ||
+													state == WupsPluginState::LateReleasePending)
+												 : (state != WupsPluginState::Unloading && state != WupsPluginState::Unloaded &&
+													state != WupsPluginState::Failed &&
+													state != WupsPluginState::LateReleasePending);
 			if (!permitted || !module)
 			{
 				error = fmt::format("{} rejected for stale lifecycle state {}",
@@ -1013,6 +1015,17 @@ void WupsPluginRuntime::OnApplicationRequestsExit()
 
 void WupsPluginRuntime::OnApplicationEnds()
 {
+	if (m_impl->package.manifest.unloadPolicy ==
+		CemodUnloadPolicy::AfterTitleThreadsStop)
+	{
+		std::string error;
+		if (!PrepareTitleShutdown(error))
+			cemuLog_log(LogType::Force,
+						"WUPS: late APPLICATION_ENDS preparation for package '{}' plugin '{}' "
+						"did not complete: {}",
+						m_impl->package.manifest.modId, m_impl->inspection.metadata.name, error);
+		return;
+	}
 	{
 		std::unique_lock lock(m_impl->mutex);
 		if (m_impl->state != WupsPluginState::Active &&
@@ -1052,6 +1065,15 @@ bool WupsPluginRuntime::UnloadChecked(std::string& error)
 		std::lock_guard lock(m_impl->mutex);
 		if (m_impl->state == WupsPluginState::Unloaded)
 			return true;
+		if (m_impl->package.manifest.unloadPolicy ==
+				CemodUnloadPolicy::AfterTitleThreadsStop &&
+			(m_impl->state == WupsPluginState::Active ||
+			 m_impl->state == WupsPluginState::Initialized ||
+			 m_impl->state == WupsPluginState::LateReleasePending))
+		{
+			error = "WUPS unload is deferred until all title PPC threads stop";
+			return false;
+		}
 		if (m_impl->teardownInProgress)
 		{
 			error = "WUPS unload is already in progress";
@@ -1077,6 +1099,123 @@ bool WupsPluginRuntime::UnloadChecked(std::string& error)
 	return m_impl->FinishUnload(false, &error);
 }
 
+bool WupsPluginRuntime::PrepareTitleShutdown(std::string& error)
+{
+	error.clear();
+	if (!m_impl)
+		return true;
+	if (m_impl->package.manifest.unloadPolicy !=
+		CemodUnloadPolicy::AfterTitleThreadsStop)
+		return UnloadChecked(error);
+
+	OnApplicationRequestsExit();
+	{
+		std::unique_lock lock(m_impl->mutex);
+		if (m_impl->state == WupsPluginState::Unloaded ||
+			(m_impl->state == WupsPluginState::LateReleasePending &&
+			 m_impl->lateReleasePrepared))
+			return true;
+		if (m_impl->state != WupsPluginState::LateReleasePending &&
+			m_impl->state != WupsPluginState::Active &&
+			m_impl->state != WupsPluginState::Initialized)
+		{
+			error = fmt::format(
+				"late WUPS title shutdown is invalid in state {}",
+				static_cast<unsigned>(m_impl->state));
+			return false;
+		}
+		if (m_impl->lifecycleTransition || s_activeWupsRuntime == m_impl.get())
+		{
+			error = "late WUPS title shutdown cannot run from an active lifecycle callback";
+			return false;
+		}
+		m_impl->lifecycleTransition = true;
+		m_impl->state = WupsPluginState::LateReleasePending;
+		// Revoking the operational state above prevents any new guest callback
+		// from entering while an already-running callback reaches its boundary.
+		m_impl->callbacksFinished.wait(lock, [this] {
+			return m_impl->callbacksInFlight == 0;
+		});
+	}
+
+	std::string hookError;
+	const bool applicationEnded =
+		m_impl->Invoke(WupsHookType::ApplicationEnds, true, hookError);
+	{
+		std::lock_guard lock(m_impl->mutex);
+		m_impl->lifecycleTransition = false;
+		if (!applicationEnded)
+		{
+			m_impl->lastError = hookError;
+			error = std::move(hookError);
+			return false;
+		}
+		m_impl->applicationEndsPending = false;
+		m_impl->deferredApplicationEnd = false;
+		m_impl->lateReleasePrepared = true;
+		m_impl->state = WupsPluginState::LateReleasePending;
+	}
+	return true;
+}
+
+bool WupsPluginRuntime::TitleShutdownPrepared() const
+{
+	if (!m_impl)
+		return true;
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->state == WupsPluginState::Unloaded ||
+		   (m_impl->state == WupsPluginState::LateReleasePending &&
+			m_impl->lateReleasePrepared && m_impl->callbacksInFlight == 0);
+}
+
+bool WupsPluginRuntime::ReleaseAfterTitleThreadsStopped(std::string& error)
+{
+	error.clear();
+	if (!m_impl)
+		return true;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		if (m_impl->state == WupsPluginState::Unloaded)
+			return true;
+		if (m_impl->state != WupsPluginState::LateReleasePending ||
+			!m_impl->lateReleasePrepared || m_impl->callbacksInFlight != 0)
+		{
+			error = "WUPS late release requires a prepared title with no PPC callbacks";
+			return false;
+		}
+		m_impl->teardownInProgress = true;
+	}
+
+	std::string cleanupError;
+	if (!m_impl->DeactivateBackend(cleanupError))
+	{
+		std::lock_guard lock(m_impl->mutex);
+		m_impl->teardownInProgress = false;
+		error = cleanupError;
+		return false;
+	}
+	std::string releaseError;
+	if (!m_impl->ReleaseBackendResources(releaseError))
+	{
+		std::lock_guard lock(m_impl->mutex);
+		m_impl->teardownInProgress = false;
+		error = releaseError;
+		return false;
+	}
+
+	std::lock_guard lock(m_impl->mutex);
+	// No guest finalizer or RPL free is legal here: every PPC thread is already
+	// gone. Host resources are revoked above and RPLLoader_UnloadAll owns the
+	// raw mapping immediately after this late phase.
+	m_impl->completedInitializers.clear();
+	m_impl->module = nullptr;
+	m_impl->moduleLifetime = 0;
+	m_impl->teardownInProgress = false;
+	m_impl->lateReleasePrepared = false;
+	m_impl->state = WupsPluginState::Unloaded;
+	return true;
+}
+
 void WupsPluginRuntime::AbandonForTitleShutdown()
 {
 	if (!m_impl)
@@ -1085,6 +1224,18 @@ void WupsPluginRuntime::AbandonForTitleShutdown()
 		std::unique_lock lock(m_impl->mutex);
 		if (m_impl->state == WupsPluginState::Unloaded)
 			return;
+		if (m_impl->package.manifest.unloadPolicy ==
+			CemodUnloadPolicy::AfterTitleThreadsStop)
+		{
+			m_impl->state = WupsPluginState::LateReleasePending;
+			m_impl->lateReleasePrepared = true;
+			m_impl->applicationEndsPending = false;
+			m_impl->lifecycleTransition = false;
+			// No guest callback is started after this state transition. A callback
+			// already in flight is joined by CafeSystem's later scheduler/thread
+			// shutdown before ReleaseAfterTitleThreadsStopped is allowed to run.
+			return;
+		}
 		m_impl->state = WupsPluginState::Unloading;
 		++m_impl->generation;
 		m_impl->callbacksFinished.wait(lock, [this] {
@@ -1367,6 +1518,73 @@ bool WupsPayloadRuntime::UnloadAll(std::string& error)
 	return success;
 }
 
+bool WupsPayloadRuntime::PrepareTitleShutdown(std::string& error)
+{
+	std::vector<std::pair<std::uint64_t, std::shared_ptr<WupsPluginRuntime>>> plugins;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		for (auto& [handle, plugin] : std::ranges::reverse_view(m_impl->plugins))
+			plugins.emplace_back(handle, plugin);
+		m_impl->applicationActive = false;
+	}
+	error.clear();
+	bool success = true;
+	for (const auto& [handle, plugin] : plugins)
+	{
+		if (m_impl->management)
+			m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
+												   plugin->Generation());
+		std::string pluginError;
+		if (!plugin->PrepareTitleShutdown(pluginError))
+		{
+			success = false;
+			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name).append(": ").append(pluginError);
+			continue;
+		}
+		if (plugin->State() == WupsPluginState::Unloaded)
+		{
+			std::lock_guard lock(m_impl->mutex);
+			const auto found = m_impl->plugins.find(handle);
+			if (found != m_impl->plugins.end() && found->second == plugin)
+				m_impl->plugins.erase(found);
+		}
+	}
+	return success;
+}
+
+bool WupsPayloadRuntime::TitleShutdownPrepared() const
+{
+	std::lock_guard lock(m_impl->mutex);
+	return std::ranges::all_of(m_impl->plugins, [](const auto& item) {
+		return item.second->TitleShutdownPrepared();
+	});
+}
+
+bool WupsPayloadRuntime::ReleaseAfterTitleThreadsStopped(std::string& error)
+{
+	std::vector<std::pair<std::uint64_t, std::shared_ptr<WupsPluginRuntime>>> plugins;
+	{
+		std::lock_guard lock(m_impl->mutex);
+		for (auto& [handle, plugin] : std::ranges::reverse_view(m_impl->plugins))
+			plugins.emplace_back(handle, plugin);
+	}
+	error.clear();
+	for (const auto& [handle, plugin] : plugins)
+	{
+		std::string pluginError;
+		if (!plugin->ReleaseAfterTitleThreadsStopped(pluginError))
+		{
+			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name).append(": ").append(pluginError);
+			continue;
+		}
+		std::lock_guard lock(m_impl->mutex);
+		const auto found = m_impl->plugins.find(handle);
+		if (found != m_impl->plugins.end() && found->second == plugin)
+			m_impl->plugins.erase(found);
+	}
+	return error.empty();
+}
+
 void WupsPayloadRuntime::AbandonAllForTitleShutdown()
 {
 	std::vector<std::shared_ptr<WupsPluginRuntime>> plugins;
@@ -1384,7 +1602,9 @@ void WupsPayloadRuntime::AbandonAllForTitleShutdown()
 		plugin->AbandonForTitleShutdown();
 	}
 	std::lock_guard lock(m_impl->mutex);
-	m_impl->plugins.clear();
+	std::erase_if(m_impl->plugins, [](const auto& item) {
+		return item.second->State() == WupsPluginState::Unloaded;
+	});
 }
 
 bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)

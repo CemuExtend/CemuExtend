@@ -177,6 +177,18 @@ constexpr std::string_view kWupsManifest = R"({
  "requested_permissions":[]
 })";
 
+constexpr std::string_view kLateReleaseWupsManifest = R"({
+ "package_version":3,
+ "api_version":2,
+ "execution_mode":"trusted_native",
+ "payload":{"format":"wups","path":"plugin.wps"},
+ "scope":{"type":"aroma_native"},
+ "lifecycle":{"unload":"after_title_threads_stop"},
+ "mod_id":"org.example.wups.late",
+ "title_ids":["0005000012345678"],
+ "requested_permissions":[]
+})";
+
 constexpr std::string_view kElfV2Manifest = R"({
  "package_version":2,
  "api_version":2,
@@ -378,6 +390,39 @@ void TestV3Mem2ExpansionRequest()
 	std::filesystem::remove(path);
 }
 
+void TestV3LateWupsReleasePolicy()
+{
+	std::string error;
+	auto path = PackagePath("wups-v3-late-release");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+						{"manifest.json", Bytes(kLateReleaseWupsManifest)}});
+	auto package = CemodPackage::Load(path, 0x0005000012345678ULL, error);
+	CHECK(package.has_value());
+	CHECK(package->manifest.unloadPolicy ==
+		  CemodUnloadPolicy::AfterTitleThreadsStop);
+	std::filesystem::remove(path);
+
+	std::string v2(kLateReleaseWupsManifest);
+	v2.replace(v2.find("\"package_version\":3"),
+			   std::string_view("\"package_version\":3").size(),
+			   "\"package_version\":2");
+	path = PackagePath("wups-v2-late-release-rejected");
+	WriteEntries(path, {{"plugin.wps", BuildWupsTestImage()},
+						{"manifest.json", Bytes(v2)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("package_version 3") != std::string::npos);
+	std::filesystem::remove(path);
+
+	std::string elf(kLateReleaseWupsManifest);
+	elf.replace(elf.find("\"wups\""), 6, "\"cemod_elf\"");
+	elf.replace(elf.find("\"plugin.wps\""), 12, "\"mod.elf\"");
+	path = PackagePath("elf-late-release-rejected");
+	WriteEntries(path, {{"mod.elf", TrustedElf()}, {"manifest.json", Bytes(elf)}});
+	CHECK(!CemodPackage::Inspect(path, error));
+	CHECK(error.find("only for trusted_native WUPS") != std::string::npos);
+	std::filesystem::remove(path);
+}
+
 void TestPayloadAndZipRejections()
 {
 	std::string error;
@@ -450,6 +495,7 @@ int main()
 	TestV2PayloadAndManifest();
 	TestV3PluginManagementPermission();
 	TestV3Mem2ExpansionRequest();
+	TestV3LateWupsReleasePolicy();
 	TestPayloadAndZipRejections();
 	return 0;
 }

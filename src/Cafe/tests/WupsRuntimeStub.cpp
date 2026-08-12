@@ -50,8 +50,27 @@ bool WupsPayloadRuntime::Unload(std::uint64_t, std::string& error)
 	return false;
 }
 
-void WupsPayloadRuntime::UnloadAll() {}
-bool WupsPayloadRuntime::UnloadAll(std::string&) { return true; }
+void WupsPayloadRuntime::UnloadAll()
+{
+	wups_runtime_stub::g_pluginCount = 0;
+}
+bool WupsPayloadRuntime::UnloadAll(std::string&)
+{
+	wups_runtime_stub::g_pluginCount = 0;
+	return true;
+}
+bool WupsPayloadRuntime::PrepareTitleShutdown(std::string&)
+{
+	return true;
+}
+bool WupsPayloadRuntime::TitleShutdownPrepared() const
+{
+	return true;
+}
+bool WupsPayloadRuntime::ReleaseAfterTitleThreadsStopped(std::string&)
+{
+	return true;
+}
 void WupsPayloadRuntime::AbandonAllForTitleShutdown() {}
 bool WupsPayloadRuntime::OnApplicationStarts(std::string&)
 {

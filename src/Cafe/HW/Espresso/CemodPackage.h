@@ -29,6 +29,12 @@ enum class CemodScopeType : std::uint8_t
 	AromaNative,
 };
 
+enum class CemodUnloadPolicy : std::uint8_t
+{
+	Normal,
+	AfterTitleThreadsStop,
+};
+
 struct CemodPayloadDescriptor
 {
 	CemodPayloadFormat format{CemodPayloadFormat::CemodElf};
@@ -63,6 +69,7 @@ struct CemodManifest
 	CemodExecutionMode executionMode{CemodExecutionMode::Isolated};
 	CemodPayloadDescriptor payload;
 	CemodScope scope;
+	CemodUnloadPolicy unloadPolicy{CemodUnloadPolicy::Normal};
 	CemodNativePermissions nativePermissions;
 	std::string modId;
 	std::vector<std::uint64_t> titleIds;

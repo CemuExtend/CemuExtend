@@ -276,6 +276,22 @@ void TestTrustedReleaseIsDeferredUntilLateTitleShutdown()
 	CHECK(runtime.ReleaseTrustedAfterTitleThreadsStopped(error));
 }
 
+void TestTitleRplUnloadPendingBlocksNextTitle()
+{
+	CemodRuntime runtime;
+	std::string error;
+	CHECK(runtime.ReadyForNextTitle(error));
+	CHECK(!runtime.TitleRplUnloadPending());
+	runtime.MarkTitleRplUnloadPending();
+	CHECK(runtime.TitleRplUnloadPending());
+	CHECK(!runtime.ReadyForNextTitle(error));
+	CHECK(error.find("RPL map") != std::string::npos);
+	// Models RPLLoader_UnloadAll() succeeding after the external lease drains.
+	runtime.MarkTitleRplUnloadComplete();
+	CHECK(!runtime.TitleRplUnloadPending());
+	CHECK(runtime.ReadyForNextTitle(error));
+}
+
 void TestTrustedLifecycleRejectsEarlyReleaseAndCrossTitleReuse()
 {
 	TrustedCemodLifecycle lifecycle;
@@ -371,6 +387,7 @@ int main()
 	TestPluginHeapIsNotReservedWithoutPlugins();
 	TestPluginHeapIsReservedBeforePluginStart();
 	TestTrustedReleaseIsDeferredUntilLateTitleShutdown();
+	TestTitleRplUnloadPendingBlocksNextTitle();
 	TestTrustedLifecycleRejectsEarlyReleaseAndCrossTitleReuse();
 	return 0;
 }

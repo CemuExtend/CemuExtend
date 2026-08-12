@@ -8,7 +8,10 @@ temporary_name=".Cemu_release.$$.tmp"
 git_hash="$(git -C "${project_dir}" log --format=%h -1 2>/dev/null || printf unknown)"
 commit_hash="$(git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown)"
 
-docker build --progress=plain --target build \
+# The build stage reads the source through a BuildKit bind mount. Bind-mounted
+# contents are not part of Docker's layer cache key, so always rerun this stage
+# while retaining the expensive base/vcpkg cache mounts.
+docker build --progress=plain --no-cache-filter build --target build \
 	--build-arg "GIT_HASH=${git_hash}" \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${commit_hash}" \
 	-t "${image_name}" "${project_dir}"

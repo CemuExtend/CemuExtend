@@ -216,6 +216,35 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 		error = "WUPS payloads require execution_mode trusted_native";
 		return false;
 	}
+	if (document.HasMember("lifecycle"))
+	{
+		if (manifest.packageVersion < 3 || !document["lifecycle"].IsObject())
+		{
+			error = "lifecycle requires package_version 3";
+			return false;
+		}
+		const auto& lifecycle = document["lifecycle"];
+		if (lifecycle.MemberCount() != 1 || !lifecycle.HasMember("unload") ||
+			!lifecycle["unload"].IsString())
+		{
+			error = "lifecycle must contain only a string unload field";
+			return false;
+		}
+		const std::string_view unload(lifecycle["unload"].GetString(),
+									  lifecycle["unload"].GetStringLength());
+		if (unload != "after_title_threads_stop")
+		{
+			error = fmt::format("unknown lifecycle unload policy '{}'", unload);
+			return false;
+		}
+		if (manifest.payload.format != CemodPayloadFormat::Wups ||
+			manifest.executionMode != CemodExecutionMode::TrustedNative)
+		{
+			error = "after_title_threads_stop is valid only for trusted_native WUPS payloads";
+			return false;
+		}
+		manifest.unloadPolicy = CemodUnloadPolicy::AfterTitleThreadsStop;
+	}
 	manifest.modId.assign(document["mod_id"].GetString(), document["mod_id"].GetStringLength());
 	if (manifest.modId.empty() || manifest.modId.size() > 128 ||
 		!std::ranges::all_of(manifest.modId, [](unsigned char c) {

@@ -35,12 +35,13 @@ and an explicit interface; it must not be pasted into CemuExtend.
 The inspected CemuExtend baseline routes packages through
 `CemodPackage::{Inspect,Load}`, catalogs them in `cemuextend.cpp`, and selects
 `CemodRuntime`/`TrustedCemodRuntime`. Title start is connected from
-`CafeSystem.cpp` after normal RPL linking. At title shutdown sandbox and WUPS
-guest lifecycle is completed before scheduler stop, while trusted-native CMB1
-branches and codecave images remain mapped until `OSSchedulerEnd` and all PPC
-thread deletion have completed. Only that late phase restores and releases the
-trusted image, immediately before application RPL unload. A pending late release
-blocks preparation of the next title. `RPLLoader.cpp` already supplies
+`CafeSystem.cpp` after normal RPL linking. At title shutdown sandbox and ordinary
+WUPS guest lifecycle is completed before scheduler stop. Trusted-native CMB1
+images and an opt-in package-version-3 WUPS payload may instead remain mapped
+until `OSSchedulerEnd` and all PPC thread deletion have completed. Only that late
+phase revokes host patches/resources; title-wide RPL unload then discards the raw
+WPS mapping without guest finalizers. A pending late release blocks preparation
+of the next title. `RPLLoader.cpp` already supplies
 in-memory loading, linking, export lookup, entrypoint lookup, and trampoline
 allocation. Guest calls use `PPCCoreCallback`; guest TLS, r2/r13 setup, and JIT
 cache invalidation already have Cemu-owned implementations. Those facilities
@@ -150,6 +151,19 @@ Native permissions are separate from the existing CEX2
 `requested_permissions`. Importing a module does not grant permission. The
 package catalog stores the complete permission set so any newly requested bit
 or module invalidates an earlier approval.
+
+Package version 3 keeps the version 2 descriptor and adds an opt-in lifecycle
+policy. A trusted WUPS payload whose replacement code or worker callbacks may
+remain reachable during title teardown can declare:
+
+```json
+{"lifecycle":{"unload":"after_title_threads_stop"}}
+```
+
+The object is exact and the only accepted value is
+`after_title_threads_stop`. It is rejected for package versions 1/2, isolated
+payloads and `cemod_elf`. This contract does not broaden guest authority; it
+only changes when Cemu may release an already approved WUPS owner.
 
 ### 3.2 ZIP contract
 
@@ -380,6 +394,7 @@ states:
 ```text
 Installed -> Mapped -> Relocated -> Initialized -> Active
           -> Deinitialized -> Unloading -> Unloaded
+          -> LateReleasePending -> Unloaded
 any active transition may roll back to Failed
 ```
 
@@ -428,6 +443,16 @@ keeps its module pointer and lifetime, reports `Failed`, and remains owned for
 a checked retry; failed load cleanup, unload, reload, and unload-all never
 erase that authority.
 Destructor-only cleanup logs an unload failure. The RPL's injected resolver
+
+For `after_title_threads_stop`, normal unload is retryably rejected while the
+title is live. Title shutdown revokes operational callbacks, drains callbacks
+already in flight, invokes `APPLICATION_REQUESTS_EXIT` and `APPLICATION_ENDS`,
+then enters `LateReleasePending` without reverse fini hooks, backend release or
+RPL unload. After `OSSchedulerEnd` and `__OSDeleteAllActivePPCThreads`, the host
+removes FunctionPatcher state and owner-scoped resources. It deliberately does
+not call guest deinitializers or `IWupsModuleLoader::Unload`; the immediately
+following `RPLLoader_UnloadAll` owns raw mapping destruction. A failure before
+that final unload leaves the old RPL map intact and blocks the next title.
 owns an immutable package/metadata context, so a rejected destructor unload
 cannot leave borrowed runtime data behind while the RPL waits for title-wide
 cleanup.
