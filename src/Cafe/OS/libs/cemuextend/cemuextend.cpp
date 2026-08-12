@@ -227,6 +227,8 @@ namespace cemuextend_hle
 
 		void RPLUnmapped() override
 		{
+			// This callback may run while title PPC threads are live. UnloadAll only
+			// revokes trusted access; CafeSystem owns its post-thread memory release.
 			GetCemodRuntime().UnloadAll();
 			Cex2Host::Instance().CloseAll();
 		}
@@ -403,7 +405,14 @@ namespace cemuextend_hle
 	{
 		if (titleId == 0) return;
 		auto& runtime = GetCemodRuntime();
-		runtime.UnloadAll();
+		std::string previousTitleError;
+		if (!runtime.ReadyForNextTitle(previousTitleError))
+		{
+			cemuLog_log(LogType::Force,
+						"CemuExtend refused to load a title before prior CEMod release: {}",
+						previousTitleError);
+			return;
+		}
 		const auto titleGrant = GetConfig().GetCemuExtendGrant(titleId).value_or(CemuExtendTitleGrant{
 			kDefaultReadMask, kDefaultWriteMask, kDefaultInjectMask});
 		const ModServicePermissions services{titleGrant.read_mask, titleGrant.write_mask,
@@ -445,6 +454,20 @@ namespace cemuextend_hle
 				return left.package.manifest.modId < right.package.manifest.modId;
 			return left.path < right.path;
 		});
+		const bool hasTrustedElf = std::ranges::any_of(approved, [](const ApprovedPackage& item) {
+			return item.package.IsTrustedNative() &&
+				   item.package.manifest.payload.format == CemodPayloadFormat::CemodElf;
+		});
+		if (hasTrustedElf)
+		{
+			std::string error;
+			if (!runtime.BeginTrustedTitle(titleId, error))
+			{
+				cemuLog_log(LogType::Force,
+							"CemuExtend refused trusted CEMods for the new title: {}", error);
+				return;
+			}
+		}
 		for (auto& item : approved)
 		{
 			if (runtime.Size() >= CemodRuntime::kMaximumModsPerTitle) break;

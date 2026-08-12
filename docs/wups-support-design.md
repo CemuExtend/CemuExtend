@@ -35,8 +35,12 @@ and an explicit interface; it must not be pasted into CemuExtend.
 The inspected CemuExtend baseline routes packages through
 `CemodPackage::{Inspect,Load}`, catalogs them in `cemuextend.cpp`, and selects
 `CemodRuntime`/`TrustedCemodRuntime`. Title start is connected from
-`CafeSystem.cpp` after normal RPL linking, while title shutdown unloads CEMOD
-instances before the application RPLs. `RPLLoader.cpp` already supplies
+`CafeSystem.cpp` after normal RPL linking. At title shutdown sandbox and WUPS
+guest lifecycle is completed before scheduler stop, while trusted-native CMB1
+branches and codecave images remain mapped until `OSSchedulerEnd` and all PPC
+thread deletion have completed. Only that late phase restores and releases the
+trusted image, immediately before application RPL unload. A pending late release
+blocks preparation of the next title. `RPLLoader.cpp` already supplies
 in-memory loading, linking, export lookup, entrypoint lookup, and trampoline
 allocation. Guest calls use `PPCCoreCallback`; guest TLS, r2/r13 setup, and JIT
 cache invalidation already have Cemu-owned implementations. Those facilities

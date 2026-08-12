@@ -77,6 +77,7 @@ add_library(CemuCafe
 	HW/Espresso/ITrustedPayloadInstance.h
   HW/Espresso/TrustedCemodRuntime.cpp
   HW/Espresso/TrustedCemodRuntime.h
+  HW/Espresso/TrustedCemodLifecycle.h
 	HW/Espresso/WupsBinary.cpp
 	HW/Espresso/WupsBinary.h
 	HW/Espresso/WupsGuestCallback.cpp
@@ -886,6 +887,14 @@ if(BUILD_TESTING)
 		${CMAKE_SOURCE_DIR}/dependencies/libcemuextend/include
 	)
 	add_test(NAME cemod_runtime_tests COMMAND cemod_runtime_tests)
+
+	add_executable(trusted_cemod_lifecycle_tests
+		tests/TrustedCemodLifecycleTests.cpp
+	)
+	target_include_directories(trusted_cemod_lifecycle_tests PRIVATE
+		${CMAKE_SOURCE_DIR}/src)
+	add_test(NAME trusted_cemod_lifecycle_tests
+		COMMAND trusted_cemod_lifecycle_tests)
 
 	if(CEMU_ENABLE_FUZZING)
 		add_executable(cex2_decoder_fuzzer tests/Cex2DecoderFuzzer.cpp)

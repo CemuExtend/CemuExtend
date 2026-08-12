@@ -1,6 +1,7 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/TrustedCemodRuntime.h"
+#include "Cafe/HW/Espresso/TrustedCemodLifecycle.h"
 
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
 #include "Cafe/HW/MMU/MMU.h"
@@ -404,10 +405,38 @@ struct TrustedCemodRuntime::Impl
 	std::unique_ptr<TrustedTitleOwner> owner;
 	std::uint64_t nextHandle{1};
 	std::uint32_t nextGeneration{1};
+	TrustedCemodLifecycle lifecycle;
 };
 
 TrustedCemodRuntime::TrustedCemodRuntime() : m_impl(std::make_unique<Impl>()) {}
-TrustedCemodRuntime::~TrustedCemodRuntime() { UnloadAll(); }
+TrustedCemodRuntime::~TrustedCemodRuntime()
+{
+	// Static destruction does not prove that title threads and RPL mappings are
+	// in release order. ShutdownTitle must have completed the late phase.
+	cemu_assert_debug(m_impl->mods.empty() && m_impl->lifecycle.IsReady());
+}
+
+bool TrustedCemodRuntime::BeginTitle(std::uint64_t titleId, std::string& error)
+{
+	std::lock_guard lock(m_impl->mutex);
+	error.clear();
+	if (!m_impl->mods.empty() || m_impl->owner)
+	{
+		error = "trusted runtime still retains the previous title";
+		return false;
+	}
+	return m_impl->lifecycle.Begin(titleId, error);
+}
+
+bool TrustedCemodRuntime::ReadyForNextTitle(std::string& error) const
+{
+	std::lock_guard lock(m_impl->mutex);
+	error.clear();
+	if (m_impl->lifecycle.IsReady() && m_impl->mods.empty() && !m_impl->owner)
+		return true;
+	error = m_impl->lifecycle.ReleasePending() ? "trusted title release is still pending" : "trusted title is still active";
+	return false;
+}
 
 std::optional<std::uint64_t> TrustedCemodRuntime::Load(CemodPackage package,
 	std::uint32_t titlePermissions, const ModServicePermissions& services, std::string& error)
@@ -417,6 +446,11 @@ std::optional<std::uint64_t> TrustedCemodRuntime::Load(CemodPackage package,
 	if (package.manifest.payload.format != CemodPayloadFormat::CemodElf)
 	{
 		error = "WUPS payload passed package validation but requires WupsPayloadRuntime";
+		return std::nullopt;
+	}
+	if (!m_impl->lifecycle.Accepts(package.targetTitleId))
+	{
+		error = "trusted package does not belong to the active title lifetime";
 		return std::nullopt;
 	}
 	if (!m_impl->mods.empty() && m_impl->owner && m_impl->owner->TitleId() != package.targetTitleId)
@@ -519,32 +553,56 @@ bool TrustedCemodRuntime::Unload(std::uint64_t handle)
 	std::lock_guard lock(m_impl->mutex);
 	const auto found = m_impl->mods.find(handle);
 	if (found == m_impl->mods.end()) return false;
-	Write32(found->second.patchAddress, found->second.originalInstruction);
-	PPCRecompiler_invalidateRange(found->second.patchAddress, found->second.patchAddress + 4);
-	m_impl->patchAddresses.erase(found->second.patchAddress);
-	RPLLoader_ReleaseCodeCaveMem(found->second.allocation);
-	m_impl->mods.erase(found);
-	if (m_impl->mods.empty() && m_impl->owner)
-	{
-		cemuextend_hle::Cex2Host::Instance().CloseOwner(*m_impl->owner);
-		m_impl->owner->Stop();
-		m_impl->owner.reset();
-	}
-	return true;
+	cemuLog_log(LogType::Force,
+				"CemuExtend rejected live-title unload of trusted CEMod '{}'",
+				found->second.package.manifest.modId);
+	return false;
 }
 
 void TrustedCemodRuntime::UnloadAll()
 {
-	for (;;)
+	std::lock_guard lock(m_impl->mutex);
+	if (m_impl->lifecycle.IsReady() || m_impl->lifecycle.ReleasePending())
+		return;
+	m_impl->lifecycle.RequestRelease();
+	if (m_impl->owner)
 	{
-		std::uint64_t handle{};
-		{
-			std::lock_guard lock(m_impl->mutex);
-			if (m_impl->mods.empty()) break;
-			handle = m_impl->mods.rbegin()->first;
-		}
-		(void)Unload(handle);
+		// Stop authentication before draining the old owner's CEX2 sessions. Keep
+		// the identity pinned until the codecave release phase.
+		m_impl->owner->Stop();
+		cemuextend_hle::Cex2Host::Instance().CloseOwner(*m_impl->owner);
 	}
+}
+
+bool TrustedCemodRuntime::MarkTitleThreadsStopped(std::string& error)
+{
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->lifecycle.MarkThreadsStopped(error);
+}
+
+bool TrustedCemodRuntime::ReleaseAfterTitleThreadsStopped(std::string& error)
+{
+	std::lock_guard lock(m_impl->mutex);
+	error.clear();
+	if (m_impl->lifecycle.IsReady())
+		return true;
+	if (!m_impl->lifecycle.ThreadsStopped())
+	{
+		error = m_impl->lifecycle.CurrentState() == TrustedCemodLifecycle::State::ReleasePending ? "trusted title PPC threads have not been marked stopped" : "trusted title shutdown was not prepared";
+		return false;
+	}
+	for (auto iterator = m_impl->mods.rbegin(); iterator != m_impl->mods.rend(); ++iterator)
+	{
+		auto& instance = iterator->second;
+		Write32(instance.patchAddress, instance.originalInstruction);
+		PPCRecompiler_invalidateRange(instance.patchAddress, instance.patchAddress + 4);
+		m_impl->patchAddresses.erase(instance.patchAddress);
+		RPLLoader_ReleaseCodeCaveMem(instance.allocation);
+	}
+	m_impl->mods.clear();
+	m_impl->patchAddresses.clear();
+	m_impl->owner.reset();
+	return m_impl->lifecycle.CompleteRelease(error);
 }
 
 void TrustedCemodRuntime::UpdatePermissions(std::uint32_t permissions,
@@ -566,4 +624,16 @@ std::size_t TrustedCemodRuntime::Size() const
 {
 	std::lock_guard lock(m_impl->mutex);
 	return m_impl->mods.size();
+}
+
+bool TrustedCemodRuntime::TitleShutdownPrepared() const
+{
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->lifecycle.IsReady() || m_impl->lifecycle.ReleasePending();
+}
+
+bool TrustedCemodRuntime::ReleasePending() const
+{
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->lifecycle.ReleasePending();
 }

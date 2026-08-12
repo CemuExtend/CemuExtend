@@ -5,9 +5,8 @@
 #include <cstdint>
 #include <string>
 
-// Runtime-neutral lifecycle contract. Implementations own every guest allocation,
-// callback registration, patch, and module reference created for one package.
-// Unload must be idempotent and must revoke callbacks before releasing memory.
+// Runtime-neutral lifecycle contract used by WUPS instances. CMB1 trusted ELF
+// images use TrustedCemodRuntime's stricter title-wide late-release contract.
 class ITrustedPayloadInstance
 {
 public:

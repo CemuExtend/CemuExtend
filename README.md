@@ -45,9 +45,9 @@ Mod単位の権限パネルにある「Trust future updates to this Mod」はopt
 
 `trusted_native`はPPC32 big-endian ET_DYNです。undefined symbolとW+X segmentを拒否し、対応relocationは`R_PPC_NONE`、`ADDR32`、`ADDR16_LO`、`ADDR16_HI`、`ADDR16_HA`、`REL24`、`REL32`、`RELATIVE`だけです。Cafe、GX2、CEX2はMod自身が`OSDynLoad`で解決します。
 
-最初のbranchだけをELFの`.cemod.bootstrap` sectionにCMB1 tableとして記録します。Cemuはmodule hash、対象命令とmask、handlerの実行segment、REL24範囲、patch競合を検証してから一括適用し、JIT cacheを無効化します。それ以降のhookはMod側C++と`libhookevent`で設置できます。
+最初のbranchだけをELFの`.cemod.bootstrap` sectionにCMB1 tableとして記録します。Cemuはmodule hash、対象命令とmask、handlerの実行segment、REL24範囲、patch競合を検証してから一括適用し、JIT cacheを無効化します。それ以降のhookはMod側C++と`libhookevent`で設置できます。trusted payloadの個別unloadは実行中タイトルでは拒否されます。
 
-trusted ELFはASM適用後に`mod_id`順で共有8 MiB codecaveへ配置されます。検証失敗、競合、容量不足では該当Modをロードせず、部分patchを残しません。タイトル終了時は元命令を復元してJITを再無効化し、codecaveとCEX2 sessionを解放します。
+trusted ELFはASM適用後に`mod_id`順で共有8 MiB codecaveへ配置されます。検証失敗、競合、容量不足では該当Modをロードせず、部分patchを残しません。タイトル終了時は先にguest callbackとCEX2 sessionを停止し、`OSSchedulerEnd`と全PPC thread削除が完了したlate phaseでだけ元命令を復元してJITを再無効化し、codecaveを解放します。late phase未完了のまま次タイトルを準備することはできません。
 
 > [!WARNING]
 > `trusted_native`はsandboxではありません。ゲームmemory、Minecraft allocator、GX2/Cafe API、他のnative Modへ無制限にアクセスできます。内容とpublisherを信頼できるpackageだけを承認してください。

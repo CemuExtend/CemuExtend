@@ -294,7 +294,31 @@ struct CemodRuntime::Impl
 };
 
 CemodRuntime::CemodRuntime() : m_impl(std::make_unique<Impl>()) {}
-CemodRuntime::~CemodRuntime() { UnloadAll(); }
+CemodRuntime::~CemodRuntime()
+{
+	UnloadAll();
+	// Process shutdown is not an alternative title late phase.
+	cemu_assert_debug(m_impl->trusted.Size() == 0);
+}
+
+bool CemodRuntime::BeginTrustedTitle(std::uint64_t titleId, std::string& error)
+{
+	return m_impl->trusted.BeginTitle(titleId, error);
+}
+
+bool CemodRuntime::ReadyForNextTitle(std::string& error) const
+{
+	error.clear();
+	{
+		std::lock_guard lock(m_impl->mutex);
+		if (!m_impl->mods.empty() || (m_impl->wups && m_impl->wups->Size() != 0))
+		{
+			error = "CEMod payloads from the previous title are still loaded";
+			return false;
+		}
+	}
+	return m_impl->trusted.ReadyForNextTitle(error);
+}
 
 std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	std::uint32_t userPermissions, std::uint32_t titlePermissions, std::string& error,
@@ -616,6 +640,23 @@ void CemodRuntime::AbandonAllForTitleShutdown()
 	m_impl->applicationStarted = false;
 	if (auto pluginHeap = cafe::wups::ActivePluginHeap())
 		pluginHeap->Reset();
+}
+
+bool CemodRuntime::TitleShutdownPrepared() const
+{
+	std::lock_guard lock(m_impl->mutex);
+	return m_impl->mods.empty() && (!m_impl->wups || m_impl->wups->Size() == 0) &&
+		   m_impl->trusted.TitleShutdownPrepared();
+}
+
+bool CemodRuntime::MarkTrustedTitleThreadsStopped(std::string& error)
+{
+	return m_impl->trusted.MarkTitleThreadsStopped(error);
+}
+
+bool CemodRuntime::ReleaseTrustedAfterTitleThreadsStopped(std::string& error)
+{
+	return m_impl->trusted.ReleaseAfterTitleThreadsStopped(error);
 }
 
 ModExecutionContext* CemodRuntime::Context(std::uint64_t handle)

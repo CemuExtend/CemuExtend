@@ -3,6 +3,7 @@
 #include "Cafe/HW/Espresso/CemodRuntime.h"
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/PPCState.h"
+#include "Cafe/HW/Espresso/TrustedCemodLifecycle.h"
 #include "Cafe/HW/Espresso/WupsPluginHeap.h"
 #include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
@@ -247,6 +248,64 @@ void TestPluginHeapIsReservedBeforePluginStart()
 	wups_runtime_stub::Reset();
 }
 
+void TestTrustedReleaseIsDeferredUntilLateTitleShutdown()
+{
+	CemodRuntime runtime;
+	std::string error;
+	constexpr std::uint64_t firstTitle = 0x0005000012345678ULL;
+	constexpr std::uint64_t secondTitle = 0x0005000087654321ULL;
+	CHECK(runtime.ReadyForNextTitle(error));
+	CHECK(runtime.BeginTrustedTitle(firstTitle, error));
+	CHECK(!runtime.TitleShutdownPrepared());
+	CHECK(!runtime.ReadyForNextTitle(error));
+	CHECK(!runtime.ReleaseTrustedAfterTitleThreadsStopped(error));
+	runtime.UnloadAll();
+	CHECK(runtime.TitleShutdownPrepared());
+	CHECK(runtime.Size() == 1); // retained mapping, not a callable payload
+	CHECK(!runtime.ReadyForNextTitle(error));
+	CHECK(!runtime.BeginTrustedTitle(secondTitle, error));
+	CHECK(!runtime.ReleaseTrustedAfterTitleThreadsStopped(error));
+	CHECK(runtime.MarkTrustedTitleThreadsStopped(error));
+	CHECK(runtime.ReleaseTrustedAfterTitleThreadsStopped(error));
+	CHECK(runtime.Size() == 0);
+	CHECK(runtime.ReadyForNextTitle(error));
+	CHECK(runtime.BeginTrustedTitle(secondTitle, error));
+	runtime.AbandonAllForTitleShutdown();
+	CHECK(runtime.TitleShutdownPrepared());
+	CHECK(runtime.MarkTrustedTitleThreadsStopped(error));
+	CHECK(runtime.ReleaseTrustedAfterTitleThreadsStopped(error));
+}
+
+void TestTrustedLifecycleRejectsEarlyReleaseAndCrossTitleReuse()
+{
+	TrustedCemodLifecycle lifecycle;
+	std::string error;
+	constexpr std::uint64_t firstTitle = 0x0005000011111111ULL;
+	constexpr std::uint64_t secondTitle = 0x0005000022222222ULL;
+	CHECK(lifecycle.IsReady());
+	CHECK(!lifecycle.Begin(0, error));
+	CHECK(lifecycle.Begin(firstTitle, error));
+	CHECK(lifecycle.Accepts(firstTitle));
+	CHECK(!lifecycle.Accepts(secondTitle));
+	CHECK(!lifecycle.Begin(secondTitle, error));
+	CHECK(!lifecycle.MarkThreadsStopped(error));
+	CHECK(!lifecycle.CompleteRelease(error));
+	lifecycle.RequestRelease();
+	CHECK(lifecycle.ReleasePending());
+	CHECK(!lifecycle.Accepts(firstTitle));
+	CHECK(!lifecycle.Begin(secondTitle, error));
+	CHECK(!lifecycle.CompleteRelease(error));
+	// RPL callbacks and explicit shutdown may repeat the request safely.
+	lifecycle.RequestRelease();
+	CHECK(lifecycle.ReleasePending());
+	CHECK(lifecycle.MarkThreadsStopped(error));
+	CHECK(lifecycle.MarkThreadsStopped(error));
+	CHECK(lifecycle.CompleteRelease(error));
+	CHECK(lifecycle.IsReady());
+	CHECK(lifecycle.CompleteRelease(error));
+	CHECK(lifecycle.Begin(secondTitle, error));
+}
+
 } // namespace
 
 PPCInterpreter_t* PPCInterpreter_getCurrentInstance(){return gCurrentCpu;}
@@ -284,6 +343,11 @@ uint64 s_loggingFlagMask = 0;
 bool cemuLog_log(LogType, std::string_view) { return true; }
 bool cemuLog_log(LogType, std::u8string_view) { return true; }
 
+uint8* memory_base = nullptr;
+uint32 memory_readU32(uint32)
+{
+	return 0;
+}
 uint8* memory_getPointerFromVirtualOffset(uint32) { return nullptr; }
 uint32 memory_getVirtualOffsetFromPointer(void*) { return 0; }
 
@@ -306,5 +370,7 @@ int main()
 	TestCex2ImportBinding();
 	TestPluginHeapIsNotReservedWithoutPlugins();
 	TestPluginHeapIsReservedBeforePluginStart();
+	TestTrustedReleaseIsDeferredUntilLateTitleShutdown();
+	TestTrustedLifecycleRejectsEarlyReleaseAndCrossTitleReuse();
 	return 0;
 }

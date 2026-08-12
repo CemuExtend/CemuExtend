@@ -867,6 +867,14 @@ namespace CafeSystem
 	PREPARE_STATUS_CODE PrepareForegroundTitle(TitleId titleId)
 	{
 		CafeTitleList::WaitForMandatoryScan();
+		std::string cemodError;
+		if (!cemuextend_hle::GetCemodRuntime().ReadyForNextTitle(cemodError))
+		{
+			cemuLog_log(LogType::Force,
+						"CemuExtend refused to prepare a title before late CEMod release: {}",
+						cemodError);
+			return PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY;
+		}
 		if (!ConfirmCemodPermissions(titleId))
 			return PREPARE_STATUS_CODE::CANCELLED;
 		sLaunchModeIsStandalone = false;
@@ -899,6 +907,14 @@ namespace CafeSystem
 		const auto standaloneTitleId = GetStandaloneTitleId(path);
 		if (!standaloneTitleId)
 			return PREPARE_STATUS_CODE::INVALID_RPX;
+		std::string cemodError;
+		if (!cemuextend_hle::GetCemodRuntime().ReadyForNextTitle(cemodError))
+		{
+			cemuLog_log(LogType::Force,
+						"CemuExtend refused to prepare a standalone title before late CEMod release: {}",
+						cemodError);
+			return PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY;
+		}
 		if (!ConfirmCemodPermissions(*standaloneTitleId))
 			return PREPARE_STATUS_CODE::CANCELLED;
 		sLaunchModeIsStandalone = true;
@@ -1106,11 +1122,14 @@ namespace CafeSystem
 	{
 		auto& runtime = cemuextend_hle::GetCemodRuntime();
 		if (runtime.Size() == 0)
-			return true;
+		{
+			runtime.UnloadAll();
+			return runtime.TitleShutdownPrepared();
+		}
 		const bool ran = coreinit::OSRunOnEmulatedCpuThread([&runtime] {
 			runtime.UnloadAll();
 		});
-		return ran && runtime.Size() == 0;
+		return ran && runtime.TitleShutdownPrepared();
 	}
 
 	void ShutdownTitle()
@@ -1122,8 +1141,8 @@ namespace CafeSystem
 		if (!modsUnloaded)
 		{
 			cemuLog_log(LogType::Force,
-				"CemuExtend could not run title shutdown callbacks on an emulated CPU; "
-				"title-wide RPL cleanup will discard the remaining modules");
+						"CemuExtend could not run title shutdown callbacks on an emulated CPU; "
+						"sandbox/WUPS guest callbacks will be abandoned and trusted release deferred");
 			cemuextend_hle::GetCemodRuntime().AbandonAllForTitleShutdown();
 		}
 		coreinit::OSSchedulerEnd();
@@ -1134,8 +1153,30 @@ namespace CafeSystem
 		GX2::_GX2DriverReset();
 		nn::save::ResetToDefaultState();
 		coreinit::__OSDeleteAllActivePPCThreads();
-		// All CEMod/WUPS ownership has already been released above. Discard any
-		// remaining title RPL mappings while their backing memory still exists.
+		std::string trustedReleaseError;
+		if (!cemuextend_hle::GetCemodRuntime().MarkTrustedTitleThreadsStopped(
+				trustedReleaseError))
+		{
+			cemuLog_log(LogType::Force,
+						"CemuExtend could not enter late trusted CEMod release: {}",
+						trustedReleaseError);
+			cemu_assert_debug(false);
+			// Keep the old RPL map and memory space intact. Preparing another title
+			// will fail closed until a later shutdown attempt completes this phase.
+			return;
+		}
+		// No PPC thread can reach a trusted branch now. Restore its bootstrap and
+		// release the codecave while the old RPL mapping is still addressable.
+		if (!cemuextend_hle::GetCemodRuntime().ReleaseTrustedAfterTitleThreadsStopped(
+				trustedReleaseError))
+		{
+			cemuLog_log(LogType::Force,
+						"CemuExtend late trusted CEMod release failed: {}", trustedReleaseError);
+			cemu_assert_debug(false);
+			return;
+		}
+		// Sandbox/WUPS ownership was released before scheduler stop. Discard title
+		// RPL mappings only after the trusted-native late phase above.
 		RPLLoader_UnloadAll();
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->TitleStop();

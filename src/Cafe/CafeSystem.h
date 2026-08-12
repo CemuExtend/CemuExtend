@@ -22,6 +22,7 @@ namespace CafeSystem
 		CANCELLED,
 		INVALID_RPX,
 		UNABLE_TO_MOUNT, // failed to mount through TitleInfo (most likely caused by an invalid or outdated path)
+		CEMOD_RUNTIME_BUSY,
 	};
 
 	void Initialize();
@@ -48,8 +49,9 @@ namespace CafeSystem
 	CosCapabilityBits GetForegroundTitleCosCapabilities(CosCapabilityGroup group);
 	std::optional<sint32> GetForegroundTitleReturnStatus(); // valid once the foreground title exited gracefully via coreinit exit
 
-	// Completes CEMod/WUPS guest lifecycle callbacks before title CPU threads
-	// and their stacks are destroyed. Safe to call repeatedly.
+	// Completes sandbox/WUPS guest callbacks and revokes trusted access before
+	// title CPU threads are destroyed. Trusted code is retained for ShutdownTitle's
+	// post-thread late phase. Safe to call repeatedly.
 	bool PrepareTitleShutdown();
 	void ShutdownTitle();
 
