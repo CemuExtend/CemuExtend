@@ -171,6 +171,8 @@ void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps)
 			windowText.append(" [Online]");
 		else if (ActiveSettings::GetNetworkService() == NetworkService::Pretendo)
 			windowText.append(" [Online-Pretendo]");
+		else if (ActiveSettings::GetNetworkService() == NetworkService::Plasma)
+			windowText.append(" [Online-Plasma]");
 		else if (ActiveSettings::GetNetworkService() == NetworkService::Custom)
 			windowText.append(" [Online-" + GetNetworkConfig().networkname.GetValue() + "]");
 	}
