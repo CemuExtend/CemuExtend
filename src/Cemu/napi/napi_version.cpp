@@ -23,6 +23,9 @@ namespace NAPI
 		case NetworkService::Pretendo:
 			requestUrl = PretendoURLs::TAGAYAURL;
 			break;
+		case NetworkService::Plasma:
+			requestUrl = PlasmaURLs::TAGAYAURL;
+			break;
 		case NetworkService::Custom:
 			requestUrl = GetNetworkConfig().urls.TAGAYA.GetValue();
 			break;

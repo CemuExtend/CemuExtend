@@ -18,6 +18,8 @@ namespace NAPI
 			return NintendoURLs::ACTURL;
 		case NetworkService::Pretendo:
 			return PretendoURLs::ACTURL;
+		case NetworkService::Plasma:
+			return PlasmaURLs::ACTURL;
 		case NetworkService::Custom:
 			return GetNetworkConfig().urls.ACT.GetValue();
 		default:

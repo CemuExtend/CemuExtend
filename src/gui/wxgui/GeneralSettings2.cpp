@@ -75,6 +75,32 @@ const wxString kPropertyCountry("Country");
 
 wxDEFINE_EVENT(wxEVT_ACCOUNTLIST_REFRESH, wxCommandEvent);
 
+int GetNetworkServiceSelection(NetworkService service)
+{
+	switch (service)
+	{
+	case NetworkService::Plasma:
+		return 3;
+	case NetworkService::Custom:
+		return 4;
+	default:
+		return static_cast<int>(service);
+	}
+}
+
+NetworkService GetNetworkServiceFromSelection(int selection)
+{
+	switch (selection)
+	{
+	case 3:
+		return NetworkService::Plasma;
+	case 4:
+		return NetworkService::Custom;
+	default:
+		return static_cast<NetworkService>(selection);
+	}
+}
+
 class wxDeviceDescription : public wxClientData
 {
 public:
@@ -910,15 +936,16 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 
 
 	{
-		wxString choices[] = { _("Offline"),  _("Nintendo"), _("Pretendo"), _("Custom") };
-		m_active_service = new wxRadioBox(online_panel, wxID_ANY, _("Network Service"), wxDefaultPosition, wxDefaultSize, std::size(choices), choices, 4, wxRA_SPECIFY_COLS);
+		wxString choices[] = { _("Offline"),  _("Nintendo"), _("Pretendo"), _("Plasma"), _("Custom") };
+		m_active_service = new wxRadioBox(online_panel, wxID_ANY, _("Network Service"), wxDefaultPosition, wxDefaultSize, std::size(choices), choices, 5, wxRA_SPECIFY_COLS);
 		if (!NetworkConfig::XMLExists())
-			m_active_service->Enable(3, false);
+			m_active_service->Enable(4, false);
 
 		m_active_service->SetItemToolTip(0, _("Online functionality disabled for this account"));
 		m_active_service->SetItemToolTip(1, _("Connect to the official Nintendo Network Service"));
 		m_active_service->SetItemToolTip(2, _("Connect to the Pretendo Network Service"));
-		m_active_service->SetItemToolTip(3, _("Connect to a custom Network Service (configured via network_services.xml)"));
+		m_active_service->SetItemToolTip(3, _("Connect to the Plasma Network Service"));
+		m_active_service->SetItemToolTip(4, _("Connect to a custom Network Service (configured via network_services.xml)"));
 
 		m_active_service->Bind(wxEVT_RADIOBOX, &GeneralSettings2::OnAccountServiceChanged,this);
 		online_panel_sizer->Add(m_active_service, 0, wxEXPAND | wxALL, 5);
@@ -2119,7 +2146,7 @@ void GeneralSettings2::UpdateAccountInformation()
 	if(online_fully_valid)
 	{
 		NetworkService service = GetConfig().GetAccountNetworkService(account.GetPersistentId());
-		m_active_service->SetSelection(static_cast<int>(service));
+		m_active_service->SetSelection(GetNetworkServiceSelection(service));
 		// set the config option here for the selected service
 		// this will guarantee that it's actually written to settings.xml
 		// allowing us to eventually get rid of the legacy option in the (far) future
@@ -2484,7 +2511,7 @@ void GeneralSettings2::ApplyConfig()
 			break;
 		}
 	}
-	m_active_service->SetSelection((int)config.GetAccountNetworkService(ActiveSettings::GetPersistentId()));
+	m_active_service->SetSelection(GetNetworkServiceSelection(config.GetAccountNetworkService(ActiveSettings::GetPersistentId())));
 
 	UpdateAccountInformation();
 
@@ -2779,7 +2806,7 @@ void GeneralSettings2::OnAccountServiceChanged(wxCommandEvent& event)
 {
 	auto& config = GetConfig();
 	uint32 peristentId = GetSelectedAccountPersistentId();
-	config.SetAccountSelectedService(peristentId, static_cast<NetworkService>(m_active_service->GetSelection()));
+	config.SetAccountSelectedService(peristentId, GetNetworkServiceFromSelection(m_active_service->GetSelection()));
 	UpdateAccountInformation();
 }
 

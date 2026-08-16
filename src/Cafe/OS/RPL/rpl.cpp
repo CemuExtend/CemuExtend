@@ -2994,6 +2994,13 @@ std::mutex g_rplReadOnlyDataMutex;
 std::vector<RPLReadOnlyDataSnapshot> g_rplReadOnlyData;
 uint32 g_rplReadOnlyDataReportCount = 0;
 
+// comparing the whole guard set at once stalled the frame and evicted the cache,
+// so walk it one window per vsync instead
+constexpr size_t kReadOnlyDataVerifyBytesPerVsync = 128 * 1024;
+
+size_t g_rplReadOnlyDataCursor = 0; // section the next window comes from
+size_t g_rplReadOnlyDataCursorOffset = 0; // offset reached inside it
+
 static std::string_view RPLLoader_GetSectionName(const RPLModule* rpl, uint32 sectionIndex)
 {
 	const uint32 nameSectionIndex = rpl->rplHeader.nameSectionIndex;
@@ -3045,6 +3052,9 @@ void RPLLoader_SnapshotReadOnlyData(RPLModule* rpl)
 			snapshot.data.size(), snapshot.address, snapshot.moduleName);
 		g_rplReadOnlyData.push_back(std::move(snapshot));
 	}
+	// cursor indexes into the vector, so restart the walk
+	g_rplReadOnlyDataCursor = 0;
+	g_rplReadOnlyDataCursorOffset = 0;
 }
 
 void RPLLoader_ForgetReadOnlyData(const RPLModule* rpl)
@@ -3052,45 +3062,69 @@ void RPLLoader_ForgetReadOnlyData(const RPLModule* rpl)
 	std::lock_guard lock(g_rplReadOnlyDataMutex);
 	std::erase_if(g_rplReadOnlyData,
 		[rpl](const RPLReadOnlyDataSnapshot& snapshot) { return snapshot.module == rpl; });
+	g_rplReadOnlyDataCursor = 0;
+	g_rplReadOnlyDataCursorOffset = 0;
 }
 
-void RPLLoader_VerifyReadOnlyData()
+// compare one window against the reference copy and undo any write inside it
+static void RPLLoader_VerifyReadOnlyDataWindow(const RPLReadOnlyDataSnapshot& snapshot,
+	uint8* live, size_t windowOffset, size_t windowSize)
 {
-	std::lock_guard lock(g_rplReadOnlyDataMutex);
-	for (RPLReadOnlyDataSnapshot& snapshot : g_rplReadOnlyData)
-	{
-		uint8* live = memory_getPointerFromVirtualOffsetAllowNull(snapshot.address);
-		if (!live || memcmp(live, snapshot.data.data(), snapshot.data.size()) == 0)
-			continue;
-		uint32 reportedRanges = 0;
-		size_t index = 0;
-		while (index < snapshot.data.size())
+	const uint8* reference = snapshot.data.data() + windowOffset;
+	uint8* liveWindow = live + windowOffset;
+	if (memcmp(liveWindow, reference, windowSize) == 0)
+		return;
+	uint32 reportedRanges = 0;
+	rpl_sections::ForEachDivergentRange(liveWindow, reference, windowSize,
+		[&](size_t rangeStart, size_t rangeSize)
 		{
-			if (live[index] == snapshot.data[index])
-			{
-				++index;
-				continue;
-			}
-			const size_t rangeStart = index;
-			while (index < snapshot.data.size() && live[index] != snapshot.data[index])
-				++index;
-			const size_t rangeSize = index - rangeStart;
 			if (reportedRanges < 8 && g_rplReadOnlyDataReportCount < 64)
 			{
 				++g_rplReadOnlyDataReportCount;
 				++reportedRanges;
 				cemuLog_log(LogType::Force,
 					"RPLLoader: read-only data in {} was modified at 0x{:08x} ({} bytes) - expected {:02x} {:02x} {:02x} {:02x}, found {:02x} {:02x} {:02x} {:02x}. Restoring",
-					snapshot.moduleName, snapshot.address + (uint32)rangeStart, rangeSize,
-					snapshot.data[rangeStart], rangeSize > 1 ? snapshot.data[rangeStart + 1] : 0,
-					rangeSize > 2 ? snapshot.data[rangeStart + 2] : 0,
-					rangeSize > 3 ? snapshot.data[rangeStart + 3] : 0,
-					live[rangeStart], rangeSize > 1 ? live[rangeStart + 1] : 0,
-					rangeSize > 2 ? live[rangeStart + 2] : 0,
-					rangeSize > 3 ? live[rangeStart + 3] : 0);
+					snapshot.moduleName,
+					snapshot.address + (uint32)(windowOffset + rangeStart), rangeSize,
+					reference[rangeStart], rangeSize > 1 ? reference[rangeStart + 1] : 0,
+					rangeSize > 2 ? reference[rangeStart + 2] : 0,
+					rangeSize > 3 ? reference[rangeStart + 3] : 0,
+					liveWindow[rangeStart], rangeSize > 1 ? liveWindow[rangeStart + 1] : 0,
+					rangeSize > 2 ? liveWindow[rangeStart + 2] : 0,
+					rangeSize > 3 ? liveWindow[rangeStart + 3] : 0);
 			}
-			memcpy(live + rangeStart, snapshot.data.data() + rangeStart, rangeSize);
+			memcpy(liveWindow + rangeStart, reference + rangeStart, rangeSize);
+		});
+}
+
+void RPLLoader_VerifyReadOnlyData()
+{
+	std::lock_guard lock(g_rplReadOnlyDataMutex);
+	size_t remainingBytes = kReadOnlyDataVerifyBytesPerVsync;
+	// also bounded by section count, so a small guard set isn't walked twice
+	size_t remainingSections = g_rplReadOnlyData.size();
+	while (remainingBytes != 0 && remainingSections != 0)
+	{
+		if (g_rplReadOnlyDataCursor >= g_rplReadOnlyData.size())
+		{
+			g_rplReadOnlyDataCursor = 0;
+			g_rplReadOnlyDataCursorOffset = 0;
 		}
+		const RPLReadOnlyDataSnapshot& snapshot = g_rplReadOnlyData[g_rplReadOnlyDataCursor];
+		if (g_rplReadOnlyDataCursorOffset >= snapshot.data.size())
+		{
+			g_rplReadOnlyDataCursor++;
+			g_rplReadOnlyDataCursorOffset = 0;
+			remainingSections--;
+			continue;
+		}
+		const size_t windowSize = std::min(remainingBytes,
+			snapshot.data.size() - g_rplReadOnlyDataCursorOffset);
+		if (uint8* live = memory_getPointerFromVirtualOffsetAllowNull(snapshot.address))
+			RPLLoader_VerifyReadOnlyDataWindow(snapshot, live, g_rplReadOnlyDataCursorOffset,
+				windowSize);
+		g_rplReadOnlyDataCursorOffset += windowSize;
+		remainingBytes -= windowSize;
 	}
 }
 

@@ -166,7 +166,7 @@ bool ActiveSettings::IsOnlineEnabled()
 	if(!HasRequiredOnlineFiles())
 		return false;
 	NetworkService networkService = static_cast<NetworkService>(GetConfig().GetAccountNetworkService(GetPersistentId()));
-	return networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom;
+	return networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom || networkService == NetworkService::Plasma;
 }
 
 bool ActiveSettings::HasRequiredOnlineFiles()
@@ -300,4 +300,3 @@ fs::path ActiveSettings::GetDefaultMLCPath()
 {
 	return GetUserDataPath("mlc01");
 }
-

@@ -9,7 +9,8 @@ enum class NetworkService
 	Nintendo,
 	Pretendo,
 	Custom,
-	COUNT = Custom
+	Plasma,
+	COUNT = Plasma
 };
 
 struct NetworkConfig
@@ -71,6 +72,20 @@ struct PretendoURLs {
    inline static std::string OLVURL = "https://discovery.olv.pretendo.cc/v1/endpoint";
 };
 
+struct PlasmaURLs
+{
+	inline static std::string ACTURL = "http://account.plasnet.org";
+	inline static std::string ECSURL = "http://account.plasnet.org";
+	inline static std::string NUSURL = "http://account.plasnet.org";
+	inline static std::string IASURL = "http://account.plasnet.org";
+	inline static std::string CCSUURL = "http://account.plasnet.org";
+	inline static std::string CCSURL = "http://account.plasnet.org";
+	inline static std::string IDBEURL = "http://account.plasnet.org";
+	inline static std::string BOSSURL = "http://account.plasnet.org";
+	inline static std::string TAGAYAURL = "http://account.plasnet.org";
+	inline static std::string OLVURL = "http://account.plasnet.org";
+};
+
 typedef XMLDataConfig<NetworkConfig> XMLNetworkConfig_t;
 extern XMLNetworkConfig_t n_config;
 inline NetworkConfig& GetNetworkConfig() { return n_config.data();};
@@ -80,6 +95,8 @@ inline bool IsNetworkServiceSSLDisabled(NetworkService service)
 	if(service == NetworkService::Nintendo)
 		return false;
 	else if(service == NetworkService::Pretendo)
+		return true;
+	else if(service == NetworkService::Plasma)
 		return true;
 	else if(service == NetworkService::Custom)
 		return GetNetworkConfig().disablesslver.GetValue();

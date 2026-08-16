@@ -422,7 +422,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		NetworkService networkService = static_cast<NetworkService>(serviceIndex);
 		if (persistentId < Account::kMinPersistendId)
 			continue;
-		if(networkService == NetworkService::Offline || networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom)
+		if(networkService == NetworkService::Offline || networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom || networkService == NetworkService::Plasma)
 			account.service_select.emplace(persistentId, networkService);
 	}
 	// debug
@@ -750,7 +750,8 @@ NetworkService CemuConfig::GetAccountNetworkService(uint32 persistentId)
 		if (serviceIndex != NetworkService::Offline &&
 			serviceIndex != NetworkService::Nintendo &&
 			serviceIndex != NetworkService::Pretendo &&
-			serviceIndex != NetworkService::Custom)
+			serviceIndex != NetworkService::Custom &&
+			serviceIndex != NetworkService::Plasma)
 			return NetworkService::Offline;
 		if( static_cast<NetworkService>(serviceIndex) == NetworkService::Custom && !NetworkConfig::XMLExists() )
 			return NetworkService::Offline; // custom is selected but no custom config exists
