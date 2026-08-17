@@ -213,6 +213,12 @@ namespace Application
 		return m_backend->ForegroundProcessExitStatus();
 	}
 
+	std::optional<WindowTitlePresentation>
+	EmulationController::CurrentWindowTitlePresentation() const
+	{
+		return m_backend->CurrentWindowTitlePresentation();
+	}
+
 	void EmulationController::SubmitKeyboard(std::uint16_t usage, bool pressed,
 		std::uint8_t modifiers)
 	{

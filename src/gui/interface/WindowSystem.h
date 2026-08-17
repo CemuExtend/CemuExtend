@@ -1,5 +1,6 @@
 #pragma once
 
+#include "application/EmulationPresentation.h"
 #include "host/contracts/HostContracts.h"
 #include "input/api/ControllerState.h"
 
@@ -100,7 +101,8 @@ namespace WindowSystem
 	void PublishPadWindowHandle(WindowHandleInfo handle);
 	void PublishCanvasHandle(bool mainWindow, WindowHandleInfo handle);
 
-	void UpdateWindowTitles(bool isIdle, bool isLoading, double fps);
+	void UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
+		std::optional<Application::WindowTitlePresentation> presentation = std::nullopt);
 	void GetWindowSize(int& w, int& h);
 	void GetPadWindowSize(int& w, int& h);
 	void GetWindowPhysSize(int& w, int& h);

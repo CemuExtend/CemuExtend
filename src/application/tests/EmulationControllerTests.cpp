@@ -42,6 +42,12 @@ namespace
 		bool IsTitleRunning() const override { return starts > stops; }
 		std::optional<std::uint64_t> RunningTitleId() const override { return {}; }
 		std::optional<std::int32_t> ForegroundProcessExitStatus() const override { return {}; }
+		std::optional<Application::WindowTitlePresentation> windowTitlePresentation;
+		std::optional<Application::WindowTitlePresentation>
+		CurrentWindowTitlePresentation() const override
+		{
+			return windowTitlePresentation;
+		}
 		void SubmitKeyboard(std::uint16_t, bool, std::uint8_t) override {}
 		void SubmitText(std::uint32_t, bool) override {}
 		void KeyboardFocusLost() override {}
@@ -256,6 +262,21 @@ int main()
 	assert(preparedBeforeStart);
 	assert(controller.State() == Application::EmulationState::Running);
 	assert(backend.prepares == 1 && backend.starts == 1);
+	assert(!controller.CurrentWindowTitlePresentation());
+	backend.windowTitlePresentation = {
+		.titleId = 0x0005000012345678,
+		.titleName = "Test title",
+		.version = 17,
+		.region = Application::TitleRegion::UnitedStates,
+		.renderer = Application::PresentationRenderer::Vulkan,
+		.gpuVendor = Application::PresentationGpuVendor::Amd,
+	};
+	const auto presentation = controller.CurrentWindowTitlePresentation();
+	assert(presentation && presentation->titleId == 0x0005000012345678 &&
+		presentation->titleName == "Test title" && presentation->version == 17 &&
+		presentation->region == Application::TitleRegion::UnitedStates &&
+		presentation->renderer == Application::PresentationRenderer::Vulkan &&
+		presentation->gpuVendor == Application::PresentationGpuVendor::Amd);
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
 	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
 		.basePath = "test-title", .version = 17});

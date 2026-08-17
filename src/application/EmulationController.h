@@ -13,6 +13,7 @@
 
 #include "application/ApplicationEvents.h"
 #include "application/ContentOperations.h"
+#include "application/EmulationPresentation.h"
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/TitleCatalog.h"
@@ -174,6 +175,8 @@ namespace Application
 		[[nodiscard]] virtual bool IsTitleRunning() const = 0;
 		[[nodiscard]] virtual std::optional<std::uint64_t> RunningTitleId() const = 0;
 		[[nodiscard]] virtual std::optional<std::int32_t> ForegroundProcessExitStatus() const = 0;
+		[[nodiscard]] virtual std::optional<WindowTitlePresentation>
+			CurrentWindowTitlePresentation() const = 0;
 		virtual void SubmitKeyboard(std::uint16_t usage, bool pressed,
 			std::uint8_t modifiers) = 0;
 		virtual void SubmitText(std::uint32_t codepoint, bool repeat) = 0;
@@ -220,6 +223,8 @@ namespace Application
 		[[nodiscard]] bool IsTitleRunning() const;
 		[[nodiscard]] std::optional<std::uint64_t> RunningTitleId() const;
 		[[nodiscard]] std::optional<std::int32_t> ForegroundProcessExitStatus() const;
+		[[nodiscard]] std::optional<WindowTitlePresentation>
+			CurrentWindowTitlePresentation() const;
 		void SubmitKeyboard(std::uint16_t usage, bool pressed, std::uint8_t modifiers);
 		void SubmitText(std::uint32_t codepoint, bool repeat);
 		void KeyboardFocusLost();

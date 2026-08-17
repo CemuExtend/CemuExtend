@@ -5,6 +5,7 @@
 #include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
+#include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cafe/Filesystem/fsc.h"
@@ -982,6 +983,62 @@ namespace Application
 			{
 				std::shared_lock lock(m_inputLifecycleMutex);
 				return CafeSystem::GetForegroundTitleReturnStatus();
+			}
+
+			std::optional<WindowTitlePresentation>
+			CurrentWindowTitlePresentation() const override
+			{
+				std::shared_lock lock(m_inputLifecycleMutex);
+				if (!m_inputAvailable || !CafeSystem::IsTitleRunning())
+					return std::nullopt;
+
+				WindowTitlePresentation presentation{
+					.titleId = CafeSystem::GetForegroundTitleId(),
+					.titleName = CafeSystem::GetForegroundTitleName(),
+					.version = CafeSystem::GetForegroundTitleVersion(),
+				};
+				switch (CafeSystem::GetForegroundTitleRegion())
+				{
+				case CafeConsoleRegion::JPN: presentation.region = TitleRegion::Japan; break;
+				case CafeConsoleRegion::USA:
+					presentation.region = TitleRegion::UnitedStates;
+					break;
+				case CafeConsoleRegion::EUR: presentation.region = TitleRegion::Europe; break;
+				default: break;
+				}
+
+				if (g_renderer)
+				{
+					switch (g_renderer->GetType())
+					{
+					case RendererAPI::OpenGL:
+						presentation.renderer = PresentationRenderer::OpenGL;
+						break;
+					case RendererAPI::Vulkan:
+						presentation.renderer = PresentationRenderer::Vulkan;
+						break;
+					case RendererAPI::Metal:
+						presentation.renderer = PresentationRenderer::Metal;
+						break;
+					default: break;
+					}
+				}
+
+				switch (LatteGPUState.glVendor)
+				{
+				case GLVENDOR_AMD: presentation.gpuVendor = PresentationGpuVendor::Amd; break;
+				case GLVENDOR_INTEL:
+					presentation.gpuVendor = PresentationGpuVendor::Intel;
+					break;
+				case GLVENDOR_NVIDIA:
+					presentation.gpuVendor = PresentationGpuVendor::Nvidia;
+					break;
+				case GLVENDOR_APPLE:
+					presentation.gpuVendor = PresentationGpuVendor::Apple;
+					break;
+				default: break;
+				}
+				return presentation;
 			}
 
 			Input::ScreenImageArea GetScreenImageArea(bool padView) const override

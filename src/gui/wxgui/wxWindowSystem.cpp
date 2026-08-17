@@ -24,12 +24,9 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/CemuApp.h"
 #include "wxgui/MainWindow.h"
-#include "Cafe/HW/Latte/Core/Latte.h"
 #include "config/ActiveSettings.h"
 #include "config/NetworkSettings.h"
 #include "config/CemuConfig.h"
-#include "Cafe/HW/Latte/Renderer/Renderer.h"
-#include "Cafe/CafeSystem.h"
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
 #include <wx/utils.h>
@@ -443,7 +440,8 @@ void WindowSystem::SetClipboardTextAsync(std::string text, std::function<void(bo
 	});
 }
 
-void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps)
+void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
+	std::optional<Application::WindowTitlePresentation> presentation)
 {
 	std::string windowText;
 	windowText = BUILD_VERSION_WITH_NAME_STRING;
@@ -465,61 +463,70 @@ void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps)
 	}
 
 	const char* renderer = "";
-	if (g_renderer)
+	const char* graphicMode = "[Generic]";
+	if (presentation)
 	{
-		switch (g_renderer->GetType())
+		switch (presentation->renderer)
 		{
-		case RendererAPI::OpenGL:
+		case Application::PresentationRenderer::OpenGL:
 			renderer = "[OpenGL]";
 			break;
-		case RendererAPI::Vulkan:
+		case Application::PresentationRenderer::Vulkan:
 			renderer = "[Vulkan]";
 			break;
-		case RendererAPI::Metal:
+		case Application::PresentationRenderer::Metal:
 			renderer = "[Metal]";
 			break;
 		default: break;
 		}
+		switch (presentation->gpuVendor)
+		{
+		case Application::PresentationGpuVendor::Amd: graphicMode = "[AMD GPU]"; break;
+		case Application::PresentationGpuVendor::Intel: graphicMode = "[Intel GPU]"; break;
+		case Application::PresentationGpuVendor::Nvidia:
+			graphicMode = "[NVIDIA GPU]";
+			break;
+		case Application::PresentationGpuVendor::Apple:
+			graphicMode = "[Apple GPU]";
+			break;
+		default: break;
+		}
+
+		windowText.append(fmt::format(
+			" - FPS: {:.2f} {} {} [TitleId: {:08x}-{:08x}]", fps, renderer,
+			graphicMode, static_cast<std::uint32_t>(presentation->titleId >> 32),
+			static_cast<std::uint32_t>(presentation->titleId & 0xFFFFFFFF)));
+		if (ActiveSettings::IsOnlineEnabled())
+		{
+			if (ActiveSettings::GetNetworkService() == NetworkService::Nintendo)
+				windowText.append(" [Online]");
+			else if (ActiveSettings::GetNetworkService() == NetworkService::Pretendo)
+				windowText.append(" [Online-Pretendo]");
+			else if (ActiveSettings::GetNetworkService() == NetworkService::Plasma)
+				windowText.append(" [Online-Plasma]");
+			else if (ActiveSettings::GetNetworkService() == NetworkService::Custom)
+				windowText.append(" [Online-" + GetNetworkConfig().networkname.GetValue() + "]");
+		}
+		windowText.append(" ");
+		windowText.append(presentation->titleName);
+		switch (presentation->region)
+		{
+		case Application::TitleRegion::Japan:
+			windowText.append(fmt::format(" [JP v{}]", presentation->version));
+			break;
+		case Application::TitleRegion::UnitedStates:
+			windowText.append(fmt::format(" [US v{}]", presentation->version));
+			break;
+		case Application::TitleRegion::Europe:
+			windowText.append(fmt::format(" [EU v{}]", presentation->version));
+			break;
+		default:
+			windowText.append(fmt::format(" [v{}]", presentation->version));
+			break;
+		}
 	}
-
-	// get GPU vendor/mode
-	const char* graphicMode = "[Generic]";
-	if (LatteGPUState.glVendor == GLVENDOR_AMD)
-		graphicMode = "[AMD GPU]";
-	else if (LatteGPUState.glVendor == GLVENDOR_INTEL)
-		graphicMode = "[Intel GPU]";
-	else if (LatteGPUState.glVendor == GLVENDOR_NVIDIA)
-		graphicMode = "[NVIDIA GPU]";
-	else if (LatteGPUState.glVendor == GLVENDOR_APPLE)
-		graphicMode = "[Apple GPU]";
-
-	const uint64 titleId = CafeSystem::GetForegroundTitleId();
-	windowText.append(fmt::format(" - FPS: {:.2f} {} {} [TitleId: {:08x}-{:08x}]", (double)fps, renderer, graphicMode, (uint32)(titleId >> 32), (uint32)(titleId & 0xFFFFFFFF)));
-
-	if (ActiveSettings::IsOnlineEnabled())
-	{
-		if (ActiveSettings::GetNetworkService() == NetworkService::Nintendo)
-			windowText.append(" [Online]");
-		else if (ActiveSettings::GetNetworkService() == NetworkService::Pretendo)
-			windowText.append(" [Online-Pretendo]");
-		else if (ActiveSettings::GetNetworkService() == NetworkService::Plasma)
-			windowText.append(" [Online-Plasma]");
-		else if (ActiveSettings::GetNetworkService() == NetworkService::Custom)
-			windowText.append(" [Online-" + GetNetworkConfig().networkname.GetValue() + "]");
-	}
-	windowText.append(" ");
-	windowText.append(CafeSystem::GetForegroundTitleName());
-	// append region
-	CafeConsoleRegion region = CafeSystem::GetForegroundTitleRegion();
-	uint16 titleVersion = CafeSystem::GetForegroundTitleVersion();
-	if (region == CafeConsoleRegion::JPN)
-		windowText.append(fmt::format(" [JP v{}]", titleVersion));
-	else if (region == CafeConsoleRegion::USA)
-		windowText.append(fmt::format(" [US v{}]", titleVersion));
-	else if (region == CafeConsoleRegion::EUR)
-		windowText.append(fmt::format(" [EU v{}]", titleVersion));
 	else
-		windowText.append(fmt::format(" [v{}]", titleVersion));
+		windowText.append(fmt::format(" - FPS: {:.2f}", fps));
 
 	std::shared_lock lock(g_mutex);
 	if (g_mainFrame)

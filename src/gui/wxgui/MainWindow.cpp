@@ -501,7 +501,8 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 		HandlePpcProcessExit();
 		break;
 	case EventType::PerformanceUpdated:
-		WindowSystem::UpdateWindowTitles(false, false, event.framesPerSecond);
+		WindowSystem::UpdateWindowTitles(false, false, event.framesPerSecond,
+			m_emulationController.CurrentWindowTitlePresentation());
 		break;
 	case EventType::Diagnostic:
 	{
