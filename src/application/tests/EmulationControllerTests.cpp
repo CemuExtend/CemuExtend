@@ -121,6 +121,26 @@ namespace
 		}
 		void RefreshTitles() override { ++titleRefreshes; }
 		void AddTitleFromPath(const std::filesystem::path& path) override { addedTitle = path; }
+		std::optional<Application::WuaConversionPlan> PlanWuaConversion(
+			std::uint64_t titleId, std::uint64_t preferredLocationUid) const override
+		{
+			return Application::WuaConversionPlan{
+				.items = {{preferredLocationUid, titleId, 1,
+					Application::ContentRole::Base, "base-path"}},
+				.suggestedFileName = "Test title.wua",
+			};
+		}
+		Application::ContentOperationResult ConvertToWua(
+			std::span<const std::uint64_t>, const std::filesystem::path&,
+			Application::ContentProgressHandler progress,
+			Application::ContentCancellationCheck cancelled) override
+		{
+			if (cancelled && cancelled())
+				return {Application::ContentOperationError::Cancelled, "cancelled"};
+			if (progress)
+				progress({Application::ContentOperationPhase::Finalizing, 1, 1, 4, 4});
+			return {};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -220,6 +240,13 @@ int main()
 	controller.AddTitleFromPath("installed-title");
 	assert(backend.scanPaths.size() == 2 && backend.titleRefreshes == 1 &&
 		backend.addedTitle == "installed-title");
+	const auto conversionPlan = controller.PlanWuaConversion(0x1234, 17);
+	assert(conversionPlan && conversionPlan->items.front().locationUid == 17);
+	Application::ContentOperationProgress conversionProgress;
+	const std::array<std::uint64_t, 1> conversionItems{17};
+	assert(controller.ConvertToWua(conversionItems, "test.wua",
+		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; }));
+	assert(conversionProgress.phase == Application::ContentOperationPhase::Finalizing);
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
 	assert(controller.ListGraphicPacks().front().key == "pack-key");
 	assert(controller.SetGraphicPackEnabled("pack-key", true).changed);

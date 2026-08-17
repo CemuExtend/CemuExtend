@@ -1,7 +1,6 @@
 #pragma once
+#include "application/TitleCatalog.h"
 #include <wx/dialog.h>
-#include "wxgui/components/wxTitleManagerList.h"
-#include "Cafe/TitleList/TitleInfo.h"
 #include <rapidjson/document.h>
 
 class wxSetGaugeValue;
@@ -9,7 +8,7 @@ class wxSetGaugeValue;
 class ChecksumTool : public wxDialog
 {
 public:
-	ChecksumTool(wxWindow* parent, wxTitleManagerList::TitleEntry& entry);
+	ChecksumTool(wxWindow* parent, Application::ManagedContentEntry entry);
 	~ChecksumTool();
 	
 private:
@@ -31,15 +30,16 @@ private:
 	class wxButton *m_verify_online, *m_verify_local, *m_export_button;
 	int m_enable_verify_button = 0;
 
-	TitleInfo m_info;
-	wxTitleManagerList::TitleEntry m_entry;
+	struct TitleState;
+	std::unique_ptr<TitleState> m_titleState;
+	Application::ManagedContentEntry m_entry;
 	wxColour m_default_color;
 	
 	struct JsonEntry
 	{
 		uint64 title_id;
 		uint32 version;
-		CafeConsoleRegion region;
+		std::uint32_t region{};
 
 		std::string wud_hash;
 		std::map<std::string, std::string> file_hashes;

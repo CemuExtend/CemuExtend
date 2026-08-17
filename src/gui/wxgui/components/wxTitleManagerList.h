@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/TitleCatalog.h"
+#include "application/ContentOperations.h"
 #include "wxgui/helpers/wxCustomData.h"
 
 #include <wx/listctrl.h>
@@ -119,6 +120,7 @@ private:
 	[[nodiscard]] boost::optional<TitleEntry&> GetTitleEntry(const fs::path& path);
 
 	void OnConvertToCompressedFormat(uint64 titleId, uint64 rightClickedUID);
+	void RunWuaConversion(uint64 titleId, uint64 rightClickedUID);
 	bool DeleteEntry(long index, const TitleEntry& entry);
 
 	void RemoveItem(long item);
@@ -142,6 +144,9 @@ private:
 	static wxString GetTitleEntryText(const TitleEntry& entry, ItemColumn column);
 	static wxString GetTranslatedTitleEntryType(EntryType entryType);
 	std::future<bool> m_context_worker;
+	std::future<Application::ContentOperationResult> m_conversionWorker;
+	std::atomic_bool m_conversionActive{};
+	std::atomic_bool m_conversionCancelled{};
 
 	Application::EmulationController& m_emulationController;
 	Application::TitleCatalogSubscription m_titleSubscription;

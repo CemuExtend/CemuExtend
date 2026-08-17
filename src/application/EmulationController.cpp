@@ -359,6 +359,23 @@ namespace Application
 		m_backend->AddTitleFromPath(path);
 	}
 
+	std::optional<WuaConversionPlan> EmulationController::PlanWuaConversion(
+		std::uint64_t titleId, std::uint64_t preferredLocationUid) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->PlanWuaConversion(titleId, preferredLocationUid);
+	}
+
+	ContentOperationResult EmulationController::ConvertToWua(
+		std::span<const std::uint64_t> locationUids,
+		const std::filesystem::path& outputPath, ContentProgressHandler progress,
+		ContentCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ConvertToWua(locationUids, outputPath,
+			std::move(progress), std::move(cancelled));
+	}
+
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

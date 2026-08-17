@@ -17,7 +17,11 @@
 #include "config/CemuConfig.h"
 #include "input/InputManager.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
+#include "Common/FileStream.h"
 #include "util/helpers/helpers.h"
+
+#include <zarchive/zarchivereader.h>
+#include <zarchive/zarchivewriter.h>
 
 #include <condition_variable>
 #include <deque>
@@ -248,6 +252,228 @@ namespace Application
 				result.name.replace(newline, 1, " - ");
 			return result;
 		}
+
+		class TitleListLease final
+		{
+		public:
+			TitleListLease() : titles(CafeTitleList::AcquireInternalList()) {}
+			~TitleListLease() { CafeTitleList::ReleaseInternalList(); }
+			std::span<TitleInfo*> titles;
+		};
+
+		std::optional<WuaConversionPlan> BuildWuaConversionPlan(
+			std::uint64_t titleId, std::uint64_t preferredLocationUid)
+		{
+			titleId = TitleIdParser::MakeBaseTitleId(titleId);
+			TitleIdParser parser(titleId);
+			const bool hasBase = parser.GetType() != TitleIdParser::TITLE_TYPE::AOC;
+			const bool hasUpdate = parser.CanHaveSeparateUpdateTitleId();
+			const std::uint64_t updateId = hasUpdate ? parser.GetSeparateUpdateTitleId() : 0;
+			const std::uint64_t aocId = hasBase ?
+				(titleId & ~0xff00000000ULL) | 0x0c00000000ULL : titleId;
+
+			TitleInfo* base{};
+			TitleInfo* update{};
+			TitleInfo* aoc{};
+			TitleListLease lease;
+			for (auto* candidate : lease.titles)
+			{
+				const auto candidateId = candidate->GetAppTitleId();
+				const bool preferred = candidate->GetUID() == preferredLocationUid;
+				if (hasBase && candidateId == titleId && (!base || preferred))
+					base = candidate;
+				else if (hasUpdate && candidateId == updateId &&
+					(!update || candidate->GetAppTitleVersion() > update->GetAppTitleVersion() || preferred))
+					update = candidate;
+				else if (candidateId == aocId &&
+					(!aoc || candidate->GetAppTitleVersion() > aoc->GetAppTitleVersion() || preferred))
+					aoc = candidate;
+			}
+
+			WuaConversionPlan plan;
+			auto add = [&plan](TitleInfo* title, ContentRole role) {
+				if (!title)
+					return;
+				plan.items.push_back({
+					.locationUid = title->GetUID(),
+					.titleId = title->GetAppTitleId(),
+					.version = title->GetAppTitleVersion(),
+					.role = role,
+					.displayPath = title->GetPrintPath(),
+				});
+			};
+			add(base, ContentRole::Base);
+			add(update, ContentRole::Update);
+			add(aoc, ContentRole::Dlc);
+			if (plan.items.empty())
+				return std::nullopt;
+
+			TitleInfo* namingTitle = base ? base : (update ? update : aoc);
+			std::string name = namingTitle->GetMetaTitleName();
+			boost::replace_all(name, ":", "");
+			boost::replace_all(name, "/", "");
+			boost::replace_all(name, "\\", "");
+			const auto region = namingTitle->GetMetaRegion();
+			if (region == CafeConsoleRegion::JPN)
+				name.append(" (JP)");
+			else if (region == CafeConsoleRegion::EUR)
+				name.append(" (EU)");
+			else if (region == CafeConsoleRegion::USA)
+				name.append(" (US)");
+			if (update)
+				name.append(fmt::format(" (v{})", update->GetAppTitleVersion()));
+			plan.suggestedFileName = std::move(name) + ".wua";
+			return plan;
+		}
+
+		class WuaWriterContext final
+		{
+		public:
+			WuaWriterContext(std::filesystem::path outputPath,
+				ContentProgressHandler progress, ContentCancellationCheck cancelled)
+				: outputPath(std::move(outputPath)), progress(std::move(progress)),
+				  cancelled(std::move(cancelled)) {}
+
+			~WuaWriterContext()
+			{
+				Close();
+			}
+
+			void Close()
+			{
+				delete writer;
+				writer = nullptr;
+				delete stream;
+				stream = nullptr;
+			}
+
+			static void NewOutputFile(std::int32_t, void* context)
+			{
+				auto& self = *static_cast<WuaWriterContext*>(context);
+				self.stream = FileStream::createFile2(self.outputPath);
+				self.valid = self.stream != nullptr;
+			}
+
+			static void WriteOutputData(const void* data, std::size_t length, void* context)
+			{
+				auto& self = *static_cast<WuaWriterContext*>(context);
+				if (!self.stream || length > static_cast<std::size_t>(std::numeric_limits<sint32>::max()) ||
+					self.stream->writeData(data, static_cast<sint32>(length)) !=
+						static_cast<sint32>(length))
+					self.valid = false;
+			}
+
+			bool IsCancelled() const { return cancelled && cancelled(); }
+
+			void Publish(ContentOperationPhase phase) const
+			{
+				if (progress)
+					progress({phase, filesCompleted, filesTotal,
+						bytesCompleted, bytesTotal});
+			}
+
+			bool CountFiles(const std::string& path)
+			{
+				if (IsCancelled())
+					return false;
+				sint32 status{};
+				std::unique_ptr<FSCVirtualFile> directory(fsc_openDirIterator(path.c_str(), &status));
+				if (!directory)
+					return false;
+				FSCDirEntry entry;
+				while (fsc_nextDir(directory.get(), &entry))
+				{
+					if (entry.isFile)
+					{
+						bytesTotal += static_cast<std::uint64_t>(entry.fileSize);
+						++filesTotal;
+						Publish(ContentOperationPhase::Collecting);
+					}
+					else if (entry.isDirectory &&
+						!CountFiles(fmt::format("{}{}/", path, entry.path)))
+						return false;
+				}
+				return true;
+			}
+
+			bool AddFiles(std::string archivePath, const std::string& path)
+			{
+				if (IsCancelled())
+					return false;
+				sint32 status{};
+				std::unique_ptr<FSCVirtualFile> directory(fsc_openDirIterator(path.c_str(), &status));
+				if (!directory)
+					return false;
+				if (!writer->MakeDir(archivePath.c_str(), false))
+					return false;
+				FSCDirEntry entry;
+				while (fsc_nextDir(directory.get(), &entry))
+				{
+					if (entry.isDirectory)
+					{
+						if (!AddFiles(fmt::format("{}{}/", archivePath, entry.path),
+							fmt::format("{}{}/", path, entry.path)))
+							return false;
+						continue;
+					}
+					if (!entry.isFile)
+						continue;
+					if (!writer->StartNewFile((archivePath + entry.path).c_str()))
+						return false;
+					std::unique_ptr<FSCVirtualFile> file(fsc_open(
+						(path + entry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE |
+						FSC_ACCESS_FLAG::READ_PERMISSION, &status));
+					if (!file)
+						return false;
+					buffer.resize(32 * 1024);
+					for (;;)
+					{
+						const auto read = file->fscReadData(buffer.data(), buffer.size());
+						if (read == 0)
+							break;
+						writer->AppendData(buffer.data(), read);
+						bytesCompleted += read;
+						Publish(ContentOperationPhase::Converting);
+						if (IsCancelled())
+							return false;
+					}
+					++filesCompleted;
+				}
+				return true;
+			}
+
+			bool Process(TitleInfo& title, bool count)
+			{
+				const auto mountPath = TitleInfo::GetUniqueTempMountingPath();
+				if (!title.Mount(mountPath, "", FSC_PRIORITY_BASE))
+					return false;
+				try
+				{
+					const bool result = count ? CountFiles(mountPath) :
+						AddFiles(fmt::format("{:016x}_v{}/", title.GetAppTitleId(),
+							title.GetAppTitleVersion()), mountPath);
+					title.Unmount(mountPath);
+					return result;
+				}
+				catch (...)
+				{
+					title.Unmount(mountPath);
+					throw;
+				}
+			}
+
+			std::filesystem::path outputPath;
+			ContentProgressHandler progress;
+			ContentCancellationCheck cancelled;
+			FileStream* stream{};
+			ZArchiveWriter* writer{};
+			std::vector<std::uint8_t> buffer;
+			std::uint32_t filesCompleted{};
+			std::uint32_t filesTotal{};
+			std::uint64_t bytesCompleted{};
+			std::uint64_t bytesTotal{};
+			bool valid{};
+		};
 
 		class CafeTitleEventSubscription final :
 			public Detail::TitleSubscriptionState,
@@ -853,6 +1079,177 @@ namespace Application
 			void AddTitleFromPath(const std::filesystem::path& path) override
 			{
 				CafeTitleList::AddTitleFromPath(path);
+			}
+
+			std::optional<WuaConversionPlan> PlanWuaConversion(
+				std::uint64_t titleId, std::uint64_t preferredLocationUid) const override
+			{
+				return BuildWuaConversionPlan(titleId, preferredLocationUid);
+			}
+
+			ContentOperationResult ConvertToWua(
+				std::span<const std::uint64_t> locationUids,
+				const std::filesystem::path& outputPath,
+				ContentProgressHandler progress,
+				ContentCancellationCheck cancelled) override
+			{
+				if (locationUids.empty())
+					return {ContentOperationError::NotFound, "No title content selected"};
+				if (outputPath.empty())
+					return {ContentOperationError::UnableToCreateOutput,
+						"Archive output path is empty"};
+
+				std::vector<TitleInfo> titles;
+				titles.reserve(locationUids.size());
+				for (const auto uid : locationUids)
+				{
+					auto title = CafeTitleList::GetTitleInfoByUID(uid);
+					if (!title.IsValid())
+						return {ContentOperationError::NotFound,
+							fmt::format("Title content {:016x} is no longer available", uid)};
+					titles.push_back(std::move(title));
+				}
+
+				auto temporaryPath = outputPath;
+				temporaryPath += fmt::format(".tmp.{}",
+					std::chrono::steady_clock::now().time_since_epoch().count());
+				auto removeTemporary = [&temporaryPath] {
+					std::error_code ignored;
+					std::filesystem::remove(temporaryPath, ignored);
+				};
+
+				try
+				{
+					WuaWriterContext context(temporaryPath, std::move(progress),
+						cancelled);
+					context.writer = new ZArchiveWriter(&WuaWriterContext::NewOutputFile,
+						&WuaWriterContext::WriteOutputData, &context);
+					if (!context.valid)
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::UnableToCreateOutput,
+							"Unable to create archive output"};
+					}
+
+					context.Publish(ContentOperationPhase::Counting);
+					for (auto& title : titles)
+					{
+						if (!context.Process(title, true))
+						{
+							const bool wasCancelled = context.IsCancelled();
+							context.Close();
+							removeTemporary();
+							return {wasCancelled ? ContentOperationError::Cancelled :
+								ContentOperationError::ReadFailure,
+								wasCancelled ? "Conversion cancelled" :
+								"Unable to enumerate title files"};
+						}
+					}
+					for (auto& title : titles)
+					{
+						if (!context.Process(title, false))
+						{
+							const bool wasCancelled = context.IsCancelled();
+							context.Close();
+							removeTemporary();
+							return {wasCancelled ? ContentOperationError::Cancelled :
+								ContentOperationError::ReadFailure,
+								wasCancelled ? "Conversion cancelled" :
+								"Unable to read title files"};
+						}
+					}
+					if (!context.valid)
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::UnableToCreateOutput,
+							"Unable to write archive output"};
+					}
+
+					if (context.IsCancelled())
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::Cancelled, "Conversion cancelled"};
+					}
+					context.Publish(ContentOperationPhase::Finalizing);
+					context.writer->Finalize();
+					delete context.stream;
+					context.stream = nullptr;
+					std::unique_ptr<ZArchiveReader> verification(
+						ZArchiveReader::OpenFromFile(temporaryPath));
+					if (!verification)
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::VerificationFailure,
+							"Unable to reopen the generated archive"};
+					}
+				}
+				catch (const std::exception& exception)
+				{
+					removeTemporary();
+					return {ContentOperationError::ReadFailure, exception.what()};
+				}
+				catch (...)
+				{
+					removeTemporary();
+					return {ContentOperationError::ReadFailure,
+						"Unknown archive conversion failure"};
+				}
+
+				if (cancelled && cancelled())
+				{
+					removeTemporary();
+					return {ContentOperationError::Cancelled, "Conversion cancelled"};
+				}
+
+				auto backupPath = outputPath;
+				backupPath += fmt::format(".backup.{}",
+					std::chrono::steady_clock::now().time_since_epoch().count());
+				std::error_code renameError;
+				const bool destinationExists = std::filesystem::exists(outputPath, renameError);
+				if (renameError)
+				{
+					removeTemporary();
+					return {ContentOperationError::RenameFailure, renameError.message()};
+				}
+				if (destinationExists)
+				{
+					std::filesystem::rename(outputPath, backupPath, renameError);
+					if (renameError)
+					{
+						removeTemporary();
+						return {ContentOperationError::RenameFailure, renameError.message()};
+					}
+				}
+				std::filesystem::rename(temporaryPath, outputPath, renameError);
+				if (renameError)
+				{
+					if (destinationExists)
+					{
+						std::error_code restoreError;
+						std::filesystem::rename(backupPath, outputPath, restoreError);
+						if (restoreError)
+						{
+							removeTemporary();
+							return {ContentOperationError::RenameFailure,
+								fmt::format("{}; original output remains at {} because restore failed: {}",
+									renameError.message(), _pathToUtf8(backupPath),
+									restoreError.message())};
+						}
+					}
+					removeTemporary();
+					return {ContentOperationError::RenameFailure, renameError.message()};
+				}
+				if (destinationExists)
+				{
+					std::error_code ignored;
+					std::filesystem::remove(backupPath, ignored);
+				}
+				CafeTitleList::Refresh();
+				return {};
 			}
 
 			std::vector<GraphicPackInfo> ListGraphicPacks() const override

@@ -1,6 +1,7 @@
 add_library(CemuApplication STATIC
 	ApplicationHost.cpp
 	ApplicationHost.h
+	ContentOperations.h
   ApplicationEvents.cpp
   ApplicationEvents.h
   CafeEmulationBackend.cpp
@@ -16,6 +17,7 @@ target_link_libraries(CemuApplication PRIVATE
 	CemuInput
 	CemuComponents
 	cemuextend::wire
+	ZArchive::zarchive
 )
 
 if(BUILD_TESTING)

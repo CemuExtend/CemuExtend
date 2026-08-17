@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "application/ApplicationEvents.h"
+#include "application/ContentOperations.h"
 #include "application/GraphicPackFacade.h"
 #include "application/TitleCatalog.h"
 
@@ -157,7 +158,8 @@ namespace Application
 		std::uint8_t flags{};
 	};
 
-	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService
+	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
+		public IContentOperations
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -248,6 +250,13 @@ namespace Application
 		void ReplaceTitleScanPaths(std::span<const std::filesystem::path> paths);
 		void RefreshTitles();
 		void AddTitleFromPath(const std::filesystem::path& path);
+		[[nodiscard]] std::optional<WuaConversionPlan> PlanWuaConversion(
+			std::uint64_t titleId, std::uint64_t preferredLocationUid) const;
+		[[nodiscard]] ContentOperationResult ConvertToWua(
+			std::span<const std::uint64_t> locationUids,
+			const std::filesystem::path& outputPath,
+			ContentProgressHandler progress,
+			ContentCancellationCheck cancelled);
 		[[nodiscard]] std::vector<GraphicPackInfo> ListGraphicPacks() const;
 		[[nodiscard]] GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled);

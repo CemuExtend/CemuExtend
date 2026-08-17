@@ -2,9 +2,6 @@
 #include "application/EmulationController.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "util/helpers/SystemException.h"
-#include "Cafe/TitleList/GameInfo.h"
-#include "Cafe/TitleList/TitleInfo.h"
-#include "Cafe/TitleList/TitleList.h"
 #include "wxgui/components/wxGameList.h"
 #include "wxgui/helpers/wxCustomEvents.h"
 #include "wxgui/helpers/wxHelpers.h"
@@ -18,6 +15,7 @@
 #include <wx/timer.h>
 #include <wx/panel.h>
 #include <wx/progdlg.h>
+#include <wx/filedlg.h>
 #include "../wxHelper.h"
 
 #include <functional>
@@ -25,12 +23,6 @@
 #include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
 #include "wxgui/MainWindow.h"
-#include "Cafe/TitleList/TitleId.h"
-
-#include <zarchive/zarchivewriter.h>
-#include <zarchive/zarchivereader.h>
-
-#include "Common/FileStream.h"
 
 wxDEFINE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_TITLE_REMOVED, wxCommandEvent);
@@ -83,6 +75,17 @@ wxTitleManagerList::~wxTitleManagerList()
 {
 	m_lifetime->store(false, std::memory_order_release);
 	m_titleSubscription.Reset();
+	m_conversionCancelled.store(true, std::memory_order_release);
+	if (m_conversionWorker.valid())
+	{
+		try
+		{
+			(void)m_conversionWorker.get();
+		}
+		catch (...)
+		{
+		}
+	}
 }
 
 boost::optional<const wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetSelectedTitleEntry() const
@@ -255,382 +258,156 @@ boost::optional<const wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetTi
 	return {};
 }
 
-void wxTitleManagerList::OnConvertToCompressedFormat(uint64 titleId, uint64 rightClickedUID)
+void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID)
 {
-	TitleInfo titleInfo_base;
-	TitleInfo titleInfo_update;
-	TitleInfo titleInfo_aoc;
-
-	titleId = TitleIdParser::MakeBaseTitleId(titleId); // if the titleId of a separate update is selected, this converts it back to the base titleId
-	TitleIdParser titleIdParser(titleId);
-	bool hasBaseTitleId = titleIdParser.GetType() != TitleIdParser::TITLE_TYPE::AOC;
-	bool hasUpdateTitleId = titleIdParser.CanHaveSeparateUpdateTitleId();
-	TitleId updateTitleId = hasUpdateTitleId ? titleIdParser.GetSeparateUpdateTitleId() : 0;
-
-	// todo - AOC titleIds might differ from the base/update game in other bits than the type. We have to use the meta data from the base/update to match aoc to the base title id
-	// for now we just assume they match
-	TitleId aocTitleId;
-	if (hasBaseTitleId)
-		aocTitleId = (titleId & (uint64)~0xFF00000000) | (uint64)0xC00000000;
-	else
-		aocTitleId = titleId;
-
-	// find base and update
-	for (const auto& data : m_data)
-	{
-		if (hasBaseTitleId && data->entry.title_id == titleId)
-		{
-			if (!titleInfo_base.IsValid())
-			{
-				titleInfo_base = CafeTitleList::GetTitleInfoByUID(data->entry.location_uid);
-				if(data->entry.location_uid == rightClickedUID)
-					break; // prefer the users selection
-			}
-		}
-	}
-	for (const auto& data : m_data)
-	{
-		if (hasUpdateTitleId && data->entry.title_id == updateTitleId)
-		{
-			if (!titleInfo_update.IsValid())
-			{
-				titleInfo_update = CafeTitleList::GetTitleInfoByUID(data->entry.location_uid);
-				if(data->entry.location_uid == rightClickedUID)
-					break;
-			}
-			else
-			{
-				// if multiple updates are present use the newest one
-				if (titleInfo_update.GetAppTitleVersion() < data->entry.version)
-					titleInfo_update = CafeTitleList::GetTitleInfoByUID(data->entry.location_uid);
-				if(data->entry.location_uid == rightClickedUID)
-					break;
-			}
-		}
-	}
-	// find AOC
-	for (const auto& data : m_data)
-	{
-		if (data->entry.title_id == aocTitleId)
-		{
-			titleInfo_aoc = CafeTitleList::GetTitleInfoByUID(data->entry.location_uid);
-			if(data->entry.location_uid == rightClickedUID)
-				break;
-		}
-	}
-
-	wxString msg = _("The following content will be converted to a compressed Wii U archive file (.wua):");
-	msg.append("\n \n");
-	
-	if (titleInfo_base.IsValid())
-		msg.append(formatWxString(_("Base game:\n{}"), titleInfo_base.GetPrintPath()));
-	else
-		msg.append(_("Base game:\nNot installed"));
-
-	msg.append("\n\n");
-
-	if (titleInfo_update.IsValid())
-		msg.append(formatWxString(_("Update:\n{}"), titleInfo_update.GetPrintPath()));
-	else
-		msg.append(_("Update:\nNot installed"));
-
-	msg.append("\n\n");
-
-	if (titleInfo_aoc.IsValid())
-		msg.append(formatWxString(_("DLC:\n{}"), titleInfo_aoc.GetPrintPath()));
-	else
-		msg.append(_("DLC:\nNot installed"));
-
-	const int answer = wxMessageBox(msg, _("Confirmation"), wxOK | wxCANCEL | wxCENTRE | wxICON_QUESTION, this);
-	if (answer != wxOK)
+	if (m_conversionActive.exchange(true, std::memory_order_acq_rel))
 		return;
-	std::vector<TitleInfo*> titlesToConvert;
-	if (titleInfo_base.IsValid())
-		titlesToConvert.emplace_back(&titleInfo_base);
-	if (titleInfo_update.IsValid())
-		titlesToConvert.emplace_back(&titleInfo_update);
-	if (titleInfo_aoc.IsValid())
-		titlesToConvert.emplace_back(&titleInfo_aoc);
-	if (titlesToConvert.empty())
-		return;
-	// get short name
-	CafeConsoleLanguage languageId = CafeConsoleLanguage::EN; // todo - use user's locale
-	std::string shortName;
-	if (titleInfo_base.IsValid())
-		shortName = titleInfo_base.GetMetaInfo()->GetShortName(languageId);
-	else if (titleInfo_update.IsValid())
-		shortName = titleInfo_update.GetMetaInfo()->GetShortName(languageId);
-	else if (titleInfo_aoc.IsValid())
-		shortName = titleInfo_aoc.GetMetaInfo()->GetShortName(languageId);
-
-	if (!shortName.empty())
+	struct ActiveReset
 	{
-		boost::replace_all(shortName, ":", "");
+		std::atomic_bool& active;
+		~ActiveReset() { active.store(false, std::memory_order_release); }
+	} activeReset{m_conversionActive};
+	m_conversionCancelled.store(false, std::memory_order_release);
+
+	const auto plan = m_emulationController.PlanWuaConversion(titleId, rightClickedUID);
+	if (!plan || plan->items.empty())
+	{
+		wxMessageBox(_("No installed content was found for conversion."), _("Error"),
+			wxOK | wxCENTRE | wxICON_ERROR, this);
+		return;
 	}
-	// for the default output directory we use the first game path configured by the user
-	std::string defaultDir = "";
+
+	auto findItem = [&plan](Application::ContentRole role) -> const Application::WuaContentItem* {
+		const auto found = std::ranges::find_if(plan->items,
+			[role](const auto& item) { return item.role == role; });
+		return found == plan->items.end() ? nullptr : &*found;
+	};
+	auto appendItem = [](wxString& message, const wxString& label,
+		const Application::WuaContentItem* item) {
+		message.append(formatWxString("{}:\n{}", label,
+			item ? wxString::FromUTF8(item->displayPath) : _("Not installed")));
+	};
+	wxString message = _("The following content will be converted to a compressed Wii U archive file (.wua):");
+	message.append("\n \n");
+	appendItem(message, _("Base game"), findItem(Application::ContentRole::Base));
+	message.append("\n\n");
+	appendItem(message, _("Update"), findItem(Application::ContentRole::Update));
+	message.append("\n\n");
+	appendItem(message, _("DLC"), findItem(Application::ContentRole::Dlc));
+	if (wxMessageBox(message, _("Confirmation"), wxOK | wxCANCEL | wxCENTRE |
+		wxICON_QUESTION, this) != wxOK)
+		return;
+
+	std::string defaultDirectory;
 	if (!GetConfig().game_paths.empty())
-		defaultDir = GetConfig().game_paths.front();
-	// get the short name, which we will use as a suggested default file name
-	std::string defaultFileName = std::move(shortName);
-	boost::replace_all(defaultFileName, "/", "");
-	boost::replace_all(defaultFileName, "\\", "");
-
-	CafeConsoleRegion region = CafeConsoleRegion::Auto;
-	if (titleInfo_base.IsValid() && titleInfo_base.HasValidXmlInfo())
-		region = titleInfo_base.GetMetaInfo()->GetRegion();
-	else if (titleInfo_update.IsValid() && titleInfo_update.HasValidXmlInfo())
-		region = titleInfo_update.GetMetaInfo()->GetRegion();
-
-	if (region == CafeConsoleRegion::JPN)
-		defaultFileName.append(" (JP)");
-	else if (region == CafeConsoleRegion::EUR)
-		defaultFileName.append(" (EU)");
-	else if (region == CafeConsoleRegion::USA)
-		defaultFileName.append(" (US)");
-	if (titleInfo_update.IsValid())
-	{
-		defaultFileName.append(fmt::format(" (v{})", titleInfo_update.GetAppTitleVersion()));
-	}
-	defaultFileName.append(".wua");
-
-	// ask the user to provide a path for the output file
-	wxFileDialog saveFileDialog(this, _("Save Wii U game archive file"), defaultDir, wxString::FromUTF8(defaultFileName),
-								"WUA files (*.wua)|*.wua", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-	if (saveFileDialog.ShowModal() == wxID_CANCEL || saveFileDialog.GetPath().IsEmpty())
+		defaultDirectory = GetConfig().game_paths.front();
+	wxFileDialog saveDialog(this, _("Save Wii U game archive file"), defaultDirectory,
+		wxString::FromUTF8(plan->suggestedFileName), "WUA files (*.wua)|*.wua",
+		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if (saveDialog.ShowModal() == wxID_CANCEL || saveDialog.GetPath().IsEmpty())
 		return;
-	fs::path outputPath(wxHelper::MakeFSPath(saveFileDialog.GetPath()));
-	fs::path outputPathTmp(wxHelper::MakeFSPath(saveFileDialog.GetPath().append("__tmp")));
-	struct ZArchiveWriterContext
+
+	std::vector<std::uint64_t> locationUids;
+	locationUids.reserve(plan->items.size());
+	for (const auto& item : plan->items)
+		locationUids.push_back(item.locationUid);
+
+	struct SharedProgress
 	{
-		static void NewOutputFile(const int32_t partIndex, void* _ctx)
-		{
-			ZArchiveWriterContext* ctx = (ZArchiveWriterContext*)_ctx;
-			ctx->fs = FileStream::createFile2(ctx->outputPath);
-			if (!ctx->fs)
-				ctx->isValid = false;
-		}
+		std::mutex mutex;
+		Application::ContentOperationProgress value;
+	} sharedProgress;
+	const auto outputPath = wxHelper::MakeFSPath(saveDialog.GetPath());
+	auto* controller = &m_emulationController;
+	m_conversionWorker = std::async(std::launch::async,
+		[controller, locationUids = std::move(locationUids), outputPath, &sharedProgress,
+			cancelled = &m_conversionCancelled] {
+			return controller->ConvertToWua(locationUids, outputPath,
+				[&sharedProgress](const auto& progress) {
+					std::scoped_lock lock(sharedProgress.mutex);
+					sharedProgress.value = progress;
+				}, [cancelled] { return cancelled->load(std::memory_order_acquire); });
+		});
 
-		static void WriteOutputData(const void* data, size_t length, void* _ctx)
-		{
-			ZArchiveWriterContext* ctx = (ZArchiveWriterContext*)_ctx;
-			if (ctx->fs)
-				ctx->fs->writeData(data, length);
-		}
-
-		bool RecursivelyCountFiles(const std::string& fscPath)
-		{
-			sint32 fscStatus;
-			std::unique_ptr<FSCVirtualFile> vfDir(fsc_openDirIterator(fscPath.c_str(), &fscStatus));
-			if (!vfDir)
-				return false;
-			if (cancelled)
-				return false;
-			FSCDirEntry dirEntry;
-			while (fsc_nextDir(vfDir.get(), &dirEntry))
-			{
-				if (dirEntry.isFile)
-				{
-					totalInputFileSize += (uint64)dirEntry.fileSize;
-					totalFileCount++;
-				}
-				else if (dirEntry.isDirectory)
-				{
-					if (!RecursivelyCountFiles(fmt::format("{}{}/", fscPath, dirEntry.path)))
-					{
-						return false;
-					}
-				}
-				else
-					cemu_assert_unimplemented();
-			}
-			return true;
-		}
-
-		bool RecursivelyAddFiles(std::string archivePath, std::string fscPath)
-		{
-			sint32 fscStatus;
-			std::unique_ptr<FSCVirtualFile> vfDir(fsc_openDirIterator(fscPath.c_str(), &fscStatus));
-			if (!vfDir)
-				return false;
-			if (cancelled)
-				return false;
-			zaWriter->MakeDir(archivePath.c_str(), false);
-			FSCDirEntry dirEntry;
-			while (fsc_nextDir(vfDir.get(), &dirEntry))
-			{
-				if (dirEntry.isFile)
-				{
-					zaWriter->StartNewFile((archivePath + dirEntry.path).c_str());
-					std::unique_ptr<FSCVirtualFile> vFile(fsc_open((fscPath + dirEntry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &fscStatus));
-					if (!vFile)
-						return false;
-					transferBuffer.resize(32 * 1024); // 32KB
-					uint32 readBytes;
-					while (true)
-					{
-                        readBytes = vFile->fscReadData(transferBuffer.data(), transferBuffer.size());
-                        if(readBytes == 0)
-                            break;
-						zaWriter->AppendData(transferBuffer.data(), readBytes);
-						if (cancelled)
-							return false;
-						transferredInputBytes += readBytes;
-					}
-					currentFileIndex++;
-				}
-				else if (dirEntry.isDirectory)
-				{
-					if (!RecursivelyAddFiles(fmt::format("{}{}/", archivePath, dirEntry.path), fmt::format("{}{}/", fscPath, dirEntry.path)))
-						return false;
-				}
-				else
-					cemu_assert_unimplemented();
-			}
-			return true;
-		}
-
-		bool LoadTitleMetaAndCountFiles(TitleInfo* titleInfo)
-		{
-			std::string temporaryMountPath = TitleInfo::GetUniqueTempMountingPath();
-			titleInfo->Mount(temporaryMountPath.c_str(), "", FSC_PRIORITY_BASE);
-			bool r = RecursivelyCountFiles(temporaryMountPath);
-			titleInfo->Unmount(temporaryMountPath.c_str());
-			return r;
-		}
-
-		bool StoreTitle(TitleInfo* titleInfo)
-		{
-			std::string temporaryMountPath = TitleInfo::GetUniqueTempMountingPath();
-			titleInfo->Mount(temporaryMountPath.c_str(), "", FSC_PRIORITY_BASE);
-			bool r = RecursivelyAddFiles(fmt::format("{:016x}_v{}/", titleInfo->GetAppTitleId(), titleInfo->GetAppTitleVersion()), temporaryMountPath);
-			titleInfo->Unmount(temporaryMountPath.c_str());
-			return r;
-		}
-
-		bool AddTitles(TitleInfo** titles, size_t count)
-		{
-			currentFileIndex = 0;
-			totalFileCount = 0;
-			// count files
-			for (size_t i = 0; i < count; i++)
-			{
-				if (!LoadTitleMetaAndCountFiles(titles[i]))
-					return false;
-				if (cancelled)
-					return false;
-			}
-			// store files
-			for (size_t i = 0; i < count; i++)
-			{
-				if (!StoreTitle(titles[i]))
-					return false;
-			}
-			return true;
-		}
-
-		~ZArchiveWriterContext()
-		{
-			delete fs;
-			delete zaWriter;
-		};
-
-		fs::path outputPath;
-		FileStream* fs;
-		ZArchiveWriter* zaWriter{};
-		bool isValid{false};
-		std::vector<uint8> transferBuffer;
-		std::atomic_bool cancelled{false};
-		// progress
-		std::atomic_uint32_t totalFileCount{};
-		std::atomic_uint32_t currentFileIndex{};
-		std::atomic_uint64_t totalInputFileSize{};
-		std::atomic_uint64_t transferredInputBytes{};
-	}writerContext;
-
-	// mount and store
-	writerContext.isValid = true;
-	writerContext.outputPath = outputPathTmp;
-	writerContext.zaWriter = new ZArchiveWriter(&ZArchiveWriterContext::NewOutputFile, &ZArchiveWriterContext::WriteOutputData, &writerContext);
-	if (!writerContext.isValid)
-	{
-		// failed to create file
-		wxMessageBox(_("Unable to create file"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-		return;
-	}
-	// open progress dialog
-	wxGenericProgressDialog progressDialog("Converting to .wua",
-		_("Counting files..."),
-		100,    // range
-		this,   // parent
-		wxPD_CAN_ABORT
-	);
+	wxGenericProgressDialog progressDialog(_("Converting to .wua"), _("Counting files..."),
+		100, this, wxPD_CAN_ABORT);
 	progressDialog.Show();
-
-	auto asyncWorker = std::async(std::launch::async, &ZArchiveWriterContext::AddTitles, &writerContext, titlesToConvert.data(), titlesToConvert.size());
-	while (!future_is_ready(asyncWorker))
+	while (!future_is_ready(m_conversionWorker))
 	{
-		if (writerContext.cancelled)
+		Application::ContentOperationProgress progress;
 		{
-			progressDialog.Update(0, _("Stopping..."));
+			std::scoped_lock lock(sharedProgress.mutex);
+			progress = sharedProgress.value;
 		}
-		else if (writerContext.currentFileIndex != 0)
+		std::uint32_t percent{};
+		wxString status;
+		if (m_conversionCancelled.load(std::memory_order_acquire))
+			status = _("Stopping...");
+		else if (progress.phase == Application::ContentOperationPhase::Finalizing)
 		{
-			uint64 numSizeCompleted = writerContext.transferredInputBytes;
-			uint64 numSizeTotal = writerContext.totalInputFileSize;
-			uint32 pct = (uint32)(numSizeCompleted * (uint64)100 / numSizeTotal);
-			pct = std::min(pct, (uint32)100);
-			if (pct >= 100)
-				pct = 99; // never set it to 100 as progress == total will make .Update() call ShowModal() and lock up this loop
-			std::string textSuffix = fmt::format(" ({}MiB/{}MiB)", numSizeCompleted / 1024 / 1024, numSizeTotal / 1024 / 1024);
-			progressDialog.Update(pct, _("Converting files...") + textSuffix);
+			percent = 99;
+			status = _("Finalizing...");
+		}
+		else if (progress.phase == Application::ContentOperationPhase::Converting)
+		{
+			if (progress.bytesTotal != 0)
+				percent = static_cast<std::uint32_t>(std::min<std::uint64_t>(99,
+					progress.bytesCompleted * 100 / progress.bytesTotal));
+			status = formatWxString(_("Converting files... ({0}MiB/{1}MiB)"),
+				progress.bytesCompleted / 1024 / 1024, progress.bytesTotal / 1024 / 1024);
 		}
 		else
 		{
-			progressDialog.Update(0, _("Collecting list of files...") + fmt::format(" ({})", writerContext.totalFileCount.load()));
+			status = formatWxString(_("Collecting list of files... ({})"), progress.filesTotal);
 		}
+		progressDialog.Update(percent, status);
 		if (progressDialog.WasCancelled())
-			writerContext.cancelled.store(true);
+			m_conversionCancelled.store(true, std::memory_order_release);
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
-	progressDialog.Update(100-1, _("Finalizing..."));
-	bool r = asyncWorker.get();
-	if (!r)
+
+	Application::ContentOperationResult result;
+	try
 	{
-		delete writerContext.fs;
-		writerContext.fs = nullptr;
-		std::error_code ec;
-		fs::remove(outputPathTmp, ec);
-		return;
+		result = m_conversionWorker.get();
 	}
-	writerContext.zaWriter->Finalize();
-	delete writerContext.fs;
-	writerContext.fs = nullptr;
-	// verify the created WUA file
-	ZArchiveReader* zreader = ZArchiveReader::OpenFromFile(outputPathTmp);
-	if (!zreader)
+	catch (const std::exception& exception)
 	{
-		wxMessageBox(_("Conversion failed\n"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-		std::error_code ec;
-		fs::remove(outputPathTmp, ec);
-		return;
+		result = {Application::ContentOperationError::ReadFailure, exception.what()};
 	}
-	// todo - do a quick verification here
-	delete zreader;
-	// finish
+	catch (...)
+	{
+		result = {Application::ContentOperationError::ReadFailure,
+			"Unknown archive conversion failure"};
+	}
 	progressDialog.Hide();
-	fs::rename(outputPathTmp, outputPath);
-
-	// ask user if they want to delete the original titles
-	// todo
-
-
-	m_emulationController.RefreshTitles();
-	wxMessageBox(_("Conversion finished\n"), _("Complete"), wxOK | wxCENTRE | wxICON_INFORMATION, this);
+	if (result.error == Application::ContentOperationError::Cancelled)
+		return;
+	if (!result)
+	{
+		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Conversion failed"),
+			wxOK | wxCENTRE | wxICON_ERROR, this);
+		return;
+	}
+	wxMessageBox(_("Conversion finished\n"), _("Complete"),
+		wxOK | wxCENTRE | wxICON_INFORMATION, this);
 }
 
+void wxTitleManagerList::OnConvertToCompressedFormat(uint64 titleId, uint64 rightClickedUID)
+{
+	RunWuaConversion(titleId, rightClickedUID);
+}
 void wxTitleManagerList::OnClose(wxCloseEvent& event)
 {
+	if (m_conversionActive.load(std::memory_order_acquire))
+	{
+		m_conversionCancelled.store(true, std::memory_order_release);
+		if (event.CanVeto())
+		{
+			event.Veto();
+			return;
+		}
+	}
 	event.Skip();
 	// wait until all tasks are complete
 	if (m_context_worker.valid())
@@ -902,7 +679,15 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 		}
 		break;
 	case kContextMenuVerifyGameFiles:
-		(new ChecksumTool(this, entry.value()))->Show();
+		(new ChecksumTool(this, Application::ManagedContentEntry{
+			.locationUid = entry->location_uid,
+			.titleId = entry->title_id,
+			.path = entry->path,
+			.name = entry->name.ToStdString(),
+			.version = entry->version,
+			.region = entry->region,
+			.regionName = entry->region_name.ToStdString(),
+		}))->Show();
 		break;
 	case kContextMenuConvertToWUA:
 		

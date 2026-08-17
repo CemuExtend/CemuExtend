@@ -79,15 +79,22 @@ const char kSchema[] = R"(
   ]
 })";
 
+struct ChecksumTool::TitleState
+{
+	TitleInfo info;
+};
 
-ChecksumTool::ChecksumTool(wxWindow* parent, wxTitleManagerList::TitleEntry& entry)
+ChecksumTool::ChecksumTool(wxWindow* parent, Application::ManagedContentEntry entry)
 	: wxDialog(parent, wxID_ANY,
-		formatWxString(_("Title checksum of {:08x}-{:08x}"), (uint32) (entry.title_id >> 32), (uint32) (entry.title_id & 0xFFFFFFFF)),
-		wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX), m_entry(entry)
+		formatWxString(_("Title checksum of {:08x}-{:08x}"),
+			(uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF)),
+		wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW |
+			wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+	  m_titleState(std::make_unique<TitleState>()), m_entry(std::move(entry))
 {
 
-	m_info = CafeTitleList::GetTitleInfoByUID(m_entry.location_uid);
-	if (!m_info.IsValid())
+	m_titleState->info = CafeTitleList::GetTitleInfoByUID(m_entry.locationUid);
+	if (!m_titleState->info.IsValid())
 		throw std::runtime_error("Invalid title");
 
 	// only request online update once
@@ -132,7 +139,7 @@ ChecksumTool::ChecksumTool(wxWindow* parent, wxTitleManagerList::TitleEntry& ent
 			{
 				// only enable if we have a file for it
 				const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_info.GetAppTitleVersion());
+				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
 
 				const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
 				if (exists(checksum_path))
@@ -158,7 +165,18 @@ ChecksumTool::ChecksumTool(wxWindow* parent, wxTitleManagerList::TitleEntry& ent
 
 	this->Bind(wxEVT_SET_GAUGE_VALUE, &ChecksumTool::OnSetGaugevalue, this);
 
-	m_worker = std::thread(&ChecksumTool::DoWork, this);
+	m_worker = std::thread([this] {
+		try
+		{
+			DoWork();
+		}
+		catch (const std::exception& exception)
+		{
+			cemuLog_log(LogType::Force, "Checksum worker failed: {}", exception.what());
+			wxQueueEvent(this, new wxSetGaugeValue(0, m_progress, m_status,
+				wxString::FromUTF8(exception.what())));
+		}
+	});
 
 	this->SetSizerAndFit(sizer);
 	this->Centre(wxBOTH);
@@ -169,6 +187,19 @@ ChecksumTool::~ChecksumTool()
 	m_running = false;
 	if (m_worker.joinable())
 		m_worker.join();
+	if (m_online_ready.valid())
+	{
+		try
+		{
+			m_online_ready.get();
+		}
+		catch (const std::exception& exception)
+		{
+			cemuLog_log(LogType::Force, "Checksum metadata worker failed: {}",
+				exception.what());
+		}
+	}
+	DeletePendingEvents();
 }
 
 std::size_t WriteCallback(const char* in, std::size_t size, std::size_t num, std::string* out)
@@ -208,7 +239,10 @@ void ChecksumTool::LoadOnlineData() const
 			curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/teamcemu/title-checksums/commits/master");
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 			curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
 
 			curl_easy_perform(curl);
@@ -243,7 +277,10 @@ void ChecksumTool::LoadOnlineData() const
 			curl_easy_setopt(curl, CURLOPT_URL, "https://github.com/TeamCemu/title-checksums/archive/master.zip");
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 			curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
 
@@ -378,8 +415,8 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 
 	auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
 	doc.AddMember("title_id", rapidjson::StringRef(title_id_str.c_str(), title_id_str.size()), a);
-	doc.AddMember("region", (int)m_info.GetMetaRegion(), a);
-	doc.AddMember("version", m_info.GetAppTitleVersion(), a);
+	doc.AddMember("region", (int)m_titleState->info.GetMetaRegion(), a);
+	doc.AddMember("version", m_titleState->info.GetAppTitleVersion(), a);
 	if (!m_json_entry.wud_hash.empty())
 		doc.AddMember("wud_hash", rapidjson::StringRef(m_json_entry.wud_hash.c_str(), m_json_entry.wud_hash.size()), a);
 	
@@ -400,7 +437,7 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 	doc.AddMember("files", file_array, a);
 
 	std::filesystem::path target_file{ dialog.GetPath().c_str().AsInternal() };
-	target_file /= fmt::format("{}_v{}.json", title_id_str, m_info.GetAppTitleVersion());
+	target_file /= fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
 	
 	std::ofstream file(target_file);
 	if(file.is_open())
@@ -448,7 +485,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 	{
 		JsonEntry test_entry{};
 		test_entry.title_id = ConvertString<uint64>(doc["title_id"].GetString(), 16);
-		test_entry.region = (CafeConsoleRegion)doc["region"].GetInt();
+		test_entry.region = static_cast<std::uint32_t>(doc["region"].GetInt());
 		test_entry.version = doc["version"].GetInt();
 		if (doc.HasMember("wud_hash"))
 			test_entry.wud_hash = doc["wud_hash"].GetString();
@@ -596,7 +633,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_info.GetAppTitleVersion());
+	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
 	
 	const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
 	if(!exists(checksum_path))
@@ -624,7 +661,7 @@ void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 void ChecksumTool::OnVerifyLocal(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_info.GetAppTitleVersion());
+	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
 	wxFileDialog file_dialog(this, _("Open checksum entry"), "", default_file.c_str(),"JSON files (*.json)|*.json", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 	if (file_dialog.ShowModal() != wxID_OK || file_dialog.GetPath().IsEmpty())
 		return;
@@ -671,22 +708,22 @@ static void _fscGetAllFiles(std::set<std::string>& allFilesOut, const std::strin
 
 void ChecksumTool::DoWork()
 {
-	m_json_entry.title_id = m_info.GetAppTitleId();
-	m_json_entry.region = m_info.GetMetaRegion();
-	m_json_entry.version = m_info.GetAppTitleVersion();
+	m_json_entry.title_id = m_titleState->info.GetAppTitleId();
+	m_json_entry.region = static_cast<std::uint32_t>(m_titleState->info.GetMetaRegion());
+	m_json_entry.version = m_titleState->info.GetAppTitleVersion();
 		
 	static_assert(SHA256_DIGEST_LENGTH == 32);
 
 	std::array<uint8, SHA256_DIGEST_LENGTH> checksum{};
 
-	switch (m_info.GetFormat())
+	switch (m_titleState->info.GetFormat())
 	{
 	case TitleInfo::TitleDataFormat::WUD:
 	{
 		const auto path = m_entry.path.string();
 		wxQueueEvent(this, new wxSetGaugeValue(1, m_progress, m_status, formatWxString(_("Reading game image: {}"), path)));
 
-		wud_t* wud = wud_open(m_info.GetPath());
+		wud_t* wud = wud_open(m_titleState->info.GetPath());
 		if (!wud)
 			throw std::runtime_error("can't open game image");
 
@@ -739,7 +776,8 @@ void ChecksumTool::DoWork()
 	default:
 		// we hash the individual files for all formats except WUD/WUX
 		std::string temporaryMountPath = TitleInfo::GetUniqueTempMountingPath();
-		m_info.Mount(temporaryMountPath.c_str(), "", FSC_PRIORITY_BASE);
+		if (!m_titleState->info.Mount(temporaryMountPath.c_str(), "", FSC_PRIORITY_BASE))
+			throw std::runtime_error("Unable to mount title content");
 		wxQueueEvent(this, new wxSetGaugeValue(1, m_progress, m_status, _("Grabbing game files")));
 
 		// get list of all files
@@ -769,15 +807,18 @@ void ChecksumTool::DoWork()
 			m_json_entry.file_hashes[filename] = str.str();
 
 			++counter;
-			wxQueueEvent(this, new wxSetGaugeValue((int)((counter * 100) / file_count), m_progress, m_status, formatWxString(_("Hashing game file: {}/{}"), counter, file_count)));
+			const auto percent = file_count == 0 ? 100 :
+				static_cast<int>((counter * 100) / file_count);
+			wxQueueEvent(this, new wxSetGaugeValue(percent, m_progress, m_status,
+				formatWxString(_("Hashing game file: {}/{}"), counter, file_count)));
 
 			if (!m_running.load(std::memory_order_relaxed))
 			{
-				m_info.Unmount(temporaryMountPath.c_str());
+				m_titleState->info.Unmount(temporaryMountPath.c_str());
 				return;
 			}
 		}
-		m_info.Unmount(temporaryMountPath.c_str());
+		m_titleState->info.Unmount(temporaryMountPath.c_str());
 
 		wxQueueEvent(this, new wxSetGaugeValue(100, m_progress, m_status, formatWxString(_("Generated checksum of {} game files"), file_count)));
 		break;

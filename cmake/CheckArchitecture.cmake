@@ -50,9 +50,8 @@ foreach(source IN LISTS architecture_sources)
 		endif()
 	endif()
 
-	# Title-manager discovery/removal/scan events cross the Application catalog
-	# as copied values. The WUA/checksum content operations remain a separate
-	# adapter migration, so narrowly guard the completed event/query seam here.
+	# Title-manager discovery/removal/scan events and WUA conversion cross the
+	# Application boundary as copied values and content-operation requests.
 	if(source MATCHES "/src/gui/wxgui/(TitleManager|components/wxTitleManagerList)\\.h$")
 		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeConsoleRegion|CafeTitleListCallbackEvent|CafeSaveListCallbackEvent")
 			list(APPEND title_manager_event_violations "${source}")
@@ -62,7 +61,7 @@ foreach(source IN LISTS architecture_sources)
 			list(APPEND title_manager_event_violations "${source}")
 		endif()
 	elseif(source MATCHES "/src/gui/wxgui/components/wxTitleManagerList\\.cpp$")
-		if(content MATCHES "CafeSaveList::|RegisterCallback|UnregisterCallback|CafeTitleListCallbackEvent|CafeSaveListCallbackEvent")
+		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeTitleList|CafeSaveList|TitleInfo|GameInfo2|TitleIdParser|FSC_|fsc_|ZArchive|FileStream|RegisterCallback|UnregisterCallback")
 			list(APPEND title_manager_event_violations "${source}")
 		endif()
 	endif()

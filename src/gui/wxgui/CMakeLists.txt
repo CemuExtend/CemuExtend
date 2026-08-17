@@ -200,7 +200,6 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuHostContracts
   CemuResource
   libzip::zip
-  ZArchive::zarchive
   CemuComponents
   CemuWxRendererAdapters
   pugixml::pugixml
