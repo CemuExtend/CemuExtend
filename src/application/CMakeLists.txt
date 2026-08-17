@@ -18,6 +18,7 @@ target_link_libraries(CemuApplication PRIVATE
 	CemuComponents
 	cemuextend::wire
 	ZArchive::zarchive
+	OpenSSL::Crypto
 )
 
 if(BUILD_TESTING)

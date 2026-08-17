@@ -257,6 +257,9 @@ namespace Application
 			const std::filesystem::path& outputPath,
 			ContentProgressHandler progress,
 			ContentCancellationCheck cancelled);
+		[[nodiscard]] ContentChecksumResult ComputeTitleChecksum(
+			std::uint64_t locationUid, ContentProgressHandler progress,
+			ContentCancellationCheck cancelled);
 		[[nodiscard]] std::vector<GraphicPackInfo> ListGraphicPacks() const;
 		[[nodiscard]] GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled);

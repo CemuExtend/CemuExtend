@@ -1,17 +1,14 @@
 #include "wxgui/ChecksumTool.h"
 
-#include "Cafe/TitleList/GameInfo.h"
+#include "application/EmulationController.h"
 #include "wxgui/helpers/wxCustomEvents.h"
 #include "util/helpers/helpers.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/wxHelper.h"
-#include "Cafe/Filesystem/WUD/wud.h"
 
 #include <zip.h>
 #include <curl/curl.h>
 
-#include <openssl/evp.h> /* EVP_Digest */
-#include <openssl/sha.h> /* SHA256_DIGEST_LENGTH */
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
@@ -33,7 +30,6 @@
 #include <wx/msgdlg.h>
 
 #include "config/ActiveSettings.h"
-#include "Cafe/TitleList/TitleList.h"
 
 const char kSchema[] = R"(
 {
@@ -79,34 +75,16 @@ const char kSchema[] = R"(
   ]
 })";
 
-struct ChecksumTool::TitleState
-{
-	TitleInfo info;
-};
-
-ChecksumTool::ChecksumTool(wxWindow* parent, Application::ManagedContentEntry entry)
+ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& controller,
+	Application::ManagedContentEntry entry)
 	: wxDialog(parent, wxID_ANY,
 		formatWxString(_("Title checksum of {:08x}-{:08x}"),
 			(uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF)),
 		wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW |
 			wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	  m_titleState(std::make_unique<TitleState>()), m_entry(std::move(entry))
+	  m_controller(controller), m_entry(std::move(entry))
 {
 
-	m_titleState->info = CafeTitleList::GetTitleInfoByUID(m_entry.locationUid);
-	if (!m_titleState->info.IsValid())
-		throw std::runtime_error("Invalid title");
-
-	// only request online update once
-	static bool s_once = false;
-	if (!s_once)
-	{
-		s_once = true;
-		m_online_ready = std::async(std::launch::async, &ChecksumTool::LoadOnlineData, this);
-	}
-	else
-		m_enable_verify_button = 1;
-		
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	{
 		auto* box_sizer = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Verifying integrity of game files...")), wxVERTICAL);
@@ -138,8 +116,8 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::ManagedContentEntry en
 			if (m_enable_verify_button >= 2)
 			{
 				// only enable if we have a file for it
-				const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
+				const auto title_id_str = fmt::format("{:016x}", m_entry.titleId);
+				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 
 				const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
 				if (exists(checksum_path))
@@ -164,6 +142,15 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::ManagedContentEntry en
 	}
 
 	this->Bind(wxEVT_SET_GAUGE_VALUE, &ChecksumTool::OnSetGaugevalue, this);
+	this->SetSizerAndFit(sizer);
+	this->Centre(wxBOTH);
+
+	// Start background work only after dialog construction can no longer throw.
+	static std::atomic_bool s_updateStarted{};
+	if (!s_updateStarted.exchange(true, std::memory_order_acq_rel))
+		m_online_ready = std::async(std::launch::async, &ChecksumTool::LoadOnlineData, this);
+	else
+		m_enable_verify_button = 1;
 
 	m_worker = std::thread([this] {
 		try
@@ -177,9 +164,6 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::ManagedContentEntry en
 				wxString::FromUTF8(exception.what())));
 		}
 	});
-
-	this->SetSizerAndFit(sizer);
-	this->Centre(wxBOTH);
 }
 
 ChecksumTool::~ChecksumTool()
@@ -415,8 +399,8 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 
 	auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
 	doc.AddMember("title_id", rapidjson::StringRef(title_id_str.c_str(), title_id_str.size()), a);
-	doc.AddMember("region", (int)m_titleState->info.GetMetaRegion(), a);
-	doc.AddMember("version", m_titleState->info.GetAppTitleVersion(), a);
+	doc.AddMember("region", static_cast<int>(m_entry.region), a);
+	doc.AddMember("version", m_entry.version, a);
 	if (!m_json_entry.wud_hash.empty())
 		doc.AddMember("wud_hash", rapidjson::StringRef(m_json_entry.wud_hash.c_str(), m_json_entry.wud_hash.size()), a);
 	
@@ -437,7 +421,7 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 	doc.AddMember("files", file_array, a);
 
 	std::filesystem::path target_file{ dialog.GetPath().c_str().AsInternal() };
-	target_file /= fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
+	target_file /= fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 	
 	std::ofstream file(target_file);
 	if(file.is_open())
@@ -633,7 +617,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
+	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 	
 	const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
 	if(!exists(checksum_path))
@@ -661,7 +645,7 @@ void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 void ChecksumTool::OnVerifyLocal(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
-	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_titleState->info.GetAppTitleVersion());
+	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 	wxFileDialog file_dialog(this, _("Open checksum entry"), "", default_file.c_str(),"JSON files (*.json)|*.json", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 	if (file_dialog.ShowModal() != wxID_OK || file_dialog.GetPath().IsEmpty())
 		return;
@@ -686,141 +670,53 @@ void ChecksumTool::OnVerifyLocal(wxCommandEvent& event)
 	VerifyJsonEntry(d);
 }
 
-static void _fscGetAllFiles(std::set<std::string>& allFilesOut, const std::string& fscBasePath, const std::string& relativePath)
+void ChecksumTool::RunChecksum()
 {
-	sint32 fscStatus;
-	FSCVirtualFile* fsc = fsc_openDirIterator((fscBasePath + relativePath).c_str(), &fscStatus);
-	cemu_assert(fsc);
-	FSCDirEntry dirEntry;
-	while (fsc_nextDir(fsc, &dirEntry))
-	{
-		if (dirEntry.isDirectory)
-		{
-			_fscGetAllFiles(allFilesOut, fscBasePath, std::string(relativePath).append(dirEntry.GetPath()).append("/"));
-		}
-		else
-		{
-			allFilesOut.emplace(std::string(relativePath).append(dirEntry.GetPath()));
-		}
-	}
-	delete fsc;
+	const auto result = m_controller.ComputeTitleChecksum(m_entry.locationUid,
+		[this](const Application::ContentOperationProgress& progress) {
+			int percent{};
+			wxString status;
+			if (progress.phase == Application::ContentOperationPhase::Collecting)
+			{
+				status = formatWxString(_("Collecting game files... ({})"),
+					progress.filesTotal);
+			}
+			else if (progress.bytesTotal != 0)
+			{
+				percent = static_cast<int>(std::min<std::uint64_t>(99,
+					progress.bytesCompleted * 100 / progress.bytesTotal));
+				status = formatWxString(_("Reading game image: {0}/{1} kB"),
+					progress.bytesCompleted / 1024, progress.bytesTotal / 1024);
+			}
+			else
+			{
+				percent = progress.filesTotal == 0 ? 0 : static_cast<int>(
+					progress.filesCompleted * 100 / progress.filesTotal);
+				status = formatWxString(_("Hashing game file: {}/{}"),
+					progress.filesCompleted, progress.filesTotal);
+			}
+			wxQueueEvent(this, new wxSetGaugeValue(percent, m_progress, m_status, status));
+		}, [this] { return !m_running.load(std::memory_order_acquire); });
+	if (result.error == Application::ContentOperationError::Cancelled)
+		return;
+	if (!result)
+		throw std::runtime_error(result.diagnostic);
+
+	m_json_entry.title_id = result.checksum->titleId;
+	m_json_entry.version = result.checksum->version;
+	m_json_entry.region = result.checksum->region;
+	m_json_entry.wud_hash = result.checksum->imageSha256;
+	m_json_entry.file_hashes.clear();
+	for (const auto& file : result.checksum->files)
+		m_json_entry.file_hashes.emplace(file.path, file.sha256);
+	wxQueueEvent(this, new wxSetGaugeValue(100, m_progress, m_status,
+		m_json_entry.wud_hash.empty() ?
+			formatWxString(_("Generated checksum of {} game files"),
+				m_json_entry.file_hashes.size()) :
+			_("Generated checksum of game image")));
 }
 
 void ChecksumTool::DoWork()
 {
-	m_json_entry.title_id = m_titleState->info.GetAppTitleId();
-	m_json_entry.region = static_cast<std::uint32_t>(m_titleState->info.GetMetaRegion());
-	m_json_entry.version = m_titleState->info.GetAppTitleVersion();
-		
-	static_assert(SHA256_DIGEST_LENGTH == 32);
-
-	std::array<uint8, SHA256_DIGEST_LENGTH> checksum{};
-
-	switch (m_titleState->info.GetFormat())
-	{
-	case TitleInfo::TitleDataFormat::WUD:
-	{
-		const auto path = m_entry.path.string();
-		wxQueueEvent(this, new wxSetGaugeValue(1, m_progress, m_status, formatWxString(_("Reading game image: {}"), path)));
-
-		wud_t* wud = wud_open(m_titleState->info.GetPath());
-		if (!wud)
-			throw std::runtime_error("can't open game image");
-
-		const auto wud_size = wud_getWUDSize(wud);
-		std::vector<uint8> buffer(1024 * 1024 * 8);
-
-		EVP_MD_CTX *sha256 = EVP_MD_CTX_new();
-		EVP_DigestInit(sha256, EVP_sha256());
-
-		uint32 read = 0;
-		size_t offset = 0;
-		auto size = wud_size;
-		do
-		{
-			if (!m_running.load(std::memory_order_relaxed))
-			{
-				wud_close(wud);
-				return;
-			}
-
-			read = wud_readData(wud, buffer.data(), std::min(buffer.size(), (size_t)wud_size - offset), offset);
-			offset += read;
-			size -= read;
-
-			EVP_DigestUpdate(sha256, buffer.data(), read);
-
-			wxQueueEvent(this, new wxSetGaugeValue((int)((offset * 90) / wud_size), m_progress, m_status, formatWxString(_("Reading game image: {0}/{1} kB"), offset / 1024, wud_size / 1024)));
-		} while (read != 0 && size > 0);
-		wud_close(wud);
-
-		wxQueueEvent(this, new wxSetGaugeValue(90, m_progress, m_status, formatWxString(_("Generating checksum of game image: {}"), path)));
-
-		if (!m_running.load(std::memory_order_relaxed))
-			return;
-
-		EVP_DigestFinal_ex(sha256, checksum.data(), NULL);
-		EVP_MD_CTX_free(sha256);
-
-		std::stringstream str;
-		for (const auto& b : checksum)
-		{
-			str << fmt::format("{:02X}", b);
-		}
-
-		m_json_entry.wud_hash = str.str();
-
-		wxQueueEvent(this, new wxSetGaugeValue(100, m_progress, m_status, formatWxString(_("Generated checksum of game image: {}"), path)));
-		break;
-	}
-	default:
-		// we hash the individual files for all formats except WUD/WUX
-		std::string temporaryMountPath = TitleInfo::GetUniqueTempMountingPath();
-		if (!m_titleState->info.Mount(temporaryMountPath.c_str(), "", FSC_PRIORITY_BASE))
-			throw std::runtime_error("Unable to mount title content");
-		wxQueueEvent(this, new wxSetGaugeValue(1, m_progress, m_status, _("Grabbing game files")));
-
-		// get list of all files
-		std::set<std::string> files;
-		_fscGetAllFiles(files, temporaryMountPath, "");
-
-		const size_t file_count = files.size();
-		size_t counter = 0;
-		for (const auto& filename : files)
-		{				
-			auto fileData = fsc_extractFile((temporaryMountPath + "/" + filename).c_str());
-			if (!fileData)
-			{
-				cemuLog_log(LogType::Force, "Failed to open {}", filename);
-				continue;
-			}
-
-			SHA256(fileData->data(), fileData->size(), checksum.data());
-
-			std::stringstream str;
-			for (const auto& b : checksum)
-			{
-				str << fmt::format("{:02X}", b);
-			}
-
-			// store relative path and hash
-			m_json_entry.file_hashes[filename] = str.str();
-
-			++counter;
-			const auto percent = file_count == 0 ? 100 :
-				static_cast<int>((counter * 100) / file_count);
-			wxQueueEvent(this, new wxSetGaugeValue(percent, m_progress, m_status,
-				formatWxString(_("Hashing game file: {}/{}"), counter, file_count)));
-
-			if (!m_running.load(std::memory_order_relaxed))
-			{
-				m_titleState->info.Unmount(temporaryMountPath.c_str());
-				return;
-			}
-		}
-		m_titleState->info.Unmount(temporaryMountPath.c_str());
-
-		wxQueueEvent(this, new wxSetGaugeValue(100, m_progress, m_status, formatWxString(_("Generated checksum of {} game files"), file_count)));
-		break;
-	}
+	RunChecksum();
 }

@@ -7,6 +7,7 @@
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cafe/Filesystem/fsc.h"
+#include "Cafe/Filesystem/WUD/wud.h"
 #include "Cafe/IOSU/PDM/iosu_pdm.h"
 #include "Cafe/TitleList/TitleInfo.h"
 #include "Cafe/TitleList/TitleList.h"
@@ -22,6 +23,9 @@
 
 #include <zarchive/zarchivereader.h>
 #include <zarchive/zarchivewriter.h>
+
+#include <openssl/evp.h>
+#include <openssl/sha.h>
 
 #include <condition_variable>
 #include <deque>
@@ -1250,6 +1254,186 @@ namespace Application
 				}
 				CafeTitleList::Refresh();
 				return {};
+			}
+
+			ContentChecksumResult ComputeTitleChecksum(
+				std::uint64_t locationUid, ContentProgressHandler progress,
+				ContentCancellationCheck cancelled) override
+			{
+				auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
+				if (!title.IsValid())
+					return {ContentOperationError::NotFound,
+						"Title content is no longer available", std::nullopt};
+
+				ContentChecksum checksum{
+					.titleId = title.GetAppTitleId(),
+					.version = title.GetAppTitleVersion(),
+					.region = static_cast<std::uint32_t>(title.GetMetaRegion()),
+				};
+				auto isCancelled = [&cancelled] { return cancelled && cancelled(); };
+				auto publish = [&progress](const ContentOperationProgress& value) {
+					if (progress)
+						progress(value);
+				};
+				auto toHex = [](const std::array<std::uint8_t, SHA256_DIGEST_LENGTH>& digest) {
+					std::string value;
+					value.reserve(SHA256_DIGEST_LENGTH * 2);
+					for (const auto byte : digest)
+						value.append(fmt::format("{:02X}", byte));
+					return value;
+				};
+
+				try
+				{
+					std::array<std::uint8_t, SHA256_DIGEST_LENGTH> digest{};
+					if (title.GetFormat() == TitleInfo::TitleDataFormat::WUD)
+					{
+						using WudHandle = std::unique_ptr<wud_t, decltype(&wud_close)>;
+						WudHandle wud(wud_open(title.GetPath()), &wud_close);
+						if (!wud)
+							return {ContentOperationError::ReadFailure,
+								"Unable to open game image", std::nullopt};
+						const auto total = wud_getWUDSize(wud.get());
+						if (total <= 0)
+							return {ContentOperationError::ReadFailure,
+								"Game image is empty", std::nullopt};
+						using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+						DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
+						if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
+							return {ContentOperationError::ReadFailure,
+								"Unable to initialize SHA-256", std::nullopt};
+						std::vector<std::uint8_t> buffer(8 * 1024 * 1024);
+						std::uint64_t offset{};
+						while (offset < total)
+						{
+							if (isCancelled())
+								return {ContentOperationError::Cancelled, "Checksum cancelled",
+									std::nullopt};
+							const auto requested = static_cast<std::size_t>(
+								std::min<std::uint64_t>(buffer.size(), total - offset));
+							const auto read = wud_readData(wud.get(), buffer.data(), requested, offset);
+							if (read != requested ||
+								EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
+								return {ContentOperationError::ReadFailure,
+									"Game image ended before its declared size", std::nullopt};
+							offset += read;
+							publish({ContentOperationPhase::Hashing, 0, 0, offset, total});
+						}
+						unsigned int digestLength{};
+						if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
+							digestLength != digest.size())
+							return {ContentOperationError::ReadFailure,
+								"Unable to finalize SHA-256", std::nullopt};
+						checksum.imageSha256 = toHex(digest);
+					}
+					else
+					{
+						const auto mountPath = TitleInfo::GetUniqueTempMountingPath();
+						if (!title.Mount(mountPath, "", FSC_PRIORITY_BASE))
+							return {ContentOperationError::ReadFailure,
+								"Unable to mount title content", std::nullopt};
+						struct UnmountGuard
+						{
+							TitleInfo& title;
+							std::string path;
+							~UnmountGuard() { title.Unmount(path); }
+						} unmount{title, mountPath};
+
+						std::vector<std::pair<std::string, std::uint64_t>> files;
+						std::function<bool(const std::string&)> collect = [&](const std::string& relative) {
+							if (isCancelled())
+								return false;
+							sint32 status{};
+							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> directory(
+								fsc_openDirIterator((mountPath + relative).c_str(), &status),
+								&fsc_close);
+							if (!directory)
+								return false;
+							FSCDirEntry entry;
+							while (fsc_nextDir(directory.get(), &entry))
+							{
+								const auto child = relative + entry.path;
+								if (entry.isDirectory)
+								{
+									if (!collect(child + "/"))
+										return false;
+								}
+								else if (entry.isFile)
+								{
+									files.emplace_back(child,
+										static_cast<std::uint64_t>(entry.fileSize));
+									publish({ContentOperationPhase::Collecting, 0,
+										static_cast<std::uint32_t>(files.size()), 0, 0});
+								}
+							}
+							return true;
+						};
+						if (!collect(""))
+							return {isCancelled() ? ContentOperationError::Cancelled :
+								ContentOperationError::ReadFailure,
+								isCancelled() ? "Checksum cancelled" :
+								"Unable to enumerate title files", std::nullopt};
+						std::ranges::sort(files, {}, &decltype(files)::value_type::first);
+						for (std::size_t index = 0; index < files.size(); ++index)
+						{
+							const auto& [filePath, expectedSize] = files[index];
+							if (isCancelled())
+								return {ContentOperationError::Cancelled, "Checksum cancelled",
+									std::nullopt};
+							sint32 status{};
+							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> file(
+								fsc_open((mountPath + "/" + filePath).c_str(),
+									FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION,
+									&status), &fsc_close);
+							if (!file)
+								return {ContentOperationError::ReadFailure,
+									fmt::format("Unable to read {}", filePath), std::nullopt};
+							using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+							DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
+							if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
+								return {ContentOperationError::ReadFailure,
+									"Unable to initialize SHA-256", std::nullopt};
+							std::vector<std::uint8_t> buffer(1024 * 1024);
+							std::uint64_t bytesRead{};
+							for (;;)
+							{
+								if (isCancelled())
+									return {ContentOperationError::Cancelled,
+										"Checksum cancelled", std::nullopt};
+								const auto read = file->fscReadData(buffer.data(), buffer.size());
+								if (read == 0)
+									break;
+								if (EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
+									return {ContentOperationError::ReadFailure,
+										"Unable to update SHA-256", std::nullopt};
+								bytesRead += read;
+							}
+							if (bytesRead != expectedSize)
+								return {ContentOperationError::ReadFailure,
+									fmt::format("{} ended before its declared size", filePath),
+									std::nullopt};
+							unsigned int digestLength{};
+							if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
+								digestLength != digest.size())
+								return {ContentOperationError::ReadFailure,
+									"Unable to finalize SHA-256", std::nullopt};
+							checksum.files.push_back({filePath, toHex(digest)});
+							publish({ContentOperationPhase::Hashing,
+								static_cast<std::uint32_t>(index + 1),
+								static_cast<std::uint32_t>(files.size()), 0, 0});
+						}
+					}
+					return {ContentOperationError::None, {}, std::move(checksum)};
+				}
+				catch (const std::exception& exception)
+				{
+					return {ContentOperationError::ReadFailure, exception.what(), std::nullopt};
+				}
+				catch (...)
+				{
+					return {ContentOperationError::ReadFailure,
+						"Unknown checksum failure", std::nullopt};
+				}
 			}
 
 			std::vector<GraphicPackInfo> ListGraphicPacks() const override

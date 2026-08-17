@@ -4,11 +4,13 @@
 #include <rapidjson/document.h>
 
 class wxSetGaugeValue;
+namespace Application { class EmulationController; }
 
 class ChecksumTool : public wxDialog
 {
 public:
-	ChecksumTool(wxWindow* parent, Application::ManagedContentEntry entry);
+	ChecksumTool(wxWindow* parent, Application::EmulationController& controller,
+		Application::ManagedContentEntry entry);
 	~ChecksumTool();
 	
 private:
@@ -22,6 +24,7 @@ private:
 	void OnVerifyLocal(wxCommandEvent& event);
 	
 	void DoWork();
+	void RunChecksum();
 	std::atomic_bool m_running = true;
 	std::thread m_worker;
 	
@@ -30,8 +33,7 @@ private:
 	class wxButton *m_verify_online, *m_verify_local, *m_export_button;
 	int m_enable_verify_button = 0;
 
-	struct TitleState;
-	std::unique_ptr<TitleState> m_titleState;
+	Application::EmulationController& m_controller;
 	Application::ManagedContentEntry m_entry;
 	wxColour m_default_color;
 	

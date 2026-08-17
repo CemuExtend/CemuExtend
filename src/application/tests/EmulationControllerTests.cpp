@@ -141,6 +141,18 @@ namespace
 				progress({Application::ContentOperationPhase::Finalizing, 1, 1, 4, 4});
 			return {};
 		}
+		Application::ContentChecksumResult ComputeTitleChecksum(
+			std::uint64_t locationUid, Application::ContentProgressHandler progress,
+			Application::ContentCancellationCheck cancelled) override
+		{
+			if (cancelled && cancelled())
+				return {Application::ContentOperationError::Cancelled, "cancelled", std::nullopt};
+			if (progress)
+				progress({Application::ContentOperationPhase::Hashing, 1, 1, 4, 4});
+			return {Application::ContentOperationError::None, {}, Application::ContentChecksum{
+				.titleId = 0x1234, .version = 1, .region = 2,
+				.imageSha256 = std::string(64, locationUid == 0 ? '0' : '1')}};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -247,6 +259,14 @@ int main()
 	assert(controller.ConvertToWua(conversionItems, "test.wua",
 		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; }));
 	assert(conversionProgress.phase == Application::ContentOperationPhase::Finalizing);
+	const auto checksum = controller.ComputeTitleChecksum(17,
+		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; });
+	assert(checksum && checksum.checksum->titleId == 0x1234);
+	assert(conversionProgress.phase == Application::ContentOperationPhase::Hashing);
+	const auto cancelledChecksum = controller.ComputeTitleChecksum(17, {},
+		[] { return true; });
+	assert(!cancelledChecksum &&
+		cancelledChecksum.error == Application::ContentOperationError::Cancelled);
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
 	assert(controller.ListGraphicPacks().front().key == "pack-key");
 	assert(controller.SetGraphicPackEnabled("pack-key", true).changed);

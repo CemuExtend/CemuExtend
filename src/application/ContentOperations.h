@@ -37,6 +37,7 @@ namespace Application
 		Counting,
 		Collecting,
 		Converting,
+		Hashing,
 		Finalizing,
 	};
 
@@ -71,6 +72,33 @@ namespace Application
 		}
 	};
 
+	struct ContentChecksumFile
+	{
+		std::string path;
+		std::string sha256;
+	};
+
+	struct ContentChecksum
+	{
+		std::uint64_t titleId{};
+		std::uint32_t version{};
+		std::uint32_t region{};
+		std::string imageSha256;
+		std::vector<ContentChecksumFile> files;
+	};
+
+	struct ContentChecksumResult
+	{
+		ContentOperationError error{ContentOperationError::None};
+		std::string diagnostic;
+		std::optional<ContentChecksum> checksum;
+
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == ContentOperationError::None && checksum.has_value();
+		}
+	};
+
 	using ContentProgressHandler = std::function<void(const ContentOperationProgress&)>;
 	using ContentCancellationCheck = std::function<bool()>;
 
@@ -84,6 +112,9 @@ namespace Application
 			std::span<const std::uint64_t> locationUids,
 			const std::filesystem::path& outputPath,
 			ContentProgressHandler progress,
+			ContentCancellationCheck cancelled) = 0;
+		[[nodiscard]] virtual ContentChecksumResult ComputeTitleChecksum(
+			std::uint64_t locationUid, ContentProgressHandler progress,
 			ContentCancellationCheck cancelled) = 0;
 	};
 }

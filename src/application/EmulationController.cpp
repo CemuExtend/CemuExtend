@@ -376,6 +376,15 @@ namespace Application
 			std::move(progress), std::move(cancelled));
 	}
 
+	ContentChecksumResult EmulationController::ComputeTitleChecksum(
+		std::uint64_t locationUid, ContentProgressHandler progress,
+		ContentCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ComputeTitleChecksum(locationUid,
+			std::move(progress), std::move(cancelled));
+	}
+
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

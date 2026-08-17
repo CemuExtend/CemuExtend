@@ -679,7 +679,7 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 		}
 		break;
 	case kContextMenuVerifyGameFiles:
-		(new ChecksumTool(this, Application::ManagedContentEntry{
+		(new ChecksumTool(this, m_emulationController, Application::ManagedContentEntry{
 			.locationUid = entry->location_uid,
 			.titleId = entry->title_id,
 			.path = entry->path,

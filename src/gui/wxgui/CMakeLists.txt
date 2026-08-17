@@ -203,7 +203,6 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuComponents
   CemuWxRendererAdapters
   pugixml::pugixml
-  OpenSSL::Crypto
   cemuextend::wire
   PUBLIC
   CURL::libcurl
