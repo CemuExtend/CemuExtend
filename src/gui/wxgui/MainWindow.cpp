@@ -58,7 +58,6 @@
 #include "canvas/RendererWindowAdapter.h"
 #ifdef ENABLE_METAL
 #include "canvas/MetalCanvas.h"
-#include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
 #endif
 
 //Cafe libs
@@ -71,8 +70,6 @@
 #if BOOST_OS_WINDOWS
 #include <windows.h>
 #endif
-
-#include "Cafe/HW/Latte/Renderer/Renderer.h" // For renderer API checks
 
 extern WindowSystem::WindowInfo g_window_info;
 extern std::shared_mutex g_mutex;
@@ -1181,8 +1178,7 @@ void MainWindow::OnDebugSetting(wxCommandEvent& event)
 #ifdef ENABLE_METAL
 	else if (event.GetId() == MAINFRAME_MENU_ID_DEBUG_GPU_CAPTURE)
 	{
-		cemu_assert_debug(g_renderer->GetType() == RendererAPI::Metal);
-		static_cast<MetalRenderer*>(g_renderer.get())->CaptureFrame();
+		(void)WxRendererAdapters::RequestFrameCapture();
 	}
 #endif
 	else if (event.GetId() == MAINFRAME_MENU_ID_DEBUG_AUDIO_AUX_ONLY)
@@ -3004,7 +3000,7 @@ void MainWindow::RecreateMenu()
 
 #ifdef ENABLE_METAL
 	auto gpuCapture = debugMenu->Append(MAINFRAME_MENU_ID_DEBUG_GPU_CAPTURE, _("&GPU capture (Metal)"));
-	gpuCapture->Enable(m_game_launched && g_renderer->GetType() == RendererAPI::Metal);
+	gpuCapture->Enable(m_game_launched && WxRendererAdapters::IsFrameCaptureSupported());
 #endif
 
 	debugMenu->AppendSeparator();

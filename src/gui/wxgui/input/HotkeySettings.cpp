@@ -1,5 +1,5 @@
 #include "wxgui/input/HotkeySettings.h"
-#include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "wxgui/canvas/RendererWindowAdapter.h"
 #include "interface/WindowSystem.h"
 #include <config/ActiveSettings.h>
 #include "input/InputManager.h"
@@ -192,8 +192,7 @@ void HotkeySettings::Init(MainWindow* mainWindowFrame)
 		 }},
 		{&s_cfgHotkeys.takeScreenshot, [](void) {
 			 RunOnUi([](MainWindow&) {
-				 if (g_renderer)
-					 (void)g_renderer->RequestScreenshot(SaveScreenshot);
+				 (void)WxRendererAdapters::RequestScreenshot(SaveScreenshot);
 			 });
 		 }},
 		{&s_cfgHotkeys.toggleFastForward, [](void) {

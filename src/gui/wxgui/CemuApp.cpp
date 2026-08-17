@@ -3,12 +3,9 @@
 #include "wxgui/MainWindow.h"
 #include "wxgui/wxgui.h"
 #include "config/CemuConfig.h"
-#ifdef ENABLE_VULKAN
-#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
-#endif
-#include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
+#include "wxgui/canvas/RendererWindowAdapter.h"
 #include "wxgui/GettingStartedDialog.h"
 #include "input/InputManager.h"
 #include "input/api/SDL/SDLControllerProvider.h"
@@ -329,7 +326,7 @@ bool CemuApp::OnInit()
 	ActiveSettings::Init(); // this is a bit of a misnomer, right now this call only loads certs for online play. In the future we should move the logic to a more appropriate place
 	HandlePostUpdate();
 
-	LatteOverlay_init();
+	WxRendererAdapters::InitializeOverlay();
 	// run a couple of tests if in non-release mode
 #ifdef CEMU_DEBUG_ASSERT
 	UnitTests();
@@ -361,9 +358,7 @@ bool CemuApp::OnInit()
 			__fastfail(0);
 	}
 #endif
-	#ifdef ENABLE_VULKAN
-	InitializeGlobalVulkan();
-	#endif
+	WxRendererAdapters::InitializeVulkanLoader();
 
 	Bind(wxEVT_ACTIVATE_APP, &CemuApp::ActivateApp, this);
 
