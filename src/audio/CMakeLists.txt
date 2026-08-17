@@ -1,4 +1,5 @@
 add_library(CemuAudio
+	AudioSpec.h
 	IAudioAPI.cpp
 	IAudioAPI.h
 	IAudioInputAPI.cpp

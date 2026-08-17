@@ -8,8 +8,6 @@
 
 #include "util/helpers/helpers.h"
 
-#include "Cafe/OS/libs/snd_core/ax.h"
-
 #include <wx/collpane.h>
 #include <wx/checklst.h>
 #include <wx/clrpicker.h>
@@ -22,6 +20,7 @@
 #include "config/NetworkSettings.h"
 
 #include "audio/IAudioAPI.h"
+#include "audio/AudioSpec.h"
 #if BOOST_OS_WINDOWS
 #include "audio/DirectSoundAPI.h"
 #include "audio/XAudio27API.h"
@@ -2552,8 +2551,6 @@ void GeneralSettings2::OnAudioAPISelected(wxCommandEvent& event)
 	OnAudioDeviceSelected(event);
 }
 
-#define AX_FRAMES_PER_GROUP 4
-
 void GeneralSettings2::UpdateAudioDevice()
 {
 	auto& config = GetConfig();
@@ -2585,7 +2582,7 @@ void GeneralSettings2::UpdateAudioDevice()
 
 				try
 				{
-					g_tvAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), 48000, channels, snd_core::AX_SAMPLES_PER_3MS_48KHZ * AX_FRAMES_PER_GROUP, 16);
+					g_tvAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), AudioSpec::kOutputSampleRate, channels, AudioSpec::kOutputSamplesPerBlock, 16);
 					g_tvAudio->SetVolume(m_tv_volume->GetValue());
 				}
 				catch (std::runtime_error& ex)
@@ -2622,7 +2619,7 @@ void GeneralSettings2::UpdateAudioDevice()
 
 				try
 				{
-					g_padAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), 48000, channels, snd_core::AX_SAMPLES_PER_3MS_48KHZ * AX_FRAMES_PER_GROUP, 16);
+					g_padAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), AudioSpec::kOutputSampleRate, channels, AudioSpec::kOutputSamplesPerBlock, 16);
 					g_padAudio->SetVolume(m_pad_volume->GetValue());
 				}
 				catch (std::runtime_error& ex)
@@ -2657,7 +2654,7 @@ void GeneralSettings2::UpdateAudioDevice()
 
 				try
 				{
-					g_inputAudio = IAudioInputAPI::CreateDevice(IAudioInputAPI::AudioInputAPI::Cubeb, description->GetDescription(), 32000, channels, snd_core::AX_SAMPLES_PER_3MS_32KHZ, 16);
+					g_inputAudio = IAudioInputAPI::CreateDevice(IAudioInputAPI::AudioInputAPI::Cubeb, description->GetDescription(), AudioSpec::kInputSampleRate, channels, AudioSpec::kInputSamplesPerBlock, 16);
 					g_inputAudio->SetVolume(m_input_volume->GetValue());
 				}
 				catch (std::runtime_error& ex)
