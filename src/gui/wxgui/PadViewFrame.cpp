@@ -19,7 +19,6 @@
 #include "wxgui/MainWindow.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "input/InputManager.h"
-#include <cemuextend/services.hpp>
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -211,14 +210,14 @@ void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t c
 {
 	if (!m_render_canvas)
 		return;
-	using cemuextend::wire::MouseButton;
+	using Frontend::CemuExtendMouseButton;
 	const auto logicalPosition = event.GetPosition();
 	const auto physicalPosition = ToPhys(logicalPosition);
 	const auto size = m_render_canvas->GetClientSize();
 	const auto aggregateButtons =
-		(event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
-		(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
-		(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U);
+		(event.LeftIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Left) : 0U) |
+		(event.RightIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Right) : 0U) |
+		(event.MiddleIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Middle) : 0U);
 	Frontend::CemuExtendMouseTransition transition =
 		Frontend::CemuExtendMouseTransition::None;
 	if (event.ButtonDown() || event.ButtonDClick())
@@ -273,7 +272,7 @@ void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 	if (pressed)
 		instance.m_pad_mouse.left_down_toggle = true;
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
-		cemuextend::wire::MouseButton::Left));
+		Frontend::CemuExtendMouseButton::Left));
 
 }
 
@@ -290,7 +289,7 @@ void PadViewFrame::OnMouseRight(wxMouseEvent& event)
 	if (pressed)
 		instance.m_pad_mouse.right_down_toggle = true;
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
-		cemuextend::wire::MouseButton::Right));
+		Frontend::CemuExtendMouseButton::Right));
 }
 
 void PadViewFrame::OnSetWindowTitle(wxCommandEvent& event)

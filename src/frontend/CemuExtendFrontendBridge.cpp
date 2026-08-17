@@ -6,9 +6,12 @@ namespace Frontend
 {
 	namespace
 	{
-		constexpr std::uint8_t kDefaultPointerMode = 0;
-		constexpr std::uint8_t kVisibleAbsolutePointerMode = 1;
-		constexpr std::uint8_t kCapturedRelativePointerMode = 3;
+		constexpr auto kDefaultPointerMode =
+			static_cast<std::uint8_t>(CemuExtendPointerMode::Default);
+		constexpr auto kVisibleAbsolutePointerMode =
+			static_cast<std::uint8_t>(CemuExtendPointerMode::VisibleAbsolute);
+		constexpr auto kCapturedRelativePointerMode =
+			static_cast<std::uint8_t>(CemuExtendPointerMode::CapturedRelative);
 		constexpr std::uint32_t kDisableRawMouse = 1U << 1U;
 		constexpr std::uint32_t kConfineToContent = 1U << 2U;
 	}
@@ -18,26 +21,27 @@ namespace Frontend
 		bool appActive, bool hasCanvas)
 	{
 		const auto previousMode = m_pointerMode;
-		m_pointerMode = mode;
+		const auto effectiveMode = hasCanvas ? mode : kDefaultPointerMode;
+		m_pointerMode = effectiveMode;
 		m_rawMouseRequested = (flags & kDisableRawMouse) == 0;
 
 		CemuExtendPointerDecision decision;
-		decision.mode = mode;
+		decision.mode = effectiveMode;
 		decision.cursor = cursor;
-		decision.ownsPointer = mode != kDefaultPointerMode;
-		decision.showCursor = mode == kDefaultPointerMode ||
-			mode == kVisibleAbsolutePointerMode;
+		decision.ownsPointer = effectiveMode != kDefaultPointerMode;
+		decision.showCursor = effectiveMode == kDefaultPointerMode ||
+			effectiveMode == kVisibleAbsolutePointerMode;
 		decision.confine = decision.ownsPointer && (flags & kConfineToContent) != 0 &&
 			appActive && hasCanvas;
-		decision.enteringCapture = mode == kCapturedRelativePointerMode &&
-			previousMode != kCapturedRelativePointerMode && hasCanvas;
-		decision.leavingPolicy = mode == kDefaultPointerMode &&
+		decision.enteringCapture = effectiveMode == kCapturedRelativePointerMode &&
+			previousMode != kCapturedRelativePointerMode;
+		decision.leavingPolicy = effectiveMode == kDefaultPointerMode &&
 			previousMode != kDefaultPointerMode;
 		decision.requestRawMouse = decision.enteringCapture && m_rawMouseRequested;
 
 		if (decision.leavingPolicy)
 			ResetPointerPosition();
-		if (mode == kDefaultPointerMode)
+		if (effectiveMode == kDefaultPointerMode)
 			m_suppressNextCapturedMotion = false;
 		if (decision.enteringCapture)
 		{

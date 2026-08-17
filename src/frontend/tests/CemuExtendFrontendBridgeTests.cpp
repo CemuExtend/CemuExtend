@@ -1,16 +1,60 @@
 #include "frontend/CemuExtendFrontendBridge.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 
 int main()
 {
+	static_assert(static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::Default) == 0);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerMode::VisibleAbsolute) == 1);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerMode::HiddenAbsolute) == 2);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerMode::CapturedRelative) == 3);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::Arrow) == 0);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::TextInput) == 1);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::ResizeAll) == 2);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::ResizeNS) == 3);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::ResizeEW) == 4);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::ResizeNESW) == 5);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::ResizeNWSE) == 6);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::Hand) == 7);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendPointerCursor::NotAllowed) == 8);
+	static_assert(static_cast<std::uint32_t>(
+		Frontend::CemuExtendMouseButton::Left) == 1U << 0U);
+	static_assert(static_cast<std::uint32_t>(
+		Frontend::CemuExtendMouseButton::Right) == 1U << 1U);
+	static_assert(static_cast<std::uint32_t>(
+		Frontend::CemuExtendMouseButton::Middle) == 1U << 2U);
+	static_assert(static_cast<std::uint32_t>(
+		Frontend::CemuExtendMouseButton::X1) == 1U << 3U);
+	static_assert(static_cast<std::uint32_t>(
+		Frontend::CemuExtendMouseButton::X2) == 1U << 4U);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendMouseEventFlag::None) == 0);
+	static_assert(static_cast<std::uint8_t>(
+		Frontend::CemuExtendMouseEventFlag::RawRelative) == 1U << 0U);
+
 	Frontend::CemuExtendFrontendBridge bridge;
 	const auto visible = bridge.ApplyPointerPolicy(1, 7, 1U << 2U, true, true);
 	assert(visible.ownsPointer && visible.showCursor && visible.confine);
 	const auto inactive = bridge.ApplyPointerPolicy(1, 7, 1U << 2U, false, true);
 	assert(inactive.ownsPointer && !inactive.confine);
 	const auto noCanvas = bridge.ApplyPointerPolicy(3, 0, 0, true, false);
-	assert(!noCanvas.enteringCapture && !noCanvas.requestRawMouse);
+	assert(!noCanvas.ownsPointer && noCanvas.showCursor &&
+		!noCanvas.enteringCapture && !noCanvas.requestRawMouse);
 	const auto captured = bridge.ApplyPointerPolicy(3, 0, 0, true, true);
 	assert(captured.enteringCapture && captured.requestRawMouse && !captured.showCursor);
 	// The synthetic event that caused capture is suppressed.

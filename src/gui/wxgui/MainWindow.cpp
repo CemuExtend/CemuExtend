@@ -64,7 +64,6 @@
 //Cafe libs
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
-#include <cemuextend/services.hpp>
 
 #include <wx/app.h>
 #include <wx/thread.h>
@@ -319,27 +318,27 @@ namespace
 {
 	std::uint32_t CemuExtendMouseButtons(const wxMouseEvent& event)
 	{
-		using cemuextend::wire::MouseButton;
-		return (event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
-			(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
-			(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U) |
-			(event.Aux1IsDown() ? static_cast<std::uint32_t>(MouseButton::X1) : 0U) |
-			(event.Aux2IsDown() ? static_cast<std::uint32_t>(MouseButton::X2) : 0U);
+		using Frontend::CemuExtendMouseButton;
+		return (event.LeftIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Left) : 0U) |
+			(event.RightIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Right) : 0U) |
+			(event.MiddleIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Middle) : 0U) |
+			(event.Aux1IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X1) : 0U) |
+			(event.Aux2IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X2) : 0U);
 	}
 
 	wxStockCursor CemuExtendCursor(std::uint8_t cursor)
 	{
-		using cemuextend::wire::PointerCursor;
-		switch (static_cast<PointerCursor>(cursor))
+		using Frontend::CemuExtendPointerCursor;
+		switch (static_cast<CemuExtendPointerCursor>(cursor))
 		{
-		case PointerCursor::TextInput: return wxCURSOR_IBEAM;
-		case PointerCursor::ResizeAll: return wxCURSOR_SIZING;
-		case PointerCursor::ResizeNS: return wxCURSOR_SIZENS;
-		case PointerCursor::ResizeEW: return wxCURSOR_SIZEWE;
-		case PointerCursor::ResizeNESW: return wxCURSOR_SIZENESW;
-		case PointerCursor::ResizeNWSE: return wxCURSOR_SIZENWSE;
-		case PointerCursor::Hand: return wxCURSOR_HAND;
-		case PointerCursor::NotAllowed: return wxCURSOR_NO_ENTRY;
+		case CemuExtendPointerCursor::TextInput: return wxCURSOR_IBEAM;
+		case CemuExtendPointerCursor::ResizeAll: return wxCURSOR_SIZING;
+		case CemuExtendPointerCursor::ResizeNS: return wxCURSOR_SIZENS;
+		case CemuExtendPointerCursor::ResizeEW: return wxCURSOR_SIZEWE;
+		case CemuExtendPointerCursor::ResizeNESW: return wxCURSOR_SIZENESW;
+		case CemuExtendPointerCursor::ResizeNWSE: return wxCURSOR_SIZENWSE;
+		case CemuExtendPointerCursor::Hand: return wxCURSOR_HAND;
+		case CemuExtendPointerCursor::NotAllowed: return wxCURSOR_NO_ENTRY;
 		default: return wxCURSOR_ARROW;
 		}
 	}
@@ -948,7 +947,7 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 	}
 	else if (nMsg == WM_INPUT && m_cemuextend_bridge.RawMouseRequested() &&
 		m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
-			cemuextend::wire::PointerMode::CapturedRelative))
+			Frontend::CemuExtendPointerMode::CapturedRelative))
 	{
 		UINT size{};
 		if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, nullptr,
@@ -961,10 +960,10 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 				const auto& raw = *reinterpret_cast<const RAWINPUT*>(storage.data());
 				if (raw.header.dwType == RIM_TYPEMOUSE)
 				{
-					using cemuextend::wire::MouseButton;
+					using Frontend::CemuExtendMouseButton;
 					std::uint32_t changed{};
 					const auto updateButton = [this, &changed](USHORT flags,
-						USHORT downFlag, USHORT upFlag, MouseButton button)
+						USHORT downFlag, USHORT upFlag, CemuExtendMouseButton button)
 					{
 						const auto mask = static_cast<std::uint32_t>(button);
 						if ((flags & downFlag) != 0 &&
@@ -984,15 +983,15 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 					};
 					const auto flags = raw.data.mouse.usButtonFlags;
 					updateButton(flags, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP,
-						MouseButton::Left);
+						CemuExtendMouseButton::Left);
 					updateButton(flags, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
-						MouseButton::Right);
+						CemuExtendMouseButton::Right);
 					updateButton(flags, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP,
-						MouseButton::Middle);
+						CemuExtendMouseButton::Middle);
 					updateButton(flags, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP,
-						MouseButton::X1);
+						CemuExtendMouseButton::X1);
 					updateButton(flags, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP,
-						MouseButton::X2);
+						CemuExtendMouseButton::X2);
 
 					if ((raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
 					{
@@ -1573,15 +1572,15 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 
 	const wxPoint center{clientSize.GetWidth() / 2, clientSize.GetHeight() / 2};
 	const bool rawMouseAvailable = m_cemuextend_bridge.PointerMode() ==
-		static_cast<std::uint8_t>(cemuextend::wire::PointerMode::CapturedRelative) &&
+		static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::CapturedRelative) &&
 		m_cemuextend_bridge.RawMouseRequested() &&
 		EnsureCemuExtendRawMouse();
 	const auto motion = m_cemuextend_bridge.UpdatePosition(
 		{physicalPosition.x, physicalPosition.y},
 		{ToPhys(center).x, ToPhys(center).y}, rawMouseAvailable);
 	const auto flags = motion.rawRelative
-		? static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative)
-		: static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::None);
+		? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
+		: static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::None);
 	m_emulationController.SubmitMouse({
 		.surface = Application::PointerSurface::Tv,
 		.x = physicalPosition.x,
@@ -1625,7 +1624,7 @@ void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t d
 		.contentHeight = physicalHeight,
 		.insideContent = inside,
 		.focused = g_window_info.app_active.load(),
-		.flags = static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative),
+		.flags = static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative),
 	});
 }
 
@@ -1740,7 +1739,7 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 	EmitCemuExtendMouseEvent(event);
 
 	if (m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
-		cemuextend::wire::PointerMode::CapturedRelative) && m_render_canvas)
+		Frontend::CemuExtendPointerMode::CapturedRelative) && m_render_canvas)
 	{
 		const auto size = m_render_canvas->GetClientSize();
 		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
@@ -1771,7 +1770,7 @@ void MainWindow::OnMouseLeft(wxMouseEvent& event)
 			instance.m_main_mouse.left_down_toggle = true;
 	}
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Left));
+		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Left));
 
 	event.Skip();
 }
@@ -1790,7 +1789,7 @@ void MainWindow::OnMouseRight(wxMouseEvent& event)
 			instance.m_main_mouse.right_down_toggle = true;
 	}
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Right));
+		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Right));
 
 	event.Skip();
 }
@@ -1803,7 +1802,7 @@ void MainWindow::OnMouseMiddle(wxMouseEvent& event)
 		event.ButtonUp(wxMOUSE_BTN_MIDDLE), event.MiddleIsDown(),
 		m_cemuextend_bridge.MouseButtons());
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Middle));
+		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Middle));
 	event.Skip();
 }
 
@@ -1811,9 +1810,9 @@ void MainWindow::OnMouseAux(wxMouseEvent& event)
 {
 	std::uint32_t changed{};
 	if (event.GetButton() == wxMOUSE_BTN_AUX1)
-		changed = static_cast<std::uint32_t>(cemuextend::wire::MouseButton::X1);
+		changed = static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::X1);
 	else if (event.GetButton() == wxMOUSE_BTN_AUX2)
-		changed = static_cast<std::uint32_t>(cemuextend::wire::MouseButton::X2);
+		changed = static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::X2);
 	EmitCemuExtendMouseEvent(event, 0, 0, changed);
 	event.Skip();
 }
