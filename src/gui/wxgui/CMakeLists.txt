@@ -49,8 +49,6 @@ add_library(CemuWxGui STATIC
   dialogs/SaveImport/SaveImportWindow.h
   dialogs/SaveImport/SaveTransfer.cpp
   dialogs/SaveImport/SaveTransfer.h
-  AudioDebuggerWindow.cpp
-  AudioDebuggerWindow.h
   DownloadGraphicPacksWindow.cpp
   DownloadGraphicPacksWindow.h
   DownloadCustomGraphicPackWindow.cpp
@@ -127,6 +125,14 @@ add_library(CemuWxRendererAdapters STATIC
   canvas/RendererWindowAdapter.h
 )
 
+# Debugger windows that intentionally inspect emulator internals live outside
+# the normal GUI archive.  Their public wx headers stay core-neutral while the
+# executable composition root supplies the implementation archive.
+add_library(CemuWxDebuggerAdapters STATIC
+  AudioDebuggerWindow.cpp
+  AudioDebuggerWindow.h
+)
+
 if (ENABLE_OPENGL)
   target_sources(CemuWxRendererAdapters PRIVATE
     canvas/OpenGLCanvas.cpp
@@ -155,8 +161,16 @@ target_link_libraries(CemuWxRendererAdapters PRIVATE
   CemuCafe
   CemuCommon
   CemuHostContracts
-  CemuInput
   CemuConfig
+  PUBLIC wxWidgets::wxWidgets
+)
+
+set_property(TARGET CemuWxDebuggerAdapters PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+cemu_use_precompiled_header(CemuWxDebuggerAdapters)
+target_include_directories(CemuWxDebuggerAdapters PUBLIC "../")
+target_link_libraries(CemuWxDebuggerAdapters PRIVATE
+  CemuCafe
+  CemuCommon
   PUBLIC wxWidgets::wxWidgets
 )
 
