@@ -41,7 +41,6 @@
 #include "Cemu/DiscordPresence/DiscordPresence.h"
 #include "util/ScreenSaver/ScreenSaver.h"
 #include "util/helpers/SystemException.h"
-#include "Cafe/HW/Latte/Renderer/Vulkan/VsyncDriver.h"
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
 #include <gamemode_client.h>
 #endif
@@ -56,6 +55,7 @@
 #ifdef ENABLE_VULKAN
 #include "canvas/VulkanCanvas.h"
 #endif
+#include "canvas/RendererWindowAdapter.h"
 #ifdef ENABLE_METAL
 #include "canvas/MetalCanvas.h"
 #include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
@@ -2320,9 +2320,7 @@ void MainWindow::OnSizeEvent(wxSizeEvent& event)
 
 	event.Skip();
 
-	#ifdef ENABLE_VULKAN
-	VsyncDriver_notifyWindowPosChanged();
-	#endif
+	WxRendererAdapters::NotifyWindowPositionChanged();
 }
 
 void MainWindow::OnDPIChangedEvent(wxDPIChangedEvent& event)
@@ -2343,9 +2341,7 @@ void MainWindow::OnMove(wxMoveEvent& event)
 
 	if (m_debugger_window && m_debugger_window->IsShown())
 		m_debugger_window->OnParentMove(GetPosition(), GetSize());
-	#ifdef ENABLE_VULKAN
-	VsyncDriver_notifyWindowPosChanged();
-	#endif
+	WxRendererAdapters::NotifyWindowPositionChanged();
 }
 
 void MainWindow::OnDebuggerClose(wxCloseEvent& event)

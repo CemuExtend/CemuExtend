@@ -121,7 +121,11 @@ add_library(CemuWxGui STATIC
   wxHelper.h
 )
 
-add_library(CemuWxRendererAdapters STATIC canvas/IRenderCanvas.h)
+add_library(CemuWxRendererAdapters STATIC
+  canvas/IRenderCanvas.h
+  canvas/RendererWindowAdapter.cpp
+  canvas/RendererWindowAdapter.h
+)
 
 if (ENABLE_OPENGL)
   target_sources(CemuWxRendererAdapters PRIVATE
