@@ -472,9 +472,56 @@ struct Cex2Host::Impl
 		session.responses.push_back(std::move(result));
 	}
 
+	static std::int32_t SaturatingAdd(std::int32_t left, std::int32_t right)
+	{
+		const auto sum = static_cast<std::int64_t>(left) + right;
+		return static_cast<std::int32_t>(std::clamp<std::int64_t>(sum,
+			std::numeric_limits<std::int32_t>::min(),
+			std::numeric_limits<std::int32_t>::max()));
+	}
+
+	static bool CoalesceMouseMotion(Session& session,
+		cemuextend::wire::MouseEventPayloadV2& event)
+	{
+		using namespace cemuextend::wire;
+		if (event.changedButtons.get() != 0 || event.wheelX.get() != 0 ||
+			event.wheelY.get() != 0 || session.responses.empty())
+			return false;
+
+		auto& response = session.responses.back();
+		if (response.size() != sizeof(ResponseHeader) + sizeof(MouseEventPayloadV2))
+			return false;
+		ResponseHeader header{};
+		std::memcpy(&header, response.data(), sizeof(header));
+		if (header.flags.get() != static_cast<std::uint16_t>(
+				cemuextend::transport::ResponseFlag::Event) ||
+			header.serviceId.get() != static_cast<std::uint16_t>(ServiceId::Input) ||
+			header.operation.get() != static_cast<std::uint16_t>(InputEvent::MouseV2))
+			return false;
+
+		MouseEventPayloadV2 previous{};
+		std::memcpy(&previous, response.data() + sizeof(header), sizeof(previous));
+		if (previous.changedButtons.get() != 0 || previous.wheelX.get() != 0 ||
+			previous.wheelY.get() != 0 || previous.surface != event.surface ||
+			previous.buttons.get() != event.buttons.get() ||
+			previous.focused != event.focused || previous.flags != event.flags)
+			return false;
+
+		// Absolute position and policy state come from the newest sample, while
+		// relative motion must retain the complete distance since the guest's last
+		// poll. Button and wheel events are never coalesced because their ordering
+		// drives actions in the guest.
+		event.deltaX = SaturatingAdd(previous.deltaX.get(), event.deltaX.get());
+		event.deltaY = SaturatingAdd(previous.deltaY.get(), event.deltaY.get());
+		std::memcpy(response.data() + sizeof(header), &event, sizeof(event));
+		return true;
+	}
+
 	void EmitMouseEventLocked(const cemuextend::wire::MouseEventPayloadV2& state)
 	{
 		using namespace cemuextend::wire;
+		const auto middle = static_cast<std::uint32_t>(MouseButton::Middle);
+		const bool perspectiveTransition = (state.changedButtons.get() & middle) != 0;
 		hostMouse = state;
 		for (auto& [id, session] : sessions)
 		{
@@ -488,9 +535,35 @@ struct Cex2Host::Impl
 			event.identity.channel = static_cast<std::uint8_t>(InputChannel::Mouse);
 			event.identity.deviceId = static_cast<std::uint16_t>(event.surface);
 			event.identity.frameNumber = static_cast<std::uint32_t>(CurrentFrameNumber());
+			if (perspectiveTransition)
+			{
+#ifndef CEMU_CEX2_TESTING
+				cemuLog_log(LogType::Force,
+					"CEX2-PERSPECTIVE mouse session={} event={} buttons={} changed={} "
+					"queued={} reserved={} dropped={}",
+					id, event.identity.eventId.get(), event.buttons.get(),
+					event.changedButtons.get(), session.responses.size(),
+					session.reservedResponses, session.droppedEvents);
+#endif
+			}
+			if (CoalesceMouseMotion(session, event))
+				continue;
+			[[maybe_unused]] const std::size_t queuedBefore = session.responses.size();
+			[[maybe_unused]] const std::uint64_t droppedBefore = session.droppedEvents;
 			EmitEvent(session, ServiceId::Input,
 				static_cast<std::uint16_t>(InputEvent::MouseV2),
 				{reinterpret_cast<const std::byte*>(&event), sizeof(event)});
+			if (perspectiveTransition)
+			{
+#ifndef CEMU_CEX2_TESTING
+				cemuLog_log(LogType::Force,
+					"CEX2-PERSPECTIVE mouse-emit session={} event={} enqueued={} "
+					"queued={}->{} dropped={}->{}",
+					id, event.identity.eventId.get(),
+					session.responses.size() != queuedBefore, queuedBefore,
+					session.responses.size(), droppedBefore, session.droppedEvents);
+#endif
+			}
 		}
 	}
 
@@ -1368,9 +1441,27 @@ void Cex2Host::KeyboardEvent(std::uint16_t usage, bool pressed, std::uint8_t mod
 {
 	if (!usage) return;
 	std::lock_guard lock(m_impl->mutex);
+#ifndef CEMU_CEX2_TESTING
+	if (usage == 62)
+		cemuLog_log(LogType::Force,
+			"CEX2-PERSPECTIVE raw pressed={} modifiers={} sessions={}",
+			pressed, modifiers, m_impl->sessions.size());
+#endif
 	for (auto& [id, session] : m_impl->sessions)
 	{
 		if (!Impl::HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input))) continue;
+		const bool wasPressed = session.pressedKeyboardUsages.contains(usage);
+		if (usage == 62)
+		{
+#ifndef CEMU_CEX2_TESTING
+			cemuLog_log(LogType::Force,
+				"CEX2-PERSPECTIVE session={} pressed={} duplicate={} queued={} reserved={} dropped={}",
+				id, pressed, wasPressed == pressed, session.responses.size(),
+				session.reservedResponses, session.droppedEvents);
+#endif
+		}
+		if (wasPressed == pressed)
+			continue;
 		if (pressed) session.pressedKeyboardUsages.insert(usage);
 		else session.pressedKeyboardUsages.erase(usage);
 		cemuextend::wire::KeyboardEventPayload event{};
@@ -1379,9 +1470,21 @@ void Cex2Host::KeyboardEvent(std::uint16_t usage, bool pressed, std::uint8_t mod
 		event.identity.channel = static_cast<std::uint8_t>(cemuextend::wire::InputChannel::Keyboard);
 		event.identity.frameNumber = CurrentFrameNumber();
 		event.usbHidUsage = usage; event.pressed = pressed; event.modifiers = modifiers;
+		[[maybe_unused]] const std::size_t queuedBefore = session.responses.size();
+		[[maybe_unused]] const std::uint64_t droppedBefore = session.droppedEvents;
 		m_impl->EmitEvent(session, ServiceId::Input,
 			static_cast<std::uint16_t>(cemuextend::wire::InputEvent::Keyboard),
 			{reinterpret_cast<const std::byte*>(&event), sizeof(event)});
+		if (usage == 62)
+		{
+#ifndef CEMU_CEX2_TESTING
+			cemuLog_log(LogType::Force,
+				"CEX2-PERSPECTIVE emit session={} event={} pressed={} enqueued={} queued={}->{} dropped={}->{}",
+				id, event.identity.eventId.get(), pressed,
+				session.responses.size() != queuedBefore, queuedBefore, session.responses.size(),
+				droppedBefore, session.droppedEvents);
+#endif
+		}
 	}
 }
 

@@ -104,8 +104,10 @@ void PadViewFrame::InitializeRenderCanvas()
 	m_render_canvas->Bind(wxEVT_MOTION, &PadViewFrame::OnMouseMove, this);
 	m_render_canvas->Bind(wxEVT_LEFT_DOWN, &PadViewFrame::OnMouseLeft, this);
 	m_render_canvas->Bind(wxEVT_LEFT_UP, &PadViewFrame::OnMouseLeft, this);
+	m_render_canvas->Bind(wxEVT_LEFT_DCLICK, &PadViewFrame::OnMouseLeft, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_DOWN, &PadViewFrame::OnMouseRight, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_UP, &PadViewFrame::OnMouseRight, this);
+	m_render_canvas->Bind(wxEVT_RIGHT_DCLICK, &PadViewFrame::OnMouseRight, this);
 
 	m_render_canvas->Bind(wxEVT_GESTURE_PAN, &PadViewFrame::OnGesturePan, this);
 
@@ -206,7 +208,7 @@ void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t c
 		(event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
 		(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
 		(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U);
-	if (event.ButtonDown())
+	if (event.ButtonDown() || event.ButtonDClick())
 		buttons |= changedButtons;
 	else if (event.ButtonUp())
 		buttons &= ~changedButtons;
@@ -238,12 +240,14 @@ void PadViewFrame::OnMouseMove(wxMouseEvent& event)
 void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
+	const bool pressed = event.ButtonDown(wxMOUSE_BTN_LEFT) ||
+		event.ButtonDClick(wxMOUSE_BTN_LEFT);
 
 	std::scoped_lock lock(instance.m_pad_mouse.m_mutex);
-	instance.m_pad_mouse.left_down = event.ButtonDown(wxMOUSE_BTN_LEFT);
+	instance.m_pad_mouse.left_down = pressed;
 	auto physPos = ToPhys(event.GetPosition());
 	instance.m_pad_mouse.position = { physPos.x, physPos.y };
-	if (event.ButtonDown(wxMOUSE_BTN_LEFT))
+	if (pressed)
 		instance.m_pad_mouse.left_down_toggle = true;
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
 		cemuextend::wire::MouseButton::Left));
@@ -253,12 +257,14 @@ void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 void PadViewFrame::OnMouseRight(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
+	const bool pressed = event.ButtonDown(wxMOUSE_BTN_RIGHT) ||
+		event.ButtonDClick(wxMOUSE_BTN_RIGHT);
 
 	std::scoped_lock lock(instance.m_pad_mouse.m_mutex);
-	instance.m_pad_mouse.right_down = event.ButtonDown(wxMOUSE_BTN_LEFT);
+	instance.m_pad_mouse.right_down = pressed;
 	auto physPos = ToPhys(event.GetPosition());
 	instance.m_pad_mouse.position = { physPos.x, physPos.y };
-	if (event.ButtonDown(wxMOUSE_BTN_RIGHT))
+	if (pressed)
 		instance.m_pad_mouse.right_down_toggle = true;
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
 		cemuextend::wire::MouseButton::Right));

@@ -1500,7 +1500,9 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 	// synthetic/private-desktop motion can report wx's aggregate state as
 	// released even while a button is held. Preserve the confirmed mask for
 	// motion/wheel events so a drag cannot turn into a spurious ButtonUp.
-	if (event.ButtonDown())
+	// wxWidgets reports the second press of a rapid click pair as DCLICK
+	// instead of another DOWN event. It is still a physical down transition.
+	if (event.ButtonDown() || event.ButtonDClick())
 		eventButtons |= changedButtons;
 	else if (event.ButtonUp())
 		eventButtons &= ~changedButtons;
@@ -1725,12 +1727,14 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 void MainWindow::OnMouseLeft(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
+	const bool pressed = event.ButtonDown(wxMOUSE_BTN_LEFT) ||
+		event.ButtonDClick(wxMOUSE_BTN_LEFT);
 	{
 		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-		instance.m_main_mouse.left_down = event.ButtonDown(wxMOUSE_BTN_LEFT);
+		instance.m_main_mouse.left_down = pressed;
 		auto physPos = ToPhys(event.GetPosition());
 		instance.m_main_mouse.position = { physPos.x, physPos.y };
-		if (event.ButtonDown(wxMOUSE_BTN_LEFT))
+		if (pressed)
 			instance.m_main_mouse.left_down_toggle = true;
 	}
 	EmitCemuExtendMouseEvent(event, 0, 0,
@@ -1742,12 +1746,14 @@ void MainWindow::OnMouseLeft(wxMouseEvent& event)
 void MainWindow::OnMouseRight(wxMouseEvent& event)
 {
 	auto& instance = InputManager::instance();
+	const bool pressed = event.ButtonDown(wxMOUSE_BTN_RIGHT) ||
+		event.ButtonDClick(wxMOUSE_BTN_RIGHT);
 	{
 		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-		instance.m_main_mouse.right_down = event.ButtonDown(wxMOUSE_BTN_RIGHT);
+		instance.m_main_mouse.right_down = pressed;
 		auto physPos = ToPhys(event.GetPosition());
 		instance.m_main_mouse.position = { physPos.x, physPos.y };
-		if(event.ButtonDown(wxMOUSE_BTN_RIGHT))
+		if (pressed)
 			instance.m_main_mouse.right_down_toggle = true;
 	}
 	EmitCemuExtendMouseEvent(event, 0, 0,
@@ -1758,6 +1764,11 @@ void MainWindow::OnMouseRight(wxMouseEvent& event)
 
 void MainWindow::OnMouseMiddle(wxMouseEvent& event)
 {
+	cemuLog_log(LogType::Force,
+		"CEX2-PERSPECTIVE wx-middle down={} dclick={} up={} aggregateMiddle={} trackedButtons={}",
+		event.ButtonDown(wxMOUSE_BTN_MIDDLE), event.ButtonDClick(wxMOUSE_BTN_MIDDLE),
+		event.ButtonUp(wxMOUSE_BTN_MIDDLE), event.MiddleIsDown(),
+		m_cemuextend_mouse_buttons);
 	EmitCemuExtendMouseEvent(event, 0, 0,
 		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Middle));
 	event.Skip();
@@ -2150,10 +2161,13 @@ void MainWindow::CreateCanvas()
 	m_render_canvas->Bind(wxEVT_MOUSEWHEEL, &MainWindow::OnMouseWheel, this);
 	m_render_canvas->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnMouseLeft, this);
 	m_render_canvas->Bind(wxEVT_LEFT_UP, &MainWindow::OnMouseLeft, this);
+	m_render_canvas->Bind(wxEVT_LEFT_DCLICK, &MainWindow::OnMouseLeft, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_DOWN, &MainWindow::OnMouseRight, this);
 	m_render_canvas->Bind(wxEVT_RIGHT_UP, &MainWindow::OnMouseRight, this);
+	m_render_canvas->Bind(wxEVT_RIGHT_DCLICK, &MainWindow::OnMouseRight, this);
 	m_render_canvas->Bind(wxEVT_MIDDLE_DOWN, &MainWindow::OnMouseMiddle, this);
 	m_render_canvas->Bind(wxEVT_MIDDLE_UP, &MainWindow::OnMouseMiddle, this);
+	m_render_canvas->Bind(wxEVT_MIDDLE_DCLICK, &MainWindow::OnMouseMiddle, this);
 	m_render_canvas->Bind(wxEVT_AUX1_DOWN, &MainWindow::OnMouseAux, this);
 	m_render_canvas->Bind(wxEVT_AUX1_UP, &MainWindow::OnMouseAux, this);
 	m_render_canvas->Bind(wxEVT_AUX2_DOWN, &MainWindow::OnMouseAux, this);

@@ -83,6 +83,7 @@ FROM cemu-extend-base AS build
 ARG BUILD_TYPE=Release
 ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
+ARG SOURCE_FINGERPRINT=unknown
 
 WORKDIR /workspace/CemuExtend
 
@@ -93,7 +94,8 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
     --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
     --mount=type=cache,id=cemu-extend-cmake,target=/workspace/CemuExtend/build/docker,sharing=locked \
-    bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
+    test -n "${SOURCE_FINGERPRINT}" \
+    && bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
     && for attempt in 1 2 3; do \
         cmake -S . -B build/docker \
             -G Ninja \

@@ -627,6 +627,40 @@ void TestMouseAndPointerPolicy()
 	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->flags.get() ==
 		static_cast<std::uint16_t>(cemuextend::transport::ResponseFlag::Event));
 	CHECK(host.EffectivePointerPolicy().mode == policy.mode);
+
+	// A high polling-rate mouse must not fill the shared response queue with
+	// redundant motion samples. Preserve the newest absolute state and the full
+	// accumulated relative distance in one event.
+	for (std::int32_t index = 0; index < 512; ++index)
+		host.MouseEvent(PointerSurface::Tv, index, index, 1, -1, 0, 0, 0, 0,
+			1280, 720, true, true, static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
+	response = PollUntil(host, context, session);
+	const auto& coalesced = *reinterpret_cast<const MouseEventPayloadV2*>(
+		response.data() + sizeof(ResponseHeader));
+	CHECK(coalesced.x.get() == 511 && coalesced.y.get() == 511);
+	CHECK(coalesced.deltaX.get() == 512 && coalesced.deltaY.get() == -512);
+	std::array<std::byte, cemuextend::transport::kMaximumMessageSize> empty{};
+	std::uint32_t emptySize{};
+	CHECK(host.Poll(context, session, empty, emptySize) ==
+		static_cast<std::int32_t>(Error::NotFound));
+
+	// wxWidgets emits repeated KEY_DOWN events while a key is held. They carry
+	// no additional raw state, so only the down/up transition pair should cross
+	// the bounded transport queue.
+	for (std::size_t repeat = 0; repeat < 512; ++repeat)
+		host.KeyboardEvent(0x04, true, 0);
+	host.KeyboardEvent(0x04, false, 0);
+	response = PollUntil(host, context, session);
+	const auto& keyDown = *reinterpret_cast<const KeyboardEventPayload*>(
+		response.data() + sizeof(ResponseHeader));
+	CHECK(keyDown.usbHidUsage.get() == 0x04 && keyDown.pressed);
+	response = PollUntil(host, context, session);
+	const auto& keyUp = *reinterpret_cast<const KeyboardEventPayload*>(
+		response.data() + sizeof(ResponseHeader));
+	CHECK(keyUp.usbHidUsage.get() == 0x04 && !keyUp.pressed);
+	CHECK(host.Poll(context, session, empty, emptySize) ==
+		static_cast<std::int32_t>(Error::NotFound));
+
 	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
 }
