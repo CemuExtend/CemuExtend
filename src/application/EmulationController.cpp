@@ -235,6 +235,16 @@ namespace Application
 		m_backend->KeyboardFocusLost();
 	}
 
+	bool EmulationController::SoftwareKeyboardActive() const
+	{
+		return m_backend->SoftwareKeyboardActive();
+	}
+
+	bool EmulationController::SubmitSoftwareKeyboardKey(std::uint32_t keyCode)
+	{
+		return m_backend->SubmitSoftwareKeyboardKey(keyCode);
+	}
+
 	void EmulationController::PointerFocusChanged(bool focused)
 	{
 		m_backend->PointerFocusChanged(focused);

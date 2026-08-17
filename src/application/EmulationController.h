@@ -181,6 +181,8 @@ namespace Application
 			std::uint8_t modifiers) = 0;
 		virtual void SubmitText(std::uint32_t codepoint, bool repeat) = 0;
 		virtual void KeyboardFocusLost() = 0;
+		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
+		virtual bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) = 0;
 		virtual void PointerFocusChanged(bool focused) = 0;
 		virtual void SubmitMouse(const MouseInput& input) = 0;
 		[[nodiscard]] virtual PointerPolicy GetPointerPolicy() = 0;
@@ -228,6 +230,8 @@ namespace Application
 		void SubmitKeyboard(std::uint16_t usage, bool pressed, std::uint8_t modifiers);
 		void SubmitText(std::uint32_t codepoint, bool repeat);
 		void KeyboardFocusLost();
+		[[nodiscard]] bool SoftwareKeyboardActive() const;
+		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode);
 		void PointerFocusChanged(bool focused);
 		void SubmitMouse(const MouseInput& input);
 		[[nodiscard]] PointerPolicy GetPointerPolicy();

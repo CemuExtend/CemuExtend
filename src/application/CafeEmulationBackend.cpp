@@ -17,6 +17,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
 #include "input/InputManager.h"
@@ -1179,6 +1180,19 @@ namespace Application
 			void KeyboardFocusLost() override
 			{
 				cemuextend_hle::Cex2Host::Instance().KeyboardFocusLost();
+			}
+
+			bool SoftwareKeyboardActive() const override
+			{
+				return swkbd_hasKeyboardInputHook();
+			}
+
+			bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) override
+			{
+				if (!swkbd_hasKeyboardInputHook())
+					return false;
+				swkbd_keyInput(keyCode);
+				return true;
 			}
 
 			void PointerFocusChanged(bool focused) override

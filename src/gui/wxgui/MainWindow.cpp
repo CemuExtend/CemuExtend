@@ -63,7 +63,6 @@
 
 //Cafe libs
 #include "Cafe/OS/libs/nfc/nfc.h"
-#include "Cafe/OS/libs/swkbd/swkbd.h"
 
 #include <wx/app.h>
 #include <wx/thread.h>
@@ -1848,7 +1847,7 @@ void MainWindow::OnKeyUp(wxKeyEvent& event)
 {
 	event.Skip();
 
-	if (swkbd_hasKeyboardInputHook())
+	if (m_emulationController.SoftwareKeyboardActive())
 		return;
 
 	HotkeySettings::CaptureInput(event);
@@ -1877,8 +1876,7 @@ void MainWindow::OnKeyDown(wxKeyEvent& event)
 
 void MainWindow::OnChar(wxKeyEvent& event)
 {
-	if (swkbd_hasKeyboardInputHook())
-		swkbd_keyInput(event.GetUnicodeKey());
+	m_emulationController.SubmitSoftwareKeyboardKey(event.GetUnicodeKey());
 
 	// event.Skip();
 }

@@ -51,6 +51,16 @@ namespace
 		void SubmitKeyboard(std::uint16_t, bool, std::uint8_t) override {}
 		void SubmitText(std::uint32_t, bool) override {}
 		void KeyboardFocusLost() override {}
+		bool softwareKeyboardActive{};
+		std::vector<std::uint32_t> softwareKeyboardKeys;
+		bool SoftwareKeyboardActive() const override { return softwareKeyboardActive; }
+		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) override
+		{
+			if (!softwareKeyboardActive)
+				return false;
+			softwareKeyboardKeys.push_back(keyCode);
+			return true;
+		}
 		void PointerFocusChanged(bool) override {}
 		void SubmitMouse(const Application::MouseInput&) override {}
 		Application::PointerPolicy GetPointerPolicy() override { return {}; }
@@ -277,6 +287,12 @@ int main()
 		presentation->region == Application::TitleRegion::UnitedStates &&
 		presentation->renderer == Application::PresentationRenderer::Vulkan &&
 		presentation->gpuVendor == Application::PresentationGpuVendor::Amd);
+	assert(!controller.SoftwareKeyboardActive());
+	assert(!controller.SubmitSoftwareKeyboardKey('x'));
+	backend.softwareKeyboardActive = true;
+	assert(controller.SoftwareKeyboardActive());
+	assert(controller.SubmitSoftwareKeyboardKey('x'));
+	assert(backend.softwareKeyboardKeys == std::vector<std::uint32_t>{'x'});
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
 	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
 		.basePath = "test-title", .version = 17});
