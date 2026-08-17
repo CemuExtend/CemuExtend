@@ -7,6 +7,7 @@ add_library(CemuApplication STATIC
   CafeEmulationBackend.cpp
   EmulationController.cpp
   EmulationController.h
+  GameProfileFacade.h
   GraphicPackFacade.h
   TitleCatalog.h
 )

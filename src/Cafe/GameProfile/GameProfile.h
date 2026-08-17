@@ -1,6 +1,9 @@
 #pragma once
 #include "config/CemuConfig.h"
 
+#include <cstddef>
+#include <utility>
+
 struct gameProfileIntegerOption_t
 {
 	bool isPresent = false;
@@ -15,9 +18,26 @@ public:
 	static const uint32 kThreadQuantumDefault = 45000;
 
 	bool Load(uint64_t title_id);
-	void Save(uint64_t title_id);
+	[[nodiscard]] bool Save(uint64_t title_id);
 	void ResetOptional();
 	void Reset();
+	void SetLoadSharedLibraries(std::optional<bool> value) { m_loadSharedLibraries = value; }
+	void SetStartWithGamepadView(bool value) { m_startWithPadView = value; }
+	void SetGraphicsAPI(std::optional<GraphicAPI> value) { m_graphics_api = value; }
+	void SetAccurateShaderMul(AccurateShaderMulOption value) { m_accurateShaderMul = value; }
+#ifdef ENABLE_METAL
+	void SetShaderFastMath(bool value) { m_shaderFastMath = value; }
+	void SetBufferCacheMode(MetalBufferCacheMode value) { m_metalBufferCacheMode = value; }
+	void SetPositionInvariance(PositionInvariance value) { m_positionInvariance = value; }
+#endif
+	void SetThreadQuantum(uint32 value) { m_threadQuantum = value; }
+	void SetCPUMode(std::optional<CPUMode> value) { m_cpuMode = value; }
+	void SetAudioDisabled(bool value) { m_disableAudio = value; }
+	void SetControllerProfile(std::size_t index, std::optional<std::string> value)
+	{
+		if (index < m_controllerProfile.size())
+			m_controllerProfile[index] = std::move(value);
+	}
 
 	[[nodiscard]] uint64 GetTitleId() const { return m_title_id; }
 	[[nodiscard]] bool IsLoaded() const { return m_is_loaded; }

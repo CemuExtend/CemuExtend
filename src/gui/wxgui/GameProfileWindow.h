@@ -6,24 +6,29 @@
 #include <wx/combobox.h>
 #include <wx/slider.h>
 
-#include "Cafe/GameProfile/GameProfile.h"
+#include "application/GameProfileFacade.h"
+
+namespace Application
+{
+	class EmulationController;
+}
 
 class GameProfileWindow : public wxFrame
 {
 public:
-	GameProfileWindow(wxWindow* parent, uint64_t title_id);
+	GameProfileWindow(wxWindow* parent,
+		Application::EmulationController& emulationController, uint64_t title_id);
 	~GameProfileWindow();
 
 private:
 	uint64_t m_title_id;
-	GameProfile m_game_profile;
+	Application::EmulationController& m_emulationController;
+	Application::GameProfileUpdate m_profile;
 
 	void OnStreamoutSizeChange(wxCommandEvent& event);
 	void OnControllerProfileDropdown(wxCommandEvent& event);
 
 	void SetSliderValue(wxSlider* slider, sint32 new_value) const;
-	void SetProfileInt(gameProfileIntegerOption_t& option, wxCheckBox* checkbox, sint32 value) const;
-
 	void ApplyProfile();
 	void SaveProfile();
 

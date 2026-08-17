@@ -804,7 +804,7 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 			}
 			case kContextMenuEditGameProfile:
 			{
-				(new GameProfileWindow(GetParent(), title_id))->Show();
+				(new GameProfileWindow(GetParent(), m_emulationController, title_id))->Show();
 				break;
 			}
             case kContextMenuCreateShortcut:

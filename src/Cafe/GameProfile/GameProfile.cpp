@@ -279,7 +279,7 @@ bool GameProfile::Load(uint64_t title_id)
 	return true;
 }
 
-void GameProfile::Save(uint64_t title_id)
+bool GameProfile::Save(uint64_t title_id)
 {
 	auto gameProfileDir = ActiveSettings::GetConfigPath("gameProfiles");
 	if (std::error_code ex_ec; !fs::exists(gameProfileDir, ex_ec))
@@ -289,7 +289,7 @@ void GameProfile::Save(uint64_t title_id)
 	if (!fs)
 	{
 		cemuLog_log(LogType::Force, "Failed to write game profile");
-		return;
+		return false;
 	}
 
 	if (m_gameName)
@@ -334,6 +334,7 @@ void GameProfile::Save(uint64_t title_id)
 #undef WRITE_ENTRY_NUMBERED
 
 	delete fs;
+	return true;
 }
 
 void GameProfile::ResetOptional()

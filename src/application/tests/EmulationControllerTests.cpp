@@ -153,6 +153,19 @@ namespace
 				.titleId = 0x1234, .version = 1, .region = 2,
 				.imageSha256 = std::string(64, locationUid == 0 ? '0' : '1')}};
 		}
+		Application::GameProfileView gameProfile;
+		int gameProfileSaves{};
+		Application::GameProfileView LoadGameProfile(std::uint64_t) const override
+		{
+			return gameProfile;
+		}
+		Application::GameProfileSaveResult SaveGameProfile(std::uint64_t,
+			const Application::GameProfileUpdate& update) override
+		{
+			++gameProfileSaves;
+			gameProfile.settings = update;
+			return {true, {}};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -267,6 +280,28 @@ int main()
 		[] { return true; });
 	assert(!cancelledChecksum &&
 		cancelledChecksum.error == Application::ContentOperationError::Cancelled);
+	backend.gameProfile = {
+		.settings = {
+			.loadSharedLibraries = false,
+			.startWithPadView = true,
+			.cpuMode = Application::GameProfileCpuMode::MultiCoreRecompiler,
+			.threadQuantum = 60000,
+			.graphicsApi = Application::GameProfileGraphicsApi::Vulkan,
+			.accurateShaderMultiplication = true,
+		},
+		.gameName = "Test game",
+		.defaultProfile = false,
+	};
+	const auto profile = controller.LoadGameProfile(0x1234);
+	assert(profile.gameName == "Test game" && !profile.defaultProfile);
+	assert(profile.settings.cpuMode == Application::GameProfileCpuMode::MultiCoreRecompiler);
+	auto updatedProfile = profile.settings;
+	updatedProfile.threadQuantum = 80000;
+	updatedProfile.controllerProfiles[0] = "Controller 1";
+	assert(controller.SaveGameProfile(0x1234, updatedProfile));
+	assert(backend.gameProfileSaves == 1 &&
+		backend.gameProfile.settings.threadQuantum == 80000 &&
+		backend.gameProfile.settings.controllerProfiles[0] == "Controller 1");
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
 	assert(controller.ListGraphicPacks().front().key == "pack-key");
 	assert(controller.SetGraphicPackEnabled("pack-key", true).changed);

@@ -5,6 +5,7 @@
 #include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
+#include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cafe/Filesystem/fsc.h"
 #include "Cafe/Filesystem/WUD/wud.h"
@@ -1434,6 +1435,118 @@ namespace Application
 					return {ContentOperationError::ReadFailure,
 						"Unknown checksum failure", std::nullopt};
 				}
+			}
+
+			GameProfileView LoadGameProfile(std::uint64_t titleId) const override
+			{
+				GameProfile profile;
+				profile.Reset();
+				profile.Load(titleId);
+
+				GameProfileView result;
+				result.gameName = profile.GetGameName();
+				result.defaultProfile = profile.IsDefaultProfile();
+				result.settings.loadSharedLibraries =
+					profile.ShouldLoadSharedLibraries().value_or(true);
+				result.settings.startWithPadView = profile.StartWithGamepadView();
+				result.settings.threadQuantum = profile.GetThreadQuantum();
+				result.settings.accurateShaderMultiplication =
+					profile.GetAccurateShaderMul() != AccurateShaderMulOption::False;
+
+				switch (profile.GetCPUMode().value_or(CPUMode::Auto))
+				{
+				case CPUMode::SinglecoreInterpreter:
+					result.settings.cpuMode = GameProfileCpuMode::SingleCoreInterpreter;
+					break;
+				case CPUMode::SinglecoreRecompiler:
+					result.settings.cpuMode = GameProfileCpuMode::SingleCoreRecompiler;
+					break;
+				case CPUMode::DualcoreRecompiler:
+				case CPUMode::MulticoreRecompiler:
+					result.settings.cpuMode = GameProfileCpuMode::MultiCoreRecompiler;
+					break;
+				default:
+					result.settings.cpuMode = GameProfileCpuMode::Auto;
+					break;
+				}
+
+				if (const auto api = profile.GetGraphicsAPI())
+				{
+					switch (*api)
+					{
+					case kOpenGL: result.settings.graphicsApi = GameProfileGraphicsApi::OpenGL; break;
+					case kVulkan: result.settings.graphicsApi = GameProfileGraphicsApi::Vulkan; break;
+#ifdef ENABLE_METAL
+					case kMetal: result.settings.graphicsApi = GameProfileGraphicsApi::Metal; break;
+#endif
+					default: result.settings.graphicsApi = GameProfileGraphicsApi::Default; break;
+					}
+				}
+
+#ifdef ENABLE_METAL
+				result.settings.shaderFastMath = profile.GetShaderFastMath();
+				result.settings.metalBufferCacheMode =
+					static_cast<std::uint8_t>(profile.GetBufferCacheMode());
+				result.settings.positionInvariance =
+					static_cast<std::uint8_t>(profile.GetPositionInvariance());
+#endif
+				result.settings.controllerProfiles = profile.GetControllerProfile();
+				return result;
+			}
+
+			GameProfileSaveResult SaveGameProfile(std::uint64_t titleId,
+				const GameProfileUpdate& update) override
+			{
+				GameProfile profile;
+				profile.Reset();
+				profile.SetLoadSharedLibraries(update.loadSharedLibraries);
+				profile.SetStartWithGamepadView(update.startWithPadView);
+				profile.SetThreadQuantum(std::clamp<std::uint32_t>(
+					update.threadQuantum, 5000, 536870912));
+				profile.SetAccurateShaderMul(update.accurateShaderMultiplication ?
+					AccurateShaderMulOption::True : AccurateShaderMulOption::False);
+
+				switch (update.cpuMode)
+				{
+				case GameProfileCpuMode::SingleCoreInterpreter:
+					profile.SetCPUMode(CPUMode::SinglecoreInterpreter);
+					break;
+				case GameProfileCpuMode::SingleCoreRecompiler:
+					profile.SetCPUMode(CPUMode::SinglecoreRecompiler);
+					break;
+				case GameProfileCpuMode::MultiCoreRecompiler:
+					profile.SetCPUMode(CPUMode::MulticoreRecompiler);
+					break;
+				default:
+					profile.SetCPUMode(CPUMode::Auto);
+					break;
+				}
+
+				switch (update.graphicsApi)
+				{
+				case GameProfileGraphicsApi::OpenGL: profile.SetGraphicsAPI(kOpenGL); break;
+				case GameProfileGraphicsApi::Vulkan: profile.SetGraphicsAPI(kVulkan); break;
+#ifdef ENABLE_METAL
+				case GameProfileGraphicsApi::Metal: profile.SetGraphicsAPI(kMetal); break;
+#endif
+				default: profile.SetGraphicsAPI(std::nullopt); break;
+				}
+
+#ifdef ENABLE_METAL
+				profile.SetShaderFastMath(update.shaderFastMath);
+				profile.SetBufferCacheMode(static_cast<MetalBufferCacheMode>(
+					std::min<std::uint8_t>(update.metalBufferCacheMode,
+						static_cast<std::uint8_t>(MetalBufferCacheMode::Host))));
+				profile.SetPositionInvariance(static_cast<PositionInvariance>(
+					std::min<std::uint8_t>(update.positionInvariance,
+						static_cast<std::uint8_t>(PositionInvariance::True))));
+#endif
+				for (std::size_t index = 0; index < update.controllerProfiles.size(); ++index)
+					profile.SetControllerProfile(index, update.controllerProfiles[index]);
+
+				if (!profile.Save(titleId))
+					return {false, "Unable to write game profile"};
+				return {true, {}};
 			}
 
 			std::vector<GraphicPackInfo> ListGraphicPacks() const override

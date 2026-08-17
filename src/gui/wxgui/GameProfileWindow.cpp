@@ -1,5 +1,7 @@
 #include "wxgui/GameProfileWindow.h"
 
+#include "application/EmulationController.h"
+
 #include <wx/statbox.h>
 #include <wx/sizer.h>
 #include <wx/panel.h>
@@ -15,13 +17,19 @@
 #include "resource/embedded/resources.h"
 #endif
 
-GameProfileWindow::GameProfileWindow(wxWindow* parent, uint64_t title_id)
-	: wxFrame(parent, wxID_ANY, _("Edit game profile"), wxDefaultPosition, wxSize{ 390, 350 }, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER | wxTAB_TRAVERSAL | wxSYSTEM_MENU), m_title_id(title_id)
+GameProfileWindow::GameProfileWindow(wxWindow* parent,
+	Application::EmulationController& emulationController, uint64_t title_id)
+	: wxFrame(parent, wxID_ANY, _("Edit game profile"), wxDefaultPosition,
+		wxSize{390, 350}, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION |
+			wxRESIZE_BORDER | wxTAB_TRAVERSAL | wxSYSTEM_MENU),
+	  m_title_id(title_id), m_emulationController(emulationController)
 {
 	SetIcon(wxICON(X_GAME_PROFILE));
 
-	m_game_profile.Reset();
-	m_game_profile.Load(title_id);
+	const auto profile = m_emulationController.LoadGameProfile(title_id);
+	m_profile = profile.settings;
+	if (profile.gameName)
+		this->SetTitle(_("Edit game profile") + " - " + *profile.gameName);
 
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -256,50 +264,42 @@ void GameProfileWindow::OnControllerProfileDropdown(wxCommandEvent& event)
 	cb->SetStringSelection(selected_value);
 }
 
-void GameProfileWindow::SetProfileInt(gameProfileIntegerOption_t& option, wxCheckBox* checkbox, sint32 value) const
-{
-	const auto state = checkbox->GetValue();
-	if (state)
-	{
-		option.isPresent = true;
-		option.value = value;
-	}
-	else
-		option.isPresent = false;
-}
-
 void GameProfileWindow::ApplyProfile()
 {
-	if(m_game_profile.m_gameName)
-		this->SetTitle(_("Edit game profile") + " - " + m_game_profile.m_gameName.value());
-
 	// general
-	m_load_libs->SetValue(m_game_profile.m_loadSharedLibraries.value());
-	m_start_with_padview->SetValue(m_game_profile.m_startWithPadView);
+	m_load_libs->SetValue(m_profile.loadSharedLibraries);
+	m_start_with_padview->SetValue(m_profile.startWithPadView);
 
 	// cpu
 	// wxString cpu_modes[] = { _("Singlecore-Interpreter"), _("Singlecore-Recompiler"), _("Triplecore-Recompiler"), _("Auto (recommended)") };
-	switch(m_game_profile.m_cpuMode.value())
+	switch (m_profile.cpuMode)
 	{
-	case CPUMode::SinglecoreInterpreter: m_cpu_mode->SetSelection(0); break;
-	case CPUMode::SinglecoreRecompiler: m_cpu_mode->SetSelection(1); break;
-	case CPUMode::DualcoreRecompiler: m_cpu_mode->SetSelection(2); break;
-	case CPUMode::MulticoreRecompiler: m_cpu_mode->SetSelection(2); break;
+	case Application::GameProfileCpuMode::SingleCoreInterpreter:
+		m_cpu_mode->SetSelection(0); break;
+	case Application::GameProfileCpuMode::SingleCoreRecompiler:
+		m_cpu_mode->SetSelection(1); break;
+	case Application::GameProfileCpuMode::MultiCoreRecompiler:
+		m_cpu_mode->SetSelection(2); break;
 	default: m_cpu_mode->SetSelection(3);
 	}
 
-	m_thread_quantum->SetStringSelection(fmt::format("{}", m_game_profile.m_threadQuantum));
+	m_thread_quantum->SetStringSelection(fmt::format("{}", m_profile.threadQuantum));
 
 	// gpu
-	if (!m_game_profile.m_graphics_api.has_value())
-		m_graphic_api->SetSelection(0); // selecting ""
-	else
-		m_graphic_api->SetSelection(1 + m_game_profile.m_graphics_api.value()); // "", OpenGL, Vulkan, Metal
-	m_shader_mul_accuracy->SetSelection((int)m_game_profile.m_accurateShaderMul);
+	switch (m_profile.graphicsApi)
+	{
+	case Application::GameProfileGraphicsApi::OpenGL: m_graphic_api->SetSelection(1); break;
+	case Application::GameProfileGraphicsApi::Vulkan: m_graphic_api->SetSelection(2); break;
 #ifdef ENABLE_METAL
-	m_shader_fast_math->SetSelection((int)m_game_profile.m_shaderFastMath);
-	m_metal_buffer_cache_mode->SetSelection((int)m_game_profile.m_metalBufferCacheMode);
-	m_position_invariance->SetSelection((int)m_game_profile.m_positionInvariance);
+	case Application::GameProfileGraphicsApi::Metal: m_graphic_api->SetSelection(3); break;
+#endif
+	default: m_graphic_api->SetSelection(0); break;
+	}
+	m_shader_mul_accuracy->SetSelection(m_profile.accurateShaderMultiplication ? 1 : 0);
+#ifdef ENABLE_METAL
+	m_shader_fast_math->SetSelection(m_profile.shaderFastMath ? 1 : 0);
+	m_metal_buffer_cache_mode->SetSelection(m_profile.metalBufferCacheMode);
+	m_position_invariance->SetSelection(m_profile.positionInvariance);
 #endif
 
 	//// audio
@@ -319,10 +319,10 @@ void GameProfileWindow::ApplyProfile()
 
 	for (int i = 0; i < InputManager::kMaxController; ++i)
 	{
-		const bool has_value = m_game_profile.m_controllerProfile[i].has_value();
+		const bool has_value = m_profile.controllerProfiles[i].has_value();
 		if (has_value)
 		{
-			const auto& v = m_game_profile.m_controllerProfile[i].value();
+			const auto& v = m_profile.controllerProfiles[i].value();
 			m_controller_profile[i]->SetStringSelection(wxString::FromUTF8(v));
 		}
 
@@ -333,64 +333,69 @@ void GameProfileWindow::ApplyProfile()
 
 void GameProfileWindow::SaveProfile()
 {
-	// update game profile struct
-	m_game_profile.Reset();
 	// general
-	m_game_profile.m_loadSharedLibraries = m_load_libs->GetValue();
-	m_game_profile.m_startWithPadView = m_start_with_padview->GetValue();
+	m_profile.loadSharedLibraries = m_load_libs->GetValue();
+	m_profile.startWithPadView = m_start_with_padview->GetValue();
 
 	// cpu
 	switch(m_cpu_mode->GetSelection())
 	{
-	case 0: m_game_profile.m_cpuMode = CPUMode::SinglecoreInterpreter; break;
-	case 1: m_game_profile.m_cpuMode = CPUMode::SinglecoreRecompiler; break;
-	case 2: m_game_profile.m_cpuMode = CPUMode::MulticoreRecompiler; break;
+	case 0: m_profile.cpuMode = Application::GameProfileCpuMode::SingleCoreInterpreter; break;
+	case 1: m_profile.cpuMode = Application::GameProfileCpuMode::SingleCoreRecompiler; break;
+	case 2: m_profile.cpuMode = Application::GameProfileCpuMode::MultiCoreRecompiler; break;
 	default:
-		m_game_profile.m_cpuMode = CPUMode::Auto;
+		m_profile.cpuMode = Application::GameProfileCpuMode::Auto;
 	}
 
 
 	const wxString thread_quantum = m_thread_quantum->GetStringSelection();
+	m_profile.threadQuantum = 45000;
 	if (!thread_quantum.empty())
 	{
-		m_game_profile.m_threadQuantum = ConvertString<uint32>(thread_quantum.ToStdString());
-		m_game_profile.m_threadQuantum = std::min<uint32>(m_game_profile.m_threadQuantum, 536870912);
-		m_game_profile.m_threadQuantum = std::max<uint32>(m_game_profile.m_threadQuantum, 5000);
+		m_profile.threadQuantum = ConvertString<uint32>(thread_quantum.ToStdString());
+		m_profile.threadQuantum = std::min<uint32>(m_profile.threadQuantum, 536870912);
+		m_profile.threadQuantum = std::max<uint32>(m_profile.threadQuantum, 5000);
 	}
 
 	// gpu
-	m_game_profile.m_accurateShaderMul = (AccurateShaderMulOption)m_shader_mul_accuracy->GetSelection();
-	if (m_game_profile.m_accurateShaderMul != AccurateShaderMulOption::False && m_game_profile.m_accurateShaderMul != AccurateShaderMulOption::True)
-		m_game_profile.m_accurateShaderMul = AccurateShaderMulOption::True; // force a legal value
+	m_profile.accurateShaderMultiplication = m_shader_mul_accuracy->GetSelection() != 0;
 #ifdef ENABLE_METAL
-	m_game_profile.m_shaderFastMath = (bool)m_shader_fast_math->GetSelection();
-	m_game_profile.m_metalBufferCacheMode = (MetalBufferCacheMode)m_metal_buffer_cache_mode->GetSelection();
-	m_game_profile.m_positionInvariance = (PositionInvariance)m_position_invariance->GetSelection();
+	m_profile.shaderFastMath = m_shader_fast_math->GetSelection() != 0;
+	m_profile.metalBufferCacheMode = static_cast<std::uint8_t>(
+		m_metal_buffer_cache_mode->GetSelection());
+	m_profile.positionInvariance = static_cast<std::uint8_t>(
+		m_position_invariance->GetSelection());
 #endif
 
-	if (m_graphic_api->GetSelection() == 0)
-		m_game_profile.m_graphics_api = {};
-	else
-		m_game_profile.m_graphics_api = (GraphicAPI)(m_graphic_api->GetSelection() - 1);  // "", OpenGL, Vulkan, Metal
+	switch (m_graphic_api->GetSelection())
+	{
+	case 1: m_profile.graphicsApi = Application::GameProfileGraphicsApi::OpenGL; break;
+	case 2: m_profile.graphicsApi = Application::GameProfileGraphicsApi::Vulkan; break;
+#ifdef ENABLE_METAL
+	case 3: m_profile.graphicsApi = Application::GameProfileGraphicsApi::Metal; break;
+#endif
+	default: m_profile.graphicsApi = Application::GameProfileGraphicsApi::Default; break;
+	}
 
 	// controller
 	for (int i = 0; i < 8; ++i)
 	{
 		if(m_controller_profile[i]->GetSelection() == wxNOT_FOUND)
 		{
-			m_game_profile.m_controllerProfile[i].reset();
+			m_profile.controllerProfiles[i].reset();
 			continue;
 		}
 
 		const wxString profile_name = m_controller_profile[i]->GetStringSelection();
 		if (profile_name.empty())
-			m_game_profile.m_controllerProfile[i].reset();
+			m_profile.controllerProfiles[i].reset();
 		else
-			m_game_profile.m_controllerProfile[i] = profile_name.ToUTF8();
+			m_profile.controllerProfiles[i] = profile_name.ToUTF8();
 	}
 
-	// update game profile file
-	m_game_profile.Save(m_title_id);
+	const auto result = m_emulationController.SaveGameProfile(m_title_id, m_profile);
+	if (!result)
+		cemuLog_log(LogType::Force, "Unable to save game profile: {}", result.diagnostic);
 }
 
 void GameProfileWindow::SetSliderValue(wxSlider* slider, sint32 new_value) const

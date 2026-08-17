@@ -385,6 +385,19 @@ namespace Application
 			std::move(progress), std::move(cancelled));
 	}
 
+	GameProfileView EmulationController::LoadGameProfile(std::uint64_t titleId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->LoadGameProfile(titleId);
+	}
+
+	GameProfileSaveResult EmulationController::SaveGameProfile(
+		std::uint64_t titleId, const GameProfileUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SaveGameProfile(titleId, update);
+	}
+
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

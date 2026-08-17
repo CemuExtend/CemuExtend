@@ -13,6 +13,7 @@
 
 #include "application/ApplicationEvents.h"
 #include "application/ContentOperations.h"
+#include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/TitleCatalog.h"
 
@@ -159,7 +160,7 @@ namespace Application
 	};
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
-		public IContentOperations
+		public IContentOperations, public IGameProfileService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -260,6 +261,9 @@ namespace Application
 		[[nodiscard]] ContentChecksumResult ComputeTitleChecksum(
 			std::uint64_t locationUid, ContentProgressHandler progress,
 			ContentCancellationCheck cancelled);
+		[[nodiscard]] GameProfileView LoadGameProfile(std::uint64_t titleId) const;
+		[[nodiscard]] GameProfileSaveResult SaveGameProfile(
+			std::uint64_t titleId, const GameProfileUpdate& update);
 		[[nodiscard]] std::vector<GraphicPackInfo> ListGraphicPacks() const;
 		[[nodiscard]] GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled);
