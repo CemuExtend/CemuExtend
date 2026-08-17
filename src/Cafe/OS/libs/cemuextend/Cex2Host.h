@@ -9,6 +9,8 @@
 
 #include "cemuextend/services.hpp"
 
+namespace Host { class IClipboard; class IWindowMetrics; }
+
 namespace cemuextend_hle { class Cex2Owner; }
 struct VPADStatus;
 
@@ -30,6 +32,8 @@ class Cex2Host
 {
 public:
 	static Cex2Host& Instance();
+	void ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics);
 
 	std::int32_t Query(Cex2Owner& owner, std::uint32_t query,
 		std::span<std::byte> output);
@@ -74,7 +78,7 @@ private:
 	~Cex2Host();
 	Cex2Host(const Cex2Host&) = delete;
 	Cex2Host& operator=(const Cex2Host&) = delete;
-	std::unique_ptr<Impl> m_impl;
+	std::shared_ptr<Impl> m_impl;
 };
 
 } // namespace cemuextend_hle

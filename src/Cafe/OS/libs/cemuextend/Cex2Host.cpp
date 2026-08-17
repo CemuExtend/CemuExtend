@@ -5,6 +5,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
+#include "host/contracts/HostContracts.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #ifndef CEMU_CEX2_TESTING
@@ -13,7 +14,6 @@
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cemu/Logging/CemuLogging.h"
-#include "gui/interface/WindowSystem.h"
 #endif
 #include "Cafe/OS/libs/cemuextend/BuildId.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
@@ -264,6 +264,8 @@ struct Cex2Host::Impl
 	};
 
 	std::mutex mutex;
+	std::shared_ptr<Host::IClipboard> clipboard;
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics;
 	std::uint64_t nextTextInputSequence{1};
 	void (*textInputWakeCallback)(){};
 	std::unordered_map<std::uint32_t, Session> sessions;
@@ -300,9 +302,15 @@ struct Cex2Host::Impl
 
 	~Impl()
 	{
+		StopWorkers();
+	}
+
+	void StopWorkers()
+	{
 		{ std::lock_guard lock(workMutex); stopping = true; }
 		workReady.notify_all();
-		for (auto& worker : workers) if (worker.joinable()) worker.join();
+		for (auto& worker : workers)
+			if (worker.joinable()) worker.join();
 	}
 
 	void Enqueue(std::function<void()> task)
@@ -760,14 +768,15 @@ struct Cex2Host::Impl
 			WindowStatePayload state{};
 			state.frameNumber = CurrentFrameNumber();
 #ifndef CEMU_CEX2_TESTING
-			const auto& window = WindowSystem::GetWindowInfo();
-			state.tvWidth = std::max(0, window.phys_width.load());
-			state.tvHeight = std::max(0, window.phys_height.load());
-			state.drcWidth = std::max(0, window.phys_pad_width.load());
-			state.drcHeight = std::max(0, window.phys_pad_height.load());
-			state.dpiScale = static_cast<float>(window.dpi_scale.load());
-			state.focused = window.app_active.load();
-			state.fullscreen = window.is_fullscreen.load();
+			const auto window = windowMetrics ? windowMetrics->GetWindowMetrics() :
+				Host::WindowMetricsSnapshot{};
+			state.tvWidth = std::max(0, window.physicalWidth);
+			state.tvHeight = std::max(0, window.physicalHeight);
+			state.drcWidth = std::max(0, window.physicalPadWidth);
+			state.drcHeight = std::max(0, window.physicalPadHeight);
+			state.dpiScale = static_cast<float>(window.dpiScale);
+			state.focused = window.appActive;
+			state.fullscreen = window.fullscreen;
 #endif
 			return MakeResponse(request, Status::Ok,
 				{reinterpret_cast<const std::byte*>(&state), sizeof(state)});
@@ -912,8 +921,23 @@ Cex2Host& Cex2Host::Instance()
 	return instance;
 }
 
-Cex2Host::Cex2Host() : m_impl(std::make_unique<Impl>()) {}
-Cex2Host::~Cex2Host() = default;
+Cex2Host::Cex2Host() : m_impl(std::make_shared<Impl>()) {}
+Cex2Host::~Cex2Host()
+{
+	// Keep the host-owned reference alive while joining. Worker tasks also hold
+	// shared references; letting the last one die on its own worker would make
+	// Impl attempt to join the current thread from its destructor.
+	if (m_impl)
+		m_impl->StopWorkers();
+}
+
+void Cex2Host::ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics)
+{
+	std::scoped_lock lock(m_impl->mutex);
+	m_impl->clipboard = std::move(clipboard);
+	m_impl->windowMetrics = std::move(windowMetrics);
+}
 
 std::int32_t Cex2Host::Query(Cex2Owner& owner, std::uint32_t query,
 	std::span<std::byte> output)
@@ -1057,6 +1081,7 @@ std::int32_t Cex2Host::Submit(Cex2Owner& owner, std::uint32_t sessionId,
 		}
 		const auto copiedHeader = request; const auto addressSpaceId = owner.AddressSpaceId();
 		const auto generation = owner.Generation(); const auto principal = owner.Principal();
+		auto clipboard = m_impl->clipboard;
 		++session.reservedResponses; session.clipboardPending = true;
 		session.pending.emplace(correlationId, Impl::Session::Pending{definition->permission, copiedHeader,
 			std::chrono::steady_clock::now() + std::chrono::seconds(5)});
@@ -1066,15 +1091,21 @@ std::int32_t Cex2Host::Submit(Cex2Owner& owner, std::uint32_t sessionId,
 		m_impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::NotSupported);
 #else
 		AuditSensitiveUse(principal, request.operation.get() == 1 ? "Clipboard Read" : "Clipboard Write");
+		if (!clipboard)
+		{
+			m_impl->Complete(sessionId, addressSpaceId, generation, correlationId,
+				Status::NotSupported);
+			return static_cast<std::int32_t>(Error::Ok);
+		}
 		if (request.operation.get() == static_cast<std::uint16_t>(cemuextend::wire::ClipboardOperation::Get))
-			WindowSystem::GetClipboardTextAsync([impl = m_impl.get(), sessionId, addressSpaceId, generation, correlationId](bool success, std::string result) {
+			clipboard->GetTextAsync([impl = m_impl, sessionId, addressSpaceId, generation, correlationId](bool success, std::string result) {
 				if (!success) { impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::IoError); return; }
 				if (result.size() > 64U * 1024U || !Impl::IsValidUtf8(result)) { impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::TooLarge); return; }
 				impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::Ok,
 					{reinterpret_cast<const std::byte*>(result.data()), result.size()});
 			});
 		else
-			WindowSystem::SetClipboardTextAsync(std::move(text), [impl = m_impl.get(), sessionId, addressSpaceId, generation, correlationId](bool success) {
+			clipboard->SetTextAsync(std::move(text), [impl = m_impl, sessionId, addressSpaceId, generation, correlationId](bool success) {
 				impl->Complete(sessionId, addressSpaceId, generation, correlationId, success ? Status::Ok : Status::IoError);
 			});
 #endif
@@ -1114,7 +1145,7 @@ std::int32_t Cex2Host::Submit(Cex2Owner& owner, std::uint32_t sessionId,
 		{
 			const bool mainWindow = drc == 0;
 			const auto accepted = g_renderer->RequestScreenshot(
-				[impl = m_impl.get(), sessionId, addressSpaceId, generation, correlationId, mainWindow]
+				[impl = m_impl, sessionId, addressSpaceId, generation, correlationId, mainWindow]
 				(const std::vector<uint8>& rgb, int width, int height, bool actualMainWindow) {
 					Status status = Status::Ok; cemuextend::wire::CaptureOpenResponse response{};
 					{
@@ -1165,7 +1196,7 @@ std::int32_t Cex2Host::Submit(Cex2Owner& owner, std::uint32_t sessionId,
 			std::chrono::steady_clock::now() + std::chrono::seconds(5)});
 		++session.acceptedRequests;
 		session.bytesCopied += requestBytes.size();
-		m_impl->Enqueue([impl = m_impl.get(), sessionId, addressSpaceId, generation,
+		m_impl->Enqueue([impl = m_impl, sessionId, addressSpaceId, generation,
 			copiedHeader, copiedPayload = std::move(copiedPayload), titleId, principal,
 			permission, maximumResponse, service, operation, correlationId]() mutable {
 			{
@@ -1337,6 +1368,8 @@ void Cex2Host::ShutdownForTesting()
 {
 	// Joining the workers also releases OpenSSL's per-thread state before the
 	// short-lived sanitizer test shuts the crypto library down.
+	if (m_impl)
+		m_impl->StopWorkers();
 	m_impl.reset();
 }
 #endif

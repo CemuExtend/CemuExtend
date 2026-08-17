@@ -6,7 +6,6 @@
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
-#include "WindowSystem.h"
 
 #include "Cafe/HW/Latte/Core/LatteBufferCache.h"
 
@@ -115,8 +114,10 @@ void LatteThread_HandleOSScreen()
 int Latte_ThreadEntry()
 {
 	SetThreadName("LatteThread");
-	sint32 w,h;
-	WindowSystem::GetWindowPhysSize(w,h);
+	const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
+		Host::WindowMetricsSnapshot{};
+	const sint32 w = window.physicalWidth;
+	const sint32 h = window.physicalHeight;
 
 	// renderer
 	g_renderer->Initialize();

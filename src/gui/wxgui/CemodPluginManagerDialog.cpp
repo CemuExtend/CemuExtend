@@ -1,6 +1,5 @@
 #include "CemodPluginManagerDialog.h"
 
-#include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "config/CemuConfig.h"
 
 #include <wx/button.h>
@@ -35,18 +34,30 @@ namespace
 		return label;
 	}
 
-	CemodGuiPackageInfo ToGuiPackageInfo(const CemodPackageInfo& info)
+	CemodGuiPackageInfo ToGuiPackageInfo(const Application::CemodPackage& info)
 	{
 		return {info.path, info.modId, info.principal, info.requestedPermissions,
-			info.executionMode == CemodExecutionMode::TrustedNative ?
+			info.executionMode == Application::CemodExecutionMode::TrustedNative ?
 				CemodGuiExecutionMode::TrustedNative : CemodGuiExecutionMode::Isolated,
 			info.signedPackage, info.titleIds, info.error};
 	}
+
+	std::optional<CemuExtend::CemodApproval> ToDomainApproval(
+		const std::optional<CemuExtendPermissionApproval>& approval)
+	{
+		if (!approval)
+			return std::nullopt;
+		return CemuExtend::CemodApproval{approval->packageDigest, approval->modIdentity,
+			approval->requestedPermissions, approval->grantedPermissions, approval->approved,
+			false};
+	}
 }
 
-CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64_t titleId)
+CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64_t titleId,
+	Application::EmulationController& emulationController)
 	: wxDialog(parent, wxID_ANY, _("Aroma / WUPS package manager"), wxDefaultPosition,
-		wxSize(980, 680), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_titleId(titleId)
+		wxSize(980, 680), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_titleId(titleId),
+	  m_emulationController(emulationController)
 {
 	auto* root = new wxBoxSizer(wxVERTICAL);
 	root->Add(new wxStaticText(this, wxID_ANY,
@@ -89,21 +100,21 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 	RefreshPlugins();
 }
 
-std::optional<CemuExtendPermissionApproval> CemodPluginManagerDialog::LoadApproval(
+std::optional<CemuExtend::CemodApproval> CemodPluginManagerDialog::LoadApproval(
 	const CemodGuiPackageInfo& info) const
 {
 	std::string digestError;
 	const auto digest = CemodGuiAdapter::CalculatePackageDigest(info.path, digestError);
 	if (digest.empty()) return std::nullopt;
 	const auto identity = info.modId.empty() ? info.principal : info.modId;
-	return GetConfig().GetCemuExtendPermissionApproval(m_titleId,
-		CemodGuiAdapter::MakeApprovalKey(identity, digest));
+	return ToDomainApproval(GetConfig().GetCemuExtendPermissionApproval(m_titleId,
+		CemodGuiAdapter::MakeApprovalKey(identity, digest)));
 }
 
 void CemodPluginManagerDialog::RefreshPlugins()
 {
 	m_infos.clear();
-	for (const auto& info : cemuextend_hle::DiscoverCemods(m_titleId))
+	for (const auto& info : m_emulationController.DiscoverCemods(m_titleId))
 		m_infos.push_back(ToGuiPackageInfo(info));
 	m_views.clear();
 	m_plugins->Clear();
@@ -205,7 +216,7 @@ void CemodPluginManagerDialog::SaveApproval()
 		{view.packageDigest, view.modIdentity, requested, granted, view.enabled, false});
 	GetConfigHandle().Save();
 	view.approval = CemodGuiAdapter::EvaluateApproval(requested,
-		GetConfig().GetCemuExtendPermissionApproval(m_titleId, key), false);
+		ToDomainApproval(GetConfig().GetCemuExtendPermissionApproval(m_titleId, key)), false);
 	view.enabled = view.approval.result == CemodGuiApprovalResult::Approved;
 	view.loadStatus = view.runtimeAvailability == CemodGuiRuntimeAvailability::UnavailableRequiresRuntimeIntegration ?
 		CemodGuiLoadStatus::Unavailable :

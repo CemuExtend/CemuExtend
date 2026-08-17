@@ -19,6 +19,8 @@
 
 #include "input/emulated/VPADController.h"
 #include "input/emulated/WPADController.h"
+#include "input/InputHost.h"
+#include "host/contracts/HostContracts.h"
 
 #include "util/helpers/Singleton.h"
 
@@ -47,6 +49,22 @@ public:
 	bool is_gameprofile_set(size_t player_index) const;
 
 	void Shutdown(); 
+	void Start();
+	void ConfigureHost(Host::IKeyboardState& keyboard, Host::IWindowMetrics& windowMetrics,
+		Host::INativeSurfaceProvider& nativeSurfaces, Input::IControllerStateObserver& observer);
+	void ClearHost();
+	void ConfigureEmulationContext(Input::IEmulationInputContext& context);
+	void ClearEmulationContext(Input::IEmulationInputContext& context);
+	void NotifyControllerState(const ControllerState& current, const ControllerState& previous);
+	[[nodiscard]] std::string GetHostKeyName(std::uint32_t key) const;
+	[[nodiscard]] std::vector<Host::KeyState> GetHostKeyStates() const;
+	[[nodiscard]] std::vector<std::uint32_t> GetPressedHostKeys() const;
+	[[nodiscard]] bool IsHostDebuggerFocused() const;
+	[[nodiscard]] bool IsHostKeyDown(Host::Key key) const;
+	[[nodiscard]] Host::WindowMetricsSnapshot GetHostWindowMetrics() const;
+	[[nodiscard]] Host::NativeSurfaceSnapshot GetHostNativeSurfaces() const;
+	[[nodiscard]] bool IsTitleRunningForInput() const;
+	[[nodiscard]] Input::ScreenImageArea GetScreenImageArea(bool padView) const;
 	
 	EmulatedControllerPtr set_controller(EmulatedControllerPtr controller);
 	EmulatedControllerPtr set_controller(size_t player_index, EmulatedController::Type type);
@@ -111,6 +129,13 @@ private:
 	std::array<EmulatedControllerPtr, kMaxWPADControllers> m_wpad;
 
 	std::array<bool, kMaxController> m_is_gameprofile_set{};
+
+	mutable std::shared_mutex m_host_mutex;
+	Host::IKeyboardState* m_keyboard_host{};
+	Host::IWindowMetrics* m_window_metrics_host{};
+	Host::INativeSurfaceProvider* m_native_surfaces_host{};
+	Input::IControllerStateObserver* m_controller_observer{};
+	Input::IEmulationInputContext* m_emulation_context{};
 
 	template<std::derived_from<ControllerProviderBase> TProvider>
 	void create_provider()

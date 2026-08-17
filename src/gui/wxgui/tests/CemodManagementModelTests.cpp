@@ -34,7 +34,7 @@ int main()
 	const auto headless = CemodGuiAdapter::EvaluateApproval(functionPatch, std::nullopt, true);
 	CHECK(headless.result == CemodGuiApprovalResult::DeniedHeadlessRequiresExplicitApproval);
 
-	CemuExtendPermissionApproval approval{
+	CemuExtend::CemodApproval approval{
 		"abc", "org.example.plugin", functionPatch, functionPatch, true, false};
 	const auto accepted = CemodGuiAdapter::EvaluateApproval(functionPatch, approval, false);
 	CHECK(accepted.result == CemodGuiApprovalResult::Approved);

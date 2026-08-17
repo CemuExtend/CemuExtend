@@ -8,7 +8,9 @@
 #include <wx/msgdlg.h>
 #include <helpers/wxHelpers.h>
 
-VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_window)
+VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
 {
 	Bind(wxEVT_PAINT, &VulkanCanvas::OnPaint, this);
@@ -17,8 +19,7 @@ VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_wi
 	MSWDisableComposited();
 #endif
 
-	auto& canvas = is_main_window ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
-	canvas = initHandleContextFromWxWidgetsWindow(this);
+	auto canvas = initHandleContextFromWxWidgetsWindow(this);
 	#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
 	if (canvas.backend == WindowSystem::WindowHandleInfo::Backend::Wayland)
 	{
@@ -26,13 +27,15 @@ VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_wi
 		canvas.surface = m_subsurface->getSurface();
 	}
 	#endif
+	WindowSystem::PublishCanvasHandle(is_main_window, canvas);
 
 	cemu_assert(g_vulkan_available);
 
 	try
 	{
 		if (is_main_window)
-			g_renderer = std::make_unique<VulkanRenderer>();
+			g_renderer = std::make_unique<VulkanRenderer>(
+				std::move(windowMetrics), std::move(nativeSurfaces));
 
 		auto vulkan_renderer = VulkanRenderer::GetInstance();
 		vulkan_renderer->InitializeSurface({size.x, size.y}, is_main_window);
@@ -60,6 +63,7 @@ VulkanCanvas::~VulkanCanvas()
 		if(vkr)
 			vkr->StopUsingPadAndWait();
 	}
+	WindowSystem::PublishCanvasHandle(m_is_main_window, {});
 }
 
 void VulkanCanvas::OnPaint(wxPaintEvent& event)

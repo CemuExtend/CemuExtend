@@ -19,7 +19,6 @@
 
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
-#include "WindowSystem.h"
 
 #include "imgui/imgui_extension.h"
 #include "imgui/imgui_impl_vulkan.h"
@@ -92,7 +91,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeverityFla
 	return VK_FALSE;
 }
 
-std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices()
+std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices(
+	const Host::NativeWindowHandle& mainWindow)
 {
     if(!vkEnumerateInstanceVersion)
     {
@@ -114,11 +114,10 @@ std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices()
 	#if BOOST_OS_WINDOWS
 	requiredExtensions.emplace_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	#elif BOOST_OS_LINUX || BOOST_OS_BSD
-	auto backend = WindowSystem::GetWindowInfo().window_main.backend;
-	if(backend == WindowSystem::WindowHandleInfo::Backend::X11)
+	if(mainWindow.backend == Host::NativeWindowBackend::X11)
 		requiredExtensions.emplace_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
 	#ifdef HAS_WAYLAND
-	else if (backend == WindowSystem::WindowHandleInfo::Backend::Wayland)
+	else if (mainWindow.backend == Host::NativeWindowBackend::Wayland)
 		requiredExtensions.emplace_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 	#endif
 	#elif BOOST_OS_MACOS
@@ -157,7 +156,7 @@ std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices()
 			throw std::runtime_error("Failed to find a GPU with Vulkan support.");
 
 		// create tmp surface to create a logical device
-		auto surface = CreateFramebufferSurface(instance, WindowSystem::GetWindowInfo().window_main);
+		auto surface = CreateFramebufferSurface(instance, mainWindow);
 		std::vector<VkPhysicalDevice> devices(device_count);
 		vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
 		for (const auto& device : devices)
@@ -492,7 +491,9 @@ static void LinuxBreathOfTheWildWorkaround(VkInstance& instance, const VkInstanc
 
 #endif
 
-VulkanRenderer::VulkanRenderer() : Renderer(RendererAPI::Vulkan)
+VulkanRenderer::VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	: Renderer(RendererAPI::Vulkan, std::move(windowMetrics), std::move(nativeSurfaces))
 {
 	glslang::InitializeProcess();
 
@@ -566,7 +567,8 @@ VulkanRenderer::VulkanRenderer() : Renderer(RendererAPI::Vulkan)
 		throw std::runtime_error("Failed to find a GPU with Vulkan support.");
 
 	// create tmp surface to create a logical device
-	auto surface = CreateFramebufferSurface(m_instance, WindowSystem::GetWindowInfo().window_main);
+	const auto window = GetNativeSurfaces();
+	auto surface = CreateFramebufferSurface(m_instance, window.mainWindow);
 
 	auto& config = GetConfig();
 	decltype(config.vk_graphic_device_uuid) zero{};
@@ -1489,11 +1491,12 @@ std::vector<const char*> VulkanRenderer::CheckInstanceExtensionSupport(FeatureCo
 	#if BOOST_OS_WINDOWS
 	requiredInstanceExtensions.emplace_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	#elif BOOST_OS_LINUX || BOOST_OS_BSD
-	auto backend = WindowSystem::GetWindowInfo().window_main.backend;
-	if(backend == WindowSystem::WindowHandleInfo::Backend::X11)
+	const auto window = GetNativeSurfaces();
+	auto backend = window.mainWindow.backend;
+	if(backend == Host::NativeWindowBackend::X11)
 		requiredInstanceExtensions.emplace_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
 	#if HAS_WAYLAND
-	else if (backend == WindowSystem::WindowHandleInfo::Backend::Wayland)
+	else if (backend == Host::NativeWindowBackend::Wayland)
 		requiredInstanceExtensions.emplace_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 	#endif
 	#elif BOOST_OS_MACOS
@@ -1635,15 +1638,16 @@ VkSurfaceKHR VulkanRenderer::CreateWaylandSurface(VkInstance instance, wl_displa
 #endif // HAS_WAYLAND
 #endif // BOOST_OS_LINUX
 
-VkSurfaceKHR VulkanRenderer::CreateFramebufferSurface(VkInstance instance, WindowSystem::WindowHandleInfo& windowInfo)
+VkSurfaceKHR VulkanRenderer::CreateFramebufferSurface(VkInstance instance,
+	const Host::NativeWindowHandle& windowInfo)
 {
 #if BOOST_OS_WINDOWS
 	return CreateWinSurface(instance, static_cast<HWND>(windowInfo.surface));
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
-	if(windowInfo.backend == WindowSystem::WindowHandleInfo::Backend::X11)
+	if(windowInfo.backend == Host::NativeWindowBackend::X11)
 		return CreateXlibSurface(instance, static_cast<Display*>(windowInfo.display), reinterpret_cast<Window>(windowInfo.surface));
 	#ifdef HAS_WAYLAND
-	if(windowInfo.backend == WindowSystem::WindowHandleInfo::Backend::Wayland)
+	if(windowInfo.backend == Host::NativeWindowBackend::Wayland)
 		return CreateWaylandSurface(instance, static_cast<wl_display*>(windowInfo.display), static_cast<wl_surface*>(windowInfo.surface));
 	#endif
 	return {};
@@ -2927,14 +2931,17 @@ void VulkanRenderer::RecreateSwapchain(bool mainWindow, bool skipCreate)
 	auto& chainInfo = GetChainInfo(mainWindow);
 
 	Vector2i size;
+	const auto window = GetWindowMetrics();
 	if (mainWindow)
 	{
 		ImGui_ImplVulkan_Shutdown();
-		WindowSystem::GetWindowPhysSize(size.x, size.y);
+		size.x = window.physicalWidth;
+		size.y = window.physicalHeight;
 	}
 	else
 	{
-		WindowSystem::GetPadWindowPhysSize(size.x, size.y);
+		size.x = window.physicalPadWidth;
+		size.y = window.physicalPadHeight;
 	}
 
 	chainInfo.swapchainImageIndex = -1;
@@ -2958,11 +2965,9 @@ bool VulkanRenderer::UpdateSwapchainProperties(bool mainWindow)
 	if(chainInfo.m_vsyncState != configValue)
 		stateChanged = true;
 
-	int width, height;
-	if (mainWindow)
-		WindowSystem::GetWindowPhysSize(width, height);
-	else
-		WindowSystem::GetPadWindowPhysSize(width, height);
+	const auto window = GetWindowMetrics();
+	const int width = mainWindow ? window.physicalWidth : window.physicalPadWidth;
+	const int height = mainWindow ? window.physicalHeight : window.physicalPadHeight;
 	auto extent = chainInfo.getExtent();
 	if (width != extent.width || height != extent.height)
 		stateChanged = true;

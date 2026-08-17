@@ -1,5 +1,5 @@
 #include "input/api/DirectInput/DirectInputController.h"
-#include "WindowSystem.h"
+#include "input/InputManager.h"
 
 DirectInputController::DirectInputController(const GUID& guid)
 	: base_type(StringFromGUID(guid), fmt::format("[{}]", StringFromGUID(guid))),
@@ -105,7 +105,8 @@ bool DirectInputController::connect()
 		return false;
 	}
 
-	HWND hwndMainWindow = static_cast<HWND>(WindowSystem::GetWindowInfo().window_main.surface);
+	const auto snapshot = InputManager::instance().GetHostNativeSurfaces();
+	HWND hwndMainWindow = static_cast<HWND>(snapshot.mainWindow.surface);
 
 	// set access
 	if (FAILED(m_device->SetCooperativeLevel(hwndMainWindow, DISCL_BACKGROUND | DISCL_EXCLUSIVE)))

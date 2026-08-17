@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include "util/helpers/Semaphore.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "Cafe/TitleList/TitleId.h"
@@ -59,6 +60,9 @@ enum class DLMGR_STATUS_CODE
 class DownloadManager
 {
 public:
+	using GameListRefreshCallback = std::function<void()>;
+	static void SetGameListRefreshCallback(GameListRefreshCallback callback);
+
 	/* singleton */
 
 	static DownloadManager* GetInstance(bool createIfNotExist = true)

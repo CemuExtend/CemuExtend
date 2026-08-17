@@ -7,6 +7,7 @@
 #include "Cafe/HW/Latte/Core/LatteTextureReadbackInfo.h"
 #include "Cafe/HW/Latte/Core/LatteQueryObject.h"
 #include "Cafe/HW/Latte/Renderer/RendererOuputShader.h"
+#include "host/contracts/HostContracts.h"
 
 #if BOOST_OS_WINDOWS
 #include "util/DXGIWrapper/DXGIWrapper.h"
@@ -50,10 +51,24 @@ public:
 		U32
 	};
 
-	Renderer(RendererAPI api) : m_rendererAPI(api) {};
+	Renderer(RendererAPI api, std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+		: m_rendererAPI(api), m_windowMetrics(std::move(windowMetrics)),
+		  m_nativeSurfaces(std::move(nativeSurfaces))
+	{
+		cemu_assert(m_windowMetrics && m_nativeSurfaces);
+	}
 	virtual ~Renderer() = default;
 
 	RendererAPI GetType() const { return m_rendererAPI; }
+	[[nodiscard]] Host::WindowMetricsSnapshot GetWindowMetrics() const
+	{
+		return m_windowMetrics->GetWindowMetrics();
+	}
+	[[nodiscard]] Host::NativeSurfaceSnapshot GetNativeSurfaces() const
+	{
+		return m_nativeSurfaces->GetNativeSurfaces();
+	}
 
 	virtual void Initialize();
 	virtual void Shutdown();
@@ -167,6 +182,8 @@ public:
 protected:
 	virtual void GetVendorInformation() { }
 	RendererAPI m_rendererAPI;
+	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
+	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	GfxVendor m_vendor = GfxVendor::Generic;
 
 	static uint8 SRGBComponentToRGB(uint8 ci);

@@ -2,6 +2,7 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/GeneralSettings2.h"
 #include "wxgui/CemuApp.h"
+#include "interface/WindowSystem.h"
 #include "wxgui/helpers/wxControlObject.h"
 #include "wxgui/CemodPluginManagerDialog.h"
 
@@ -52,11 +53,7 @@
 
 #include "resource/embedded/resources.h"
 
-#include "Cafe/CafeSystem.h"
-#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
-#include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cemu/ncrypto/ncrypto.h"
-#include "Cafe/TitleList/TitleList.h"
 #include "wxHelper.h"
 
 #include "util/ScreenSaver/ScreenSaver.h"
@@ -410,7 +407,7 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 		m_graphic_api->SetSelection(0);
 		if (api_size > 1)
 			m_graphic_api->SetToolTip(_("Select one of the available graphic back ends"));
-		if (CafeSystem::IsTitleRunning())
+		if (m_emulationController.IsTitleRunning())
 		{
 			m_graphic_api->Disable();
 			m_graphic_api->SetToolTip(_("Graphics API cannot be changed while a title is running"));
@@ -926,7 +923,7 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 
 		online_panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
 
-		if (CafeSystem::IsTitleRunning())
+		if (m_emulationController.IsTitleRunning())
 		{
 			m_active_account->Enable(false);
 			m_create_account->Enable(false);
@@ -950,7 +947,7 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		m_active_service->Bind(wxEVT_RADIOBOX, &GeneralSettings2::OnAccountServiceChanged,this);
 		online_panel_sizer->Add(m_active_service, 0, wxEXPAND | wxALL, 5);
 
-		if (CafeSystem::IsTitleRunning())
+		if (m_emulationController.IsTitleRunning())
 		{
 			m_active_service->Enable(false);
 		}
@@ -1137,7 +1134,7 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 				_("CemuExtend"), wxOK | wxICON_WARNING, this);
 			return;
 		}
-		CemodPluginManagerDialog dialog(this, *titleId);
+		CemodPluginManagerDialog dialog(this, *titleId, m_emulationController);
 		dialog.ShowModal();
 		RefreshCemodList();
 	});
@@ -1157,17 +1154,21 @@ std::optional<uint64> GeneralSettings2::SelectedCemuExtendTitle() const
 void GeneralSettings2::RefreshCemuExtendTitles()
 {
 	const auto previous = SelectedCemuExtendTitle();
-	const auto running = CafeSystem::IsTitleRunning() ? CafeSystem::GetForegroundTitleId() : 0;
+	const auto running = m_emulationController.RunningTitleId().value_or(0);
 	std::set<uint64> packageIds;
 	std::size_t rejected{};
-	for (const auto& package : cemuextend_hle::DiscoverCemodCatalog())
+	for (const auto& package : m_emulationController.DiscoverCemodCatalog())
 	{
 		if (!package.error.empty()) { ++rejected; continue; }
 		packageIds.insert(package.titleIds.begin(), package.titleIds.end());
 	}
 	std::set<uint64> ids;
-	for (const auto titleId : CafeTitleList::GetAllTitleIds())
-		if (packageIds.contains(titleId)) ids.insert(titleId);
+	std::map<uint64, std::string> installedNames;
+	for (const auto& title : m_emulationController.ListTitles())
+	{
+		installedNames.try_emplace(title.titleId, title.name);
+		if (packageIds.contains(title.titleId)) ids.insert(title.titleId);
+	}
 	if (running != 0 && packageIds.contains(running)) ids.insert(running);
 	// Keep packages manageable before their game has been added to Cemu.
 	if (ids.empty()) ids = packageIds;
@@ -1175,9 +1176,8 @@ void GeneralSettings2::RefreshCemuExtendTitles()
 	m_cemuextend_title_ids.clear();
 	for (const auto titleId : ids)
 	{
-		TitleInfo titleInfo;
-		std::string name;
-		if (CafeTitleList::GetFirstByTitleId(titleId, titleInfo)) name = titleInfo.GetMetaTitleName();
+		const auto found = installedNames.find(titleId);
+		const std::string name = found == installedNames.end() ? std::string{} : found->second;
 		const auto label = name.empty() ? fmt::format("Unknown game ({:016x})", titleId) : name;
 		m_cemuextend_title_choice->Append(wxString::FromUTF8(label));
 		m_cemuextend_title_ids.push_back(titleId);
@@ -1209,9 +1209,9 @@ void GeneralSettings2::LoadCemuExtendGrant()
 		return;
 	}
 	const auto configured = GetConfig().GetCemuExtendGrant(*titleId);
+	const auto defaults = m_emulationController.ServiceGrantDefaults();
 	const CemuExtendTitleGrant grant = configured.value_or(CemuExtendTitleGrant{
-		cemuextend_hle::kDefaultReadMask, cemuextend_hle::kDefaultWriteMask,
-		cemuextend_hle::kDefaultInjectMask});
+		defaults.readMask, defaults.writeMask, defaults.injectMask});
 	for (size_t index = 0; index < m_cemuextend_read.size(); ++index)
 	{
 		const auto bit = 1U << index;
@@ -1261,21 +1261,21 @@ void GeneralSettings2::RefreshCemodList()
 		return;
 	}
 	std::size_t rejected{};
-	for (const auto& package : cemuextend_hle::DiscoverCemods(*titleId))
+	for (const auto& package : m_emulationController.DiscoverCemods(*titleId))
 	{
 		if (!package.error.empty()) { ++rejected; continue; }
 		m_cemod_list->Append(wxString::FromUTF8(fmt::format("{}  —  {} / {}", package.modId,
-			package.executionMode == CemodExecutionMode::TrustedNative ? "trusted native" : "isolated",
+			package.executionMode == Application::CemodExecutionMode::TrustedNative ? "trusted native" : "isolated",
 			package.signedPackage ? "signed" : "unsigned")));
 		m_cemod_principals.push_back(package.principal);
 		m_cemod_mod_ids.push_back(package.modId);
 		m_cemod_requested.push_back(package.requestedPermissions);
-		m_cemod_trusted.push_back(package.executionMode == CemodExecutionMode::TrustedNative);
+		m_cemod_trusted.push_back(package.executionMode == Application::CemodExecutionMode::TrustedNative);
 		m_cemod_signed.push_back(package.signedPackage);
-		const auto grant = cemuextend_hle::ResolveCemodGrant(*titleId, package.modId, package.principal,
+		const auto grant = m_emulationController.ResolveCemodGrant(*titleId, package.modId, package.principal,
 			package.requestedPermissions);
 		m_cemod_list->Check(m_cemod_principals.size() - 1,
-			grant.approved && (package.requestedPermissions & ~grant.approved_request_mask) == 0);
+			grant.approved && (package.requestedPermissions & ~grant.approvedRequestMask) == 0);
 	}
 	if (!m_cemod_principals.empty()) m_cemod_list->SetSelection(0);
 	m_cemod_status->SetLabel(wxString::FromUTF8(fmt::format(
@@ -1291,8 +1291,9 @@ void GeneralSettings2::LoadCemodGrant()
 	const auto titleId = SelectedCemuExtendTitle();
 	const bool valid = selection != wxNOT_FOUND && static_cast<std::size_t>(selection) < m_cemod_principals.size() &&
 		titleId.has_value();
-	const auto grant = valid ? cemuextend_hle::ResolveCemodGrant(*titleId, m_cemod_mod_ids[selection],
-		m_cemod_principals[selection], m_cemod_requested[selection]) : CemuExtendModGrant{};
+	const auto grant = valid ? m_emulationController.ResolveCemodGrant(*titleId,
+		m_cemod_mod_ids[selection], m_cemod_principals[selection],
+		m_cemod_requested[selection]) : Application::CemodGrant{};
 	const auto granted = grant.permissions;
 	const auto requested = valid ? m_cemod_requested[selection] : 0;
 	if (valid && m_cemod_trusted[selection])
@@ -1327,12 +1328,13 @@ void GeneralSettings2::ToggleCemod(std::size_t selection, bool enabled)
 			return;
 		}
 	}
-	auto grant = cemuextend_hle::ResolveCemodGrant(*titleId, m_cemod_mod_ids[selection],
+	auto grant = m_emulationController.ResolveCemodGrant(*titleId, m_cemod_mod_ids[selection],
 		m_cemod_principals[selection], m_cemod_requested[selection]);
 	grant.permissions &= m_cemod_requested[selection];
-	grant.approved_request_mask = enabled ? m_cemod_requested[selection] : 0U;
+	grant.approvedRequestMask = enabled ? m_cemod_requested[selection] : 0U;
 	grant.approved = enabled;
-	GetConfig().SetCemuExtendModGrant(*titleId, m_cemod_principals[selection], grant);
+	GetConfig().SetCemuExtendModGrant(*titleId, m_cemod_principals[selection],
+		{grant.permissions, grant.approvedRequestMask, grant.approved});
 	if (!enabled)
 		GetConfig().RemoveCemuExtendModTrustAnchor(*titleId, m_cemod_mod_ids[selection]);
 	GetConfigHandle().Save();
@@ -1374,7 +1376,8 @@ void GeneralSettings2::ImportLegacyCemodData()
 	if (wxMessageBox(_("Copy this title's legacy shared File and Configuration data into only the selected Mod? Existing ABI 2 data will not be overwritten."),
 		_("Import CemuExtend data"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES) return;
 	std::string error;
-	if (cemuextend_hle::ImportLegacyData(*titleId, m_cemod_principals[selection], error))
+	if (m_emulationController.ImportLegacyCemodData(
+		*titleId, m_cemod_principals[selection], error))
 		wxMessageBox(_("Legacy data was imported for the selected Mod."), _("Import CemuExtend data"),
 			wxOK | wxICON_INFORMATION, this);
 	else
@@ -1515,8 +1518,10 @@ wxPanel* GeneralSettings2::AddTcpGeckoPage(wxNotebook* notebook)
 	return panel;
 }
 
-GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched)
-	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER), m_game_launched(game_launched)
+GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched,
+	Application::EmulationController& emulationController)
+	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
+	  m_game_launched(game_launched), m_emulationController(emulationController)
 {
 	SetIcon(wxICON(X_SETTINGS));
 
@@ -1581,7 +1586,7 @@ void GeneralSettings2::StoreConfig()
 	config.play_boot_sound = m_play_boot_sound->IsChecked();
 	config.disable_screensaver = m_disable_screensaver->IsChecked();
 	// toggle while a game is running
-	if (CafeSystem::IsTitleRunning())
+	if (m_emulationController.IsTitleRunning())
 	{
 		ScreenSaver::SetInhibit(config.disable_screensaver);
 	}
@@ -1674,7 +1679,7 @@ void GeneralSettings2::StoreConfig()
 	// In particular, the Vulkan device list must not be re-enumerated while the
 	// active renderer owns an instance, and the placeholder shown in that state
 	// must never overwrite the configured device UUID.
-	if (!CafeSystem::IsTitleRunning())
+	if (!m_emulationController.IsTitleRunning())
 	{
 		config.graphic_api = m_api_map[m_graphic_api->GetSelection()];
 
@@ -2142,7 +2147,7 @@ void GeneralSettings2::UpdateAccountInformation()
 	}
 
 	// enable/disable network service field depending on online requirements
-	m_active_service->Enable(online_fully_valid && !CafeSystem::IsTitleRunning());
+	m_active_service->Enable(online_fully_valid && !m_emulationController.IsTitleRunning());
 	if(online_fully_valid)
 	{
 		NetworkService service = GetConfig().GetAccountNetworkService(account.GetPersistentId());
@@ -2236,7 +2241,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		m_vsync->Select(selection);
 
 		m_graphic_device->Clear();
-		if (CafeSystem::IsTitleRunning())
+		if (m_emulationController.IsTitleRunning())
 		{
 			m_graphic_device->AppendString(_("Current device (restart title to change)"));
 			m_graphic_device->SetSelection(0);
@@ -2245,7 +2250,8 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 
 		m_graphic_device->Enable();
-		auto devices = VulkanRenderer::GetDevices();
+		auto devices = VulkanRenderer::GetDevices(
+			WindowSystem::GetWindowInfo().window_main);
 		if(!devices.empty())
 		{
 			for(const auto& device : devices)
@@ -2775,10 +2781,11 @@ void GeneralSettings2::OnAddPathClicked(wxCommandEvent& event)
 	m_reload_gamelist = true;
 
 	// trigger title list rescan with new path configuration
-	CafeTitleList::ClearScanPaths();
+	std::vector<fs::path> scanPaths;
 	for (auto& it : m_game_paths->GetStrings())
-		CafeTitleList::AddScanPath(wxHelper::MakeFSPath(it));
-	CafeTitleList::Refresh();
+		scanPaths.push_back(wxHelper::MakeFSPath(it));
+	m_emulationController.ReplaceTitleScanPaths(scanPaths);
+	m_emulationController.RefreshTitles();
 }
 
 void GeneralSettings2::OnRemovePathClicked(wxCommandEvent& event)
@@ -2790,10 +2797,11 @@ void GeneralSettings2::OnRemovePathClicked(wxCommandEvent& event)
 	m_game_paths->Delete(selection);
 	m_reload_gamelist = true;
 	// trigger title list rescan with new path configuration
-	CafeTitleList::ClearScanPaths();
+	std::vector<fs::path> scanPaths;
 	for (auto& it : m_game_paths->GetStrings())
-		CafeTitleList::AddScanPath(wxHelper::MakeFSPath(it));
-	CafeTitleList::Refresh();
+		scanPaths.push_back(wxHelper::MakeFSPath(it));
+	m_emulationController.ReplaceTitleScanPaths(scanPaths);
+	m_emulationController.RefreshTitles();
 }
 
 void GeneralSettings2::OnActiveAccountChanged(wxCommandEvent& event)
@@ -2812,7 +2820,7 @@ void GeneralSettings2::OnAccountServiceChanged(wxCommandEvent& event)
 
 void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 {
-	if(CafeSystem::IsTitleRunning())
+	if(m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Can't change MLC path while a game is running!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
@@ -2859,7 +2867,7 @@ void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 
 void GeneralSettings2::OnMLCPathClear(wxCommandEvent& event)
 {
-	if(CafeSystem::IsTitleRunning())
+	if(m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Can't change MLC path while a game is running!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;

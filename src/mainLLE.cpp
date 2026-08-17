@@ -1,5 +1,5 @@
 #include "util/crypto/aes128.h"
-#include "WindowSystem.h"
+#include "gui/interface/WindowSystem.h"
 #include "Common/FileStream.h"
 
 void CemuCommonInit();
@@ -45,4 +45,3 @@ void mainEmulatorLLE()
 	// begin execution
 	PPCCoreLLE_startSingleCoreScheduler(0x00000100);
 }
-

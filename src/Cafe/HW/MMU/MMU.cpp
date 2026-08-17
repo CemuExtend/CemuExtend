@@ -1,7 +1,7 @@
 #include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cemu/Logging/CemuLogging.h"
-#include "WindowSystem.h"
+#include "Cafe/CafeSystem.h"
 #include "util/MemMapper/MemMapper.h"
 #include "config/ActiveSettings.h"
 
@@ -203,7 +203,9 @@ void MMURange::mapMem()
 	if (MemMapper::AllocateMemory(memory_base + baseAddress, size, MemMapper::PAGE_PERMISSION::P_RW, true) == nullptr)
 	{
 		std::string errorMsg = _tr("Unable to allocate {} memory", name);
-		WindowSystem::ShowErrorDialog(errorMsg, _tr("Error"));
+		CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+			.diagnosticCode = CafeSystem::DiagnosticCode::MemoryAllocationFailed,
+			.diagnostic = errorMsg});
 		#if BOOST_OS_WINDOWS
 		ExitProcess(-1);
 		#else
@@ -251,7 +253,9 @@ void memory_init()
 	{
 		debug_printf("memory_init(): Unable to reserve 4GB of memory\n");
 		debugBreakpoint();
-		WindowSystem::ShowErrorDialog(_tr("Unable to reserve 4GB of memory"), _tr("Error"));
+		CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+			.diagnosticCode = CafeSystem::DiagnosticCode::MemoryReservationFailed,
+			.diagnostic = "Unable to reserve 4GB of memory"});
 		exit(-1);
 	}
 	for (auto& itr : g_mmuRanges)

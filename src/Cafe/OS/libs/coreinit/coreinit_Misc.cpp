@@ -696,19 +696,23 @@ namespace coreinit
 
 	void OSLauncherThread(uint64 titleId)
 	{
-		CafeSystem::ShutdownTitle();
-		if (CafeSystem::PrepareForegroundTitle(titleId) != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
-		{
-			CafeSystem::NotifyPPCProcessExit(0);
-			return;
-		}
-		CafeSystem::RequestRecreateCanvas();
-		CafeSystem::LaunchForegroundTitle();
+		(void)CafeSystem::SwitchForegroundTitle(titleId);
 	}
 
 	void OSShutdownThread(sint32 status)
 	{
-		CafeSystem::ShutdownTitle();
+		// ShutdownTitle deliberately uses a try-lock so the UI cannot deadlock
+		// behind a guest title-switch callback.  A failed try-lock is therefore a
+		// transient result, not completion: the calling PPC thread is suspended
+		// until this notification is delivered, so keep retrying at a low rate.
+		uint32 retryCount = 0;
+		while (!CafeSystem::ShutdownTitle())
+		{
+			if ((++retryCount % 100) == 1)
+				cemuLog_log(LogType::Force,
+					"Waiting for the active title lifecycle transition before process exit");
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
 		CafeSystem::NotifyPPCProcessExit(status);
 	}
 

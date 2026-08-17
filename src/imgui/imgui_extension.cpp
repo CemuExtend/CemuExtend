@@ -1,5 +1,4 @@
 #include "imgui_extension.h"
-#include "WindowSystem.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "resource/IconsFontAwesome5.h"
 #include "resource/resource.h"
@@ -126,18 +125,19 @@ ImFont* ImGui_GetFont(float size)
 void ImGui_UpdateWindowInformation(bool mainWindow)
 {
 	static std::map<uint32, ImGuiKey> keyboard_mapping;
-	auto& windowInfo = WindowSystem::GetWindowInfo();
+	auto& inputManager = InputManager::instance();
+	const auto hostSnapshot = inputManager.GetHostNativeSurfaces();
 	static uint32 current_key = 0;
 	ImGuiIO& io = ImGui::GetIO();
 	io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 #if BOOST_OS_WINDOWS
-	io.ImeWindowHandle = mainWindow ? windowInfo.window_main.surface : windowInfo.window_pad.surface;
+	io.ImeWindowHandle = mainWindow ? hostSnapshot.mainWindow.surface : hostSnapshot.padWindow.surface;
 #endif
 
 	io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
 
-	auto& instance = InputManager::instance();
+	auto& instance = inputManager;
 
 	const auto mousePos = instance.get_mouse_position(!mainWindow);
 	io.MousePos = { (float)mousePos.x, (float)mousePos.y };
@@ -155,7 +155,8 @@ void ImGui_UpdateWindowInformation(bool mainWindow)
 		keyboard_mapping[key_code] = mapped_key;
 		return mapped_key;
 	};
-	windowInfo.iter_keystates([&](auto&& el){ io.AddKeyEvent(get_mapping(el.first), el.second); });
+	for (const auto& keyState : inputManager.GetHostKeyStates())
+		io.AddKeyEvent(get_mapping(keyState.key), keyState.pressed);
 
 	// printf("%f %f %d\n", io.MousePos.x, io.MousePos.y, io.MouseDown[0]);
 

@@ -4,19 +4,22 @@
 #include <wx/msgdlg.h>
 #include <helpers/wxHelpers.h>
 
-MetalCanvas::MetalCanvas(wxWindow* parent, const wxSize& size, bool is_main_window)
+MetalCanvas::MetalCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
 {
 	Bind(wxEVT_PAINT, &MetalCanvas::OnPaint, this);
 	Bind(wxEVT_SIZE, &MetalCanvas::OnResize, this);
 
-	auto& canvas = is_main_window ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
-	canvas = initHandleContextFromWxWidgetsWindow(this);
+	auto canvas = initHandleContextFromWxWidgetsWindow(this);
+	WindowSystem::PublishCanvasHandle(is_main_window, canvas);
 
 	try
 	{
 		if (is_main_window)
-			g_renderer = std::make_unique<MetalRenderer>();
+			g_renderer = std::make_unique<MetalRenderer>(
+				std::move(windowMetrics), std::move(nativeSurfaces));
 
 		auto metal_renderer = MetalRenderer::GetInstance();
 		metal_renderer->InitializeLayer({size.x, size.y}, is_main_window);
@@ -41,6 +44,7 @@ MetalCanvas::~MetalCanvas()
 	MetalRenderer* mtlr = (MetalRenderer*)g_renderer.get();
 	if (mtlr)
 		mtlr->ShutdownLayer(m_is_main_window);
+	WindowSystem::PublishCanvasHandle(m_is_main_window, {});
 }
 
 void MetalCanvas::OnPaint(wxPaintEvent& event)

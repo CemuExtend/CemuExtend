@@ -1,7 +1,6 @@
 #include "DirectSoundAPI.h"
 
 #include "util/helpers/helpers.h"
-#include "WindowSystem.h"
 #include <wrl/client.h>
 
 #pragma comment(lib, "Dsound.lib")
@@ -11,13 +10,14 @@ std::wstring DirectSoundAPI::DirectSoundDeviceDescription::GetIdentifier() const
 	return m_guid ? WStringFromGUID(*m_guid) : L"default";
 }
 
-DirectSoundAPI::DirectSoundAPI(GUID* guid, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample)
+DirectSoundAPI::DirectSoundAPI(GUID* guid, Host::NativeWindowHandle mainWindow,
+	sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample)
 	: IAudioAPI(samplerate, channels, samples_per_block, bits_per_sample)
 {
 	if (DirectSoundCreate8(guid, &m_direct_sound, nullptr) != DS_OK)
 		throw std::runtime_error("can't create directsound device");
 
-	if (FAILED(m_direct_sound->SetCooperativeLevel(static_cast<HWND>(WindowSystem::GetWindowInfo().window_main.surface), DSSCL_PRIORITY)))
+	if (FAILED(m_direct_sound->SetCooperativeLevel(static_cast<HWND>(mainWindow.surface), DSSCL_PRIORITY)))
 		throw std::runtime_error("can't set directsound priority");
 
 	DSBUFFERDESC bd{};

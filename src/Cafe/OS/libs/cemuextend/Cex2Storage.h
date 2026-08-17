@@ -3,6 +3,7 @@
 #include "cemuextend/services.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -26,6 +27,9 @@ public:
 		std::span<const std::byte> payload);
 	static cemuextend::wire::Status ImportLegacy(std::uint64_t titleId,
 		std::string_view principal);
+#ifdef CEMU_CEX2_TESTING
+	[[nodiscard]] static std::filesystem::path TestingRoot();
+#endif
 };
 
 } // namespace cemuextend_hle

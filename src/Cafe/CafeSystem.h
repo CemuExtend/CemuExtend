@@ -1,6 +1,11 @@
 #pragma once
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/TitleList/TitleId.h"
+#include "Cafe/CafeEvent.h"
+
+#include <memory>
+
+namespace Host { class ICanvasHost; }
 
 enum class CosCapabilityBits : uint64;
 enum class CosCapabilityGroup : uint32;
@@ -8,14 +13,7 @@ enum class CafeConsoleRegion;
 
 namespace CafeSystem
 {
-	class SystemImplementation
-	{
-	public:
-		virtual void CafeRecreateCanvas() = 0;
-		virtual void CafePPCProcessExit() = 0; // emulated process exited
-		virtual bool CafeConfirmCemodPermissions(TitleId titleId) = 0;
-	};
-
+	void ConfigureCanvasHost(std::shared_ptr<Host::ICanvasHost> canvas);
 	enum class PREPARE_STATUS_CODE
 	{
 		SUCCESS,
@@ -26,12 +24,19 @@ namespace CafeSystem
 	};
 
 	void Initialize();
-	void SetImplementation(SystemImplementation* impl);
-    void Shutdown();
+	void SetEventSink(IEventSink* sink);
+	void EmitEvent(const Event& event);
+	[[nodiscard]] bool Shutdown();
 
 	PREPARE_STATUS_CODE PrepareForegroundTitle(TitleId titleId);
 	PREPARE_STATUS_CODE PrepareForegroundTitleFromStandaloneRPX(const fs::path& path);
+	[[nodiscard]] std::optional<TitleId> GetStandaloneTitleId(const fs::path& path);
 	void LaunchForegroundTitle();
+	// Atomically stops the current title and prepares/starts its replacement.
+	// UI Stop/Close operations are serialized across the entire transition.
+	[[nodiscard]] bool SwitchForegroundTitle(TitleId titleId);
+	// Releases a fully prepared title that has not started its PPC scheduler.
+	void AbortPreparedTitle();
 	bool IsTitleRunning();
 
 	bool GetOverrideArgStr(std::vector<std::string>& args);
@@ -53,7 +58,7 @@ namespace CafeSystem
 	// title CPU threads are destroyed. Trusted code is retained for ShutdownTitle's
 	// post-thread late phase. Safe to call repeatedly.
 	bool PrepareTitleShutdown();
-	void ShutdownTitle();
+	[[nodiscard]] bool ShutdownTitle();
 
 	std::string GetMlcStoragePath(TitleId titleId);
 	void MlcStorageMountAllTitles();
@@ -63,7 +68,7 @@ namespace CafeSystem
 	uint32 GetRPXHashBase();
 	uint32 GetRPXHashUpdated();
 
-	void RequestRecreateCanvas();
+	[[nodiscard]] bool RequestRecreateCanvas();
 	void NotifyPPCProcessExit(sint32 status);
 
 };

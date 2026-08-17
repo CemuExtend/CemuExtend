@@ -32,7 +32,8 @@ class OpenGLRenderer : public Renderer
 {
 	friend class OpenGLCanvas;
 public:
-	OpenGLRenderer();
+	OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~OpenGLRenderer();
 
 	static OpenGLRenderer* GetInstance();

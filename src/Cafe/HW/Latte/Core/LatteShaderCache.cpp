@@ -6,7 +6,6 @@
 #include "Cafe/HW/Latte/Core/FetchShader.h"
 #include "Cemu/FileCache/FileCache.h"
 #include "Cafe/GameProfile/GameProfile.h"
-#include "WindowSystem.h"
 
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #ifdef ENABLE_OPENGL
@@ -552,8 +551,10 @@ void LatteShaderCache_ShowProgress(const std::function <bool(void)>& loadUpdateF
 		if ((tick_cached() - lastFrameUpdate) < std::chrono::milliseconds(1000 / 20)) // -> aim for 20 FPS
 			continue;
 
-		int w, h;
-		WindowSystem::GetWindowPhysSize(w, h);
+		const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
+			Host::WindowMetricsSnapshot{};
+		const int w = window.physicalWidth;
+		const int h = window.physicalHeight;
 		const Vector2f window_size{ (float)w,(float)h };
 
 		ImGui_GetFont(window_size.y / 32.0f); // = 24 by default

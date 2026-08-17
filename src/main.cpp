@@ -1,4 +1,4 @@
-#include "WindowSystem.h"
+#include "gui/interface/WindowSystem.h"
 #include "util/crypto/aes128.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -114,6 +114,11 @@ void WindowsInitCwd()
 
 void CemuCommonInit()
 {
+	// Both the regular frontend and the LLE entry point converge on this process
+	// initialization routine.  Keep that composition safe when one entry point
+	// has already initialized the process before handing control to another.
+	static std::once_flag initOnce;
+	std::call_once(initOnce, [] {
 	reconfigureGLDrivers();
 	reconfigureVkDrivers();
 	// crypto init
@@ -131,6 +136,7 @@ void CemuCommonInit()
 	// parallelize expensive init code
 	std::future<int> futureInitAudioAPI = std::async(std::launch::async, []{ IAudioAPI::InitializeStatic(); IAudioInputAPI::InitializeStatic(); return 0; });
 	std::future<int> futureInitGraphicPacks = std::async(std::launch::async, []{ GraphicPack2::LoadAll(); return 0; });
+	InputManager::instance().Start();
 	InputManager::instance().load();
 	futureInitAudioAPI.wait();
 	futureInitGraphicPacks.wait();
@@ -151,6 +157,7 @@ void CemuCommonInit()
 		CafeSaveList::SetMLCPath(mlcPath);
 		CafeSaveList::Refresh();
 	}
+	});
 }
 
 void mainEmulatorLLE();

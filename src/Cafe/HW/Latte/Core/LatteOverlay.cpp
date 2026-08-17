@@ -4,7 +4,6 @@
 #include "Cafe/Account/Account.h"
 #include "config/CemuConfig.h"
 #include "config/ActiveSettings.h"
-#include "WindowSystem.h"
 
 #include <imgui.h>
 #include "resource/IconsFontAwesome5.h"
@@ -520,18 +519,18 @@ void LatteOverlay_render(bool pad_view)
 	if(config.overlay.position == ScreenPosition::kDisabled && config.notification.position == ScreenPosition::kDisabled)
 		return;
 
-	sint32 w = 0, h = 0;
-	if (pad_view && WindowSystem::IsPadWindowOpen())
-		WindowSystem::GetPadWindowPhysSize(w, h);
-	else
-		WindowSystem::GetWindowPhysSize(w, h);
+	const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
+		Host::WindowMetricsSnapshot{};
+	const sint32 w = pad_view && window.padOpen ? window.physicalPadWidth : window.physicalWidth;
+	const sint32 h = pad_view && window.padOpen ? window.physicalPadHeight : window.physicalHeight;
 
 	if (w == 0 || h == 0)
 		return;
 
 	const Vector2f window_size{ (float)w,(float)h };
 
-	float fontDPIScale = !pad_view ? WindowSystem::GetWindowDPIScale() : WindowSystem::GetPadDPIScale();
+	const float fontDPIScale = static_cast<float>(!pad_view ? window.dpiScale :
+		(window.padOpen ? window.padDpiScale : 1.0));
 
 	float overlayFontSize = 14.0f * (float)config.overlay.text_scale / 100.0f * fontDPIScale;
 

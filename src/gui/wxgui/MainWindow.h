@@ -14,8 +14,9 @@
 
 #include <future>
 #include <cstdint>
-#include "Cafe/HW/Espresso/Debugger/GDBStub.h"
-#include "Cafe/CafeSystem.h"
+#include "application/EmulationController.h"
+#include "frontend/CemuExtendFrontendBridge.h"
+#include "host/contracts/HostContracts.h"
 
 class DebuggerWindow2;
 struct GameEntry;
@@ -24,6 +25,7 @@ class TitleManager;
 class GraphicPacksWindow2;
 class EmulatedUSBDeviceFrame;
 class wxLaunchGameEvent;
+class CemodPermissionDialog;
 
 wxDECLARE_EVENT(wxEVT_LAUNCH_GAME, wxLaunchGameEvent);
 wxDECLARE_EVENT(wxEVT_SET_WINDOW_TITLE, wxCommandEvent);
@@ -53,12 +55,14 @@ private:
 	INITIATED_BY m_initiatedBy;
 };
 
-class MainWindow : public wxFrame, public CafeSystem::SystemImplementation
+class MainWindow : public wxFrame
 {
 	friend class CemuApp;
 
 public:
-	MainWindow();
+	explicit MainWindow(Application::EmulationController& emulationController,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~MainWindow();
 
     void CreateGameListAndStatusBar();
@@ -147,9 +151,12 @@ public:
 	static void ShowCursor(bool state);
 
 	uintptr_t GetRenderCanvasHWND();
-
 	static void RequestGameListRefresh();
 	static void RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIATED_BY initiatedBy);
+
+	// Frontend host entry point for renderer canvas recreation.
+	void RecreateCanvasForHost();
+	void HandlePpcProcessExit();
 
 private:
 	bool FullscreenEnabled() const;
@@ -158,6 +165,9 @@ private:
 	static wxString GetInitialWindowTitle();
 
 	bool InstallUpdate(const fs::path& metaFilePath);
+	bool ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,
+		std::vector<Application::CemodPermissionRequest> requests);
+	void RollbackFailedLaunchUi();
 
 	void OnTimer(wxTimerEvent& event);
 	void OnCemuExtendTextChanged(wxCommandEvent& event);
@@ -173,13 +183,8 @@ private:
 	void UpdateCemuExtendPointerConfinement(bool confine);
 	bool ApplyCemuExtendPointerPolicy();
 
-	// CafeSystem implementation
-	void CafeRecreateCanvas() override;
-	void CafePPCProcessExit() override;
-	bool CafeConfirmCemodPermissions(TitleId titleId) override;
-
-	void OnRequestRecreateCanvas(wxCommandEvent& event);
 	void OnRequestGameExit(wxCommandEvent& event);
+	void HandleApplicationEvent(const Application::Event& event);
 
 	wxRect GetDesktopRect();
 
@@ -188,20 +193,18 @@ private:
 	EmulatedUSBDeviceFrame* m_usb_devices = nullptr;
 	PadViewFrame* m_padView = nullptr;
 	GraphicPacksWindow2* m_graphic_pack_window = nullptr;
+	CemodPermissionDialog* m_active_cemod_permission_dialog{};
 
 	wxTimer* m_timer;
+	Application::EmulationController& m_emulationController;
+	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
+	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
+	Application::EventSubscription m_applicationEventSubscription;
+	std::shared_ptr<std::atomic_bool> m_applicationEventLifetime;
 	wxPoint m_mouse_position{};
 	std::chrono::steady_clock::time_point m_last_mouse_move_time;
-	wxPoint m_cemuextend_last_mouse_position{};
-	bool m_cemuextend_mouse_position_valid{};
-	std::uint8_t m_cemuextend_pointer_mode{};
-	std::uint32_t m_cemuextend_mouse_buttons{};
-	std::int32_t m_cemuextend_wheel_remainder_x{};
-	std::int32_t m_cemuextend_wheel_remainder_y{};
-	bool m_cemuextend_raw_mouse_requested{true};
+	Frontend::CemuExtendFrontendBridge m_cemuextend_bridge;
 	bool m_cemuextend_raw_mouse_registered{};
-	bool m_cemuextend_raw_mouse_seen{};
-	bool m_cemuextend_suppress_next_captured_wx_motion{};
 	bool m_cemuextend_pointer_confined{};
 	wxSize m_restored_size;
 	wxPoint m_restored_position;
@@ -231,9 +234,7 @@ private:
 	// panels
 	wxPanel* m_main_panel{}, * m_game_panel{};
 	wxTextCtrl* m_cemuextend_text_input{};
-	std::uint64_t m_cemuextend_text_input_sequence{};
 	bool m_cemuextend_text_input_updating{};
-	std::string m_cemuextend_text_input_preedit;
 	unsigned m_cemuextend_text_input_focus_retries{};
 	bool m_cemuextend_text_input_focus_logged{};
 	bool m_cemuextend_text_input_focus_failure_logged{};

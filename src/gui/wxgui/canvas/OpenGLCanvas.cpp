@@ -86,7 +86,9 @@ class GLCanvasManager : public OpenGLCanvasCallbacks
 class OpenGLCanvas : public IRenderCanvas, public wxGLCanvas
 {
 public:
-	OpenGLCanvas(wxWindow* parent, const wxSize& size, bool is_main_window)
+	OpenGLCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 		: IRenderCanvas(is_main_window), wxGLCanvas(parent, wxID_ANY, g_gl_attribute_list, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
 	{
 		if (m_is_main_window)
@@ -94,7 +96,8 @@ public:
 			s_glCanvasManager.SetTVView(this);
 			s_glCanvasManager.SetGLContext(new wxGLContext(this));
 
-			g_renderer = std::make_unique<OpenGLRenderer>();
+			g_renderer = std::make_unique<OpenGLRenderer>(
+				std::move(windowMetrics), std::move(nativeSurfaces));
 		}
 		else
 		{
@@ -145,9 +148,12 @@ private:
 	//wxGLContext* m_context = nullptr;
 };
 
-wxWindow* GLCanvas_Create(wxWindow* parent, const wxSize& size, bool is_main_window)
+wxWindow* GLCanvas_Create(wxWindow* parent, const wxSize& size, bool is_main_window,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 {
-	return new OpenGLCanvas(parent, size, is_main_window);
+	return new OpenGLCanvas(parent, size, is_main_window,
+		std::move(windowMetrics), std::move(nativeSurfaces));
 }
 
 void GLCanvasManager::SwapBuffers(bool swapTV, bool swapDRC)

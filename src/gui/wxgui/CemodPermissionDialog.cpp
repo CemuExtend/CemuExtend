@@ -1,7 +1,5 @@
 #include "CemodPermissionDialog.h"
 
-#include "Cafe/OS/libs/cemuextend/cemuextend.h"
-
 #include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/scrolwin.h>
@@ -11,7 +9,7 @@
 #include <wx/stattext.h>
 
 CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
-	std::vector<CemodPermissionRequest> requests)
+	std::vector<Application::CemodPermissionRequest> requests)
 	: CemodPermissionDialog(parent, gameName, [&requests] {
 		std::vector<CemodPermissionDialogEntry> entries;
 		for (auto& request : requests)
@@ -21,7 +19,7 @@ CemodPermissionDialog::CemodPermissionDialog(wxWindow* parent, const wxString& g
 			entry.principal = request.principal;
 			entry.approvalKey = request.principal;
 			entry.modIdentity = request.modId;
-			entry.executionMode = request.executionMode == CemodExecutionMode::TrustedNative ?
+			entry.executionMode = request.executionMode == Application::CemodExecutionMode::TrustedNative ?
 				CemodGuiExecutionMode::TrustedNative : CemodGuiExecutionMode::Isolated;
 			entry.signedPackage = request.signedPackage;
 			static constexpr std::array labels{

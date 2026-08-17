@@ -1,7 +1,7 @@
 #include <mutex>
 
 #include "Cemu/Logging/CemuLogging.h"
-#include "WindowSystem.h"
+#include "Cafe/CafeSystem.h"
 #include "config/ActiveSettings.h"
 #include "util/crypto/aes128.h"
 #include "Common/FileStream.h"
@@ -75,7 +75,9 @@ void KeyCache_Prepare()
 		}
 		else
 		{
-			WindowSystem::ShowErrorDialog(_tr("Unable to create file keys.txt\nThis can happen if Cemu does not have write permission to its own directory, the disk is full or if anti-virus software is blocking Cemu."), _tr("Error"), WindowSystem::ErrorCategory::KEYS_TXT_CREATION);
+			CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+				.diagnosticCode = CafeSystem::DiagnosticCode::KeyFileCreateFailed,
+				.diagnostic = "Unable to create keys.txt"});
 		}
 		mtxKeyCache.unlock();
 		return;
@@ -109,7 +111,9 @@ void KeyCache_Prepare()
 		if( strishex(line) == false )
 		{
 			auto errorMsg = _tr("Error in keys.txt at line {}", lineNumber);
-			WindowSystem::ShowErrorDialog(errorMsg, WindowSystem::ErrorCategory::KEYS_TXT_CREATION);
+			CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+				.diagnosticCode = CafeSystem::DiagnosticCode::KeyFileInvalidLine,
+				.diagnostic = errorMsg});
 			continue;
 		}
 		if(line.size() == 32 )

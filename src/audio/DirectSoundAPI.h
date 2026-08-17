@@ -26,7 +26,8 @@ public:
 	using DirectSoundDeviceDescriptionPtr = std::shared_ptr<DirectSoundDeviceDescription>;
 
 	// output
-	DirectSoundAPI(GUID* guid, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample);
+	DirectSoundAPI(GUID* guid, Host::NativeWindowHandle mainWindow, sint32 samplerate,
+		sint32 channels, sint32 samples_per_block, sint32 bits_per_sample);
 	~DirectSoundAPI();
 
 	AudioAPI GetType() const override { return DirectSound; }

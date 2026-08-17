@@ -18,10 +18,20 @@
 #include <curl/curl.h>
 #include <pugixml.hpp>
 
-#include "WindowSystem.h"
-
 #include "Cemu/napi/napi.h"
 #include "util/helpers/Serializer.h"
+
+namespace
+{
+	std::mutex s_gameListRefreshCallbackMutex;
+	DownloadManager::GameListRefreshCallback s_gameListRefreshCallback;
+}
+
+void DownloadManager::SetGameListRefreshCallback(GameListRefreshCallback callback)
+{
+	std::scoped_lock lock(s_gameListRefreshCallbackMutex);
+	s_gameListRefreshCallback = std::move(callback);
+}
 
 FileCache* s_nupFileCache = nullptr;
 
@@ -1403,7 +1413,13 @@ void DownloadManager::asyncPackageInstall(Package* package)
 	reportPackageStatus(package);
 	checkPackagesState();
 	// lastly request game list to be refreshed
-	WindowSystem::RefreshGameList();
+	GameListRefreshCallback refreshCallback;
+	{
+		std::scoped_lock lock(s_gameListRefreshCallbackMutex);
+		refreshCallback = s_gameListRefreshCallback;
+	}
+	if (refreshCallback)
+		refreshCallback();
 	return;
 }
 

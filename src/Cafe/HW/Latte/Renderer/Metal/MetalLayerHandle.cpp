@@ -1,11 +1,13 @@
 #include "Cafe/HW/Latte/Renderer/Metal/MetalLayerHandle.h"
 #include "Cafe/HW/Latte/Renderer/Metal/MetalLayer.h"
 
-#include "gui/interface/WindowSystem.h"
+#include "Cafe/HW/Latte/Renderer/Renderer.h"
 
 MetalLayerHandle::MetalLayerHandle(MTL::Device* device, const Vector2i& size, bool mainWindow)
 {
-    const auto& windowInfo = (mainWindow ? WindowSystem::GetWindowInfo().window_main : WindowSystem::GetWindowInfo().window_pad);
+	const auto window = g_renderer ? g_renderer->GetNativeSurfaces() :
+		Host::NativeSurfaceSnapshot{};
+    const auto& windowInfo = mainWindow ? window.mainWindow : window.padWindow;
 
     m_layer = (CA::MetalLayer*)CreateMetalLayer(windowInfo.surface, m_layerScaleX, m_layerScaleY);
     m_layer->setDevice(device);

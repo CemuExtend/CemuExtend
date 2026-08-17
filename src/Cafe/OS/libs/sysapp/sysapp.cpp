@@ -3,20 +3,29 @@
 #include "Cafe/CafeSystem.h"
 #include "Cafe/OS/libs/coreinit/coreinit_FG.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Misc.h"
+#include "host/contracts/HostContracts.h"
 
+#include <atomic>
 #include <chrono>
 #include <mutex>
 #include <string>
 #include <utility>
-
-#include <wx/app.h>
-#include <wx/utils.h>
 
 typedef struct  
 {
 	MEMPTR<char> argStr;
 	uint32be size;
 }sysStandardArguments_t;
+
+namespace
+{
+	std::atomic<std::shared_ptr<Host::IExternalLauncher>> s_externalLauncher;
+}
+
+void sysapp::ConfigureExternalLauncher(std::shared_ptr<Host::IExternalLauncher> launcher)
+{
+	s_externalLauncher.store(std::move(launcher), std::memory_order_release);
+}
 
 typedef struct
 {
@@ -740,17 +749,19 @@ namespace sysapp
 				return 0;
 		}
 
-		if (!wxTheApp)
+		auto launcher = s_externalLauncher.load(std::memory_order_acquire);
+		if (!launcher)
 		{
 			cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer could not access the host UI");
 			return -1;
 		}
 
 		cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer opening {} in the host browser", url);
-		wxTheApp->CallAfter([url = std::move(url)] {
-			if (!wxLaunchDefaultBrowser(wxString::FromUTF8(url)))
-				cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer failed to open the host browser");
-		});
+		if (!launcher->OpenUrl(std::move(url)))
+		{
+			cemuLog_log(LogType::Force, "SYSSwitchToBrowserForViewer failed to queue the host browser request");
+			return -1;
+		}
 		return 0;
 	}
 

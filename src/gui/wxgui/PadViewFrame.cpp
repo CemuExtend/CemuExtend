@@ -6,7 +6,6 @@
 
 #include "config/ActiveSettings.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
-#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 #ifdef ENABLE_OPENGL
 #include "wxgui/canvas/OpenGLCanvas.h"
 #endif
@@ -20,6 +19,7 @@
 #include "wxgui/MainWindow.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "input/InputManager.h"
+#include <cemuextend/services.hpp>
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -31,10 +31,15 @@ extern WindowSystem::WindowInfo g_window_info;
 #define PAD_MIN_WIDTH  320
 #define PAD_MIN_HEIGHT 180
 
-PadViewFrame::PadViewFrame(wxFrame* parent)
-	: wxFrame(nullptr, wxID_ANY, _("GamePad View"), wxDefaultPosition, wxDefaultSize, wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxCLOSE_BOX | wxWANTS_CHARS)
+PadViewFrame::PadViewFrame(wxFrame* parent,
+	Application::EmulationController& emulationController,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	: wxFrame(nullptr, wxID_ANY, _("GamePad View"), wxDefaultPosition, wxDefaultSize, wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxCLOSE_BOX | wxWANTS_CHARS),
+	  m_emulationController(emulationController),
+	  m_windowMetrics(std::move(windowMetrics)), m_nativeSurfaces(std::move(nativeSurfaces))
 {
-	g_window_info.window_pad = initHandleContextFromWxWidgetsWindow(this);
+	WindowSystem::PublishPadWindowHandle(initHandleContextFromWxWidgetsWindow(this));
 
 	SetIcon(wxICON(M_WND_ICON128));
 	wxWindow::EnableTouchEvents(wxTOUCH_PAN_GESTURES);
@@ -62,6 +67,8 @@ PadViewFrame::PadViewFrame(wxFrame* parent)
 
 PadViewFrame::~PadViewFrame()
 {
+	WindowSystem::PublishPadWindowHandle({});
+	WindowSystem::PublishCanvasHandle(false, {});
 	g_window_info.pad_open = false;
 }
 
@@ -82,15 +89,18 @@ void PadViewFrame::InitializeRenderCanvas()
 	{
 		#ifdef ENABLE_VULKAN
 		if (ActiveSettings::GetGraphicsAPI() == kVulkan)
-			m_render_canvas = new VulkanCanvas(this, wxSize(854, 480), false);
+			m_render_canvas = new VulkanCanvas(this, wxSize(854, 480), false,
+				m_windowMetrics, m_nativeSurfaces);
 		#endif
 		#ifdef ENABLE_OPENGL
 		if (ActiveSettings::GetGraphicsAPI() == kOpenGL)
-			m_render_canvas = GLCanvas_Create(this, wxSize(854, 480), false);
+			m_render_canvas = GLCanvas_Create(this, wxSize(854, 480), false,
+				m_windowMetrics, m_nativeSurfaces);
 		#endif
 		#ifdef ENABLE_METAL
 		if (ActiveSettings::GetGraphicsAPI() == kMetal)
-			m_render_canvas = new MetalCanvas(this, wxSize(854, 480), false);
+			m_render_canvas = new MetalCanvas(this, wxSize(854, 480), false,
+				m_windowMetrics, m_nativeSurfaces);
 		#endif
 		sizer->Add(m_render_canvas, 1, wxEXPAND, 0, nullptr);
 	}
@@ -119,6 +129,7 @@ void PadViewFrame::DestroyCanvas()
 {
 	if(!m_render_canvas)
 		return;
+	WindowSystem::PublishCanvasHandle(false, {});
 	m_render_canvas->Destroy();
 	m_render_canvas = nullptr;
 }
@@ -204,25 +215,37 @@ void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t c
 	const auto logicalPosition = event.GetPosition();
 	const auto physicalPosition = ToPhys(logicalPosition);
 	const auto size = m_render_canvas->GetClientSize();
-	auto buttons =
+	const auto aggregateButtons =
 		(event.LeftIsDown() ? static_cast<std::uint32_t>(MouseButton::Left) : 0U) |
 		(event.RightIsDown() ? static_cast<std::uint32_t>(MouseButton::Right) : 0U) |
 		(event.MiddleIsDown() ? static_cast<std::uint32_t>(MouseButton::Middle) : 0U);
+	Frontend::CemuExtendMouseTransition transition =
+		Frontend::CemuExtendMouseTransition::None;
 	if (event.ButtonDown() || event.ButtonDClick())
-		buttons |= changedButtons;
+		transition = Frontend::CemuExtendMouseTransition::Down;
 	else if (event.ButtonUp())
-		buttons &= ~changedButtons;
-	wxPoint delta{};
-	if (m_cemuextend_mouse_position_valid)
-		delta = physicalPosition - m_cemuextend_last_mouse_position;
-	m_cemuextend_last_mouse_position = physicalPosition;
-	m_cemuextend_mouse_position_valid = true;
+		transition = Frontend::CemuExtendMouseTransition::Up;
+	else if (changedButtons != 0)
+		transition = Frontend::CemuExtendMouseTransition::Aggregate;
+	const auto buttonUpdate = m_cemuextend_bridge.UpdateButtons(transition,
+		changedButtons, aggregateButtons);
+	const auto motion = m_cemuextend_bridge.UpdatePosition(
+		{physicalPosition.x, physicalPosition.y}, {}, false);
 	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
 		logicalPosition.x < size.GetWidth() && logicalPosition.y < size.GetHeight();
-	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Drc,
-		physicalPosition.x, physicalPosition.y, delta.x, delta.y, 0, 0,
-		buttons, changedButtons, ToPhys(size.GetWidth()), ToPhys(size.GetHeight()),
-		inside, g_window_info.app_active.load());
+	m_emulationController.SubmitMouse({
+		.surface = Application::PointerSurface::Drc,
+		.x = physicalPosition.x,
+		.y = physicalPosition.y,
+		.deltaX = motion.delta.x,
+		.deltaY = motion.delta.y,
+		.buttons = buttonUpdate.buttons,
+		.changedButtons = buttonUpdate.changed,
+		.contentWidth = ToPhys(size.GetWidth()),
+		.contentHeight = ToPhys(size.GetHeight()),
+		.insideContent = inside,
+		.focused = g_window_info.app_active.load(),
+	});
 }
 
 void PadViewFrame::OnMouseMove(wxMouseEvent& event)

@@ -18,6 +18,8 @@ std::atomic_int32_t g_padVolume = 0;
 
 uint32 IAudioAPI::s_audioDelay = 2;
 std::array<bool, IAudioAPI::AudioAPIEnd> IAudioAPI::s_availableApis{};
+Host::INativeSurfaceProvider* IAudioAPI::s_nativeSurfaceProvider{};
+std::mutex IAudioAPI::s_nativeSurfaceMutex;
 
 IAudioAPI::IAudioAPI(uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample)
 	: m_samplerate(samplerate), m_channels(channels), m_samplesPerBlock(samples_per_block), m_bitsPerSample(bits_per_sample)
@@ -89,6 +91,20 @@ void IAudioAPI::InitializeStatic()
 #endif
 }
 
+void IAudioAPI::ConfigureNativeSurfaceProvider(Host::INativeSurfaceProvider* provider)
+{
+	std::scoped_lock lock(s_nativeSurfaceMutex);
+	s_nativeSurfaceProvider = provider;
+}
+
+std::optional<Host::NativeSurfaceSnapshot> IAudioAPI::GetNativeSurfaces()
+{
+	std::scoped_lock lock(s_nativeSurfaceMutex);
+	if (!s_nativeSurfaceProvider)
+		return std::nullopt;
+	return s_nativeSurfaceProvider->GetNativeSurfaces();
+}
+
 bool IAudioAPI::IsAudioAPIAvailable(AudioAPI api)
 {
 	if ((size_t)api < s_availableApis.size())
@@ -144,7 +160,11 @@ AudioAPIPtr IAudioAPI::CreateDevice(AudioAPI api, const DeviceDescriptionPtr& de
 	case DirectSound:
 	{
 		const auto tmp = std::dynamic_pointer_cast<DirectSoundAPI::DirectSoundDeviceDescription>(device);
-		return std::make_unique<DirectSoundAPI>(tmp->GetGUID(), samplerate, channels, samples_per_block, bits_per_sample);
+		const auto surfaces = GetNativeSurfaces();
+		if (!surfaces || !surfaces->mainWindow.surface)
+			throw std::runtime_error("DirectSound requires a native main window");
+		return std::make_unique<DirectSoundAPI>(tmp->GetGUID(), surfaces->mainWindow,
+			samplerate, channels, samples_per_block, bits_per_sample);
 	}
 	case XAudio27:
 	{

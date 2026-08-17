@@ -32,10 +32,6 @@
 #include <wx/timer.h>
 #include "wxHelper.h"
 
-#include "Cafe/TitleList/TitleList.h"
-#include "Cafe/TitleList/SaveList.h"
-#include "Cafe/CafeSystem.h"
-#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 
 wxIMPLEMENT_APP_NO_MAIN(CemuApp);
 
@@ -317,7 +313,7 @@ bool CemuApp::OnInit()
 	if (isFirstStart)
 	{
 		// show the getting started dialog
-		GettingStartedDialog dia(nullptr);
+		GettingStartedDialog dia(m_emulationController, nullptr);
 		dia.ShowModal();
 		// make sure config is created. Gfx pack UI and input UI may create it earlier already, but we still want to update it
 		GetConfigHandle().Save();
@@ -371,10 +367,13 @@ bool CemuApp::OnInit()
 
 	Bind(wxEVT_ACTIVATE_APP, &CemuApp::ActivateApp, this);
 
-	m_mainFrame = new MainWindow();
+	m_mainFrame = new MainWindow(m_emulationController,
+		WindowSystem::GetWindowMetricsHost(), WindowSystem::GetNativeSurfaceHost());
 
-	std::unique_lock lock(g_mutex);
-	g_window_info.app_active = true;
+	{
+		std::unique_lock lock(g_mutex);
+		g_window_info.app_active = true;
+	}
 
 	HotkeySettings::Init(m_mainFrame);
 
@@ -416,11 +415,13 @@ int CemuApp::OnExit()
 		m_sdlEventPumpTimer = nullptr;
 	}
 #endif
+	HotkeySettings::Shutdown();
+	InputManager::instance().Shutdown();
 	wxApp::OnExit();
 	wxTheClipboard->Flush();
-	InputManager::instance().Shutdown();
 	int retValue = 0;
-	if (auto r = CafeSystem::GetForegroundTitleReturnStatus(); (LaunchSettings::GetLoadFile() || LaunchSettings::GetLoadTitleID()) && r)
+	if (auto r = m_emulationController.ForegroundProcessExitStatus();
+		(LaunchSettings::GetLoadFile() || LaunchSettings::GetLoadTitleID()) && r)
 		retValue = *r;
 #if BOOST_OS_MACOS
 	SDLControllerProvider::ShutdownSDL();
@@ -650,7 +651,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 			(usage == 0x28 || usage == 0x58) &&
 			g_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
-			cemuextend_hle::KeyboardEvent(usage, true,
+			m_emulationController.SubmitKeyboard(usage, true,
 				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_KEY_UP)
@@ -662,7 +663,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 			(usage == 0x28 || usage == 0x58) &&
 			g_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
-			cemuextend_hle::KeyboardEvent(usage, false,
+			m_emulationController.SubmitKeyboard(usage, false,
 				CemuExtendKeyModifiers(key_event));
 	}
 	else if(event.GetEventType() == wxEVT_CHAR)
@@ -671,16 +672,17 @@ int CemuApp::FilterEvent(wxEvent& event)
 		const auto codepoint = key_event.GetUnicodeKey();
 		if (!native_text_input_event &&
 			codepoint >= 0x20 && codepoint != 0x7f && codepoint <= 0x10ffff)
-			cemuextend_hle::TextEvent(static_cast<uint32>(codepoint), key_event.IsAutoRepeat());
+			m_emulationController.SubmitText(
+				static_cast<uint32>(codepoint), key_event.IsAutoRepeat());
 	}
 	else if(event.GetEventType() == wxEVT_ACTIVATE_APP)
 	{
 		const auto& activate_event = (wxActivateEvent&)event;
-		cemuextend_hle::PointerFocusChanged(activate_event.GetActive());
+		m_emulationController.PointerFocusChanged(activate_event.GetActive());
 		if(!activate_event.GetActive())
 		{
 			g_window_info.set_keystatesup();
-			cemuextend_hle::KeyboardFocusLost();
+			m_emulationController.KeyboardFocusLost();
 		}
 	}
 

@@ -1,7 +1,6 @@
 #include "SwapchainInfoVk.h"
 
 #include "config/CemuConfig.h"
-#include "WindowSystem.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteTiming.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
@@ -9,8 +8,10 @@
 
 SwapchainInfoVk::SwapchainInfoVk(bool mainWindow, Vector2i size) : mainWindow(mainWindow), m_desiredExtent(size)
 {
-	auto& windowHandleInfo = mainWindow ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
 	auto renderer = VulkanRenderer::GetInstance();
+	const auto window = renderer ? renderer->GetNativeSurfaces() :
+		Host::NativeSurfaceSnapshot{};
+	const auto& windowHandleInfo = mainWindow ? window.mainSurface : window.padSurface;
 	m_instance = renderer->GetVkInstance();
 	m_logicalDevice = renderer->GetLogicalDevice();
 	m_physicalDevice = renderer->GetPhysicalDevice();

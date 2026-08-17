@@ -1,7 +1,7 @@
 #include "Common/precompiled.h"
 
-#include "Cafe/HW/Espresso/WupsBinary.h"
-#include "Cafe/OS/RPL/RPLExternalModulePolicy.h"
+#include "Cemu/CemuExtend/Formats/WupsBinary.h"
+#include "Cemu/CemuExtend/Formats/ExternalModuleMappingPolicy.h"
 
 #include <zlib.h>
 

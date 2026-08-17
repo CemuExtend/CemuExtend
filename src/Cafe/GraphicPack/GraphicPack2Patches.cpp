@@ -1,7 +1,7 @@
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cemu/Logging/CemuLogging.h"
 #include "Common/FileStream.h"
-#include "WindowSystem.h"
+#include "Cafe/CafeSystem.h"
 #include "util/helpers/StringParser.h"
 #include "Cemu/PPCAssembler/ppcAssembler.h"
 #include "Cafe/OS/RPL/rpl_structs.h"
@@ -63,7 +63,9 @@ void PatchErrorHandler::showStageErrorMessageBox()
 		}
 	}
 
-	WindowSystem::ShowErrorDialog(errorMsg, _tr("Graphic pack error"), WindowSystem::ErrorCategory::GRAPHIC_PACKS);
+	CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+		.diagnosticCode = CafeSystem::DiagnosticCode::GraphicPackInvalid,
+		.diagnostic = std::move(errorMsg)});
 }
 
 // Loads upstream Cemu-style patch_<anything>.asm files and patches.txt.

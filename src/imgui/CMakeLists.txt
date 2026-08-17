@@ -44,5 +44,6 @@ target_include_directories(imguiImpl PUBLIC "../../dependencies/imgui/")
 
 target_link_libraries(imguiImpl PRIVATE
 	CemuCommon
-	CemuGui
+	CemuHostContracts
+	CemuInput
 )

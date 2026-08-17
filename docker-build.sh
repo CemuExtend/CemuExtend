@@ -3,8 +3,13 @@ set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build}"
+enable_wxwidgets="${CEMU_ENABLE_WXWIDGETS:-ON}"
 artifact_dir="${project_dir}/result/bin"
 temporary_name=".Cemu_release.$$.tmp"
+artifact_name="Cemu_release"
+if [[ "${enable_wxwidgets}" == "OFF" ]]; then
+	artifact_name="Cemu_headless"
+fi
 git_hash="$(git -C "${project_dir}" log --format=%h -1 2>/dev/null || printf unknown)"
 commit_hash="$(git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown)"
 source_fingerprint="$({
@@ -23,6 +28,7 @@ docker build --progress=plain --target build \
 	--build-arg "GIT_HASH=${git_hash}" \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${commit_hash}" \
 	--build-arg "SOURCE_FINGERPRINT=${source_fingerprint}" \
+	--build-arg "ENABLE_WXWIDGETS=${enable_wxwidgets}" \
 	-t "${image_name}" "${project_dir}"
 
 mkdir -p "${artifact_dir}"
@@ -30,7 +36,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 	-v "${artifact_dir}:/artifacts" \
 	"${image_name}" \
 	cp /Cemu_release "/artifacts/${temporary_name}"
-mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/Cemu_release"
+mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/${artifact_name}"
 
-printf 'Docker release build: %s\n' "${artifact_dir}/Cemu_release"
-sha256sum "${artifact_dir}/Cemu_release"
+printf 'Docker release build: %s\n' "${artifact_dir}/${artifact_name}"
+sha256sum "${artifact_dir}/${artifact_name}"

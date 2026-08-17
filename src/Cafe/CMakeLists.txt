@@ -1,4 +1,7 @@
 add_library(CemuCafe
+	CafeEvent.h
+	OS/libs/HostInputFocus.cpp
+	OS/libs/HostInputFocus.h
   Account/Account.cpp
   Account/AccountError.h
   Account/Account.h
@@ -70,7 +73,6 @@ add_library(CemuCafe
   HW/Espresso/PPCScheduler.cpp
   HW/Espresso/PPCSchedulerLLE.cpp
   HW/Espresso/PPCState.h
-  HW/Espresso/CemodPackage.cpp
   HW/Espresso/CemodPackage.h
   HW/Espresso/CemodRuntime.cpp
   HW/Espresso/CemodRuntime.h
@@ -78,7 +80,6 @@ add_library(CemuCafe
   HW/Espresso/TrustedCemodRuntime.cpp
   HW/Espresso/TrustedCemodRuntime.h
   HW/Espresso/TrustedCemodLifecycle.h
-	HW/Espresso/WupsBinary.cpp
 	HW/Espresso/WupsBinary.h
 	HW/Espresso/WupsGuestCallback.cpp
 	HW/Espresso/WupsGuestCallback.h
@@ -709,7 +710,9 @@ endif()
 
 target_link_libraries(CemuCafe PRIVATE
 	CemuCommon
-  CemuGui
+  CemuHostContracts
+  CemuInput
+  CemuExtendDomain
   cemuextend::wire
   ZArchive::zarchive
   imguiImpl
@@ -787,24 +790,20 @@ if(BUILD_TESTING)
 	add_test(NAME cex2_host_tests COMMAND cex2_host_tests)
 
 	add_executable(cemod_package_tests
-		HW/Espresso/CemodPackage.cpp
-		HW/Espresso/WupsBinary.cpp
 		tests/CemodPackageTests.cpp
 	)
 	target_include_directories(cemod_package_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-	target_link_libraries(cemod_package_tests PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB)
+	target_link_libraries(cemod_package_tests PRIVATE CemuExtendDomain)
 	add_test(NAME cemod_package_tests COMMAND cemod_package_tests)
 
 	add_executable(wups_binary_tests
-		HW/Espresso/WupsBinary.cpp
 		tests/WupsBinaryTests.cpp
 	)
 	target_include_directories(wups_binary_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-	target_link_libraries(wups_binary_tests PRIVATE ZLIB::ZLIB)
+	target_link_libraries(wups_binary_tests PRIVATE CemuExtendDomain)
 	add_test(NAME wups_binary_tests COMMAND wups_binary_tests)
 
 	add_executable(wups_runtime_tests
-		HW/Espresso/WupsBinary.cpp
 		HW/Espresso/WupsBackendAbi.cpp
 		HW/Espresso/WupsBackendManagement.cpp
 		HW/Espresso/ModuleExportRegistry.cpp
@@ -814,7 +813,7 @@ if(BUILD_TESTING)
 		tests/WupsRuntimeTests.cpp
 	)
 	target_include_directories(wups_runtime_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-	target_link_libraries(wups_runtime_tests PRIVATE ZLIB::ZLIB fmt::fmt)
+	target_link_libraries(wups_runtime_tests PRIVATE CemuExtendDomain fmt::fmt)
 	add_test(NAME wups_runtime_tests COMMAND wups_runtime_tests)
 
 	add_executable(wups_guest_memory_ownership_tests
@@ -827,7 +826,6 @@ if(BUILD_TESTING)
 
 	add_executable(wups_compatibility_tests
 		HW/Espresso/ModuleExportRegistry.cpp
-		HW/Espresso/WupsBinary.cpp
 		HW/Espresso/WumsBinary.cpp
 		HW/Espresso/WumsRuntime.cpp
 		HW/Espresso/WupsFunctionPatcher.cpp
@@ -837,12 +835,11 @@ if(BUILD_TESTING)
 	target_include_directories(wups_compatibility_tests PRIVATE
 		${CMAKE_SOURCE_DIR}/src)
 	target_link_libraries(wups_compatibility_tests PRIVATE
-		ZLIB::ZLIB fmt::fmt)
+		CemuExtendDomain fmt::fmt)
 	add_test(NAME wups_compatibility_tests COMMAND wups_compatibility_tests)
 
 	add_executable(wups_services_tests
 		HW/Espresso/ModuleExportRegistry.cpp
-		HW/Espresso/WupsBinary.cpp
 		HW/Espresso/WupsBackendAbi.cpp
 		HW/Espresso/WupsBackendManagement.cpp
 		HW/Espresso/WupsFunctionPatcher.cpp
@@ -851,7 +848,7 @@ if(BUILD_TESTING)
 		tests/WupsServicesTests.cpp
 	)
 	target_include_directories(wups_services_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-	target_link_libraries(wups_services_tests PRIVATE ZLIB::ZLIB fmt::fmt)
+	target_link_libraries(wups_services_tests PRIVATE CemuExtendDomain fmt::fmt)
 	add_test(NAME wups_services_tests COMMAND wups_services_tests)
 
 	add_executable(wups_production_adapter_tests
@@ -904,16 +901,16 @@ if(BUILD_TESTING)
 		target_link_options(cex2_decoder_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 
 		add_executable(cemod_package_fuzzer
-			HW/Espresso/CemodPackage.cpp HW/Espresso/WupsBinary.cpp tests/CemodPackageFuzzer.cpp)
+			tests/CemodPackageFuzzer.cpp)
 		target_include_directories(cemod_package_fuzzer PRIVATE ${CMAKE_SOURCE_DIR}/src)
-		target_link_libraries(cemod_package_fuzzer PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB)
+		target_link_libraries(cemod_package_fuzzer PRIVATE CemuExtendDomain)
 		target_compile_options(cemod_package_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 		target_link_options(cemod_package_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 
 		add_executable(wups_binary_fuzzer
-			HW/Espresso/WupsBinary.cpp tests/WupsBinaryFuzzer.cpp)
+			tests/WupsBinaryFuzzer.cpp)
 		target_include_directories(wups_binary_fuzzer PRIVATE ${CMAKE_SOURCE_DIR}/src)
-		target_link_libraries(wups_binary_fuzzer PRIVATE ZLIB::ZLIB)
+		target_link_libraries(wups_binary_fuzzer PRIVATE CemuExtendDomain)
 		target_compile_options(wups_binary_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 		target_link_options(wups_binary_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
 

@@ -84,6 +84,7 @@ ARG BUILD_TYPE=Release
 ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
+ARG ENABLE_WXWIDGETS=ON
 
 WORKDIR /workspace/CemuExtend
 
@@ -103,6 +104,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DGIT_HASH=${GIT_HASH} \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
+            -DENABLE_WXWIDGETS=${ENABLE_WXWIDGETS} \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
         && break; \

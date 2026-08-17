@@ -3,10 +3,7 @@
 #ifdef HAS_SDL
 #include "input/api/SDL/SDLController.h"
 #endif
-#include "WindowSystem.h"
 #include "input/InputManager.h"
-#include "Cafe/HW/Latte/Core/Latte.h"
-#include "Cafe/CafeSystem.h"
 
 enum ControllerVPADMapping2 : uint32
 {
@@ -149,7 +146,7 @@ void VPADController::update()
 {
 	EmulatedController::update();
 
-	if (!CafeSystem::IsTitleRunning())
+	if (!InputManager::instance().IsTitleRunningForInput())
 		return;
 
 	std::unique_lock lock(m_rumble_mutex);
@@ -207,8 +204,11 @@ void VPADController::update_touch(VPADStatus_t& status)
 	}
 	else if (const auto left_mouse = instance.get_left_down_mouse_info(&pad_view))
 	{
-		glm::ivec2 image_pos, image_size;
-		LatteRenderTarget_getScreenImageArea(&image_pos.x, &image_pos.y, &image_size.x, &image_size.y, nullptr, nullptr, pad_view);
+		const auto imageArea = instance.GetScreenImageArea(pad_view);
+		if (!imageArea.IsValid())
+			return;
+		const glm::ivec2 image_pos{imageArea.x, imageArea.y};
+		const glm::ivec2 image_size{imageArea.width, imageArea.height};
 
 		glm::vec2 relative_mouse_pos = left_mouse.value() - image_pos;
 		relative_mouse_pos = { std::min(relative_mouse_pos.x, (float)image_size.x), std::min(relative_mouse_pos.y, (float)image_size.y) };
@@ -286,11 +286,11 @@ void VPADController::update_motion(VPADStatus_t& status)
 	{
 		const Vector2<float> mousePos(right_mouse->x, right_mouse->y);
 
-		int w, h;
-		if (pad_view)
-			WindowSystem::GetPadWindowPhysSize(w, h);
-		else
-			WindowSystem::GetWindowPhysSize(w, h);
+		const auto metrics = input_manager.GetHostWindowMetrics();
+		const int w = pad_view ? metrics.physicalPadWidth : metrics.physicalWidth;
+		const int h = pad_view ? metrics.physicalPadHeight : metrics.physicalHeight;
+		if (w <= 0 || h <= 0)
+			return;
 
 		float wx = mousePos.x / w;
 		float wy = mousePos.y / h;

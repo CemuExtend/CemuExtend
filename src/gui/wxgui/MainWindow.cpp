@@ -38,7 +38,6 @@
 
 // External functionality headers
 #include "input/InputManager.h"
-#include "Cafe/TitleList/TitleList.h"
 #include "Cemu/DiscordPresence/DiscordPresence.h"
 #include "util/ScreenSaver/ScreenSaver.h"
 #include "util/helpers/SystemException.h"
@@ -65,8 +64,7 @@
 //Cafe libs
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
-#include "Cafe/OS/libs/cemuextend/cemuextend.h"
-#include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include <cemuextend/services.hpp>
 
 #include <wx/app.h>
 #include <wx/thread.h>
@@ -81,6 +79,15 @@
 
 extern WindowSystem::WindowInfo g_window_info;
 extern std::shared_mutex g_mutex;
+
+namespace
+{
+	struct MainWindowNativeHandleLease
+	{
+		explicit MainWindowNativeHandleLease(std::shared_mutex& mutex) : lock(mutex) {}
+		std::shared_lock<std::shared_mutex> lock;
+	};
+}
 
 enum
 {
@@ -177,7 +184,6 @@ enum
 wxDEFINE_EVENT(wxEVT_SET_WINDOW_TITLE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_REQUEST_GAMELIST_REFRESH, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_LAUNCH_GAME, wxLaunchGameEvent);
-wxDEFINE_EVENT(wxEVT_REQUEST_RECREATE_CANVAS, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_REQUEST_GAME_EXIT, wxCommandEvent);
 
 wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
@@ -259,7 +265,6 @@ EVT_COMMAND(wxID_ANY, wxEVT_GAMELIST_END_UPDATE, MainWindow::OnGameListEndUpdate
 EVT_COMMAND(wxID_ANY, wxEVT_ACCOUNTLIST_REFRESH, MainWindow::OnAccountListRefresh)
 EVT_COMMAND(wxID_ANY, wxEVT_SET_WINDOW_TITLE, MainWindow::OnSetWindowTitle)
 
-EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_RECREATE_CANVAS, MainWindow::OnRequestRecreateCanvas)
 EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_GAME_EXIT, MainWindow::OnRequestGameExit)
 
 wxEND_EVENT_TABLE()
@@ -340,24 +345,47 @@ namespace
 	}
 }
 
-MainWindow::MainWindow()
-	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER)
+MainWindow::MainWindow(Application::EmulationController& emulationController,
+	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER),
+	  m_emulationController(emulationController),
+	  m_windowMetrics(std::move(windowMetrics)),
+	  m_nativeSurfaces(std::move(nativeSurfaces)),
+	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
+	cemu_assert(m_windowMetrics && m_nativeSurfaces);
 #ifdef __WXMAC__
 	// Not necessary to set wxApp::s_macExitMenuItemId as automatically handled
 	wxApp::s_macAboutMenuItemId = MAINFRAME_MENU_ID_HELP_ABOUT;
 	wxApp::s_macPreferencesMenuItemId = MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS;
 #endif
-	g_window_info.window_main = initHandleContextFromWxWidgetsWindow(this);
-	g_mainFrame = this;
-	cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(+[] {
-		if (wxTheApp == nullptr) return;
+	{
+		std::unique_lock lock(g_mutex);
+		g_window_info.window_main = initHandleContextFromWxWidgetsWindow(this);
+		g_mainFrame = this;
+	}
+	const std::weak_ptr<std::atomic_bool> eventLifetime = m_applicationEventLifetime;
+	m_applicationEventSubscription = m_emulationController.Events().Subscribe(
+		[this, eventLifetime](const Application::Event& event) {
+			if (wxTheApp == nullptr || WindowSystem::IsShuttingDown())
+				return;
+			wxTheApp->CallAfter([this, eventLifetime, event] {
+				const auto lifetime = eventLifetime.lock();
+				if (!lifetime || !lifetime->load(std::memory_order_acquire))
+					return;
+				if (WindowSystem::IsShuttingDown())
+					return;
+				HandleApplicationEvent(event);
+			});
+		});
+	m_emulationController.SetTextInputWakeCallback(+[] {
+		if (wxTheApp == nullptr || WindowSystem::IsShuttingDown()) return;
 		wxTheApp->CallAfter([] {
+			if (WindowSystem::IsShuttingDown()) return;
 			if (g_mainFrame != nullptr) g_mainFrame->RefreshCemuExtendTextInput();
 		});
 	});
-	CafeSystem::SetImplementation(this);
-
 	RecreateMenu();
 	SetClientSize(1280, 720);
 	SetIcon(wxICON(M_WND_ICON128));
@@ -383,11 +411,9 @@ MainWindow::MainWindow()
 	}
 	else if (load_title_id)
 	{
-		TitleInfo info;
-		TitleId baseId;
-		if (CafeTitleList::FindBaseTitleId(load_title_id.value(), baseId) && CafeTitleList::GetFirstByTitleId(baseId, info))
+		if (const auto title = m_emulationController.ResolveBaseTitle(*load_title_id))
 		{
-			MainWindow::RequestLaunchGame(info.GetPath(), wxLaunchGameEvent::INITIATED_BY::COMMAND_LINE);
+			MainWindow::RequestLaunchGame(title->path, wxLaunchGameEvent::INITIATED_BY::COMMAND_LINE);
 			quick_launch = true;
 		}
 		else
@@ -433,8 +459,18 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
-	cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(nullptr);
+	m_applicationEventLifetime->store(false, std::memory_order_release);
+	m_applicationEventSubscription.Reset();
+	WindowSystem::BeginShutdown();
+	HotkeySettings::Shutdown();
+	m_emulationController.SetTextInputWakeCallback(nullptr);
 	UpdateCemuExtendPointerConfinement(false);
+	// Publish invalid handles and wait for outstanding snapshots before wx destroys
+	// their native objects.  NativeHandleLease is a publication/destruction barrier.
+	WindowSystem::PublishCanvasHandle(true, {});
+	WindowSystem::PublishCanvasHandle(false, {});
+	WindowSystem::PublishPadWindowHandle({});
+	WindowSystem::PublishMainWindowHandle({});
 	if (m_padView)
 	{
 		m_padView->Destroy();
@@ -445,6 +481,44 @@ MainWindow::~MainWindow()
 
 	std::unique_lock lock(g_mutex);
 	g_mainFrame = nullptr;
+}
+
+void MainWindow::HandleApplicationEvent(const Application::Event& event)
+{
+	using Application::EventType;
+	switch (event.type)
+	{
+	case EventType::LoadingStarted:
+		WindowSystem::UpdateWindowTitles(false, true, 0.0);
+		break;
+	case EventType::GameLoaded:
+		OnGameLoaded();
+		UpdateSettingsAfterGameLaunch();
+		break;
+	case EventType::GameExited:
+		RestoreSettingsAfterGameExited();
+		break;
+	case EventType::PpcProcessExited:
+		HandlePpcProcessExit();
+		break;
+	case EventType::PerformanceUpdated:
+		WindowSystem::UpdateWindowTitles(false, false, event.framesPerSecond);
+		break;
+	case EventType::Diagnostic:
+	{
+		std::optional<WindowSystem::ErrorCategory> category;
+		if (event.diagnosticCode == Application::DiagnosticCode::KeyFileCreateFailed ||
+			event.diagnosticCode == Application::DiagnosticCode::KeyFileInvalidLine)
+			category = WindowSystem::ErrorCategory::KEYS_TXT_CREATION;
+		else if (event.diagnosticCode == Application::DiagnosticCode::GraphicPackInvalid)
+			category = WindowSystem::ErrorCategory::GRAPHIC_PACKS;
+		WindowSystem::ShowErrorDialog(event.diagnostic, _tr("Error"), category);
+		break;
+	}
+	case EventType::GameListRefreshRequested:
+		RequestGameListRefresh();
+		break;
+	}
 }
 
 void MainWindow::CreateGameListAndStatusBar()
@@ -488,6 +562,23 @@ wxString MainWindow::GetInitialWindowTitle()
 
 void MainWindow::OnClose(wxCloseEvent& event)
 {
+	if (!IsMaximized() && !WindowSystem::IsFullScreen())
+		m_restored_size = GetSize();
+
+	SaveSettings();
+
+	if (m_active_cemod_permission_dialog && m_active_cemod_permission_dialog->IsModal())
+		m_active_cemod_permission_dialog->EndModal(wxID_CANCEL);
+	WindowSystem::BeginShutdown();
+	const auto shutdownResult = m_emulationController.ShutdownApplication();
+	if (!shutdownResult.stopped)
+	{
+		cemuLog_log(LogType::Force, "Failed to shut down emulation while closing: {}",
+			shutdownResult.diagnostic);
+		WindowSystem::ResumeAfterFailedShutdown();
+		event.Veto();
+		return;
+	}
 	if (m_debugger_window)
 	{
 		m_debugger_window->CleanupForDestroy();
@@ -498,15 +589,8 @@ void MainWindow::OnClose(wxCloseEvent& event)
 	if(m_game_list)
 		m_game_list->OnClose(event);
 
-	if (!IsMaximized() && !WindowSystem::IsFullScreen())
-		m_restored_size = GetSize();
-
-	SaveSettings();
 	m_timer->Stop();
-
 	event.Skip();
-
-    CafeSystem::Shutdown();
 	DestroyCanvas();
 }
 
@@ -519,7 +603,8 @@ bool MainWindow::InstallUpdate(const fs::path& metaFilePath)
 
 		if (updateResult == wxID_OK)
 		{
-			CafeTitleList::AddTitleFromPath(frame.GetTargetPath()); // this will also send a notification to the game list which will update the entry
+			// This also publishes the title-list notification consumed by the game list.
+			m_emulationController.AddTitleFromPath(frame.GetTargetPath());
 			wxMessageBox(_("Title installed!"), _("Success"));
 			return true;
 		}
@@ -546,136 +631,105 @@ bool MainWindow::InstallUpdate(const fs::path& metaFilePath)
 
 bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATED_BY initiatedBy)
 {
-	TitleInfo launchTitle{ launchPath };
-	if (launchTitle.IsValid())
-	{
-		// the title might not be in the TitleList, so we add it as a temporary entry
-		CafeTitleList::AddTitleFromPath(launchPath);
-		// title is valid, launch from TitleId
-		TitleId baseTitleId;
-		if (!CafeTitleList::FindBaseTitleId(launchTitle.GetAppTitleId(), baseTitleId))
-		{
-			wxString t = _("Unable to launch game because the base files were not found.");
-			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			return false;
-		}
-		CafeSystem::PREPARE_STATUS_CODE r = CafeSystem::PrepareForegroundTitle(baseTitleId);
-		if (r == CafeSystem::PREPARE_STATUS_CODE::CANCELLED)
-			return false;
-		if (r == CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX)
-		{
-			cemu_assert_debug(false);
-			return false;
-		}
-		else if (r == CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT)
-		{
-			wxString t = _("Unable to mount title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nFile which failed to load:\n");
-			t.append(_pathToUtf8(launchPath));
-			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			return false;
-		}
-		else if (r != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
-		{
-			wxString t = _("Failed to launch game.");
-			t.append(_pathToUtf8(launchPath));
-			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			return false;
-		}
-	}
-	else //if (launchTitle.GetFormat() == TitleInfo::TitleDataFormat::INVALID_STRUCTURE )
-	{
-		// title is invalid, if it's an RPX/ELF we can launch it directly
-		// otherwise it's an error
-		CafeTitleFileType fileType = DetermineCafeSystemFileType(launchPath);
-		if (fileType == CafeTitleFileType::RPX || fileType == CafeTitleFileType::ELF)
-		{
-			CafeSystem::PREPARE_STATUS_CODE r = CafeSystem::PrepareForegroundTitleFromStandaloneRPX(launchPath);
-			if (r == CafeSystem::PREPARE_STATUS_CODE::CANCELLED)
-				return false;
-			if (r != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
+	auto beforeStart = [this](const Application::LaunchResult& prepared) {
+			wxWindowUpdateLocker lock(this);
+			DestroyGameListAndStatusBar();
+			m_game_launched = true;
+			m_loadMenuItem->Enable(false);
+			m_installUpdateMenuItem->Enable(false);
+			m_memorySearcherMenuItem->Enable(true);
+			m_launched_game_name = prepared.titleName;
+	#ifdef ENABLE_DISCORD_RPC
+			if (m_discord)
+				m_discord->UpdatePresence(DiscordPresence::Playing, m_launched_game_name);
+	#endif
+			if (GetConfig().disable_screensaver)
+				ScreenSaver::SetInhibit(true);
+			if (FullscreenEnabled())
+				SetFullScreen(true);
+
+			// GameMode support
+#if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
+			if(GetWxGUIConfig().feral_gamemode)
 			{
-				cemu_assert_debug(false); // todo
-				wxString t = _("Failed to launch executable. Path: ");
-				t.append(_pathToUtf8(launchPath));
-				wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-				return false;
+				if(gamemode_request_start() < 0)
+					cemuLog_log(LogType::Force, "Could not start GameMode");
+				else
+					cemuLog_log(LogType::Force, "GameMode has been started.");
 			}
-		}
-		else if (initiatedBy == wxLaunchGameEvent::INITIATED_BY::GAME_LIST)
-		{
-			wxString t = _("Unable to launch title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nPath which failed to load:\n");
-			t.append(_pathToUtf8(launchPath));
-			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+#endif
+			CreateCanvas();
+		};
+	Application::LaunchResult launchResult;
+	for (;;)
+	{
+		launchResult = m_emulationController.Launch(
+			{launchPath}, beforeStart, [this] { RollbackFailedLaunchUi(); });
+		if (launchResult.error != Application::LaunchError::PermissionRequired)
+			break;
+		if (!ConfirmCemodPermissions(launchResult.titleId,
+			std::move(launchResult.titleName), std::move(launchResult.permissionRequests)))
 			return false;
-		}
+	}
+
+	if (!launchResult)
+	{
+		using Application::LaunchError;
+		if (launchResult.error == LaunchError::PermissionDenied)
+			return false;
+		wxString message;
+		if (launchResult.error == LaunchError::BaseTitleMissing)
+			message = _("Unable to launch game because the base files were not found.");
+		else if (launchResult.error == LaunchError::UnableToMount)
+			message = _("Unable to mount title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nFile which failed to load:\n");
+		else if (launchResult.error == LaunchError::CemodRuntimeBusy)
+			message = _("The CemuExtend mod runtime is still shutting down the previous title. Please try again.");
+		else if (initiatedBy == wxLaunchGameEvent::INITIATED_BY::GAME_LIST &&
+			(launchResult.error == LaunchError::InvalidTitle ||
+			 launchResult.error == LaunchError::MissingDiscKey ||
+			 launchResult.error == LaunchError::MissingTitleTicket))
+			message = _("Unable to launch title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nPath which failed to load:\n");
 		else
 		{
-			wxString t = _("Unable to launch game\nPath:\n");
-			t.append(_pathToUtf8(launchPath));
-			if(launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_DISC_KEY)
-			{
-				t.append("\n\n");
-				t.append(_("Could not decrypt title. Make sure that keys.txt contains the correct disc key for this title."));
-			}
-			if(launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_TITLE_TIK)
-			{
-				t.append("\n\n");
-				t.append(_("Could not decrypt title because title.tik is missing."));
-			}
-			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			return false;
+			message = _("Unable to launch game\nPath:\n");
+			if (launchResult.error == LaunchError::MissingDiscKey)
+				message.append(_("\n\nCould not decrypt title. Make sure that keys.txt contains the correct disc key for this title."));
+			else if (launchResult.error == LaunchError::MissingTitleTicket)
+				message.append(_("\n\nCould not decrypt title because title.tik is missing."));
 		}
+		message.append(_pathToUtf8(launchPath));
+		wxMessageBox(message, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+		return false;
 	}
+	GetWxGUIConfig().AddRecentlyLaunchedFile(_pathToUtf8(launchResult.recentPath));
 
-	if(launchTitle.IsValid())
-		GetWxGUIConfig().AddRecentlyLaunchedFile(_pathToUtf8(launchTitle.GetPath()));
-	else
-		GetWxGUIConfig().AddRecentlyLaunchedFile(_pathToUtf8(launchPath));
-
-	wxWindowUpdateLocker lock(this);
-
-    DestroyGameListAndStatusBar();
-
-	m_game_launched = true;
-	m_loadMenuItem->Enable(false);
-	m_installUpdateMenuItem->Enable(false);
-	m_memorySearcherMenuItem->Enable(true);
-
-	m_launched_game_name = CafeSystem::GetForegroundTitleName();
-	#ifdef ENABLE_DISCORD_RPC
-	if (m_discord)
-		m_discord->UpdatePresence(DiscordPresence::Playing, m_launched_game_name);
-	#endif
-
-	if (GetConfig().disable_screensaver)
-		ScreenSaver::SetInhibit(true);
-
-	if (FullscreenEnabled())
-		SetFullScreen(true);
-
-    //GameMode support
-#if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
-    if(GetWxGUIConfig().feral_gamemode)
-    {
-        // attempt to start gamemode
-        if(gamemode_request_start() < 0)
-        {
-            // GameMode failed to start
-            cemuLog_log(LogType::Force, "Could not start GameMode");
-        }
-        else
-        {
-            cemuLog_log(LogType::Force, "GameMode has been started.");
-        }
-    }
-#endif
-
-	CreateCanvas();
-	CafeSystem::LaunchForegroundTitle();
 	RecreateMenu();
 	UpdateChildWindowTitleRunningState();
 
 	return true;
+}
+
+void MainWindow::RollbackFailedLaunchUi()
+{
+	DestroyCanvas();
+	m_game_launched = false;
+	m_launched_game_name.clear();
+	if (WindowSystem::IsFullScreen())
+	{
+		g_window_info.is_fullscreen = false;
+		ShowFullScreen(false);
+		SetMenuVisible(true);
+	}
+	#ifdef ENABLE_DISCORD_RPC
+	if (m_discord)
+		m_discord->UpdatePresence(DiscordPresence::Idling, "");
+	#endif
+	if (GetConfig().disable_screensaver)
+		ScreenSaver::SetInhibit(false);
+	RecreateMenu();
+	CreateGameListAndStatusBar();
+	DoLayout();
+	UpdateChildWindowTitleRunningState();
 }
 
 void MainWindow::OnLaunchFromFile(wxLaunchGameEvent& event)
@@ -856,7 +910,8 @@ void MainWindow::TogglePadView()
 		if (m_padView)
 			return;
 
-		m_padView = new PadViewFrame(this);
+		m_padView = new PadViewFrame(this, m_emulationController,
+			m_windowMetrics, m_nativeSurfaces);
 
 		m_padView->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnPadClose, this);
 
@@ -892,8 +947,8 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 			InputManager::instance().on_device_changed();
 		}
 	}
-	else if (nMsg == WM_INPUT && m_cemuextend_raw_mouse_requested &&
-		m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
+	else if (nMsg == WM_INPUT && m_cemuextend_bridge.RawMouseRequested() &&
+		m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
 			cemuextend::wire::PointerMode::CapturedRelative))
 	{
 		UINT size{};
@@ -913,14 +968,18 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 						USHORT downFlag, USHORT upFlag, MouseButton button)
 					{
 						const auto mask = static_cast<std::uint32_t>(button);
-						if ((flags & downFlag) != 0 && (m_cemuextend_mouse_buttons & mask) == 0)
+						if ((flags & downFlag) != 0 &&
+							(m_cemuextend_bridge.MouseButtons() & mask) == 0)
 						{
-							m_cemuextend_mouse_buttons |= mask;
+							m_cemuextend_bridge.UpdateButtons(
+								Frontend::CemuExtendMouseTransition::Down, mask);
 							changed |= mask;
 						}
-						if ((flags & upFlag) != 0 && (m_cemuextend_mouse_buttons & mask) != 0)
+						if ((flags & upFlag) != 0 &&
+							(m_cemuextend_bridge.MouseButtons() & mask) != 0)
 						{
-							m_cemuextend_mouse_buttons &= ~mask;
+							m_cemuextend_bridge.UpdateButtons(
+								Frontend::CemuExtendMouseTransition::Up, mask);
 							changed |= mask;
 						}
 					};
@@ -938,7 +997,7 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 
 					if ((raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
 					{
-						m_cemuextend_raw_mouse_seen = true;
+						m_cemuextend_bridge.MarkRawMouseSeen();
 						EmitCemuExtendRawMouseEvent(raw.data.mouse.lLastX,
 							raw.data.mouse.lLastY, changed);
 					}
@@ -956,7 +1015,7 @@ void MainWindow::OpenSettings()
 	auto& config = GetWxGUIConfig();
 	const auto language = config.language;
 
-	GeneralSettings2 frame(this, m_game_launched);
+		GeneralSettings2 frame(this, m_game_launched, m_emulationController);
 	frame.ShowModal();
 	const bool paths_modified = frame.ShouldReloadGamelist();
 	const bool mlc_modified = frame.MLCModified();
@@ -1017,10 +1076,11 @@ void MainWindow::OnOptionsInput(wxCommandEvent& event)
 			return;
 
 		uint64 titleId = 0;
-		if (CafeSystem::IsTitleRunning())
-			titleId = CafeSystem::GetForegroundTitleId();
+		if (const auto runningTitleId = m_emulationController.RunningTitleId())
+			titleId = *runningTitleId;
 
-		m_graphic_pack_window = new GraphicPacksWindow2(this, titleId);
+		m_graphic_pack_window = new GraphicPacksWindow2(
+			this, titleId, m_emulationController);
 		m_graphic_pack_window->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnGraphicWindowClose, this);
 		m_graphic_pack_window->Show(true);
 
@@ -1495,62 +1555,50 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 	const auto physicalHeight = ToPhys(clientSize.GetHeight());
 	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
 		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
-	auto eventButtons = m_cemuextend_mouse_buttons;
 	// Button callbacks are the authoritative transitions. In particular,
 	// synthetic/private-desktop motion can report wx's aggregate state as
 	// released even while a button is held. Preserve the confirmed mask for
 	// motion/wheel events so a drag cannot turn into a spurious ButtonUp.
 	// wxWidgets reports the second press of a rapid click pair as DCLICK
 	// instead of another DOWN event. It is still a physical down transition.
+	Frontend::CemuExtendMouseTransition transition =
+		Frontend::CemuExtendMouseTransition::None;
 	if (event.ButtonDown() || event.ButtonDClick())
-		eventButtons |= changedButtons;
+		transition = Frontend::CemuExtendMouseTransition::Down;
 	else if (event.ButtonUp())
-		eventButtons &= ~changedButtons;
+		transition = Frontend::CemuExtendMouseTransition::Up;
 	else if (changedButtons != 0)
-	{
-		const auto aggregateButtons = CemuExtendMouseButtons(event);
-		eventButtons = (eventButtons & ~changedButtons) |
-			(aggregateButtons & changedButtons);
-	}
-	const auto actualChanged = (m_cemuextend_mouse_buttons ^ eventButtons) & changedButtons;
-	m_cemuextend_mouse_buttons = eventButtons;
+		transition = Frontend::CemuExtendMouseTransition::Aggregate;
+	const auto buttonUpdate = m_cemuextend_bridge.UpdateButtons(transition,
+		changedButtons, CemuExtendMouseButtons(event));
 
-	wxPoint delta{};
-	if (m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
-		cemuextend::wire::PointerMode::CapturedRelative))
-	{
-		const bool rawMouseAvailable =
-			m_cemuextend_raw_mouse_requested && EnsureCemuExtendRawMouse();
-		if (m_cemuextend_suppress_next_captured_wx_motion)
-		{
-			// ApplyCemuExtendPointerPolicy enters capture from the wx event that
-			// still contains the pre-capture cursor position. Suppress only that
-			// transition event instead of disabling the wx fallback wholesale.
-			m_cemuextend_suppress_next_captured_wx_motion = false;
-		}
-		else if (!rawMouseAvailable || !m_cemuextend_raw_mouse_seen)
-		{
-			// Keep wx motion as a fallback until the first WM_INPUT arrives.
-			// This also preserves deterministic input on private desktops and
-			// other synthetic-input paths that do not produce raw packets.
-			const wxPoint center{clientSize.GetWidth() / 2, clientSize.GetHeight() / 2};
-			delta = physicalPosition - ToPhys(center);
-		}
-	}
-	else if (m_cemuextend_mouse_position_valid)
-	{
-		delta = physicalPosition - m_cemuextend_last_mouse_position;
-	}
-
-	m_cemuextend_last_mouse_position = physicalPosition;
-	m_cemuextend_mouse_position_valid = true;
-	const auto flags = m_cemuextend_raw_mouse_requested && m_cemuextend_raw_mouse_seen
+	const wxPoint center{clientSize.GetWidth() / 2, clientSize.GetHeight() / 2};
+	const bool rawMouseAvailable = m_cemuextend_bridge.PointerMode() ==
+		static_cast<std::uint8_t>(cemuextend::wire::PointerMode::CapturedRelative) &&
+		m_cemuextend_bridge.RawMouseRequested() &&
+		EnsureCemuExtendRawMouse();
+	const auto motion = m_cemuextend_bridge.UpdatePosition(
+		{physicalPosition.x, physicalPosition.y},
+		{ToPhys(center).x, ToPhys(center).y}, rawMouseAvailable);
+	const auto flags = motion.rawRelative
 		? static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative)
 		: static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::None);
-	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Tv,
-		physicalPosition.x, physicalPosition.y, delta.x, delta.y,
-		wheelX, wheelY, m_cemuextend_mouse_buttons, actualChanged,
-		physicalWidth, physicalHeight, inside, g_window_info.app_active.load(), flags);
+	m_emulationController.SubmitMouse({
+		.surface = Application::PointerSurface::Tv,
+		.x = physicalPosition.x,
+		.y = physicalPosition.y,
+		.deltaX = motion.delta.x,
+		.deltaY = motion.delta.y,
+		.wheelX = wheelX,
+		.wheelY = wheelY,
+		.buttons = buttonUpdate.buttons,
+		.changedButtons = buttonUpdate.changed,
+		.contentWidth = physicalWidth,
+		.contentHeight = physicalHeight,
+		.insideContent = inside,
+		.focused = g_window_info.app_active.load(),
+		.flags = flags,
+	});
 }
 
 void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
@@ -1565,13 +1613,21 @@ void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t d
 	const auto physicalHeight = ToPhys(clientSize.GetHeight());
 	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
 		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
-	m_cemuextend_last_mouse_position = physicalPosition;
-	m_cemuextend_mouse_position_valid = true;
-	cemuextend_hle::MouseEvent(cemuextend::wire::PointerSurface::Tv,
-		physicalPosition.x, physicalPosition.y, deltaX, deltaY, 0, 0,
-		m_cemuextend_mouse_buttons, changedButtons, physicalWidth, physicalHeight,
-		inside, g_window_info.app_active.load(),
-		static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative));
+	m_cemuextend_bridge.RecordRawPosition({physicalPosition.x, physicalPosition.y});
+	m_emulationController.SubmitMouse({
+		.surface = Application::PointerSurface::Tv,
+		.x = physicalPosition.x,
+		.y = physicalPosition.y,
+		.deltaX = deltaX,
+		.deltaY = deltaY,
+		.buttons = m_cemuextend_bridge.MouseButtons(),
+		.changedButtons = changedButtons,
+		.contentWidth = physicalWidth,
+		.contentHeight = physicalHeight,
+		.insideContent = inside,
+		.focused = g_window_info.app_active.load(),
+		.flags = static_cast<std::uint8_t>(cemuextend::wire::MouseEventFlag::RawRelative),
+	});
 }
 
 bool MainWindow::EnsureCemuExtendRawMouse()
@@ -1633,60 +1689,38 @@ void MainWindow::UpdateCemuExtendPointerConfinement(bool confine)
 
 bool MainWindow::ApplyCemuExtendPointerPolicy()
 {
-	using cemuextend::wire::PointerMode;
-	const auto policy = cemuextend_hle::EffectivePointerPolicy();
-	const auto previousMode = m_cemuextend_pointer_mode;
-	m_cemuextend_pointer_mode = policy.mode;
-	const auto mode = static_cast<PointerMode>(policy.mode);
-	const auto flags = policy.flags.get();
-	m_cemuextend_raw_mouse_requested =
-		(flags & static_cast<std::uint32_t>(
-			cemuextend::wire::PointerPolicyFlag::DisableRawMouse)) == 0;
-	const bool confine = mode != PointerMode::Default &&
-		(flags & static_cast<std::uint32_t>(
-			cemuextend::wire::PointerPolicyFlag::ConfineToContent)) != 0 &&
-		g_window_info.app_active.load() && m_render_canvas;
-	UpdateCemuExtendPointerConfinement(confine);
+	const auto policy = m_emulationController.GetPointerPolicy();
+	const auto decision = m_cemuextend_bridge.ApplyPointerPolicy(policy.mode,
+		policy.cursor, policy.flags, g_window_info.app_active.load(),
+		m_render_canvas != nullptr);
+	UpdateCemuExtendPointerConfinement(decision.confine);
 
-	if (mode == PointerMode::Default)
-	{
-		if (previousMode != static_cast<std::uint8_t>(PointerMode::Default))
-		{
-			ShowCursor(true);
-			if (m_render_canvas)
-				m_render_canvas->SetCursor(wxCursor(wxCURSOR_ARROW));
-			m_cemuextend_mouse_position_valid = false;
-		}
-		m_cemuextend_suppress_next_captured_wx_motion = false;
-		return false;
-	}
-
-	if (mode == PointerMode::VisibleAbsolute)
+	if (decision.leavingPolicy)
 	{
 		ShowCursor(true);
 		if (m_render_canvas)
-			m_render_canvas->SetCursor(wxCursor(CemuExtendCursor(policy.cursor)));
+			m_render_canvas->SetCursor(wxCursor(wxCURSOR_ARROW));
 	}
-	else
+	else if (decision.showCursor)
 	{
+		ShowCursor(true);
+		if (m_render_canvas)
+			m_render_canvas->SetCursor(wxCursor(CemuExtendCursor(decision.cursor)));
+	}
+	else if (decision.ownsPointer)
 		ShowCursor(false);
-	}
 
-	if (mode == PointerMode::CapturedRelative &&
-		previousMode != static_cast<std::uint8_t>(PointerMode::CapturedRelative) &&
-		m_render_canvas)
+	if (decision.enteringCapture && m_render_canvas)
 	{
-		m_cemuextend_raw_mouse_seen = false;
-		m_cemuextend_suppress_next_captured_wx_motion = true;
-		if (m_cemuextend_raw_mouse_requested)
+		if (decision.requestRawMouse)
 			EnsureCemuExtendRawMouse();
 		const auto size = m_render_canvas->GetClientSize();
 		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
 		m_render_canvas->WarpPointer(center.x, center.y);
-		m_cemuextend_last_mouse_position = ToPhys(center);
-		m_cemuextend_mouse_position_valid = true;
+		const auto physicalCenter = ToPhys(center);
+		m_cemuextend_bridge.RecordRawPosition({physicalCenter.x, physicalCenter.y});
 	}
-	return true;
+	return decision.ownsPointer;
 }
 
 void MainWindow::OnMouseMove(wxMouseEvent& event)
@@ -1706,7 +1740,7 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 	lock.unlock();
 	EmitCemuExtendMouseEvent(event);
 
-	if (m_cemuextend_pointer_mode == static_cast<std::uint8_t>(
+	if (m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
 		cemuextend::wire::PointerMode::CapturedRelative) && m_render_canvas)
 	{
 		const auto size = m_render_canvas->GetClientSize();
@@ -1768,7 +1802,7 @@ void MainWindow::OnMouseMiddle(wxMouseEvent& event)
 		"CEX2-PERSPECTIVE wx-middle down={} dclick={} up={} aggregateMiddle={} trackedButtons={}",
 		event.ButtonDown(wxMOUSE_BTN_MIDDLE), event.ButtonDClick(wxMOUSE_BTN_MIDDLE),
 		event.ButtonUp(wxMOUSE_BTN_MIDDLE), event.MiddleIsDown(),
-		m_cemuextend_mouse_buttons);
+		m_cemuextend_bridge.MouseButtons());
 	EmitCemuExtendMouseEvent(event, 0, 0,
 		static_cast<std::uint32_t>(cemuextend::wire::MouseButton::Middle));
 	event.Skip();
@@ -1952,7 +1986,7 @@ bool MainWindow::CanSubmitCemuExtendTextInput() const
 	// active. Once it is committed, a subsequent Enter may be mirrored to the
 	// guest as the single-line field's submit action.
 	return m_cemuextend_text_input != nullptr &&
-		m_cemuextend_text_input_preedit.empty();
+		m_cemuextend_bridge.CanSubmitText();
 }
 
 bool MainWindow::HasCemuExtendTextInputNativeFocus() const
@@ -1970,7 +2004,7 @@ bool MainWindow::HasCemuExtendTextInputNativeFocus() const
 void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 {
 	if (m_cemuextend_text_input == nullptr ||
-		m_cemuextend_text_input_sequence != sequence ||
+		m_cemuextend_bridge.TextInputSequence() != sequence ||
 		!m_cemuextend_text_input->IsShown())
 		return;
 	if (HasCemuExtendTextInputNativeFocus())
@@ -2024,10 +2058,10 @@ void MainWindow::PublishCemuExtendTextComposition()
 	const long insertion = m_cemuextend_text_input->GetInsertionPoint();
 	const std::string prefix = m_cemuextend_text_input
 		->GetRange(0, insertion).utf8_string();
-	cemuextend_hle::TextCompositionEvent(
-		committed, m_cemuextend_text_input_preedit,
-		static_cast<uint32>(prefix.size()),
-		static_cast<uint32>(m_cemuextend_text_input_preedit.size()));
+	const auto composition = m_cemuextend_bridge.ComposeText(committed,
+		static_cast<std::uint32_t>(prefix.size()));
+	m_emulationController.SubmitTextComposition(composition.committed, composition.preedit,
+		composition.cursor, composition.selectionLength);
 }
 
 void MainWindow::OnCemuExtendTextChanged(wxCommandEvent& event)
@@ -2037,7 +2071,7 @@ void MainWindow::OnCemuExtendTextChanged(wxCommandEvent& event)
 
 void MainWindow::OnCemuExtendTextPreedit(std::string_view preedit)
 {
-	m_cemuextend_text_input_preedit.assign(preedit);
+	m_cemuextend_bridge.SetPreedit(preedit);
 	if (!preedit.empty() && !m_cemuextend_text_input_preedit_logged)
 	{
 		m_cemuextend_text_input_preedit_logged = true;
@@ -2050,7 +2084,7 @@ void MainWindow::OnCemuExtendTextPreedit(std::string_view preedit)
 void MainWindow::RefreshCemuExtendTextInput()
 {
 	if (m_cemuextend_text_input == nullptr || m_render_canvas == nullptr) return;
-	const auto state = cemuextend_hle::EffectiveTextInput();
+	const auto state = m_emulationController.GetTextInputState();
 	if (!state.active)
 	{
 		if (m_cemuextend_text_input->IsShown())
@@ -2064,12 +2098,11 @@ void MainWindow::RefreshCemuExtendTextInput()
 			m_cemuextend_text_input->Hide();
 			m_render_canvas->SetFocus();
 		}
-		m_cemuextend_text_input_sequence = 0;
+		m_cemuextend_bridge.EndTextInput();
 		m_cemuextend_text_input_focus_retries = 0;
 		m_cemuextend_text_input_focus_logged = false;
 		m_cemuextend_text_input_focus_failure_logged = false;
 		m_cemuextend_text_input_preedit_logged = false;
-		m_cemuextend_text_input_preedit.clear();
 		return;
 	}
 	const wxSize canvas = m_render_canvas->GetClientSize();
@@ -2079,7 +2112,7 @@ void MainWindow::RefreshCemuExtendTextInput()
 		0, std::max(0, canvas.GetHeight() - 1));
 	// Moving the native widget while an IME owns a preedit can reset some IM
 	// modules. Keep its anchor stable until that composition ends.
-	if (m_cemuextend_text_input_preedit.empty())
+	if (!m_cemuextend_bridge.HasPreedit())
 		m_cemuextend_text_input->SetPosition(
 			m_render_canvas->GetPosition() + wxPoint{x, y});
 #if defined(__WXGTK__)
@@ -2094,12 +2127,10 @@ void MainWindow::RefreshCemuExtendTextInput()
 #else
 	m_cemuextend_text_input->SetSize(wxSize{1, 1});
 #endif
-	const bool startingSession =
-		state.sequence != m_cemuextend_text_input_sequence;
+	const bool startingSession = m_cemuextend_bridge.BeginTextInput(state.sequence);
 	if (startingSession)
 	{
 		m_cemuextend_text_input_updating = true;
-		m_cemuextend_text_input_preedit.clear();
 		m_cemuextend_text_input_focus_retries = 0;
 		m_cemuextend_text_input_focus_logged = false;
 		m_cemuextend_text_input_focus_failure_logged = false;
@@ -2109,11 +2140,10 @@ void MainWindow::RefreshCemuExtendTextInput()
 		m_cemuextend_text_input->SetMaxLength(state.maximumLength);
 		m_cemuextend_text_input->SetInsertionPointEnd();
 		m_cemuextend_text_input_updating = false;
-		m_cemuextend_text_input_sequence = state.sequence;
 		// Release any key held by the render canvas before the native control
 		// starts owning key events. Otherwise its key-up would be intentionally
 		// filtered and the guest could retain a stuck raw key.
-		cemuextend_hle::KeyboardFocusLost();
+		m_emulationController.KeyboardFocusLost();
 		m_cemuextend_text_input->Show();
 		// This native control exists only to own the OS IME session and its
 		// candidate window. Its one-pixel surface is effectively invisible, but
@@ -2142,15 +2172,18 @@ void MainWindow::CreateCanvas()
     // create canvas
 	#ifdef ENABLE_OPENGL
 	if (ActiveSettings::GetGraphicsAPI() == kOpenGL)
-		m_render_canvas = GLCanvas_Create(m_game_panel, wxSize(1280, 720), true);
+		m_render_canvas = GLCanvas_Create(m_game_panel, wxSize(1280, 720), true,
+			m_windowMetrics, m_nativeSurfaces);
 	#endif
 	#ifdef ENABLE_VULKAN
 	if (ActiveSettings::GetGraphicsAPI() == kVulkan)
-		m_render_canvas = new VulkanCanvas(m_game_panel, wxSize(1280, 720), true);
+		m_render_canvas = new VulkanCanvas(m_game_panel, wxSize(1280, 720), true,
+			m_windowMetrics, m_nativeSurfaces);
 	#endif
 	#ifdef ENABLE_METAL
 	if (ActiveSettings::GetGraphicsAPI() == kMetal)
-		m_render_canvas = new MetalCanvas(m_game_panel, wxSize(1280, 720), true);
+		m_render_canvas = new MetalCanvas(m_game_panel, wxSize(1280, 720), true,
+			m_windowMetrics, m_nativeSurfaces);
 	#endif
 	if (!m_render_canvas)
 		cemu_assert(false && "Failed to create canvas or invalid graphics API selected");
@@ -2247,12 +2280,11 @@ void MainWindow::DestroyCanvas()
 	{
 		m_cemuextend_text_input->Destroy();
 		m_cemuextend_text_input = nullptr;
-		m_cemuextend_text_input_sequence = 0;
+		m_cemuextend_bridge.EndTextInput();
 		m_cemuextend_text_input_focus_retries = 0;
 		m_cemuextend_text_input_focus_logged = false;
 		m_cemuextend_text_input_focus_failure_logged = false;
 		m_cemuextend_text_input_preedit_logged = false;
-		m_cemuextend_text_input_preedit.clear();
 	}
 	UpdateCemuExtendPointerConfinement(false);
 	if (m_padView)
@@ -2261,6 +2293,7 @@ void MainWindow::DestroyCanvas()
 	}
 	if (m_render_canvas)
 	{
+		WindowSystem::PublishCanvasHandle(true, {});
 		m_render_canvas->Destroy();
 		m_render_canvas = nullptr;
 	}
@@ -2355,11 +2388,7 @@ void MainWindow::OnMouseWheel(wxMouseEvent& event)
 	const auto reportedDelta = event.GetWheelDelta();
 	const auto wheelDelta = reportedDelta > 0 ? reportedDelta : 120;
 	const bool horizontal = event.GetWheelAxis() == wxMOUSE_WHEEL_HORIZONTAL;
-	auto& remainder = horizontal ? m_cemuextend_wheel_remainder_x :
-		m_cemuextend_wheel_remainder_y;
-	const auto accumulated = static_cast<std::int64_t>(remainder) + rotation;
-	const auto steps = static_cast<std::int32_t>(accumulated / wheelDelta);
-	remainder = static_cast<std::int32_t>(accumulated % wheelDelta);
+	const auto steps = m_cemuextend_bridge.NormalizeWheel(rotation, wheelDelta, horizontal);
 
 	auto& instance = InputManager::instance();
 	instance.m_mouse_wheel = static_cast<float>(rotation) /
@@ -2399,7 +2428,13 @@ void MainWindow::SetFullScreen(bool state)
 
 void MainWindow::EndEmulation() // unfinished - memory leaks and crashes after repeated use (after 3x usually)
 {
-	CafeSystem::ShutdownTitle();
+	const auto stopResult = m_emulationController.Stop();
+	if (!stopResult.stopped)
+	{
+		cemuLog_log(LogType::Force, "EmulationController stop request ignored: {}",
+			stopResult.diagnostic);
+		return;
+	}
 	DestroyCanvas();
 	m_game_launched = false;
 	m_launched_game_name.clear();
@@ -3057,7 +3092,7 @@ void MainWindow::RecreateMenu()
 
 void MainWindow::UpdateChildWindowTitleRunningState()
 {
-	const bool running = CafeSystem::IsTitleRunning();
+	const bool running = m_emulationController.IsTitleRunning();
 
 	if(m_graphic_pack_window)
 		m_graphic_pack_window->UpdateTitleRunning(running);
@@ -3084,7 +3119,8 @@ void MainWindow::OnGraphicWindowOpen(wxTitleIdEvent& event)
 {
 	if (m_graphic_pack_window)
 		return;
-	m_graphic_pack_window = new GraphicPacksWindow2(this, event.GetTitleId());
+	m_graphic_pack_window = new GraphicPacksWindow2(
+		this, event.GetTitleId(), m_emulationController);
 	m_graphic_pack_window->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnGraphicWindowClose, this);
 	m_graphic_pack_window->Show(true);
 }
@@ -3101,58 +3137,36 @@ void MainWindow::RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIAT
 	wxPostEvent(g_mainFrame, evt);
 }
 
-void MainWindow::OnRequestRecreateCanvas(wxCommandEvent& event)
+void MainWindow::RecreateCanvasForHost()
 {
-	CounterSemaphore* sem = (CounterSemaphore*)event.GetClientData();
+	cemu_assert_debug(wxIsMainThread());
 	DestroyCanvas();
 	CreateCanvas();
-	sem->increment();
 }
 
-void MainWindow::CafeRecreateCanvas()
-{
-	CounterSemaphore sem;
-	auto* evt = new wxCommandEvent(wxEVT_REQUEST_RECREATE_CANVAS);
-	evt->SetClientData((void*)&sem);
-	wxQueueEvent(g_mainFrame, evt);
-	sem.decrementWithWait();
-}
-
-void MainWindow::CafePPCProcessExit()
+void MainWindow::HandlePpcProcessExit()
 {
 	// this is called from the emulated PPC thread, so queue an event instead of handling it directly
 	wxQueueEvent(g_mainFrame, new wxCommandEvent(wxEVT_REQUEST_GAME_EXIT));
 }
 
-bool MainWindow::CafeConfirmCemodPermissions(TitleId titleId)
+bool MainWindow::ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,
+	std::vector<Application::CemodPermissionRequest> requests)
 {
-	if (!wxIsMainThread())
-	{
-		auto result = std::make_shared<std::promise<bool>>();
-		auto future = result->get_future();
-		wxTheApp->CallAfter([this, titleId, result]() {
-			result->set_value(CafeConfirmCemodPermissions(titleId));
-		});
-		return future.get();
-	}
-
-	auto requests = cemuextend_hle::PendingCemodPermissionRequests(titleId);
+	cemu_assert_debug(wxIsMainThread());
 	if (requests.empty()) return true;
-
-	TitleInfo titleInfo;
-	std::string gameName;
-	if (CafeTitleList::GetFirstByTitleId(titleId, titleInfo))
-		gameName = titleInfo.GetMetaTitleName();
-	if (gameName.empty()) gameName = fmt::format("Title {:016x}", static_cast<uint64>(titleId));
+	if (gameName.empty()) gameName = fmt::format("Title {:016x}", titleId);
 
 	CemodPermissionDialog dialog(this, wxString::FromUTF8(gameName), std::move(requests));
-	if (dialog.ShowModal() != wxID_OK) return false;
+	m_active_cemod_permission_dialog = &dialog;
+	const auto modalResult = dialog.ShowModal();
+	m_active_cemod_permission_dialog = nullptr;
+	if (modalResult != wxID_OK) return false;
+	std::vector<Application::CemodPermissionDecision> decisions;
 	for (const auto& selection : dialog.GetSelections())
-	{
-		GetConfig().SetCemuExtendModGrant(titleId, selection.principal,
-			{selection.grantedPermissions, selection.requestedPermissions, true});
-	}
-	GetConfigHandle().Save();
+		decisions.push_back({selection.principal, selection.requestedPermissions,
+			selection.grantedPermissions});
+	m_emulationController.SaveCemodPermissionDecisions(titleId, decisions);
 	return true;
 }
 

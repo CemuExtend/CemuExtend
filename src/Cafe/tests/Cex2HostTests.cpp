@@ -4,6 +4,7 @@
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include "cemuextend/services.hpp"
 #include "cemuextend/transport.hpp"
@@ -338,7 +339,7 @@ void TestPrincipalStorageAndPagination()
 		static_cast<std::uint16_t>(Status::InvalidArgument));
 
 #ifndef _WIN32
-	const auto titleRoot = std::filesystem::temp_directory_path() / "cemuextend-cex2-tests" /
+	const auto titleRoot = cemuextend_hle::Cex2Storage::TestingRoot() /
 		"files" / "ce02000000000001";
 	std::error_code filesystemError;
 	std::filesystem::path namespaceRoot;

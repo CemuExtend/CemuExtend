@@ -47,13 +47,126 @@ InputManager::InputManager()
 	create_provider<WiimoteControllerProvider>();
 #endif
 
-	m_update_thread_shutdown.store(false);
-	m_update_thread = std::thread(&InputManager::update_thread, this);
 }
 
 InputManager::~InputManager()
 {
 	// destructors will not invoked forever, so we manually release resources in Shutdown().
+}
+
+void InputManager::Start()
+{
+	if (m_update_thread.joinable())
+		return;
+	m_update_thread_shutdown.store(false, std::memory_order_release);
+	m_update_thread = std::thread(&InputManager::update_thread, this);
+}
+
+void InputManager::ConfigureHost(Host::IKeyboardState& keyboard,
+	Host::IWindowMetrics& windowMetrics, Host::INativeSurfaceProvider& nativeSurfaces,
+	Input::IControllerStateObserver& observer)
+{
+	std::unique_lock lock(m_host_mutex);
+	m_keyboard_host = &keyboard;
+	m_window_metrics_host = &windowMetrics;
+	m_native_surfaces_host = &nativeSurfaces;
+	m_controller_observer = &observer;
+}
+
+void InputManager::ClearHost()
+{
+	std::unique_lock lock(m_host_mutex);
+	m_controller_observer = nullptr;
+	m_native_surfaces_host = nullptr;
+	m_window_metrics_host = nullptr;
+	m_keyboard_host = nullptr;
+}
+
+void InputManager::ConfigureEmulationContext(Input::IEmulationInputContext& context)
+{
+	std::unique_lock lock(m_host_mutex);
+	m_emulation_context = &context;
+}
+
+void InputManager::ClearEmulationContext(Input::IEmulationInputContext& context)
+{
+	std::unique_lock lock(m_host_mutex);
+	if (m_emulation_context == &context)
+		m_emulation_context = nullptr;
+}
+
+void InputManager::NotifyControllerState(const ControllerState& current,
+	const ControllerState& previous)
+{
+	Input::IControllerStateObserver* observer{};
+	{
+		std::shared_lock lock(m_host_mutex);
+		observer = m_controller_observer;
+	}
+	if (observer)
+		observer->OnControllerState(current, previous);
+}
+
+std::string InputManager::GetHostKeyName(std::uint32_t key) const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_keyboard_host ? m_keyboard_host->GetKeyName(key) : std::to_string(key);
+}
+
+std::vector<std::uint32_t> InputManager::GetPressedHostKeys() const
+{
+	const auto states = GetHostKeyStates();
+	std::vector<std::uint32_t> pressed;
+	pressed.reserve(states.size());
+	for (const auto& state : states)
+		if (state.pressed)
+			pressed.push_back(state.key);
+	return pressed;
+}
+
+std::vector<Host::KeyState> InputManager::GetHostKeyStates() const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_keyboard_host ? m_keyboard_host->GetKeyStates() : std::vector<Host::KeyState>{};
+}
+
+bool InputManager::IsHostDebuggerFocused() const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_window_metrics_host && m_window_metrics_host->GetWindowMetrics().debuggerFocused;
+}
+
+bool InputManager::IsHostKeyDown(Host::Key key) const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_keyboard_host && m_keyboard_host->IsKeyDown(key);
+}
+
+Host::WindowMetricsSnapshot InputManager::GetHostWindowMetrics() const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_window_metrics_host ? m_window_metrics_host->GetWindowMetrics() :
+		Host::WindowMetricsSnapshot{};
+}
+
+Host::NativeSurfaceSnapshot InputManager::GetHostNativeSurfaces() const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_native_surfaces_host ? m_native_surfaces_host->GetNativeSurfaces() :
+		Host::NativeSurfaceSnapshot{};
+}
+
+bool InputManager::IsTitleRunningForInput() const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_emulation_context && m_emulation_context->IsTitleRunning();
+}
+
+Input::ScreenImageArea InputManager::GetScreenImageArea(bool padView) const
+{
+	std::shared_lock lock(m_host_mutex);
+	return m_emulation_context ? m_emulation_context->GetScreenImageArea(padView) :
+		Input::ScreenImageArea{};
 }
 
 void InputManager::load() noexcept

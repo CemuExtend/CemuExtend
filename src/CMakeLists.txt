@@ -53,8 +53,10 @@ function(cemu_use_precompiled_header target_name)
 endfunction()
 
 add_subdirectory(Common)
+add_subdirectory(frontend)
 add_subdirectory(gui)
 add_subdirectory(Cafe)
+add_subdirectory(application)
 add_subdirectory(Cemu)
 add_subdirectory(config)
 add_subdirectory(input)
@@ -63,10 +65,71 @@ add_subdirectory(util)
 add_subdirectory(imgui)
 add_subdirectory(resource)
 
+function(cemu_collect_target_link_closure root_target out_var)
+	set(queue "${root_target}")
+	set(visited "")
+	set(closure "")
+	while(queue)
+		list(POP_FRONT queue current)
+		if(current IN_LIST visited OR NOT TARGET "${current}")
+			continue()
+		endif()
+		list(APPEND visited "${current}")
+		foreach(property LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+			get_target_property(edges "${current}" "${property}")
+			if(NOT edges)
+				continue()
+			endif()
+			foreach(edge IN LISTS edges)
+				if(TARGET "${edge}")
+					list(APPEND closure "${edge}")
+					list(APPEND queue "${edge}")
+				endif()
+			endforeach()
+		endforeach()
+	endwhile()
+	list(REMOVE_DUPLICATES closure)
+	set(${out_var} "${closure}" PARENT_SCOPE)
+endfunction()
+
+function(cemu_assert_target_has_no_edge target)
+	cemu_collect_target_link_closure("${target}" link_edges)
+	foreach(forbidden IN LISTS ARGN)
+		if(forbidden IN_LIST link_edges)
+			message(FATAL_ERROR
+				"Forbidden transitive architecture edge: ${target} -> ... -> ${forbidden}")
+		endif()
+	endforeach()
+endfunction()
+
+# Configure-time target DAG guards. Forward edges are intentionally allowed;
+# these assertions reject the reverse edges that would form architecture cycles.
+cemu_assert_target_has_no_edge(CemuHostContracts CemuCafe CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
+
+# Source-level layer checks are mandatory for every configuration, including
+# production builds with BUILD_TESTING=OFF. The ctest registration below keeps
+# the same guard visible in test reports as well.
+set(SOURCE_ROOT "${CMAKE_SOURCE_DIR}")
+include("${CMAKE_SOURCE_DIR}/cmake/CheckArchitecture.cmake")
+
+if(BUILD_TESTING)
+	add_test(NAME architecture_guards
+		COMMAND ${CMAKE_COMMAND}
+			-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}
+			-P ${CMAKE_SOURCE_DIR}/cmake/CheckArchitecture.cmake)
+endif()
+
 add_executable(CemuBin
 	main.cpp
 	mainLLE.cpp
 )
+
+if(NOT ENABLE_WXWIDGETS)
+	target_sources(CemuBin PRIVATE headless/HeadlessWindowSystem.cpp)
+endif()
 
 cemu_use_precompiled_header(CemuBin)
 
@@ -216,15 +279,20 @@ if(ENABLE_SDL)
 endif()
 
 target_link_libraries(CemuBin PRIVATE
+	CemuApplication
 	CemuAudio
 	CemuCafe
 	CemuCommon
 	CemuComponents
 	CemuConfig
-	CemuGui
 	CemuInput
+	CemuResource
 	CemuUtil
 )
+
+if(ENABLE_WXWIDGETS)
+	target_link_libraries(CemuBin PRIVATE CemuWxGui)
+endif()
 
 if(UNIX AND NOT APPLE)
 	# due to nasm output some linkers will make stack executable

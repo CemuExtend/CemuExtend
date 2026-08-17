@@ -1,5 +1,7 @@
 #pragma once
 
+#include "application/EmulationController.h"
+
 #include <wx/app.h>
 
 class MainWindow;
@@ -31,6 +33,9 @@ private:
 	void ActivateApp(wxActivateEvent& event);
 	static std::vector<const wxLanguageInfo*> GetAvailableTranslationLanguages(wxTranslations* translationsMgr);
 
+	// Composition root: the application owns core lifecycle and publishes
+	// use-case events to whichever frontend is currently attached.
+	Application::EmulationController m_emulationController;
 	MainWindow* m_mainFrame = nullptr;
 #if BOOST_OS_MACOS
 	void OnSDLEventPumpTimer(wxTimerEvent& event);

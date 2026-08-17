@@ -12,6 +12,7 @@
 #include "util/helpers/Semaphore.h"
 #include "util/containers/flat_hash_map.hpp"
 #include "util/containers/robin_hood.h"
+#include "host/contracts/HostContracts.h"
 
 struct VkSupportedFormatInfo_t
 {
@@ -132,11 +133,6 @@ public:
 	bool neverSkipAccurateBarrier{false};
 };
 
-namespace WindowSystem
-{
-	struct WindowHandleInfo;
-};
-
 class VulkanRenderer : public Renderer
 {
 	friend class LatteQueryObjectVk;
@@ -185,8 +181,9 @@ public:
 		std::array<uint8, VK_UUID_SIZE> uuid;
 	};
 
-	static std::vector<DeviceInfo> GetDevices();
-	VulkanRenderer();
+	static std::vector<DeviceInfo> GetDevices(const Host::NativeWindowHandle& mainWindow);
+	VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	virtual ~VulkanRenderer();
 
 	static VulkanRenderer* GetInstance();
@@ -219,7 +216,8 @@ public:
 	#endif
 #endif
 
-	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance, struct WindowSystem::WindowHandleInfo& windowInfo);
+	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance,
+		const Host::NativeWindowHandle& windowInfo);
 
 	void AppendOverlayDebugInfo() override;
 
@@ -492,7 +490,7 @@ private:
 
 	}m_featureControl{};
 	static bool CheckDeviceExtensionSupport(const VkPhysicalDevice device, FeatureControl& info);
-	static std::vector<const char*> CheckInstanceExtensionSupport(FeatureControl& info);
+	std::vector<const char*> CheckInstanceExtensionSupport(FeatureControl& info);
 
 	bool UpdateSwapchainProperties(bool mainWindow);
 	void SwapBuffer(bool mainWindow);

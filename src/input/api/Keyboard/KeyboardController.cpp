@@ -1,7 +1,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "input/api/Keyboard/KeyboardController.h"
-#include "WindowSystem.h"
+#include "input/InputManager.h"
 
 KeyboardController::KeyboardController()
 	: base_type("keyboard", "Keyboard")
@@ -11,18 +11,18 @@ KeyboardController::KeyboardController()
 
 std::string KeyboardController::get_button_name(uint64 button) const
 {
-	return WindowSystem::GetKeyCodeName(button);
+	return InputManager::instance().GetHostKeyName(button);
 }
 
 ControllerState KeyboardController::raw_state()
 {
 	ControllerState result{};
 
-	if (WindowSystem::GetWindowInfo().debugger_focused)
+	auto& inputManager = InputManager::instance();
+	if (inputManager.IsHostDebuggerFocused())
 		return result;
 
-	boost::container::small_vector<uint32, 16> pressedKeys;
-	WindowSystem::GetWindowInfo().iter_keystates([&pressedKeys](const std::pair<const uint32, bool>& keyState) { if (keyState.second) pressedKeys.emplace_back(keyState.first); });
+	auto pressedKeys = inputManager.GetPressedHostKeys();
 	result.buttons.SetPressedButtons(pressedKeys);
 	return result;
 }

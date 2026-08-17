@@ -1,7 +1,6 @@
 #include "Common/precompiled.h"
 
-#include "Cafe/HW/Espresso/CemodPackage.h"
-#include "Cafe/HW/Espresso/ModExecutionContext.h"
+#include "Cemu/CemuExtend/Formats/CemodPackage.h"
 
 #include <openssl/evp.h>
 #include <rapidjson/document.h>
@@ -482,12 +481,12 @@ bool ParseManifest(std::span<const std::byte> bytes, CemodManifest& manifest, st
 	manifest.instructionsPerFrame = cpu["instructions_per_frame"].GetUint();
 	manifest.timeMicrosecondsPerFrame = cpu["time_us_per_frame"].GetUint();
 	manifest.entrypoint.assign(document["entrypoint"].GetString(), document["entrypoint"].GetStringLength());
-	if (manifest.codeBytes == 0 || manifest.codeBytes > ModExecutionContext::kMaximumCodeBytes ||
-		manifest.privateBytes == 0 || manifest.privateBytes > ModExecutionContext::kMaximumPrivateBytes ||
-		manifest.stackBytes == 0 || manifest.stackBytes > ModExecutionContext::kMaximumStackBytes ||
-		manifest.stackBytes % ModExecutionContext::kPageSize != 0 ||
+	if (manifest.codeBytes == 0 || manifest.codeBytes > 16U * 1024U * 1024U ||
+		manifest.privateBytes == 0 || manifest.privateBytes > 32U * 1024U * 1024U ||
+		manifest.stackBytes == 0 || manifest.stackBytes > 1U * 1024U * 1024U ||
+		manifest.stackBytes % 4096U != 0 ||
 		manifest.instructionsPerFrame == 0 ||
-		manifest.instructionsPerFrame > ModExecutionContext::kMaximumInstructionsPerFrame ||
+		manifest.instructionsPerFrame > 1'000'000U ||
 		manifest.timeMicrosecondsPerFrame == 0 || manifest.timeMicrosecondsPerFrame > 1000 ||
 		manifest.entrypoint != "cemod_init")
 	{

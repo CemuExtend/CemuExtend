@@ -50,7 +50,9 @@ std::vector<MetalRenderer::DeviceInfo> MetalRenderer::GetDevices()
     return result;
 }
 
-MetalRenderer::MetalRenderer() : Renderer(RendererAPI::Metal)
+MetalRenderer::MetalRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+    std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+    : Renderer(RendererAPI::Metal, std::move(windowMetrics), std::move(nativeSurfaces))
 {
     // Options
 

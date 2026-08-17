@@ -1,6 +1,7 @@
 add_library(CemuInput
 	InputManager.cpp
 	InputManager.h
+	InputHost.h
 	ControllerFactory.cpp
 	ControllerFactory.h
 	api/ControllerState.h
@@ -99,10 +100,9 @@ if(ENABLE_SDL)
 endif()
 
 target_include_directories(CemuInput PUBLIC "../")
-
 target_link_libraries(CemuInput PRIVATE
 	CemuCommon
-	CemuGui
+	CemuHostContracts
 )
 
 if (ENABLE_BLUEZ)

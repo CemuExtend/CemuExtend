@@ -2,7 +2,7 @@
 
 #include <Windows.h>
 
-#include "WindowSystem.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 
 typedef LONG NTSTATUS;
 
@@ -53,7 +53,10 @@ public:
 private:
 	bool HasMonitorChanged()
 	{
-		HWND hWnd = (HWND)WindowSystem::GetWindowInfo().canvas_main.surface;
+		const auto* renderer = VulkanRenderer::GetInstance();
+		const auto window = renderer ? renderer->GetNativeSurfaces() :
+			Host::NativeSurfaceSnapshot{};
+		HWND hWnd = static_cast<HWND>(window.mainSurface.surface);
 		if (hWnd == 0)
 			return true;
 		HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
@@ -71,7 +74,10 @@ private:
 
 	HRESULT GetAdapterHandleFromHwnd(D3DKMT_HANDLE* phAdapter, UINT* pOutput)
 	{
-		HWND hWnd = (HWND)WindowSystem::GetWindowInfo().canvas_main.surface;
+		const auto* renderer = VulkanRenderer::GetInstance();
+		const auto window = renderer ? renderer->GetNativeSurfaces() :
+			Host::NativeSurfaceSnapshot{};
+		HWND hWnd = static_cast<HWND>(window.mainSurface.surface);
 		if (hWnd == 0)
 			return E_FAIL;
 

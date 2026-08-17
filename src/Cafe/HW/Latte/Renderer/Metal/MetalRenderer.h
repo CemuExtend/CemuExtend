@@ -150,7 +150,8 @@ public:
 
     static std::vector<DeviceInfo> GetDevices();
 
-    MetalRenderer();
+    MetalRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+        std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~MetalRenderer() override;
 
 	static MetalRenderer* GetInstance() {

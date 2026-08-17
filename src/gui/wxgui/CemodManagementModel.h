@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config/CemuConfig.h"
+#include "Cemu/CemuExtend/CemodInspectionService.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -10,11 +10,7 @@
 #include <variant>
 #include <vector>
 
-enum class CemodGuiExecutionMode : std::uint8_t
-{
-	Isolated,
-	TrustedNative,
-};
+using CemodGuiExecutionMode = CemuExtend::CemodExecutionMode;
 
 // GUI-owned copy of the catalog data. Runtime discovery types must not leak
 // into this header because the wxGUI model is also compiled without Cemu's PCH.
@@ -30,20 +26,7 @@ struct CemodGuiPackageInfo
 	std::string error;
 };
 
-enum class CemodGuiPermission : std::uint8_t
-{
-	NativeMemory,
-	FunctionPatching,
-	PhysicalAddressPatching,
-	FilesystemRead,
-	FilesystemWrite,
-	Network,
-	MappedMemory,
-	Notifications,
-	ContentRedirection,
-	Modules,
-	PluginManagement,
-};
+using CemodGuiPermission = CemuExtend::CemodPermission;
 
 struct CemodGuiPermissionItem
 {
@@ -135,21 +118,8 @@ public:
 		std::string_view pluginIdentity) const = 0;
 };
 
-enum class CemodGuiApprovalResult : std::uint8_t
-{
-	Approved,
-	NeedsReapproval,
-	DeniedByDefault,
-	DeniedHeadlessRequiresExplicitApproval,
-};
-
-struct CemodGuiApprovalState
-{
-	CemodGuiApprovalResult result{CemodGuiApprovalResult::DeniedByDefault};
-	std::uint64_t requested{};
-	std::uint64_t granted{};
-	std::string reason;
-};
+using CemodGuiApprovalResult = CemuExtend::CemodApprovalResult;
+using CemodGuiApprovalState = CemuExtend::CemodApprovalState;
 
 struct CemodPluginView
 {
@@ -201,9 +171,9 @@ public:
 	[[nodiscard]] static std::string PermissionName(CemodGuiPermission permission);
 	[[nodiscard]] static std::uint64_t DefaultGrantedPermissions(std::uint64_t requested);
 	[[nodiscard]] static CemodGuiApprovalState EvaluateApproval(std::uint64_t requested,
-		const std::optional<CemuExtendPermissionApproval>& approval, bool headless);
+		const std::optional<CemuExtend::CemodApproval>& approval, bool headless);
 	[[nodiscard]] static CemodPluginView InspectPlugin(const CemodGuiPackageInfo& info,
-		std::uint64_t titleId, const std::optional<CemuExtendPermissionApproval>& approval,
+		std::uint64_t titleId, const std::optional<CemuExtend::CemodApproval>& approval,
 		bool headless = false);
 
 	// These methods intentionally do not manufacture runtime state. A later runtime adapter

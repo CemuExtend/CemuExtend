@@ -3,16 +3,7 @@
 #include "wxgui/GraphicPacksWindow2.h"
 #include "wxgui/DownloadGraphicPacksWindow.h"
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
-#include "Cafe/GraphicPack/GraphicPack2.h"
-#include "config/CemuConfig.h"
-#include "config/ActiveSettings.h"
-
-#include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
-
-#include "Cafe/CafeSystem.h"
-#include "Cafe/TitleList/TitleList.h"
-
-#include "wxHelper.h"
+#include "util/helpers/helpers.h"
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -22,13 +13,13 @@
 class wxGraphicPackData : public wxTreeItemData
 {
 public:
-	wxGraphicPackData(GraphicPackPtr pack)
-	 : m_pack(std::move(pack)) {  }
+	explicit wxGraphicPackData(std::string key)
+	 : m_key(std::move(key)) {  }
 
-	const GraphicPackPtr& GetGraphicPack() const { return m_pack; }
+	const std::string& GetKey() const { return m_key; }
 
 private:
-	GraphicPackPtr m_pack;
+	std::string m_key;
 };
 
 void GraphicPacksWindow2::FillGraphicPackList() const
@@ -36,21 +27,21 @@ void GraphicPacksWindow2::FillGraphicPackList() const
 	wxWindowUpdateLocker lock(m_graphic_pack_tree);
 
 	m_graphic_pack_tree->DeleteAllItems();
-	auto graphic_packs = GraphicPack2::GetGraphicPacks();
+	const auto graphic_packs = m_emulationController.ListGraphicPacks();
 
 	const auto root = m_graphic_pack_tree->AddRoot("Root");
 
 	const bool has_filter = !m_filter.empty();
 
-	for(auto& p : graphic_packs)
+	for(const auto& p : graphic_packs)
 	{
-		if (!p->IsUniversal())
+		if (!p.universal)
 		{
 			// filter graphic packs by given title id
 			if (m_filter_installed_games && !m_installed_games.empty())
 			{
 				bool found = false;
-				for (uint64 titleId : p->GetTitleIds())
+				for (uint64 titleId : p.titleIds)
 				{
 					if (std::find(m_installed_games.cbegin(), m_installed_games.cend(), titleId) != m_installed_games.cend())
 					{
@@ -68,11 +59,11 @@ void GraphicPacksWindow2::FillGraphicPackList() const
 			{
 				bool found = false;
 	
-				if (boost::icontains(p->GetVirtualPath(), m_filter))
+				if (boost::icontains(p.virtualPath, m_filter))
 					found = true;
 				else
 				{
-					for (uint64 titleId : p->GetTitleIds())
+					for (uint64 titleId : p.titleIds)
 					{
 						if (boost::icontains(fmt::format("{:x}", titleId), m_filter))
 						{
@@ -87,7 +78,7 @@ void GraphicPacksWindow2::FillGraphicPackList() const
 			}
 		}
 
-		const auto& path = p->GetVirtualPath();
+		const auto& path = p.virtualPath;
 		auto tokens = TokenizeView(path, '/');
 		auto node = root;
 		for(size_t i=0; i<tokens.size(); i++)
@@ -124,25 +115,25 @@ void GraphicPacksWindow2::FillGraphicPackList() const
 
 		if(node.IsOk() && node != root)
 		{
-			m_graphic_pack_tree->SetItemData(node, new wxGraphicPackData(p));
+			m_graphic_pack_tree->SetItemData(node, new wxGraphicPackData(p.key));
 			bool canEnable = true;
 
-			if (p->GetVersion() == 3)
+			if (p.version == 3)
 			{
 				auto tmp_text = m_graphic_pack_tree->GetItemText(node);
 				m_graphic_pack_tree->SetItemText(node, tmp_text + " (may not be compatible with Vulkan)");
 			}
-			else if (p->GetVersion() != 3 && p->GetVersion() != 4 && p->GetVersion() != 5 && p->GetVersion() != 6 && p->GetVersion() != GraphicPack2::GFXPACK_VERSION_7 && p->GetVersion() != GraphicPack2::GFXPACK_VERSION_8)
+			else if (!p.supportedVersion)
 			{
 				auto tmp_text = m_graphic_pack_tree->GetItemText(node);
 				m_graphic_pack_tree->SetItemText(node, tmp_text + " (Unsupported version)");
 				m_graphic_pack_tree->SetItemTextColour(node, m_incompatible_colour);
 				canEnable = false;
 			}
-			else if (p->IsActivated())
+			else if (p.activated)
 				m_graphic_pack_tree->SetItemTextColour(node, m_activated_colour);
 
-			m_graphic_pack_tree->MakeCheckable(node, p->IsEnabled());
+			m_graphic_pack_tree->MakeCheckable(node, p.enabled);
 			if (!canEnable)
 				m_graphic_pack_tree->DisableCheckBox(node);
 		}
@@ -188,16 +179,13 @@ void GraphicPacksWindow2::ExpandChildren(const std::vector<wxTreeItemId>& ids, s
 	ExpandChildren(children, counter);
 }
 
-void GraphicPacksWindow2::RefreshGraphicPacks()
-{
-	GraphicPack2::ClearGraphicPacks();
-	GraphicPack2::LoadAll();
-}
-
-GraphicPacksWindow2::GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter)
+GraphicPacksWindow2::GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
+	Application::EmulationController& emulationController)
 	: wxDialog(parent, wxID_ANY, _("Graphic packs"), wxDefaultPosition, wxSize(1000,670), wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
-		m_installed_games(CafeTitleList::GetAllTitleIds())
+		m_emulationController(emulationController)
 {
+	for (const auto& title : m_emulationController.ListTitles())
+		m_installed_games.push_back(title.titleId);
 	if (title_id_filter != 0)
 		m_filter = fmt::format("{:x}", title_id_filter);
 
@@ -329,36 +317,13 @@ GraphicPacksWindow2::GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_fil
 
 	SetSizer(main_sizer);
 
-	UpdateTitleRunning(CafeSystem::IsTitleRunning());
+	UpdateTitleRunning(m_emulationController.IsTitleRunning());
 	FillGraphicPackList();
 }
 
 void GraphicPacksWindow2::SaveStateToConfig()
 {
-	auto& data = GetConfigHandle().data();
-	data.graphic_pack_entries.clear();
-
-	for (const auto& gp : GraphicPack2::GetGraphicPacks())
-	{
-		auto filename = _utf8ToPath(gp->GetNormalizedPathString());
-		if (gp->IsEnabled())
-		{
-			data.graphic_pack_entries.try_emplace(filename);
-			auto& it = data.graphic_pack_entries[filename];
-			// otherwise store all selected presets
-			for (const auto& preset : gp->GetActivePresets())
-				it.try_emplace(preset->category, preset->name);
-		}
-		else if(gp->IsDefaultEnabled())
-		{
-			// save that its disabled
-			data.graphic_pack_entries.try_emplace(filename);
-			auto& it = data.graphic_pack_entries[filename];
-			it.try_emplace("_disabled", "false");
-		}
-	}
-
-	GetConfigHandle().Save();
+	m_emulationController.SaveGraphicPackState();
 }
 
 GraphicPacksWindow2::~GraphicPacksWindow2()
@@ -383,18 +348,29 @@ wxTreeItemId GraphicPacksWindow2::FindTreeItem(const wxTreeItemId& root, const w
 	return {};
 }
 
-void GraphicPacksWindow2::LoadPresetSelections(const GraphicPackPtr& gp)
+std::optional<Application::GraphicPackInfo> GraphicPacksWindow2::FindGraphicPack(
+	std::string_view key) const
 {
-	std::vector<std::string> order;
-	auto presets = gp->GetCategorizedPresets(order);
-	for(const auto& category : order)
+	const auto packs = m_emulationController.ListGraphicPacks();
+	const auto found = std::ranges::find_if(packs,
+		[key](const auto& pack) { return pack.key == key; });
+	return found == packs.end() ? std::nullopt : std::optional{*found};
+}
+
+void GraphicPacksWindow2::LoadPresetSelections(
+	const Application::GraphicPackInfo& graphicPack)
+{
+	for(const auto& category : graphicPack.presetOrder)
 	{
-		const auto& entry = presets[category];
+		std::vector<const Application::GraphicPackPreset*> entry;
+		for (const auto& preset : graphicPack.presets)
+			if (preset.category == category)
+				entry.push_back(&preset);
 		
 		// test if any preset is visible and update its status
-		if (std::none_of(entry.cbegin(), entry.cend(), [gp](const auto& p)
+		if (std::none_of(entry.cbegin(), entry.cend(), [](const auto* preset)
 		{
-			return p->visible;
+			return preset->visible;
 		}))
 		{
 			continue;
@@ -410,7 +386,7 @@ void GraphicPacksWindow2::LoadPresetSelections(const GraphicPackPtr& gp)
 		preset->Bind(wxEVT_CHOICE, &GraphicPacksWindow2::OnActivePresetChanged, this);
 
 		std::optional<std::string> active_preset;
-		for (auto& pentry : entry)
+		for (const auto* pentry : entry)
 		{
 			if (!pentry->visible)
 				continue;
@@ -448,25 +424,27 @@ void GraphicPacksWindow2::OnTreeSelectionChanged(wxTreeEvent& event)
 			if(!m_gp_options->IsShown())
 				m_gp_options->Show();
 			
-			const auto& gp = data->GetGraphicPack();
-			if (gp != m_shown_graphic_pack)
+			const auto graphicPack = FindGraphicPack(data->GetKey());
+			if (!graphicPack)
+				return;
+			if (graphicPack->key != m_shown_graphic_pack_key)
 			{
 				m_preset_sizer->Clear(true);
-				m_gp_name = gp->GetName();
+				m_gp_name = graphicPack->name;
 				m_graphic_pack_name->SetLabel(wxString::FromUTF8(m_gp_name));
 
-				if (gp->GetDescription().empty())
+				if (graphicPack->description.empty())
 					m_gp_description = _("This graphic pack has no description").utf8_string();
 				else
-					m_gp_description = gp->GetDescription();
+					m_gp_description = graphicPack->description;
 
 				m_graphic_pack_description->SetLabel(wxString::FromUTF8(m_gp_description));
 
-				LoadPresetSelections(gp);
+				LoadPresetSelections(*graphicPack);
 				
-				m_reload_shaders->Enable(gp->HasShaders());
+				m_reload_shaders->Enable(graphicPack->hasShaders);
 
-				m_shown_graphic_pack = gp;
+				m_shown_graphic_pack_key = graphicPack->key;
 
 				m_graphic_pack_name->Wrap(m_graphic_pack_name->GetParent()->GetClientSize().GetWidth() - 20);
 				m_graphic_pack_name->GetGrandParent()->Layout();
@@ -487,7 +465,7 @@ void GraphicPacksWindow2::OnTreeSelectionChanged(wxTreeEvent& event)
 
 	m_reload_shaders->Disable();
 
-	m_shown_graphic_pack.reset();
+	m_shown_graphic_pack_key.clear();
 
 	m_gp_options->Hide();
 	m_right_panel->FitInside();
@@ -506,34 +484,19 @@ void GraphicPacksWindow2::OnTreeChoiceChanged(wxTreeEvent& event)
 	if (!data)
 		return;
 
-	auto& graphic_pack = data->GetGraphicPack();
-	graphic_pack->SetEnabled(state);
-
-	bool requiresRestart = graphic_pack->RequiresRestart(true, false);
-	bool isRunning = CafeSystem::IsTitleRunning() && graphic_pack->ContainsTitleId(CafeSystem::GetForegroundTitleId());
-	if (isRunning)
+	const auto result = m_emulationController.SetGraphicPackEnabled(data->GetKey(), state);
+	if (!result)
 	{
-		if (state)
-		{
-			GraphicPack2::ActivateGraphicPack(graphic_pack);
-			if (!requiresRestart)
-			{
-				ReloadPack(graphic_pack);
-				m_graphic_pack_tree->SetItemTextColour(item, m_activated_colour);
-			}
-		}
-		else
-		{
-			if (!requiresRestart)
-			{
-				DeleteShadersFromRuntimeCache(graphic_pack);
-				m_graphic_pack_tree->SetItemTextColour(item, m_default_colour);
-			}
-			GraphicPack2::DeactivateGraphicPack(graphic_pack);
-		}
+		m_graphic_pack_tree->Check(item, !state);
+		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Graphic packs"),
+			wxOK | wxICON_ERROR, this);
+		return;
 	}
+	if (result.titleRunning && !result.requiresRestart)
+		m_graphic_pack_tree->SetItemTextColour(item,
+			state ? m_activated_colour : m_default_colour);
 
-	if (!m_info_bar->IsShown() && (isRunning && requiresRestart))
+	if (!m_info_bar->IsShown() && result.titleRunning && result.requiresRestart)
 		m_info_bar->ShowMessage(_("Restart of Cemu required for changes to take effect"));
 
 	// also change selection to activated gp
@@ -574,7 +537,7 @@ void GraphicPacksWindow2::ClearPresets()
 
 void GraphicPacksWindow2::OnActivePresetChanged(wxCommandEvent& event)
 {
-	if (!m_shown_graphic_pack)
+	if (m_shown_graphic_pack_key.empty())
 		return;
 
 	const auto obj = wxDynamicCast(event.GetEventObject(), wxChoice);
@@ -582,27 +545,27 @@ void GraphicPacksWindow2::OnActivePresetChanged(wxCommandEvent& event)
 	const auto string_data = dynamic_cast<wxStringClientData*>(obj->GetClientObject());
 	wxASSERT(string_data);
 	const auto preset = obj->GetStringSelection().utf8_string();
-	if(m_shown_graphic_pack->SetActivePreset(string_data->GetData().utf8_string(), preset))
+	const auto result = m_emulationController.SetGraphicPackPreset(
+		m_shown_graphic_pack_key, string_data->GetData().utf8_string(), preset);
+	if (result.changed && result.info)
 	{
 		wxWindowUpdateLocker lock(this);
 		ClearPresets();
-		LoadPresetSelections(m_shown_graphic_pack);
+		LoadPresetSelections(*result.info);
 		//m_preset_sizer->GetContainingWindow()->Layout();
 		//m_right_panel->FitInside();
 		m_right_panel->FitInside();
 		m_right_panel->Layout();
 	}
 
-	if (!m_shown_graphic_pack->RequiresRestart(false, true))
-		ReloadPack(m_shown_graphic_pack);
-	else if (!m_info_bar->IsShown())
+	if (result.requiresRestart && !m_info_bar->IsShown())
 		m_info_bar->ShowMessage(_("Restart of Cemu required for changes to take effect"));		
 }
 
 void GraphicPacksWindow2::OnReloadShaders(wxCommandEvent& event)
 {
-	if (m_shown_graphic_pack)
-		ReloadPack(m_shown_graphic_pack);
+	if (!m_shown_graphic_pack_key.empty())
+		(void)m_emulationController.ReloadGraphicPack(m_shown_graphic_pack_key);
 }
 
 void GraphicPacksWindow2::OnClickCustomDownload(wxCommandEvent& event)
@@ -610,39 +573,28 @@ void GraphicPacksWindow2::OnClickCustomDownload(wxCommandEvent& event)
 	DownloadCustomGraphicPackWindow frame(this);
 	if (frame.ShowModal() == wxID_OK)
 	{
-		RefreshGraphicPacks();
-		FillGraphicPackList();
+		if (m_emulationController.RefreshGraphicPacks())
+			FillGraphicPackList();
 	}
 }
 
 void GraphicPacksWindow2::OnCheckForUpdates(wxCommandEvent& event)
 {
-	DownloadGraphicPacksWindow frame(this);
+	DownloadGraphicPacksWindow frame(this, m_emulationController);
 	SaveStateToConfig();
 	const int updateResult = frame.ShowModal();
 	if (updateResult == wxID_OK)
 	{
-		if (!CafeSystem::IsTitleRunning())
+		const auto refresh = m_emulationController.RefreshGraphicPacks();
+		if (refresh)
 		{
-			// remember virtual paths of all the enabled packs
-			std::map<std::string, std::string> previouslyEnabledPacks;
-			for(auto& it : GraphicPack2::GetGraphicPacks())
-			{
-				if(it->IsEnabled())
-					previouslyEnabledPacks.emplace(it->GetNormalizedPathString(), it->GetVirtualPath());
-			}
-			// reload graphic packs
-			RefreshGraphicPacks();
 			FillGraphicPackList();
-			// remove packs which are still present
-			for(auto& it : GraphicPack2::GetGraphicPacks())
-				previouslyEnabledPacks.erase(it->GetNormalizedPathString());
-			if(!previouslyEnabledPacks.empty())
+			if(!refresh.removedEnabledPaths.empty())
 			{
 				std::string lost_packs;
-				for(auto& it : previouslyEnabledPacks)
+				for(const auto& path : refresh.removedEnabledPaths)
 				{
-					lost_packs.append(it.second);
+					lost_packs.append(path);
 					lost_packs.push_back('\n');
 				}
 				wxString message = _("This update removed or renamed the following graphic packs:");
@@ -650,6 +602,9 @@ void GraphicPacksWindow2::OnCheckForUpdates(wxCommandEvent& event)
 				wxMessageBox(message, _("Warning"), wxOK | wxCENTRE | wxICON_INFORMATION, this);
 			}
 		}
+		else if (!refresh.diagnostic.empty())
+			wxMessageBox(wxString::FromUTF8(refresh.diagnostic), _("Graphic packs"),
+				wxOK | wxICON_WARNING, this);
 	}
 }
 
@@ -712,30 +667,3 @@ void GraphicPacksWindow2::UpdateTitleRunning(bool running)
 		m_download_from_url->SetToolTip(nullptr);
 	}
 }
-
-void GraphicPacksWindow2::ReloadPack(const GraphicPackPtr& graphic_pack) const
-{
-	if (graphic_pack->HasShaders() || graphic_pack->HasPatches() || graphic_pack->HasCustomVSyncFrequency())
-	{
-		if (graphic_pack->Reload())
-		{
-			DeleteShadersFromRuntimeCache(graphic_pack);
-		}
-	}
-}
-
-void GraphicPacksWindow2::DeleteShadersFromRuntimeCache(const GraphicPackPtr& graphic_pack) const
-{
-	for (const auto& shader : graphic_pack->GetCustomShaders())
-	{
-		LatteConst::ShaderType shaderType;
-		if (shader.type == GraphicPack2::GP_SHADER_TYPE::VERTEX)
-			shaderType = LatteConst::ShaderType::Vertex;
-		else if (shader.type == GraphicPack2::GP_SHADER_TYPE::GEOMETRY)
-			shaderType = LatteConst::ShaderType::Geometry;
-		else if (shader.type == GraphicPack2::GP_SHADER_TYPE::PIXEL)
-			shaderType = LatteConst::ShaderType::Pixel;
-		LatteAsyncCommands_queueDeleteShader(shader.shader_base_hash, shader.shader_aux_hash, shaderType);
-	}
-}
-

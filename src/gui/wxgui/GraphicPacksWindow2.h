@@ -6,8 +6,7 @@
 #include <wx/hyperlink.h>
 
 #include "wxcomponents/checktree.h"
-
-#include "Cafe/GraphicPack/GraphicPack2.h"
+#include "application/EmulationController.h"
 
 class wxSplitterWindow;
 class wxPanel;
@@ -17,16 +16,17 @@ class wxChoice;
 class GraphicPacksWindow2 : public wxDialog
 {
 public:
-	GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter);
+	GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
+		Application::EmulationController& emulationController);
 	~GraphicPacksWindow2();
 
-	static void RefreshGraphicPacks();
 	void UpdateTitleRunning(bool running);
 
 private:
 	std::string m_filter;
 	bool m_filter_installed_games;
 	std::vector<uint64_t> m_installed_games;
+	Application::EmulationController& m_emulationController;
 
 	void ClearPresets();
 	void FillGraphicPackList() const;
@@ -50,7 +50,7 @@ private:
 	wxButton* m_update_graphicPacks;
 	wxInfoBar* m_info_bar;
 
-	GraphicPackPtr m_shown_graphic_pack;
+	std::string m_shown_graphic_pack_key;
 	std::string m_gp_name, m_gp_description;
 
 	float m_ratio = 0.55f;
@@ -59,7 +59,9 @@ private:
 	wxColour m_incompatible_colour = wxSystemSettings::SelectLightDark(wxColour(0xCC, 0x00, 0x00), wxColour(0xDE, 0x49, 0x49));
 
 	wxTreeItemId FindTreeItem(const wxTreeItemId& root, const wxString& text) const;
-	void LoadPresetSelections(const GraphicPackPtr& gp);
+	void LoadPresetSelections(const Application::GraphicPackInfo& graphicPack);
+	[[nodiscard]] std::optional<Application::GraphicPackInfo> FindGraphicPack(
+		std::string_view key) const;
 
 	void OnTreeSelectionChanged(wxTreeEvent& event);
 	void OnTreeChoiceChanged(wxTreeEvent& event);
@@ -73,8 +75,5 @@ private:
 	void OnInstalledGamesChanged(wxCommandEvent& event);
 
 	void SaveStateToConfig();
-
-	void ReloadPack(const GraphicPackPtr& graphic_pack) const;
-	void DeleteShadersFromRuntimeCache(const GraphicPackPtr& graphic_pack) const;
 
 };

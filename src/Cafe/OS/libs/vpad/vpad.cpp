@@ -6,7 +6,7 @@
 #include "config/ActiveSettings.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
 #include "input/InputManager.h"
-#include "WindowSystem.h"
+#include "Cafe/OS/libs/HostInputFocus.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 
 #ifdef PUBLIC_RELASE
@@ -271,7 +271,7 @@ namespace vpad
 			PPCCore_switchToScheduler();
 		}
 
-		if (!WindowSystem::InputConfigWindowHasFocus())
+		if (!CafeHost::InputConfigurationHasFocus())
 		{
 			if (channel <= 1 && vpadDelayEnabled)
 			{

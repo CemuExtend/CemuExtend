@@ -1,21 +1,11 @@
 #pragma once
 
+#include "host/contracts/HostContracts.h"
 #include "input/api/ControllerState.h"
 
 namespace WindowSystem
 {
-	struct WindowHandleInfo
-	{
-		enum class Backend
-		{
-			X11,
-			Wayland,
-			Cocoa,
-			Windows,
-		} backend;
-		void* display = nullptr;
-		void* surface = nullptr;
-	};
+	using WindowHandleInfo = Host::NativeWindowHandle;
 
 	enum struct PlatformKeyCodes : uint32
 	{
@@ -98,8 +88,17 @@ namespace WindowSystem
 	}
 
 	void Create();
+	std::shared_ptr<Host::IWindowMetrics> GetWindowMetricsHost();
+	std::shared_ptr<Host::INativeSurfaceProvider> GetNativeSurfaceHost();
+	// Prevents new asynchronous host work from being queued while wx tears down.
+	[[nodiscard]] bool IsShuttingDown();
+	void BeginShutdown();
+	void ResumeAfterFailedShutdown();
 
 	WindowInfo& GetWindowInfo();
+	void PublishMainWindowHandle(WindowHandleInfo handle);
+	void PublishPadWindowHandle(WindowHandleInfo handle);
+	void PublishCanvasHandle(bool mainWindow, WindowHandleInfo handle);
 
 	void UpdateWindowTitles(bool isIdle, bool isLoading, double fps);
 	void GetWindowSize(int& w, int& h);

@@ -34,7 +34,7 @@ target_include_directories(CemuAudio PUBLIC "../")
 
 target_link_libraries(CemuAudio PRIVATE
 	CemuCommon
-	CemuGui
+	CemuHostContracts
 )
 
 if(ENABLE_CUBEB)

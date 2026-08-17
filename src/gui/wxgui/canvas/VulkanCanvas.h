@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wxgui/canvas/IRenderCanvas.h"
+#include "host/contracts/HostContracts.h"
 
 #include <wx/frame.h>
 
@@ -13,7 +14,9 @@ class VulkanCanvas : public IRenderCanvas, public wxWindow
 	std::unique_ptr<class wxWlSubsurface> m_subsurface;
 #endif
 public:
-	VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_window);
+	VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~VulkanCanvas();
 
 private:

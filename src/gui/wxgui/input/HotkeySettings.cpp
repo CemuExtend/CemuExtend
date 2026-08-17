@@ -182,31 +182,35 @@ void HotkeySettings::Init(MainWindow* mainWindowFrame)
 {
 	s_cfgHotkeyToFuncMap.insert({
 		{&s_cfgHotkeys.toggleFullscreen, [](void) {
-			 s_mainWindow->SetFullScreen(!s_mainWindow->IsFullScreen());
+			 RunOnUi([](MainWindow& window) { window.SetFullScreen(!window.IsFullScreen()); });
 		 }},
 		{&s_cfgHotkeys.toggleFullscreenAlt, [](void) {
-			 s_mainWindow->SetFullScreen(!s_mainWindow->IsFullScreen());
+			 RunOnUi([](MainWindow& window) { window.SetFullScreen(!window.IsFullScreen()); });
 		 }},
 		{&s_cfgHotkeys.exitFullscreen, [](void) {
-			 s_mainWindow->SetFullScreen(false);
+			 RunOnUi([](MainWindow& window) { window.SetFullScreen(false); });
 		 }},
 		{&s_cfgHotkeys.takeScreenshot, [](void) {
-			 if (g_renderer)
-				 (void)g_renderer->RequestScreenshot(SaveScreenshot);
+			 RunOnUi([](MainWindow&) {
+				 if (g_renderer)
+					 (void)g_renderer->RequestScreenshot(SaveScreenshot);
+			 });
 		 }},
 		{&s_cfgHotkeys.toggleFastForward, [](void) {
-			 ActiveSettings::SetTimerShiftFactor((ActiveSettings::GetTimerShiftFactor() < 3) ? 3 : 1);
+			 RunOnUi([](MainWindow&) {
+				 ActiveSettings::SetTimerShiftFactor((ActiveSettings::GetTimerShiftFactor() < 3) ? 3 : 1);
+			 });
 		 }},
 		{&s_cfgHotkeys.exitApplication, [](void) {
-			auto closeEvent = new wxCloseEvent{wxEVT_CLOSE_WINDOW, s_mainWindow->GetId()};
-			closeEvent->SetCanVeto(false);
-			wxQueueEvent(s_mainWindow, closeEvent);
+			RunOnUi([](MainWindow& window) {
+				auto closeEvent = new wxCloseEvent{wxEVT_CLOSE_WINDOW, window.GetId()};
+				closeEvent->SetCanVeto(false);
+				wxQueueEvent(&window, closeEvent);
+			});
 		 }},
 #ifdef CEMU_DEBUG_ASSERT
 		{&s_cfgHotkeys.endEmulation, [](void) {
-			 wxTheApp->CallAfter([]() {
-				s_mainWindow->EndEmulation();
-			 });
+			 RunOnUi([](MainWindow& window) { window.EndEmulation(); });
 		 }},
 #endif
 	});
@@ -225,7 +229,22 @@ void HotkeySettings::Init(MainWindow* mainWindowFrame)
 			s_controllerHotkeyToFuncMap[controllerHotkey] = func;
 		}
 	}
-	s_mainWindow = mainWindowFrame;
+	s_mainWindow.store(mainWindowFrame, std::memory_order_release);
+}
+
+void HotkeySettings::Shutdown()
+{
+	s_mainWindow.store(nullptr, std::memory_order_release);
+}
+
+void HotkeySettings::RunOnUi(std::function<void(MainWindow&)> action)
+{
+	if (wxTheApp == nullptr || s_mainWindow.load(std::memory_order_acquire) == nullptr)
+		return;
+	wxTheApp->CallAfter([action = std::move(action)] {
+		if (auto* window = s_mainWindow.load(std::memory_order_acquire))
+			action(*window);
+	});
 }
 
 void HotkeySettings::CreateColumnHeaders(void)

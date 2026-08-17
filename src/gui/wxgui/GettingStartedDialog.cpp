@@ -13,9 +13,8 @@
 #include "wxgui/DownloadGraphicPacksWindow.h"
 #include "wxgui/GraphicPacksWindow2.h"
 #include "wxgui/input/InputSettings2.h"
+#include "application/EmulationController.h"
 #include "config/CemuConfig.h"
-
-#include "Cafe/TitleList/TitleList.h"
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -244,8 +243,11 @@ void GettingStartedDialog::OnClose(wxCloseEvent& event)
 	}
 }
 
-GettingStartedDialog::GettingStartedDialog(wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, _("Getting started"), wxDefaultPosition, { 740,530 }, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+GettingStartedDialog::GettingStartedDialog(
+	Application::EmulationController& emulationController, wxWindow* parent)
+	: wxDialog(parent, wxID_ANY, _("Getting started"), wxDefaultPosition, { 740,530 },
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	  m_emulationController(emulationController)
 {
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -269,10 +271,10 @@ GettingStartedDialog::GettingStartedDialog(wxWindow* parent)
 
 void GettingStartedDialog::OnConfigureGPs(wxCommandEvent& event)
 {
-	DownloadGraphicPacksWindow dialog(this);
+	DownloadGraphicPacksWindow dialog(this, m_emulationController);
 	dialog.ShowModal();
-	GraphicPacksWindow2::RefreshGraphicPacks();
-	GraphicPacksWindow2 window(this, 0);
+	(void)m_emulationController.RefreshGraphicPacks();
+	GraphicPacksWindow2 window(this, 0, m_emulationController);
 	window.ShowModal();
 }
 

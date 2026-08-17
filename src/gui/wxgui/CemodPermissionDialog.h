@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Cafe/OS/libs/cemuextend/cemuextend.h"
+#include "application/EmulationController.h"
 #include "CemodManagementModel.h"
 
 #include <wx/dialog.h>
@@ -9,8 +9,6 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-
-struct CemodPermissionRequest;
 
 class wxCheckBox;
 
@@ -49,7 +47,7 @@ class CemodPermissionDialog final : public wxDialog
 {
 public:
 	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
-		std::vector<CemodPermissionRequest> requests);
+		std::vector<Application::CemodPermissionRequest> requests);
 	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
 		std::vector<CemodPermissionDialogEntry> entries);
 

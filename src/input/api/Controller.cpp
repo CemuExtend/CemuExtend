@@ -1,6 +1,6 @@
 #include "input/api/Controller.h"
 #include "config/CemuConfig.h"
-#include "WindowSystem.h"
+#include "input/InputManager.h"
 
 ControllerBase::ControllerBase(std::string_view uuid, std::string_view display_name)
 	: m_uuid{uuid}, m_display_name{display_name}
@@ -60,7 +60,7 @@ const ControllerState& ControllerBase::update_state()
 	kTriggerYN,
 	 */
 
-	WindowSystem::CaptureInput(result, m_last_state);
+	InputManager::instance().NotifyControllerState(result, m_last_state);
 
 	m_last_state = std::move(result);
 	return m_last_state;

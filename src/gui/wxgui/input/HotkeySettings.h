@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <wx/wx.h>
 #include "wxCemuConfig.h"
 #include "input/api/Controller.h"
@@ -10,6 +11,7 @@ class HotkeySettings : public wxFrame
 {
 public:
 	static void Init(class MainWindow* mainWindow);
+	static void Shutdown();
 
 	static void CaptureInput(wxKeyEvent& event);
 	static void CaptureInput(const ControllerState& currentState, const ControllerState& lastState);
@@ -18,7 +20,8 @@ public:
 	~HotkeySettings();
 
 private:
-	inline static class MainWindow* s_mainWindow = nullptr;
+	inline static std::atomic<class MainWindow*> s_mainWindow{nullptr};
+	static void RunOnUi(std::function<void(class MainWindow&)> action);
 	static std::unordered_map<sHotkeyCfg*, std::function<void(void)>> s_cfgHotkeyToFuncMap;
 	inline static std::unordered_map<uint16, std::function<void(void)>> s_keyboardHotkeyToFuncMap{};
 	inline static std::unordered_map<uint16, std::function<void(void)>> s_controllerHotkeyToFuncMap{};

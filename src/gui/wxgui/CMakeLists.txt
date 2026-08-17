@@ -121,25 +121,49 @@ add_library(CemuWxGui STATIC
   wxHelper.h
 )
 
+add_library(CemuWxRendererAdapters STATIC canvas/IRenderCanvas.h)
+
 if (ENABLE_OPENGL)
-  target_sources(CemuWxGui PRIVATE
+  target_sources(CemuWxRendererAdapters PRIVATE
     canvas/OpenGLCanvas.cpp
     canvas/OpenGLCanvas.h
   )
 endif()
 
 if (ENABLE_VULKAN)
-  target_sources(CemuWxGui PRIVATE
+  target_sources(CemuWxRendererAdapters PRIVATE
     canvas/VulkanCanvas.cpp
     canvas/VulkanCanvas.h
   )
 endif()
 
 if (ENABLE_METAL)
-  target_sources(CemuWxGui PRIVATE
+  target_sources(CemuWxRendererAdapters PRIVATE
     canvas/MetalCanvas.cpp
     canvas/MetalCanvas.h
   )
+endif()
+
+set_property(TARGET CemuWxRendererAdapters PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+cemu_use_precompiled_header(CemuWxRendererAdapters)
+target_include_directories(CemuWxRendererAdapters PUBLIC "../")
+target_link_libraries(CemuWxRendererAdapters PRIVATE
+  CemuCafe
+  CemuCommon
+  CemuHostContracts
+  CemuInput
+  CemuConfig
+  PUBLIC wxWidgets::wxWidgets
+)
+
+if(ENABLE_WXWIDGETS AND UNIX AND NOT APPLE)
+  # VulkanCanvas includes the native GTK/Wayland adapter directly.  Keep these
+  # platform requirements on the renderer-adapter target instead of inheriting
+  # them accidentally from the normal GUI archive.
+  target_link_libraries(CemuWxRendererAdapters PRIVATE GTK3::gtk)
+  if (ENABLE_WAYLAND)
+    target_link_libraries(CemuWxRendererAdapters PRIVATE Wayland::Client CemuWaylandProtocols)
+  endif()
 endif()
 
 if (ENABLE_BLUEZ)
@@ -156,12 +180,10 @@ cemu_use_precompiled_header(CemuWxGui)
 if(BUILD_TESTING)
   add_executable(cemod_gui_model_tests
     CemodManagementModel.cpp
-    "${CMAKE_SOURCE_DIR}/src/Cafe/HW/Espresso/CemodPackage.cpp"
-    "${CMAKE_SOURCE_DIR}/src/Cafe/HW/Espresso/WupsBinary.cpp"
     tests/CemodManagementModelTests.cpp
   )
   target_include_directories(cemod_gui_model_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
-  target_link_libraries(cemod_gui_model_tests PRIVATE OpenSSL::Crypto libzip::zip ZLIB::ZLIB fmt::fmt)
+  target_link_libraries(cemod_gui_model_tests PRIVATE CemuExtendDomain fmt::fmt)
   add_test(NAME cemod_gui_model_tests COMMAND cemod_gui_model_tests)
 endif()
 
@@ -172,12 +194,16 @@ target_include_directories(CemuWxGui PUBLIC ${RAPIDJSON_INCLUDE_DIRS})
 
 target_link_libraries(CemuWxGui PRIVATE
   CemuCommon
+  CemuApplication
+  CemuExtendDomain
+  CemuFrontendModel
+  CemuHostContracts
   CemuResource
   libzip::zip
   ZArchive::zarchive
   CemuComponents
+  CemuWxRendererAdapters
   pugixml::pugixml
-  CemuCafe
   OpenSSL::Crypto
   cemuextend::wire
   PUBLIC

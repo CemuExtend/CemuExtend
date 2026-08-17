@@ -1,5 +1,5 @@
 #include "Cafe/OS/common/OSCommon.h"
-#include "WindowSystem.h"
+#include "host/contracts/HostContracts.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
@@ -70,7 +70,10 @@
 #include "Cafe/HW/SI/si.h"
 
 #include <time.h>
+#include <future>
 #include <limits>
+#include <mutex>
+#include <shared_mutex>
 
 #if BOOST_OS_LINUX
 #include <sys/sysinfo.h>
@@ -102,7 +105,7 @@ uint32 generateHashFromRawRPXData(uint8* rpxData, sint32 size)
 	return h;
 }
 
-std::optional<TitleId> GetStandaloneTitleId(const fs::path& path)
+std::optional<TitleId> CafeSystem::GetStandaloneTitleId(const fs::path& path)
 {
 	auto data = FileStream::LoadIntoMemory(path);
 	if (!data || data->empty() || data->size() > static_cast<std::size_t>(std::numeric_limits<sint32>::max()))
@@ -183,7 +186,9 @@ void LoadMainExecutable()
 		applicationRPX = RPLLoader_LoadFromMemory(rpxData, rpxSize, (char*)_pathToExecutable.c_str());
 		if (!applicationRPX)
 		{
-			WindowSystem::ShowErrorDialog(_tr("Failed to run this title because the executable is damaged"));
+			CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
+				.diagnosticCode = CafeSystem::DiagnosticCode::DamagedExecutable,
+				.diagnostic = "Failed to run this title because the executable is damaged"});
 			cemuLog_createLogFile(false);
 			cemuLog_waitForFlush();
 			exit(0);
@@ -379,7 +384,7 @@ uint32 LoadSharedData()
 
 void cemu_initForGame()
 {
-	WindowSystem::UpdateWindowTitles(false, true, 0.0);
+	CafeSystem::EmitEvent({.type = CafeSystem::EventType::LoadingStarted});
 	cemuLog_createLogFile(false);
 	// input manager apply game profile
 	InputManager::instance().apply_game_profile();
@@ -461,23 +466,55 @@ void cemu_initForGame()
 
 namespace CafeSystem
 {
+	namespace
+	{
+		std::shared_mutex s_eventSinkMutex;
+		IEventSink* s_eventSink{};
+		std::atomic<std::shared_ptr<Host::ICanvasHost>> s_canvasHost;
+	}
+
+	void ConfigureCanvasHost(std::shared_ptr<Host::ICanvasHost> canvas)
+	{
+		s_canvasHost.store(std::move(canvas), std::memory_order_release);
+	}
+
+	void SetEventSink(IEventSink* sink)
+	{
+		std::unique_lock lock(s_eventSinkMutex);
+		s_eventSink = sink;
+	}
+
+	void EmitEvent(const Event& event)
+	{
+		std::shared_lock lock(s_eventSinkMutex);
+		if (s_eventSink)
+			s_eventSink->OnCafeEvent(event);
+	}
+
 	void InitVirtualMlcStorage();
 	void MlcStorageMountTitle(TitleInfo& titleInfo);
     void MlcStorageUnmountAllTitles();
+	void UnmountCurrentTitle();
 
+	std::recursive_mutex sLifecycleMutex;
     static bool s_initialized = false;
-	static SystemImplementation* s_implementation{nullptr};
     bool sLaunchModeIsStandalone = false;
 	std::optional<std::vector<std::string>> s_overrideArgs;
 	std::optional<sint32> s_foregroundReturnStatus;
 
-	bool sSystemRunning = false;
+	std::atomic_bool sSystemRunning = false;
+	std::thread sTitleThread;
+	std::mutex sTitleStartupMutex;
+	bool sTitleStopRequested = false;
+	bool sTitlePrepared = false;
+	bool sPrepareBaseMounted = false;
+	bool sPrepareTitleMounted = false;
+	bool sPrepareStandaloneContentMounted = false;
+	bool sPrepareMemoryMapped = false;
+	bool sPrepareRecompilerInitialized = false;
+	bool sPrepareVirtualMlcInitialized = false;
+	bool sPrepareExtrasMounted = false;
 	TitleId sForegroundTitleId = 0;
-
-	bool ConfirmCemodPermissions(TitleId titleId)
-	{
-		return !s_implementation || s_implementation->CafeConfirmCemodPermissions(titleId);
-	}
 
 	GameInfo2 sGameInfo_ForegroundTitle;
 
@@ -677,17 +714,18 @@ namespace CafeSystem
 		HW_SI::Initialize();
 	}
 
-	void SetImplementation(SystemImplementation* impl)
-	{
-		s_implementation = impl;
-	}
-
-    void Shutdown()
+    bool Shutdown()
     {
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
         cemu_assert_debug(s_initialized);
         // if a title is running, shut it down
-        if (sSystemRunning)
-            ShutdownTitle();
+		if (sSystemRunning)
+		{
+			if (!ShutdownTitle())
+				return false;
+		}
+		else if (sTitlePrepared)
+			AbortPreparedTitle();
         // shutdown persistent subsystems (deprecated manual shutdown)
 		iosu::odm::Shutdown();
 		iosu::act::Stop();
@@ -697,6 +735,7 @@ namespace CafeSystem
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->SystemExit();
         s_initialized = false;
+		return true;
     }
 
 	std::string GetInternalVirtualCodeFolder()
@@ -798,7 +837,9 @@ namespace CafeSystem
     {
         if(sLaunchModeIsStandalone)
             return;
-        cemu_assert_debug(sGameInfo_ForegroundTitle.IsValid()); // unmounting title which was never mounted?
+        // Preparation can fail after MountBaseDirectories but before a valid title
+        // has been mounted. In that rollback path there is simply no title mount
+        // to release.
         if (!sGameInfo_ForegroundTitle.IsValid())
             return;
         sGameInfo_ForegroundTitle.GetBase().Unmount("/vol/content");
@@ -866,6 +907,9 @@ namespace CafeSystem
 
 	PREPARE_STATUS_CODE PrepareForegroundTitle(TitleId titleId)
 	{
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
+		if (sTitlePrepared)
+			AbortPreparedTitle();
 		CafeTitleList::WaitForMandatoryScan();
 		std::string cemodError;
 		if (!cemuextend_hle::GetCemodRuntime().ReadyForNextTitle(cemodError))
@@ -875,8 +919,7 @@ namespace CafeSystem
 						cemodError);
 			return PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY;
 		}
-		if (!ConfirmCemodPermissions(titleId))
-			return PREPARE_STATUS_CODE::CANCELLED;
+		sTitlePrepared = true;
 		sLaunchModeIsStandalone = false;
 		s_foregroundReturnStatus = std::nullopt;
         _pathToExecutable.clear();
@@ -884,26 +927,41 @@ namespace CafeSystem
 		if (tip.GetType() == TitleIdParser::TITLE_TYPE::AOC || tip.GetType() == TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE)
 			cemuLog_log(LogType::Force, "Launched titleId is not the base of a title");
         // mount mlc storage
+		sPrepareBaseMounted = true;
         MountBaseDirectories();
         // mount title folders
+		sPrepareTitleMounted = true;
 		PREPARE_STATUS_CODE r = LoadAndMountForegroundTitle(titleId);
 		if (r != PREPARE_STATUS_CODE::SUCCESS)
+		{
+			AbortPreparedTitle();
 			return r;
+		}
 		gameProfile_load();
 		// setup memory space and PPC recompiler
 		cemuextend_hle::ConfigureMemoryForTitle(titleId);
-        SetupMemorySpace();
+		sPrepareMemoryMapped = true;
+		SetupMemorySpace();
+		sPrepareRecompilerInitialized = true;
         PPCRecompiler_init();
 		r = PrepareExecutable(); // load RPX
 		if (r != PREPARE_STATUS_CODE::SUCCESS)
+		{
+			AbortPreparedTitle();
 			return r;
+		}
+		sPrepareVirtualMlcInitialized = true;
 		InitVirtualMlcStorage();
+		sPrepareExtrasMounted = true;
 		MountExtras();
 		return PREPARE_STATUS_CODE::SUCCESS;
 	}
 
 	PREPARE_STATUS_CODE PrepareForegroundTitleFromStandaloneRPX(const fs::path& path)
 	{
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
+		if (sTitlePrepared)
+			AbortPreparedTitle();
 		const auto standaloneTitleId = GetStandaloneTitleId(path);
 		if (!standaloneTitleId)
 			return PREPARE_STATUS_CODE::INVALID_RPX;
@@ -915,8 +973,7 @@ namespace CafeSystem
 						cemodError);
 			return PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY;
 		}
-		if (!ConfirmCemodPermissions(*standaloneTitleId))
-			return PREPARE_STATUS_CODE::CANCELLED;
+		sTitlePrepared = true;
 		sLaunchModeIsStandalone = true;
 		cemuLog_log(LogType::Force, "Launching executable in standalone mode due to incorrect layout or missing meta files");
 		fs::path executablePath = path;
@@ -933,28 +990,48 @@ namespace CafeSystem
 				if (!r)
 				{
 					cemuLog_log(LogType::Force, "Failed to mount {}", _pathToUtf8(contentPath));
+					AbortPreparedTitle();
 					return PREPARE_STATUS_CODE::UNABLE_TO_MOUNT;
 				}
+				sPrepareStandaloneContentMounted = true;
 			}
 		}
 		// mount code folder to a virtual temporary path
-		FSCDeviceHostFS_Mount(std::string("/internal/code/").c_str(), _pathToUtf8(executablePath.parent_path()), FSC_PRIORITY_BASE);
+		if (!FSCDeviceHostFS_Mount(std::string("/internal/code/").c_str(),
+			_pathToUtf8(executablePath.parent_path()), FSC_PRIORITY_BASE))
+		{
+			AbortPreparedTitle();
+			return PREPARE_STATUS_CODE::UNABLE_TO_MOUNT;
+		}
+		sPrepareTitleMounted = true;
 		std::string internalExecutablePath = "/internal/code/";
 		internalExecutablePath.append(_pathToUtf8(executablePath.filename()));
 		_pathToExecutable = internalExecutablePath;
 		// since a lot of systems (including save folder location) rely on a TitleId, we derive a placeholder id from the executable hash
 		auto execData = fsc_extractFile(_pathToExecutable.c_str());
 		if (!execData)
+		{
+			AbortPreparedTitle();
 			return PREPARE_STATUS_CODE::INVALID_RPX;
+		}
 		sForegroundTitleId = *standaloneTitleId;
 		cemuLog_log(LogType::Force, "Generated placeholder TitleId: {:016x}", sForegroundTitleId);
 		// setup memory space and ppc recompiler
 		cemuextend_hle::ConfigureMemoryForTitle(*standaloneTitleId);
-        SetupMemorySpace();
+		sPrepareMemoryMapped = true;
+		SetupMemorySpace();
+		sPrepareRecompilerInitialized = true;
         PPCRecompiler_init();
         // load executable
-        PrepareExecutable();
+		const auto executableStatus = PrepareExecutable();
+		if (executableStatus != PREPARE_STATUS_CODE::SUCCESS)
+		{
+			AbortPreparedTitle();
+			return executableStatus;
+		}
+		sPrepareVirtualMlcInitialized = true;
 		InitVirtualMlcStorage();
+		sPrepareExtrasMounted = true;
 		MountExtras();
 		return PREPARE_STATUS_CODE::SUCCESS;
 	}
@@ -964,7 +1041,13 @@ namespace CafeSystem
 		for(auto& module : s_iosuModules)
 			module->TitleStart();
 		cemu_initForGame();
-		// enter scheduler
+		// Serialize the final scheduler transition with shutdown.  Without this
+		// handshake OSSchedulerEnd could observe an inactive scheduler, after which
+		// this worker would start it while ShutdownTitle was already tearing down
+		// Latte and title memory.
+		std::scoped_lock startupLock(sTitleStartupMutex);
+		if (sTitleStopRequested)
+			return;
 		if ((ActiveSettings::GetCPUMode() == CPUMode::MulticoreRecompiler || LaunchSettings::ForceMultiCoreInterpreter()) && !LaunchSettings::ForceInterpreter())
 			coreinit::OSSchedulerBegin(3);
 		else
@@ -973,17 +1056,72 @@ namespace CafeSystem
 
 	void LaunchForegroundTitle()
 	{
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
 		PPCTimer_waitForInit();
-		// start system
+		// Construct the worker before committing the prepared title. The gate keeps
+		// it from touching title state if thread construction or the frontend event
+		// fails; EmulationController can then roll the prepared title back safely.
+		std::promise<bool> launchGate;
+		auto launchReady = launchGate.get_future();
+		cemu_assert_debug(!sTitleThread.joinable());
+		{
+			std::scoped_lock startupLock(sTitleStartupMutex);
+			sTitleStopRequested = false;
+		}
+		sTitleThread = std::thread([ready = std::move(launchReady)]() mutable {
+			if (ready.get())
+				_LaunchTitleThread();
+		});
+		try
+		{
+			EmitEvent({.type = EventType::GameLoaded});
+		}
+		catch (...)
+		{
+			launchGate.set_value(false);
+			sTitleThread.join();
+			throw;
+		}
+		// Commit only after every operation that can fail has succeeded.
 		sSystemRunning = true;
-		WindowSystem::NotifyGameLoaded();
-		std::thread t(_LaunchTitleThread);
-		t.detach();
+		sTitlePrepared = false;
+		launchGate.set_value(true);
 	}
 
 	bool IsTitleRunning()
 	{
-		return sSystemRunning;
+		return sSystemRunning.load(std::memory_order_acquire);
+	}
+
+	void AbortPreparedTitle()
+	{
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
+		if (!sTitlePrepared || sSystemRunning)
+			return;
+		if (sPrepareRecompilerInitialized)
+			PPCRecompiler_Shutdown();
+		if (sPrepareTitleMounted)
+			UnmountCurrentTitle();
+		if (sPrepareStandaloneContentMounted)
+			fsc_unmount("/vol/content", FSC_PRIORITY_BASE);
+		if (sPrepareExtrasMounted)
+			UnmountExtras();
+		if (sPrepareVirtualMlcInitialized)
+			MlcStorageUnmountAllTitles();
+		if (sPrepareBaseMounted)
+			UnmountBaseDirectories();
+		if (sPrepareMemoryMapped)
+			DestroyMemorySpace();
+		LaunchSettings::ClearCosArgstr();
+		sForegroundTitleId = 0;
+		sTitlePrepared = false;
+		sPrepareBaseMounted = false;
+		sPrepareTitleMounted = false;
+		sPrepareStandaloneContentMounted = false;
+		sPrepareMemoryMapped = false;
+		sPrepareRecompilerInitialized = false;
+		sPrepareVirtualMlcInitialized = false;
+		sPrepareExtrasMounted = false;
 	}
 
 	TitleId GetForegroundTitleId()
@@ -1133,10 +1271,17 @@ namespace CafeSystem
 		return ran && runtime.TitleShutdownPrepared();
 	}
 
-	void ShutdownTitle()
+	bool ShutdownTitle()
 	{
+		// A guest-requested title switch can synchronously wait for the UI to
+		// recreate its canvas while holding this mutex. Never block the UI thread
+		// behind that wait: report a retained running transition and let the caller
+		// retry after the switch commits or cancels.
+		std::unique_lock lifecycleLock(sLifecycleMutex, std::try_to_lock);
+		if (!lifecycleLock.owns_lock())
+			return false;
 		if(!sSystemRunning)
-			return;
+			return true;
 		auto& cemodRuntime = cemuextend_hle::GetCemodRuntime();
 		if (!cemodRuntime.TitleRplUnloadPending())
 		{
@@ -1149,7 +1294,16 @@ namespace CafeSystem
 							"sandbox/WUPS guest callbacks will be abandoned and trusted release deferred");
 				cemodRuntime.AbandonAllForTitleShutdown();
 			}
-			coreinit::OSSchedulerEnd();
+			{
+				std::scoped_lock startupLock(sTitleStartupMutex);
+				sTitleStopRequested = true;
+				coreinit::OSSchedulerEnd();
+			}
+			// The scheduler owner is a managed title thread. Joining here prevents
+			// Latte/PPC/memory teardown from racing its cemu_initForGame or
+			// OSSchedulerBegin transition.
+			if (sTitleThread.joinable())
+				sTitleThread.join();
 			Latte_Stop();
 			// reset Cafe OS userspace modules
 			snd_core::reset();
@@ -1166,7 +1320,7 @@ namespace CafeSystem
 				cemu_assert_debug(false);
 				// Keep the old RPL map and memory space intact. Preparing another title
 				// will fail closed until a later shutdown attempt completes this phase.
-				return;
+				return false;
 			}
 			// No PPC thread can reach a trusted branch now. Restore its bootstrap and
 			// release the codecave while the old RPL mapping is still addressable.
@@ -1175,14 +1329,14 @@ namespace CafeSystem
 				cemuLog_log(LogType::Force,
 							"CemuExtend late trusted CEMod release failed: {}", trustedReleaseError);
 				cemu_assert_debug(false);
-				return;
+				return false;
 			}
 			if (!cemodRuntime.ReleaseWupsAfterTitleThreadsStopped(trustedReleaseError))
 			{
 				cemuLog_log(LogType::Force,
 							"CemuExtend late WUPS release failed: {}", trustedReleaseError);
 				cemu_assert_debug(false);
-				return;
+				return false;
 			}
 			cemodRuntime.MarkTitleRplUnloadPending();
 		}
@@ -1197,7 +1351,7 @@ namespace CafeSystem
 			cemu_assert_debug(false);
 			// Do not destroy memory or mount the next title over a retained WPS
 			// image. A later shutdown attempt may complete after the lease drains.
-			return;
+			return false;
 		}
 		cemodRuntime.MarkTitleRplUnloadComplete();
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
@@ -1206,12 +1360,54 @@ namespace CafeSystem
 		PPCRecompiler_Shutdown();
 		GraphicPack2::Reset();
 		UnmountCurrentTitle();
+		if (sPrepareStandaloneContentMounted)
+			fsc_unmount("/vol/content", FSC_PRIORITY_BASE);
 		UnmountExtras();
 		MlcStorageUnmountAllTitles();
 		UnmountBaseDirectories();
 		DestroyMemorySpace();
 		LaunchSettings::ClearCosArgstr();
 		sSystemRunning = false;
+		sTitlePrepared = false;
+		sPrepareBaseMounted = false;
+		sPrepareTitleMounted = false;
+		sPrepareStandaloneContentMounted = false;
+		sPrepareMemoryMapped = false;
+		sPrepareRecompilerInitialized = false;
+		sPrepareVirtualMlcInitialized = false;
+		sPrepareExtrasMounted = false;
+		EmitEvent({.type = EventType::GameExited});
+		return true;
+	}
+
+	bool SwitchForegroundTitle(TitleId titleId)
+	{
+		// Keep a guest-requested relaunch atomic with respect to UI Stop/Close.
+		// Otherwise the controller can observe the gap between the old title being
+		// stopped and the replacement being prepared, report Idle, and tear down
+		// persistent Cafe services under the detached launcher thread.
+		std::scoped_lock lifecycleLock(sLifecycleMutex);
+		if (!ShutdownTitle())
+		{
+			cemuLog_log(LogType::Force,
+				"Title switch aborted because the old title could not be released safely");
+			return false;
+		}
+		if (PrepareForegroundTitle(titleId) != PREPARE_STATUS_CODE::SUCCESS)
+		{
+			NotifyPPCProcessExit(0);
+			return false;
+		}
+		if (!RequestRecreateCanvas())
+		{
+			AbortPreparedTitle();
+			// The old title is already gone. Reconcile the application controller
+			// and frontend instead of leaving them in their previous Running state.
+			NotifyPPCProcessExit(0);
+			return false;
+		}
+		LaunchForegroundTitle();
+		return true;
 	}
 
 	/* Virtual mlc storage */
@@ -1307,15 +1503,20 @@ namespace CafeSystem
 		return currentUpdatedApplicationHash;
 	}
 
-	void RequestRecreateCanvas()
+	bool RequestRecreateCanvas()
 	{
-		s_implementation->CafeRecreateCanvas();
+		if (auto canvas = s_canvasHost.load(std::memory_order_acquire))
+			return canvas->RecreateCanvas();
+		else
+			cemuLog_log(LogType::Force, "Canvas recreation requested without a frontend canvas host");
+		// Headless/core-only frontends intentionally have no canvas to recreate.
+		return true;
 	}
 
 	void NotifyPPCProcessExit(sint32 status)
 	{
 		s_foregroundReturnStatus = status;
-		s_implementation->CafePPCProcessExit();
+		EmitEvent({.type = EventType::PpcProcessExited, .processStatus = status});
 	}
 
 	std::optional<sint32> GetForegroundTitleReturnStatus()

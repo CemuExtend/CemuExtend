@@ -1,5 +1,4 @@
 #include "Cafe/HW/Latte/Renderer/OpenGL/OpenGLRenderer.h"
-#include "WindowSystem.h"
 
 #include "Cafe/HW/Latte/Core/LatteRingBuffer.h"
 #include "Cafe/HW/Latte/Core/LatteDraw.h"
@@ -111,7 +110,9 @@ static const GLenum glAlphaTestFunc[] =
 	GL_ALWAYS
 };
 
-OpenGLRenderer::OpenGLRenderer() : Renderer(RendererAPI::OpenGL)
+OpenGLRenderer::OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	: Renderer(RendererAPI::OpenGL, std::move(windowMetrics), std::move(nativeSurfaces))
 {
 	glRendererState.useTextureUploadBuffer = false;
 	if (glRendererState.useTextureUploadBuffer)
@@ -600,11 +601,9 @@ void OpenGLRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
 
 	if (clearBackground)
 	{
-		int windowWidth, windowHeight;
-		if (padView)
-			WindowSystem::GetPadWindowPhysSize(windowWidth, windowHeight);
-		else
-			WindowSystem::GetWindowPhysSize(windowWidth, windowHeight);
+		const auto window = GetWindowMetrics();
+		const int windowWidth = padView ? window.physicalPadWidth : window.physicalWidth;
+		const int windowHeight = padView ? window.physicalPadHeight : window.physicalHeight;
 		g_renderer->renderTarget_setViewport(0, 0, windowWidth, windowHeight, 0.0f, 1.0f);
 		g_renderer->ClearColorbuffer(padView);
 	}

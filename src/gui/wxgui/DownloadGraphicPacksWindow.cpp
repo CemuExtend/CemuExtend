@@ -10,7 +10,7 @@
 #include "config/ActiveSettings.h"
 #include "Common/FileStream.h"
 
-#include "Cafe/CafeSystem.h"
+#include "application/EmulationController.h"
 
 struct DownloadGraphicPacksWindow::curlDownloadFileState_t
 {
@@ -51,8 +51,8 @@ bool DownloadGraphicPacksWindow::curlDownloadFile(const char *url, curlDownloadF
 	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, downloadState);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, true);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
 	downloadState->fileData.resize(0);
@@ -290,9 +290,11 @@ void DownloadGraphicPacksWindow::UpdateThread()
 	m_threadState = ThreadFinished;
 }
 
-DownloadGraphicPacksWindow::DownloadGraphicPacksWindow(wxWindow* parent)
+DownloadGraphicPacksWindow::DownloadGraphicPacksWindow(wxWindow* parent,
+	Application::EmulationController& emulationController)
 	: wxDialog(parent, wxID_ANY, _("Checking version..."), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	m_threadState(ThreadRunning), m_stage(StageCheckVersion), m_currentStage(StageCheckVersion)
+	m_threadState(ThreadRunning), m_stage(StageCheckVersion), m_currentStage(StageCheckVersion),
+	m_emulationController(emulationController)
 {
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -334,7 +336,7 @@ const std::string& DownloadGraphicPacksWindow::GetException() const
 
 int DownloadGraphicPacksWindow::ShowModal()
 {
-	if(CafeSystem::IsTitleRunning())
+	if(m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Graphic packs cannot be updated while a game is running."), _("Graphic packs"), 5, this);
 		return wxID_CANCEL;

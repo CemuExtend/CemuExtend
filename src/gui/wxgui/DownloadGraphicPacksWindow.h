@@ -10,11 +10,13 @@
 #include <wx/timer.h>
 #include <wx/gauge.h>
 
+namespace Application { class EmulationController; }
 
 class DownloadGraphicPacksWindow : public wxDialog
 {
 public:
-	DownloadGraphicPacksWindow(wxWindow* parent);
+	DownloadGraphicPacksWindow(wxWindow* parent,
+		Application::EmulationController& emulationController);
 	~DownloadGraphicPacksWindow();
 
 	const std::string& GetException() const;
@@ -55,6 +57,7 @@ private:
 
 	struct curlDownloadFileState_t;
 	std::unique_ptr<curlDownloadFileState_t> m_downloadState;
+	Application::EmulationController& m_emulationController;
 
 	static size_t curlDownloadFile_writeData(void* ptr, size_t size, size_t nmemb, curlDownloadFileState_t* downloadState);
 	static int progress_callback(curlDownloadFileState_t* downloadState, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "frontend/CemuExtendFrontendBridge.h"
+#include "host/contracts/HostContracts.h"
+#include "application/EmulationController.h"
+
 #include <wx/frame.h>
 
 #include <cstdint>
@@ -13,7 +17,9 @@ wxDECLARE_EVENT(EVT_SET_WINDOW_TITLE, wxCommandEvent);
 class PadViewFrame : public wxFrame
 {
 public:
-	PadViewFrame(wxFrame* parent);
+	PadViewFrame(wxFrame* parent, Application::EmulationController& emulationController,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~PadViewFrame();
 
 	bool Initialize();
@@ -38,6 +44,8 @@ private:
 	void EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t changedButtons = 0);
 
 	wxWindow* m_render_canvas = nullptr;
-	wxPoint m_cemuextend_last_mouse_position{};
-	bool m_cemuextend_mouse_position_valid{};
+	Application::EmulationController& m_emulationController;
+	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
+	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
+	Frontend::CemuExtendFrontendBridge m_cemuextend_bridge;
 };

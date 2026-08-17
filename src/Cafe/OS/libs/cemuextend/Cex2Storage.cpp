@@ -64,7 +64,7 @@ std::string PrincipalHash(std::string_view principal)
 fs::path NamespaceRoot(std::uint64_t titleId, std::string_view principal, std::string_view kind)
 {
 #ifdef CEMU_CEX2_TESTING
-	auto root = fs::temp_directory_path() / "cemuextend-cex2-tests";
+	auto root = Cex2Storage::TestingRoot();
 #else
 	auto root = ActiveSettings::GetUserDataPath("cemuextend/abi2");
 #endif
@@ -901,6 +901,20 @@ Cex2StorageResult File(std::uint64_t title, std::string_view principal, std::uin
 #endif
 
 } // namespace
+
+#ifdef CEMU_CEX2_TESTING
+fs::path Cex2Storage::TestingRoot()
+{
+#ifdef _WIN32
+	const auto processId = static_cast<std::uint64_t>(GetCurrentProcessId());
+#else
+	const auto processId = static_cast<std::uint64_t>(::getpid());
+#endif
+	// CTest invocations can overlap across build trees. A process-scoped root
+	// prevents one test binary from deleting or replacing another one's files.
+	return fs::temp_directory_path() / fmt::format("cemuextend-cex2-tests-{}", processId);
+}
+#endif
 
 bool Cex2Storage::ValidateConfigurationFormat(std::span<const std::byte> bytes)
 {

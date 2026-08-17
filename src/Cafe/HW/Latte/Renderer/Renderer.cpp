@@ -1,5 +1,4 @@
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
-#include "WindowSystem.h"
 
 #include "config/CemuConfig.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
@@ -63,13 +62,11 @@ void Renderer::Shutdown()
 
 bool Renderer::ImguiBegin(bool mainWindow)
 {
-	sint32 w = 0, h = 0;
-	if (mainWindow)
-		WindowSystem::GetWindowPhysSize(w, h);
-	else if (WindowSystem::IsPadWindowOpen())
-		WindowSystem::GetPadWindowPhysSize(w, h);
-	else
+	const auto window = GetWindowMetrics();
+	if (!mainWindow && !window.padOpen)
 		return false;
+	const sint32 w = mainWindow ? window.physicalWidth : window.physicalPadWidth;
+	const sint32 h = mainWindow ? window.physicalHeight : window.physicalPadHeight;
 		
 	if (w == 0 || h == 0)
 		return false;

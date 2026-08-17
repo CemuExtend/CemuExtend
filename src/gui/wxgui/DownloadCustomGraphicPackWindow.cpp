@@ -1,5 +1,4 @@
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
-#include "Cafe/CafeSystem.h"
 #include "config/ActiveSettings.h"
 
 #include <cstring>

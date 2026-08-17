@@ -5,6 +5,7 @@
 #endif
 
 #include "config/CemuConfig.h"
+#include "host/contracts/HostContracts.h"
 
 class IAudioAPI
 {
@@ -69,6 +70,7 @@ public:
 
 	static void PrintLogging();
 	static void InitializeStatic();
+	static void ConfigureNativeSurfaceProvider(Host::INativeSurfaceProvider* provider);
 	static bool IsAudioAPIAvailable(AudioAPI api);
 
 	static std::unique_ptr<IAudioAPI> CreateDeviceFromConfig(AudioType type, sint32 rate, sint32 samples_per_block, sint32 bits_per_sample);
@@ -91,6 +93,9 @@ protected:
 	uint32 m_audioDelayOverride = 0;
 
 private:
+	static Host::INativeSurfaceProvider* s_nativeSurfaceProvider;
+	static std::mutex s_nativeSurfaceMutex;
+	[[nodiscard]] static std::optional<Host::NativeSurfaceSnapshot> GetNativeSurfaces();
 	static uint32 s_audioDelay;
 	void InitWFX(sint32 samplerate, sint32 channels, sint32 bits_per_sample);
 	static AudioChannels AudioTypeToChannels(AudioType type);

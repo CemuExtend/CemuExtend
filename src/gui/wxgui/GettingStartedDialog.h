@@ -8,10 +8,13 @@
 #include <wx/stattext.h>
 #include <wx/panel.h>
 
+namespace Application { class EmulationController; }
+
 class GettingStartedDialog : public wxDialog
 {
 public:
-	GettingStartedDialog(wxWindow* parent = nullptr);
+	GettingStartedDialog(Application::EmulationController& emulationController,
+		wxWindow* parent = nullptr);
 
 private:
 	wxPanel* CreatePage1();
@@ -24,6 +27,7 @@ private:
 	void OnInputSettings(wxCommandEvent& event);
 
 	wxSimplebook* m_notebook;
+	Application::EmulationController& m_emulationController;
 
 	struct
 	{
@@ -45,4 +49,3 @@ private:
 		wxCheckBox* updateCheckbox;
 	}m_page2;
 };
-
