@@ -30,13 +30,7 @@
 
 #include "audio/IAudioInputAPI.h"
 
-#ifdef ENABLE_VULKAN
-#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
-#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
-#endif
-#ifdef ENABLE_METAL
-#include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
-#endif
+#include "wxgui/canvas/RendererWindowAdapter.h"
 #include "Cafe/Account/Account.h"
 
 #include <boost/tokenizer.hpp>
@@ -120,12 +114,12 @@ private:
 class wxVulkanUUID : public wxClientData
 {
 public:
-	wxVulkanUUID(const VulkanRenderer::DeviceInfo& info)
+	wxVulkanUUID(const WxRendererAdapters::VulkanDevice& info)
 		: m_device_info(info) {}
-	const VulkanRenderer::DeviceInfo& GetDeviceInfo() const { return m_device_info; }
+	const WxRendererAdapters::VulkanDevice& GetDeviceInfo() const { return m_device_info; }
 
 private:
-	VulkanRenderer::DeviceInfo m_device_info;
+	WxRendererAdapters::VulkanDevice m_device_info;
 };
 #endif
 
@@ -133,12 +127,12 @@ private:
 class wxMetalUUID : public wxClientData
 {
 public:
-	wxMetalUUID(const MetalRenderer::DeviceInfo& info)
+	wxMetalUUID(const WxRendererAdapters::MetalDevice& info)
 		: m_device_info(info) {}
-	const MetalRenderer::DeviceInfo& GetDeviceInfo() const { return m_device_info; }
+	const WxRendererAdapters::MetalDevice& GetDeviceInfo() const { return m_device_info; }
 
 private:
-	MetalRenderer::DeviceInfo m_device_info;
+	WxRendererAdapters::MetalDevice m_device_info;
 };
 #endif
 
@@ -391,7 +385,7 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 		m_api_map.push_back(GraphicAPI::kOpenGL);
 #endif
 #ifdef ENABLE_VULKAN
-		if (g_vulkan_available)
+		if (WxRendererAdapters::IsVulkanLoaderAvailable())
 		{
 			choices[api_size++] = "Vulkan";
 			m_api_map.push_back(GraphicAPI::kVulkan);
@@ -2250,7 +2244,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 
 		m_graphic_device->Enable();
-		auto devices = VulkanRenderer::GetDevices(
+		auto devices = WxRendererAdapters::EnumerateVulkanDevices(
 			WindowSystem::GetWindowInfo().window_main);
 		if(!devices.empty())
 		{
@@ -2289,7 +2283,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		m_graphic_device->Enable();
 		m_graphic_device->Clear();
 
-		auto devices = MetalRenderer::GetDevices();
+		auto devices = WxRendererAdapters::EnumerateMetalDevices();
 		if(!devices.empty())
 		{
 			for (const auto& device : devices)

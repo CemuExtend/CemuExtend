@@ -7,6 +7,7 @@
 
 #ifdef ENABLE_VULKAN
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VsyncDriver.h"
 #endif
 
@@ -25,6 +26,43 @@ namespace WxRendererAdapters
 	{
 #ifdef ENABLE_VULKAN
 		(void)InitializeGlobalVulkan();
+#endif
+	}
+
+	bool IsVulkanLoaderAvailable()
+	{
+#ifdef ENABLE_VULKAN
+		return g_vulkan_available;
+#else
+		return false;
+#endif
+	}
+
+	std::vector<VulkanDevice> EnumerateVulkanDevices(const Host::NativeWindowHandle& mainWindow)
+	{
+#ifdef ENABLE_VULKAN
+		const auto devices = VulkanRenderer::GetDevices(mainWindow);
+		std::vector<VulkanDevice> result;
+		result.reserve(devices.size());
+		for (const auto& device : devices)
+			result.push_back({device.name, device.uuid});
+		return result;
+#else
+		return {};
+#endif
+	}
+
+	std::vector<MetalDevice> EnumerateMetalDevices()
+	{
+#ifdef ENABLE_METAL
+		const auto devices = MetalRenderer::GetDevices();
+		std::vector<MetalDevice> result;
+		result.reserve(devices.size());
+		for (const auto& device : devices)
+			result.push_back({device.name, device.uuid});
+		return result;
+#else
+		return {};
 #endif
 	}
 

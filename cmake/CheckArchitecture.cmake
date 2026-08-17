@@ -127,8 +127,8 @@ foreach(source IN LISTS architecture_sources)
 
 	# Normal wx startup, menu, and hotkey code only sees the neutral renderer
 	# adapter. Renderer globals and backend-specific APIs stay in its target.
-	if(source MATCHES "/src/gui/wxgui/(CemuApp|MainWindow|input/HotkeySettings)\.cpp$")
-		if(content MATCHES "Cafe/HW/Latte/(Core/LatteOverlay|Renderer/)|g_renderer|RendererAPI|MetalRenderer|LatteOverlay_init|InitializeGlobalVulkan")
+	if(source MATCHES "/src/gui/wxgui/(CemuApp|MainWindow|GeneralSettings2|input/HotkeySettings)\.cpp$")
+		if(content MATCHES "Cafe/HW/Latte/(Core/LatteOverlay|Renderer/)|g_renderer|g_vulkan_available|RendererAPI|MetalRenderer|LatteOverlay_init|InitializeGlobalVulkan")
 			list(APPEND wx_renderer_adapter_violations "${source}")
 		endif()
 	endif()
