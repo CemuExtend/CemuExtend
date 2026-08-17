@@ -46,17 +46,54 @@ namespace Application
 		TitlePlayStats playStats;
 	};
 
+	enum class ManagedContentType : std::uint8_t
+	{
+		Base,
+		Update,
+		Dlc,
+		Save,
+		System,
+	};
+
+	enum class ManagedContentFormat : std::uint8_t
+	{
+		Folder,
+		Wud,
+		Nus,
+		Wua,
+		Wuhb,
+	};
+
+	// Copied view used by title-management frontends. locationUid is opaque and
+	// only identifies one concrete installation for the lifetime of the process.
+	struct ManagedContentEntry
+	{
+		std::uint64_t locationUid{};
+		std::uint64_t titleId{};
+		std::filesystem::path path;
+		std::string name;
+		std::uint32_t version{};
+		std::uint32_t region{};
+		std::string regionName;
+		ManagedContentType type{ManagedContentType::Base};
+		ManagedContentFormat format{ManagedContentFormat::Folder};
+	};
+
 	enum class TitleCatalogEventType : std::uint8_t
 	{
 		Discovered,
 		Removed,
 		ScanFinished,
+		SaveDiscovered,
+		SaveRemoved,
+		SaveScanFinished,
 	};
 
 	struct TitleCatalogEvent
 	{
 		TitleCatalogEventType type{};
 		std::uint64_t titleId{};
+		std::optional<ManagedContentEntry> managedEntry;
 	};
 
 	using TitleCatalogHandler = std::function<void(const TitleCatalogEvent&)>;

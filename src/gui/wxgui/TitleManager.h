@@ -24,6 +24,11 @@ class wxPanel;
 class wxChoice;
 class wxNotebook;
 
+namespace Application
+{
+	class EmulationController;
+}
+
 enum class TitleManagerPage
 {
 	TitleManager = 0,
@@ -35,7 +40,8 @@ enum class DLMGR_STATUS_CODE;
 class TitleManager : public wxFrame
 {
 public:
-	TitleManager(wxWindow* parent, TitleManagerPage default_page = TitleManagerPage::TitleManager);
+	TitleManager(wxWindow* parent, Application::EmulationController& emulationController,
+		TitleManagerPage default_page = TitleManagerPage::TitleManager);
 	~TitleManager();
 
 	void SetFocusAndTab(TitleManagerPage page);
@@ -61,11 +67,8 @@ private:
 	void OnSaveExport(wxCommandEvent& event);
 	void OnSaveImport(wxCommandEvent& event);
 
-	void HandleTitleListCallback(struct CafeTitleListCallbackEvent* evt);
-
 	wxNotebook* m_notebook;
-	
-	uint32 m_callbackId;
+	Application::EmulationController& m_emulationController;
 
 	// title manager
 	wxTextCtrl* m_filter;

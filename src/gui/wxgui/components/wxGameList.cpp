@@ -1287,6 +1287,11 @@ void wxGameList::OnLeaveWindow(wxMouseEvent& event)
 
 void wxGameList::HandleTitleCatalogEvent(const Application::TitleCatalogEvent& event)
 {
+	if (event.type == Application::TitleCatalogEventType::SaveDiscovered ||
+		event.type == Application::TitleCatalogEventType::SaveRemoved ||
+		event.type == Application::TitleCatalogEventType::SaveScanFinished)
+		return;
+
 	if (event.type == Application::TitleCatalogEventType::ScanFinished)
 		return;
 

@@ -9,6 +9,9 @@ class wxControl;
 wxDECLARE_EVENT(wxEVT_REMOVE_ITEM, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_SET_TEXT, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_ENABLE, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_TITLE_REMOVED, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_TITLE_SEARCH_COMPLETE, wxCommandEvent);
 
 class wxSetStatusBarTextEvent;
 wxDECLARE_EVENT(wxEVT_SET_STATUS_BAR_TEXT, wxSetStatusBarTextEvent);
@@ -71,4 +74,3 @@ private:
 	wxControl* m_text_ctrl;
 	const wxString m_text;
 };
-

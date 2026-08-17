@@ -66,6 +66,7 @@ namespace
 			std::string&) override { return false; }
 		std::vector<Application::TitleSummary> titles;
 		std::vector<Application::GameSummary> games;
+		std::vector<Application::TitleCatalogEvent> catalogEvents;
 		std::vector<std::filesystem::path> scanPaths;
 		int titleRefreshes{};
 		int titleSubscriptions{};
@@ -101,8 +102,16 @@ namespace
 				bool& stopped;
 			};
 			++titleSubscriptions;
-			for (const auto& game : games)
-				handler({Application::TitleCatalogEventType::Discovered, game.titleId});
+			if (catalogEvents.empty())
+			{
+				for (const auto& game : games)
+					handler({Application::TitleCatalogEventType::Discovered, game.titleId});
+			}
+			else
+			{
+				for (const auto& event : catalogEvents)
+					handler(event);
+			}
 			return Application::TitleCatalogSubscription{
 				std::make_shared<State>(titleSubscriptionStopped)};
 		}
@@ -181,11 +190,28 @@ int main()
 	assert(controller.GetGame(0x1234)->name == "Test title");
 	assert(!controller.IsTitleScanning());
 	assert(controller.LoadTitleIcon(0x1234)->size() == 3);
+	backend.catalogEvents.push_back({
+		.type = Application::TitleCatalogEventType::SaveDiscovered,
+		.titleId = 0x1234,
+		.managedEntry = Application::ManagedContentEntry{
+			.locationUid = 17,
+			.titleId = 0x1234,
+			.path = "save-path",
+			.name = "Test save",
+			.version = 9,
+			.region = 2,
+			.regionName = "USA",
+			.type = Application::ManagedContentType::Save,
+			.format = Application::ManagedContentFormat::Folder,
+		},
+	});
 	std::vector<Application::TitleCatalogEvent> titleEvents;
 	auto titleSubscription = controller.SubscribeTitleCatalog(
 		[&](const auto& event) { titleEvents.push_back(event); });
 	assert(backend.titleSubscriptions == 1);
 	assert(titleEvents.size() == 1 && titleEvents.front().titleId == 0x1234);
+	assert(titleEvents.front().managedEntry->locationUid == 17);
+	assert(titleEvents.front().managedEntry->name == "Test save");
 	titleSubscription.Reset();
 	assert(backend.titleSubscriptionStopped);
 	const std::array<std::filesystem::path, 2> scanPaths{"games-a", "games-b"};

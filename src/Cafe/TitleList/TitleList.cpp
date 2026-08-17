@@ -529,8 +529,7 @@ uint64 CafeTitleList::RegisterCallback(void(*cb)(CafeTitleListCallbackEvent* evt
 		CafeTitleListCallbackEvent evt;
 		evt.eventType = CafeTitleListCallbackEvent::TYPE::SCAN_FINISHED;
 		evt.titleInfo = nullptr;
-		for (auto& it : sTLCallbackList)
-			it.cb(&evt, it.ctx);
+		cb(&evt, ctx);
 	}
 	return id;
 }

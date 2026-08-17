@@ -1,19 +1,28 @@
 #pragma once
 
+#include "application/TitleCatalog.h"
 #include "wxgui/helpers/wxCustomData.h"
-#include "config/CemuConfig.h"
 
 #include <wx/listctrl.h>
 
+#include <atomic>
 #include <boost/optional.hpp> // std::optional doesn't support optional reference inner types yet
+#include <memory>
 #include <utility>
 #include <vector>
+
+namespace Application
+{
+	class EmulationController;
+}
 
 class wxTitleManagerList : public wxListView
 {
 	friend class TitleManager;
 public:
-	wxTitleManagerList(wxWindow* parent, wxWindowID id = wxID_ANY);
+	wxTitleManagerList(wxWindow* parent,
+		Application::EmulationController& emulationController,
+		wxWindowID id = wxID_ANY);
 	~wxTitleManagerList();
 
 	enum ItemColumn
@@ -69,7 +78,8 @@ public:
 		uint64 title_id;
 		wxString name;
 		uint32_t version = 0;
-		CafeConsoleRegion region;
+		std::uint32_t region{};
+		wxString region_name;
 
 		std::vector<uint32> persistent_ids; // only used for save
 	};
@@ -96,8 +106,7 @@ private:
 
 	void OnTitleDiscovered(wxCommandEvent& event);
 	void OnTitleRemoved(wxCommandEvent& event);
-	void HandleTitleListCallback(struct CafeTitleListCallbackEvent* evt);
-	void HandleSaveListCallback(struct CafeSaveListCallbackEvent* evt);
+	void HandleTitleCatalogEvent(const Application::TitleCatalogEvent& event);
 
 	using TitleEntryData_t = wxCustomData<TitleEntry>;
 	void AddTitle(TitleEntryData_t* obj);
@@ -134,6 +143,7 @@ private:
 	static wxString GetTranslatedTitleEntryType(EntryType entryType);
 	std::future<bool> m_context_worker;
 
-	uint64 m_callbackIdTitleList;
-	uint64 m_callbackIdSaveList;
+	Application::EmulationController& m_emulationController;
+	Application::TitleCatalogSubscription m_titleSubscription;
+	std::shared_ptr<std::atomic_bool> m_lifetime;
 };

@@ -1,4 +1,5 @@
 #include "wxgui/components/wxTitleManagerList.h"
+#include "application/EmulationController.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "util/helpers/SystemException.h"
 #include "Cafe/TitleList/GameInfo.h"
@@ -25,8 +26,6 @@
 #include "wxgui/ChecksumTool.h"
 #include "wxgui/MainWindow.h"
 #include "Cafe/TitleList/TitleId.h"
-#include "Cafe/TitleList/SaveList.h"
-#include "Cafe/TitleList/TitleList.h"
 
 #include <zarchive/zarchivewriter.h>
 #include <zarchive/zarchivereader.h>
@@ -35,10 +34,14 @@
 
 wxDEFINE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_TITLE_REMOVED, wxCommandEvent);
+wxDEFINE_EVENT(wxEVT_TITLE_SEARCH_COMPLETE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
-wxTitleManagerList::wxTitleManagerList(wxWindow* parent, wxWindowID id)
-	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL)
+wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
+	Application::EmulationController& emulationController, wxWindowID id)
+	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
+	  m_emulationController(emulationController),
+	  m_lifetime(std::make_shared<std::atomic_bool>(true))
 {
 	AddColumns();
 
@@ -62,16 +65,24 @@ wxTitleManagerList::wxTitleManagerList(wxWindow* parent, wxWindowID id)
 	Bind(wxEVT_TITLE_REMOVED, &wxTitleManagerList::OnTitleRemoved, this);
 	Bind(wxEVT_CLOSE_WINDOW, &wxTitleManagerList::OnClose, this);
 
-	m_callbackIdTitleList = CafeTitleList::RegisterCallback([](CafeTitleListCallbackEvent* evt, void* ctx) { ((wxTitleManagerList*)ctx)->HandleTitleListCallback(evt); }, this);
-	m_callbackIdSaveList = CafeSaveList::RegisterCallback([](CafeSaveListCallbackEvent* evt, void* ctx) { ((wxTitleManagerList*)ctx)->HandleSaveListCallback(evt); }, this);
+	auto lifetime = m_lifetime;
+	m_titleSubscription = m_emulationController.SubscribeTitleCatalog(
+		[this, lifetime = std::move(lifetime)](const Application::TitleCatalogEvent& event) {
+			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
+				return;
+			wxTheApp->CallAfter([this, lifetime, event] {
+				if (lifetime->load(std::memory_order_acquire))
+					HandleTitleCatalogEvent(event);
+			});
+		});
 
 	ShowSortIndicator(ColumnTitleId);
 }
 
 wxTitleManagerList::~wxTitleManagerList()
 {
-	CafeSaveList::UnregisterCallback(m_callbackIdSaveList);
-	CafeTitleList::UnregisterCallback(m_callbackIdTitleList);
+	m_lifetime->store(false, std::memory_order_release);
+	m_titleSubscription.Reset();
 }
 
 boost::optional<const wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetSelectedTitleEntry() const
@@ -614,7 +625,7 @@ void wxTitleManagerList::OnConvertToCompressedFormat(uint64 titleId, uint64 righ
 	// todo
 
 
-	CafeTitleList::Refresh();
+	m_emulationController.RefreshTitles();
 	wxMessageBox(_("Conversion finished\n"), _("Complete"), wxOK | wxCENTRE | wxICON_INFORMATION, this);
 }
 
@@ -935,7 +946,7 @@ wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColu
 	case ColumnVersion:
 		return formatWxString("{}", entry.version);
 	case ColumnRegion:
-		return wxGetTranslation(fmt::format("{}", entry.region));
+		return wxGetTranslation(entry.region_name);
 	case ColumnFormat:
 	{
 		if (entry.type == EntryType::Save)
@@ -989,110 +1000,76 @@ wxString wxTitleManagerList::GetTranslatedTitleEntryType(EntryType type)
 	}
 }
 
-void wxTitleManagerList::HandleTitleListCallback(CafeTitleListCallbackEvent* evt)
+namespace
 {
-	if (evt->eventType != CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED &&
-		evt->eventType != CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED)
-		return;
-
-	auto& titleInfo = *evt->titleInfo;
-	wxTitleManagerList::EntryType entryType;
-	switch (titleInfo.GetTitleType())
+	wxTitleManagerList::EntryType ToWxEntryType(Application::ManagedContentType type)
 	{
-	case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE:
-		entryType = EntryType::Update;
-		break;
-	case TitleIdParser::TITLE_TYPE::AOC:
-		entryType = EntryType::Dlc;
-		break;
-	case TitleIdParser::TITLE_TYPE::SYSTEM_DATA:
-	case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
-	case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
-		entryType = EntryType::System;
-		break;
-	default:
-		entryType = EntryType::Base;
+		switch (type)
+		{
+		case Application::ManagedContentType::Update:
+			return wxTitleManagerList::EntryType::Update;
+		case Application::ManagedContentType::Dlc:
+			return wxTitleManagerList::EntryType::Dlc;
+		case Application::ManagedContentType::Save:
+			return wxTitleManagerList::EntryType::Save;
+		case Application::ManagedContentType::System:
+			return wxTitleManagerList::EntryType::System;
+		case Application::ManagedContentType::Base:
+		default:
+			return wxTitleManagerList::EntryType::Base;
+		}
 	}
 
-	wxTitleManagerList::EntryFormat entryFormat;
-	switch (titleInfo.GetFormat())
+	wxTitleManagerList::EntryFormat ToWxEntryFormat(
+		Application::ManagedContentFormat format)
 	{
-	case TitleInfo::TitleDataFormat::WUD:
-		entryFormat = EntryFormat::WUD;
-		break;
-	case TitleInfo::TitleDataFormat::NUS:
-		entryFormat = EntryFormat::NUS;
-		break;
-	case TitleInfo::TitleDataFormat::WIIU_ARCHIVE:
-		entryFormat = EntryFormat::WUA;
-		break;
-	case TitleInfo::TitleDataFormat::WUHB:
-		entryFormat = EntryFormat::WUHB;
-		break;
-	case TitleInfo::TitleDataFormat::HOST_FS:
-	default:
-		entryFormat = EntryFormat::Folder;
-		break;
-	}
-
-	if (evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED)
-	{
-		if (titleInfo.IsCached())
-			return; // the title list only displays non-cached entries
-		wxTitleManagerList::TitleEntry entry(entryType, entryFormat, titleInfo.GetPath());
-
-		ParsedMetaXml* metaInfo = titleInfo.GetMetaInfo();
-		if(titleInfo.IsSystemDataTitle())
-			return; // dont show system data titles for now
-		entry.location_uid = titleInfo.GetUID();
-		entry.title_id = titleInfo.GetAppTitleId();
-		std::string name = metaInfo->GetLongName(GetConfig().console_language.GetValue());
-		const auto nl = name.find(L'\n');
-		if (nl != std::string::npos)
-			name.replace(nl, 1, " - ");
-		entry.name = wxString::FromUTF8(name);
-		entry.version = titleInfo.GetAppTitleVersion();
-		entry.region = metaInfo->GetRegion();
-
-		auto* cmdEvt = new wxCommandEvent(wxEVT_TITLE_FOUND);
-		cmdEvt->SetClientObject(new wxCustomData(entry));
-		wxQueueEvent(this, cmdEvt);
-	}
-	else if (evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED)
-	{
-		wxTitleManagerList::TitleEntry entry(entryType, entryFormat, titleInfo.GetPath());
-		entry.location_uid = titleInfo.GetUID();
-		entry.title_id = titleInfo.GetAppTitleId();
-
-		auto* cmdEvt = new wxCommandEvent(wxEVT_TITLE_REMOVED);
-		cmdEvt->SetClientObject(new wxCustomData(entry));
-		wxQueueEvent(this, cmdEvt);
+		switch (format)
+		{
+		case Application::ManagedContentFormat::Wud:
+			return wxTitleManagerList::EntryFormat::WUD;
+		case Application::ManagedContentFormat::Nus:
+			return wxTitleManagerList::EntryFormat::NUS;
+		case Application::ManagedContentFormat::Wua:
+			return wxTitleManagerList::EntryFormat::WUA;
+		case Application::ManagedContentFormat::Wuhb:
+			return wxTitleManagerList::EntryFormat::WUHB;
+		case Application::ManagedContentFormat::Folder:
+		default:
+			return wxTitleManagerList::EntryFormat::Folder;
+		}
 	}
 }
 
-void wxTitleManagerList::HandleSaveListCallback(struct CafeSaveListCallbackEvent* evt)
+void wxTitleManagerList::HandleTitleCatalogEvent(
+	const Application::TitleCatalogEvent& event)
 {
-	if (evt->eventType == CafeSaveListCallbackEvent::TYPE::SAVE_DISCOVERED)
+	if (event.type == Application::TitleCatalogEventType::ScanFinished)
 	{
-		ParsedMetaXml* metaInfo = evt->saveInfo->GetMetaInfo();
-		if (!metaInfo)
-			return;
-		auto& saveInfo = *evt->saveInfo;
-		wxTitleManagerList::TitleEntry entry(EntryType::Save, EntryFormat::Folder, saveInfo.GetPath());
-		entry.location_uid = std::hash<uint64>() ( metaInfo->GetTitleId() );
-		entry.title_id = metaInfo->GetTitleId();
-		std::string name = metaInfo->GetLongName(GetConfig().console_language.GetValue());
-		const auto nl = name.find(L'\n');
-		if (nl != std::string::npos)
-			name.replace(nl, 1, " - ");
-		entry.name = wxString::FromUTF8(name);
-		entry.version = metaInfo->GetTitleVersion();
-		entry.region = metaInfo->GetRegion();
-
-		auto* cmdEvt = new wxCommandEvent(wxEVT_TITLE_FOUND);
-		cmdEvt->SetClientObject(new wxCustomData(entry));
-		wxQueueEvent(this, cmdEvt);
+		wxCommandEvent complete(wxEVT_TITLE_SEARCH_COMPLETE);
+		complete.SetEventObject(this);
+		ProcessWindowEvent(complete);
+		return;
 	}
+	if (event.type == Application::TitleCatalogEventType::SaveScanFinished ||
+		!event.managedEntry)
+		return;
+
+	const auto& managed = *event.managedEntry;
+	TitleEntry entry(ToWxEntryType(managed.type), ToWxEntryFormat(managed.format),
+		managed.path);
+	entry.location_uid = managed.locationUid;
+	entry.title_id = managed.titleId;
+	entry.name = wxString::FromUTF8(managed.name);
+	entry.version = managed.version;
+	entry.region = managed.region;
+	entry.region_name = wxString::FromUTF8(managed.regionName);
+
+	const bool removed = event.type == Application::TitleCatalogEventType::Removed ||
+		event.type == Application::TitleCatalogEventType::SaveRemoved;
+	wxCommandEvent command(removed ? wxEVT_TITLE_REMOVED : wxEVT_TITLE_FOUND);
+	command.SetEventObject(this);
+	command.SetClientObject(new wxCustomData(entry));
+	ProcessWindowEvent(command);
 }
 
 void wxTitleManagerList::OnTitleDiscovered(wxCommandEvent& event)
@@ -1183,7 +1160,7 @@ bool wxTitleManagerList::SortFunc(int column, const Type_t& v1, const Type_t& v2
 		if(entry1.region == entry2.region)
 			return SortFunc(ColumnTitleId, v1, v2);
 
-		return std::underlying_type_t<CafeConsoleRegion>(entry1.region) < std::underlying_type_t<CafeConsoleRegion>(entry2.region);
+		return entry1.region < entry2.region;
 	}
 	else if (column == ColumnFormat)
 	{

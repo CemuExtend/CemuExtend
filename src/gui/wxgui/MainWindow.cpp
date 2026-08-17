@@ -1911,7 +1911,7 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 			m_title_manager->SetFocusAndTab(default_tab);
 		else
 		{
-			m_title_manager = new TitleManager(this, default_tab);
+			m_title_manager = new TitleManager(this, m_emulationController, default_tab);
 			m_title_manager->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& event)
 				{
 					m_title_manager = nullptr;

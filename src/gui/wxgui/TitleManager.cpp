@@ -1,8 +1,8 @@
 #include "wxgui/TitleManager.h"
 
+#include "application/EmulationController.h"
 #include "wxgui/helpers/wxCustomEvents.h"
 #include "wxgui/helpers/wxCustomData.h"
-#include "Cafe/TitleList/GameInfo.h"
 #include "util/helpers/helpers.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/wxHelper.h"
@@ -38,12 +38,8 @@
 #include "Cafe/Account/Account.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "wxgui/CemuApp.h"
-#include "Cafe/TitleList/TitleList.h"
-#include "Cafe/TitleList/SaveList.h"
 #include "resource/embedded/resources.h"
 
-wxDEFINE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_TITLE_SEARCH_COMPLETE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_DL_TITLE_UPDATE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_DL_DISCONNECT_COMPLETE, wxCommandEvent);
 
@@ -79,7 +75,7 @@ wxPanel* TitleManager::CreateTitleManagerPage()
 
 	sizer->Add(new wxStaticLine(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL), 0, wxEXPAND | wxALL, 5);
 
-	m_title_list = new wxTitleManagerList(panel);
+	m_title_list = new wxTitleManagerList(panel, m_emulationController);
 	m_title_list->SetSizeHints(800, 600);
 	m_title_list->Bind(wxEVT_LIST_ITEM_SELECTED, &TitleManager::OnTitleSelected, this);
 	sizer->Add(m_title_list, 1, wxALL | wxEXPAND, 5);
@@ -230,13 +226,24 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 	return panel;
 }
 
-TitleManager::TitleManager(wxWindow* parent, TitleManagerPage default_page)
-	: wxFrame(parent, wxID_ANY, _("Title Manager"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL)
+TitleManager::TitleManager(wxWindow* parent,
+	Application::EmulationController& emulationController, TitleManagerPage default_page)
+	: wxFrame(parent, wxID_ANY, _("Title Manager"), wxDefaultPosition, wxDefaultSize,
+		wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL),
+	  m_emulationController(emulationController)
 {
 	SetIcon(wxICON(X_BOX));
 	
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	m_notebook = new wxNotebook(this, wxID_ANY);
+
+	// Catalog subscriptions replay immediately. Install frame handlers before
+	// constructing the list so its initial scan-complete event cannot be lost.
+	this->Bind(wxEVT_SET_STATUS_BAR_TEXT, &TitleManager::OnSetStatusBarText, this);
+	this->Bind(wxEVT_TITLE_FOUND, &TitleManager::OnTitleFound, this);
+	this->Bind(wxEVT_TITLE_SEARCH_COMPLETE, &TitleManager::OnTitleSearchComplete, this);
+	this->Bind(wxEVT_DL_TITLE_UPDATE, &TitleManager::OnDownloadableTitleUpdate, this);
+	this->Bind(wxEVT_DL_DISCONNECT_COMPLETE, &TitleManager::OnDisconnect, this);
 
 	m_notebook->AddPage(CreateTitleManagerPage(), _("Title Manager"), default_page == TitleManagerPage::TitleManager);
 	m_notebook->AddPage(CreateDownloadManagerPage(), _("Download Manager"), default_page == TitleManagerPage::DownloadManager);
@@ -249,12 +256,6 @@ TitleManager::TitleManager(wxWindow* parent, TitleManagerPage default_page)
 	this->SetSizerAndFit(sizer);
 	this->Centre(wxBOTH);
 
-	this->Bind(wxEVT_SET_STATUS_BAR_TEXT, &TitleManager::OnSetStatusBarText, this);
-	this->Bind(wxEVT_TITLE_FOUND, &TitleManager::OnTitleFound, this);
-	this->Bind(wxEVT_TITLE_SEARCH_COMPLETE, &TitleManager::OnTitleSearchComplete, this);
-	this->Bind(wxEVT_DL_TITLE_UPDATE, &TitleManager::OnDownloadableTitleUpdate, this);
-	this->Bind(wxEVT_DL_DISCONNECT_COMPLETE, &TitleManager::OnDisconnect, this);
-	
 	// TODO typing on title list should change filter text and filter!
 
 	// if download manager is already active then restore state
@@ -269,13 +270,10 @@ TitleManager::TitleManager(wxWindow* parent, TitleManagerPage default_page)
 		SetConnected(true);
 	}
 
-	m_callbackId = CafeTitleList::RegisterCallback([](CafeTitleListCallbackEvent* evt, void* ctx) { ((TitleManager*)ctx)->HandleTitleListCallback(evt); }, this);
 }
 
 TitleManager::~TitleManager()
 {
-	CafeTitleList::UnregisterCallback(m_callbackId);
-
 	// unregister callbacks for download manager
 	DownloadManager* dlMgr = DownloadManager::GetInstance(false);
 	if (dlMgr)
@@ -312,15 +310,6 @@ void TitleManager::SetDownloadStatusText(const wxString& text)
 	evt->SetEventObject(m_status_text);
 	evt->SetString(text);
 	wxQueueEvent(this, evt);
-}
-
-void TitleManager::HandleTitleListCallback(CafeTitleListCallbackEvent* evt)
-{
-	if (evt->eventType == CafeTitleListCallbackEvent::TYPE::SCAN_FINISHED)
-	{
-		auto* evt = new wxCommandEvent(wxEVT_TITLE_SEARCH_COMPLETE);
-		wxQueueEvent(this, evt);
-	}
 }
 
 void TitleManager::OnTitleFound(wxCommandEvent& event)
@@ -373,7 +362,7 @@ void TitleManager::OnRefreshButton(wxCommandEvent& event)
 	m_isScanning = true;
 	// m_title_list->ClearItems(); -> Dont clear. Refresh() triggers incremental updates via notifications
 	m_status_bar->SetStatusText(_("Searching for titles..."));
-	CafeTitleList::Refresh();
+	m_emulationController.RefreshTitles();
 }
 
 void TitleManager::OnInstallTitle(wxCommandEvent& event)
@@ -392,7 +381,7 @@ void TitleManager::OnInstallTitle(wxCommandEvent& event)
 
 		if (updateResult == wxID_OK)
 		{
-			CafeTitleList::AddTitleFromPath(frame.GetTargetPath());
+			m_emulationController.AddTitleFromPath(frame.GetTargetPath());
 		}
 		else
 		{
@@ -419,11 +408,7 @@ static void PopulateSavePersistentIds(wxTitleManagerList::TitleEntry& entry)
 	if (!entry.persistent_ids.empty())
 		return;
 	cemu_assert(entry.type == wxTitleManagerList::EntryType::Save);
-	SaveInfo saveInfo = CafeSaveList::GetSaveByTitleId(entry.title_id);
-	if (!saveInfo.IsValid())
-		return;
-	fs::path savePath = saveInfo.GetPath();
-	savePath /= "user";
+	fs::path savePath = entry.path / "user";
 	std::error_code ec;
 	for (auto it : fs::directory_iterator(savePath, ec))
 	{

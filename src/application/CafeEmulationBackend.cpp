@@ -10,6 +10,7 @@
 #include "Cafe/IOSU/PDM/iosu_pdm.h"
 #include "Cafe/TitleList/TitleInfo.h"
 #include "Cafe/TitleList/TitleList.h"
+#include "Cafe/TitleList/SaveList.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
@@ -169,6 +170,85 @@ namespace Application
 			return titleId;
 		}
 
+		ManagedContentType TranslateManagedType(TitleInfo& title)
+		{
+			switch (title.GetTitleType())
+			{
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE:
+				return ManagedContentType::Update;
+			case TitleIdParser::TITLE_TYPE::AOC:
+				return ManagedContentType::Dlc;
+			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA:
+			case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
+			case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
+				return ManagedContentType::System;
+			default:
+				return ManagedContentType::Base;
+			}
+		}
+
+		ManagedContentFormat TranslateManagedFormat(const TitleInfo& title)
+		{
+			switch (title.GetFormat())
+			{
+			case TitleInfo::TitleDataFormat::WUD:
+				return ManagedContentFormat::Wud;
+			case TitleInfo::TitleDataFormat::NUS:
+				return ManagedContentFormat::Nus;
+			case TitleInfo::TitleDataFormat::WIIU_ARCHIVE:
+				return ManagedContentFormat::Wua;
+			case TitleInfo::TitleDataFormat::WUHB:
+				return ManagedContentFormat::Wuhb;
+			case TitleInfo::TitleDataFormat::HOST_FS:
+			default:
+				return ManagedContentFormat::Folder;
+			}
+		}
+
+		ManagedContentEntry TranslateManagedTitle(TitleInfo& title, bool presentation)
+		{
+			ManagedContentEntry result{
+				.locationUid = title.GetUID(),
+				.titleId = title.GetAppTitleId(),
+				.path = title.GetPath(),
+				.version = title.GetAppTitleVersion(),
+				.region = static_cast<std::uint32_t>(title.GetMetaRegion()),
+				.regionName = fmt::format("{}", title.GetMetaRegion()),
+				.type = TranslateManagedType(title),
+				.format = TranslateManagedFormat(title),
+			};
+			if (presentation)
+			{
+				result.name = title.GetMetaTitleName();
+				const auto newline = result.name.find('\n');
+				if (newline != std::string::npos)
+					result.name.replace(newline, 1, " - ");
+			}
+			return result;
+		}
+
+		std::optional<ManagedContentEntry> TranslateManagedSave(SaveInfo& save)
+		{
+			auto* meta = save.GetMetaInfo();
+			if (!meta)
+				return std::nullopt;
+			ManagedContentEntry result{
+				.locationUid = std::hash<std::uint64_t>{}(meta->GetTitleId()),
+				.titleId = meta->GetTitleId(),
+				.path = save.GetPath(),
+				.name = meta->GetLongName(GetConfig().console_language.GetValue()),
+				.version = meta->GetTitleVersion(),
+				.region = static_cast<std::uint32_t>(meta->GetRegion()),
+				.regionName = fmt::format("{}", meta->GetRegion()),
+				.type = ManagedContentType::Save,
+				.format = ManagedContentFormat::Folder,
+			};
+			const auto newline = result.name.find('\n');
+			if (newline != std::string::npos)
+				result.name.replace(newline, 1, " - ");
+			return result;
+		}
+
 		class CafeTitleEventSubscription final :
 			public Detail::TitleSubscriptionState,
 			public std::enable_shared_from_this<CafeTitleEventSubscription>
@@ -195,6 +275,8 @@ namespace Application
 
 			~CafeTitleEventSubscription() override
 			{
+				if (m_saveCallbackId != 0)
+					CafeSaveList::UnregisterCallback(m_saveCallbackId);
 				if (m_callbackId != 0)
 					CafeTitleList::UnregisterCallback(m_callbackId);
 				Stop();
@@ -228,30 +310,80 @@ namespace Application
 				m_callbackId = CafeTitleList::RegisterCallback(
 					[](CafeTitleListCallbackEvent* event, void* context) {
 						auto& self = *static_cast<CafeTitleEventSubscription*>(context);
-						TitleCatalogEvent translated;
-						switch (event->eventType)
-						{
-						case CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED:
-							translated.type = TitleCatalogEventType::Discovered;
-							break;
-						case CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED:
-							translated.type = TitleCatalogEventType::Removed;
-							break;
-						case CafeTitleListCallbackEvent::TYPE::SCAN_FINISHED:
-							translated.type = TitleCatalogEventType::ScanFinished;
-							break;
-						}
-						if (event->titleInfo)
-							translated.titleId = ToBaseTitleId(
-								event->titleInfo->GetAppTitleId());
 						try
 						{
+							TitleCatalogEvent translated;
+							switch (event->eventType)
+							{
+							case CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED:
+								translated.type = TitleCatalogEventType::Discovered;
+								break;
+							case CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED:
+								translated.type = TitleCatalogEventType::Removed;
+								break;
+							case CafeTitleListCallbackEvent::TYPE::SCAN_FINISHED:
+								translated.type = TitleCatalogEventType::ScanFinished;
+								break;
+							default:
+								cemuLog_log(LogType::Force,
+									"Ignoring unknown title catalog event");
+								return;
+							}
+							if (event->titleInfo)
+							{
+								translated.titleId = ToBaseTitleId(
+									event->titleInfo->GetAppTitleId());
+								const bool discovered = event->eventType ==
+									CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED;
+								if (!discovered || (!event->titleInfo->IsCached() &&
+									!event->titleInfo->IsSystemDataTitle()))
+								{
+									translated.managedEntry = TranslateManagedTitle(
+										*event->titleInfo, discovered);
+								}
+							}
 							self.Enqueue(std::move(translated));
 						}
 						catch (const std::exception& exception)
 						{
 							cemuLog_log(LogType::Force,
 								"Unable to queue title catalog event: {}", exception.what());
+						}
+					}, this);
+
+				m_saveCallbackId = CafeSaveList::RegisterCallback(
+					[](CafeSaveListCallbackEvent* event, void* context) {
+						auto& self = *static_cast<CafeTitleEventSubscription*>(context);
+						try
+						{
+							TitleCatalogEvent translated;
+							switch (event->eventType)
+							{
+							case CafeSaveListCallbackEvent::TYPE::SAVE_DISCOVERED:
+								translated.type = TitleCatalogEventType::SaveDiscovered;
+								break;
+							case CafeSaveListCallbackEvent::TYPE::SAVE_REMOVED:
+								translated.type = TitleCatalogEventType::SaveRemoved;
+								break;
+							case CafeSaveListCallbackEvent::TYPE::SCAN_FINISHED:
+								translated.type = TitleCatalogEventType::SaveScanFinished;
+								break;
+							default:
+								cemuLog_log(LogType::Force,
+									"Ignoring unknown save catalog event");
+								return;
+							}
+							if (event->saveInfo)
+							{
+								translated.titleId = event->saveInfo->GetTitleId();
+								translated.managedEntry = TranslateManagedSave(*event->saveInfo);
+							}
+							self.Enqueue(std::move(translated));
+						}
+						catch (const std::exception& exception)
+						{
+							cemuLog_log(LogType::Force,
+								"Unable to queue save catalog event: {}", exception.what());
 						}
 					}, this);
 			}
@@ -301,6 +433,7 @@ namespace Application
 			std::deque<TitleCatalogEvent> m_pending;
 			std::thread m_thread;
 			std::uint64_t m_callbackId{};
+			std::uint64_t m_saveCallbackId{};
 			bool m_stopping{};
 		};
 

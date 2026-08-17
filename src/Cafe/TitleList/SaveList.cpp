@@ -46,19 +46,24 @@ void CafeSaveList::Refresh()
 void CafeSaveList::RefreshThreadWorker()
 {
 	SetThreadName("SaveListWorker");
-	// clear save list
-	for (auto& itSaveInfo : sSLList)
 	{
-		for (auto& it : sSLCallbackList)
+		// Keep callback dispatch and deletion under the same mutex used by
+		// UnregisterCallback. Returning from unregister is therefore a quiescence
+		// barrier for callback contexts.
+		std::unique_lock lock(sSLMutex);
+		for (auto& itSaveInfo : sSLList)
 		{
-			CafeSaveListCallbackEvent evt;
-			evt.eventType = CafeSaveListCallbackEvent::TYPE::SAVE_REMOVED;
-			evt.saveInfo = itSaveInfo;
-			it.cb(&evt, it.ctx);
+			for (auto& it : sSLCallbackList)
+			{
+				CafeSaveListCallbackEvent evt;
+				evt.eventType = CafeSaveListCallbackEvent::TYPE::SAVE_REMOVED;
+				evt.saveInfo = itSaveInfo;
+				it.cb(&evt, it.ctx);
+			}
+			delete itSaveInfo;
 		}
-		delete itSaveInfo;
+		sSLList.clear();
 	}
-	sSLList.clear();
 
 	sSLMutex.lock();
 	fs::path mlcPath = sSLMLCPath;
@@ -96,16 +101,18 @@ void CafeSaveList::RefreshThreadWorker()
 				delete saveInfo;
 		}
 	}
-	sSLMutex.lock();
-	sSLWorkerThreadActive = false;
-	sSLMutex.unlock();
-	// send notification about finished scan
-	for (auto& it : sSLCallbackList)
 	{
-		CafeSaveListCallbackEvent evt;
-		evt.eventType = CafeSaveListCallbackEvent::TYPE::SCAN_FINISHED;
-		evt.saveInfo = nullptr;
-		it.cb(&evt, it.ctx);
+		std::unique_lock lock(sSLMutex);
+		sSLWorkerThreadActive = false;
+		// See the removal dispatch above: unregister must wait until callbacks
+		// using its context have returned.
+		for (auto& it : sSLCallbackList)
+		{
+			CafeSaveListCallbackEvent evt;
+			evt.eventType = CafeSaveListCallbackEvent::TYPE::SCAN_FINISHED;
+			evt.saveInfo = nullptr;
+			it.cb(&evt, it.ctx);
+		}
 	}
 }
 
@@ -155,8 +162,7 @@ uint64 CafeSaveList::RegisterCallback(void(*cb)(CafeSaveListCallbackEvent* evt, 
 		CafeSaveListCallbackEvent evt;
 		evt.eventType = CafeSaveListCallbackEvent::TYPE::SCAN_FINISHED;
 		evt.saveInfo = nullptr;
-		for (auto& it : sSLCallbackList)
-			it.cb(&evt, it.ctx);
+		cb(&evt, ctx);
 	}
 	return id;
 }
