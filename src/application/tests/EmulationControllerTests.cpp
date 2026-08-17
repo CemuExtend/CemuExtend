@@ -61,6 +61,14 @@ namespace
 			softwareKeyboardKeys.push_back(keyCode);
 			return true;
 		}
+		Application::NfcTouchResult nfcTouchResult{Application::NfcTouchResult::Inactive};
+		std::filesystem::path nfcTouchPath;
+		Application::NfcTouchResult TouchNfcTagFromFile(
+			const std::filesystem::path& path) override
+		{
+			nfcTouchPath = path;
+			return nfcTouchResult;
+		}
 		void PointerFocusChanged(bool) override {}
 		void SubmitMouse(const Application::MouseInput&) override {}
 		Application::PointerPolicy GetPointerPolicy() override { return {}; }
@@ -293,6 +301,12 @@ int main()
 	assert(controller.SoftwareKeyboardActive());
 	assert(controller.SubmitSoftwareKeyboardKey('x'));
 	assert(backend.softwareKeyboardKeys == std::vector<std::uint32_t>{'x'});
+	assert(controller.TouchNfcTagFromFile("missing.nfc") ==
+		Application::NfcTouchResult::Inactive);
+	backend.nfcTouchResult = Application::NfcTouchResult::Success;
+	assert(controller.TouchNfcTagFromFile("tag.nfc") ==
+		Application::NfcTouchResult::Success);
+	assert(backend.nfcTouchPath == std::filesystem::path{"tag.nfc"});
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
 	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
 		.basePath = "test-title", .version = 17});

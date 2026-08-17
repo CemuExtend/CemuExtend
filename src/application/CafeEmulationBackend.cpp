@@ -17,6 +17,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
@@ -1193,6 +1194,25 @@ namespace Application
 					return false;
 				swkbd_keyInput(keyCode);
 				return true;
+			}
+
+			NfcTouchResult TouchNfcTagFromFile(
+				const std::filesystem::path& path) override
+			{
+				std::unique_lock lock(m_inputLifecycleMutex);
+				if (!m_inputAvailable || !CafeSystem::IsTitleRunning())
+					return NfcTouchResult::Inactive;
+
+				uint32 error{};
+				if (nfc::TouchTagFromFile(path, &error))
+					return NfcTouchResult::Success;
+				switch (error)
+				{
+				case NFC_TOUCH_TAG_ERROR_NO_ACCESS: return NfcTouchResult::NoAccess;
+				case NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT:
+					return NfcTouchResult::InvalidFileFormat;
+				default: return NfcTouchResult::UnknownError;
+				}
 			}
 
 			void PointerFocusChanged(bool focused) override

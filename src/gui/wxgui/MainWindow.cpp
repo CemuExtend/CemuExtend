@@ -62,7 +62,6 @@
 #endif
 
 //Cafe libs
-#include "Cafe/OS/libs/nfc/nfc.h"
 
 #include <wx/app.h>
 #include <wx/thread.h>
@@ -291,22 +290,7 @@ public:
 	{
 		if (!m_window->IsGameLaunched() || filenames.GetCount() != 1)
 			return false;
-		uint32 nfcError;
-		std::string path = filenames[0].utf8_string();
-		if (nfc::TouchTagFromFile(_utf8ToPath(path), &nfcError))
-		{
-			GetWxGUIConfig().AddRecentNfcFile(path);
-			m_window->UpdateNFCMenu();
-			return true;
-		}
-		else
-		{
-			if (nfcError == NFC_TOUCH_TAG_ERROR_NO_ACCESS)
-				wxMessageBox(_("Cannot open file"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			else if (nfcError == NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT)
-				wxMessageBox(_("Not a valid NFC file"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-			return false;
-		}
+		return m_window->TouchNfcFile(filenames[0].utf8_string(), true);
 	}
 
 private:
@@ -853,20 +837,7 @@ void MainWindow::OnNFCMenu(wxCommandEvent& event)
 				"All NFC files (bin, dat, nfc)|*.bin;*.dat;*.nfc|All files (*.*)|*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); // TRANSLATE
 		if (openFileDialog.ShowModal() == wxID_CANCEL || openFileDialog.GetPath().IsEmpty())
 			return;
-		wxString wxStrFilePath = openFileDialog.GetPath();
-		uint32 nfcError;
-		if (nfc::TouchTagFromFile(_utf8ToPath(wxStrFilePath.utf8_string()), &nfcError) == false)
-		{
-			if (nfcError == NFC_TOUCH_TAG_ERROR_NO_ACCESS)
-				wxMessageBox(_("Cannot open file"));
-			else if (nfcError == NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT)
-				wxMessageBox(_("Not a valid NFC file"));
-		}
-		else
-		{
-			GetWxGUIConfig().AddRecentNfcFile(wxStrFilePath.utf8_string());
-			UpdateNFCMenu();
-		}
+		TouchNfcFile(openFileDialog.GetPath().utf8_string(), false);
 	}
 	else if (event.GetId() >= MAINFRAME_MENU_ID_NFC_RECENT_0 && event.GetId() <= MAINFRAME_MENU_ID_NFC_RECENT_LAST)
 	{
@@ -874,25 +845,36 @@ void MainWindow::OnNFCMenu(wxCommandEvent& event)
 		auto& config = GetWxGUIConfig();
 		if (index < config.recent_nfc_files.size())
 		{
-			const auto& path = config.recent_nfc_files[index];
+			const auto path = config.recent_nfc_files[index];
 			if (!path.empty())
-			{
-				uint32 nfcError = 0;
-				if (nfc::TouchTagFromFile(_utf8ToPath(path), &nfcError) == false)
-				{
-					if (nfcError == NFC_TOUCH_TAG_ERROR_NO_ACCESS)
-						wxMessageBox(_("Cannot open file"));
-					else if (nfcError == NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT)
-						wxMessageBox(_("Not a valid NFC file"));
-				}
-				else
-				{
-					config.AddRecentNfcFile(path);
-					UpdateNFCMenu();
-				}
-			}
+				TouchNfcFile(path, false);
 		}
 	}
+}
+
+bool MainWindow::TouchNfcFile(std::string path, bool dropTarget)
+{
+	const auto result = m_emulationController.TouchNfcTagFromFile(_utf8ToPath(path));
+	if (result == Application::NfcTouchResult::Success)
+	{
+		GetWxGUIConfig().AddRecentNfcFile(path);
+		UpdateNFCMenu();
+		return true;
+	}
+
+	wxString message;
+	if (result == Application::NfcTouchResult::NoAccess)
+		message = _("Cannot open file");
+	else if (result == Application::NfcTouchResult::InvalidFileFormat)
+		message = _("Not a valid NFC file");
+	if (!message.empty())
+	{
+		if (dropTarget)
+			wxMessageBox(message, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+		else
+			wxMessageBox(message);
+	}
+	return false;
 }
 
 void MainWindow::OnFileExit(wxCommandEvent& event)

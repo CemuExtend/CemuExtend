@@ -16,6 +16,7 @@
 #include "application/EmulationPresentation.h"
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
+#include "application/NfcFacade.h"
 #include "application/TitleCatalog.h"
 #include "application/TitleInstallFacade.h"
 
@@ -183,6 +184,8 @@ namespace Application
 		virtual void KeyboardFocusLost() = 0;
 		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
 		virtual bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) = 0;
+		virtual NfcTouchResult TouchNfcTagFromFile(
+			const std::filesystem::path& path) = 0;
 		virtual void PointerFocusChanged(bool focused) = 0;
 		virtual void SubmitMouse(const MouseInput& input) = 0;
 		[[nodiscard]] virtual PointerPolicy GetPointerPolicy() = 0;
@@ -232,6 +235,7 @@ namespace Application
 		void KeyboardFocusLost();
 		[[nodiscard]] bool SoftwareKeyboardActive() const;
 		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode);
+		NfcTouchResult TouchNfcTagFromFile(const std::filesystem::path& path);
 		void PointerFocusChanged(bool focused);
 		void SubmitMouse(const MouseInput& input);
 		[[nodiscard]] PointerPolicy GetPointerPolicy();

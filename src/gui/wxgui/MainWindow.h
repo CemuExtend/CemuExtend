@@ -79,6 +79,7 @@ public:
 	void EndEmulation();
 	void SetMenuVisible(bool state);
 	void UpdateNFCMenu();
+	bool TouchNfcFile(std::string path, bool dropTarget);
 	bool IsMenuHidden() const;
 	void TogglePadView();
 

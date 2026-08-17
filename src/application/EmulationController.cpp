@@ -245,6 +245,13 @@ namespace Application
 		return m_backend->SubmitSoftwareKeyboardKey(keyCode);
 	}
 
+	NfcTouchResult EmulationController::TouchNfcTagFromFile(
+		const std::filesystem::path& path)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->TouchNfcTagFromFile(path);
+	}
+
 	void EmulationController::PointerFocusChanged(bool focused)
 	{
 		m_backend->PointerFocusChanged(focused);
