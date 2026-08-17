@@ -3,7 +3,6 @@
 #include "wxHelper.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "util/helpers/SystemException.h"
-#include "Cafe/TitleList/GameInfo.h"
 #include "wxgui/components/wxGameList.h"
 #include "wxgui/helpers/wxCustomEvents.h"
 
@@ -20,7 +19,6 @@
 #include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
-#include "Cafe/TitleList/TitleId.h"
 #include "wxgui/MainWindow.h"
 
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
@@ -765,9 +763,8 @@ void wxDownloadManagerList::Filter2(bool showTitles, bool showUpdates, bool show
 	{
 		bool visible = false;
 
-		TitleIdParser tParser(data->entry.titleId);
 		bool isInstalled = data->entry.status == TitleDownloadStatus::Installed;
-		if (tParser.IsBaseTitleUpdate())
+		if (data->entry.type == EntryType::Update)
 		{
 			if (showUpdates && (showInstalled || !isInstalled))
 				visible = true;
@@ -810,4 +807,3 @@ void wxDownloadManagerList::AutosizeColumns()
 {
 	wxAutosizeColumns(this, ColumnTitleId, ColumnMAX - 1);
 }
-
