@@ -205,7 +205,6 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuResource
   libzip::zip
   CemuComponents
-  CemuWxRendererAdapters
   pugixml::pugixml
   PUBLIC
   CURL::libcurl

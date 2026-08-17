@@ -108,6 +108,8 @@ cemu_assert_target_has_no_edge(CemuHostContracts CemuCafe CemuApplication CemuWx
 cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuWxGui CemuWxRendererAdapters)
+cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 
 # Source-level layer checks are mandatory for every configuration, including
 # production builds with BUILD_TESTING=OFF. The ctest registration below keeps
@@ -291,7 +293,13 @@ target_link_libraries(CemuBin PRIVATE
 )
 
 if(ENABLE_WXWIDGETS)
-	target_link_libraries(CemuBin PRIVATE CemuWxGui)
+	# The executable is the composition root for the normal frontend and its
+	# backend-specific renderer adapters.  CemuWxGui only references the neutral
+	# adapter API; it does not own or link the implementation target.
+	target_link_libraries(CemuBin PRIVATE
+		CemuWxGui
+		CemuWxRendererAdapters
+	)
 endif()
 
 if(UNIX AND NOT APPLE)
