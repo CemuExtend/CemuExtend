@@ -398,6 +398,22 @@ namespace Application
 		return m_backend->SaveGameProfile(titleId, update);
 	}
 
+	TitleInstallPlanResult EmulationController::PlanTitleInstall(
+		const std::filesystem::path& sourcePath) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->PlanTitleInstall(sourcePath);
+	}
+
+	TitleInstallResult EmulationController::InstallTitle(const TitleInstallPlan& plan,
+		TitleInstallDecision decision, TitleInstallProgressHandler progress,
+		TitleInstallCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->InstallTitle(plan, decision, std::move(progress),
+			std::move(cancelled));
+	}
+
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

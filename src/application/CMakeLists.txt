@@ -10,6 +10,7 @@ add_library(CemuApplication STATIC
   GameProfileFacade.h
   GraphicPackFacade.h
   TitleCatalog.h
+  TitleInstallFacade.h
 )
 
 target_include_directories(CemuApplication PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")

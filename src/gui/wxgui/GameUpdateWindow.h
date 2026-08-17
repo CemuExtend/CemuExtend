@@ -1,67 +1,74 @@
 #pragma once
 
-#include "Cafe/TitleList/GameInfo.h"
+#include "application/TitleInstallFacade.h"
 
 #include <wx/dialog.h>
-#include <wx/timer.h>
 #include <wx/gauge.h>
+#include <wx/timer.h>
 
 #include <atomic>
 #include <string>
-#include <array>
-#include <memory>
+#include <thread>
 
-// thrown if users doesn't wish to reinstall update/dlc
+namespace Application
+{
+	class EmulationController;
+}
+
 class AbortException : public std::exception {};
 
 class GameUpdateWindow : public wxDialog
 {
 public:
-
-	GameUpdateWindow(wxWindow& parent, const fs::path& metaPath);
+	GameUpdateWindow(wxWindow& parent,
+		Application::EmulationController& emulationController,
+		const fs::path& sourcePath);
 	~GameUpdateWindow();
 
-	uint64 GetTitleId() const { return m_title_info.GetAppTitleId(); }
-	bool HasException() const { return !m_thread_exception.empty(); }
-	//bool IsDLC() const { return m_game_info->IsDLC(); }
-	//bool IsUpdate() const { return m_game_info->IsUpdate(); }
-	const std::string& GetExceptionMessage() const { return m_thread_exception; }
-	const std::string GetGameName() const { return m_title_info.GetMetaTitleName(); }
-	uint32 GetTargetVersion() const { return m_title_info.GetAppTitleVersion(); }
-	fs::path GetTargetPath() const { return fs::path(m_target_path); }
+	[[nodiscard]] uint64 GetTitleId() const { return m_plan.titleId; }
+	[[nodiscard]] bool HasException() const
+	{
+		return m_result.error != Application::TitleInstallError::None &&
+			m_result.error != Application::TitleInstallError::Cancelled;
+	}
+	[[nodiscard]] const std::string& GetExceptionMessage() const
+	{
+		return HasException() ? m_result.diagnostic : m_emptyDiagnostic;
+	}
+	[[nodiscard]] const std::string& GetGameName() const { return m_plan.titleName; }
+	[[nodiscard]] uint32 GetTargetVersion() const { return m_plan.version; }
+	[[nodiscard]] fs::path GetTargetPath() const
+	{
+		return m_result.installedPath.empty() ? m_plan.targetPath : m_result.installedPath;
+	}
 
 	int ShowModal() override;
 	void OnClose(wxCloseEvent& event);
+	void OnUpdate(wxTimerEvent& event);
+	void OnCancelButton(wxCommandEvent& event);
 
-	void OnUpdate(const wxTimerEvent& event);
-	void OnCancelButton(const wxCommandEvent& event);
-
-	//uint64 GetUpdateTitleId() const { return m_title_info->GetUpdateTitleId(); }
-	//uint64 GetDLCTitleId() const { return m_game_info->GetDLCTitleId(); }
-	
 private:
-	//std::unique_ptr<GameInfoDEPRECATED> m_game_info;
-	TitleInfo m_title_info;
-	enum ThreadState_t
+	enum class ThreadState : std::uint8_t
 	{
-		ThreadRunning,
-		ThreadCanceled,
-		ThreadFinished,
+		Running,
+		Finished,
 	};
 
-	uint64_t m_required_size;
-	fs::path m_target_path;
-	std::array<fs::path, 3> m_source_paths;
-	bool ParseUpdate(const fs::path& metaPath);
-
-	std::atomic<uint64> m_processed_size = 0;
-	std::atomic<ThreadState_t> m_thread_state;
-	std::string m_thread_exception;
+	Application::EmulationController& m_emulationController;
+	Application::TitleInstallPlan m_plan;
+	Application::TitleInstallDecision m_decision{
+		Application::TitleInstallDecision::Proceed};
+	Application::TitleInstallResult m_result{
+		Application::TitleInstallError::Cancelled, "Title installation cancelled", {}};
+	std::string m_emptyDiagnostic;
+	std::atomic_bool m_cancelRequested{};
+	std::atomic<ThreadState> m_threadState{ThreadState::Running};
+	std::atomic<std::uint64_t> m_processedBytes{};
+	std::atomic<std::uint64_t> m_totalBytes{};
 	std::thread m_thread;
+
+	wxGauge* m_processBar{};
+	wxTimer* m_timer{};
+
 	void ThreadWork();
-
-	fs::path m_backup_folder; // for prev update data
-
-	wxGauge* m_processBar;
-	wxTimer* m_timer;
 };

@@ -599,13 +599,11 @@ bool MainWindow::InstallUpdate(const fs::path& metaFilePath)
 {
 	try
 	{
-		GameUpdateWindow frame(*this, metaFilePath);
+		GameUpdateWindow frame(*this, m_emulationController, metaFilePath);
 		const int updateResult = frame.ShowModal();
 
 		if (updateResult == wxID_OK)
 		{
-			// This also publishes the title-list notification consumed by the game list.
-			m_emulationController.AddTitleFromPath(frame.GetTargetPath());
 			wxMessageBox(_("Title installed!"), _("Success"));
 			return true;
 		}

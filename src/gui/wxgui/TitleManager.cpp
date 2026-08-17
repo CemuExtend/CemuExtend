@@ -376,14 +376,10 @@ void TitleManager::OnInstallTitle(wxCommandEvent& event)
 	{
 		filePath = filePath.parent_path();
 		filePath = filePath.parent_path();
-		GameUpdateWindow frame(*this, filePath);
+		GameUpdateWindow frame(*this, m_emulationController, filePath);
 		const int updateResult = frame.ShowModal();
 
-		if (updateResult == wxID_OK)
-		{
-			m_emulationController.AddTitleFromPath(frame.GetTargetPath());
-		}
-		else
+		if (updateResult != wxID_OK)
 		{
 			if (frame.GetExceptionMessage().empty())
 				wxMessageBox(_("Update installation has been canceled!"));

@@ -166,6 +166,37 @@ namespace
 			gameProfile.settings = update;
 			return {true, {}};
 		}
+		Application::TitleInstallPlan installPlan{
+			.sourcePath = "source-title",
+			.targetPath = "installed-title",
+			.titleId = 0x1234,
+			.version = 7,
+			.kind = Application::TitleInstallKind::Update,
+			.requiredBytes = 10,
+			.availableBytes = 100,
+		};
+		int titleInstalls{};
+		Application::TitleInstallDecision installDecision{
+			Application::TitleInstallDecision::Proceed};
+		Application::TitleInstallPlanResult PlanTitleInstall(
+			const std::filesystem::path&) const override
+		{
+			return {Application::TitleInstallError::None, {}, installPlan};
+		}
+		Application::TitleInstallResult InstallTitle(
+			const Application::TitleInstallPlan& plan,
+			Application::TitleInstallDecision decision,
+			Application::TitleInstallProgressHandler progress,
+			Application::TitleInstallCancellationCheck cancelled) override
+		{
+			++titleInstalls;
+			installDecision = decision;
+			if (cancelled && cancelled())
+				return {Application::TitleInstallError::Cancelled, "cancelled", {}};
+			if (progress)
+				progress({plan.requiredBytes, plan.requiredBytes, "meta/meta.xml"});
+			return {Application::TitleInstallError::None, {}, plan.targetPath};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -302,6 +333,20 @@ int main()
 	assert(backend.gameProfileSaves == 1 &&
 		backend.gameProfile.settings.threadQuantum == 80000 &&
 		backend.gameProfile.settings.controllerProfiles[0] == "Controller 1");
+	const auto installPlan = controller.PlanTitleInstall("source-title");
+	assert(installPlan && installPlan.plan->targetPath == "installed-title");
+	Application::TitleInstallProgress installProgress;
+	const auto installed = controller.InstallTitle(*installPlan.plan,
+		Application::TitleInstallDecision::AcceptConflict,
+		[&](const auto& value) { installProgress = value; }, [] { return false; });
+	assert(installed && installed.installedPath == "installed-title");
+	assert(backend.titleInstalls == 1 &&
+		backend.installDecision == Application::TitleInstallDecision::AcceptConflict &&
+		installProgress.bytesCompleted == 10);
+	const auto cancelledInstall = controller.InstallTitle(*installPlan.plan,
+		Application::TitleInstallDecision::Proceed, {}, [] { return true; });
+	assert(!cancelledInstall &&
+		cancelledInstall.error == Application::TitleInstallError::Cancelled);
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
 	assert(controller.ListGraphicPacks().front().key == "pack-key");
 	assert(controller.SetGraphicPackEnabled("pack-key", true).changed);

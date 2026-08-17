@@ -1,339 +1,173 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/GameUpdateWindow.h"
-#include "util/helpers/helpers.h"
-#include "util/helpers/SystemException.h"
-#include "Cafe/TitleList/GameInfo.h"
-#include "config/ActiveSettings.h"
+
+#include "application/EmulationController.h"
 #include "wxgui/helpers/wxHelpers.h"
 
-wxString _GetTitleIdTypeStr(TitleId titleId)
+namespace
 {
-	TitleIdParser tip(titleId);
-	switch (tip.GetType())
+	wxString GetTitleKindString(Application::TitleInstallKind kind)
 	{
-	case TitleIdParser::TITLE_TYPE::AOC:
-		return _("DLC");
-	case TitleIdParser::TITLE_TYPE::BASE_TITLE:
-		return _("Base game");
-	case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO:
-		return _("Demo");
-	case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
-	case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
-		return _("System title");
-	case TitleIdParser::TITLE_TYPE::SYSTEM_DATA:
-		return _("System data title");
-	case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE:
-		return _("Update");
-	default:
-		break;
+		switch (kind)
+		{
+		case Application::TitleInstallKind::Dlc: return _("DLC");
+		case Application::TitleInstallKind::Base: return _("Base game");
+		case Application::TitleInstallKind::Demo: return _("Demo");
+		case Application::TitleInstallKind::SystemTitle: return _("System title");
+		case Application::TitleInstallKind::SystemData: return _("System data title");
+		case Application::TitleInstallKind::Update: return _("Update");
+		default: return _("Unknown");
+		}
 	}
-	return "Unknown";
 }
 
-bool GameUpdateWindow::ParseUpdate(const fs::path& metaPath)
+GameUpdateWindow::GameUpdateWindow(wxWindow& parent,
+	Application::EmulationController& emulationController, const fs::path& sourcePath)
+	: wxDialog(&parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+		wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+	  m_emulationController(emulationController)
 {
-	m_title_info = TitleInfo(metaPath);
-	if (!m_title_info.IsValid())
-		return false;
-	fs::path target_location = ActiveSettings::GetMlcPath(m_title_info.GetInstallPath());
-	std::error_code ec;
-	if (fs::exists(target_location, ec))
+	const auto planned = m_emulationController.PlanTitleInstall(sourcePath);
+	if (!planned)
+		throw std::runtime_error(planned.diagnostic);
+	m_plan = *planned.plan;
+
+	if (m_plan.conflict != Application::TitleInstallConflict::None)
 	{
-		try
+		wxString message;
+		switch (m_plan.conflict)
 		{
-			const TitleInfo tmp(target_location);
-			if (!tmp.IsValid())
-			{
-				// does not exist / is not valid. We allow to overwrite it
-			}
-			else
-			{
-				TitleIdParser tip(m_title_info.GetAppTitleId());
-				TitleIdParser tipOther(tmp.GetAppTitleId());
-
-				if (tip.GetType() != tipOther.GetType())
-				{
-					auto typeStrToInstall = _GetTitleIdTypeStr(m_title_info.GetAppTitleId());
-					auto typeStrCurrentlyInstalled = _GetTitleIdTypeStr(tmp.GetAppTitleId());
-
-					auto wxMsg = _("It seems that there is already a title installed at the target location but it has a different type.\nCurrently installed: \'{}\' Installing: \'{}\'\n\nThis can happen for titles which were installed with very old Cemu versions.\nDo you still want to continue with the installation? It will replace the currently installed title.");
-					wxMessageDialog dialog(this, formatWxString(wxMsg, typeStrCurrentlyInstalled, typeStrToInstall), _("Warning"), wxCENTRE | wxYES_NO | wxICON_EXCLAMATION);
-					if (dialog.ShowModal() != wxID_YES)
-						return false;
-				}
-				else if (tmp.GetAppTitleVersion() == m_title_info.GetAppTitleVersion())
-				{
-					wxMessageDialog dialog(this, _("It seems that the selected title is already installed, do you want to reinstall it?"), _("Warning"), wxCENTRE | wxYES_NO);
-					if (dialog.ShowModal() != wxID_YES)
-						return false;
-				}
-				else if (tmp.GetAppTitleVersion() > m_title_info.GetAppTitleVersion())
-				{
-					wxMessageDialog dialog(this, _("It seems that a newer version is already installed, do you still want to install the older version?"), _("Warning"), wxCENTRE | wxYES_NO);
-					if (dialog.ShowModal() != wxID_YES)
-						return false;
-				}
-			}
-
-			// temp rename until done
-			m_backup_folder = target_location;
-			m_backup_folder.replace_extension(".backup");
-
-			std::error_code ec;
-			while (fs::exists(m_backup_folder, ec) || ec)
-			{
-				fs::remove_all(m_backup_folder, ec);
-
-				if (ec)
-				{
-					const auto error_msg = formatWxString(_("Error when trying to move former title installation:\n{}"), GetSystemErrorMessage(ec));
-					wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE, this);
-					return false;
-				}
-
-				// wait so filesystem doesnt 
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			}
-
-			fs::rename(target_location, m_backup_folder);
+		case Application::TitleInstallConflict::DifferentType:
+			message = formatWxString(_("It seems that there is already a title installed at the target location but it has a different type.\nCurrently installed: '{}' Installing: '{}'\n\nThis can happen for titles which were installed with very old Cemu versions.\nDo you still want to continue with the installation? It will replace the currently installed title."),
+				GetTitleKindString(m_plan.installed.kind), GetTitleKindString(m_plan.kind));
+			break;
+		case Application::TitleInstallConflict::SameVersion:
+			message = _("It seems that the selected title is already installed, do you want to reinstall it?");
+			break;
+		case Application::TitleInstallConflict::NewerVersionInstalled:
+			message = _("It seems that a newer version is already installed, do you still want to install the older version?");
+			break;
+		default:
+			break;
 		}
-		catch (const std::exception& ex)
-		{
-			cemuLog_log(LogType::Force, "GameUpdateWindow::ParseUpdate exist-error: {} at {}", ex.what(), _pathToUtf8(target_location));
-		}
-	}
-
-	m_target_path = target_location;
-
-	fs::path source(metaPath);
-
-	m_source_paths =
-	{
-		fs::path(source).append("content"),
-		fs::path(source).append("code"),
-		fs::path(source).append("meta")
-	};
-
-	m_required_size = 0;
-	for (auto& path : m_source_paths)
-	{
-		for (const fs::directory_entry& f : fs::recursive_directory_iterator(path))
-		{
-			if (is_regular_file(f.path()))
-				m_required_size += file_size(f.path());
-		}
-	}
-
-	const fs::space_info targetSpace = fs::space(ActiveSettings::GetMlcPath());
-	if (targetSpace.free <= m_required_size)
-	{
-		auto string = formatWxString(_("Not enough space available.\nRequired: {0} MB\nAvailable: {1} MB"), (m_required_size / 1024 / 1024), (targetSpace.free / 1024 / 1024));
-		throw std::runtime_error(string.utf8_string());
-	}
-
-	return true;
-}
-
-GameUpdateWindow::GameUpdateWindow(wxWindow& parent, const fs::path& filePath)
-	: wxDialog(&parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	  m_thread_state(ThreadRunning)
-{
-	try
-	{
-		#if BOOST_OS_WINDOWS
-		SetLastError(0);
-		#endif
-		if(!ParseUpdate(filePath))
+		wxMessageDialog dialog(this, message, _("Warning"),
+			wxCENTRE | wxYES_NO | wxICON_EXCLAMATION);
+		if (dialog.ShowModal() != wxID_YES)
 			throw AbortException();
+		m_decision = Application::TitleInstallDecision::AcceptConflict;
 	}
-	catch (const std::runtime_error& ex)
+
+	switch (m_plan.kind)
 	{
-		throw SystemException(ex);
+	case Application::TitleInstallKind::Dlc: SetTitle(_("Installing DLC...")); break;
+	case Application::TitleInstallKind::Update: SetTitle(_("Installing update...")); break;
+	case Application::TitleInstallKind::SystemTitle:
+	case Application::TitleInstallKind::SystemData:
+		SetTitle(_("Installing system title...")); break;
+	default: SetTitle(_("Installing title...")); break;
 	}
-	
-	auto sizer = new wxBoxSizer(wxVERTICAL);
 
-	TitleIdParser tip(GetTitleId());
-
-	if (tip.GetType() == TitleIdParser::TITLE_TYPE::AOC)
-		SetTitle(_("Installing DLC..."));
-	else if (tip.GetType() == TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE)
-		SetTitle(_("Installing update..."));
-	else if (tip.IsSystemTitle())
-		SetTitle(_("Installing system title..."));
-	else
-		SetTitle(_("Installing title..."));
-
-	m_processBar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_HORIZONTAL);
+	auto* sizer = new wxBoxSizer(wxVERTICAL);
+	m_processBar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition,
+		wxSize(500, 20), wxGA_HORIZONTAL);
 	m_processBar->SetValue(0);
-	m_processBar->SetRange((sint32)(m_required_size / 1000));
 	sizer->Add(m_processBar, 0, wxALL | wxEXPAND, 5);
 
-	wxButton* m_cancelButton = new wxButton(this, wxID_ANY, _("Cancel"));
-	m_cancelButton->Bind(wxEVT_BUTTON, &GameUpdateWindow::OnCancelButton, this);
-	sizer->Add(m_cancelButton, 0, wxALIGN_RIGHT | wxALL, 5);
+	auto* cancelButton = new wxButton(this, wxID_ANY, _("Cancel"));
+	cancelButton->Bind(wxEVT_BUTTON, &GameUpdateWindow::OnCancelButton, this);
+	sizer->Add(cancelButton, 0, wxALIGN_RIGHT | wxALL, 5);
 
-	this->SetSizer(sizer);
-	this->Centre(wxBOTH);
-
-	wxWindowBase::Layout();
-	wxWindowBase::Fit();
+	SetSizerAndFit(sizer);
+	Centre(wxBOTH);
 
 	m_timer = new wxTimer(this);
-	this->Bind(wxEVT_TIMER, &GameUpdateWindow::OnUpdate, this);
-	this->Bind(wxEVT_CLOSE_WINDOW, &GameUpdateWindow::OnClose, this);
+	Bind(wxEVT_TIMER, &GameUpdateWindow::OnUpdate, this);
+	Bind(wxEVT_CLOSE_WINDOW, &GameUpdateWindow::OnClose, this);
 	m_timer->Start(250);
 
-	m_thread_state = ThreadRunning;
+	m_totalBytes = m_plan.requiredBytes;
 	m_thread = std::thread(&GameUpdateWindow::ThreadWork, this);
-}
-
-void GameUpdateWindow::ThreadWork()
-{
-	fs::directory_entry currentDirEntry;
-	try
-	{
-		// create base directories
-		for (auto& path : m_source_paths)
-		{
-			if (!path.has_stem())
-				continue;
-
-			fs::path targetDir = fs::path(m_target_path) / path.stem();
-			create_directories(targetDir);
-		}
-
-		for (auto& path : m_source_paths)
-		{
-			if (m_thread_state == ThreadCanceled)
-				break;
-
-			if (!path.has_parent_path())
-				continue;
-
-			const auto len = path.parent_path().string().size() + 1;
-			for (const fs::directory_entry& f : fs::recursive_directory_iterator {path})
-			{
-				if (m_thread_state == ThreadCanceled)
-					break;
-
-				currentDirEntry = f;
-				fs::path relative(f.path().string().substr(len));
-				fs::path target = fs::path(m_target_path) / relative;
-				if (is_directory(f))
-				{
-					create_directories(target);
-					continue;
-				}
-
-				copy(f, target, fs::copy_options::overwrite_existing);
-				if (is_regular_file(f.path()))
-				{
-					m_processed_size += file_size(f.path());
-				}
-			}
-		}
-	}
-	catch (const std::exception& ex)
-	{
-		std::stringstream error_msg;
-		error_msg << GetSystemErrorMessage(ex);
-
-		if(currentDirEntry != fs::directory_entry{})
-			error_msg << fmt::format("\n{}\n{}",_("Current file:").utf8_string(), _pathToUtf8(currentDirEntry.path()));
-
-		m_thread_exception = error_msg.str();
-		m_thread_state = ThreadCanceled;
-	}
-
-	if (m_thread_state == ThreadCanceled)
-	{
-		if(fs::exists(m_target_path))
-			fs::remove_all(m_target_path);
-	}
-	else
-		m_thread_state = ThreadFinished;
 }
 
 GameUpdateWindow::~GameUpdateWindow()
 {
-	m_timer->Stop();
+	if (m_timer)
+		m_timer->Stop();
+	m_cancelRequested = true;
 	if (m_thread.joinable())
 		m_thread.join();
+}
+
+void GameUpdateWindow::ThreadWork()
+{
+	try
+	{
+		m_result = m_emulationController.InstallTitle(m_plan, m_decision,
+			[this](const Application::TitleInstallProgress& progress) {
+				m_processedBytes.store(progress.bytesCompleted, std::memory_order_relaxed);
+				m_totalBytes.store(progress.bytesTotal, std::memory_order_relaxed);
+			}, [this] { return m_cancelRequested.load(std::memory_order_relaxed); });
+	}
+	catch (const std::exception& exception)
+	{
+		m_result = {Application::TitleInstallError::CopyFailure, exception.what(), {}};
+	}
+	catch (...)
+	{
+		m_result = {Application::TitleInstallError::CopyFailure,
+			"Unknown title installation failure", {}};
+	}
+	if (m_result && !m_result.diagnostic.empty())
+		cemuLog_log(LogType::Force, "Title installation warning: {}", m_result.diagnostic);
+	m_threadState.store(ThreadState::Finished, std::memory_order_release);
 }
 
 int GameUpdateWindow::ShowModal()
 {
 	wxDialog::ShowModal();
-	return m_thread_state == ThreadCanceled ? wxID_CANCEL : wxID_OK;
+	if (m_thread.joinable())
+		m_thread.join();
+	return m_result ? wxID_OK : wxID_CANCEL;
 }
 
 void GameUpdateWindow::OnClose(wxCloseEvent& event)
 {
-	if (m_thread_state == ThreadRunning)
+	if (m_threadState.load(std::memory_order_acquire) == ThreadState::Running)
 	{
-		wxMessageDialog dialog(this, _("Do you really want to cancel the installation process?\n\nCanceling the process will delete the applied files."), _("Info"), wxCENTRE | wxYES_NO);
+		wxMessageDialog dialog(this,
+			_("Do you really want to cancel the installation process?\n\nCanceling the process will delete the staged files."),
+			_("Info"), wxCENTRE | wxYES_NO);
 		if (dialog.ShowModal() != wxID_YES)
 			return;
-
-		m_thread_state = ThreadCanceled;
+		m_cancelRequested = true;
 	}
 
-	m_timer->Stop();
+	if (m_timer)
+		m_timer->Stop();
 	if (m_thread.joinable())
 		m_thread.join();
-
-	if(!m_backup_folder.empty())
-	{
-		if(m_thread_state == ThreadCanceled)
-		{
-			// restore backup
-			try
-			{
-				if(fs::exists(m_target_path))
-					fs::remove_all(m_target_path);
-
-				fs::rename(m_backup_folder, m_target_path);
-			}
-			catch (const std::exception& ex)
-			{
-				cemuLog_logDebug(LogType::Force, "can't restore update backup: {}",ex.what());
-			}
-		}
-		else
-		{
-			// delete backup
-			try
-			{
-				if(fs::exists(m_backup_folder))
-					fs::remove_all(m_backup_folder);
-			}
-			catch (const std::exception& ex)
-			{
-				cemuLog_logDebug(LogType::Force, "can't delete update backup: {}",ex.what());
-			}
-		}
-		
-		m_backup_folder.clear();
-	}
-
 	event.Skip();
 }
 
-void GameUpdateWindow::OnUpdate(const wxTimerEvent& event)
+void GameUpdateWindow::OnUpdate(wxTimerEvent& event)
 {
-	if (m_thread_state != ThreadRunning)
+	if (m_threadState.load(std::memory_order_acquire) == ThreadState::Finished)
 	{
 		Close();
 		return;
 	}
 
-	const auto processedSize = (sint32)(m_processed_size / 1000);
-	if (m_processBar->GetValue() != processedSize)
-		m_processBar->SetValue(processedSize);
+	const auto completed = m_processedBytes.load(std::memory_order_relaxed);
+	const auto total = m_totalBytes.load(std::memory_order_relaxed);
+	const auto percent = total == 0 ? 0 : static_cast<int>(std::min<long double>(100,
+		static_cast<long double>(completed) * 100 / static_cast<long double>(total)));
+	if (m_processBar->GetValue() != percent)
+		m_processBar->SetValue(percent);
+	event.Skip();
 }
 
-void GameUpdateWindow::OnCancelButton(const wxCommandEvent& event)
+void GameUpdateWindow::OnCancelButton(wxCommandEvent& event)
 {
 	Close();
+	event.Skip();
 }

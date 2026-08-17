@@ -16,6 +16,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
 #include "input/InputManager.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
@@ -30,6 +31,7 @@
 
 #include <condition_variable>
 #include <deque>
+#include <fstream>
 #include <shared_mutex>
 
 namespace Application
@@ -713,6 +715,224 @@ namespace Application
 			case CafeSystem::PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY: return LaunchError::CemodRuntimeBusy;
 			}
 			return LaunchError::InvalidExecutable;
+		}
+
+		TitleInstallKind TranslateInstallKind(TitleIdParser::TITLE_TYPE type)
+		{
+			switch (type)
+			{
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE: return TitleInstallKind::Base;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO: return TitleInstallKind::Demo;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE: return TitleInstallKind::Update;
+			case TitleIdParser::TITLE_TYPE::AOC: return TitleInstallKind::Dlc;
+			case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
+			case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
+				return TitleInstallKind::SystemTitle;
+			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA: return TitleInstallKind::SystemData;
+			default: return TitleInstallKind::Unknown;
+			}
+		}
+
+		std::uint64_t FingerprintInstallTarget(const fs::path& target)
+		{
+			std::uint64_t result = 1469598103934665603ULL;
+			auto mix = [&result](std::uint64_t value) {
+				result ^= value;
+				result *= 1099511628211ULL;
+			};
+			const std::array<fs::path, 4> paths{
+				target, target / "meta/meta.xml", target / "code/app.xml",
+				target / "code/cos.xml"};
+			for (const auto& path : paths)
+			{
+				std::error_code ec;
+				const auto status = fs::symlink_status(path, ec);
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() :
+					static_cast<std::uint64_t>(status.type()));
+				if (!ec && fs::is_regular_file(status))
+				{
+					mix(fs::file_size(path, ec));
+					if (ec)
+						mix(std::numeric_limits<std::uint64_t>::max() - 1);
+				}
+				ec.clear();
+				const auto modified = fs::last_write_time(path, ec);
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() - 2 :
+					static_cast<std::uint64_t>(modified.time_since_epoch().count()));
+			}
+			return result;
+		}
+
+		TitleInstallPlanResult BuildTitleInstallPlan(const fs::path& requestedSource,
+			bool checkAvailableSpace = true)
+		{
+			std::error_code ec;
+			auto source = fs::weakly_canonical(requestedSource, ec);
+			if (ec || source.empty())
+				source = requestedSource;
+			TitleInfo title(source);
+			if (!title.IsValid())
+				return {TitleInstallError::InvalidSource,
+					"The selected folder is not a valid installable title", std::nullopt};
+
+			const std::array<const char*, 3> requiredFolders{"content", "code", "meta"};
+			std::uint64_t requiredBytes{};
+			std::uint64_t sourceFingerprint = 1469598103934665603ULL;
+			auto mixSource = [&sourceFingerprint](std::uint64_t value) {
+				sourceFingerprint ^= value;
+				sourceFingerprint *= 1099511628211ULL;
+			};
+			for (const auto* folder : requiredFolders)
+			{
+				const auto root = source / folder;
+				const auto rootStatus = fs::symlink_status(root, ec);
+				if (ec || fs::is_symlink(rootStatus))
+					return {TitleInstallError::InvalidSource,
+						fs::is_symlink(rootStatus) ?
+							"Symbolic links are not supported in title installs" : ec.message(),
+						std::nullopt};
+				if (!fs::is_directory(rootStatus))
+					return {TitleInstallError::MissingContent,
+						fmt::format("Required '{}' folder is missing", folder), std::nullopt};
+				fs::recursive_directory_iterator iterator(root, ec), end;
+				if (ec)
+					return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+				while (iterator != end)
+				{
+					if (iterator->is_symlink(ec))
+						return {TitleInstallError::InvalidSource,
+							"Symbolic links are not supported in title installs", std::nullopt};
+					if (ec)
+						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+					if (iterator->is_regular_file(ec))
+					{
+						const auto size = iterator->file_size(ec);
+						if (ec || size > std::numeric_limits<std::uint64_t>::max() - requiredBytes)
+							return {TitleInstallError::InvalidSource,
+								"Unable to measure title files", std::nullopt};
+						requiredBytes += size;
+						mixSource(std::hash<std::string>{}(
+							_pathToUtf8(fs::relative(iterator->path(), source, ec))));
+						if (ec)
+							return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+						mixSource(size);
+						const auto modified = iterator->last_write_time(ec);
+						if (ec)
+							return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+						mixSource(static_cast<std::uint64_t>(
+							modified.time_since_epoch().count()));
+					}
+					else if (ec)
+						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+					else if (!iterator->is_directory(ec) || ec)
+						return {TitleInstallError::InvalidSource,
+							"Unsupported entry in title install source", std::nullopt};
+					iterator.increment(ec);
+					if (ec)
+						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+				}
+			}
+
+			TitleInstallPlan plan{
+				.sourcePath = source,
+				.targetPath = ActiveSettings::GetMlcPath(title.GetInstallPath()),
+				.titleId = title.GetAppTitleId(),
+				.version = title.GetAppTitleVersion(),
+				.titleName = title.GetMetaTitleName(),
+				.kind = TranslateInstallKind(title.GetTitleType()),
+				.requiredBytes = requiredBytes,
+				.sourceFingerprint = sourceFingerprint,
+			};
+			const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
+			if ((!ec && canonicalTarget == source) ||
+				(fs::exists(plan.targetPath, ec) && !ec &&
+					fs::equivalent(source, plan.targetPath, ec) && !ec))
+				return {TitleInstallError::InvalidSource,
+					"A title cannot be installed from its destination folder", std::nullopt};
+			ec.clear();
+
+			plan.installed.exists = fs::exists(plan.targetPath, ec) && !ec;
+			if (ec)
+				return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+			if (plan.installed.exists)
+			{
+				plan.installed.fingerprint = FingerprintInstallTarget(plan.targetPath);
+				TitleInfo installed(plan.targetPath);
+				plan.installed.valid = installed.IsValid();
+				if (plan.installed.valid)
+				{
+					plan.installed.titleId = installed.GetAppTitleId();
+					plan.installed.version = installed.GetAppTitleVersion();
+					plan.installed.kind = TranslateInstallKind(installed.GetTitleType());
+					if (title.GetTitleType() != installed.GetTitleType())
+						plan.conflict = TitleInstallConflict::DifferentType;
+					else if (plan.version == plan.installed.version)
+						plan.conflict = TitleInstallConflict::SameVersion;
+					else if (plan.installed.version > plan.version)
+						plan.conflict = TitleInstallConflict::NewerVersionInstalled;
+				}
+			}
+
+			const auto space = fs::space(ActiveSettings::GetMlcPath(), ec);
+			if (ec)
+				return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
+			plan.availableBytes = space.available;
+			if (checkAvailableSpace && plan.availableBytes <= plan.requiredBytes)
+				return {TitleInstallError::NotEnoughSpace,
+					fmt::format("Not enough space available. Required: {} MB, available: {} MB",
+						plan.requiredBytes / 1024 / 1024,
+						plan.availableBytes / 1024 / 1024), std::nullopt};
+			return {TitleInstallError::None, {}, std::move(plan)};
+		}
+
+		TitleInstallPlanResult SafeBuildTitleInstallPlan(const fs::path& source,
+			bool checkAvailableSpace = true)
+		{
+			try
+			{
+				return BuildTitleInstallPlan(source, checkAvailableSpace);
+			}
+			catch (const std::exception& exception)
+			{
+				return {TitleInstallError::InvalidSource, exception.what(), std::nullopt};
+			}
+			catch (...)
+			{
+				return {TitleInstallError::InvalidSource,
+					"Unknown title install planning failure", std::nullopt};
+			}
+		}
+
+		bool SameInstallSnapshot(const TitleInstallPlan& left, const TitleInstallPlan& right)
+		{
+			return left.sourcePath == right.sourcePath && left.targetPath == right.targetPath &&
+				left.titleId == right.titleId && left.version == right.version &&
+				left.kind == right.kind && left.requiredBytes == right.requiredBytes &&
+				left.sourceFingerprint == right.sourceFingerprint &&
+				left.conflict == right.conflict &&
+				left.installed.exists == right.installed.exists &&
+				left.installed.valid == right.installed.valid &&
+				left.installed.titleId == right.installed.titleId &&
+				left.installed.version == right.installed.version &&
+				left.installed.kind == right.installed.kind &&
+				left.installed.fingerprint == right.installed.fingerprint;
+		}
+
+		fs::path UniqueInstallSibling(const fs::path& target, std::string_view suffix)
+		{
+			static std::atomic_uint64_t sequence{};
+			const auto seed = static_cast<std::uint64_t>(
+				std::chrono::steady_clock::now().time_since_epoch().count());
+			for (std::uint64_t attempt = 0; attempt < 1024; ++attempt)
+			{
+				auto candidate = target;
+				candidate += _utf8ToPath(fmt::format(".{}.{}.{}", suffix, seed,
+					sequence.fetch_add(1, std::memory_order_relaxed)));
+				std::error_code ec;
+				if (!fs::exists(candidate, ec) && !ec)
+					return candidate;
+			}
+			return {};
 		}
 
 		class CafeEmulationBackend final : public IEmulationBackend,
@@ -1547,6 +1767,261 @@ namespace Application
 				if (!profile.Save(titleId))
 					return {false, "Unable to write game profile"};
 				return {true, {}};
+			}
+
+			TitleInstallPlanResult PlanTitleInstall(
+				const std::filesystem::path& sourcePath) const override
+			{
+				return SafeBuildTitleInstallPlan(sourcePath);
+			}
+
+			TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
+				TitleInstallDecision decision, TitleInstallProgressHandler progress,
+				TitleInstallCancellationCheck cancelled) override
+			{
+				if (plan.conflict != TitleInstallConflict::None &&
+					decision != TitleInstallDecision::AcceptConflict)
+					return {TitleInstallError::ConflictNotAccepted,
+						"The existing title conflict was not accepted", {}};
+
+				auto currentPlanResult = SafeBuildTitleInstallPlan(plan.sourcePath);
+				if (!currentPlanResult)
+					return {currentPlanResult.error, currentPlanResult.diagnostic, {}};
+				if (!SameInstallSnapshot(plan, *currentPlanResult.plan))
+					return {TitleInstallError::StalePlan,
+						"The source or installed title changed before installation", {}};
+
+				std::error_code ec;
+				const auto canonicalSource = fs::weakly_canonical(plan.sourcePath, ec);
+				ec.clear();
+				const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
+				if ((!canonicalSource.empty() && canonicalSource == canonicalTarget) ||
+					(fs::exists(plan.targetPath, ec) && !ec &&
+						fs::equivalent(plan.sourcePath, plan.targetPath, ec) && !ec))
+					return {TitleInstallError::InvalidSource,
+						"A title cannot be installed from its destination folder", {}};
+
+				if (cancelled && cancelled())
+					return {TitleInstallError::Cancelled, "Title installation cancelled", {}};
+
+				const auto stagingPath = UniqueInstallSibling(plan.targetPath, "installing");
+				const auto backupPath = plan.installed.exists ?
+					UniqueInstallSibling(plan.targetPath, "backup") : fs::path{};
+				if (stagingPath.empty() || (plan.installed.exists && backupPath.empty()))
+					return {TitleInstallError::CopyFailure,
+						"Unable to reserve a temporary installation path", {}};
+
+				auto removeStaging = [&] {
+					std::error_code ignored;
+					fs::remove_all(stagingPath, ignored);
+				};
+				try
+				{
+					fs::create_directories(stagingPath.parent_path(), ec);
+					if (ec)
+						return {TitleInstallError::CopyFailure, ec.message(), {}};
+					if (!fs::create_directory(stagingPath, ec))
+						return {TitleInstallError::CopyFailure,
+							ec ? ec.message() : "Temporary installation path already exists", {}};
+
+					std::uint64_t copiedBytes{};
+					std::vector<std::uint8_t> buffer(1024 * 1024);
+					const std::array<const char*, 3> folders{"content", "code", "meta"};
+					for (const auto* folder : folders)
+					{
+						const auto root = plan.sourcePath / folder;
+						fs::recursive_directory_iterator iterator(root, ec), end;
+						if (ec)
+							throw std::runtime_error(ec.message());
+						fs::create_directories(stagingPath / folder, ec);
+						if (ec)
+							throw std::runtime_error(ec.message());
+						while (iterator != end)
+						{
+							if (cancelled && cancelled())
+							{
+								removeStaging();
+								return {TitleInstallError::Cancelled,
+									"Title installation cancelled", {}};
+							}
+							const auto relative = fs::relative(iterator->path(), plan.sourcePath, ec);
+							if (ec)
+								throw std::runtime_error(ec.message());
+							const auto destination = stagingPath / relative;
+							if (iterator->is_directory(ec))
+							{
+								fs::create_directories(destination, ec);
+								if (ec)
+									throw std::runtime_error(ec.message());
+							}
+							else if (iterator->is_regular_file(ec))
+							{
+								fs::create_directories(destination.parent_path(), ec);
+								if (ec)
+									throw std::runtime_error(ec.message());
+								std::ifstream input(iterator->path(), std::ios::binary);
+								std::ofstream output(destination,
+									std::ios::binary | std::ios::trunc);
+								if (!input || !output)
+									throw std::runtime_error(fmt::format("Unable to copy {}",
+										_pathToUtf8(iterator->path())));
+								while (input)
+								{
+									if (cancelled && cancelled())
+									{
+										input.close();
+										output.close();
+										removeStaging();
+										return {TitleInstallError::Cancelled,
+											"Title installation cancelled", {}};
+									}
+									input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+									const auto count = input.gcount();
+									if (count <= 0)
+										break;
+									output.write(reinterpret_cast<const char*>(buffer.data()), count);
+									if (!output)
+										throw std::runtime_error(fmt::format("Unable to write {}",
+											_pathToUtf8(destination)));
+									copiedBytes += static_cast<std::uint64_t>(count);
+									if (progress)
+										progress({copiedBytes, plan.requiredBytes, relative});
+								}
+								if (!input.eof())
+									throw std::runtime_error(fmt::format("Unable to read {}",
+										_pathToUtf8(iterator->path())));
+								output.flush();
+								if (!output)
+									throw std::runtime_error(fmt::format("Unable to flush {}",
+										_pathToUtf8(destination)));
+								const auto permissions = iterator->status(ec).permissions();
+								if (!ec)
+									fs::permissions(destination, permissions, ec);
+								ec.clear();
+							}
+							else if (ec)
+								throw std::runtime_error(ec.message());
+							else if (iterator->is_symlink(ec))
+							{
+								fs::copy(iterator->path(), destination,
+									fs::copy_options::copy_symlinks, ec);
+								if (ec)
+									throw std::runtime_error(ec.message());
+							}
+							iterator.increment(ec);
+							if (ec)
+								throw std::runtime_error(ec.message());
+						}
+					}
+
+					if (copiedBytes != plan.requiredBytes)
+						throw std::runtime_error("Copied title size does not match the install plan");
+					const auto sourceAfterCopy = SafeBuildTitleInstallPlan(plan.sourcePath, false);
+					if (!sourceAfterCopy ||
+						sourceAfterCopy.plan->sourceFingerprint != plan.sourceFingerprint ||
+						sourceAfterCopy.plan->requiredBytes != plan.requiredBytes ||
+						sourceAfterCopy.plan->titleId != plan.titleId ||
+						sourceAfterCopy.plan->version != plan.version)
+					{
+						removeStaging();
+						return {TitleInstallError::StalePlan,
+							"The title source changed while staging the installation", {}};
+					}
+					if (cancelled && cancelled())
+					{
+						removeStaging();
+						return {TitleInstallError::Cancelled,
+							"Title installation cancelled", {}};
+					}
+
+					const bool targetExists = fs::exists(plan.targetPath, ec) && !ec;
+					if (ec || targetExists != plan.installed.exists ||
+						(targetExists && FingerprintInstallTarget(plan.targetPath) !=
+							plan.installed.fingerprint))
+					{
+						removeStaging();
+						return {TitleInstallError::StalePlan,
+							"The installed title changed while staging the update", {}};
+					}
+
+					bool originalMoved{};
+					if (targetExists)
+					{
+						fs::rename(plan.targetPath, backupPath, ec);
+						if (ec)
+						{
+							removeStaging();
+							return {TitleInstallError::CommitFailure, ec.message(), {}};
+						}
+						originalMoved = true;
+					}
+
+					fs::rename(stagingPath, plan.targetPath, ec);
+					if (ec)
+					{
+						const auto commitError = ec;
+						if (originalMoved)
+						{
+							ec.clear();
+							fs::rename(backupPath, plan.targetPath, ec);
+							if (ec)
+							{
+								removeStaging();
+								return {TitleInstallError::RestoreFailure,
+									fmt::format("{}; original title remains at {} because restore failed: {}",
+										commitError.message(), _pathToUtf8(backupPath), ec.message()), {}};
+							}
+						}
+						removeStaging();
+						return {TitleInstallError::CommitFailure, commitError.message(), {}};
+					}
+
+					std::string warning;
+					if (originalMoved)
+					{
+						ec.clear();
+						fs::remove_all(backupPath, ec);
+						if (ec)
+							warning = fmt::format("Installed title, but unable to remove backup {}: {}",
+								_pathToUtf8(backupPath), ec.message());
+					}
+					try
+					{
+						if (!CafeTitleList::ReplaceTitleFromPath(plan.targetPath))
+						{
+							if (!warning.empty())
+								warning.append("; ");
+							warning.append("installed title could not be refreshed in the title catalog");
+						}
+					}
+					catch (const std::exception& exception)
+					{
+						if (!warning.empty())
+							warning.append("; ");
+						warning.append(fmt::format(
+							"installed title could not be refreshed in the title catalog: {}",
+							exception.what()));
+					}
+					catch (...)
+					{
+						if (!warning.empty())
+							warning.append("; ");
+						warning.append(
+							"installed title could not be refreshed in the title catalog");
+					}
+					return {TitleInstallError::None, std::move(warning), plan.targetPath};
+				}
+				catch (const std::exception& exception)
+				{
+					removeStaging();
+					return {TitleInstallError::CopyFailure, exception.what(), {}};
+				}
+				catch (...)
+				{
+					removeStaging();
+					return {TitleInstallError::CopyFailure,
+						"Unknown title installation failure", {}};
+				}
 			}
 
 			std::vector<GraphicPackInfo> ListGraphicPacks() const override

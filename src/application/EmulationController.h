@@ -16,6 +16,7 @@
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/TitleCatalog.h"
+#include "application/TitleInstallFacade.h"
 
 namespace Application
 {
@@ -160,7 +161,8 @@ namespace Application
 	};
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
-		public IContentOperations, public IGameProfileService
+		public IContentOperations, public IGameProfileService,
+		public ITitleInstallService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -264,6 +266,11 @@ namespace Application
 		[[nodiscard]] GameProfileView LoadGameProfile(std::uint64_t titleId) const;
 		[[nodiscard]] GameProfileSaveResult SaveGameProfile(
 			std::uint64_t titleId, const GameProfileUpdate& update);
+		[[nodiscard]] TitleInstallPlanResult PlanTitleInstall(
+			const std::filesystem::path& sourcePath) const;
+		[[nodiscard]] TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
+			TitleInstallDecision decision, TitleInstallProgressHandler progress,
+			TitleInstallCancellationCheck cancelled);
 		[[nodiscard]] std::vector<GraphicPackInfo> ListGraphicPacks() const;
 		[[nodiscard]] GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled);

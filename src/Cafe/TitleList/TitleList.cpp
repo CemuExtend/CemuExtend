@@ -256,6 +256,35 @@ void CafeTitleList::AddTitleFromPath(fs::path path)
 		delete titleInfo;
 }
 
+bool CafeTitleList::ReplaceTitleFromPath(const fs::path& path)
+{
+	std::unique_ptr<TitleInfo> replacement = std::make_unique<TitleInfo>(path);
+	if (!replacement->IsValid() || !replacement->ParseXmlInfo())
+		return false;
+
+	std::unique_lock lock(sTLMutex);
+	auto existing = std::find_if(sTLList.begin(), sTLList.end(),
+		[&replacement](const TitleInfo* title) {
+			return replacement->IsEqualByLocation(*title);
+		});
+	if (existing != sTLList.end())
+	{
+		TitleInfo* removed = *existing;
+		sTLList.erase(existing);
+		_RemoveTitleFromMultimap(removed);
+		std::erase(sTLListPending, removed);
+		CafeTitleListCallbackEvent event{
+			.eventType = CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED,
+			.titleInfo = removed,
+		};
+		for (auto& callback : sTLCallbackList)
+			callback.cb(&event, callback.ctx);
+		delete removed;
+	}
+	AddTitle(replacement.release());
+	return true;
+}
+
 bool CafeTitleList::RefreshWorkerThread()
 {
 	SetThreadName("TitleListWorker");
