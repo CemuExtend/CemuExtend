@@ -1,14 +1,12 @@
 #pragma once
 
+#include "application/EmulationController.h"
 #include "config/CemuConfig.h"
-#include "Cafe/TitleList/TitleId.h"
 
 #include <wx/listctrl.h>
 #include <wx/timer.h>
 #include <wx/panel.h>
 #include <wx/settings.h>
-#include <Cafe/TitleList/GameInfo.h>
-
 #include "wxHelper.h"
 #include "util/helpers/Semaphore.h"
 
@@ -40,7 +38,8 @@ public:
 		kSmallIcons
 	};
 
-	wxGameList(wxWindow* parent, wxWindowID id = wxID_ANY);
+	wxGameList(wxWindow* parent, Application::EmulationController& emulationController,
+		wxWindowID id = wxID_ANY);
 	~wxGameList();
 
 	void SetStyle(Style style, bool save = true);
@@ -52,7 +51,7 @@ public:
 	void ReloadGameEntries();
 	void DeleteCachedStrings();
 
-    void CreateShortcut(GameInfo2& gameInfo);
+    void CreateShortcut(const Application::GameSummary& gameInfo);
 
 	long FindListItemByTitleId(uint64 title_id) const;
 
@@ -92,7 +91,7 @@ private:
 		int dir;
 	};
 
-	int FindInsertPosition(TitleId titleId, bool& entryAlreadyExists);
+	int FindInsertPosition(uint64 titleId, bool& entryAlreadyExists);
 	std::weak_ordering SortComparator(uint64 titleId1, uint64 titleId2, SortData* sortData);
 	static int SortFunction(wxIntPtr item1, wxIntPtr item2, wxIntPtr sortData);
 
@@ -106,19 +105,22 @@ private:
 	CounterSemaphore m_async_task_count;
 	std::atomic_bool m_async_worker_active{false};
 
-	std::vector<TitleId> m_icon_load_queue;
-
-	uint64 m_callbackIdTitleList;
+	std::vector<uint64> m_icon_load_queue;
+	Application::EmulationController& m_emulationController;
+	Application::TitleCatalogSubscription m_titleSubscription;
+	std::shared_ptr<std::atomic_bool> m_lifetime =
+		std::make_shared<std::atomic_bool>(true);
 
 	std::string GetNameByTitleId(uint64 titleId);
 
-	void HandleTitleListCallback(struct CafeTitleListCallbackEvent* evt);
+	void HandleTitleCatalogEvent(const Application::TitleCatalogEvent& event);
 
 	void RemoveCache(const std::vector<fs::path>& cachePath, const std::string& titleName);
 
 	void AsyncWorkerThread();
-	void RequestLoadIconAsync(TitleId titleId);
-	bool QueryIconForTitle(TitleId titleId, int& icon, int& iconSmall);
+	void RequestLoadIconAsync(uint64 titleId);
+	bool QueryIconForTitle(uint64 titleId, int& icon, int& iconSmall);
+	void InstallLoadedIcon(uint64 titleId, std::vector<std::uint8_t> data);
 
 	inline static constexpr int kListIconWidth = 64;
 	inline static constexpr int kIconWidth = 128;
@@ -126,13 +128,13 @@ private:
 	wxImageList m_image_list_small_data = wxImageList(kListIconWidth, kListIconWidth, false, 1);
 
 	std::mutex m_icon_cache_mtx;
-	std::set<TitleId> m_icon_loaded;
-	std::map<TitleId, std::pair<int, int>> m_icon_cache; // pair contains icon and small icon
+	std::set<uint64> m_icon_loaded;
+	std::map<uint64, std::pair<int, int>> m_icon_cache; // pair contains icon and small icon
 
-	std::map<TitleId, std::string> m_name_cache;
+	std::map<uint64, std::string> m_name_cache;
 
 	// bulk update handling
-	std::vector<TitleId> m_bulkTitlesToAdd;
+	std::vector<uint64> m_bulkTitlesToAdd;
 	wxTimer m_bulkUpdateTimer;
 
 	// list mode
@@ -163,4 +165,3 @@ private:
 
 	static inline std::once_flag s_launch_file_once;
 };
-

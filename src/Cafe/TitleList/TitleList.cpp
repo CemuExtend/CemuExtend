@@ -288,6 +288,10 @@ bool CafeTitleList::RefreshWorkerThread()
 			ScanMLCPath(mlcPath / "sys/title/00050030");
 		}
 
+		// Protect the title/callback lists through removal notifications.  Callback
+		// unregistration uses this same mutex, making it a quiescence barrier for
+		// adapters whose callback context can be destroyed after unregister returns.
+		sTLMutex.lock();
 		// remove any titles that are still pending
 		for (auto& itPending : sTLListPending)
 		{
@@ -307,6 +311,7 @@ bool CafeTitleList::RefreshWorkerThread()
 			delete itPending;
 		}
 		sTLListPending.clear();
+		sTLMutex.unlock();
 	}
 	sTLMutex.lock();
 	sTLRefreshWorkerActive = false;

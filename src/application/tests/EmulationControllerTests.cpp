@@ -65,8 +65,11 @@ namespace
 		bool ImportLegacyCemodData(std::uint64_t, std::string_view,
 			std::string&) override { return false; }
 		std::vector<Application::TitleSummary> titles;
+		std::vector<Application::GameSummary> games;
 		std::vector<std::filesystem::path> scanPaths;
 		int titleRefreshes{};
+		int titleSubscriptions{};
+		bool titleSubscriptionStopped{};
 		std::filesystem::path addedTitle;
 		std::vector<Application::TitleSummary> ListTitles() const override { return titles; }
 		std::optional<Application::TitleSummary> ResolveBaseTitle(
@@ -75,6 +78,33 @@ namespace
 			const auto found = std::ranges::find_if(titles,
 				[titleId](const auto& title) { return title.titleId == titleId; });
 			return found == titles.end() ? std::nullopt : std::optional{*found};
+		}
+		std::vector<Application::GameSummary> ListGames() const override { return games; }
+		std::optional<Application::GameSummary> GetGame(std::uint64_t titleId) const override
+		{
+			const auto found = std::ranges::find_if(games,
+				[titleId](const auto& game) { return game.titleId == titleId; });
+			return found == games.end() ? std::nullopt : std::optional{*found};
+		}
+		bool IsTitleScanning() const override { return false; }
+		std::optional<std::vector<std::uint8_t>> LoadTitleIcon(std::uint64_t) const override
+		{
+			return std::vector<std::uint8_t>{1, 2, 3};
+		}
+		Application::TitleCatalogSubscription SubscribeTitleCatalogEvents(
+			Application::TitleCatalogHandler handler) override
+		{
+			struct State final : Application::Detail::TitleSubscriptionState
+			{
+				explicit State(bool& stopped) : stopped(stopped) {}
+				void Stop() override { stopped = true; }
+				bool& stopped;
+			};
+			++titleSubscriptions;
+			for (const auto& game : games)
+				handler({Application::TitleCatalogEventType::Discovered, game.titleId});
+			return Application::TitleCatalogSubscription{
+				std::make_shared<State>(titleSubscriptionStopped)};
 		}
 		void ReplaceScanPaths(std::span<const std::filesystem::path> paths) override
 		{
@@ -142,9 +172,22 @@ int main()
 	assert(controller.State() == Application::EmulationState::Running);
 	assert(backend.prepares == 1 && backend.starts == 1);
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
+	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
+		.basePath = "test-title", .version = 17});
 	const auto titles = controller.ListTitles();
 	assert(titles.size() == 1 && titles.front().titleId == 0x1234);
 	assert(controller.ResolveBaseTitle(0x1234)->path == "test-title");
+	assert(controller.ListGames().front().version == 17);
+	assert(controller.GetGame(0x1234)->name == "Test title");
+	assert(!controller.IsTitleScanning());
+	assert(controller.LoadTitleIcon(0x1234)->size() == 3);
+	std::vector<Application::TitleCatalogEvent> titleEvents;
+	auto titleSubscription = controller.SubscribeTitleCatalog(
+		[&](const auto& event) { titleEvents.push_back(event); });
+	assert(backend.titleSubscriptions == 1);
+	assert(titleEvents.size() == 1 && titleEvents.front().titleId == 0x1234);
+	titleSubscription.Reset();
+	assert(backend.titleSubscriptionStopped);
 	const std::array<std::filesystem::path, 2> scanPaths{"games-a", "games-b"};
 	controller.ReplaceTitleScanPaths(scanPaths);
 	controller.RefreshTitles();

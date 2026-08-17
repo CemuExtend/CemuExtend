@@ -6,6 +6,8 @@
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
+#include "Cafe/Filesystem/fsc.h"
+#include "Cafe/IOSU/PDM/iosu_pdm.h"
 #include "Cafe/TitleList/TitleInfo.h"
 #include "Cafe/TitleList/TitleList.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
@@ -14,7 +16,10 @@
 #include "config/CemuConfig.h"
 #include "input/InputManager.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
+#include "util/helpers/helpers.h"
 
+#include <condition_variable>
+#include <deque>
 #include <shared_mutex>
 
 namespace Application
@@ -111,6 +116,193 @@ namespace Application
 			}
 			return result;
 		}
+
+		std::optional<GameSummary> TranslateGame(std::uint64_t titleId)
+		{
+			auto game = CafeTitleList::GetGameInfo(titleId);
+			if (!game.IsValid())
+				return std::nullopt;
+
+			auto& base = game.GetBase();
+			GameSummary result{
+				.titleId = game.GetBaseTitleId(),
+				.name = game.GetTitleName(),
+				.basePath = base.GetPath(),
+				.savePath = game.GetSaveFolder(),
+				.version = game.GetVersion(),
+				.aocVersion = game.GetAOCVersion(),
+				.region = static_cast<std::uint32_t>(game.GetRegion()),
+				.regionName = fmt::format("{}", game.GetRegion()),
+				.systemData = game.IsSystemDataTitle(),
+			};
+			if (game.HasUpdate())
+				result.updatePath = game.GetUpdate().GetPath();
+			if (game.HasAOC())
+				result.aocPath = game.GetAOC().front().GetPath();
+
+			if (base.ParseXmlInfo())
+			{
+				if (const auto* meta = base.GetMetaInfo())
+				{
+					result.productCode = meta->GetProductCode();
+					result.companyCode = meta->GetCompanyCode();
+				}
+			}
+
+			iosu::pdm::GameListStat stats{};
+			result.playStats.available = iosu::pdm::GetStatForGamelist(result.titleId, stats);
+			if (result.playStats.available)
+			{
+				result.playStats.minutesPlayed = stats.numMinutesPlayed;
+				result.playStats.lastPlayedYear = stats.last_played.year;
+				result.playStats.lastPlayedMonth = stats.last_played.month;
+				result.playStats.lastPlayedDay = stats.last_played.day;
+			}
+			return result;
+		}
+
+		std::uint64_t ToBaseTitleId(std::uint64_t titleId)
+		{
+			titleId = TitleIdParser::MakeBaseTitleId(titleId);
+			if (((titleId >> 32) & 0xff) == 0x0c)
+				titleId &= ~0xff00000000ULL;
+			return titleId;
+		}
+
+		class CafeTitleEventSubscription final :
+			public Detail::TitleSubscriptionState,
+			public std::enable_shared_from_this<CafeTitleEventSubscription>
+		{
+		public:
+			explicit CafeTitleEventSubscription(TitleCatalogHandler handler)
+				: m_handler(std::move(handler)) {}
+
+			static std::shared_ptr<CafeTitleEventSubscription> Create(
+				TitleCatalogHandler handler)
+			{
+				auto state = std::make_shared<CafeTitleEventSubscription>(std::move(handler));
+				try
+				{
+					state->Connect();
+				}
+				catch (...)
+				{
+					state->Stop();
+					throw;
+				}
+				return state;
+			}
+
+			~CafeTitleEventSubscription() override
+			{
+				if (m_callbackId != 0)
+					CafeTitleList::UnregisterCallback(m_callbackId);
+				Stop();
+				if (m_thread.joinable())
+				{
+					if (m_thread.get_id() == std::this_thread::get_id())
+						m_thread.detach();
+					else
+						m_thread.join();
+				}
+			}
+
+			void Stop() override
+			{
+				{
+					std::scoped_lock lock(m_mutex);
+					m_stopping = true;
+					m_pending.clear();
+				}
+				m_condition.notify_all();
+				if (m_thread.joinable() &&
+					m_thread.get_id() != std::this_thread::get_id())
+					m_thread.join();
+			}
+
+		private:
+			void Connect()
+			{
+				auto self = shared_from_this();
+				m_thread = std::thread([self = std::move(self)] { self->Run(); });
+				m_callbackId = CafeTitleList::RegisterCallback(
+					[](CafeTitleListCallbackEvent* event, void* context) {
+						auto& self = *static_cast<CafeTitleEventSubscription*>(context);
+						TitleCatalogEvent translated;
+						switch (event->eventType)
+						{
+						case CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED:
+							translated.type = TitleCatalogEventType::Discovered;
+							break;
+						case CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED:
+							translated.type = TitleCatalogEventType::Removed;
+							break;
+						case CafeTitleListCallbackEvent::TYPE::SCAN_FINISHED:
+							translated.type = TitleCatalogEventType::ScanFinished;
+							break;
+						}
+						if (event->titleInfo)
+							translated.titleId = ToBaseTitleId(
+								event->titleInfo->GetAppTitleId());
+						try
+						{
+							self.Enqueue(std::move(translated));
+						}
+						catch (const std::exception& exception)
+						{
+							cemuLog_log(LogType::Force,
+								"Unable to queue title catalog event: {}", exception.what());
+						}
+					}, this);
+			}
+
+			void Enqueue(TitleCatalogEvent event)
+			{
+				{
+					std::scoped_lock lock(m_mutex);
+					if (m_stopping)
+						return;
+					m_pending.push_back(std::move(event));
+				}
+				m_condition.notify_one();
+			}
+
+			void Run()
+			{
+				SetThreadName("TitleCatalogEvents");
+				for (;;)
+				{
+					TitleCatalogEvent event;
+					{
+						std::unique_lock lock(m_mutex);
+						m_condition.wait(lock, [this] {
+							return m_stopping || !m_pending.empty();
+						});
+						if (m_stopping)
+							return;
+						event = std::move(m_pending.front());
+						m_pending.pop_front();
+					}
+					try
+					{
+						m_handler(event);
+					}
+					catch (const std::exception& exception)
+					{
+						cemuLog_log(LogType::Force,
+							"Title catalog subscriber failed: {}", exception.what());
+					}
+				}
+			}
+
+			TitleCatalogHandler m_handler;
+			std::mutex m_mutex;
+			std::condition_variable m_condition;
+			std::deque<TitleCatalogEvent> m_pending;
+			std::thread m_thread;
+			std::uint64_t m_callbackId{};
+			bool m_stopping{};
+		};
 
 		void DeleteGraphicPackShaders(const GraphicPackPtr& pack)
 		{
@@ -461,6 +653,56 @@ namespace Application
 					!CafeTitleList::GetFirstByTitleId(baseTitleId, title))
 					return std::nullopt;
 				return TitleSummary{baseTitleId, title.GetMetaTitleName(), title.GetPath()};
+			}
+
+			std::vector<GameSummary> ListGames() const override
+			{
+				std::vector<GameSummary> result;
+				std::set<std::uint64_t> seen;
+				for (const auto titleId : CafeTitleList::GetAllTitleIds())
+				{
+					auto game = TranslateGame(titleId);
+					if (game && seen.emplace(game->titleId).second)
+						result.push_back(std::move(*game));
+				}
+				return result;
+			}
+
+			std::optional<GameSummary> GetGame(std::uint64_t titleId) const override
+			{
+				return TranslateGame(titleId);
+			}
+
+			bool IsTitleScanning() const override
+			{
+				return CafeTitleList::IsScanning();
+			}
+
+			std::optional<std::vector<std::uint8_t>> LoadTitleIcon(
+				std::uint64_t titleId) const override
+			{
+				TitleInfo title;
+				if (!CafeTitleList::GetFirstByTitleId(titleId, title))
+					return std::nullopt;
+				const auto mountPath = TitleInfo::GetUniqueTempMountingPath();
+				if (!title.Mount(mountPath, "", FSC_PRIORITY_BASE))
+					return std::nullopt;
+				auto data = fsc_extractFile((mountPath + "/meta/iconTex.tga").c_str());
+				if (!data)
+				{
+					data = fsc_extractFile((mountPath + "/meta/iconTex.tga.gz").c_str());
+					if (data)
+						data = zlibDecompress(*data, 70 * 1024);
+				}
+				title.Unmount(mountPath);
+				return data;
+			}
+
+			TitleCatalogSubscription SubscribeTitleCatalogEvents(
+				TitleCatalogHandler handler) override
+			{
+				return TitleCatalogSubscription{
+					CafeTitleEventSubscription::Create(std::move(handler))};
 			}
 
 			void ReplaceScanPaths(std::span<const std::filesystem::path> paths) override

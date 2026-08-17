@@ -238,6 +238,13 @@ namespace Application
 		[[nodiscard]] std::vector<TitleSummary> ListTitles() const;
 		[[nodiscard]] std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const;
+		[[nodiscard]] std::vector<GameSummary> ListGames() const;
+		[[nodiscard]] std::optional<GameSummary> GetGame(std::uint64_t titleId) const;
+		[[nodiscard]] bool IsTitleScanning() const;
+		[[nodiscard]] std::optional<std::vector<std::uint8_t>> LoadTitleIcon(
+			std::uint64_t titleId) const;
+		[[nodiscard]] TitleCatalogSubscription SubscribeTitleCatalog(
+			TitleCatalogHandler handler);
 		void ReplaceTitleScanPaths(std::span<const std::filesystem::path> paths);
 		void RefreshTitles();
 		void AddTitleFromPath(const std::filesystem::path& path);

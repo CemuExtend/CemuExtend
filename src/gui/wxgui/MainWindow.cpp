@@ -528,7 +528,8 @@ void MainWindow::CreateGameListAndStatusBar()
     m_main_panel = new wxPanel(this);
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     // game list
-    m_game_list = new wxGameList(m_main_panel, MAINFRAME_GAMELIST_ID);
+    m_game_list = new wxGameList(m_main_panel, m_emulationController,
+		MAINFRAME_GAMELIST_ID);
     m_game_list->Bind(wxEVT_OPEN_SETTINGS, [this](auto&) {OpenSettings(); });
     m_game_list->SetDropTarget(new wxGameDropTarget(this));
     sizer->Add(m_game_list, 1, wxEXPAND);

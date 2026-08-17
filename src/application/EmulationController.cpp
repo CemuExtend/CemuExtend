@@ -308,6 +308,38 @@ namespace Application
 		return m_backend->ResolveBaseTitle(titleId);
 	}
 
+	std::vector<GameSummary> EmulationController::ListGames() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListGames();
+	}
+
+	std::optional<GameSummary> EmulationController::GetGame(std::uint64_t titleId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetGame(titleId);
+	}
+
+	bool EmulationController::IsTitleScanning() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->IsTitleScanning();
+	}
+
+	std::optional<std::vector<std::uint8_t>> EmulationController::LoadTitleIcon(
+		std::uint64_t titleId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->LoadTitleIcon(titleId);
+	}
+
+	TitleCatalogSubscription EmulationController::SubscribeTitleCatalog(
+		TitleCatalogHandler handler)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SubscribeTitleCatalogEvents(std::move(handler));
+	}
+
 	void EmulationController::ReplaceTitleScanPaths(
 		std::span<const std::filesystem::path> paths)
 	{

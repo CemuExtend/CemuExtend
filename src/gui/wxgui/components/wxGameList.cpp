@@ -8,6 +8,7 @@
 #include <numeric>
 
 #include <wx/listctrl.h>
+#include <wx/app.h>
 #include <wx/wupdlock.h>
 #include <wx/menu.h>
 #include <wx/mstream.h>
@@ -26,16 +27,11 @@
 
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
-#include "Cafe/TitleList/GameInfo.h"
-#include "Cafe/TitleList/TitleList.h"
-
 #include "wxgui/CemuApp.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/MainWindow.h"
 
 #include "../wxHelper.h"
-
-#include "Cafe/IOSU/PDM/iosu_pdm.h" // for last played and play time
 
 #if BOOST_OS_WINDOWS
 // for shortcut creation
@@ -66,7 +62,7 @@ void _stripPathFilename(fs::path& path)
 		path = path.parent_path();
 }
 
-std::vector<fs::path> _getCachesPaths(const TitleId& titleId)
+std::vector<fs::path> _getCachesPaths(uint64 titleId)
 {
 	std::vector<fs::path> cachePaths{
 		ActiveSettings::GetCachePath(L"shaderCache/driver/vk/{:016x}.bin", titleId),
@@ -138,8 +134,10 @@ bool writeICNS(const fs::path& pngPath, const fs::path& icnsPath) {
 	return true;
 }
 
-wxGameList::wxGameList(wxWindow* parent, wxWindowID id)
-	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, GetStyleFlags(Style::kList)), m_style(Style::kList)
+wxGameList::wxGameList(wxWindow* parent,
+	Application::EmulationController& emulationController, wxWindowID id)
+	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, GetStyleFlags(Style::kList)),
+	  m_style(Style::kList), m_emulationController(emulationController)
 {
 	const auto& config = GetWxGUIConfig();
 
@@ -192,7 +190,15 @@ wxGameList::wxGameList(wxWindow* parent, wxWindowID id)
 	Bind(wxEVT_SIZE, &wxGameList::OnGameListSize, this);
 	m_bulkUpdateTimer.Bind(wxEVT_TIMER, &wxGameList::OnTimerBulkAddEntriesToGameList, this);
 
-	m_callbackIdTitleList = CafeTitleList::RegisterCallback([](CafeTitleListCallbackEvent* evt, void* ctx) { ((wxGameList*)ctx)->HandleTitleListCallback(evt); }, this);
+	m_titleSubscription = m_emulationController.SubscribeTitleCatalog(
+		[this, lifetime = m_lifetime](const Application::TitleCatalogEvent& event) {
+			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
+				return;
+			wxTheApp->CallAfter([this, lifetime, event] {
+				if (lifetime->load(std::memory_order_acquire))
+					HandleTitleCatalogEvent(event);
+			});
+		});
 
 	// start async worker (for icon loading)
 	m_async_worker_active = true;
@@ -203,7 +209,8 @@ wxGameList::wxGameList(wxWindow* parent, wxWindowID id)
 
 wxGameList::~wxGameList()
 {
-	CafeTitleList::UnregisterCallback(m_callbackIdTitleList);
+	m_lifetime->store(false, std::memory_order_release);
+	m_titleSubscription.Reset();
 
 	m_tooltip_timer->Stop();
 
@@ -350,11 +357,12 @@ void wxGameList::ReloadGameEntries()
 {
 	wxWindowUpdateLocker windowlock(this);
 	DeleteAllItems();
-	// tell the game list to rescan
-	CafeTitleList::Refresh();
-	// resend notifications for all known titles by re-registering the callback
-	CafeTitleList::UnregisterCallback(m_callbackIdTitleList);
-	m_callbackIdTitleList = CafeTitleList::RegisterCallback([](CafeTitleListCallbackEvent* evt, void* ctx) { ((wxGameList*)ctx)->HandleTitleListCallback(evt); }, this);
+	m_bulkTitlesToAdd.clear();
+	for (const auto& game : m_emulationController.ListGames())
+		m_bulkTitlesToAdd.push_back(game.titleId);
+	if (!m_bulkTitlesToAdd.empty())
+		m_bulkUpdateTimer.StartOnce(1);
+	m_emulationController.RefreshTitles();
 }
 
 long wxGameList::FindListItemByTitleId(uint64 title_id) const
@@ -375,12 +383,12 @@ std::string wxGameList::GetNameByTitleId(uint64 titleId)
 	auto it = m_name_cache.find(titleId);
 	if (it != m_name_cache.end())
 		return it->second;
-	TitleInfo titleInfo;
-	if (!CafeTitleList::GetFirstByTitleId(titleId, titleInfo))
+	const auto game = m_emulationController.GetGame(titleId);
+	if (!game)
 		return "Unknown title";
 	std::string name;
 	if (!GetConfig().GetGameListCustomName(titleId, name))
-		name = titleInfo.GetMetaTitleName();
+		name = game->name;
 	m_name_cache.emplace(titleId, name);
 	return name;
 }
@@ -489,24 +497,24 @@ static inline int order_to_int(const std::weak_ordering &wo)
 
 std::weak_ordering wxGameList::SortComparator(uint64 titleId1, uint64 titleId2, SortData* sortData)
 {
-	auto titleLastPlayed = [](uint64_t id)
-	{
-		iosu::pdm::GameListStat playTimeStat{};
-		iosu::pdm::GetStatForGamelist(id, playTimeStat);
-		return playTimeStat;
+	auto titleLastPlayed = [this](uint64_t id) {
+		const auto game = m_emulationController.GetGame(id);
+		if (!game)
+			return std::tuple{std::uint32_t{}, std::uint32_t{}, std::uint32_t{}};
+		return std::tuple{game->playStats.lastPlayedYear,
+			game->playStats.lastPlayedMonth, game->playStats.lastPlayedDay};
 	};
 
-	auto titlePlayMinutes = [](uint64_t id)
+	auto titlePlayMinutes = [this](uint64_t id)
 	{
-		iosu::pdm::GameListStat playTimeStat;
-		if (!iosu::pdm::GetStatForGamelist(id, playTimeStat))
-			return 0u;
-		return playTimeStat.numMinutesPlayed;
+		const auto game = m_emulationController.GetGame(id);
+		return game ? game->playStats.minutesPlayed : 0u;
 	};
 
-	auto titleRegion = [](uint64_t id)
+	auto titleRegion = [this](uint64_t id)
 	{
-		return CafeTitleList::GetGameInfo(id).GetRegion();
+		const auto game = m_emulationController.GetGame(id);
+		return game ? game->region : 0u;
 	};
 
 	switch(sortData->column)
@@ -521,7 +529,7 @@ std::weak_ordering wxGameList::SortComparator(uint64 titleId1, uint64 titleId2, 
 		return std::tie(isFavoriteB, nameA) <=> std::tie(isFavoriteA, nameB);
 	}
 	case ColumnGameStarted:
-		return titleLastPlayed(titleId1).last_played <=> titleLastPlayed(titleId2).last_played;
+		return titleLastPlayed(titleId1) <=> titleLastPlayed(titleId2);
 	case ColumnGameTime:
 		return titlePlayMinutes(titleId1) <=> titlePlayMinutes(titleId2);
 	case ColumnRegion:
@@ -648,8 +656,8 @@ void wxGameList::OnContextMenu(wxContextMenuEvent& event)
 	if (selection != wxNOT_FOUND)
 	{
 		const auto title_id = (uint64)GetItemData(selection);
-		GameInfo2 gameInfo = CafeTitleList::GetGameInfo(title_id);
-		if (gameInfo.IsValid())
+		const auto gameInfo = m_emulationController.GetGame(title_id);
+		if (gameInfo)
 		{
 			menu.SetClientData((void*)title_id);
 
@@ -665,12 +673,12 @@ void wxGameList::OnContextMenu(wxContextMenuEvent& event)
 			menu.AppendSeparator();
 			menu.Append(kWikiPage, _("&Wiki page"));
 			menu.Append(kContextMenuGameFolder, _("&Game directory"));
-			menu.Append(kContextMenuSaveFolder, _("&Save directory"))->Enable(fs::is_directory(gameInfo.GetSaveFolder(), ec));
-			menu.Append(kContextMenuUpdateFolder, _("&Update directory"))->Enable(gameInfo.HasUpdate());
-			menu.Append(kContextMenuDLCFolder, _("&DLC directory"))->Enable(gameInfo.HasAOC());
+			menu.Append(kContextMenuSaveFolder, _("&Save directory"))->Enable(fs::is_directory(gameInfo->savePath, ec));
+			menu.Append(kContextMenuUpdateFolder, _("&Update directory"))->Enable(gameInfo->updatePath.has_value());
+			menu.Append(kContextMenuDLCFolder, _("&DLC directory"))->Enable(gameInfo->aocPath.has_value());
 
 			menu.AppendSeparator();
-			menu.Append(kContextMenuRemoveCache, _("&Remove shader caches"))->Enable(!_getCachesPaths(gameInfo.GetBaseTitleId()).empty());
+			menu.Append(kContextMenuRemoveCache, _("&Remove shader caches"))->Enable(!_getCachesPaths(gameInfo->titleId).empty());
 
 			menu.AppendSeparator();
 			menu.Append(kContextMenuEditGraphicPacks, _("&Edit graphic packs"));
@@ -686,7 +694,7 @@ void wxGameList::OnContextMenu(wxContextMenuEvent& event)
 		}
 	}
 
-	menu.Append(kContextMenuRefreshGames, _("&Refresh game list"))->Enable(!CafeTitleList::IsScanning());
+	menu.Append(kContextMenuRefreshGames, _("&Refresh game list"))->Enable(!m_emulationController.IsTitleScanning());
 	menu.AppendSeparator();
 	menu.AppendRadioItem(kContextMenuStyleList, _("Style: &List"))->Check(m_style == Style::kList);
 	menu.AppendRadioItem(kContextMenuStyleIcon, _("Style: &Icons"))->Check(m_style == Style::kIcons);
@@ -699,14 +707,14 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 	const auto title_id = (uint64)((wxMenu*)event.GetEventObject())->GetClientData();
 	if (title_id)
 	{
-		GameInfo2 gameInfo = CafeTitleList::GetGameInfo(title_id);
-		if (gameInfo.IsValid())
+		const auto gameInfo = m_emulationController.GetGame(title_id);
+		if (gameInfo)
 		{
 			switch (event.GetId())
 			{
 			case kContextMenuStart:
 			{
-				MainWindow::RequestLaunchGame(gameInfo.GetBase().GetPath(), wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
+				MainWindow::RequestLaunchGame(gameInfo->basePath, wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
 				break;
 			}
 			case kContextMenuFavorite:
@@ -745,7 +753,7 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 			}
 			case kContextMenuGameFolder:
 				{
-				fs::path path(gameInfo.GetBase().GetPath());
+				fs::path path(gameInfo->basePath);
 				_stripPathFilename(path);
 				wxLaunchDefaultApplication(wxHelper::FromPath(path));
 				break;
@@ -754,40 +762,38 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 				{
 					// https://wiki.cemu.info/wiki/GameIDs
 					// WUP-P-ALZP
-				if (gameInfo.GetBase().ParseXmlInfo())
+				if (!gameInfo->productCode.empty() && gameInfo->companyCode.size() >= 2)
 				{
-					std::string productCode = gameInfo.GetBase().GetMetaInfo()->GetProductCode();
-					const auto tokens = TokenizeView(productCode, '-');
+					const auto tokens = TokenizeView(gameInfo->productCode, '-');
 					wxASSERT(!tokens.empty());
-					const std::string company_code = gameInfo.GetBase().GetMetaInfo()->GetCompanyCode();
-					wxASSERT(company_code.size() >= 2);
-					wxLaunchDefaultBrowser(formatWxString("https://wiki.cemu.info/wiki/{}{}", *tokens.rbegin(), company_code.substr(company_code.size() - 2)));
+					wxLaunchDefaultBrowser(formatWxString("https://wiki.cemu.info/wiki/{}{}",
+						*tokens.rbegin(), gameInfo->companyCode.substr(gameInfo->companyCode.size() - 2)));
 				}
 				break;
 				}
 
 			case kContextMenuSaveFolder:
 			{
-				wxLaunchDefaultApplication(wxHelper::FromPath(gameInfo.GetSaveFolder()));
+				wxLaunchDefaultApplication(wxHelper::FromPath(gameInfo->savePath));
 				break;
 			}
 			case kContextMenuUpdateFolder:
 			{
-				fs::path path(gameInfo.GetUpdate().GetPath());
+				fs::path path(*gameInfo->updatePath);
 				_stripPathFilename(path);
 				wxLaunchDefaultApplication(wxHelper::FromPath(path));
 				break;
 			}
 			case kContextMenuDLCFolder:
 			{
-				fs::path path(gameInfo.GetAOC().front().GetPath());
+				fs::path path(*gameInfo->aocPath);
 				_stripPathFilename(path);
 				wxLaunchDefaultApplication(wxHelper::FromPath(path));
 				break;
 			}
 			case kContextMenuRemoveCache:
 			{
-				RemoveCache(_getCachesPaths(gameInfo.GetBaseTitleId()), gameInfo.GetTitleName());
+				RemoveCache(_getCachesPaths(gameInfo->titleId), gameInfo->name);
 				break;
 			}
 			case kContextMenuEditGraphicPacks:
@@ -803,14 +809,14 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 			}
             case kContextMenuCreateShortcut:
             {
-                CreateShortcut(gameInfo);
+				CreateShortcut(*gameInfo);
                 break;
             }
             case kContextMenuCopyTitleName:
             {
                 if (wxClipboard::Get()->Open())
                 {
-                    wxClipboard::Get()->SetData(new wxTextDataObject(wxString::FromUTF8(gameInfo.GetTitleName())));
+					wxClipboard::Get()->SetData(new wxTextDataObject(wxString::FromUTF8(gameInfo->name)));
                     wxClipboard::Get()->Close();
                 }
                 break;
@@ -819,7 +825,7 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
             {
                 if (wxClipboard::Get()->Open())
                 {
-                    wxClipboard::Get()->SetData(new wxTextDataObject(fmt::format("{:016x}", gameInfo.GetBaseTitleId())));
+					wxClipboard::Get()->SetData(new wxTextDataObject(fmt::format("{:016x}", gameInfo->titleId)));
                     wxClipboard::Get()->Close();
                 }
                 break;
@@ -1080,7 +1086,7 @@ void wxGameList::OnClose(wxCloseEvent& event)
 	m_exit = true;
 }
 
-int wxGameList::FindInsertPosition(TitleId titleId, bool& entryAlreadyExists)
+int wxGameList::FindInsertPosition(uint64 titleId, bool& entryAlreadyExists)
 {
 	entryAlreadyExists = false;
 	SortData data{this, ItemColumns(GetSortIndicator()), IsAscendingSortIndicator()};
@@ -1113,21 +1119,21 @@ int wxGameList::FindInsertPosition(TitleId titleId, bool& entryAlreadyExists)
 
 void wxGameList::OnTimerBulkAddEntriesToGameList(wxTimerEvent& event)
 {
-	std::vector<TitleId> titleIdsToUpdate;
+	std::vector<uint64> titleIdsToUpdate;
 	std::swap(titleIdsToUpdate, m_bulkTitlesToAdd);
 
 	wxWindowUpdateLocker lock(this);
 	bool hasAnyNewEntry = false;
 	for (auto& titleId : titleIdsToUpdate)
 	{
-		GameInfo2 gameInfo = CafeTitleList::GetGameInfo(titleId);
-		if (!gameInfo.IsValid() || gameInfo.IsSystemDataTitle())
+		const auto gameInfo = m_emulationController.GetGame(titleId);
+		if (!gameInfo || gameInfo->systemData)
 		{
 			// entry no longer exists or is not a valid game
 			// we dont need to remove list entries here because all delete operations should trigger a full list refresh
 			continue;
 		}
-		TitleId baseTitleId = gameInfo.GetBaseTitleId();
+		const uint64 baseTitleId = gameInfo->titleId;
 		bool isNewEntry = false;
 
 		int icon = -1; /* 0 is the default empty icon */
@@ -1151,20 +1157,20 @@ void wxGameList::OnTimerBulkAddEntriesToGameList(wxTimerEvent& event)
 
 			SetItem(index, ColumnName, wxString::FromUTF8(GetNameByTitleId(baseTitleId)));
 
-			SetItem(index, ColumnVersion, fmt::format("{}", gameInfo.GetVersion()));
+			SetItem(index, ColumnVersion, fmt::format("{}", gameInfo->version));
 
-			if(gameInfo.HasAOC())
-				SetItem(index, ColumnDLC, fmt::format("{}", gameInfo.GetAOCVersion()));
+			if(gameInfo->aocPath)
+				SetItem(index, ColumnDLC, fmt::format("{}", gameInfo->aocVersion));
 			else
 				SetItem(index, ColumnDLC, wxString());
 
 			if (isNewEntry)
 			{
-				iosu::pdm::GameListStat playTimeStat;
-				if (iosu::pdm::GetStatForGamelist(baseTitleId, playTimeStat))
+				const auto& playTimeStat = gameInfo->playStats;
+				if (playTimeStat.available)
 				{
 					// time played
-					uint32 minutesPlayed = playTimeStat.numMinutesPlayed;
+					uint32 minutesPlayed = playTimeStat.minutesPlayed;
 					if (minutesPlayed == 0)
 						SetItem(index, ColumnGameTime, wxEmptyString);
 					else if (minutesPlayed < 60)
@@ -1179,9 +1185,11 @@ void wxGameList::OnTimerBulkAddEntriesToGameList(wxTimerEvent& event)
 					}
 
 					// last played
-					if (playTimeStat.last_played.year != 0)
+					if (playTimeStat.lastPlayedYear != 0)
 					{
-						const wxDateTime tmp((wxDateTime::wxDateTime_t)playTimeStat.last_played.day, (wxDateTime::Month)playTimeStat.last_played.month, (wxDateTime::wxDateTime_t)playTimeStat.last_played.year, 0, 0, 0, 0);
+						const wxDateTime tmp((wxDateTime::wxDateTime_t)playTimeStat.lastPlayedDay,
+							(wxDateTime::Month)playTimeStat.lastPlayedMonth,
+							(wxDateTime::wxDateTime_t)playTimeStat.lastPlayedYear, 0, 0, 0, 0);
 						SetItem(index, ColumnGameStarted, tmp.FormatDate());
 					}
 					else
@@ -1193,8 +1201,7 @@ void wxGameList::OnTimerBulkAddEntriesToGameList(wxTimerEvent& event)
 					SetItem(index, ColumnGameStarted, _("never"));
 				}
 			}
-			const auto region_text = fmt::format("{}", gameInfo.GetRegion());
-			SetItem(index, ColumnRegion, wxGetTranslation(region_text));
+			SetItem(index, ColumnRegion, wxGetTranslation(gameInfo->regionName));
 	        SetItem(index, ColumnTitleID, fmt::format("{:016x}", baseTitleId));
 		}
 		else if (m_style == Style::kIcons)
@@ -1234,13 +1241,11 @@ void wxGameList::OnItemActivated(wxListEvent& event)
 		return;
 	}
 
-	TitleInfo titleInfo;
-	if (!CafeTitleList::GetFirstByTitleId(item_data, titleInfo))
-		return;
-	if (!titleInfo.IsValid())
+	const auto game = m_emulationController.GetGame(item_data);
+	if (!game)
 		return;
 
-	MainWindow::RequestLaunchGame(titleInfo.GetPath(), wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
+	MainWindow::RequestLaunchGame(game->basePath, wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
 }
 
 void wxGameList::OnTimer(wxTimerEvent& event)
@@ -1280,13 +1285,25 @@ void wxGameList::OnLeaveWindow(wxMouseEvent& event)
 	m_tooltip_window->Hide();
 }
 
-void wxGameList::HandleTitleListCallback(CafeTitleListCallbackEvent* evt)
+void wxGameList::HandleTitleCatalogEvent(const Application::TitleCatalogEvent& event)
 {
-	if (evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED ||
-		evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED)
+	if (event.type == Application::TitleCatalogEventType::ScanFinished)
+		return;
+
+	if (event.type == Application::TitleCatalogEventType::Removed &&
+		!m_emulationController.GetGame(event.titleId))
 	{
-		wxQueueEvent(this, new wxTitleIdEvent(wxEVT_GAME_ENTRY_ADDED_OR_REMOVED, evt->titleInfo->GetAppTitleId()));
+		const auto item = FindListItemByTitleId(event.titleId);
+		if (item != wxNOT_FOUND)
+			DeleteItem(item);
+		m_name_cache.erase(event.titleId);
+		UpdateItemColors();
+		return;
 	}
+
+	if (m_bulkTitlesToAdd.size() < 100)
+		m_bulkUpdateTimer.StartOnce(100);
+	m_bulkTitlesToAdd.emplace_back(event.titleId);
 }
 
 void wxGameList::RemoveCache(const std::vector<fs::path>& cachePaths, const std::string& titleName)
@@ -1318,7 +1335,7 @@ void wxGameList::AsyncWorkerThread()
 		// get next titleId to load (if any)
 		m_async_worker_mutex.lock();
 		bool hasJob = !m_icon_load_queue.empty();
-		TitleId titleId = 0;
+		uint64 titleId = 0;
 		if (hasJob)
 		{
 			titleId = m_icon_load_queue.front();
@@ -1330,50 +1347,21 @@ void wxGameList::AsyncWorkerThread()
 		if(m_icon_loaded.find(titleId) != m_icon_loaded.end())
 			continue;
 		m_icon_loaded.emplace(titleId);
-		// load and process icon
-		TitleInfo titleInfo;
-		if( !CafeTitleList::GetFirstByTitleId(titleId, titleInfo) )
-			continue;
-		std::string tempMountPath = TitleInfo::GetUniqueTempMountingPath();
-		if(!titleInfo.Mount(tempMountPath, "", FSC_PRIORITY_BASE))
-			continue;
-		auto tgaData = fsc_extractFile((tempMountPath + "/meta/iconTex.tga").c_str());
-		// try iconTex.tga.gz
-		if (!tgaData)
-		{
-			tgaData = fsc_extractFile((tempMountPath + "/meta/iconTex.tga.gz").c_str());
-			if (tgaData)
-			{
-				auto decompressed = zlibDecompress(*tgaData, 70*1024);
-				std::swap(tgaData, decompressed);
-			}
-		}
-		bool iconSuccessfullyLoaded = false;
-		if (tgaData && tgaData->size() > 16)
-		{
-			wxMemoryInputStream tmp_stream(tgaData->data(), tgaData->size());
-			const wxImage image(tmp_stream);
-			// todo - is wxImageList thread safe?
-			int icon = m_image_list_data.Add(image.Scale(kIconWidth, kIconWidth, wxIMAGE_QUALITY_BICUBIC));
-			int icon_small = m_image_list_small_data.Add(image.Scale(kListIconWidth, kListIconWidth, wxIMAGE_QUALITY_BICUBIC));
-			// store in cache
-			m_icon_cache_mtx.lock();
-			m_icon_cache.try_emplace(titleId, icon, icon_small);
-			m_icon_cache_mtx.unlock();
-			iconSuccessfullyLoaded = true;
-		}
-		else
-		{
+		auto data = m_emulationController.LoadTitleIcon(titleId);
+		if (!data || data->size() <= 16)
 			cemuLog_log(LogType::Force, "Failed to load icon for title {:016x}", titleId);
+		else if (wxTheApp)
+		{
+			auto lifetime = m_lifetime;
+			wxTheApp->CallAfter([this, lifetime, titleId, data = std::move(*data)]() mutable {
+				if (lifetime->load(std::memory_order_acquire))
+					InstallLoadedIcon(titleId, std::move(data));
+			});
 		}
-		titleInfo.Unmount(tempMountPath);
-		// notify UI about loaded icon
-		if(iconSuccessfullyLoaded)
-			wxQueueEvent(this, new wxTitleIdEvent(wxEVT_GAME_ENTRY_ADDED_OR_REMOVED, titleId));
 	}
 }
 
-void wxGameList::RequestLoadIconAsync(TitleId titleId)
+void wxGameList::RequestLoadIconAsync(uint64 titleId)
 {
 	m_async_worker_mutex.lock();
 	m_icon_load_queue.push_back(titleId);
@@ -1382,7 +1370,7 @@ void wxGameList::RequestLoadIconAsync(TitleId titleId)
 }
 
 // returns icons if cached, otherwise an async request to load them is made
-bool wxGameList::QueryIconForTitle(TitleId titleId, int& icon, int& iconSmall)
+bool wxGameList::QueryIconForTitle(uint64 titleId, int& icon, int& iconSmall)
 {
 	m_icon_cache_mtx.lock();
 	auto it = m_icon_cache.find(titleId);
@@ -1398,16 +1386,34 @@ bool wxGameList::QueryIconForTitle(TitleId titleId, int& icon, int& iconSmall)
 	return true;
 }
 
+void wxGameList::InstallLoadedIcon(uint64 titleId, std::vector<std::uint8_t> data)
+{
+	wxMemoryInputStream stream(data.data(), data.size());
+	const wxImage image(stream);
+	if (!image.IsOk())
+		return;
+	const int icon = m_image_list_data.Add(
+		image.Scale(kIconWidth, kIconWidth, wxIMAGE_QUALITY_BICUBIC));
+	const int iconSmall = m_image_list_small_data.Add(
+		image.Scale(kListIconWidth, kListIconWidth, wxIMAGE_QUALITY_BICUBIC));
+	{
+		std::scoped_lock lock(m_icon_cache_mtx);
+		m_icon_cache.try_emplace(titleId, icon, iconSmall);
+	}
+	wxTitleIdEvent updated(wxEVT_GAME_ENTRY_ADDED_OR_REMOVED, titleId);
+	ProcessWindowEvent(updated);
+}
+
 void wxGameList::DeleteCachedStrings()
 {
 	m_name_cache.clear();
 }
 
 #if BOOST_OS_LINUX || BOOST_OS_BSD
-void wxGameList::CreateShortcut(GameInfo2& gameInfo)
+void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
-	const auto titleId = gameInfo.GetBaseTitleId();
-	const auto titleName = wxString::FromUTF8(gameInfo.GetTitleName());
+	const auto titleId = gameInfo.titleId;
+	const auto titleName = wxString::FromUTF8(gameInfo.name);
 	auto exePath = ActiveSettings::GetExecutablePath();
 	const char* flatpakId = getenv("FLATPAK_ID");
 
@@ -1438,7 +1444,7 @@ void wxGameList::CreateShortcut(GameInfo2& gameInfo)
 			return;
 		}
 
-		iconPath = outIconDir / fmt::format("{:016x}.png", gameInfo.GetBaseTitleId());
+		iconPath = outIconDir / fmt::format("{:016x}.png", gameInfo.titleId);
 		wxFileOutputStream pngFileStream(_pathToUtf8(iconPath.value()));
 
 		const auto icon = m_image_list_data.GetIcon(iconIdx);
@@ -1483,10 +1489,10 @@ void wxGameList::CreateShortcut(GameInfo2& gameInfo)
 	outputStream << desktopEntryString;
 }
 #elif BOOST_OS_MACOS
-void wxGameList::CreateShortcut(GameInfo2& gameInfo)
+void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
-	const auto titleId = gameInfo.GetBaseTitleId();
-	const auto titleName = wxString::FromUTF8(gameInfo.GetTitleName());
+	const auto titleId = gameInfo.titleId;
+	const auto titleName = wxString::FromUTF8(gameInfo.name);
 	auto exePath = ActiveSettings::GetExecutablePath();
 
 	const wxString appName = wxString::Format("%s.app", titleName);
@@ -1531,7 +1537,7 @@ void wxGameList::CreateShortcut(GameInfo2& gameInfo)
 			return;
 		}
 
-		iconPath = outIconDir / fmt::format("{:016x}.png", gameInfo.GetBaseTitleId());
+		iconPath = outIconDir / fmt::format("{:016x}.png", gameInfo.titleId);
 		wxFileOutputStream pngFileStream(_pathToUtf8(iconPath.value()));
 
 		const auto icon = m_image_list_data.GetIcon(iconIdx);
@@ -1571,8 +1577,8 @@ void wxGameList::CreateShortcut(GameInfo2& gameInfo)
 	"	<string>{1}</string>\n"
 	"</dict>\n"
 	"</plist>\n",
-	gameInfo.GetTitleName(),
-	std::to_string(gameInfo.GetVersion())
+	gameInfo.name,
+	std::to_string(gameInfo.version)
 	);
 	// write Info.plist to infoPath
 	std::ofstream infoStream(infoPath);
@@ -1614,10 +1620,10 @@ void wxGameList::CreateShortcut(GameInfo2& gameInfo)
 	fs::remove(*iconPath);
 }
 #elif BOOST_OS_WINDOWS
-void wxGameList::CreateShortcut(GameInfo2& gameInfo)
+void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
-	const auto titleId = gameInfo.GetBaseTitleId();
-	const auto titleName = wxString::FromUTF8(gameInfo.GetTitleName());
+	const auto titleId = gameInfo.titleId;
+	const auto titleName = wxString::FromUTF8(gameInfo.name);
 	auto exePath = ActiveSettings::GetExecutablePath();
 
 	// Get '%APPDATA%\Microsoft\Windows\Start Menu\Programs' path
