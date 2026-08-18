@@ -18,7 +18,6 @@
 #include "frontend/CemuExtendFrontendBridge.h"
 #include "host/contracts/HostContracts.h"
 
-class DebuggerWindow2;
 class DebugPPCThreadsWindow;
 struct GameEntry;
 class DiscordPresence;
@@ -222,7 +221,7 @@ private:
 	std::string m_launched_game_name;
 
 	wxMenuItem* m_gdbstub_toggle{};
-	DebuggerWindow2* m_debugger_window = nullptr;
+	wxWindow* m_debugger_window = nullptr;
 	DebugPPCThreadsWindow* m_ppc_threads_window = nullptr;
 	LoggingWindow* m_logging_window = nullptr;
 

@@ -23,12 +23,6 @@ add_library(CemuWxGui STATIC
   components/wxLogCtrl.h
   components/wxTitleManagerList.cpp
   components/wxTitleManagerList.h
-  debugger/DebuggerWindow2.cpp
-  debugger/DebuggerWindow2.h
-  debugger/DisasmCtrl.cpp
-  debugger/DisasmCtrl.h
-  debugger/RegisterWindow.cpp
-  debugger/RegisterWindow.h
   dialogs/CreateAccount/wxCreateAccountDialog.cpp
   dialogs/CreateAccount/wxCreateAccountDialog.h
   dialogs/SaveImport/SaveImportWindow.cpp
@@ -111,8 +105,8 @@ add_library(CemuWxRendererAdapters STATIC
 )
 
 # Debugger windows that intentionally inspect emulator internals live outside
-# the normal GUI archive.  Their public wx headers stay core-neutral while the
-# executable composition root supplies the implementation archive.
+# the normal GUI archive.  The normal-facing adapter facade stays core-neutral
+# while the executable composition root supplies the implementation archive.
 add_library(CemuWxDebuggerAdapters STATIC
   AudioDebuggerWindow.cpp
   AudioDebuggerWindow.h
@@ -120,12 +114,20 @@ add_library(CemuWxDebuggerAdapters STATIC
   debugger/BreakpointWindow.h
   debugger/DebuggerEvents.cpp
   debugger/DebuggerEvents.h
+  debugger/DebuggerWindow2.cpp
+  debugger/DebuggerWindow2.h
+  debugger/DebuggerWindowAdapter.cpp
+  debugger/DebuggerWindowAdapter.h
+  debugger/DisasmCtrl.cpp
+  debugger/DisasmCtrl.h
   debugger/DumpCtrl.cpp
   debugger/DumpCtrl.h
   debugger/DumpWindow.cpp
   debugger/DumpWindow.h
   debugger/ModuleWindow.cpp
   debugger/ModuleWindow.h
+  debugger/RegisterWindow.cpp
+  debugger/RegisterWindow.h
   debugger/SymbolCtrl.cpp
   debugger/SymbolCtrl.h
   debugger/SymbolWindow.cpp
@@ -182,6 +184,9 @@ target_include_directories(CemuWxDebuggerAdapters PUBLIC "../")
 target_link_libraries(CemuWxDebuggerAdapters PRIVATE
   CemuCafe
   CemuCommon
+  CemuComponents
+  CemuConfig
+  CemuResource
   CemuWxGuiCommon
   PUBLIC wxWidgets::wxWidgets
 )

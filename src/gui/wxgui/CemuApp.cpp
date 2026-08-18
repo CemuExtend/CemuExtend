@@ -12,7 +12,7 @@
 #include "wxgui/helpers/wxHelpers.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "wxgui/input/HotkeySettings.h"
-#include "wxgui/debugger/DebuggerWindow2.h"
+#include "wxgui/debugger/DebuggerWindowAdapter.h"
 #include <wx/language.h>
 
 #if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
@@ -682,25 +682,18 @@ int CemuApp::FilterEvent(wxEvent& event)
 	}
 
 	// track if debugger window or its child windows are focused
-	if (s_debuggerWindow && (event.GetEventType() == wxEVT_SET_FOCUS || event.GetEventType() == wxEVT_ACTIVATE))
+	if (WxDebuggerAdapters::HasDebuggerWindow() &&
+		(event.GetEventType() == wxEVT_SET_FOCUS || event.GetEventType() == wxEVT_ACTIVATE))
 	{
 		wxWindow* target_window = wxDynamicCast(event.GetEventObject(), wxWindow);
 
 		if (target_window && event.GetEventType() == wxEVT_ACTIVATE && !((wxActivateEvent&)event).GetActive())
 			target_window = nullptr;
 
-		if (target_window)
-		{
-			g_window_info.debugger_focused = false;
-			wxWindow* window_it = target_window;
-			while (window_it)
-			{
-				if (window_it == s_debuggerWindow) g_window_info.debugger_focused = true;
-				window_it = window_it->GetParent();
-			}
-		}
+		g_window_info.debugger_focused = target_window &&
+			WxDebuggerAdapters::IsDebuggerWindowOrChild(target_window);
 	}
-	else if (!s_debuggerWindow)
+	else if (!WxDebuggerAdapters::HasDebuggerWindow())
 	{
 		g_window_info.debugger_focused = false;
 	}

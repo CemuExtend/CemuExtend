@@ -482,7 +482,8 @@ DebuggerWindow2::~DebuggerWindow2()
 {
 	g_debuggerDispatcher.ClearDebuggerCallbacks();
 
-	s_debuggerWindow = nullptr;
+	if (s_debuggerWindow == this)
+		s_debuggerWindow = nullptr;
 
 	CleanupForDestroy();
 

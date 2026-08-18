@@ -140,8 +140,16 @@ cemu_assert_target_has_no_sources(CemuWxGui
 	debugger/DumpCtrl.h
 	debugger/DumpWindow.cpp
 	debugger/DumpWindow.h
+	debugger/DebuggerWindow2.cpp
+	debugger/DebuggerWindow2.h
+	debugger/DebuggerWindowAdapter.cpp
+	debugger/DebuggerWindowAdapter.h
+	debugger/DisasmCtrl.cpp
+	debugger/DisasmCtrl.h
 	debugger/ModuleWindow.cpp
 	debugger/ModuleWindow.h
+	debugger/RegisterWindow.cpp
+	debugger/RegisterWindow.h
 	debugger/SymbolCtrl.cpp
 	debugger/SymbolCtrl.h
 	debugger/SymbolWindow.cpp

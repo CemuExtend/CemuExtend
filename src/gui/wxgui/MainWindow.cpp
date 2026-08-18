@@ -10,7 +10,7 @@
 #include "AudioDebuggerWindow.h"
 #include "input/InputSettings2.h"
 #include "input/HotkeySettings.h"
-#include "debugger/DebuggerWindow2.h"
+#include "debugger/DebuggerWindowAdapter.h"
 #include "EmulatedUSBDevices/EmulatedUSBDeviceFrame.h"
 #include "windows/PPCThreadsViewer/DebugPPCThreadsWindow.h"
 #include "windows/TextureRelationViewer/TextureRelationWindow.h"
@@ -432,7 +432,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 
 	if (LaunchSettings::GDBStubEnabled())
 	{
-			g_gdbstub = std::make_unique<GDBServer>(GetConfig().gdb_port);
+		WxDebuggerAdapters::EnsureGdbStub(GetConfig().gdb_port);
 	}
 }
 
@@ -564,8 +564,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 	}
 	if (m_debugger_window)
 	{
-		m_debugger_window->CleanupForDestroy();
-		m_debugger_window->Destroy();
+		WxDebuggerAdapters::DestroyDebuggerWindow(*m_debugger_window);
 		m_debugger_window = nullptr;
 	}
 
@@ -1315,14 +1314,8 @@ void MainWindow::OnLoggingWindow(wxCommandEvent& event)
 
 void MainWindow::OnGDBStubToggle(wxCommandEvent& event)
 {
-	if (g_gdbstub)
-	{
-		g_gdbstub.release();
-		return;
-	}
-
 	const auto& config = GetConfig();
-	g_gdbstub = std::make_unique<GDBServer>(config.gdb_port);
+	WxDebuggerAdapters::ToggleGdbStub(config.gdb_port);
 }
 
 void MainWindow::OnDebugViewPPCThreads(wxCommandEvent& event)
@@ -1358,7 +1351,7 @@ void MainWindow::OnDebugViewPPCDebugger(wxCommandEvent& event)
 {
 	if (m_debugger_window && m_debugger_window->IsShown())
 	{
-		m_debugger_window->Close();
+		WxDebuggerAdapters::RequestCloseDebuggerWindow(*m_debugger_window);
 		m_debugger_window = nullptr;
 		return;
 	}
@@ -1375,7 +1368,9 @@ void MainWindow::OnDebugViewPPCDebugger(wxCommandEvent& event)
 	pos.y = std::min(pos.y + 200, rect.GetHeight() - 400);
 	this->SetPosition(pos);
 
-	m_debugger_window = new DebuggerWindow2(*this, rect);
+	m_debugger_window = WxDebuggerAdapters::CreateDebuggerWindow(*this, rect);
+	if (!m_debugger_window)
+		return;
 	m_debugger_window->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnDebuggerClose, this);
 	m_debugger_window->Show(true);
 }
@@ -1963,7 +1958,7 @@ void MainWindow::OnGesturePan(wxPanGestureEvent& event)
 void MainWindow::OnGameLoaded()
 {
 	if (m_debugger_window)
-		m_debugger_window->OnGameLoaded();
+		WxDebuggerAdapters::NotifyGameLoaded(*m_debugger_window);
 }
 
 void MainWindow::AsyncSetTitle(std::string_view windowTitle)
@@ -2317,7 +2312,7 @@ void MainWindow::OnSizeEvent(wxSizeEvent& event)
 	g_window_info.dpi_scale = GetDPIScaleFactor();
 
 	if (m_debugger_window && m_debugger_window->IsShown())
-		m_debugger_window->OnParentMove(GetPosition(), event.GetSize());
+		WxDebuggerAdapters::NotifyParentMove(*m_debugger_window, GetPosition(), event.GetSize());
 
 	event.Skip();
 
@@ -2341,13 +2336,14 @@ void MainWindow::OnMove(wxMoveEvent& event)
 		m_restored_position = GetPosition();
 
 	if (m_debugger_window && m_debugger_window->IsShown())
-		m_debugger_window->OnParentMove(GetPosition(), GetSize());
+		WxDebuggerAdapters::NotifyParentMove(*m_debugger_window, GetPosition(), GetSize());
 	WxRendererAdapters::NotifyWindowPositionChanged();
 }
 
 void MainWindow::OnDebuggerClose(wxCloseEvent& event)
 {
-	m_debugger_window = nullptr;
+	if (m_debugger_window == event.GetEventObject())
+		m_debugger_window = nullptr;
 	event.Skip();
 }
 
@@ -3038,7 +3034,7 @@ void MainWindow::RecreateMenu()
 
 	debugMenu->Append(MAINFRAME_MENU_ID_DEBUG_VIEW_LOGGING_WINDOW, _("&Open logging window"));
 	m_gdbstub_toggle = debugMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_TOGGLE_GDB_STUB, _("&Launch with GDB stub"));
-	m_gdbstub_toggle->Check(g_gdbstub != nullptr);
+	m_gdbstub_toggle->Check(WxDebuggerAdapters::IsGdbStubEnabled());
 	m_gdbstub_toggle->Enable(!m_game_launched);
 
 	debugMenu->Append(MAINFRAME_MENU_ID_DEBUG_VIEW_PPC_THREADS, _("&View PPC threads"));
