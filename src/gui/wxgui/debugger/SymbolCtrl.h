@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <wx/listctrl.h>
 
 class SymbolListCtrl : public wxListView
@@ -19,7 +21,7 @@ private:
 		wxString libName;
 		wxString searchName;
 	};
-	using SymbolMap = std::map<MPTR, SymbolItem>;
+	using SymbolMap = std::map<std::uint32_t, SymbolItem>;
 
 	SymbolMap m_data;
 	wxString m_list_filter;

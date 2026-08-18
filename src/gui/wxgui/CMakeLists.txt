@@ -35,10 +35,6 @@ add_library(CemuWxGui STATIC
   debugger/DumpWindow.h
   debugger/RegisterWindow.cpp
   debugger/RegisterWindow.h
-  debugger/SymbolCtrl.cpp
-  debugger/SymbolCtrl.h
-  debugger/SymbolWindow.cpp
-  debugger/SymbolWindow.h
   dialogs/CreateAccount/wxCreateAccountDialog.cpp
   dialogs/CreateAccount/wxCreateAccountDialog.h
   dialogs/SaveImport/SaveImportWindow.cpp
@@ -123,8 +119,14 @@ add_library(CemuWxDebuggerAdapters STATIC
   AudioDebuggerWindow.h
   debugger/BreakpointWindow.cpp
   debugger/BreakpointWindow.h
+  debugger/DebuggerEvents.cpp
+  debugger/DebuggerEvents.h
   debugger/ModuleWindow.cpp
   debugger/ModuleWindow.h
+  debugger/SymbolCtrl.cpp
+  debugger/SymbolCtrl.h
+  debugger/SymbolWindow.cpp
+  debugger/SymbolWindow.h
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp

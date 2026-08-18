@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wxgui/debugger/DebuggerEvents.h"
 #include "wxgui/debugger/DisasmCtrl.h"
 #include "config/XMLConfig.h"
 #include "Cafe/HW/Espresso/Debugger/Debugger.h"
@@ -17,15 +18,6 @@ class ModuleWindow;
 class SymbolWindow;
 class wxStaticText;
 struct RPLStoredSymbol;
-
-wxDECLARE_EVENT(wxEVT_UPDATE_VIEW, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_BREAKPOINT_HIT, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_RUN, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_BREAKPOINT_CHANGE, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_MOVE_TO_DISASM_ADDR, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_NOTIFY_MODULE_LOADED, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_NOTIFY_MODULE_UNLOADED, wxCommandEvent);
-wxDECLARE_EVENT(wxEVT_NOTIFY_GRAPHIC_PACKS_MODIFIED, wxCommandEvent);
 
 extern class DebuggerWindow2* s_debuggerWindow;
 
@@ -170,4 +162,3 @@ private:
 
 wxDECLARE_EVENT_TABLE();
 };
-

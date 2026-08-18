@@ -135,6 +135,10 @@ cemu_assert_target_has_no_sources(CemuWxGui
 	debugger/BreakpointWindow.h
 	debugger/ModuleWindow.cpp
 	debugger/ModuleWindow.h
+	debugger/SymbolCtrl.cpp
+	debugger/SymbolCtrl.h
+	debugger/SymbolWindow.cpp
+	debugger/SymbolWindow.h
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
 	windows/TextureRelationViewer/TextureRelationWindow.cpp

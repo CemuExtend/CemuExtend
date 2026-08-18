@@ -4,7 +4,7 @@
 #include <wx/listctrl.h>
 #include <wx/clipbrd.h>
 
-enum ItemColumns
+enum SymbolColumns
 {
 	ColumnName = 0,
 	ColumnAddress,

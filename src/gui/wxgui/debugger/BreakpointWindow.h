@@ -2,14 +2,13 @@
 
 #include <wx/frame.h>
 
-class DebuggerWindow2;
 class wxListEvent;
 class wxListView;
 
 class BreakpointWindow : public wxFrame
 {
 public:
-	BreakpointWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size);
+	BreakpointWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 	virtual ~BreakpointWindow();
 
 	void OnMainMove(const wxPoint& position, const wxSize& main_size);

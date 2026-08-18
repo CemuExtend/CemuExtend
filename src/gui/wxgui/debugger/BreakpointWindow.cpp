@@ -1,9 +1,9 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/debugger/BreakpointWindow.h"
+#include "wxgui/debugger/DebuggerEvents.h"
 
 #include <sstream>
 
-#include "wxgui/debugger/DebuggerWindow2.h"
 #include "Cafe/HW/Espresso/Debugger/Debugger.h"
 
 #include "Cemu/ExpressionParser/ExpressionParser.h"
@@ -17,7 +17,7 @@ enum
 	MENU_ID_DELETE_BP,
 };
 
-enum ItemColumns
+enum BreakpointColumns
 {
 	ColumnEnabled = 0,
 	ColumnAddress,
@@ -25,7 +25,7 @@ enum ItemColumns
 	ColumnComment,
 };
 
-BreakpointWindow::BreakpointWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size)
+BreakpointWindow::BreakpointWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain)
 	: wxFrame(&parent, wxID_ANY, _("Breakpoints"), wxDefaultPosition, wxSize(420, 250), wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxFRAME_FLOAT_ON_PARENT)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
@@ -66,7 +66,7 @@ BreakpointWindow::BreakpointWindow(DebuggerWindow2& parent, const wxPoint& main_
 
 	this->Centre(wxBOTH);
 
-	if (parent.GetConfig().data().pin_to_main)
+	if (pinToMain)
 		OnMainMove(main_position, main_size);
 
 	m_breakpoints->Bind(wxEVT_LIST_ITEM_CHECKED, &BreakpointWindow::OnBreakpointToggled, this);

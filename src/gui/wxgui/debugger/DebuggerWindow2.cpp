@@ -53,14 +53,6 @@ enum
 };
 
 wxDEFINE_EVENT(wxEVT_DEBUGGER_CLOSE, wxCloseEvent);
-wxDEFINE_EVENT(wxEVT_UPDATE_VIEW, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_BREAKPOINT_CHANGE, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_BREAKPOINT_HIT, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_MOVE_TO_DISASM_ADDR, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_RUN, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_NOTIFY_MODULE_LOADED, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_NOTIFY_MODULE_UNLOADED, wxCommandEvent);
-wxDEFINE_EVENT(wxEVT_NOTIFY_GRAPHIC_PACKS_MODIFIED, wxCommandEvent);
 
 wxBEGIN_EVENT_TABLE(DebuggerWindow2, wxFrame)
 	EVT_SHOW(DebuggerWindow2::OnShow)
@@ -473,9 +465,10 @@ DebuggerWindow2::DebuggerWindow2(wxFrame& parent, const wxRect& display_size)
 
 	m_register_window = new RegisterWindow(*this, m_main_position, m_main_size);
 	m_dump_window = new DumpWindow(*this, m_main_position, m_main_size);
-	m_breakpoint_window = new BreakpointWindow(*this, m_main_position, m_main_size);
-	m_module_window = new ModuleWindow(*this, m_main_position, m_main_size);
-	m_symbol_window = new SymbolWindow(*this, m_main_position, m_main_size);
+	const bool pinToMain = m_config.data().pin_to_main;
+	m_breakpoint_window = new BreakpointWindow(*this, m_main_position, m_main_size, pinToMain);
+	m_module_window = new ModuleWindow(*this, m_main_position, m_main_size, pinToMain);
+	m_symbol_window = new SymbolWindow(*this, m_main_position, m_main_size, pinToMain);
 
 	const bool value = m_config.data().pin_to_main;
 	m_config.data().pin_to_main = true;

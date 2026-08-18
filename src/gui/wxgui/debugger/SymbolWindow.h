@@ -3,12 +3,10 @@
 #include "wxgui/debugger/SymbolCtrl.h"
 #include <wx/frame.h>
 
-class DebuggerWindow2;
-
 class SymbolWindow : public wxFrame
 {
 public:
-	SymbolWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size);
+	SymbolWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 
 	void OnMainMove(const wxPoint& position, const wxSize& main_size);
 	void OnGameLoaded();
