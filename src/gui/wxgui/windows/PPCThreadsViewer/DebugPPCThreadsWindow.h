@@ -1,7 +1,13 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+#include <thread>
+
 #include <wx/wx.h>
 
+struct ThreadProfileState;
+class wxGenericProgressDialog;
 class wxListView;
 
 class DebugPPCThreadsWindow: public wxFrame
@@ -20,14 +26,17 @@ public:
 	void Close();
 
 private:
-    void ProfileThread(struct OSThread_t* thread);
-    void ProfileThreadWorker(OSThread_t* thread);
-    void PresentProfileResults(OSThread_t* thread, const std::unordered_map<VAddr, uint32>& samples);
-    void DumpStackTrace(struct OSThread_t* thread);
+	void ProfileThread(std::uint32_t threadAddress);
+	void StopProfile();
+	void UpdateProfileProgress();
+	void DumpStackTrace(std::uint32_t threadAddress);
 
 	wxListView* m_thread_list;
 	wxCheckBox* m_auto_refresh;
 	wxTimer* m_timer;
+	wxGenericProgressDialog* m_profile_dialog{};
+	std::shared_ptr<ThreadProfileState> m_profile_state;
+	std::jthread m_profile_thread;
 
 	void OnTimer(wxTimerEvent& event);
 

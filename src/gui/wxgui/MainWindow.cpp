@@ -438,6 +438,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 
 MainWindow::~MainWindow()
 {
+	ClosePpcThreadsViewer();
 	m_applicationEventLifetime->store(false, std::memory_order_release);
 	m_applicationEventSubscription.Reset();
 	WindowSystem::BeginShutdown();
@@ -550,6 +551,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 
 	if (m_active_cemod_permission_dialog && m_active_cemod_permission_dialog->IsModal())
 		m_active_cemod_permission_dialog->EndModal(wxID_CANCEL);
+	ClosePpcThreadsViewer();
 	WindowSystem::BeginShutdown();
 	const auto shutdownResult = m_emulationController.ShutdownApplication();
 	if (!shutdownResult.stopped)
@@ -1325,8 +1327,31 @@ void MainWindow::OnGDBStubToggle(wxCommandEvent& event)
 
 void MainWindow::OnDebugViewPPCThreads(wxCommandEvent& event)
 {
-	auto frame = new DebugPPCThreadsWindow(*this);
-	frame->Show(true);
+	if (m_ppc_threads_window)
+	{
+		m_ppc_threads_window->Raise();
+		return;
+	}
+
+	m_ppc_threads_window = new DebugPPCThreadsWindow(*this);
+	auto* createdWindow = m_ppc_threads_window;
+	const std::weak_ptr<std::atomic_bool> lifetime = m_applicationEventLifetime;
+	m_ppc_threads_window->Bind(wxEVT_DESTROY, [this, lifetime, createdWindow](wxWindowDestroyEvent& destroyEvent) {
+		if (const auto alive = lifetime.lock();
+			alive && alive->load(std::memory_order_acquire) && m_ppc_threads_window == createdWindow)
+			m_ppc_threads_window = nullptr;
+		destroyEvent.Skip();
+	});
+	m_ppc_threads_window->Show(true);
+}
+
+void MainWindow::ClosePpcThreadsViewer()
+{
+	if (!m_ppc_threads_window)
+		return;
+	auto* window = m_ppc_threads_window;
+	m_ppc_threads_window = nullptr;
+	window->Close();
 }
 
 void MainWindow::OnDebugViewPPCDebugger(wxCommandEvent& event)
@@ -2399,6 +2424,7 @@ void MainWindow::SetFullScreen(bool state)
 
 void MainWindow::EndEmulation() // unfinished - memory leaks and crashes after repeated use (after 3x usually)
 {
+	ClosePpcThreadsViewer();
 	const auto stopResult = m_emulationController.Stop();
 	if (!stopResult.stopped)
 	{

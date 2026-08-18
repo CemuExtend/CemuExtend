@@ -19,6 +19,7 @@
 #include "host/contracts/HostContracts.h"
 
 class DebuggerWindow2;
+class DebugPPCThreadsWindow;
 struct GameEntry;
 class DiscordPresence;
 class TitleManager;
@@ -169,6 +170,7 @@ private:
 	bool ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,
 		std::vector<Application::CemodPermissionRequest> requests);
 	void RollbackFailedLaunchUi();
+	void ClosePpcThreadsViewer();
 
 	void OnTimer(wxTimerEvent& event);
 	void OnCemuExtendTextChanged(wxCommandEvent& event);
@@ -221,6 +223,7 @@ private:
 
 	wxMenuItem* m_gdbstub_toggle{};
 	DebuggerWindow2* m_debugger_window = nullptr;
+	DebugPPCThreadsWindow* m_ppc_threads_window = nullptr;
 	LoggingWindow* m_logging_window = nullptr;
 
 	std::future<bool> m_update_available;

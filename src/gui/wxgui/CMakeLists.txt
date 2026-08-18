@@ -107,9 +107,6 @@ add_library(CemuWxGui STATIC
   wxCemuConfig.h
   EmulatedUSBDevices/EmulatedUSBDeviceFrame.cpp
   EmulatedUSBDevices/EmulatedUSBDeviceFrame.h
-  windows/PPCThreadsViewer
-  windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
-  windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   wxcomponents/checktree.cpp
   wxcomponents/checktree.h
   wxgui.h
@@ -128,6 +125,8 @@ add_library(CemuWxRendererAdapters STATIC
 add_library(CemuWxDebuggerAdapters STATIC
   AudioDebuggerWindow.cpp
   AudioDebuggerWindow.h
+  windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
+  windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp
   windows/TextureRelationViewer/TextureRelationWindow.h
 )

@@ -5,11 +5,18 @@
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/RPL/rpl_symbol_storage.h"
 
-#include "wxgui/components/wxProgressDialogManager.h"
-
+#include <atomic>
 #include <cinttypes>
 #include <helpers/wxHelpers.h>
 #include <wx/listctrl.h>
+#include <wx/progdlg.h>
+
+struct ThreadProfileState
+{
+	std::atomic_bool cancel{};
+	std::atomic_bool finished{};
+	std::atomic<std::uint32_t> sampleCount{};
+};
 
 enum
 {
@@ -138,6 +145,7 @@ wxBEGIN_EVENT_TABLE(DebugPPCThreadsWindow, wxFrame)
 DebugPPCThreadsWindow::~DebugPPCThreadsWindow()
 {
 	m_timer->Stop();
+	StopProfile();
 }
 
 void DebugPPCThreadsWindow::OnCloseButton(wxCommandEvent& event)
@@ -157,6 +165,7 @@ void DebugPPCThreadsWindow::OnClose(wxCloseEvent& event)
 
 void DebugPPCThreadsWindow::OnTimer(wxTimerEvent& event)
 {
+	UpdateProfileProgress();
 	if (m_auto_refresh->IsChecked())
 		RefreshThreadList();
 }
@@ -269,153 +278,234 @@ void DebugPPCThreadsWindow::RefreshThreadList()
 	m_thread_list->SetScrollPos(0, scrollPos, true);
 }
 
-void DebugPPCThreadsWindow::DumpStackTrace(OSThread_t* thread)
+void DebugPPCThreadsWindow::DumpStackTrace(std::uint32_t threadAddress)
 {
+	auto* thread = reinterpret_cast<OSThread_t*>(memory_getPointerFromVirtualOffset(threadAddress));
 	cemuLog_log(LogType::Force, "Dumping stack trace for thread {0:08x} LR: {1:08x}", memory_getVirtualOffsetFromPointer(thread), _swapEndianU32(thread->context.lr));
 	DebugLogStackTrace(thread, _swapEndianU32(thread->context.gpr[1]));
 }
 
-void DebugPPCThreadsWindow::PresentProfileResults(OSThread_t* thread, const std::unordered_map<VAddr, uint32>& samples)
+namespace
 {
-	std::vector<std::pair<VAddr, uint32>> sortedSamples;
-	// count samples
-	uint32 totalSampleCount = 0;
-	for (auto& sample : samples)
-		totalSampleCount += sample.second;
-	cemuLog_log(LogType::Force, "--- Thread {:08x} profile results with {:} samples captured ---",
-				MEMPTR<OSThread_t>(thread).GetMPTR(), totalSampleCount);
-	cemuLog_log(LogType::Force, "Exclusive time, grouped by function:");
-	// print samples grouped by function
-	sortedSamples.clear();
-	for (auto& sample : samples)
+	void PresentProfileResults(std::uint32_t threadAddress, const std::unordered_map<std::uint32_t, std::uint32_t>& samples)
 	{
-		RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(sample.first);
-		VAddr sampleAddr = sample.first;
-		if (symbol)
-			sampleAddr = symbol->address;
-		auto it = std::find_if(sortedSamples.begin(), sortedSamples.end(),
-							   [sampleAddr](const std::pair<VAddr, uint32>& a) { return a.first == sampleAddr; });
-		if (it != sortedSamples.end())
-			it->second += sample.second;
-		else
-			sortedSamples.push_back(std::make_pair(sampleAddr, sample.second));
-	}
-	std::sort(sortedSamples.begin(), sortedSamples.end(),
-			  [](const std::pair<VAddr, uint32>& a, const std::pair<VAddr, uint32>& b) { return a.second > b.second; });
-	for (auto& sample : sortedSamples)
-	{
-		if (sample.second < 3)
-			continue;
-		VAddr sampleAddr = sample.first;
-		RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(sample.first);
-		std::string strName;
-		if (symbol)
+		std::vector<std::pair<std::uint32_t, std::uint32_t>> sortedSamples;
+		std::uint32_t totalSampleCount = 0;
+		for (const auto& sample : samples)
+			totalSampleCount += sample.second;
+		cemuLog_log(LogType::Force, "--- Thread {:08x} profile results with {:} samples captured ---",
+			threadAddress, totalSampleCount);
+		if (totalSampleCount == 0)
+			return;
+
+		cemuLog_log(LogType::Force, "Exclusive time, grouped by function:");
+		for (const auto& sample : samples)
 		{
-			strName = fmt::format("{}.{}+0x{:x}", (const char*)symbol->libName, (const char*)symbol->symbolName,
-								  sampleAddr - symbol->address);
+			RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(sample.first);
+			std::uint32_t sampleAddr = sample.first;
+			if (symbol)
+				sampleAddr = symbol->address;
+			auto it = std::find_if(sortedSamples.begin(), sortedSamples.end(),
+				[sampleAddr](const std::pair<std::uint32_t, std::uint32_t>& entry) { return entry.first == sampleAddr; });
+			if (it != sortedSamples.end())
+				it->second += sample.second;
+			else
+				sortedSamples.emplace_back(sampleAddr, sample.second);
 		}
-		else
-			strName = "Unknown";
-		cemuLog_log(LogType::Force, "[{:08x}] {:8.2f}% (Samples: {:5}) Symbol: {}", sample.first,
-					(double)(sample.second * 100) / (double)totalSampleCount, sample.second, strName);
+		std::sort(sortedSamples.begin(), sortedSamples.end(),
+			[](const auto& left, const auto& right) { return left.second > right.second; });
+		for (const auto& sample : sortedSamples)
+		{
+			if (sample.second < 3)
+				continue;
+			RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(sample.first);
+			std::string symbolName = "Unknown";
+			if (symbol)
+			{
+				symbolName = fmt::format("{}.{}+0x{:x}", (const char*)symbol->libName,
+					(const char*)symbol->symbolName, sample.first - symbol->address);
+			}
+			cemuLog_log(LogType::Force, "[{:08x}] {:8.2f}% (Samples: {:5}) Symbol: {}", sample.first,
+				(double)(sample.second * 100) / (double)totalSampleCount, sample.second, symbolName);
+		}
 	}
-}
 
-void DebugPPCThreadsWindow::ProfileThreadWorker(OSThread_t* thread)
-{
-	wxProgressDialogManager progressDialog(this);
-	progressDialog.Create(_("Profiling thread"),
-						  _("Capturing samples..."),
-						  1000, // range
-						  wxPD_CAN_SKIP);
-
-	std::unordered_map<VAddr, uint32> samples;
-	// loop for one minute
-	uint64 startTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-						   std::chrono::system_clock::now().time_since_epoch())
-						   .count();
-	uint32 totalSampleCount = 0;
-	while (true)
+	bool SampleThreadInstructionPointer(const std::shared_ptr<ThreadProfileState>& state,
+		std::uint32_t threadAddress, std::uint32_t& instructionPointer)
 	{
-		// suspend thread
-		coreinit::OSSuspendThread(thread);
-		// wait until thread is not running anymore
+		auto* thread = reinterpret_cast<OSThread_t*>(memory_getPointerFromVirtualOffset(threadAddress));
 		__OSLockScheduler();
+		if (!coreinit::__OSIsThreadActive(thread) ||
+			thread->state == OSThread_t::THREAD_STATE::STATE_NONE ||
+			thread->state == OSThread_t::THREAD_STATE::STATE_MORIBUND)
+		{
+			__OSUnlockScheduler();
+			return false;
+		}
+
+		coreinit::__OSSuspendThreadNolock(thread);
 		while (coreinit::OSIsThreadRunningNoLock(thread))
 		{
 			__OSUnlockScheduler();
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			__OSLockScheduler();
+			if (!coreinit::__OSIsThreadActive(thread))
+			{
+				// Forced teardown can remove a thread while the profiler's suspend
+				// request is still counted. Restore that increment before exiting.
+				if (thread->suspendCounter > 0)
+					thread->suspendCounter--;
+				__OSUnlockScheduler();
+				return false;
+			}
+			if (state->cancel.load(std::memory_order_acquire) && coreinit::OSIsThreadRunningNoLock(thread))
+			{
+				// Undo exactly the suspend requested by the profiler.  A running
+				// thread is not on a ready queue, so decrement directly instead of
+				// adding it to one through __OSResumeThreadInternal().
+				cemu_assert_debug(thread->suspendCounter > 0);
+				thread->suspendCounter--;
+				__OSUnlockScheduler();
+				return false;
+			}
 		}
-		uint32 sampleIP = thread->context.srr0;
+		instructionPointer = thread->context.srr0;
+		coreinit::__OSResumeThreadInternal(thread, 1);
 		__OSUnlockScheduler();
-		coreinit::OSResumeThread(thread);
-		// count sample
-		samples[sampleIP]++;
-		totalSampleCount++;
-		if ((totalSampleCount % 50) == 0)
-		{
-			wxString msg = formatWxString(_("Capturing samples... ({:})\nResults will be written to log.txt\n"), totalSampleCount);
-			if (totalSampleCount < 30000)
-				msg.Append(_("Click Skip button for early results with lower accuracy"));
-			else
-				msg.Append(_("Click Skip button to finish"));
-			progressDialog.Update(totalSampleCount * 1000 / 30000, msg);
-			if (progressDialog.IsCancelledOrSkipped())
-				break;
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		return true;
 	}
-	PresentProfileResults(thread, samples);
-	progressDialog.Destroy();
+
+	void ProfileThreadWorker(const std::shared_ptr<ThreadProfileState>& state, std::uint32_t threadAddress)
+	{
+		try
+		{
+			std::unordered_map<std::uint32_t, std::uint32_t> samples;
+			while (!state->cancel.load(std::memory_order_acquire))
+			{
+				std::uint32_t instructionPointer{};
+				if (!SampleThreadInstructionPointer(state, threadAddress, instructionPointer))
+					break;
+				samples[instructionPointer]++;
+				state->sampleCount.fetch_add(1, std::memory_order_relaxed);
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+			if (!samples.empty())
+				PresentProfileResults(threadAddress, samples);
+		}
+		catch (const std::exception& exception)
+		{
+			cemuLog_log(LogType::Force, "PPC thread profiler failed: {}", exception.what());
+		}
+		catch (...)
+		{
+			cemuLog_log(LogType::Force, "PPC thread profiler failed with an unknown error");
+		}
+		state->finished.store(true, std::memory_order_release);
+	}
 }
 
-void DebugPPCThreadsWindow::ProfileThread(OSThread_t* thread)
+void DebugPPCThreadsWindow::ProfileThread(std::uint32_t threadAddress)
 {
-	std::thread profileThread(&DebugPPCThreadsWindow::ProfileThreadWorker, this, thread);
-	profileThread.detach();
+	if (m_profile_state)
+		return;
+
+	m_profile_state = std::make_shared<ThreadProfileState>();
+	m_profile_dialog = new wxGenericProgressDialog(_("Profiling thread"), _("Capturing samples..."),
+		1000, this, wxPD_CAN_SKIP);
+	const auto state = m_profile_state;
+	m_profile_thread = std::jthread([state, threadAddress] {
+		ProfileThreadWorker(state, threadAddress);
+	});
+}
+
+void DebugPPCThreadsWindow::UpdateProfileProgress()
+{
+	if (!m_profile_state)
+		return;
+
+	const auto sampleCount = m_profile_state->sampleCount.load(std::memory_order_relaxed);
+	if (m_profile_dialog && !m_profile_state->finished.load(std::memory_order_acquire))
+	{
+		wxString message = formatWxString(_("Capturing samples... ({:})\nResults will be written to log.txt\n"), sampleCount);
+		if (sampleCount < 30000)
+			message.Append(_("Click Skip button for early results with lower accuracy"));
+		else
+			message.Append(_("Click Skip button to finish"));
+		bool skipped = false;
+		const auto progress = std::min<std::uint32_t>(sampleCount * 1000 / 30000, 999);
+		if (!m_profile_dialog->Update(progress, message, &skipped) || skipped)
+			m_profile_state->cancel.store(true, std::memory_order_release);
+	}
+
+	if (m_profile_state->finished.load(std::memory_order_acquire))
+		StopProfile();
+}
+
+void DebugPPCThreadsWindow::StopProfile()
+{
+	if (m_profile_state)
+		m_profile_state->cancel.store(true, std::memory_order_release);
+	if (m_profile_thread.joinable())
+	{
+		m_profile_thread.request_stop();
+		m_profile_thread.join();
+	}
+	if (m_profile_dialog)
+	{
+		m_profile_dialog->Destroy();
+		m_profile_dialog = nullptr;
+	}
+	m_profile_state.reset();
 }
 
 void DebugPPCThreadsWindow::OnThreadListPopupClick(wxCommandEvent& evt)
 {
 	MPTR threadMPTR = (MPTR)(size_t)static_cast<wxMenu*>(evt.GetEventObject())->GetClientData();
-	OSThread_t* osThread = (OSThread_t*)memory_getPointerFromVirtualOffset(threadMPTR);
+	auto* osThread = reinterpret_cast<OSThread_t*>(memory_getPointerFromVirtualOffset(threadMPTR));
 	__OSLockScheduler();
 	if (!coreinit::__OSIsThreadActive(osThread))
 	{
 		__OSUnlockScheduler();
 		return;
 	}
-	__OSUnlockScheduler();
-	// handle command
+
+	bool priorityChanged = false;
 	switch (evt.GetId())
 	{
 	case THREADLIST_MENU_BOOST_PRIO_5:
 		osThread->basePriority = osThread->basePriority - 5;
+		priorityChanged = true;
 		break;
 	case THREADLIST_MENU_BOOST_PRIO_1:
 		osThread->basePriority = osThread->basePriority - 1;
+		priorityChanged = true;
 		break;
 	case THREADLIST_MENU_DECREASE_PRIO_5:
 		osThread->basePriority = osThread->basePriority + 5;
+		priorityChanged = true;
 		break;
 	case THREADLIST_MENU_DECREASE_PRIO_1:
 		osThread->basePriority = osThread->basePriority + 1;
+		priorityChanged = true;
 		break;
 	case THREADLIST_MENU_SUSPEND:
-		coreinit::OSSuspendThread(osThread);
+		coreinit::__OSSuspendThreadNolock(osThread);
 		break;
 	case THREADLIST_MENU_RESUME:
-		coreinit::OSResumeThread(osThread);
+		coreinit::__OSResumeThreadInternal(osThread, 1);
 		break;
 	case THREADLIST_MENU_DUMP_STACK_TRACE:
-		DumpStackTrace(osThread);
+		DumpStackTrace(threadMPTR);
 		break;
 	case THREADLIST_MENU_PROFILE_THREAD:
-		ProfileThread(osThread);
-		break;
+		__OSUnlockScheduler();
+		ProfileThread(threadMPTR);
+		RefreshThreadList();
+		return;
 	}
-	coreinit::__OSUpdateThreadEffectivePriority(osThread);
+	if (priorityChanged)
+		coreinit::__OSUpdateThreadEffectivePriority(osThread);
+	__OSUnlockScheduler();
 	// update thread list
 	RefreshThreadList();
 }
@@ -462,5 +552,6 @@ void DebugPPCThreadsWindow::OnThreadListRightClick(wxMouseEvent& event)
 
 void DebugPPCThreadsWindow::Close()
 {
+	StopProfile();
 	this->Destroy();
 }
