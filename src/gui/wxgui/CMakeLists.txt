@@ -110,9 +110,6 @@ add_library(CemuWxGui STATIC
   windows/PPCThreadsViewer
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
-  windows/TextureRelationViewer
-  windows/TextureRelationViewer/TextureRelationWindow.cpp
-  windows/TextureRelationViewer/TextureRelationWindow.h
   wxcomponents/checktree.cpp
   wxcomponents/checktree.h
   wxgui.h
@@ -131,6 +128,8 @@ add_library(CemuWxRendererAdapters STATIC
 add_library(CemuWxDebuggerAdapters STATIC
   AudioDebuggerWindow.cpp
   AudioDebuggerWindow.h
+  windows/TextureRelationViewer/TextureRelationWindow.cpp
+  windows/TextureRelationViewer/TextureRelationWindow.h
 )
 
 if (ENABLE_OPENGL)
