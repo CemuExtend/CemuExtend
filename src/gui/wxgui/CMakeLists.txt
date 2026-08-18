@@ -25,8 +25,6 @@ add_library(CemuWxGui STATIC
   components/wxLogCtrl.h
   components/wxTitleManagerList.cpp
   components/wxTitleManagerList.h
-  debugger/BreakpointWindow.cpp
-  debugger/BreakpointWindow.h
   debugger/DebuggerWindow2.cpp
   debugger/DebuggerWindow2.h
   debugger/DisasmCtrl.cpp
@@ -35,8 +33,6 @@ add_library(CemuWxGui STATIC
   debugger/DumpCtrl.h
   debugger/DumpWindow.cpp
   debugger/DumpWindow.h
-  debugger/ModuleWindow.cpp
-  debugger/ModuleWindow.h
   debugger/RegisterWindow.cpp
   debugger/RegisterWindow.h
   debugger/SymbolCtrl.cpp
@@ -125,6 +121,10 @@ add_library(CemuWxRendererAdapters STATIC
 add_library(CemuWxDebuggerAdapters STATIC
   AudioDebuggerWindow.cpp
   AudioDebuggerWindow.h
+  debugger/BreakpointWindow.cpp
+  debugger/BreakpointWindow.h
+  debugger/ModuleWindow.cpp
+  debugger/ModuleWindow.h
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp

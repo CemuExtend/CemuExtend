@@ -131,6 +131,10 @@ cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.cpp
 	AudioDebuggerWindow.h
+	debugger/BreakpointWindow.cpp
+	debugger/BreakpointWindow.h
+	debugger/ModuleWindow.cpp
+	debugger/ModuleWindow.h
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
 	windows/TextureRelationViewer/TextureRelationWindow.cpp
