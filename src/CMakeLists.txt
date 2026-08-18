@@ -126,6 +126,7 @@ cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters)
+cemu_assert_target_has_no_edge(CemuWxGuiCommon CemuCafe CemuApplication CemuWxGui CemuWxDebuggerAdapters)
 cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_sources(CemuWxGui
@@ -133,6 +134,12 @@ cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.h
 	debugger/BreakpointWindow.cpp
 	debugger/BreakpointWindow.h
+	components/TextList.cpp
+	components/TextList.h
+	debugger/DumpCtrl.cpp
+	debugger/DumpCtrl.h
+	debugger/DumpWindow.cpp
+	debugger/DumpWindow.h
 	debugger/ModuleWindow.cpp
 	debugger/ModuleWindow.h
 	debugger/SymbolCtrl.cpp

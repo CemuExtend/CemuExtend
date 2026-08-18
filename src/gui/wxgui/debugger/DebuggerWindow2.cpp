@@ -464,7 +464,7 @@ DebuggerWindow2::DebuggerWindow2(wxFrame& parent, const wxRect& display_size)
 	this->wxWindowBase::Layout();
 
 	m_register_window = new RegisterWindow(*this, m_main_position, m_main_size);
-	m_dump_window = new DumpWindow(*this, m_main_position, m_main_size);
+	m_dump_window = new DumpWindow(*this, m_main_position, m_main_size, m_config.data().pin_to_main);
 	const bool pinToMain = m_config.data().pin_to_main;
 	m_breakpoint_window = new BreakpointWindow(*this, m_main_position, m_main_size, pinToMain);
 	m_module_window = new ModuleWindow(*this, m_main_position, m_main_size, pinToMain);

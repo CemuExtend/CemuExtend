@@ -13,8 +13,6 @@ add_library(CemuWxGui STATIC
   CemodPermissionDialog.h
   ChecksumTool.cpp
   ChecksumTool.h
-  components/TextList.cpp
-  components/TextList.h
   components/wxDownloadManagerList.cpp
   components/wxDownloadManagerList.h
   components/wxGameList.cpp
@@ -29,10 +27,6 @@ add_library(CemuWxGui STATIC
   debugger/DebuggerWindow2.h
   debugger/DisasmCtrl.cpp
   debugger/DisasmCtrl.h
-  debugger/DumpCtrl.cpp
-  debugger/DumpCtrl.h
-  debugger/DumpWindow.cpp
-  debugger/DumpWindow.h
   debugger/RegisterWindow.cpp
   debugger/RegisterWindow.h
   dialogs/CreateAccount/wxCreateAccountDialog.cpp
@@ -105,6 +99,11 @@ add_library(CemuWxGui STATIC
   wxHelper.h
 )
 
+add_library(CemuWxGuiCommon STATIC
+  components/TextList.cpp
+  components/TextList.h
+)
+
 add_library(CemuWxRendererAdapters STATIC
   canvas/IRenderCanvas.h
   canvas/RendererWindowAdapter.cpp
@@ -121,6 +120,10 @@ add_library(CemuWxDebuggerAdapters STATIC
   debugger/BreakpointWindow.h
   debugger/DebuggerEvents.cpp
   debugger/DebuggerEvents.h
+  debugger/DumpCtrl.cpp
+  debugger/DumpCtrl.h
+  debugger/DumpWindow.cpp
+  debugger/DumpWindow.h
   debugger/ModuleWindow.cpp
   debugger/ModuleWindow.h
   debugger/SymbolCtrl.cpp
@@ -131,6 +134,14 @@ add_library(CemuWxDebuggerAdapters STATIC
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp
   windows/TextureRelationViewer/TextureRelationWindow.h
+)
+
+set_property(TARGET CemuWxGuiCommon PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+cemu_use_precompiled_header(CemuWxGuiCommon)
+target_include_directories(CemuWxGuiCommon PUBLIC "../")
+target_link_libraries(CemuWxGuiCommon PRIVATE
+  CemuCommon
+  PUBLIC wxWidgets::wxWidgets
 )
 
 if (ENABLE_OPENGL)
@@ -171,6 +182,7 @@ target_include_directories(CemuWxDebuggerAdapters PUBLIC "../")
 target_link_libraries(CemuWxDebuggerAdapters PRIVATE
   CemuCafe
   CemuCommon
+  CemuWxGuiCommon
   PUBLIC wxWidgets::wxWidgets
 )
 
@@ -212,6 +224,7 @@ target_include_directories(CemuWxGui PUBLIC ${RAPIDJSON_INCLUDE_DIRS})
 
 target_link_libraries(CemuWxGui PRIVATE
   CemuCommon
+  CemuWxGuiCommon
   CemuApplication
   CemuExtendDomain
   CemuFrontendModel

@@ -1,8 +1,6 @@
 #include "wxgui/wxgui.h"
 #include "TextList.h"
 
-#include "debugger/DisasmCtrl.h"
-
 #include <wx/setup.h>
 #include <wx/tooltip.h>
 

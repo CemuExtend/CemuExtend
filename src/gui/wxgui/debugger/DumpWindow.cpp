@@ -1,10 +1,6 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/debugger/DumpWindow.h"
 
-#include "wxgui/debugger/DebuggerWindow2.h"
-#include "Cafe/HW/Espresso/Debugger/Debugger.h"
-#include "wxgui/debugger/DumpCtrl.h"
-
 enum
 {
 	// REGISTER
@@ -14,7 +10,7 @@ enum
 	REGISTER_LABEL_FPR1_0 = REGISTER_LABEL_R0 + 32,
 };
 
-DumpWindow::DumpWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size)
+DumpWindow::DumpWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain)
 	: wxFrame(&parent, wxID_ANY, _("Memory Dump"), wxDefaultPosition, wxSize(600, 250), wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxFRAME_FLOAT_ON_PARENT)
 {
 	wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
@@ -26,7 +22,7 @@ DumpWindow::DumpWindow(DebuggerWindow2& parent, const wxPoint& main_position, co
 
 	this->Centre(wxBOTH);
 
-	if (parent.GetConfig().data().pin_to_main)
+	if (pinToMain)
 		OnMainMove(main_position, main_size);
 }
 

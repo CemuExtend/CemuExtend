@@ -2,12 +2,10 @@
 
 #include "wxgui/debugger/DumpCtrl.h"
 
-class DebuggerWindow2;
-
 class DumpWindow : public wxFrame
 {
 public:
-	DumpWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size);
+	DumpWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 
 	void OnMainMove(const wxPoint& position, const wxSize& main_size);
 	void OnGameLoaded();

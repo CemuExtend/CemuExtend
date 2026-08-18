@@ -11,28 +11,28 @@ public:
 
 protected:
 	void GoToAddressDialog();
-	void CenterOffset(uint32 offset);
-	uint32 LineToOffset(uint32 line);
-	uint32 OffsetToLine(uint32 offset);
-	uint32 PositionToAddress(const wxPoint& position, uint32 line);
+	void CenterOffset(std::uint32_t offset);
+	std::uint32_t LineToOffset(std::uint32_t line);
+	std::uint32_t OffsetToLine(std::uint32_t offset);
+	std::uint32_t PositionToAddress(const wxPoint& position, std::uint32_t line);
 
-	void OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& start_position) override;
-	void OnMouseMove(const wxPoint& position, uint32 line) override;
-	void OnMouseDClick(const wxPoint& position, uint32 line) override;
-	void OnKeyPressed(sint32 key_code, const wxPoint& position) override;
-	void OnContextMenu(const wxPoint& position, uint32 line) override;
+	void OnDraw(wxDC& dc, std::int32_t start, std::int32_t count, const wxPoint& start_position) override;
+	void OnMouseMove(const wxPoint& position, std::uint32_t line) override;
+	void OnMouseDClick(const wxPoint& position, std::uint32_t line) override;
+	void OnKeyPressed(std::int32_t key_code, const wxPoint& position) override;
+	void OnContextMenu(const wxPoint& position, std::uint32_t line) override;
 	void OnMenuSelected(wxCommandEvent& event);
 
 	template <typename T>
-	bool WriteNumericDialog(uint32 address);
-	bool WriteString(uint32 address);
+	bool WriteNumericDialog(std::uint32_t address);
+	bool WriteString(std::uint32_t address);
 private:
 	struct  
 	{
-		uint32 baseAddress;
-		uint32 size;
+		std::uint32_t baseAddress;
+		std::uint32_t size;
 	}m_memoryRegion;
-	uint32 m_lastGotoOffset{0};
-	uint32 m_writerContextAddress {0};
-	uint32 m_writerContextLine {0};
+	std::uint32_t m_lastGotoOffset{0};
+	std::uint32_t m_writerContextAddress {0};
+	std::uint32_t m_writerContextLine {0};
 };

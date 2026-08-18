@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <wx/wx.h>
 
 #include <unordered_map>
@@ -15,35 +17,35 @@ public:
 		const wxSize& size = wxDefaultSize, long style = 0);
 
 	void RefreshControl(const wxRect* update_region = nullptr);
-	void RefreshLine(uint32 line);
+	void RefreshLine(std::uint32_t line);
 
 	wxSize DoGetVirtualSize() const override;
 	void DoSetSize(int x, int y, int width, int height, int sizeFlags) override;
 	void SetScrollPos(int orient, int pos, bool refresh) override;
-	void DrawLineBackground(wxDC& dc, uint32 line, const wxColour& colour, uint32 lines = 1) const;
-	void DrawLineBackground(wxDC& dc, const wxPoint& position, const wxColour& colour, uint32 lines = 1) const;
+	void DrawLineBackground(wxDC& dc, std::uint32_t line, const wxColour& colour, std::uint32_t lines = 1) const;
+	void DrawLineBackground(wxDC& dc, const wxPoint& position, const wxColour& colour, std::uint32_t lines = 1) const;
 
 	bool SetElementCount(size_t element_count);
-	uint32 GetElementCount() const;
-	bool IsKeyDown(sint32 keycode);
+	std::uint32_t GetElementCount() const;
+	bool IsKeyDown(std::int32_t keycode);
 	
 protected:
 	void WriteText(wxDC& dc, const wxString& text, wxPoint& position) const;
 	void WriteText(wxDC& dc, const wxString& text, wxPoint& position, const wxColour& color) const;
 	void NextLine(wxPoint& position, const wxPoint* start_position = nullptr) const;
 
-	virtual void OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& start_position) {};
-	virtual void OnMouseMove(const wxPoint& position, uint32 line) {}
-	virtual void OnKeyPressed(sint32 key_code, const wxPoint& position) {}
+	virtual void OnDraw(wxDC& dc, std::int32_t start, std::int32_t count, const wxPoint& start_position) {};
+	virtual void OnMouseMove(const wxPoint& position, std::uint32_t line) {}
+	virtual void OnKeyPressed(std::int32_t key_code, const wxPoint& position) {}
 	virtual void OnMouseDown();
 	virtual void OnMouseUp();
-	virtual void OnMouseDClick(const wxPoint& position, uint32 line) {}
-	virtual void OnContextMenu(const wxPoint& position, uint32 line) {}
-	virtual bool OnShowTooltip(const wxPoint& position, uint32 line);
+	virtual void OnMouseDClick(const wxPoint& position, std::uint32_t line) {}
+	virtual void OnContextMenu(const wxPoint& position, std::uint32_t line) {}
+	virtual bool OnShowTooltip(const wxPoint& position, std::uint32_t line);
 	void OnEraseBackground(wxEraseEvent&) {}
 
-	sint32 m_line_height;
-	sint32 m_char_width;
+	std::int32_t m_line_height;
+	std::int32_t m_char_width;
 	size_t m_elements_visible = 0;
 	size_t m_element_count = 0;
 	bool m_scrolled_to_end = true;
@@ -64,7 +66,7 @@ private:
 	void OnContextMenu(wxContextMenuEvent& event);
 	void OnTooltipTimer(wxTimerEvent& event);
 
-	std::unordered_map<sint32, bool> m_key_states;
+	std::unordered_map<std::int32_t, bool> m_key_states;
 
 	wxFont m_font;
 	
