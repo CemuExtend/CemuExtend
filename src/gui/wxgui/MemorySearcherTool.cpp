@@ -47,7 +47,7 @@ const wxString kDatatypeInt32 = "int32";
 const wxString kDatatypeInt64 = "int64";
 const wxString kDataTypeNames[] = {kDatatypeFloat,kDatatypeDouble,/*DATATYPE_STRING,*/kDatatypeInt8,kDatatypeInt16,kDatatypeInt32,kDatatypeInt64};
 
-MemorySearcherTool::MemorySearcherTool(wxFrame* parent)
+MemorySearcherTool::MemorySearcherTool(wxWindow* parent)
 	: wxFrame(parent, wxID_ANY, _("Memory Searcher"), wxDefaultPosition, wxSize(600, 540), wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
@@ -135,11 +135,31 @@ MemorySearcherTool::MemorySearcherTool(wxFrame* parent)
 
 MemorySearcherTool::~MemorySearcherTool()
 {
-	m_refresh_timer->Stop();
-	
+	PrepareForShutdown();
+}
+
+void MemorySearcherTool::PrepareForShutdown()
+{
+	if (m_refresh_timer)
+		m_refresh_timer->Stop();
+
 	m_running = false;
 	if (m_worker.joinable())
+	{
+		cemu_assert_debug(std::this_thread::get_id() != m_worker.get_id());
 		m_worker.join();
+	}
+
+	// A cancelled search worker can return before consuming every std::async
+	// result. Quiesce those jobs before the Cafe memory map is torn down and
+	// before any of the controls captured by them can be destroyed.
+	for (auto& job : m_search_jobs)
+	{
+		if (job.valid())
+			job.wait();
+	}
+	m_search_jobs.clear();
+	DeletePendingEvents();
 }
 
 void MemorySearcherTool::OnTimerTick(wxTimerEvent& event)
@@ -150,6 +170,7 @@ void MemorySearcherTool::OnTimerTick(wxTimerEvent& event)
 
 void MemorySearcherTool::OnClose(wxCloseEvent& event)
 {
+	PrepareForShutdown();
 	Save();
 	event.Skip();
 }

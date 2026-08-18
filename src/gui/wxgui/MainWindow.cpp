@@ -11,6 +11,7 @@
 #include "input/InputSettings2.h"
 #include "input/HotkeySettings.h"
 #include "debugger/DebuggerWindowAdapter.h"
+#include "debugger/MemorySearcherAdapter.h"
 #include "EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h"
 #include "windows/PPCThreadsViewer/DebugPPCThreadsWindow.h"
 #include "windows/TextureRelationViewer/TextureRelationWindow.h"
@@ -552,6 +553,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 	if (m_active_cemod_permission_dialog && m_active_cemod_permission_dialog->IsModal())
 		m_active_cemod_permission_dialog->EndModal(wxID_CANCEL);
 	ClosePpcThreadsViewer();
+	CloseMemorySearcher();
 	WindowSystem::BeginShutdown();
 	const auto shutdownResult = m_emulationController.ShutdownApplication();
 	if (!shutdownResult.stopped)
@@ -1890,8 +1892,14 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 			m_toolWindow->SetFocus();
 		else
 		{
-			m_toolWindow = new MemorySearcherTool(this);
-			m_toolWindow->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnMemorySearcherClose, this);
+			m_toolWindow = WxDebuggerAdapters::CreateMemorySearcherWindow(*this);
+			auto* const createdWindow = m_toolWindow;
+			m_toolWindow->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event)
+				{
+					if (m_toolWindow == createdWindow)
+						m_toolWindow = nullptr;
+					event.Skip();
+				});
 			m_toolWindow->Show(true);
 		}
 		break;
@@ -2373,10 +2381,14 @@ void MainWindow::OnPadClose(wxCloseEvent& event)
 	event.Skip();
 }
 
-void MainWindow::OnMemorySearcherClose(wxCloseEvent& event)
+void MainWindow::CloseMemorySearcher()
 {
+	if (!m_toolWindow)
+		return;
+
+	auto* const window = m_toolWindow;
 	m_toolWindow = nullptr;
-	event.Skip();
+	WxDebuggerAdapters::CloseMemorySearcherWindow(*window);
 }
 
 void MainWindow::OnMouseWheel(wxMouseEvent& event)
@@ -2426,6 +2438,7 @@ void MainWindow::SetFullScreen(bool state)
 void MainWindow::EndEmulation() // unfinished - memory leaks and crashes after repeated use (after 3x usually)
 {
 	ClosePpcThreadsViewer();
+	CloseMemorySearcher();
 	const auto stopResult = m_emulationController.Stop();
 	if (!stopResult.stopped)
 	{
@@ -2444,13 +2457,8 @@ void MainWindow::EndEmulation() // unfinished - memory leaks and crashes after r
 	if (GetConfig().disable_screensaver)
 		ScreenSaver::SetInhibit(false);
 
-	// close memory searcher if created
-	if (m_toolWindow)
-	{
-		m_toolWindow->Close();
-		m_toolWindow = nullptr;
+	if (m_memorySearcherMenuItem)
 		m_memorySearcherMenuItem->Enable(false);
-	}
 
 	RecreateMenu();
 	CreateGameListAndStatusBar();

@@ -5,7 +5,6 @@
 #include <wx/infobar.h>
 
 #include "wxgui/PadViewFrame.h"
-#include "wxgui/MemorySearcherTool.h"
 
 #include "config/XMLConfig.h"
 
@@ -95,7 +94,7 @@ public:
 
 	void OnDebuggerClose(wxCloseEvent& event);
 	void OnPadClose(wxCloseEvent& event);
-	void OnMemorySearcherClose(wxCloseEvent& event);
+	void CloseMemorySearcher();
 	void OnMouseWheel(wxMouseEvent& event);
 	void OnClose(wxCloseEvent& event);
 	void OnFileMenu(wxCommandEvent& event);
@@ -189,7 +188,7 @@ private:
 
 	wxRect GetDesktopRect();
 
-	MemorySearcherTool* m_toolWindow = nullptr;
+	wxWindow* m_toolWindow = nullptr;
 	TitleManager* m_title_manager = nullptr;
 	wxWindow* m_usb_devices = nullptr;
 	PadViewFrame* m_padView = nullptr;

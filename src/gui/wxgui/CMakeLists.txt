@@ -46,8 +46,6 @@ add_library(CemuWxGui STATIC
   wxWindowSystem.cpp
   helpers/wxControlObject.h
   helpers/wxCustomData.h
-  helpers/wxCustomEvents.cpp
-  helpers/wxCustomEvents.h
   helpers/wxHelpers.cpp
   helpers/wxHelpers.h
   helpers/wxLogEvent.h
@@ -77,8 +75,6 @@ add_library(CemuWxGui STATIC
   LoggingWindow.h
   MainWindow.cpp
   MainWindow.h
-  MemorySearcherTool.cpp
-  MemorySearcherTool.h
   PadViewFrame.cpp
   PadViewFrame.h
   TitleManager.cpp
@@ -94,6 +90,8 @@ add_library(CemuWxGui STATIC
 add_library(CemuWxGuiCommon STATIC
   components/TextList.cpp
   components/TextList.h
+  helpers/wxCustomEvents.cpp
+  helpers/wxCustomEvents.h
 )
 
 add_library(CemuWxRendererAdapters STATIC
@@ -124,12 +122,16 @@ add_library(CemuWxDebuggerAdapters STATIC
   debugger/DumpWindow.h
   debugger/ModuleWindow.cpp
   debugger/ModuleWindow.h
+  debugger/MemorySearcherAdapter.cpp
+  debugger/MemorySearcherAdapter.h
   debugger/RegisterWindow.cpp
   debugger/RegisterWindow.h
   debugger/SymbolCtrl.cpp
   debugger/SymbolCtrl.h
   debugger/SymbolWindow.cpp
   debugger/SymbolWindow.h
+  MemorySearcherTool.cpp
+  MemorySearcherTool.h
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp
@@ -192,6 +194,7 @@ target_link_libraries(CemuWxDebuggerAdapters PRIVATE
   CemuComponents
   CemuConfig
   CemuResource
+  CemuUtil
   CemuWxGuiCommon
   PUBLIC wxWidgets::wxWidgets
 )

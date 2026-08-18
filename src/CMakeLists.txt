@@ -141,6 +141,8 @@ cemu_assert_target_has_no_sources(CemuWxGui
 	debugger/BreakpointWindow.h
 	components/TextList.cpp
 	components/TextList.h
+	helpers/wxCustomEvents.cpp
+	helpers/wxCustomEvents.h
 	debugger/DumpCtrl.cpp
 	debugger/DumpCtrl.h
 	debugger/DumpWindow.cpp
@@ -153,12 +155,16 @@ cemu_assert_target_has_no_sources(CemuWxGui
 	debugger/DisasmCtrl.h
 	debugger/ModuleWindow.cpp
 	debugger/ModuleWindow.h
+	debugger/MemorySearcherAdapter.cpp
+	debugger/MemorySearcherAdapter.h
 	debugger/RegisterWindow.cpp
 	debugger/RegisterWindow.h
 	debugger/SymbolCtrl.cpp
 	debugger/SymbolCtrl.h
 	debugger/SymbolWindow.cpp
 	debugger/SymbolWindow.h
+	MemorySearcherTool.cpp
+	MemorySearcherTool.h
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.cpp
 	windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
 	windows/TextureRelationViewer/TextureRelationWindow.cpp

@@ -13,9 +13,11 @@
 #include "wxgui/helpers/wxCustomEvents.h"
 
 class wxComboBox;
+class wxButton;
 class wxDataViewEvent;
 class wxDataViewListCtrl;
 class wxStaticText;
+class wxTextCtrl;
 class wxTimer;
 class wxTimerEvent;
 
@@ -44,8 +46,9 @@ struct TableEntry_t
 class MemorySearcherTool : public wxFrame
 {
 public:
-	MemorySearcherTool(wxFrame* parent);
+	explicit MemorySearcherTool(wxWindow* parent);
 	virtual ~MemorySearcherTool();
+	void PrepareForShutdown();
 
 	void OnTimerTick(wxTimerEvent& event);
 	void OnClose(wxCloseEvent&);
@@ -261,4 +264,3 @@ bool MemorySearcherTool::ConvertStringToType(const std::string& inValue, sint8& 
 //	m_isSearchFinished = true;
 //}
 //
-
