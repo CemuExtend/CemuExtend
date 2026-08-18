@@ -125,13 +125,18 @@ cemu_assert_target_has_no_edge(CemuHostContracts CemuCafe CemuApplication CemuWx
 cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
-cemu_assert_target_has_no_edge(CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters)
+cemu_assert_target_has_no_edge(CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
 cemu_assert_target_has_no_edge(CemuWxGuiCommon CemuCafe CemuApplication CemuWxGui CemuWxDebuggerAdapters)
 cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuWxDeviceAdapters CemuApplication CemuWxGui CemuWxDebuggerAdapters CemuWxRendererAdapters)
 cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.cpp
 	AudioDebuggerWindow.h
+	EmulatedUSBDevices/EmulatedUSBDeviceAdapter.cpp
+	EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h
+	EmulatedUSBDevices/EmulatedUSBDeviceFrame.cpp
+	EmulatedUSBDevices/EmulatedUSBDeviceFrame.h
 	debugger/BreakpointWindow.cpp
 	debugger/BreakpointWindow.h
 	components/TextList.cpp
@@ -349,6 +354,7 @@ if(ENABLE_WXWIDGETS)
 		CemuWxGui
 		CemuWxRendererAdapters
 		CemuWxDebuggerAdapters
+		CemuWxDeviceAdapters
 	)
 endif()
 

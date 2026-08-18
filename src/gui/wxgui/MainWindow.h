@@ -23,7 +23,6 @@ struct GameEntry;
 class DiscordPresence;
 class TitleManager;
 class GraphicPacksWindow2;
-class EmulatedUSBDeviceFrame;
 class wxLaunchGameEvent;
 class CemodPermissionDialog;
 
@@ -192,7 +191,7 @@ private:
 
 	MemorySearcherTool* m_toolWindow = nullptr;
 	TitleManager* m_title_manager = nullptr;
-	EmulatedUSBDeviceFrame* m_usb_devices = nullptr;
+	wxWindow* m_usb_devices = nullptr;
 	PadViewFrame* m_padView = nullptr;
 	GraphicPacksWindow2* m_graphic_pack_window = nullptr;
 	CemodPermissionDialog* m_active_cemod_permission_dialog{};

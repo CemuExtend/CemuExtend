@@ -11,7 +11,7 @@
 #include "input/InputSettings2.h"
 #include "input/HotkeySettings.h"
 #include "debugger/DebuggerWindowAdapter.h"
-#include "EmulatedUSBDevices/EmulatedUSBDeviceFrame.h"
+#include "EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h"
 #include "windows/PPCThreadsViewer/DebugPPCThreadsWindow.h"
 #include "windows/TextureRelationViewer/TextureRelationWindow.h"
 
@@ -1925,13 +1925,18 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 		}
 		else
 		{
-			m_usb_devices = new EmulatedUSBDeviceFrame(this);
-			m_usb_devices->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& event)
+			m_usb_devices = WxDeviceAdapters::CreateEmulatedUSBDeviceWindow(*this);
+			auto* createdWindow = m_usb_devices;
+			m_usb_devices->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event)
 				{
 					if (event.CanVeto()) {
-						m_usb_devices->Show(false);
+						createdWindow->Show(false);
 						event.Veto();
+						return;
 					}
+					if (m_usb_devices == createdWindow)
+						m_usb_devices = nullptr;
+					event.Skip();
 				});
 			m_usb_devices->Show(true);
 		}

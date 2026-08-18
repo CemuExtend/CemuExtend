@@ -85,8 +85,6 @@ add_library(CemuWxGui STATIC
   TitleManager.h
   wxCemuConfig.cpp
   wxCemuConfig.h
-  EmulatedUSBDevices/EmulatedUSBDeviceFrame.cpp
-  EmulatedUSBDevices/EmulatedUSBDeviceFrame.h
   wxcomponents/checktree.cpp
   wxcomponents/checktree.h
   wxgui.h
@@ -136,6 +134,13 @@ add_library(CemuWxDebuggerAdapters STATIC
   windows/PPCThreadsViewer/DebugPPCThreadsWindow.h
   windows/TextureRelationViewer/TextureRelationWindow.cpp
   windows/TextureRelationViewer/TextureRelationWindow.h
+)
+
+add_library(CemuWxDeviceAdapters STATIC
+  EmulatedUSBDevices/EmulatedUSBDeviceAdapter.cpp
+  EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h
+  EmulatedUSBDevices/EmulatedUSBDeviceFrame.cpp
+  EmulatedUSBDevices/EmulatedUSBDeviceFrame.h
 )
 
 set_property(TARGET CemuWxGuiCommon PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -188,6 +193,18 @@ target_link_libraries(CemuWxDebuggerAdapters PRIVATE
   CemuConfig
   CemuResource
   CemuWxGuiCommon
+  PUBLIC wxWidgets::wxWidgets
+)
+
+set_property(TARGET CemuWxDeviceAdapters PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+cemu_use_precompiled_header(CemuWxDeviceAdapters)
+target_include_directories(CemuWxDeviceAdapters PUBLIC "../")
+target_link_libraries(CemuWxDeviceAdapters PRIVATE
+  CemuCafe
+  CemuCommon
+  CemuComponents
+  CemuConfig
+  CemuResource
   PUBLIC wxWidgets::wxWidgets
 )
 
