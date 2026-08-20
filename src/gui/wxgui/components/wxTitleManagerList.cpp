@@ -33,14 +33,16 @@ wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
 	Application::EmulationController& emulationController,
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<Host::IPathProvider> pathProvider,
 	std::function<void(fs::path)> requestLaunch, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
 	  m_emulationController(emulationController),
 	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_pathProvider(std::move(pathProvider)),
 	  m_requestLaunch(std::move(requestLaunch)),
 	  m_lifetime(std::make_shared<std::atomic_bool>(true))
 {
-	cemu_assert(m_uiDispatcher && static_cast<bool>(m_requestLaunch));
+	cemu_assert(m_uiDispatcher && m_pathProvider && static_cast<bool>(m_requestLaunch));
 	AddColumns();
 
 	// tooltip TODO: extract class mb wxPanelTooltip
@@ -693,7 +695,7 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 			.version = entry->version,
 			.region = entry->region,
 			.regionName = entry->region_name.ToStdString(),
-		}))->Show();
+		}, m_pathProvider))->Show();
 		break;
 	case kContextMenuConvertToWUA:
 		

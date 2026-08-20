@@ -89,7 +89,7 @@ foreach(source IN LISTS architecture_sources)
 	endif()
 
 	if(source MATCHES "/src/gui/wxgui/ChecksumTool\\.(h|cpp)$")
-		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeTitleList|TitleInfo|GameInfo2|FSC_|fsc_(open|close|read)|wud_(open|close|readData|getWUDSize)|openssl/|EVP_|SHA256[(:]")
+		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeTitleList|TitleInfo|GameInfo2|FSC_|fsc_(open|close|read)|wud_(open|close|readData|getWUDSize)|openssl/|EVP_|SHA256[(:]|#include[ \t]*[<\"]config/ActiveSettings|ActiveSettings::")
 			list(APPEND checksum_ui_violations "${source}")
 		endif()
 	endif()

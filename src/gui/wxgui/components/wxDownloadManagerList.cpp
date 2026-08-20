@@ -16,7 +16,6 @@
 
 #include <functional>
 
-#include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 

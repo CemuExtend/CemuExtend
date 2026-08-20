@@ -5,12 +5,14 @@
 
 class wxSetGaugeValue;
 namespace Application { class EmulationController; }
+namespace Host { class IPathProvider; }
 
 class ChecksumTool : public wxDialog
 {
 public:
 	ChecksumTool(wxWindow* parent, Application::EmulationController& controller,
-		Application::ManagedContentEntry entry);
+		Application::ManagedContentEntry entry,
+		std::shared_ptr<Host::IPathProvider> pathProvider);
 	~ChecksumTool();
 	
 private:
@@ -35,6 +37,7 @@ private:
 
 	Application::EmulationController& m_controller;
 	Application::ManagedContentEntry m_entry;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	wxColour m_default_color;
 	
 	struct JsonEntry

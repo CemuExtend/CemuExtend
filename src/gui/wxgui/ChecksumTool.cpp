@@ -1,6 +1,7 @@
 #include "wxgui/ChecksumTool.h"
 
 #include "application/EmulationController.h"
+#include "host/contracts/HostContracts.h"
 #include "wxgui/helpers/wxCustomEvents.h"
 #include "util/helpers/helpers.h"
 #include "wxgui/helpers/wxHelpers.h"
@@ -28,8 +29,6 @@
 #include <wx/filedlg.h>
 #include <wx/dirdlg.h>
 #include <wx/msgdlg.h>
-
-#include "config/ActiveSettings.h"
 
 const char kSchema[] = R"(
 {
@@ -76,14 +75,17 @@ const char kSchema[] = R"(
 })";
 
 ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& controller,
-	Application::ManagedContentEntry entry)
+	Application::ManagedContentEntry entry,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY,
 		formatWxString(_("Title checksum of {:08x}-{:08x}"),
 			(uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF)),
 		wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW |
 			wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	  m_controller(controller), m_entry(std::move(entry))
+	  m_controller(controller), m_entry(std::move(entry)),
+	  m_pathProvider(std::move(pathProvider))
 {
+	cemu_assert(m_pathProvider != nullptr);
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	{
@@ -119,7 +121,8 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& c
 				const auto title_id_str = fmt::format("{:016x}", m_entry.titleId);
 				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 
-				const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
+				const auto checksum_path = m_pathProvider->GetUserDataPath(
+					"resources/checksums") / _utf8ToPath(default_file);
 				if (exists(checksum_path))
 					m_verify_online->Enable();
 			}
@@ -201,7 +204,7 @@ void ChecksumTool::LoadOnlineData() const
 
 		std::string latest_commit;
 
-		const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums");
+		const auto checksum_path = m_pathProvider->GetUserDataPath("resources/checksums");
 		if (exists(checksum_path))
 		{
 			std::string current_commit;
@@ -619,7 +622,8 @@ void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
 	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 	
-	const auto checksum_path = ActiveSettings::GetUserDataPath("resources/checksums/{}", default_file);
+	const auto checksum_path = m_pathProvider->GetUserDataPath(
+		"resources/checksums") / _utf8ToPath(default_file);
 	if(!exists(checksum_path))
 		return;
 	

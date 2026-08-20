@@ -17,6 +17,7 @@ namespace Application
 {
 	class EmulationController;
 }
+namespace Host { class IPathProvider; }
 
 class wxTitleManagerList : public wxListView
 {
@@ -25,6 +26,7 @@ public:
 	wxTitleManagerList(wxWindow* parent,
 		Application::EmulationController& emulationController,
 		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<Host::IPathProvider> pathProvider,
 		std::function<void(fs::path)> requestLaunch,
 		wxWindowID id = wxID_ANY);
 	~wxTitleManagerList();
@@ -153,6 +155,7 @@ private:
 
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::function<void(fs::path)> m_requestLaunch;
 	Application::TitleCatalogSubscription m_titleSubscription;
 	std::shared_ptr<std::atomic_bool> m_lifetime;

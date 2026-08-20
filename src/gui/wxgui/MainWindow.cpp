@@ -1899,7 +1899,7 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 		else
 		{
 			m_title_manager = new TitleManager(this, m_emulationController,
-				m_uiDispatcher,
+				m_uiDispatcher, m_pathProvider,
 				[this](fs::path path) {
 					QueueEvent(new wxLaunchGameEvent(std::move(path),
 						wxLaunchGameEvent::INITIATED_BY::TITLE_MANAGER));

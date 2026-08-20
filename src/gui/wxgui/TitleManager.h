@@ -30,6 +30,7 @@ namespace Application
 {
 	class EmulationController;
 }
+namespace Host { class IPathProvider; }
 
 enum class TitleManagerPage
 {
@@ -44,6 +45,7 @@ class TitleManager : public wxFrame
 public:
 	TitleManager(wxWindow* parent, Application::EmulationController& emulationController,
 		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<Host::IPathProvider> pathProvider,
 		std::function<void(fs::path)> requestLaunch,
 		std::function<void()> requestGameListRefresh,
 		TitleManagerPage default_page = TitleManagerPage::TitleManager);
@@ -75,6 +77,7 @@ private:
 	wxNotebook* m_notebook;
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::function<void(fs::path)> m_requestLaunch;
 	std::function<void()> m_requestGameListRefresh;
 

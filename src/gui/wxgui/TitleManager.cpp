@@ -71,7 +71,7 @@ wxPanel* TitleManager::CreateTitleManagerPage()
 	sizer->Add(new wxStaticLine(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL), 0, wxEXPAND | wxALL, 5);
 
 	m_title_list = new wxTitleManagerList(panel, m_emulationController,
-		m_uiDispatcher, m_requestLaunch);
+		m_uiDispatcher, m_pathProvider, m_requestLaunch);
 	m_title_list->SetSizeHints(800, 600);
 	m_title_list->Bind(wxEVT_LIST_ITEM_SELECTED, &TitleManager::OnTitleSelected, this);
 	sizer->Add(m_title_list, 1, wxALL | wxEXPAND, 5);
@@ -227,6 +227,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 TitleManager::TitleManager(wxWindow* parent,
 	Application::EmulationController& emulationController,
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<Host::IPathProvider> pathProvider,
 	std::function<void(fs::path)> requestLaunch,
 	std::function<void()> requestGameListRefresh,
 	TitleManagerPage default_page)
@@ -234,10 +235,11 @@ TitleManager::TitleManager(wxWindow* parent,
 		wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL),
 	  m_emulationController(emulationController),
 	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_pathProvider(std::move(pathProvider)),
 	  m_requestLaunch(std::move(requestLaunch)),
 	  m_requestGameListRefresh(std::move(requestGameListRefresh))
 {
-	cemu_assert(m_uiDispatcher && static_cast<bool>(m_requestLaunch) &&
+	cemu_assert(m_uiDispatcher && m_pathProvider && static_cast<bool>(m_requestLaunch) &&
 		static_cast<bool>(m_requestGameListRefresh));
 	SetIcon(wxICON(X_BOX));
 	
