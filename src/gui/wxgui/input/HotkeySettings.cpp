@@ -2,6 +2,7 @@
 #include "wxgui/canvas/RendererWindowAdapter.h"
 #include "wxgui/WxFrontendContext.h"
 #include "wxgui/WxWindowState.h"
+#include "host/contracts/HostContracts.h"
 #include <config/ActiveSettings.h>
 #include "input/InputManager.h"
 #include "HotkeySettings.h"
@@ -18,9 +19,10 @@
 #include "resource/embedded/resources.h"
 #endif
 
-std::optional<fs::path> GenerateScreenshotFilename(bool isDRC)
+std::optional<fs::path> GenerateScreenshotFilename(
+	const Host::IPathProvider& pathProvider, bool isDRC)
 {
-	fs::path screendir = ActiveSettings::GetUserDataPath("screenshots");
+	fs::path screendir = pathProvider.GetUserDataPath("screenshots");
 	// build screenshot name with format Screenshot_YYYY-MM-DD_HH-MM-SS[_GamePad].png
 	// if the file already exists add a suffix counter (_2.png, _3.png etc)
 	std::time_t time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -77,7 +79,8 @@ bool SaveScreenshotToClipboard(const wxImage& image)
 	return success;
 }
 
-std::optional<std::string> SaveScreenshot(std::vector<uint8> data, int width, int height, bool mainWindow)
+std::optional<std::string> SaveScreenshot(const Host::IPathProvider& pathProvider,
+	std::vector<uint8> data, int width, int height, bool mainWindow)
 {
 #if BOOST_OS_WINDOWS
 	// on Windows wxWidgets uses OLE API for the clipboard
@@ -100,7 +103,7 @@ std::optional<std::string> SaveScreenshot(std::vector<uint8> data, int width, in
 	}
 	if (save_screenshot)
 	{
-		auto imagePath = GenerateScreenshotFilename(mainWindow);
+		auto imagePath = GenerateScreenshotFilename(pathProvider, mainWindow);
 		if (imagePath.has_value() && SaveScreenshotToFile(imagePath.value(), image))
 		{
 			if (mainWindow)
@@ -178,11 +181,13 @@ HotkeySettings::~HotkeySettings()
 }
 
 void HotkeySettings::Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
-	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry)
+	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 {
-	cemu_assert(uiDispatcher && mainWindowRegistry);
+	cemu_assert(uiDispatcher && mainWindowRegistry && pathProvider);
 	s_uiDispatcher = uiDispatcher;
 	s_mainWindowRegistry = mainWindowRegistry;
+	s_pathProvider = pathProvider;
 	s_cfgHotkeyToFuncMap.insert({
 		{&s_cfgHotkeys.toggleFullscreen, [](void) {
 			 RunOnUi([](MainWindow& window) { window.SetFullScreen(!window.IsFullScreen()); });
@@ -195,7 +200,15 @@ void HotkeySettings::Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
 		 }},
 		{&s_cfgHotkeys.takeScreenshot, [](void) {
 			 RunOnUi([](MainWindow&) {
-				 (void)WxRendererAdapters::RequestScreenshot(SaveScreenshot);
+				 auto pathProvider = s_pathProvider.lock();
+				 if (!pathProvider)
+					 return;
+				 (void)WxRendererAdapters::RequestScreenshot(
+					 [pathProvider = std::move(pathProvider)](
+						 const std::vector<std::uint8_t>& data, int width,
+						 int height, bool mainWindow) {
+						 return SaveScreenshot(*pathProvider, data, width, height, mainWindow);
+					 });
 			 });
 		 }},
 		{&s_cfgHotkeys.toggleFastForward, [](void) {

@@ -396,7 +396,8 @@ bool CemuApp::OnInit()
 	m_windowState->app_active = true;
 
 	HotkeySettings::Init(
-		m_frontendContext->uiDispatcher, m_mainWindowRegistry);
+		m_frontendContext->uiDispatcher, m_mainWindowRegistry,
+		m_frontendContext->pathProvider);
 
 	SetTopWindow(m_mainFrame);
 	m_mainFrame->Show();

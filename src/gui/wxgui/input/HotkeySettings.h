@@ -9,12 +9,14 @@
 class HotkeyEntry;
 class IWxUiDispatcher;
 class WxMainWindowRegistry;
+namespace Host { class IPathProvider; }
 
 class HotkeySettings : public wxFrame
 {
 public:
 	static void Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
-		std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry);
+		std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry,
+		std::shared_ptr<Host::IPathProvider> pathProvider);
 
 	static void CaptureInput(wxKeyEvent& event);
 	static void CaptureInput(const ControllerState& currentState, const ControllerState& lastState);
@@ -25,6 +27,7 @@ public:
 private:
 	inline static std::weak_ptr<IWxUiDispatcher> s_uiDispatcher;
 	inline static std::weak_ptr<WxMainWindowRegistry> s_mainWindowRegistry;
+	inline static std::weak_ptr<Host::IPathProvider> s_pathProvider;
 	static void RunOnUi(std::function<void(class MainWindow&)> action);
 	static std::unordered_map<sHotkeyCfg*, std::function<void(void)>> s_cfgHotkeyToFuncMap;
 	inline static std::unordered_map<uint16, std::function<void(void)>> s_keyboardHotkeyToFuncMap{};
