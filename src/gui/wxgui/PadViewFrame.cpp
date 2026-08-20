@@ -1,6 +1,7 @@
 #include "interface/WindowSystem.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/PadViewFrame.h"
+#include "wxgui/WxWindowState.h"
 #include "wxgui/canvas/IRenderCanvas.h"
 
 #include <wx/display.h>
@@ -25,8 +26,6 @@
 #endif
 #include "wxHelper.h"
 
-extern WindowSystem::WindowInfo g_window_info;
-
 #define PAD_MIN_WIDTH  320
 #define PAD_MIN_HEIGHT 180
 
@@ -34,12 +33,15 @@ PadViewFrame::PadViewFrame(wxFrame* parent,
 	Application::EmulationController& emulationController,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+	std::shared_ptr<WxWindowState> windowState)
 	: wxFrame(nullptr, wxID_ANY, _("GamePad View"), wxDefaultPosition, wxDefaultSize, wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxCLOSE_BOX | wxWANTS_CHARS),
 	  m_emulationController(emulationController),
 	  m_windowMetrics(std::move(windowMetrics)), m_nativeSurfaces(std::move(nativeSurfaces)),
-	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
+	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher)),
+	  m_windowState(std::move(windowState))
 {
+	cemu_assert(m_windowState != nullptr);
 	m_nativeWindowHandle = initHandleContextFromWxWidgetsWindow(this);
 	m_nativeWindowPublication =
 		m_nativeSurfacePublisher->PublishPadWindow(m_nativeWindowHandle);
@@ -49,13 +51,15 @@ PadViewFrame::PadViewFrame(wxFrame* parent,
 
 	SetMinClientSize({ PAD_MIN_WIDTH, PAD_MIN_HEIGHT });
 
-	SetPosition({ g_window_info.restored_pad_x, g_window_info.restored_pad_y });
-	if (g_window_info.restored_pad_width >= PAD_MIN_WIDTH && g_window_info.restored_pad_height >= PAD_MIN_HEIGHT)
-		SetClientSize({ g_window_info.restored_pad_width, g_window_info.restored_pad_height });
+	SetPosition({ m_windowState->restored_pad_x, m_windowState->restored_pad_y });
+	if (m_windowState->restored_pad_width >= PAD_MIN_WIDTH &&
+		m_windowState->restored_pad_height >= PAD_MIN_HEIGHT)
+		SetClientSize({ m_windowState->restored_pad_width,
+			m_windowState->restored_pad_height });
 	else
 		SetClientSize(wxSize(854, 480));
 
-	if (g_window_info.pad_maximized)
+	if (m_windowState->pad_maximized)
 		Maximize();
 
 	Bind(wxEVT_SIZE, &PadViewFrame::OnSizeEvent, this);
@@ -65,19 +69,20 @@ PadViewFrame::PadViewFrame(wxFrame* parent,
 
 	Bind(wxEVT_SET_WINDOW_TITLE, &PadViewFrame::OnSetWindowTitle, this);
 
-	g_window_info.pad_open = true;
+	m_windowState->pad_open = true;
 }
 
 PadViewFrame::~PadViewFrame()
 {
 	PrepareForDestroy();
-	g_window_info.pad_open = false;
+	m_windowState->pad_open = false;
 }
 
 void PadViewFrame::PrepareForDestroy()
 {
 	if (std::exchange(m_preparedForDestroy, true))
 		return;
+	m_windowState->pad_open = false;
 	if (m_render_canvas)
 	{
 		if (auto* canvas = dynamic_cast<IRenderCanvas*>(m_render_canvas))
@@ -89,10 +94,10 @@ void PadViewFrame::PrepareForDestroy()
 bool PadViewFrame::Initialize()
 {
 	const wxSize client_size = GetClientSize();
-	g_window_info.pad_width = client_size.GetWidth();
-	g_window_info.pad_height = client_size.GetHeight();
-	g_window_info.phys_pad_width = ToPhys(client_size.GetWidth());
-	g_window_info.phys_pad_height = ToPhys(client_size.GetHeight());
+	m_windowState->pad_width = client_size.GetWidth();
+	m_windowState->pad_height = client_size.GetHeight();
+	m_windowState->phys_pad_width = ToPhys(client_size.GetWidth());
+	m_windowState->phys_pad_height = ToPhys(client_size.GetHeight());
 
 	return true;
 }
@@ -154,17 +159,17 @@ void PadViewFrame::OnSizeEvent(wxSizeEvent& event)
 {
 	if (!IsMaximized() && !IsFullScreen())
 	{
-		g_window_info.restored_pad_width = GetSize().x;
-		g_window_info.restored_pad_height = GetSize().y;
+		m_windowState->restored_pad_width = GetSize().x;
+		m_windowState->restored_pad_height = GetSize().y;
 	}
-	g_window_info.pad_maximized = IsMaximized() && !IsFullScreen();
+	m_windowState->pad_maximized = IsMaximized() && !IsFullScreen();
 
 	const wxSize client_size = GetClientSize();
-	g_window_info.pad_width = client_size.GetWidth();
-	g_window_info.pad_height = client_size.GetHeight();
-	g_window_info.phys_pad_width = ToPhys(client_size.GetWidth());
-	g_window_info.phys_pad_height = ToPhys(client_size.GetHeight());
-	g_window_info.pad_dpi_scale = GetDPIScaleFactor();
+	m_windowState->pad_width = client_size.GetWidth();
+	m_windowState->pad_height = client_size.GetHeight();
+	m_windowState->phys_pad_width = ToPhys(client_size.GetWidth());
+	m_windowState->phys_pad_height = ToPhys(client_size.GetHeight());
+	m_windowState->pad_dpi_scale = GetDPIScaleFactor();
 
 	event.Skip();
 }
@@ -173,19 +178,19 @@ void PadViewFrame::OnDPIChangedEvent(wxDPIChangedEvent& event)
 {
 	event.Skip();
 	const wxSize client_size = GetClientSize();
-	g_window_info.pad_width = client_size.GetWidth();
-	g_window_info.pad_height = client_size.GetHeight();
-	g_window_info.phys_pad_width = ToPhys(client_size.GetWidth());
-	g_window_info.phys_pad_height = ToPhys(client_size.GetHeight());
-	g_window_info.pad_dpi_scale = GetDPIScaleFactor();
+	m_windowState->pad_width = client_size.GetWidth();
+	m_windowState->pad_height = client_size.GetHeight();
+	m_windowState->phys_pad_width = ToPhys(client_size.GetWidth());
+	m_windowState->phys_pad_height = ToPhys(client_size.GetHeight());
+	m_windowState->pad_dpi_scale = GetDPIScaleFactor();
 }
 
 void PadViewFrame::OnMoveEvent(wxMoveEvent& event)
 {
 	if (!IsMaximized() && !IsFullScreen())
 	{
-		g_window_info.restored_pad_x = GetPosition().x;
-		g_window_info.restored_pad_y = GetPosition().y;
+		m_windowState->restored_pad_x = GetPosition().x;
+		m_windowState->restored_pad_y = GetPosition().y;
 	}
 }
 
@@ -259,7 +264,7 @@ void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t c
 		.contentWidth = ToPhys(size.GetWidth()),
 		.contentHeight = ToPhys(size.GetHeight()),
 		.insideContent = inside,
-		.focused = g_window_info.app_active.load(),
+		.focused = m_windowState->app_active.load(),
 	});
 }
 
@@ -315,7 +320,6 @@ void PadViewFrame::OnSetWindowTitle(wxCommandEvent& event)
 
 void PadViewFrame::AsyncSetTitle(std::string_view windowTitle)
 {
-	wxCommandEvent set_title_event(wxEVT_SET_WINDOW_TITLE);
-	set_title_event.SetString(wxString::FromUTF8(windowTitle));
-	QueueEvent(set_title_event.Clone());
+	cemu_assert_debug(wxIsMainThread());
+	SetTitle(wxString::FromUTF8(windowTitle));
 }

@@ -113,8 +113,6 @@ std::optional<std::string> SaveScreenshot(std::vector<uint8> data, int width, in
 	return std::nullopt;
 }
 
-extern WindowSystem::WindowInfo g_window_info;
-
 std::unordered_map<sHotkeyCfg*, std::function<void(void)>> HotkeySettings::s_cfgHotkeyToFuncMap;
 
 struct HotkeyEntry

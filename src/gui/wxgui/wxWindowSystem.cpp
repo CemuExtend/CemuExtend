@@ -25,6 +25,8 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/CemuApp.h"
 #include "wxgui/MainWindow.h"
+#include "wxgui/WxWindowState.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "config/ActiveSettings.h"
 #include "config/NetworkSettings.h"
 #include "config/CemuConfig.h"
@@ -36,28 +38,17 @@
 #include <future>
 #include <unordered_map>
 
-WindowSystem::WindowInfo g_window_info{};
-
-std::shared_mutex g_mutex;
-MainWindow* g_mainFrame = nullptr;
-
 namespace
 {
 	std::atomic_bool s_wxFrontendStopping{false};
-	std::atomic_uint64_t s_nextNativeSurfacePublication{1};
-	Host::NativeSurfacePublication s_mainWindowPublication{};
-	Host::NativeSurfacePublication s_padWindowPublication{};
-	Host::NativeSurfacePublication s_mainCanvasPublication{};
-	Host::NativeSurfacePublication s_padCanvasPublication{};
 	std::mutex s_wxDispatchMutex;
-	struct NativeHandleLease
-	{
-		explicit NativeHandleLease(std::shared_mutex& mutex) : lock(mutex) {}
-		std::shared_lock<std::shared_mutex> lock;
-	};
+	std::mutex s_runtimeObjectsMutex;
 	std::mutex s_pendingUiMutex;
 	std::uint64_t s_nextPendingUiId{1};
 	std::unordered_map<std::uint64_t, std::function<void()>> s_pendingUiCancellation;
+	std::shared_ptr<class WxHostServices> s_wxHostServices;
+	std::shared_ptr<WxWindowState> s_wxWindowState;
+	std::shared_ptr<WxMainWindowRegistry> s_mainWindowRegistry;
 
 	std::optional<std::uint64_t> RegisterPendingUi(std::function<void()> cancel)
 	{
@@ -106,21 +97,47 @@ namespace
 			callback();
 	}
 
+	std::optional<uint32> ResolvePlatformKeyCode(WindowSystem::PlatformKeyCodes key)
+	{
+		switch (key)
+		{
+#if BOOST_OS_WINDOWS
+		case WindowSystem::PlatformKeyCodes::LCONTROL: return VK_LCONTROL;
+		case WindowSystem::PlatformKeyCodes::RCONTROL: return VK_RCONTROL;
+		case WindowSystem::PlatformKeyCodes::TAB: return VK_TAB;
+		case WindowSystem::PlatformKeyCodes::ESCAPE: return VK_ESCAPE;
+#elif BOOST_OS_LINUX || BOOST_OS_BSD
+		case WindowSystem::PlatformKeyCodes::LCONTROL: return GDK_KEY_Control_L;
+		case WindowSystem::PlatformKeyCodes::RCONTROL: return GDK_KEY_Control_R;
+		case WindowSystem::PlatformKeyCodes::TAB: return GDK_KEY_Tab;
+		case WindowSystem::PlatformKeyCodes::ESCAPE: return GDK_KEY_Escape;
+#elif BOOST_OS_MACOS
+		case WindowSystem::PlatformKeyCodes::LCONTROL: return kVK_Control;
+		case WindowSystem::PlatformKeyCodes::RCONTROL: return kVK_RightControl;
+		case WindowSystem::PlatformKeyCodes::TAB: return kVK_Tab;
+		case WindowSystem::PlatformKeyCodes::ESCAPE: return kVK_Escape;
+#endif
+		}
+		return std::nullopt;
+	}
+
 	template<typename Callback>
 	bool QueueFrameCallback(Callback&& callback)
 	{
+		auto registry = WxFrontendRuntime::GetMainWindowRegistry();
+		if (!registry)
+			return false;
+		auto sharedCallback = std::make_shared<std::decay_t<Callback>>(
+			std::forward<Callback>(callback));
+		auto invoke = [registry = std::move(registry),
+			sharedCallback = std::move(sharedCallback)] {
+			return registry->InvokeForUi(
+				[&](MainWindow& frame) { (*sharedCallback)(frame); });
+		};
+		if (wxIsMainThread())
+			return !s_wxFrontendStopping.load(std::memory_order_acquire) && invoke();
 		return WindowSystem::QueueUi(
-			[callback = std::forward<Callback>(callback)]() mutable {
-			MainWindow* frame{};
-			{
-				std::shared_lock lock(g_mutex);
-				frame = g_mainFrame;
-			}
-			// Frame destruction and CallAfter callbacks are serialized by the wx UI
-			// thread, so the pointer remains valid for this callback invocation.
-			if (frame)
-				callback(*frame);
-		});
+			[invoke = std::move(invoke)]() mutable { (void)invoke(); });
 	}
 
 	class WxHostServices final : public Host::IWindowMetrics,
@@ -134,105 +151,78 @@ namespace
 		public Input::IControllerStateObserver
 	{
 	public:
+		explicit WxHostServices(std::shared_ptr<WxWindowState> state,
+			std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry)
+			: m_state(std::move(state)),
+			  m_mainWindowRegistry(std::move(mainWindowRegistry)) {}
+
 		Host::WindowMetricsSnapshot GetWindowMetrics() const override
 		{
-			std::shared_lock lock(g_mutex);
-			return {
-				.appActive = g_window_info.app_active,
-				.padOpen = g_window_info.pad_open,
-				.fullscreen = g_window_info.is_fullscreen,
-				.debuggerFocused = g_window_info.debugger_focused,
-				.width = g_window_info.width,
-				.height = g_window_info.height,
-				.physicalWidth = g_window_info.phys_width,
-				.physicalHeight = g_window_info.phys_height,
-				.padWidth = g_window_info.pad_width,
-				.padHeight = g_window_info.pad_height,
-				.physicalPadWidth = g_window_info.phys_pad_width,
-				.physicalPadHeight = g_window_info.phys_pad_height,
-				.dpiScale = g_window_info.dpi_scale,
-				.padDpiScale = g_window_info.pad_dpi_scale,
-			};
+			return m_state->Metrics();
 		}
 
 		Host::NativeSurfaceSnapshot GetNativeSurfaces() const override
 		{
-			auto lease = std::make_shared<NativeHandleLease>(g_mutex);
-			return {
-				.mainWindow = g_window_info.window_main,
-				.padWindow = g_window_info.window_pad,
-				.mainSurface = g_window_info.canvas_main,
-				.padSurface = g_window_info.canvas_pad,
-				.lifetime = std::move(lease),
-			};
+			return m_state->NativeSurfaces();
 		}
 
 		Host::NativeSurfacePublication PublishMainWindow(
 			Host::NativeWindowHandle handle) override
 		{
-			std::unique_lock lock(g_mutex);
-			g_window_info.window_main = handle;
-			return s_mainWindowPublication = s_nextNativeSurfacePublication.fetch_add(1);
+			return m_state->PublishMainWindow(handle);
 		}
 
 		void ClearMainWindow(Host::NativeSurfacePublication publication) override
 		{
-			std::unique_lock lock(g_mutex);
-			if (s_mainWindowPublication == publication)
-				g_window_info.window_main = {};
+			m_state->ClearMainWindow(publication);
 		}
 
 		Host::NativeSurfacePublication PublishPadWindow(
 			Host::NativeWindowHandle handle) override
 		{
-			std::unique_lock lock(g_mutex);
-			g_window_info.window_pad = handle;
-			return s_padWindowPublication = s_nextNativeSurfacePublication.fetch_add(1);
+			return m_state->PublishPadWindow(handle);
 		}
 
 		void ClearPadWindow(Host::NativeSurfacePublication publication) override
 		{
-			std::unique_lock lock(g_mutex);
-			if (s_padWindowPublication == publication)
-				g_window_info.window_pad = {};
+			m_state->ClearPadWindow(publication);
 		}
 
 		Host::NativeSurfacePublication PublishCanvas(bool mainWindow,
 			Host::NativeWindowHandle handle) override
 		{
-			std::unique_lock lock(g_mutex);
-			(mainWindow ? g_window_info.canvas_main : g_window_info.canvas_pad) = handle;
-			auto& publication = mainWindow ?
-				s_mainCanvasPublication : s_padCanvasPublication;
-			return publication = s_nextNativeSurfacePublication.fetch_add(1);
+			return m_state->PublishCanvas(mainWindow, handle);
 		}
 
 		void ClearCanvas(bool mainWindow,
 			Host::NativeSurfacePublication publication) override
 		{
-			std::unique_lock lock(g_mutex);
-			auto& current = mainWindow ? g_window_info.canvas_main : g_window_info.canvas_pad;
-			const auto currentPublication = mainWindow ?
-				s_mainCanvasPublication : s_padCanvasPublication;
-			if (currentPublication == publication)
-				current = {};
+			m_state->ClearCanvas(mainWindow, publication);
 		}
 
 		bool IsKeyDown(Host::Key key) const override
 		{
 			using Host::Key;
+			WindowSystem::PlatformKeyCodes platformKey;
 			switch (key)
 			{
 			case Key::LeftControl:
-				return WindowSystem::IsKeyDown(WindowSystem::PlatformKeyCodes::LCONTROL);
+				platformKey = WindowSystem::PlatformKeyCodes::LCONTROL;
+				break;
 			case Key::RightControl:
-				return WindowSystem::IsKeyDown(WindowSystem::PlatformKeyCodes::RCONTROL);
+				platformKey = WindowSystem::PlatformKeyCodes::RCONTROL;
+				break;
 			case Key::Tab:
-				return WindowSystem::IsKeyDown(WindowSystem::PlatformKeyCodes::TAB);
+				platformKey = WindowSystem::PlatformKeyCodes::TAB;
+				break;
 			case Key::Escape:
-				return WindowSystem::IsKeyDown(WindowSystem::PlatformKeyCodes::ESCAPE);
+				platformKey = WindowSystem::PlatformKeyCodes::ESCAPE;
+				break;
+			default:
+				return false;
 			}
-			return false;
+			const auto nativeKey = ResolvePlatformKeyCode(platformKey);
+			return nativeKey && m_state->IsKeyDown(*nativeKey);
 		}
 
 		std::string GetKeyName(std::uint32_t key) const override
@@ -242,11 +232,7 @@ namespace
 
 		std::vector<Host::KeyState> GetKeyStates() const override
 		{
-			std::vector<Host::KeyState> states;
-			g_window_info.iter_keystates([&states](const auto& state) {
-				states.push_back({state.first, state.second});
-			});
-			return states;
+			return m_state->KeyStates();
 		}
 
 		void OnControllerState(const ControllerState& current,
@@ -282,34 +268,25 @@ namespace
 		{
 			if (wxIsMainThread())
 			{
-				MainWindow* frame{};
-				{
-					std::shared_lock lock(g_mutex);
-					frame = g_mainFrame;
-				}
-				const bool available = frame &&
-					!s_wxFrontendStopping.load(std::memory_order_acquire);
-				if (available)
-					frame->RecreateCanvasForHost();
-				return available;
+				if (s_wxFrontendStopping.load(std::memory_order_acquire))
+					return false;
+				return m_mainWindowRegistry->InvokeForUi(
+					[](MainWindow& frame) { frame.RecreateCanvasForHost(); });
 			}
 			auto result = std::make_shared<std::promise<bool>>();
 			auto future = result->get_future();
 			const auto pending = RegisterPendingUi([result] { result->set_value(false); });
 			if (!pending)
 				return false;
-			if (!WindowSystem::QueueUi([id = *pending, result] {
+			auto mainWindowRegistry = m_mainWindowRegistry;
+			if (!WindowSystem::QueueUi([id = *pending, result,
+				mainWindowRegistry = std::move(mainWindowRegistry)] {
 				if (!IsPendingUi(id))
 					return;
-				MainWindow* frame{};
-				{
-					std::shared_lock lock(g_mutex);
-					frame = g_mainFrame;
-				}
-				const bool available = frame &&
-					!s_wxFrontendStopping.load(std::memory_order_acquire);
-				if (available)
-					frame->RecreateCanvasForHost();
+				const bool available =
+					!s_wxFrontendStopping.load(std::memory_order_acquire) &&
+					mainWindowRegistry->InvokeForUi(
+						[](MainWindow& frame) { frame.RecreateCanvasForHost(); });
 				if (CompletePendingUi(id))
 					result->set_value(available);
 			}))
@@ -320,25 +297,35 @@ namespace
 			return future.get();
 		}
 
+	private:
+		std::shared_ptr<WxWindowState> m_state;
+		std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 	};
-
-	std::shared_ptr<WxHostServices> s_wxHostServices;
 
 	void InstallWxHostServices()
 	{
 		s_wxFrontendStopping.store(false, std::memory_order_release);
-		s_wxHostServices = std::make_shared<WxHostServices>();
+		auto windowState = std::make_shared<WxWindowState>();
+		auto mainWindowRegistry = std::make_shared<WxMainWindowRegistry>();
+		auto hostServices = std::make_shared<WxHostServices>(
+			windowState, mainWindowRegistry);
+		{
+			std::scoped_lock lock(s_runtimeObjectsMutex);
+			s_wxWindowState = windowState;
+			s_mainWindowRegistry = mainWindowRegistry;
+			s_wxHostServices = hostServices;
+		}
 		Application::ConnectHost({
-			.windowMetrics = std::static_pointer_cast<Host::IWindowMetrics>(s_wxHostServices),
-			.clipboard = std::static_pointer_cast<Host::IClipboard>(s_wxHostServices),
-			.externalLauncher = std::static_pointer_cast<Host::IExternalLauncher>(s_wxHostServices),
-			.inputFocus = std::static_pointer_cast<Host::IInputFocus>(s_wxHostServices),
-			.canvas = std::static_pointer_cast<Host::ICanvasHost>(s_wxHostServices),
+			.windowMetrics = std::static_pointer_cast<Host::IWindowMetrics>(hostServices),
+			.clipboard = std::static_pointer_cast<Host::IClipboard>(hostServices),
+			.externalLauncher = std::static_pointer_cast<Host::IExternalLauncher>(hostServices),
+			.inputFocus = std::static_pointer_cast<Host::IInputFocus>(hostServices),
+			.canvas = std::static_pointer_cast<Host::ICanvasHost>(hostServices),
 		});
-		InputManager::instance().ConfigureHost(*s_wxHostServices, *s_wxHostServices,
-			*s_wxHostServices, *s_wxHostServices);
+		InputManager::instance().ConfigureHost(*hostServices, *hostServices,
+			*hostServices, *hostServices);
 		InputManager::instance().Start();
-		IAudioAPI::ConfigureNativeSurfaceProvider(s_wxHostServices.get());
+		IAudioAPI::ConfigureNativeSurfaceProvider(hostServices.get());
 	}
 }
 
@@ -369,17 +356,32 @@ void Frontend::Run()
 
 std::shared_ptr<Host::IWindowMetrics> WindowSystem::GetWindowMetricsHost()
 {
+	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
 }
 
 std::shared_ptr<Host::INativeSurfaceProvider> WindowSystem::GetNativeSurfaceHost()
 {
+	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
 }
 
 std::shared_ptr<Host::INativeSurfacePublisher> WindowSystem::GetNativeSurfacePublisher()
 {
+	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
+}
+
+std::shared_ptr<WxWindowState> WxFrontendRuntime::GetWindowState()
+{
+	std::scoped_lock lock(s_runtimeObjectsMutex);
+	return s_wxWindowState;
+}
+
+std::shared_ptr<WxMainWindowRegistry> WxFrontendRuntime::GetMainWindowRegistry()
+{
+	std::scoped_lock lock(s_runtimeObjectsMutex);
+	return s_mainWindowRegistry;
 }
 
 bool WindowSystem::IsShuttingDown()
@@ -459,11 +461,19 @@ bool WindowSystem::QueueUi(std::function<void()> callback,
 void WindowSystem::ReleaseHostServices()
 {
 	BeginShutdown();
+	std::shared_ptr<WxHostServices> hostServices;
+	{
+		std::scoped_lock lock(s_runtimeObjectsMutex);
+		if (!s_wxHostServices)
+			return;
+		hostServices = std::move(s_wxHostServices);
+		s_mainWindowRegistry.reset();
+		s_wxWindowState.reset();
+	}
 	InputManager::instance().Shutdown();
 	Application::DisconnectHost();
 	InputManager::instance().ClearHost();
 	IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
-	s_wxHostServices.reset();
 }
 
 void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WindowSystem::ErrorCategory> /*errorId*/)
@@ -474,11 +484,6 @@ void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view ti
 	else
 		caption = wxString::FromUTF8(title);
 	wxMessageBox(wxString::FromUTF8(message), caption, wxOK | wxCENTRE | wxICON_ERROR);
-}
-
-WindowSystem::WindowInfo& WindowSystem::GetWindowInfo()
-{
-	return g_window_info;
 }
 
 void WindowSystem::GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
@@ -540,17 +545,17 @@ void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 
 	if (isIdle)
 	{
-		std::shared_lock lock(g_mutex);
-		if (g_mainFrame)
-			g_mainFrame->AsyncSetTitle(windowText);
+		(void)QueueFrameCallback([windowText = std::move(windowText)](MainWindow& frame) {
+			frame.AsyncSetTitle(windowText);
+		});
 		return;
 	}
 	if (isLoading)
 	{
 		windowText.append(" - Loading...");
-		std::shared_lock lock(g_mutex);
-		if (g_mainFrame)
-			g_mainFrame->AsyncSetTitle(windowText);
+		(void)QueueFrameCallback([windowText = std::move(windowText)](MainWindow& frame) {
+			frame.AsyncSetTitle(windowText);
+		});
 		return;
 	}
 
@@ -620,28 +625,28 @@ void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 	else
 		windowText.append(fmt::format(" - FPS: {:.2f}", fps));
 
-	std::shared_lock lock(g_mutex);
-	if (g_mainFrame)
-	{
-		g_mainFrame->AsyncSetTitle(windowText);
-		auto* pad = g_mainFrame->GetPadView();
+	(void)QueueFrameCallback([windowText = std::move(windowText), fps](MainWindow& frame) {
+		frame.AsyncSetTitle(windowText);
+		auto* pad = frame.GetPadView();
 		if (pad)
 			pad->AsyncSetTitle(fmt::format("{} - FPS: {:.02f}", _("GamePad View").utf8_string(), fps));
-	}
+	});
 }
 
 void WindowSystem::GetWindowSize(int& w, int& h)
 {
-	w = g_window_info.width;
-	h = g_window_info.height;
+	auto state = WxFrontendRuntime::GetWindowState();
+	w = state ? state->width.load() : 0;
+	h = state ? state->height.load() : 0;
 }
 
 void WindowSystem::GetPadWindowSize(int& w, int& h)
 {
-	if (g_window_info.pad_open)
+	auto state = WxFrontendRuntime::GetWindowState();
+	if (state && state->pad_open.load())
 	{
-		w = g_window_info.pad_width;
-		h = g_window_info.pad_height;
+		w = state->pad_width.load();
+		h = state->pad_height.load();
 	}
 	else
 	{
@@ -652,16 +657,18 @@ void WindowSystem::GetPadWindowSize(int& w, int& h)
 
 void WindowSystem::GetWindowPhysSize(int& w, int& h)
 {
-	w = g_window_info.phys_width;
-	h = g_window_info.phys_height;
+	auto state = WxFrontendRuntime::GetWindowState();
+	w = state ? state->phys_width.load() : 0;
+	h = state ? state->phys_height.load() : 0;
 }
 
 void WindowSystem::GetPadWindowPhysSize(int& w, int& h)
 {
-	if (g_window_info.pad_open)
+	auto state = WxFrontendRuntime::GetWindowState();
+	if (state && state->pad_open.load())
 	{
-		w = g_window_info.phys_pad_width;
-		h = g_window_info.phys_pad_height;
+		w = state->phys_pad_width.load();
+		h = state->phys_pad_height.load();
 	}
 	else
 	{
@@ -672,75 +679,32 @@ void WindowSystem::GetPadWindowPhysSize(int& w, int& h)
 
 double WindowSystem::GetWindowDPIScale()
 {
-	return g_window_info.dpi_scale;
+	auto state = WxFrontendRuntime::GetWindowState();
+	return state ? state->dpi_scale.load() : 1.0;
 }
 
 double WindowSystem::GetPadDPIScale()
 {
-	return g_window_info.pad_open ? g_window_info.pad_dpi_scale.load() : 1.0;
+	auto state = WxFrontendRuntime::GetWindowState();
+	return state && state->pad_open.load() ? state->pad_dpi_scale.load() : 1.0;
 }
 
 bool WindowSystem::IsPadWindowOpen()
 {
-	return g_window_info.pad_open;
+	auto state = WxFrontendRuntime::GetWindowState();
+	return state && state->pad_open.load();
 }
 
 bool WindowSystem::IsKeyDown(uint32 key)
 {
-	return g_window_info.get_keystate(key);
+	auto state = WxFrontendRuntime::GetWindowState();
+	return state && state->IsKeyDown(key);
 }
 
 bool WindowSystem::IsKeyDown(PlatformKeyCodes platformKey)
 {
-	uint32 key = 0;
-
-	switch (platformKey)
-	{
-#if BOOST_OS_WINDOWS
-	case PlatformKeyCodes::LCONTROL:
-		key = VK_LCONTROL;
-		break;
-	case PlatformKeyCodes::RCONTROL:
-		key = VK_RCONTROL;
-		break;
-	case PlatformKeyCodes::TAB:
-		key = VK_TAB;
-		break;
-	case PlatformKeyCodes::ESCAPE:
-		key = VK_ESCAPE;
-		break;
-#elif BOOST_OS_LINUX || BOOST_OS_BSD
-	case PlatformKeyCodes::LCONTROL:
-		key = GDK_KEY_Control_L;
-		break;
-	case PlatformKeyCodes::RCONTROL:
-		key = GDK_KEY_Control_R;
-		break;
-	case PlatformKeyCodes::TAB:
-		key = GDK_KEY_Tab;
-		break;
-	case PlatformKeyCodes::ESCAPE:
-		key = GDK_KEY_Escape;
-		break;
-#elif BOOST_OS_MACOS
-	case PlatformKeyCodes::LCONTROL:
-		key = kVK_Control;
-		break;
-	case PlatformKeyCodes::RCONTROL:
-		key = kVK_RightControl;
-		break;
-	case PlatformKeyCodes::TAB:
-		key = kVK_Tab;
-		break;
-	case PlatformKeyCodes::ESCAPE:
-		key = kVK_Escape;
-		break;
-#endif
-	default:
-		return false;
-	}
-
-	return WindowSystem::IsKeyDown(key);
+	const auto key = ResolvePlatformKeyCode(platformKey);
+	return key && WindowSystem::IsKeyDown(*key);
 }
 
 std::string WindowSystem::GetKeyCodeName(uint32 button)
@@ -792,28 +756,24 @@ bool WindowSystem::InputConfigWindowHasFocus()
 
 void WindowSystem::NotifyGameLoaded()
 {
-	std::shared_lock lock(g_mutex);
-	if (g_mainFrame)
-	{
-		g_mainFrame->OnGameLoaded();
-		g_mainFrame->UpdateSettingsAfterGameLaunch();
-	}
+	(void)QueueFrameCallback([](MainWindow& frame) {
+		frame.OnGameLoaded();
+		frame.UpdateSettingsAfterGameLaunch();
+	});
 }
 
 void WindowSystem::NotifyGameExited()
 {
-	std::shared_lock lock(g_mutex);
-	if (g_mainFrame)
-		g_mainFrame->RestoreSettingsAfterGameExited();
+	(void)QueueFrameCallback([](MainWindow& frame) {
+		frame.RestoreSettingsAfterGameExited();
+	});
 }
 
 void WindowSystem::RefreshGameList()
 {
-	std::shared_lock lock(g_mutex);
-	if (g_mainFrame)
-	{
-		g_mainFrame->RequestGameListRefresh();
-	}
+	(void)QueueFrameCallback([](MainWindow& frame) {
+		frame.RequestGameListRefresh();
+	});
 }
 
 void WindowSystem::CaptureInput(const ControllerState& currentState, const ControllerState& lastState)
@@ -823,5 +783,6 @@ void WindowSystem::CaptureInput(const ControllerState& currentState, const Contr
 
 bool WindowSystem::IsFullScreen()
 {
-	return g_window_info.is_fullscreen;
+	auto state = WxFrontendRuntime::GetWindowState();
+	return state && state->is_fullscreen.load();
 }

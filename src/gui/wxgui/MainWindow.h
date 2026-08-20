@@ -24,6 +24,8 @@ class TitleManager;
 class GraphicPacksWindow2;
 class wxLaunchGameEvent;
 class CemodPermissionDialog;
+class WxWindowState;
+class WxMainWindowRegistry;
 
 wxDECLARE_EVENT(wxEVT_LAUNCH_GAME, wxLaunchGameEvent);
 wxDECLARE_EVENT(wxEVT_SET_WINDOW_TITLE, wxCommandEvent);
@@ -61,7 +63,9 @@ public:
 	explicit MainWindow(Application::EmulationController& emulationController,
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+		std::shared_ptr<WxWindowState> windowState,
+		std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry);
 	~MainWindow();
 
     void CreateGameListAndStatusBar();
@@ -201,6 +205,8 @@ private:
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+	std::shared_ptr<WxWindowState> m_windowState;
+	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 	Host::NativeWindowHandle m_nativeWindowHandle;
 	Host::NativeSurfacePublication m_nativeWindowPublication{};
 	Application::EventSubscription m_applicationEventSubscription;
@@ -286,5 +292,3 @@ private:
 
 wxDECLARE_EVENT_TABLE();
 };
-
-extern MainWindow* g_mainFrame;

@@ -2,6 +2,8 @@
 #include "interface/WindowSystem.h"
 #include "wxCemuConfig.h"
 #include "wxgui/MainWindow.h"
+#include "wxgui/WxWindowState.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "wxgui/wxgui.h"
 #include "config/CemuConfig.h"
 #include "config/ActiveSettings.h"
@@ -31,10 +33,6 @@
 
 
 wxIMPLEMENT_APP_NO_MAIN(CemuApp);
-
-// defined in wxWindowSystem.cpp
-extern WindowSystem::WindowInfo g_window_info;
-extern std::shared_mutex g_mutex;
 
 // forward declarations from main.cpp
 void UnitTests();
@@ -362,14 +360,23 @@ bool CemuApp::OnInit()
 
 	Bind(wxEVT_ACTIVATE_APP, &CemuApp::ActivateApp, this);
 
+	m_windowState = WxFrontendRuntime::GetWindowState();
+	m_mainWindowRegistry = WxFrontendRuntime::GetMainWindowRegistry();
+	cemu_assert(m_windowState && m_mainWindowRegistry);
 	m_mainFrame = new MainWindow(m_emulationController,
 		WindowSystem::GetWindowMetricsHost(), WindowSystem::GetNativeSurfaceHost(),
-		WindowSystem::GetNativeSurfacePublisher());
+		WindowSystem::GetNativeSurfacePublisher(), m_windowState,
+		m_mainWindowRegistry);
+	auto* createdMainFrame = m_mainFrame;
+	m_mainFrame->Bind(wxEVT_DESTROY,
+		[this, createdMainFrame](wxWindowDestroyEvent& event) {
+			if (event.GetEventObject() == createdMainFrame &&
+				m_mainFrame == createdMainFrame)
+				m_mainFrame = nullptr;
+			event.Skip();
+		});
 
-	{
-		std::unique_lock lock(g_mutex);
-		g_window_info.app_active = true;
-	}
+	m_windowState->app_active = true;
 
 	HotkeySettings::Init(m_mainFrame);
 
@@ -632,20 +639,21 @@ int CemuApp::FilterEvent(wxEvent& event)
 	// native focus acquisition fails, events still target the render canvas and
 	// naturally fall back to the ordinary raw/text path instead of deadlocking
 	// the guest input field.
-	const bool native_text_input_event = g_mainFrame != nullptr &&
-		g_mainFrame->IsCemuExtendTextInputEvent(event);
+	const bool native_text_input_event = m_mainFrame != nullptr &&
+		m_mainFrame->IsCemuExtendTextInputEvent(event);
 	if(event.GetEventType() == wxEVT_KEY_DOWN)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto usage = CemuExtendUsbHidUsage(key_event);
-		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
+		m_windowState->SetKeyState(
+			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
 		// A single-line native IME owns ordinary editing keys, but Enter is
 		// also the guest field's submit action. Mirror Enter only after any
 		// preedit has been committed; the first Enter used to accept a Japanese
 		// conversion candidate must remain private to the OS IME.
 		const bool native_submit = native_text_input_event &&
 			(usage == 0x28 || usage == 0x58) &&
-			g_mainFrame->CanSubmitCemuExtendTextInput();
+			m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
 			m_emulationController.SubmitKeyboard(usage, true,
 				CemuExtendKeyModifiers(key_event));
@@ -654,10 +662,11 @@ int CemuApp::FilterEvent(wxEvent& event)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto usage = CemuExtendUsbHidUsage(key_event);
-		g_window_info.set_keystate(fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
+		m_windowState->SetKeyState(
+			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
 		const bool native_submit = native_text_input_event &&
 			(usage == 0x28 || usage == 0x58) &&
-			g_mainFrame->CanSubmitCemuExtendTextInput();
+			m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
 			m_emulationController.SubmitKeyboard(usage, false,
 				CemuExtendKeyModifiers(key_event));
@@ -677,7 +686,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 		m_emulationController.PointerFocusChanged(activate_event.GetActive());
 		if(!activate_event.GetActive())
 		{
-			g_window_info.set_keystatesup();
+			m_windowState->ReleaseKeyStates();
 			m_emulationController.KeyboardFocusLost();
 		}
 	}
@@ -691,12 +700,12 @@ int CemuApp::FilterEvent(wxEvent& event)
 		if (target_window && event.GetEventType() == wxEVT_ACTIVATE && !((wxActivateEvent&)event).GetActive())
 			target_window = nullptr;
 
-		g_window_info.debugger_focused = target_window &&
+		m_windowState->debugger_focused = target_window &&
 			WxDebuggerAdapters::IsDebuggerWindowOrChild(target_window);
 	}
 	else if (!WxDebuggerAdapters::HasDebuggerWindow())
 	{
-		g_window_info.debugger_focused = false;
+		m_windowState->debugger_focused = false;
 	}
 
 	return wxApp::FilterEvent(event);
@@ -857,6 +866,6 @@ void CemuApp::CreateDefaultCemuFiles()
 
 void CemuApp::ActivateApp(wxActivateEvent& event)
 {
-	g_window_info.app_active = event.GetActive();
+	m_windowState->app_active = event.GetActive();
 	event.Skip();
 }

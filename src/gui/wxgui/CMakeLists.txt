@@ -44,6 +44,9 @@ add_library(CemuWxGui STATIC
   GraphicPacksWindow2.cpp
   GraphicPacksWindow2.h
   wxWindowSystem.cpp
+  WxWindowState.cpp
+  WxWindowState.h
+  WxFrontendRuntime.h
   helpers/wxControlObject.h
   helpers/wxCustomData.h
   helpers/wxHelpers.cpp

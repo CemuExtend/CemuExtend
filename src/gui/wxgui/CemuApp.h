@@ -5,6 +5,8 @@
 #include <wx/app.h>
 
 class MainWindow;
+class WxWindowState;
+class WxMainWindowRegistry;
 class wxTimer;
 class wxTimerEvent;
 
@@ -37,6 +39,8 @@ private:
 	// use-case events to whichever frontend is currently attached.
 	Application::EmulationController m_emulationController;
 	MainWindow* m_mainFrame = nullptr;
+	std::shared_ptr<WxWindowState> m_windowState;
+	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 #if BOOST_OS_MACOS
 	void OnSDLEventPumpTimer(wxTimerEvent& event);
 	wxTimer* m_sdlEventPumpTimer = nullptr;

@@ -23,6 +23,8 @@
 #include "wxHelper.h"
 #include "helpers/wxHelpers.h"
 #include "PadViewFrame.h"
+#include "WxWindowState.h"
+#include "WxFrontendRuntime.h"
 
 #if defined(__WXGTK__)
 #include <gtk/gtk.h>
@@ -71,18 +73,6 @@
 #if BOOST_OS_WINDOWS
 #include <windows.h>
 #endif
-
-extern WindowSystem::WindowInfo g_window_info;
-extern std::shared_mutex g_mutex;
-
-namespace
-{
-	struct MainWindowNativeHandleLease
-	{
-		explicit MainWindowNativeHandleLease(std::shared_mutex& mutex) : lock(mutex) {}
-		std::shared_lock<std::shared_mutex> lock;
-	};
-}
 
 enum
 {
@@ -328,24 +318,26 @@ namespace
 MainWindow::MainWindow(Application::EmulationController& emulationController,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+	std::shared_ptr<WxWindowState> windowState,
+	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry)
 	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER),
 	  m_emulationController(emulationController),
 	  m_windowMetrics(std::move(windowMetrics)),
 	  m_nativeSurfaces(std::move(nativeSurfaces)),
 	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher)),
+	  m_windowState(std::move(windowState)),
+	  m_mainWindowRegistry(std::move(mainWindowRegistry)),
 	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
-	cemu_assert(m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher);
+	cemu_assert(m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher &&
+		m_windowState && m_mainWindowRegistry);
 #ifdef __WXMAC__
 	// Not necessary to set wxApp::s_macExitMenuItemId as automatically handled
 	wxApp::s_macAboutMenuItemId = MAINFRAME_MENU_ID_HELP_ABOUT;
 	wxApp::s_macPreferencesMenuItemId = MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS;
 #endif
-	{
-		std::unique_lock lock(g_mutex);
-		g_mainFrame = this;
-	}
+	m_mainWindowRegistry->Register(*this, m_applicationEventLifetime);
 	m_nativeWindowHandle = initHandleContextFromWxWidgetsWindow(this);
 	m_nativeWindowPublication =
 		m_nativeSurfacePublisher->PublishMainWindow(m_nativeWindowHandle);
@@ -361,7 +353,9 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 		});
 	m_emulationController.SetTextInputWakeCallback(+[] {
 		(void)WindowSystem::QueueUi([] {
-			if (g_mainFrame != nullptr) g_mainFrame->RefreshCemuExtendTextInput();
+			if (const auto registry = WxFrontendRuntime::GetMainWindowRegistry())
+				(void)registry->InvokeForUi(
+					[](MainWindow& frame) { frame.RefreshCemuExtendTextInput(); });
 		});
 	});
 	RecreateMenu();
@@ -439,6 +433,7 @@ MainWindow::~MainWindow()
 {
 	ClosePpcThreadsViewer();
 	m_applicationEventLifetime->store(false, std::memory_order_release);
+	m_mainWindowRegistry->Unregister(*this);
 	m_applicationEventSubscription.Reset();
 	WindowSystem::BeginShutdown();
 	HotkeySettings::Shutdown();
@@ -459,8 +454,6 @@ MainWindow::~MainWindow()
 
 	m_timer->Stop();
 
-	std::unique_lock lock(g_mutex);
-	g_mainFrame = nullptr;
 }
 
 void MainWindow::HandleApplicationEvent(const Application::Event& event)
@@ -697,7 +690,7 @@ void MainWindow::RollbackFailedLaunchUi()
 	m_launched_game_name.clear();
 	if (WindowSystem::IsFullScreen())
 	{
-		g_window_info.is_fullscreen = false;
+		m_windowState->is_fullscreen = false;
 		ShowFullScreen(false);
 		SetMenuVisible(true);
 	}
@@ -890,7 +883,8 @@ void MainWindow::TogglePadView()
 			return;
 
 		m_padView = new PadViewFrame(this, m_emulationController,
-			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
+			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher,
+			m_windowState);
 
 		m_padView->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnPadClose, this);
 
@@ -1478,16 +1472,16 @@ void MainWindow::LoadSettings()
 
 	if (config.pad_position != Vector2i{ -1,-1 })
 	{
-		g_window_info.restored_pad_x = config.pad_position.x;
-		g_window_info.restored_pad_y = config.pad_position.y;
+		m_windowState->restored_pad_x = config.pad_position.x;
+		m_windowState->restored_pad_y = config.pad_position.y;
 	}
 
 	if (config.pad_size != Vector2i{ -1,-1 })
 	{
-		g_window_info.restored_pad_width = config.pad_size.x;
-		g_window_info.restored_pad_height = config.pad_size.y;
+		m_windowState->restored_pad_width = config.pad_size.x;
+		m_windowState->restored_pad_height = config.pad_size.y;
 
-		g_window_info.pad_maximized = config.pad_maximized;
+		m_windowState->pad_maximized = config.pad_maximized;
 	}
 
 	this->TogglePadView();
@@ -1519,16 +1513,16 @@ void MainWindow::SaveSettings()
 
 	config.pad_open = m_padView != nullptr;
 
-	if (config.pad_position != Vector2i{ -1,-1 } && g_window_info.restored_pad_x != -1)
+	if (config.pad_position != Vector2i{ -1,-1 } && m_windowState->restored_pad_x != -1)
 	{
-		config.pad_position.x = g_window_info.restored_pad_x;
-		config.pad_position.y = g_window_info.restored_pad_y;
+		config.pad_position.x = m_windowState->restored_pad_x;
+		config.pad_position.y = m_windowState->restored_pad_y;
 	}
-	if (config.pad_size != Vector2i{ -1,-1 } && g_window_info.restored_pad_width != -1)
+	if (config.pad_size != Vector2i{ -1,-1 } && m_windowState->restored_pad_width != -1)
 	{
-		config.pad_size.x = g_window_info.restored_pad_width;
-		config.pad_size.y = g_window_info.restored_pad_height;
-		config.pad_maximized = g_window_info.pad_maximized;
+		config.pad_size.x = m_windowState->restored_pad_width;
+		config.pad_size.y = m_windowState->restored_pad_height;
+		config.pad_maximized = m_windowState->pad_maximized;
 	}
 	else
 	{
@@ -1594,7 +1588,7 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 		.contentWidth = physicalWidth,
 		.contentHeight = physicalHeight,
 		.insideContent = inside,
-		.focused = g_window_info.app_active.load(),
+		.focused = m_windowState->app_active.load(),
 		.flags = flags,
 	});
 }
@@ -1623,7 +1617,7 @@ void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t d
 		.contentWidth = physicalWidth,
 		.contentHeight = physicalHeight,
 		.insideContent = inside,
-		.focused = g_window_info.app_active.load(),
+		.focused = m_windowState->app_active.load(),
 		.flags = static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative),
 	});
 }
@@ -1689,7 +1683,7 @@ bool MainWindow::ApplyCemuExtendPointerPolicy()
 {
 	const auto policy = m_emulationController.GetPointerPolicy();
 	const auto decision = m_cemuextend_bridge.ApplyPointerPolicy(policy.mode,
-		policy.cursor, policy.flags, g_window_info.app_active.load(),
+		policy.cursor, policy.flags, m_windowState->app_active.load(),
 		m_render_canvas != nullptr);
 	UpdateCemuExtendPointerConfinement(decision.confine);
 
@@ -1976,9 +1970,8 @@ void MainWindow::OnGameLoaded()
 
 void MainWindow::AsyncSetTitle(std::string_view windowTitle)
 {
-	wxCommandEvent set_title_event(wxEVT_SET_WINDOW_TITLE);
-	set_title_event.SetString(wxString::FromUTF8(windowTitle));
-	g_mainFrame->QueueEvent(set_title_event.Clone());
+	cemu_assert_debug(wxIsMainThread());
+	SetTitle(wxString::FromUTF8(windowTitle));
 }
 
 bool MainWindow::IsCemuExtendTextInputEvent(const wxEvent& event) const
@@ -2051,8 +2044,10 @@ void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 		return;
 	}
 	++m_cemuextend_text_input_focus_retries;
-	(void)WindowSystem::QueueUi([this, sequence] {
-		if (g_mainFrame == this)
+	const std::weak_ptr<std::atomic_bool> lifetime = m_applicationEventLifetime;
+	(void)WindowSystem::QueueUi([this, lifetime, sequence] {
+		const auto alive = lifetime.lock();
+		if (alive && alive->load(std::memory_order_acquire))
 			EnsureCemuExtendTextInputFocus(sequence);
 	});
 }
@@ -2320,11 +2315,11 @@ void MainWindow::OnSizeEvent(wxSizeEvent& event)
 		m_restored_size = GetSize();
 
 	const wxSize client_size = GetClientSize();
-	g_window_info.width = client_size.GetWidth();
-	g_window_info.height = client_size.GetHeight();
-	g_window_info.phys_width = ToPhys(client_size.GetWidth());
-	g_window_info.phys_height = ToPhys(client_size.GetHeight());
-	g_window_info.dpi_scale = GetDPIScaleFactor();
+	m_windowState->width = client_size.GetWidth();
+	m_windowState->height = client_size.GetHeight();
+	m_windowState->phys_width = ToPhys(client_size.GetWidth());
+	m_windowState->phys_height = ToPhys(client_size.GetHeight());
+	m_windowState->dpi_scale = GetDPIScaleFactor();
 
 	if (m_debugger_window && m_debugger_window->IsShown())
 		WxDebuggerAdapters::NotifyParentMove(*m_debugger_window, GetPosition(), event.GetSize());
@@ -2338,11 +2333,11 @@ void MainWindow::OnDPIChangedEvent(wxDPIChangedEvent& event)
 {
 	event.Skip();
 	const wxSize client_size = GetClientSize();
-	g_window_info.width = client_size.GetWidth();
-	g_window_info.height = client_size.GetHeight();
-	g_window_info.phys_width = ToPhys(client_size.GetWidth());
-	g_window_info.phys_height = ToPhys(client_size.GetHeight());
-	g_window_info.dpi_scale = GetDPIScaleFactor();
+	m_windowState->width = client_size.GetWidth();
+	m_windowState->height = client_size.GetHeight();
+	m_windowState->phys_width = ToPhys(client_size.GetWidth());
+	m_windowState->phys_height = ToPhys(client_size.GetHeight());
+	m_windowState->dpi_scale = GetDPIScaleFactor();
 }
 
 void MainWindow::OnMove(wxMoveEvent& event)
@@ -2434,7 +2429,7 @@ void MainWindow::SetFullScreen(bool state)
 	}
 	if (state && !m_game_launched)
 		return;
-	g_window_info.is_fullscreen = state;
+	m_windowState->is_fullscreen = state;
 	m_fullscreenMenuItem->Check(state);
 
 	this->ShowFullScreen(state);
@@ -3145,14 +3140,35 @@ void MainWindow::OnGraphicWindowOpen(wxTitleIdEvent& event)
 
 void MainWindow::RequestGameListRefresh()
 {
-	auto* evt = new wxCommandEvent(wxEVT_REQUEST_GAMELIST_REFRESH);
-	wxQueueEvent(g_mainFrame, evt);
+	auto registry = WxFrontendRuntime::GetMainWindowRegistry();
+	if (!registry)
+		return;
+	auto request = [registry = std::move(registry)] {
+		(void)registry->InvokeForUi([](MainWindow& frame) {
+			frame.QueueEvent(new wxCommandEvent(wxEVT_REQUEST_GAMELIST_REFRESH));
+		});
+	};
+	if (wxIsMainThread())
+		request();
+	else
+		(void)WindowSystem::QueueUi(std::move(request));
 }
 
 void MainWindow::RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIATED_BY initiatedBy)
 {
-	wxLaunchGameEvent evt(filePath, initiatedBy);
-	wxPostEvent(g_mainFrame, evt);
+	auto registry = WxFrontendRuntime::GetMainWindowRegistry();
+	if (!registry)
+		return;
+	auto request = [registry = std::move(registry),
+		filePath = std::move(filePath), initiatedBy] {
+		(void)registry->InvokeForUi([&](MainWindow& frame) {
+			frame.QueueEvent(new wxLaunchGameEvent(filePath, initiatedBy));
+		});
+	};
+	if (wxIsMainThread())
+		request();
+	else
+		(void)WindowSystem::QueueUi(std::move(request));
 }
 
 void MainWindow::RecreateCanvasForHost()
@@ -3165,7 +3181,12 @@ void MainWindow::RecreateCanvasForHost()
 void MainWindow::HandlePpcProcessExit()
 {
 	// this is called from the emulated PPC thread, so queue an event instead of handling it directly
-	wxQueueEvent(g_mainFrame, new wxCommandEvent(wxEVT_REQUEST_GAME_EXIT));
+	const std::weak_ptr<std::atomic_bool> lifetime = m_applicationEventLifetime;
+	(void)WindowSystem::QueueUi([this, lifetime] {
+		const auto alive = lifetime.lock();
+		if (alive && alive->load(std::memory_order_acquire))
+			QueueEvent(new wxCommandEvent(wxEVT_REQUEST_GAME_EXIT));
+	});
 }
 
 bool MainWindow::ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,

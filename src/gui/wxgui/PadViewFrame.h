@@ -8,6 +8,8 @@
 
 #include <cstdint>
 
+class WxWindowState;
+
 #define WM_CREATE_PAD	(WM_USER+1)
 #define WM_DESTROY_PAD	(WM_USER+2)
 
@@ -20,7 +22,8 @@ public:
 	PadViewFrame(wxFrame* parent, Application::EmulationController& emulationController,
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+		std::shared_ptr<WxWindowState> windowState);
 	~PadViewFrame();
 
 	bool Initialize();
@@ -50,6 +53,7 @@ private:
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+	std::shared_ptr<WxWindowState> m_windowState;
 	Host::NativeWindowHandle m_nativeWindowHandle;
 	Host::NativeSurfacePublication m_nativeWindowPublication{};
 	bool m_preparedForDestroy{};

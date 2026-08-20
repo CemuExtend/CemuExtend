@@ -2261,8 +2261,9 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 
 		m_graphic_device->Enable();
-		auto devices = WxRendererAdapters::EnumerateVulkanDevices(
-			WindowSystem::GetWindowInfo().window_main);
+		auto nativeSurfaceProvider = WindowSystem::GetNativeSurfaceHost();
+		const auto surfaces = nativeSurfaceProvider->GetNativeSurfaces();
+		auto devices = WxRendererAdapters::EnumerateVulkanDevices(surfaces.mainWindow);
 		if(!devices.empty())
 		{
 			for(const auto& device : devices)
