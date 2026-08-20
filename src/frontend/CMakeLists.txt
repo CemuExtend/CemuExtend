@@ -1,6 +1,7 @@
 add_library(CemuHostContracts INTERFACE)
 target_sources(CemuHostContracts INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/../host/contracts/HostContracts.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/FrontendRuntime.h"
 )
 target_include_directories(CemuHostContracts INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 

@@ -1,4 +1,4 @@
-#include "gui/interface/WindowSystem.h"
+#include "frontend/FrontendRuntime.h"
 #include "util/crypto/aes128.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -251,7 +251,7 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int
 #endif
 	if (!LaunchSettings::HandleCommandline(lpCmdLine))
 		return 0;
-	WindowSystem::Create();
+	Frontend::Run();
 	return 0;
 }
 
@@ -265,7 +265,7 @@ int main(int argc, char* argv[])
 #endif
 	if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;
-	WindowSystem::Create();
+	Frontend::Run();
 	return 0;
 }
 
@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 #endif
     if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;
-	WindowSystem::Create();
+	Frontend::Run();
 	return 0;
 }
 #endif

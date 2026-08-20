@@ -1,5 +1,5 @@
 #include "util/crypto/aes128.h"
-#include "gui/interface/WindowSystem.h"
+#include "frontend/FrontendRuntime.h"
 #include "Common/FileStream.h"
 
 void CemuCommonInit();
@@ -36,7 +36,7 @@ void mainEmulatorLLE()
 	memory_initPhysicalLayout();
 	
 	// start GUI thread
-	WindowSystem::Create();
+	Frontend::Run();
 	// load kernel ancast image
 	loadPPCBootrom();
 	loadEncryptedPPCAncastKernel();

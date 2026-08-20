@@ -2,6 +2,7 @@
 #include "input/InputManager.h"
 #include "audio/IAudioAPI.h"
 #include "application/ApplicationHost.h"
+#include "frontend/FrontendRuntime.h"
 #include "interface/WindowSystem.h"
 
 #include "helpers/wxHelpers.h"
@@ -301,7 +302,7 @@ void _wxLaunch()
 }
 #endif
 
-void WindowSystem::Create()
+void Frontend::Run()
 {
 	SetThreadName("cemu");
 	InstallWxHostServices();

@@ -88,7 +88,6 @@ namespace WindowSystem
 		ShowErrorDialog(message, "", errorCategory);
 	}
 
-	void Create();
 	std::shared_ptr<Host::IWindowMetrics> GetWindowMetricsHost();
 	std::shared_ptr<Host::INativeSurfaceProvider> GetNativeSurfaceHost();
 	// Prevents new asynchronous host work from being queued while wx tears down.
