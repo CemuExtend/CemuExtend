@@ -51,6 +51,8 @@ PairingDialog::PairingDialog(wxWindow* parent)
 
 PairingDialog::~PairingDialog()
 {
+	StopWorker();
+	DeletePendingEvents();
 	Unbind(wxEVT_CLOSE_WINDOW, &PairingDialog::OnClose, this);
 }
 
@@ -58,9 +60,7 @@ void PairingDialog::OnClose(wxCloseEvent& event)
 {
 	event.Skip();
 
-	m_threadShouldQuit = true;
-	if (m_thread.joinable())
-		m_thread.join();
+	StopWorker();
 }
 
 void PairingDialog::OnCancelButton(const wxCommandEvent& event)
@@ -74,6 +74,14 @@ void PairingDialog::OnGaugeUpdate(wxCommandEvent& event)
 
 	switch (state)
 	{
+	case PairingState::SearchBlocking:
+		m_cancelButton->Disable();
+		break;
+
+	case PairingState::SearchResumed:
+		m_cancelButton->Enable();
+		break;
+
 	case PairingState::Pairing:
 	{
 		m_text->SetLabel(_("Found controller. Pairing..."));
@@ -179,7 +187,7 @@ void PairingDialog::WorkerThread()
 		{
 			.dwSize = sizeof(BLUETOOTH_DEVICE_INFO)};
 
-	while (!m_threadShouldQuit)
+	while (!m_threadShouldQuit.load(std::memory_order_acquire))
 	{
 		HBLUETOOTH_DEVICE_FIND deviceFind = BluetoothFindFirstDevice(&searchParams, &info);
 		if (deviceFind == nullptr)
@@ -188,7 +196,7 @@ void PairingDialog::WorkerThread()
 			return;
 		}
 
-		while (!m_threadShouldQuit)
+		while (!m_threadShouldQuit.load(std::memory_order_acquire))
 		{
 			if (info.szName == wiimoteName || info.szName == wiiUProControllerName)
 			{
@@ -244,9 +252,9 @@ void PairingDialog::WorkerThread()
 
 	// Search for device
 	inquiry_info* infos = nullptr;
-	m_cancelButton->Disable();
+	UpdateCallback(PairingState::SearchBlocking);
 	const auto respCount = hci_inquiry(hostId, 7, 4, LIAC_LAP, &infos, IREQ_CACHE_FLUSH);
-	m_cancelButton->Enable();
+	UpdateCallback(PairingState::SearchResumed);
 	if (respCount <= 0)
 	{
 		UpdateCallback(PairingState::SearchFailed);
@@ -254,7 +262,7 @@ void PairingDialog::WorkerThread()
 	}
 	stdx::scope_exit infoFree([&]() { bt_free(infos);});
 
-	if (m_threadShouldQuit)
+	if (m_threadShouldQuit.load(std::memory_order_acquire))
 		return;
 
 	// Open dev to read name
@@ -270,7 +278,7 @@ void PairingDialog::WorkerThread()
 		const auto& addr = devInfo.bdaddr;
 		const auto err =  hci_read_remote_name(hostDev, &addr, HCI_MAX_NAME_LENGTH, nameBuffer,
 								 2000);
-		if (m_threadShouldQuit)
+		if (m_threadShouldQuit.load(std::memory_order_acquire))
 			return;
 		if (err || !isWiimoteName(nameBuffer))
 			continue;
@@ -294,7 +302,16 @@ void PairingDialog::WorkerThread()
 #endif
 void PairingDialog::UpdateCallback(PairingState state)
 {
+	if (m_threadShouldQuit.load(std::memory_order_acquire))
+		return;
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS_PAIR);
 	event->SetInt((int)state);
 	wxQueueEvent(this, event);
+}
+
+void PairingDialog::StopWorker()
+{
+	m_threadShouldQuit.store(true, std::memory_order_release);
+	if (m_thread.joinable())
+		m_thread.join();
 }

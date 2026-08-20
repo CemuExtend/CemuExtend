@@ -5,6 +5,9 @@
 #include <wx/gauge.h>
 #include <wx/stattext.h>
 
+#include <atomic>
+#include <thread>
+
 class PairingDialog : public wxDialog
 {
 public:
@@ -15,6 +18,8 @@ private:
     enum class PairingState
     {
         Pairing,
+		SearchBlocking,
+		SearchResumed,
         Finished,
         NoBluetoothAvailable,
 	  	SearchFailed,
@@ -28,11 +33,12 @@ private:
 
     void WorkerThread();
     void UpdateCallback(PairingState state);
+	void StopWorker();
 
     wxStaticText* m_text;
     wxGauge* m_gauge;
     wxButton* m_cancelButton;
 
     std::thread m_thread;
-    bool m_threadShouldQuit = false;
+	std::atomic_bool m_threadShouldQuit{};
 };
