@@ -2522,7 +2522,7 @@ void MainWindow::OnTimer(wxTimerEvent& event)
 			wxMessageDialog dialog(this, _("There's a new update available.\nDo you want to update?"), _("Update notification"), wxCENTRE | wxYES_NO);
 			if(dialog.ShowModal() == wxID_YES)
 			{
-				CemuUpdateWindow update_window(this);
+				CemuUpdateWindow update_window(this, m_pathProvider);
 				update_window.ShowModal();
 			}
 		}
@@ -2810,7 +2810,7 @@ void MainWindow::OnHelpAbout(wxCommandEvent& event)
 
 void MainWindow::OnHelpUpdate(wxCommandEvent& event)
 {
-	CemuUpdateWindow test(this);
+	CemuUpdateWindow test(this, m_pathProvider);
 	test.ShowModal();
 }
 

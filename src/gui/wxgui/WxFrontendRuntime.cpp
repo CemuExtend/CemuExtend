@@ -196,6 +196,11 @@ namespace
 			return ActiveSettings::GetMlcPath();
 		}
 
+		fs::path GetExecutablePath() const override
+		{
+			return ActiveSettings::GetExecutablePath();
+		}
+
 		Host::NativeSurfaceSnapshot GetNativeSurfaces() const override
 		{
 			return m_state->NativeSurfaces();

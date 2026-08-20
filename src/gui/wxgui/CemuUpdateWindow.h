@@ -8,11 +8,14 @@
 #include <wx/checkbox.h>
 
 #include <curl/system.h>
+#include <memory>
+
+namespace Host { class IPathProvider; }
 
 class CemuUpdateWindow : public wxDialog
 {
 public:
-	CemuUpdateWindow(wxWindow* parent);
+	CemuUpdateWindow(wxWindow* parent, std::shared_ptr<Host::IPathProvider> pathProvider);
 	~CemuUpdateWindow();
 
 	static std::future<bool> IsUpdateAvailableAsync();
@@ -63,6 +66,7 @@ private:
 	std::string m_downloadUrl, m_changelogUrl;
 	int m_gaugeMaxValue = 0;
 
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::thread m_thread;
 	fs::path m_restartFile;
 	bool m_restartRequired = false;

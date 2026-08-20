@@ -3,7 +3,7 @@
 #include "Common/version.h"
 #include "util/helpers/helpers.h"
 #include "util/helpers/SystemException.h"
-#include "config/ActiveSettings.h"
+#include "host/contracts/HostContracts.h"
 #include "Common/FileStream.h"
 #include "wxCemuConfig.h"
 
@@ -29,10 +29,13 @@ wxDEFINE_EVENT(wxEVT_RESULT, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_PROGRESS, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_PROGRESS, wxCommandEvent);
 
-CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent)
+CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Cemu update"), wxDefaultPosition, wxDefaultSize,
-		wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX)
+		wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+	  m_pathProvider(std::move(pathProvider))
 {
+	cemu_assert(static_cast<bool>(m_pathProvider));
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	m_gauge = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_HORIZONTAL);
 	m_gauge->SetValue(0);
@@ -497,14 +500,14 @@ void CemuUpdateWindow::WorkerThread()
 					break;
 
 				// apply update
-				fs::path exePath = ActiveSettings::GetExecutablePath();
+				fs::path exePath = m_pathProvider->GetExecutablePath();
 #if BOOST_OS_WINDOWS
 				std::wstring target_directory = exePath.parent_path().generic_wstring();
 				if (target_directory[target_directory.size() - 1] == '/')
 					target_directory = target_directory.substr(0, target_directory.size() - 1); // remove trailing /
 
 				// get exe name
-				const auto exec = ActiveSettings::GetExecutablePath();
+				const auto exec = m_pathProvider->GetExecutablePath();
 				const auto target_exe = fs::path(exec).replace_extension("exe.backup");
 				fs::rename(exec, target_exe);
 				m_restartFile = exec;				
@@ -615,7 +618,7 @@ void CemuUpdateWindow::OnClose(wxCloseEvent& event)
 	if (m_restartRequired)
 	{
 	    const auto tmppath = fs::temp_directory_path() / L"cemu_update/Cemu.dmg";
-	    fs::path exePath = ActiveSettings::GetExecutablePath().parent_path();
+	    fs::path exePath = m_pathProvider->GetExecutablePath().parent_path();
 		const auto appResources = exePath.parent_path().parent_path() / L"Resources";
 		const auto apppath = appResources / L"update.sh";
 	    execlp("sh", "sh", apppath.c_str(), NULL);
