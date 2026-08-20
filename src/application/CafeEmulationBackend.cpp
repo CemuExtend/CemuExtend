@@ -50,7 +50,7 @@ namespace Application
 {
 	namespace
 	{
-		struct DownloadRefreshForwarder
+		struct ApplicationEventForwarder
 		{
 			std::mutex mutex;
 			ApplicationEvents* events{};
@@ -1359,21 +1359,29 @@ namespace Application
 			{
 				CafeSystem::SetEventSink(this);
 				InputManager::instance().ConfigureEmulationContext(*this);
-				m_downloadRefreshForwarder = std::make_shared<DownloadRefreshForwarder>();
-				m_downloadRefreshForwarder->events = &m_events;
-				DownloadManager::SetGameListRefreshCallback([forwarder = m_downloadRefreshForwarder] {
+				m_eventForwarder = std::make_shared<ApplicationEventForwarder>();
+				m_eventForwarder->events = &m_events;
+				DownloadManager::SetGameListRefreshCallback([forwarder = m_eventForwarder] {
 					std::scoped_lock lock(forwarder->mutex);
 					if (forwarder->events)
 						forwarder->events->Publish({.type = EventType::GameListRefreshRequested});
 				});
+				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(
+					[forwarder = m_eventForwarder] {
+						std::scoped_lock lock(forwarder->mutex);
+						if (forwarder->events)
+							forwarder->events->Publish(
+								{.type = EventType::TextInputWakeRequested});
+					});
 			}
 
 			~CafeEmulationBackend() override
 			{
+				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback({});
 				DownloadManager::SetGameListRefreshCallback({});
 				{
-					std::scoped_lock lock(m_downloadRefreshForwarder->mutex);
-					m_downloadRefreshForwarder->events = nullptr;
+					std::scoped_lock lock(m_eventForwarder->mutex);
+					m_eventForwarder->events = nullptr;
 				}
 				InputManager::instance().ClearEmulationContext(*this);
 				CafeSystem::SetEventSink(nullptr);
@@ -1667,12 +1675,6 @@ namespace Application
 			{
 				cemuextend_hle::Cex2Host::Instance().TextCompositionEvent(
 					text, preedit, cursor, selectionLength);
-			}
-
-			void SetTextInputWakeCallback(std::function<void()> callback) override
-			{
-				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(
-					std::move(callback));
 			}
 
 			void SaveCemodPermissionDecisions(std::uint64_t titleId,
@@ -3461,7 +3463,7 @@ namespace Application
 
 		private:
 			ApplicationEvents& m_events;
-			std::shared_ptr<DownloadRefreshForwarder> m_downloadRefreshForwarder;
+			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
 			mutable std::shared_mutex m_inputLifecycleMutex;
 			bool m_inputAvailable{};
 		};

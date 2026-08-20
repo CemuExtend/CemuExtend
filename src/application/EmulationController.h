@@ -195,7 +195,6 @@ namespace Application
 		virtual void SubmitTextComposition(std::string_view text,
 			std::string_view preedit, std::uint32_t cursor,
 			std::uint32_t selectionLength) = 0;
-		virtual void SetTextInputWakeCallback(std::function<void()> callback) = 0;
 		virtual void SaveCemodPermissionDecisions(std::uint64_t titleId,
 			std::span<const CemodPermissionDecision> decisions) = 0;
 		[[nodiscard]] virtual std::vector<CemodPackage> DiscoverCemodCatalog() = 0;
@@ -244,7 +243,6 @@ namespace Application
 		[[nodiscard]] TextInputState GetTextInputState();
 		void SubmitTextComposition(std::string_view text, std::string_view preedit,
 			std::uint32_t cursor, std::uint32_t selectionLength);
-		void SetTextInputWakeCallback(std::function<void()> callback);
 		void SaveCemodPermissionDecisions(std::uint64_t titleId,
 			std::span<const CemodPermissionDecision> decisions);
 		[[nodiscard]] std::vector<CemodPackage> DiscoverCemodCatalog();

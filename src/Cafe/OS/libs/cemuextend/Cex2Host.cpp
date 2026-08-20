@@ -319,6 +319,14 @@ struct Cex2Host::Impl
 		workReady.notify_one();
 	}
 
+	void QueueTextInputWakeLocked()
+	{
+		if (!textInputWakeCallback)
+			return;
+		auto callback = textInputWakeCallback;
+		Enqueue([callback = std::move(callback)] { callback(); });
+	}
+
 	void Complete(std::uint32_t sessionId, std::uint64_t addressSpaceId, std::uint32_t generation,
 		std::uint32_t correlationId, Status status, std::span<const std::byte> payload = {})
 	{
@@ -622,7 +630,7 @@ struct Cex2Host::Impl
 				session.textInput.caretY = header.caretY.get();
 				session.textInput.lineHeight = header.lineHeight.get();
 				session.textInput.initialText.assign(text);
-				if (textInputWakeCallback) textInputWakeCallback();
+				QueueTextInputWakeLocked();
 				return MakeResponse(request, Status::Ok);
 			}
 			if (request.operation.get() == static_cast<std::uint16_t>(InputOperation::GetHostMouse))
@@ -1327,8 +1335,8 @@ std::int32_t Cex2Host::Close(Cex2Owner& owner, std::uint32_t sessionId)
 		return static_cast<std::int32_t>(Error::PermissionDenied);
 	const bool hadTextInput = found->second.textInput.active;
 	m_impl->sessions.erase(found);
-	if (hadTextInput && m_impl->textInputWakeCallback)
-		m_impl->textInputWakeCallback();
+	if (hadTextInput)
+		m_impl->QueueTextInputWakeLocked();
 	return static_cast<std::int32_t>(Error::Ok);
 }
 
@@ -1347,8 +1355,8 @@ void Cex2Host::CloseOwner(Cex2Owner& owner)
 	// Transfers are scoped to the address space, so they outlive one session of
 	// it but never the owner that started them.
 	Cex2Http::ReleaseSession(owner.AddressSpaceId());
-	if (hadTextInput && m_impl->textInputWakeCallback)
-		m_impl->textInputWakeCallback();
+	if (hadTextInput)
+		m_impl->QueueTextInputWakeLocked();
 }
 
 void Cex2Host::CloseAll()
@@ -1359,8 +1367,8 @@ void Cex2Host::CloseAll()
 	for (const auto& entry : m_impl->sessions)
 		Cex2Http::ReleaseSession(entry.second.addressSpaceId);
 	m_impl->sessions.clear();
-	if (hadTextInput && m_impl->textInputWakeCallback)
-		m_impl->textInputWakeCallback();
+	if (hadTextInput)
+		m_impl->QueueTextInputWakeLocked();
 }
 
 #ifdef CEMU_CEX2_TESTING
@@ -1756,8 +1764,8 @@ void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 			--session.reservedResponses;
 		}
 	}
-	if (hadTextInput && m_impl->textInputWakeCallback)
-		m_impl->textInputWakeCallback();
+	if (hadTextInput)
+		m_impl->QueueTextInputWakeLocked();
 }
 
 } // namespace cemuextend_hle

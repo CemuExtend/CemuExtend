@@ -15,10 +15,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -674,6 +677,23 @@ void TestTextInputComposition()
 	ModExecutionContext context(33, 1, "text-input-principal");
 	context.SetGrantedPermissions(5);
 	const auto session = Open(host, context);
+	struct WakeState
+	{
+		std::mutex mutex;
+		std::condition_variable ready;
+		std::size_t count{};
+	};
+	const auto wake = std::make_shared<WakeState>();
+	host.SetTextInputWakeCallback([wake, &host] {
+		// Wake handlers must run outside the host mutex so Application event
+		// subscribers can safely query the current text-input state.
+		(void)host.EffectiveTextInput();
+		{
+			std::lock_guard lock(wake->mutex);
+			++wake->count;
+		}
+		wake->ready.notify_one();
+	});
 
 	Encoder subscription;
 	subscription.U16(static_cast<std::uint16_t>(ServiceId::Input));
@@ -702,6 +722,11 @@ void TestTextInputComposition()
 	response = PollUntil(host, context, session);
 	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
 		static_cast<std::uint16_t>(Status::Ok));
+	{
+		std::unique_lock lock(wake->mutex);
+		CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
+			[&] { return wake->count >= 1; }));
+	}
 	const auto state = host.EffectiveTextInput();
 	CHECK(state.active && state.requestId == 42 && state.maximumLength == 128);
 	CHECK(state.caretX == 320 && state.caretY == 180 && state.lineHeight == 22);
@@ -720,6 +745,11 @@ void TestTextInputComposition()
 		static_cast<std::uint16_t>(Status::Ok));
 	CHECK(host.EffectiveTextInput().sequence == sequence);
 	CHECK(host.EffectiveTextInput().caretX == 340);
+	{
+		std::unique_lock lock(wake->mutex);
+		CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
+			[&] { return wake->count >= 2; }));
+	}
 
 	constexpr std::string_view committed = "search";
 	constexpr std::string_view preedit = "\xE6\x97\xA5\xE6\x9C\xAC";
@@ -760,7 +790,13 @@ void TestTextInputComposition()
 	CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
 		static_cast<std::uint16_t>(Status::Ok));
 	CHECK(!host.EffectiveTextInput().active);
+	{
+		std::unique_lock lock(wake->mutex);
+		CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
+			[&] { return wake->count >= 3; }));
+	}
 	CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+	host.SetTextInputWakeCallback({});
 }
 
 std::vector<std::byte> HttpStartPayload(std::string_view url)

@@ -353,14 +353,6 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 				HandleApplicationEvent(event);
 			});
 		});
-	m_emulationController.SetTextInputWakeCallback(
-		[uiDispatcher = m_uiDispatcher,
-		 mainWindowRegistry = m_mainWindowRegistry] {
-		(void)uiDispatcher->Queue([mainWindowRegistry] {
-			(void)mainWindowRegistry->InvokeForUi(
-				[](MainWindow& frame) { frame.RefreshCemuExtendTextInput(); });
-		});
-	});
 	RecreateMenu();
 	SetClientSize(1280, 720);
 	SetIcon(wxICON(M_WND_ICON128));
@@ -439,7 +431,6 @@ MainWindow::~MainWindow()
 	m_mainWindowRegistry->Unregister(*this);
 	m_applicationEventSubscription.Reset();
 	m_uiDispatcher->BeginShutdown();
-	m_emulationController.SetTextInputWakeCallback({});
 	UpdateCemuExtendPointerConfinement(false);
 	// Publish invalid handles and wait for outstanding snapshots before wx destroys
 	// their native objects.  NativeHandleLease is a publication/destruction barrier.
@@ -493,6 +484,9 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 	}
 	case EventType::GameListRefreshRequested:
 		RequestGameListRefresh();
+		break;
+	case EventType::TextInputWakeRequested:
+		RefreshCemuExtendTextInput();
 		break;
 	}
 }

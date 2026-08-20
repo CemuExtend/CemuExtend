@@ -16,6 +16,7 @@ namespace Application
 		PerformanceUpdated,
 		Diagnostic,
 		GameListRefreshRequested,
+		TextInputWakeRequested,
 	};
 
 	enum class DiagnosticCode : std::uint8_t
