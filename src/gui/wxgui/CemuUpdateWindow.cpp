@@ -80,9 +80,11 @@ CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
 
 CemuUpdateWindow::~CemuUpdateWindow()
 {
-	m_order = WorkerOrder::Exit;
+	m_order.store(WorkerOrder::Exit, std::memory_order_release);
+	m_condition.notify_all();
 	if (m_thread.joinable())
 		m_thread.join();
+	DeletePendingEvents();
 }
 
 size_t CemuUpdateWindow::WriteStringCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -200,6 +202,8 @@ int CemuUpdateWindow::ProgressCallback(void* clientp, curl_off_t dltotal, curl_o
 	curl_off_t ulnow)
 {
 	auto* thisptr = (CemuUpdateWindow*)clientp;
+	if (thisptr->m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+		return 1;
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS);
 	event->SetInt((int)dlnow);
 	wxQueueEvent(thisptr, event);
@@ -233,7 +237,7 @@ bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& f
 
 		curl_off_t update_size;
 		if (curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &update_size) == CURLE_OK)
-			m_gaugeMaxValue = (int)update_size;
+			m_gaugeMaxValue.store((int)update_size, std::memory_order_release);
 
 
 		auto _curlWriteData = +[](void* ptr, size_t size, size_t nmemb, void* ctx) -> size_t
@@ -257,14 +261,6 @@ bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& f
 				curl_easy_cleanup(curl);
 				return r;
 			}, curl, &http_code);
-		while (!curl_result.valid())
-		{
-			if (m_order == WorkerOrder::Exit)
-				return false;
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		}
-
 		result = curl_result.get() == CURLE_OK;
 
 		delete fsUpdateFile;
@@ -302,10 +298,10 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 	}
 
 	const auto count = zip_get_num_entries(za, 0);
-	m_gaugeMaxValue = count;
+	m_gaugeMaxValue.store((int)count, std::memory_order_release);
 	for (auto i = 0; i < count; i++)
 	{
-		if (m_order == WorkerOrder::Exit)
+		if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
 			return false;
 
 		zip_stat_t sb{};
@@ -385,7 +381,7 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 	}
 
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS);
-	event->SetInt(m_gaugeMaxValue);
+	event->SetInt(m_gaugeMaxValue.load(std::memory_order_acquire));
 	wxQueueEvent(this, event);
 
 	zip_close(za);
@@ -404,15 +400,16 @@ void CemuUpdateWindow::WorkerThread()
 	while (true)
 	{
 		std::unique_lock lock(m_mutex);
-		while (m_order == WorkerOrder::Idle)
-			m_condition.wait_for(lock, std::chrono::milliseconds(125));
+		m_condition.wait(lock, [this] {
+			return m_order.load(std::memory_order_acquire) != WorkerOrder::Idle;
+		});
 
-		if (m_order == WorkerOrder::Exit)
+		if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
 			break;
 
 		try
 		{
-			if (m_order == WorkerOrder::CheckVersion)
+			if (m_order.load(std::memory_order_acquire) == WorkerOrder::CheckVersion)
 			{
 				auto* event = new wxCommandEvent(wxEVT_RESULT);
 				if (QueryUpdateInfo(m_downloadUrl, m_changelogUrl))
@@ -422,7 +419,7 @@ void CemuUpdateWindow::WorkerThread()
 
 				wxQueueEvent(this, event);
 			}
-			else if (m_order == WorkerOrder::UpdateVersion)
+			else if (m_order.load(std::memory_order_acquire) == WorkerOrder::UpdateVersion)
 			{
 				// download update
 				const std::string url = m_downloadUrl;
@@ -447,10 +444,10 @@ void CemuUpdateWindow::WorkerThread()
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
 					event->SetInt((int)Result::UpdateDownloadError);
 					wxQueueEvent(this, event);
-					m_order = WorkerOrder::Idle;
+					m_order.store(WorkerOrder::Idle, std::memory_order_release);
 					continue;
 				}
-				if (m_order == WorkerOrder::Exit)
+				if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
 					break;
 
 				// extract
@@ -496,7 +493,7 @@ void CemuUpdateWindow::WorkerThread()
 					continue;
 				}
 
-				if (m_order == WorkerOrder::Exit)
+				if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
 					break;
 
 				// apply update
@@ -559,7 +556,7 @@ void CemuUpdateWindow::WorkerThread()
 				}
 #endif
 				auto* event = new wxCommandEvent(wxEVT_PROGRESS);
-				event->SetInt(m_gaugeMaxValue);
+			event->SetInt(m_gaugeMaxValue.load(std::memory_order_acquire));
 				wxQueueEvent(this, event);
 
 				auto* result_event = new wxCommandEvent(wxEVT_RESULT);
@@ -581,7 +578,7 @@ void CemuUpdateWindow::WorkerThread()
 			wxQueueEvent(this, result_event);
 		}
 
-		m_order = WorkerOrder::Idle;
+		m_order.store(WorkerOrder::Idle, std::memory_order_release);
 	}
 }
 
@@ -686,14 +683,15 @@ void CemuUpdateWindow::OnResult(wxCommandEvent& event)
 
 void CemuUpdateWindow::OnGaugeUpdate(wxCommandEvent& event)
 {
-	const int total_size = m_gaugeMaxValue > 0 ? m_gaugeMaxValue : 10000000;
+	const int gaugeMaxValue = m_gaugeMaxValue.load(std::memory_order_acquire);
+	const int total_size = gaugeMaxValue > 0 ? gaugeMaxValue : 10000000;
 	m_gauge->SetValue((event.GetInt() * 100) / total_size);
 }
 
 void CemuUpdateWindow::OnUpdateButton(const wxCommandEvent& event)
 {
 	std::unique_lock lock(m_mutex);
-	m_order = WorkerOrder::UpdateVersion;
+	m_order.store(WorkerOrder::UpdateVersion, std::memory_order_release);
 
 	m_condition.notify_all();
 

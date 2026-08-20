@@ -8,6 +8,7 @@
 #include <wx/checkbox.h>
 
 #include <curl/system.h>
+#include <atomic>
 #include <memory>
 
 namespace Host { class IPathProvider; }
@@ -60,11 +61,11 @@ private:
 	};
 	std::mutex m_mutex;
 	std::condition_variable m_condition;
-	WorkerOrder m_order = WorkerOrder::CheckVersion;
+	std::atomic<WorkerOrder> m_order{WorkerOrder::CheckVersion};
 	void WorkerThread();
 
 	std::string m_downloadUrl, m_changelogUrl;
-	int m_gaugeMaxValue = 0;
+	std::atomic_int m_gaugeMaxValue{};
 
 	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::thread m_thread;
