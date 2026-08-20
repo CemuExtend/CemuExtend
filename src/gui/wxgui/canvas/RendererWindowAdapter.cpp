@@ -4,15 +4,22 @@
 
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "config/ActiveSettings.h"
+
+#ifdef ENABLE_OPENGL
+#include "wxgui/canvas/OpenGLCanvas.h"
+#endif
 
 #ifdef ENABLE_VULKAN
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VsyncDriver.h"
+#include "wxgui/canvas/VulkanCanvas.h"
 #endif
 
 #ifdef ENABLE_METAL
 #include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
+#include "wxgui/canvas/MetalCanvas.h"
 #endif
 
 namespace WxRendererAdapters
@@ -64,6 +71,36 @@ namespace WxRendererAdapters
 #else
 		return {};
 #endif
+	}
+
+	wxWindow* CreateRenderCanvas(wxWindow* parent, const wxSize& size,
+		bool isMainWindow,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+	{
+		switch (ActiveSettings::GetGraphicsAPI())
+		{
+#ifdef ENABLE_OPENGL
+		case kOpenGL:
+			return GLCanvas_Create(parent, size, isMainWindow,
+				std::move(windowMetrics), std::move(nativeSurfaces));
+#endif
+#ifdef ENABLE_VULKAN
+		case kVulkan:
+			return new VulkanCanvas(parent, size, isMainWindow,
+				std::move(windowMetrics), std::move(nativeSurfaces),
+				std::move(nativeSurfacePublisher));
+#endif
+#ifdef ENABLE_METAL
+		case kMetal:
+			return new MetalCanvas(parent, size, isMainWindow,
+				std::move(windowMetrics), std::move(nativeSurfaces),
+				std::move(nativeSurfacePublisher));
+#endif
+		default:
+			return nullptr;
+		}
 	}
 
 	void NotifyWindowPositionChanged()

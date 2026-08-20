@@ -24,6 +24,7 @@
 #include "helpers/wxHelpers.h"
 #include "PadViewFrame.h"
 #include "WxWindowState.h"
+#include "canvas/IRenderCanvas.h"
 
 #if defined(__WXGTK__)
 #include <gtk/gtk.h>
@@ -49,17 +50,7 @@
 #include "helpers/wxWayland.h"
 #endif
 
-// Renderer Canvasses
-#ifdef ENABLE_OPENGL
-#include "canvas/OpenGLCanvas.h"
-#endif
-#ifdef ENABLE_VULKAN
-#include "canvas/VulkanCanvas.h"
-#endif
 #include "canvas/RendererWindowAdapter.h"
-#ifdef ENABLE_METAL
-#include "canvas/MetalCanvas.h"
-#endif
 
 //Cafe libs
 
@@ -2166,22 +2157,10 @@ void MainWindow::CreateCanvas()
     m_game_panel->SetSizer(sizer);
     this->GetSizer()->Add(m_game_panel, 1, wxEXPAND);
 
-    // create canvas
-	#ifdef ENABLE_OPENGL
-	if (ActiveSettings::GetGraphicsAPI() == kOpenGL)
-		m_render_canvas = GLCanvas_Create(m_game_panel, wxSize(1280, 720), true,
-			m_windowMetrics, m_nativeSurfaces);
-	#endif
-	#ifdef ENABLE_VULKAN
-	if (ActiveSettings::GetGraphicsAPI() == kVulkan)
-		m_render_canvas = new VulkanCanvas(m_game_panel, wxSize(1280, 720), true,
-			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
-	#endif
-	#ifdef ENABLE_METAL
-	if (ActiveSettings::GetGraphicsAPI() == kMetal)
-		m_render_canvas = new MetalCanvas(m_game_panel, wxSize(1280, 720), true,
-			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
-	#endif
+	// create canvas
+	m_render_canvas = WxRendererAdapters::CreateRenderCanvas(
+		m_game_panel, wxSize(1280, 720), true, m_windowMetrics,
+		m_nativeSurfaces, m_nativeSurfacePublisher);
 	if (!m_render_canvas)
 		cemu_assert(false && "Failed to create canvas or invalid graphics API selected");
 	cemu_assert(m_render_canvas != nullptr);

@@ -6,17 +6,7 @@
 
 #include <wx/display.h>
 
-#include "config/ActiveSettings.h"
-#ifdef ENABLE_OPENGL
-#include "wxgui/canvas/OpenGLCanvas.h"
-#endif
-#ifdef ENABLE_VULKAN
-#include "wxgui/canvas/VulkanCanvas.h"
-#endif
-#ifdef ENABLE_METAL
-#include "wxgui/canvas/MetalCanvas.h"
-#endif
-#include "config/CemuConfig.h"
+#include "wxgui/canvas/RendererWindowAdapter.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/helpers/wxHelpers.h"
 
@@ -105,21 +95,9 @@ void PadViewFrame::InitializeRenderCanvas()
 {
 	auto sizer = new wxBoxSizer(wxVERTICAL);
 	{
-		#ifdef ENABLE_VULKAN
-		if (ActiveSettings::GetGraphicsAPI() == kVulkan)
-			m_render_canvas = new VulkanCanvas(this, wxSize(854, 480), false,
-				m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
-		#endif
-		#ifdef ENABLE_OPENGL
-		if (ActiveSettings::GetGraphicsAPI() == kOpenGL)
-			m_render_canvas = GLCanvas_Create(this, wxSize(854, 480), false,
-				m_windowMetrics, m_nativeSurfaces);
-		#endif
-		#ifdef ENABLE_METAL
-		if (ActiveSettings::GetGraphicsAPI() == kMetal)
-			m_render_canvas = new MetalCanvas(this, wxSize(854, 480), false,
-				m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
-		#endif
+		m_render_canvas = WxRendererAdapters::CreateRenderCanvas(
+			this, wxSize(854, 480), false, m_windowMetrics,
+			m_nativeSurfaces, m_nativeSurfacePublisher);
 		sizer->Add(m_render_canvas, 1, wxEXPAND, 0, nullptr);
 	}
 	cemu_assert(m_render_canvas != nullptr);

@@ -5,9 +5,13 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+class wxSize;
+class wxWindow;
 
 namespace WxRendererAdapters
 {
@@ -33,6 +37,11 @@ namespace WxRendererAdapters
 	[[nodiscard]] std::vector<VulkanDevice> EnumerateVulkanDevices(
 		const Host::NativeWindowHandle& mainWindow);
 	[[nodiscard]] std::vector<MetalDevice> EnumerateMetalDevices();
+	[[nodiscard]] wxWindow* CreateRenderCanvas(wxWindow* parent,
+		const wxSize& size, bool isMainWindow,
+		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
 
 	void NotifyWindowPositionChanged();
 	[[nodiscard]] std::optional<ScreenshotRequestId> RequestScreenshot(
