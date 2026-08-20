@@ -1,6 +1,7 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/PadViewFrame.h"
 #include "wxgui/WxWindowState.h"
+#include "wxgui/WxFrontendContext.h"
 #include "wxgui/canvas/IRenderCanvas.h"
 
 #include <wx/display.h>
@@ -18,7 +19,6 @@
 #include "config/CemuConfig.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/helpers/wxHelpers.h"
-#include "input/InputManager.h"
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -30,17 +30,17 @@
 
 PadViewFrame::PadViewFrame(wxFrame* parent,
 	Application::EmulationController& emulationController,
-	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
-	std::shared_ptr<WxWindowState> windowState)
+	std::shared_ptr<WxFrontendContext> frontendContext)
 	: wxFrame(nullptr, wxID_ANY, _("GamePad View"), wxDefaultPosition, wxDefaultSize, wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxCLOSE_BOX | wxWANTS_CHARS),
 	  m_emulationController(emulationController),
-	  m_windowMetrics(std::move(windowMetrics)), m_nativeSurfaces(std::move(nativeSurfaces)),
-	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher)),
-	  m_windowState(std::move(windowState))
+	  m_windowMetrics(frontendContext->windowMetrics),
+	  m_nativeSurfaces(frontendContext->nativeSurfaces),
+	  m_nativeSurfacePublisher(frontendContext->nativeSurfacePublisher),
+	  m_inputHostEvents(frontendContext->inputHostEvents),
+	  m_windowState(frontendContext->windowState)
 {
-	cemu_assert(m_windowState != nullptr);
+	cemu_assert(m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher &&
+		m_inputHostEvents && m_windowState);
 	m_nativeWindowHandle = initHandleContextFromWxWidgetsWindow(this);
 	m_nativeWindowPublication =
 		m_nativeSurfacePublisher->PublishPadWindow(m_nativeWindowHandle);
@@ -209,14 +209,9 @@ void PadViewFrame::OnKeyUp(wxKeyEvent& event)
 
 void PadViewFrame::OnGesturePan(wxPanGestureEvent& event)
 {
-	auto& instance = InputManager::instance();
-
-	std::scoped_lock lock(instance.m_pad_touch.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_pad_touch.position = { physPos.x, physPos.y };
-	instance.m_pad_touch.left_down = event.IsGestureStart() || !event.IsGestureEnd();
-	if (event.IsGestureStart() || !event.IsGestureEnd())
-		instance.m_pad_touch.left_down_toggle = true;
+	m_inputHostEvents->UpdateTouch(Host::PointerSurface::Pad,
+		{physPos.x, physPos.y}, event.IsGestureStart() || !event.IsGestureEnd());
 }
 
 void PadViewFrame::OnChar(wxKeyEvent& event)
@@ -269,11 +264,9 @@ void PadViewFrame::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::uint32_t c
 
 void PadViewFrame::OnMouseMove(wxMouseEvent& event)
 {
-	auto& instance = InputManager::instance();
-
-	std::scoped_lock lock(instance.m_pad_touch.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_pad_mouse.position = { physPos.x, physPos.y };
+	m_inputHostEvents->UpdateMousePosition(Host::PointerSurface::Pad,
+		{physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event);
 
 	event.Skip();
@@ -281,16 +274,11 @@ void PadViewFrame::OnMouseMove(wxMouseEvent& event)
 
 void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 {
-	auto& instance = InputManager::instance();
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_LEFT) ||
 		event.ButtonDClick(wxMOUSE_BTN_LEFT);
-
-	std::scoped_lock lock(instance.m_pad_mouse.m_mutex);
-	instance.m_pad_mouse.left_down = pressed;
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_pad_mouse.position = { physPos.x, physPos.y };
-	if (pressed)
-		instance.m_pad_mouse.left_down_toggle = true;
+	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Pad,
+		Host::PointerButton::Left, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
 		Frontend::CemuExtendMouseButton::Left));
 
@@ -298,16 +286,11 @@ void PadViewFrame::OnMouseLeft(wxMouseEvent& event)
 
 void PadViewFrame::OnMouseRight(wxMouseEvent& event)
 {
-	auto& instance = InputManager::instance();
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_RIGHT) ||
 		event.ButtonDClick(wxMOUSE_BTN_RIGHT);
-
-	std::scoped_lock lock(instance.m_pad_mouse.m_mutex);
-	instance.m_pad_mouse.right_down = pressed;
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_pad_mouse.position = { physPos.x, physPos.y };
-	if (pressed)
-		instance.m_pad_mouse.right_down_toggle = true;
+	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Pad,
+		Host::PointerButton::Right, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, static_cast<std::uint32_t>(
 		Frontend::CemuExtendMouseButton::Right));
 }

@@ -210,6 +210,7 @@ private:
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
 	std::shared_ptr<Host::IKeyboardState> m_keyboardState;
+	std::shared_ptr<Host::IInputHostEvents> m_inputHostEvents;
 	std::shared_ptr<WxWindowState> m_windowState;
 	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;

@@ -70,6 +70,7 @@ namespace
 	std::uint64_t s_nextPendingUiId{1};
 	std::unordered_map<std::uint64_t, std::function<void()>> s_pendingUiCancellation;
 	std::shared_ptr<class WxHostServices> s_wxHostServices;
+	std::shared_ptr<class WxInputHostEvents> s_inputHostEvents;
 	std::shared_ptr<WxWindowState> s_wxWindowState;
 	std::shared_ptr<WxMainWindowRegistry> s_mainWindowRegistry;
 
@@ -337,6 +338,59 @@ namespace
 		}
 	};
 
+	class WxInputHostEvents final : public Host::IInputHostEvents
+	{
+	public:
+		void Deactivate()
+		{
+			std::scoped_lock lock(m_mutex);
+			m_active = false;
+		}
+
+		void UpdateMousePosition(Host::PointerSurface surface,
+			Host::PointerPosition position) override
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_active)
+				InputManager::instance().UpdateHostMousePosition(surface, position);
+		}
+
+		void UpdateMouseButton(Host::PointerSurface surface, Host::PointerButton button,
+			bool pressed, Host::PointerPosition position) override
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_active)
+				InputManager::instance().UpdateHostMouseButton(
+					surface, button, pressed, position);
+		}
+
+		void UpdateTouch(Host::PointerSurface surface, Host::PointerPosition position,
+			bool pressed) override
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_active)
+				InputManager::instance().UpdateHostTouch(surface, position, pressed);
+		}
+
+		void UpdateMouseWheel(float value, std::int32_t cumulativeSteps) override
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_active)
+				InputManager::instance().UpdateHostMouseWheel(value, cumulativeSteps);
+		}
+
+		void NotifyDeviceChanged() override
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_active)
+				InputManager::instance().on_device_changed();
+		}
+
+	private:
+		std::mutex m_mutex;
+		bool m_active{true};
+	};
+
 	std::shared_ptr<WxFrontendContext> InstallWxHostServices()
 	{
 		s_wxFrontendStopping.store(false, std::memory_order_release);
@@ -344,11 +398,13 @@ namespace
 		auto mainWindowRegistry = std::make_shared<WxMainWindowRegistry>();
 		auto hostServices = std::make_shared<WxHostServices>(
 			windowState, mainWindowRegistry);
+		auto inputHostEvents = std::make_shared<WxInputHostEvents>();
 		{
 			std::scoped_lock lock(s_runtimeObjectsMutex);
 			s_wxWindowState = windowState;
 			s_mainWindowRegistry = mainWindowRegistry;
 			s_wxHostServices = hostServices;
+			s_inputHostEvents = inputHostEvents;
 		}
 		Application::ConnectHost({
 			.windowMetrics = std::static_pointer_cast<Host::IWindowMetrics>(hostServices),
@@ -366,6 +422,7 @@ namespace
 		context->nativeSurfaces = hostServices;
 		context->nativeSurfacePublisher = hostServices;
 		context->keyboardState = hostServices;
+		context->inputHostEvents = std::move(inputHostEvents);
 		context->windowState = std::move(windowState);
 		context->mainWindowRegistry = std::move(mainWindowRegistry);
 		context->uiDispatcher = std::make_shared<WxUiDispatcher>();
@@ -502,14 +559,17 @@ void RuntimeReleaseHostServices()
 {
 	RuntimeBeginShutdown();
 	std::shared_ptr<WxHostServices> hostServices;
+	std::shared_ptr<WxInputHostEvents> inputHostEvents;
 	{
 		std::scoped_lock lock(s_runtimeObjectsMutex);
 		if (!s_wxHostServices)
 			return;
 		hostServices = std::move(s_wxHostServices);
+		inputHostEvents = std::move(s_inputHostEvents);
 		s_mainWindowRegistry.reset();
 		s_wxWindowState.reset();
 	}
+	inputHostEvents->Deactivate();
 	InputManager::instance().Shutdown();
 	Application::DisconnectHost();
 	InputManager::instance().ClearHost();

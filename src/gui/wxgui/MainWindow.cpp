@@ -39,7 +39,6 @@
 #include "config/ActiveSettings.h"
 
 // External functionality headers
-#include "input/InputManager.h"
 #include "Cemu/DiscordPresence/DiscordPresence.h"
 #include "util/ScreenSaver/ScreenSaver.h"
 #include "util/helpers/SystemException.h"
@@ -323,6 +322,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	  m_nativeSurfaces(m_frontendContext->nativeSurfaces),
 	  m_nativeSurfacePublisher(m_frontendContext->nativeSurfacePublisher),
 	  m_keyboardState(m_frontendContext->keyboardState),
+	  m_inputHostEvents(m_frontendContext->inputHostEvents),
 	  m_windowState(m_frontendContext->windowState),
 	  m_mainWindowRegistry(m_frontendContext->mainWindowRegistry),
 	  m_uiDispatcher(m_frontendContext->uiDispatcher),
@@ -331,7 +331,8 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
 	cemu_assert(m_frontendContext && m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher &&
-		m_keyboardState && m_windowState && m_mainWindowRegistry && m_uiDispatcher &&
+		m_keyboardState && m_inputHostEvents && m_windowState && m_mainWindowRegistry &&
+		m_uiDispatcher &&
 		m_showErrorDialog && m_updateWindowTitles);
 #ifdef __WXMAC__
 	// Not necessary to set wxApp::s_macExitMenuItemId as automatically handled
@@ -882,9 +883,8 @@ void MainWindow::TogglePadView()
 		if (m_padView)
 			return;
 
-		m_padView = new PadViewFrame(this, m_emulationController,
-			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher,
-			m_windowState);
+		m_padView = new PadViewFrame(
+			this, m_emulationController, m_frontendContext);
 
 		m_padView->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnPadClose, this);
 
@@ -918,7 +918,7 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 	{
 		if (wParam == DBT_DEVNODES_CHANGED)
 		{
-			InputManager::instance().on_device_changed();
+			m_inputHostEvents->NotifyDeviceChanged();
 		}
 	}
 	else if (nMsg == WM_INPUT && m_cemuextend_bridge.RawMouseRequested() &&
@@ -1729,11 +1729,9 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 	if (!bridgeOwnsPointer)
 		ShowCursor(true);
 
-	auto& instance = InputManager::instance();
-	std::unique_lock lock(instance.m_main_mouse.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_main_mouse.position = { physPos.x, physPos.y };
-	lock.unlock();
+	m_inputHostEvents->UpdateMousePosition(Host::PointerSurface::Main,
+		{physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event);
 
 	if (m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
@@ -1756,17 +1754,11 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 
 void MainWindow::OnMouseLeft(wxMouseEvent& event)
 {
-	auto& instance = InputManager::instance();
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_LEFT) ||
 		event.ButtonDClick(wxMOUSE_BTN_LEFT);
-	{
-		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-		instance.m_main_mouse.left_down = pressed;
-		auto physPos = ToPhys(event.GetPosition());
-		instance.m_main_mouse.position = { physPos.x, physPos.y };
-		if (pressed)
-			instance.m_main_mouse.left_down_toggle = true;
-	}
+	const auto physPos = ToPhys(event.GetPosition());
+	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Main,
+		Host::PointerButton::Left, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, 0, 0,
 		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Left));
 
@@ -1775,17 +1767,11 @@ void MainWindow::OnMouseLeft(wxMouseEvent& event)
 
 void MainWindow::OnMouseRight(wxMouseEvent& event)
 {
-	auto& instance = InputManager::instance();
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_RIGHT) ||
 		event.ButtonDClick(wxMOUSE_BTN_RIGHT);
-	{
-		std::scoped_lock lock(instance.m_main_mouse.m_mutex);
-		instance.m_main_mouse.right_down = pressed;
-		auto physPos = ToPhys(event.GetPosition());
-		instance.m_main_mouse.position = { physPos.x, physPos.y };
-		if (pressed)
-			instance.m_main_mouse.right_down_toggle = true;
-	}
+	const auto physPos = ToPhys(event.GetPosition());
+	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Main,
+		Host::PointerButton::Right, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, 0, 0,
 		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Right));
 
@@ -1960,13 +1946,9 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 
 void MainWindow::OnGesturePan(wxPanGestureEvent& event)
 {
-	auto& instance = InputManager::instance();
-	std::scoped_lock lock(instance.m_main_touch.m_mutex);
 	auto physPos = ToPhys(event.GetPosition());
-	instance.m_main_touch.position = { physPos.x, physPos.y };
-	instance.m_main_touch.left_down = event.IsGestureStart() || !event.IsGestureEnd();
-	if (event.IsGestureStart() || !event.IsGestureEnd())
-		instance.m_main_touch.left_down_toggle = true;
+	m_inputHostEvents->UpdateTouch(Host::PointerSurface::Main,
+		{physPos.x, physPos.y}, event.IsGestureStart() || !event.IsGestureEnd());
 
 
 	event.Skip();
@@ -2414,12 +2396,10 @@ void MainWindow::OnMouseWheel(wxMouseEvent& event)
 	const bool horizontal = event.GetWheelAxis() == wxMOUSE_WHEEL_HORIZONTAL;
 	const auto steps = m_cemuextend_bridge.NormalizeWheel(rotation, wheelDelta, horizontal);
 
-	auto& instance = InputManager::instance();
-	instance.m_mouse_wheel = static_cast<float>(rotation) /
-		static_cast<float>(wheelDelta);
+	m_inputHostEvents->UpdateMouseWheel(
+		static_cast<float>(rotation) / static_cast<float>(wheelDelta), steps);
 	if (steps != 0)
 	{
-		instance.m_mouse_wheel_cumulative.fetch_add(steps, std::memory_order_relaxed);
 		if (horizontal)
 			EmitCemuExtendMouseEvent(event, steps, 0);
 		else

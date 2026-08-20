@@ -30,9 +30,6 @@ class InputManager : public Singleton<InputManager>
 	InputManager();
 	~InputManager();
 
-	friend class MainWindow;
-	friend class PadViewFrame;
-
 public:
 	constexpr static size_t kMaxController = 8;
 	constexpr static size_t kMaxVPADControllers = 2;
@@ -91,11 +88,24 @@ public:
 
 	void apply_game_profile();
 	void on_device_changed();
+	void UpdateHostMousePosition(Host::PointerSurface surface,
+		Host::PointerPosition position);
+	void UpdateHostMouseButton(Host::PointerSurface surface, Host::PointerButton button,
+		bool pressed, Host::PointerPosition position);
+	void UpdateHostTouch(Host::PointerSurface surface, Host::PointerPosition position,
+		bool pressed);
+	void UpdateHostMouseWheel(float value, std::int32_t cumulativeSteps);
+	[[nodiscard]] float ConsumeHostMouseWheel();
 
 
 	static std::vector<std::string> get_profiles();
 	static bool is_valid_profilename(const std::string& name);
 
+	glm::ivec2 get_mouse_position(bool pad_window) const;
+	std::optional<glm::ivec2> get_left_down_mouse_info(bool* is_pad);
+	std::optional<glm::ivec2> get_right_down_mouse_info(bool* is_pad);
+
+private:
 	struct MouseInfo
 	{
 		mutable std::shared_mutex m_mutex;
@@ -106,9 +116,6 @@ public:
 		bool left_down_toggle = false;
 		bool right_down_toggle = false;
 	} m_main_mouse{}, m_pad_mouse{}, m_main_touch{}, m_pad_touch{};
-	glm::ivec2 get_mouse_position(bool pad_window) const;
-	std::optional<glm::ivec2> get_left_down_mouse_info(bool* is_pad);
-	std::optional<glm::ivec2> get_right_down_mouse_info(bool* is_pad);
 
 	// m_mouse_wheel is the transient value consumed by VPADController. The
 	// bridge publishes the cumulative counter so a reset to zero cannot create
@@ -116,7 +123,6 @@ public:
 	std::atomic<float> m_mouse_wheel{};
 	std::atomic<sint32> m_mouse_wheel_cumulative{};
 
-private:
 	void update_thread();
 
 	std::thread m_update_thread;

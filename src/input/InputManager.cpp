@@ -933,6 +933,57 @@ bool InputManager::is_valid_profilename(const std::string& name)
 	return true;
 }
 
+void InputManager::UpdateHostMousePosition(Host::PointerSurface surface,
+	Host::PointerPosition position)
+{
+	auto& state = surface == Host::PointerSurface::Pad ? m_pad_mouse : m_main_mouse;
+	std::scoped_lock lock(state.m_mutex);
+	state.position = {position.x, position.y};
+}
+
+void InputManager::UpdateHostMouseButton(Host::PointerSurface surface,
+	Host::PointerButton button, bool pressed, Host::PointerPosition position)
+{
+	auto& state = surface == Host::PointerSurface::Pad ? m_pad_mouse : m_main_mouse;
+	std::scoped_lock lock(state.m_mutex);
+	state.position = {position.x, position.y};
+	if (button == Host::PointerButton::Left)
+	{
+		state.left_down = pressed;
+		if (pressed)
+			state.left_down_toggle = true;
+	}
+	else
+	{
+		state.right_down = pressed;
+		if (pressed)
+			state.right_down_toggle = true;
+	}
+}
+
+void InputManager::UpdateHostTouch(Host::PointerSurface surface,
+	Host::PointerPosition position, bool pressed)
+{
+	auto& state = surface == Host::PointerSurface::Pad ? m_pad_touch : m_main_touch;
+	std::scoped_lock lock(state.m_mutex);
+	state.position = {position.x, position.y};
+	state.left_down = pressed;
+	if (pressed)
+		state.left_down_toggle = true;
+}
+
+void InputManager::UpdateHostMouseWheel(float value, std::int32_t cumulativeSteps)
+{
+	m_mouse_wheel.store(value, std::memory_order_relaxed);
+	if (cumulativeSteps != 0)
+		m_mouse_wheel_cumulative.fetch_add(cumulativeSteps, std::memory_order_relaxed);
+}
+
+float InputManager::ConsumeHostMouseWheel()
+{
+	return m_mouse_wheel.exchange(0.0f, std::memory_order_relaxed);
+}
+
 glm::ivec2 InputManager::get_mouse_position(bool pad_window) const
 {
 	if (pad_window)

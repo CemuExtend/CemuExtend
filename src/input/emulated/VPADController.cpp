@@ -300,8 +300,8 @@ void VPADController::update_motion(VPADStatus_t& status)
 
 		float rotX = (wy * 2 - 1.0f) * 135.0f; // up/down best
 		float rotY = (wx * 2 - 1.0f) * -180.0f; // left/right
-		float rotZ = input_manager.m_mouse_wheel * 14.0f + m_lastGyroRotation.z;
-		input_manager.m_mouse_wheel = 0.0f;
+		float rotZ = input_manager.ConsumeHostMouseWheel() * 14.0f +
+			m_lastGyroRotation.z;
 
 		if (!m_startGyroRotationSet)
 		{

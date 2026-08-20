@@ -35,6 +35,7 @@ struct WxFrontendContext
 	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher;
 	std::shared_ptr<Host::IKeyboardState> keyboardState;
+	std::shared_ptr<Host::IInputHostEvents> inputHostEvents;
 	std::shared_ptr<WxWindowState> windowState;
 	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry;
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher;

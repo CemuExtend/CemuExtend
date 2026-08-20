@@ -70,6 +70,24 @@ namespace Host
 		bool pressed{};
 	};
 
+	enum class PointerSurface : std::uint8_t
+	{
+		Main,
+		Pad,
+	};
+
+	enum class PointerButton : std::uint8_t
+	{
+		Left,
+		Right,
+	};
+
+	struct PointerPosition
+	{
+		std::int32_t x{};
+		std::int32_t y{};
+	};
+
 	class IWindowMetrics
 	{
 	public:
@@ -107,6 +125,20 @@ namespace Host
 		[[nodiscard]] virtual bool IsKeyDown(Key key) const = 0;
 		[[nodiscard]] virtual std::string GetKeyName(std::uint32_t key) const = 0;
 		[[nodiscard]] virtual std::vector<KeyState> GetKeyStates() const = 0;
+	};
+
+	class IInputHostEvents
+	{
+	public:
+		virtual ~IInputHostEvents() = default;
+		virtual void UpdateMousePosition(PointerSurface surface,
+			PointerPosition position) = 0;
+		virtual void UpdateMouseButton(PointerSurface surface, PointerButton button,
+			bool pressed, PointerPosition position) = 0;
+		virtual void UpdateTouch(PointerSurface surface, PointerPosition position,
+			bool pressed) = 0;
+		virtual void UpdateMouseWheel(float value, std::int32_t cumulativeSteps) = 0;
+		virtual void NotifyDeviceChanged() = 0;
 	};
 
 	class IClipboard
