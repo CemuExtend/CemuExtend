@@ -3,11 +3,13 @@
 #include <wx/dialog.h>
 
 class wxComboBox;
+namespace Application { class EmulationController; }
 
 class SaveTransfer : public wxDialog
 {
 public:
-	SaveTransfer(wxWindow* parent, uint64 title_id, const wxString& source_account, uint32 source_id);
+	SaveTransfer(wxWindow* parent, Application::EmulationController& emulationController,
+		uint64 title_id, const wxString& source_account, uint32 source_id);
 
 	void EndModal(int retCode) override;
 
@@ -20,5 +22,6 @@ private:
 	uint32 m_target_id = 0;
 	const uint64 m_title_id;
 	const uint32 m_source_id;
+	Application::EmulationController& m_emulationController;
 	int m_return_code = wxCANCEL;
 };

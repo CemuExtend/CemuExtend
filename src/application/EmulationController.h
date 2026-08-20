@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "application/ApplicationEvents.h"
+#include "application/AccountFacade.h"
 #include "application/ContentOperations.h"
 #include "application/EmulationPresentation.h"
 #include "application/GameProfileFacade.h"
@@ -164,7 +165,7 @@ namespace Application
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
-		public ITitleInstallService
+		public ITitleInstallService, public IAccountService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -292,6 +293,23 @@ namespace Application
 		[[nodiscard]] GraphicPackResult ReloadGraphicPack(std::string_view key);
 		[[nodiscard]] GraphicPackRefreshResult RefreshGraphicPacks();
 		void SaveGraphicPackState();
+		[[nodiscard]] std::vector<AccountInfo> ListAccounts() const;
+		[[nodiscard]] std::optional<AccountInfo> GetAccount(
+			std::uint32_t persistentId) const;
+		[[nodiscard]] std::uint32_t NextPersistentId() const;
+		[[nodiscard]] bool HasFreeAccountSlots() const;
+		[[nodiscard]] std::vector<AccountCountry> ListAccountCountries() const;
+		[[nodiscard]] OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const;
+		[[nodiscard]] DownloadAccountContext GetDownloadAccountContext(
+			std::optional<std::uint32_t> persistentId) const;
+		[[nodiscard]] AccountValidation ValidateOnlineAccount(
+			std::uint32_t persistentId) const;
+		[[nodiscard]] AccountOperationResult CreateAccount(
+			std::uint32_t persistentId, std::wstring_view miiName);
+		[[nodiscard]] AccountOperationResult UpdateAccount(
+			std::uint32_t persistentId, const AccountUpdate& update);
+		[[nodiscard]] AccountOperationResult DeleteAccount(
+			std::uint32_t persistentId);
 		[[nodiscard]] ApplicationEvents& Events() { return m_events; }
 		[[nodiscard]] const ApplicationEvents& Events() const { return m_events; }
 

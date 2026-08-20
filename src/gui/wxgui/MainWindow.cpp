@@ -1093,10 +1093,10 @@ void MainWindow::OnOptionsInput(wxCommandEvent& event)
 void MainWindow::OnAccountSelect(wxCommandEvent& event)
 {
 	const int index = event.GetId() - MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1;
-	const auto& accounts = Account::GetAccounts();
+	const auto accounts = m_emulationController.ListAccounts();
 	wxASSERT(index >= 0 && index < (int)accounts.size());
 	auto& config = GetConfig();
-	config.account.m_persistent_id = accounts[index].GetPersistentId();
+	config.account.m_persistent_id = accounts[index].persistentId;
 	// config.account.online_enabled.value = false; // reset online for safety
 	GetConfigHandle().Save();
 }
@@ -2885,10 +2885,12 @@ void MainWindow::RecreateMenu()
 	m_optionsAccountMenu = new wxMenu();
 	const auto account_id = ActiveSettings::GetPersistentId();
 	int index = 0;
-	for(const auto& account : Account::GetAccounts())
+	for(const auto& account : m_emulationController.ListAccounts())
 	{
-		wxMenuItem* item = m_optionsAccountMenu->AppendRadioItem(MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1 + index, account.ToString());
-		item->Check(account_id == account.GetPersistentId());
+		wxMenuItem* item = m_optionsAccountMenu->AppendRadioItem(
+			MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1 + index,
+			fmt::format(L"{} ({:x})", account.miiName, account.persistentId));
+		item->Check(account_id == account.persistentId);
 		if (m_game_launched || LaunchSettings::GetPersistentId().has_value())
 			item->Enable(false);
 

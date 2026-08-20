@@ -30,10 +30,8 @@
 #include "audio/IAudioInputAPI.h"
 
 #include "wxgui/canvas/RendererWindowAdapter.h"
-#include "Cafe/Account/Account.h"
 
 #include <boost/tokenizer.hpp>
-#include "util/helpers/SystemException.h"
 #include "wxgui/dialogs/CreateAccount/wxCreateAccountDialog.h"
 
 #if BOOST_OS_WINDOWS
@@ -46,7 +44,6 @@
 
 #include "resource/embedded/resources.h"
 
-#include "Cemu/ncrypto/ncrypto.h"
 #include "wxHelper.h"
 
 #include "util/ScreenSaver/ScreenSaver.h"
@@ -138,14 +135,14 @@ private:
 class wxAccountData : public wxClientData
 {
 public:
-	wxAccountData(const Account& account)
+	explicit wxAccountData(Application::AccountInfo account)
 		: m_account(account) {}
 
-	Account& GetAccount() { return m_account; }
-	const Account& GetAccount() const { return m_account; }
+	Application::AccountInfo& GetAccount() { return m_account; }
+	const Application::AccountInfo& GetAccount() const { return m_account; }
 
 private:
-	Account m_account;
+	Application::AccountInfo m_account;
 };
 
 wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
@@ -997,13 +994,9 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		m_account_grid->Append(new wxStringProperty(_("Email"), kPropertyEmail));
 
 		wxPGChoices countries;
-		for (int i = 0; i < NCrypto::GetCountryCount(); ++i)
+		for (const auto& country : m_emulationController.ListAccountCountries())
 		{
-			const auto country = NCrypto::GetCountryAsString(i);
-			if (country && (i == 0 || !boost::equals(country, "NN")))
-			{
-				countries.Add(country, i);
-			}
+			countries.Add(country.name, country.code);
 		}
 		m_account_grid->Append(new wxEnumProperty(_("Country"), kPropertyCountry, countries));
 
@@ -1556,7 +1549,7 @@ uint32 GeneralSettings2::GetSelectedAccountPersistentId()
 	const auto active_account = m_active_account->GetSelection();
 	if (active_account == wxNOT_FOUND)
 		return GetConfig().account.m_persistent_id.GetInitValue();
-	return dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(active_account))->GetAccount().GetPersistentId();
+	return dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(active_account))->GetAccount().persistentId;
 }
 
 void GeneralSettings2::StoreConfig()
@@ -1933,17 +1926,25 @@ void GeneralSettings2::ResetAccountInformation()
 
 void GeneralSettings2::OnAccountCreate(wxCommandEvent& event)
 {
-	wxASSERT(Account::HasFreeAccountSlots());
+	wxASSERT(m_emulationController.HasFreeAccountSlots());
 
-	wxCreateAccountDialog dialog(this);
+	wxCreateAccountDialog dialog(this, m_emulationController);
 	if (dialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	Account account(dialog.GetPersistentId(), dialog.GetMiiName().ToStdWstring());
-	account.Save();
-	Account::RefreshAccounts();
+	const auto result = m_emulationController.CreateAccount(
+		dialog.GetPersistentId(), dialog.GetMiiName().ToStdWstring());
+	if (!result || !result.account)
+	{
+		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
+			wxOK | wxCENTRE | wxICON_ERROR, this);
+		return;
+	}
+	const auto& account = *result.account;
 
-	const int index = m_active_account->Append(account.ToString(), new wxAccountData(account));
+	const int index = m_active_account->Append(
+		fmt::format(L"{} ({:x})", account.miiName, account.persistentId),
+		new wxAccountData(account));
 
 	// update ui
 	m_active_account->SetSelection(index);
@@ -1970,11 +1971,11 @@ void GeneralSettings2::OnAccountDelete(wxCommandEvent& event)
 	wxASSERT(selection != wxNOT_FOUND);
 	auto* obj = dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(selection));
 	wxASSERT(obj);
-	auto& account = obj->GetAccount();
+	const auto& account = obj->GetAccount();
 
 	const std::wstring format_str = _("Are you sure you want to delete the account {} with id {:x}?").ToStdWstring();
 	const std::wstring msg = fmt::format(fmt::runtime(format_str),
-	                                     std::wstring{ account.GetMiiName() }, account.GetPersistentId());
+	                                     account.miiName, account.persistentId);
 
 	const int answer = wxMessageBox(msg, _("Confirmation"), wxYES_NO | wxCENTRE | wxICON_QUESTION, this);
 	if (answer == wxNO)
@@ -1982,22 +1983,20 @@ void GeneralSettings2::OnAccountDelete(wxCommandEvent& event)
 
 	// todo: ask if saves should be deleted too?
 
-	const fs::path path = account.GetFileName();
-	try
+	const auto result = m_emulationController.DeleteAccount(account.persistentId);
+	if (result)
 	{
-		fs::remove_all(path.parent_path());
 		m_active_account->Delete(selection);
 		m_active_account->SetSelection(0);
-		Account::RefreshAccounts();
 		UpdateAccountInformation();
 
 		m_create_account->Enable(m_active_account->GetCount() < 0xC);
 		m_delete_account->Enable(m_active_account->GetCount() > 1);
 	}
-	catch(const std::exception& ex)
+	else
 	{
-		SystemException sys(ex);
-		cemuLog_log(LogType::Force, sys.what());
+		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
+			wxOK | wxCENTRE | wxICON_ERROR, this);
 	}
 
 }
@@ -2017,6 +2016,15 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 	auto* obj = dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(selection));
 	wxASSERT(obj);
 	auto& account = obj->GetAccount();
+	Application::AccountUpdate update{
+		.miiName = account.miiName,
+		.birthYear = account.birthYear,
+		.birthMonth = account.birthMonth,
+		.birthDay = account.birthDay,
+		.gender = account.gender,
+		.email = account.email,
+		.country = account.country,
+	};
 
 	// TODO make id changeable to free ids + current it?
 	bool refresh_accounts = false;
@@ -2026,7 +2034,7 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 		if (new_name.empty())
 			new_name = L"default";
 
-		account.SetMiiName(new_name);
+		update.miiName = std::move(new_name);
 		refresh_accounts = true;
 	}
 	else if (property->GetName() == kPropertyBirthday)
@@ -2042,29 +2050,36 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 
 		if (tokens.size() == 3)
 		{
-			account.SetBirthYear(ConvertString<uint16>(tokens[0]));
-			account.SetBirthMonth(ConvertString<uint8>(tokens[1]));
-			account.SetBirthDay(ConvertString<uint8>(tokens[2]));
+			update.birthYear = ConvertString<uint16>(tokens[0]);
+			update.birthMonth = ConvertString<uint8>(tokens[1]);
+			update.birthDay = ConvertString<uint8>(tokens[2]);
 		}
 	}
 	else if (property->GetName() == kPropertyGender)
 	{
-		account.SetGender(value.As<int>());
+		update.gender = value.As<int>();
 	}
 	else if (property->GetName() == kPropertyEmail)
 	{
-		account.SetEmail(value.As<wxString>().ToStdString());
+		update.email = value.As<wxString>().ToStdString();
 
 	}
 	else if (property->GetName() == kPropertyCountry)
 	{
-		account.SetCountry(value.As<int>());
+		update.country = value.As<int>();
 	}
 	else
 		cemu_assert_debug(false);
 
-	account.Save();
-	Account::RefreshAccounts(); // refresh internal account list
+	const auto result = m_emulationController.UpdateAccount(account.persistentId, update);
+	if (!result || !result.account)
+	{
+		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
+			wxOK | wxCENTRE | wxICON_ERROR, this);
+		UpdateOnlineAccounts();
+		return;
+	}
+	account = *result.account;
 	UpdateAccountInformation(); // refresh on invalid values
 
 	if(refresh_accounts)
@@ -2092,37 +2107,40 @@ void GeneralSettings2::UpdateAccountInformation()
 	wxASSERT(obj);
 	const auto& account = obj->GetAccount();
 
-	m_active_account->SetString(selection, account.ToString());
+	m_active_account->SetString(selection,
+		fmt::format(L"{} ({:x})", account.miiName, account.persistentId));
 
-	m_account_grid->GetProperty(kPropertyPersistentId)->SetValueFromString(fmt::format("{:x}", account.GetPersistentId()));
-	m_account_grid->GetProperty(kPropertyMiiName)->SetValueFromString(std::wstring{ account.GetMiiName() });
-	m_account_grid->GetProperty(kPropertyBirthday)->SetValueFromString(fmt::format("{:04d}-{:02d}-{:02d}", account.GetBirthYear(), account.GetBirthMonth(), account.GetBirthDay()));
+	m_account_grid->GetProperty(kPropertyPersistentId)->SetValueFromString(fmt::format("{:x}", account.persistentId));
+	m_account_grid->GetProperty(kPropertyMiiName)->SetValueFromString(account.miiName);
+	m_account_grid->GetProperty(kPropertyBirthday)->SetValueFromString(fmt::format("{:04d}-{:02d}-{:02d}", account.birthYear, account.birthMonth, account.birthDay));
 
 	const auto gender_property = m_account_grid->GetProperty(kPropertyGender); // gender 2 can be also female?
-	gender_property->SetChoiceSelection(std::min(gender_property->GetChoices().GetCount() - 1, (uint32)account.GetGender()));
+	gender_property->SetChoiceSelection(std::min(gender_property->GetChoices().GetCount() - 1, (uint32)account.gender));
 
-	m_account_grid->GetProperty(kPropertyEmail)->SetValueFromString(std::string{ account.GetEmail() });
+	m_account_grid->GetProperty(kPropertyEmail)->SetValueFromString(account.email);
 
 	auto* country_property = dynamic_cast<wxEnumProperty*>(m_account_grid->GetProperty(kPropertyCountry));
 	wxASSERT(country_property);
-	int index = (country_property)->GetIndexForValue(account.GetCountry());
+	int index = (country_property)->GetIndexForValue(account.country);
 	if (index == wxNOT_FOUND)
 		index = 0;
 	country_property->SetChoiceSelection(index);
 
-	const bool online_fully_valid = account.IsValidOnlineAccount() && ActiveSettings::HasRequiredOnlineFiles();
-	if (ActiveSettings::HasRequiredOnlineFiles())
+	const auto onlineEnvironment = m_emulationController.GetOnlineEnvironmentStatus();
+	const bool online_fully_valid = account.validOnlineAccount &&
+		onlineEnvironment.requiredFilesAvailable;
+	if (onlineEnvironment.requiredFilesAvailable)
 	{
-		if(account.IsValidOnlineAccount())
+		if(account.validOnlineAccount)
 			m_online_status->SetLabel(_("Selected account is a valid online account"));
 		else
 			m_online_status->SetLabel(_("Selected account is not linked to a NNID or PNID"));
 	}
 	else
 	{
-		if(NCrypto::OTP_IsPresent() != NCrypto::SEEPROM_IsPresent())
+		if(onlineEnvironment.otpPresent != onlineEnvironment.seepromPresent)
 			m_online_status->SetLabel(_("OTP.bin or SEEPROM.bin is missing"));
-		else if(NCrypto::OTP_IsPresent() && NCrypto::SEEPROM_IsPresent())
+		else if(onlineEnvironment.otpPresent && onlineEnvironment.seepromPresent)
 			m_online_status->SetLabel(_("OTP and SEEPROM present but no certificate files were found"));
 		else
 			m_online_status->SetLabel(_("Online play is not set up. Follow the guide below to get started"));
@@ -2143,12 +2161,12 @@ void GeneralSettings2::UpdateAccountInformation()
 	m_active_service->Enable(online_fully_valid && !m_emulationController.IsTitleRunning());
 	if(online_fully_valid)
 	{
-		NetworkService service = GetConfig().GetAccountNetworkService(account.GetPersistentId());
+		NetworkService service = GetConfig().GetAccountNetworkService(account.persistentId);
 		m_active_service->SetSelection(GetNetworkServiceSelection(service));
 		// set the config option here for the selected service
 		// this will guarantee that it's actually written to settings.xml
 		// allowing us to eventually get rid of the legacy option in the (far) future
-		GetConfig().SetAccountSelectedService(account.GetPersistentId(), service);
+		GetConfig().SetAccountSelectedService(account.persistentId, service);
 	}
 	else
 	{
@@ -2156,7 +2174,7 @@ void GeneralSettings2::UpdateAccountInformation()
 	}
 	wxString tmp = _("Network service");
 	tmp.append(" (");
-	tmp.append(wxString::FromUTF8(boost::nowide::narrow(account.GetMiiName())));
+	tmp.append(wxString::FromUTF8(boost::nowide::narrow(account.miiName)));
 	tmp.append(")");
 	m_active_service->SetLabel(tmp);
 
@@ -2169,9 +2187,9 @@ void GeneralSettings2::UpdateAccountInformation()
 void GeneralSettings2::UpdateOnlineAccounts()
 {
 	m_active_account->Clear();
-	for(const auto& account : Account::GetAccounts())
+	for(const auto& account : m_emulationController.ListAccounts())
 	{
-		m_active_account->Append(fmt::format(L"{} ({:x})", std::wstring{ account.GetMiiName() }, account.GetPersistentId()),
+		m_active_account->Append(fmt::format(L"{} ({:x})", account.miiName, account.persistentId),
 			new wxAccountData(account));
 	}
 
@@ -2504,7 +2522,7 @@ void GeneralSettings2::ApplyConfig()
 	{
 		const auto* obj = dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(i));
 		wxASSERT(obj);
-		if(obj->GetAccount().GetPersistentId() == ActiveSettings::GetPersistentId())
+		if(obj->GetAccount().persistentId == ActiveSettings::GetPersistentId())
 		{
 			m_active_account->SetSelection(i);
 			break;
@@ -2887,29 +2905,29 @@ void GeneralSettings2::OnShowOnlineValidator(wxCommandEvent& event)
 	wxASSERT(obj);
 	const auto& account = obj->GetAccount();
 
-	const auto validator = account.ValidateOnlineFiles();
+	const auto validator = m_emulationController.ValidateOnlineAccount(account.persistentId);
 	if (validator) // everything valid? shouldn't happen
 		return;
 
 	wxString err;
 	err << _("The following error(s) have been found:") << '\n';
 
-	if (validator.otp == OnlineValidator::FileState::Missing)
+	if (validator.otp == Application::AccountFileState::Missing)
 		err << _("otp.bin missing in Cemu directory") << '\n';
-	else if(validator.otp == OnlineValidator::FileState::Corrupted)
+	else if(validator.otp == Application::AccountFileState::Corrupted)
 		err << _("otp.bin is invalid") << '\n';
 
-	if (validator.seeprom == OnlineValidator::FileState::Missing)
+	if (validator.seeprom == Application::AccountFileState::Missing)
 		err << _("seeprom.bin missing in Cemu directory") << '\n';
-	else if(validator.seeprom == OnlineValidator::FileState::Corrupted)
+	else if(validator.seeprom == Application::AccountFileState::Corrupted)
 		err << _("seeprom.bin is invalid") << '\n';
 
-	if(!validator.missing_files.empty())
+	if(!validator.missingFiles.empty())
 	{
 		err << _("Missing certificate and key files:") << '\n';
 
 		int counter = 0;
-		for (const auto& f : validator.missing_files)
+		for (const auto& f : validator.missingFiles)
 		{
 			err << f << '\n';
 
@@ -2924,26 +2942,26 @@ void GeneralSettings2::OnShowOnlineValidator(wxCommandEvent& event)
 		err << '\n';
 	}
 
-	if (!validator.valid_account)
+	if (!validator.validAccount)
 	{
 		err << _("The currently selected account is not a valid or dumped online account:") << '\n';
-		err << GetOnlineAccountErrorMessage(validator.account_error);
+		err << GetOnlineAccountErrorMessage(validator.accountError);
 	}
 
 	wxMessageBox(err, _("Online Status"), wxOK | wxCENTRE | wxICON_INFORMATION);
 }
 
-wxString GeneralSettings2::GetOnlineAccountErrorMessage(OnlineAccountError error)
+wxString GeneralSettings2::GetOnlineAccountErrorMessage(Application::AccountOnlineError error)
 {
 	switch (error)
 	{
-		case OnlineAccountError::kNoAccountId:
+		case Application::AccountOnlineError::NoAccountId:
 			return _("AccountId missing (The account is not connected to a NNID/PNID)");
-		case OnlineAccountError::kNoPasswordCached:
+		case Application::AccountOnlineError::NoPasswordCached:
 			return _("IsPasswordCacheEnabled is set to false (The remember password option on your Wii U must be enabled for this account before dumping it)");
-		case OnlineAccountError::kPasswordCacheEmpty:
+		case Application::AccountOnlineError::PasswordCacheEmpty:
 			return _("AccountPasswordCache is empty (The remember password option on your Wii U must be enabled for this account before dumping it)");
-		case OnlineAccountError::kNoPrincipalId:
+		case Application::AccountOnlineError::NoPrincipalId:
 			return _("PrincipalId missing");
 		default:
 			return "no error";

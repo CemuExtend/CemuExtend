@@ -32,10 +32,8 @@
 #include <wx/notebook.h>
 #include <wx/settings.h>
 
-#include "Cafe/IOSU/legacy/iosu_crypto.h"
 #include "config/ActiveSettings.h"
 #include "wxgui/dialogs/SaveImport/SaveImportWindow.h"
-#include "Cafe/Account/Account.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "wxgui/CemuApp.h"
 #include "resource/embedded/resources.h"
@@ -154,14 +152,15 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 #if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
 		m_account = new wxChoice(panel, wxID_ANY);
 		m_account->SetMinSize({ 250,-1 });
-		auto accounts = Account::GetAccounts();
+		auto accounts = m_emulationController.ListAccounts();
 		if (!accounts.empty())
 		{
 			const auto id = GetConfig().account.m_persistent_id.GetValue();
 			for (const auto& a : accounts)
 			{
-				m_account->Append(a.ToString(), (void*)static_cast<uintptr_t>(a.GetPersistentId()));
-				if(a.GetPersistentId() == id)
+				m_account->Append(fmt::format(L"{} ({:x})", a.miiName, a.persistentId),
+					(void*)static_cast<uintptr_t>(a.persistentId));
+				if(a.persistentId == id)
 				{
 					m_account->SetSelection(m_account->GetCount() - 1);
 				}
@@ -181,7 +180,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 #if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
 	m_status_text = new wxStaticText(panel, wxID_ANY, _("Select an account and press Connect"));
 #else
-	if(!NCrypto::HasDataForConsoleCert())
+	if(!m_emulationController.GetOnlineEnvironmentStatus().consoleCertificateAvailable)
 	{
 		m_status_text = new wxStaticText(panel, wxID_ANY, _("Valid online files are required to download eShop titles. For more information, go to the Account tab in the General Settings."));
 		m_connect->Enable(false);
@@ -438,14 +437,15 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 				v->Disable();
 		}
 
-		const auto& accounts = Account::GetAccounts();
+		const auto accounts = m_emulationController.ListAccounts();
 		for (const auto& id : entry->persistent_ids)
 		{
-			const auto it = std::find_if(accounts.cbegin(), accounts.cend(), [id](const auto& acc) { return acc.GetPersistentId() == id; });
+			const auto it = std::find_if(accounts.cbegin(), accounts.cend(),
+				[id](const auto& acc) { return acc.persistentId == id; });
 			if(it != accounts.cend())
 			{
 				m_save_account_list->Append(fmt::format("{:x} ({})", id, 
-					boost::nowide::narrow(it->GetMiiName().data(), it->GetMiiName().size())), 
+					boost::nowide::narrow(it->miiName)),
 					(void*)(uintptr_t)id);
 			}
 			else
@@ -563,7 +563,8 @@ void TitleManager::OnSaveTransfer(wxCommandEvent& event)
 
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection_index);
 	
-	SaveTransfer transfer(this, entry->title_id, selection, persistent_id);
+	SaveTransfer transfer(this, m_emulationController, entry->title_id, selection,
+		persistent_id);
 	if (transfer.ShowModal() == wxCANCEL)
 		return;
 
@@ -577,10 +578,10 @@ void TitleManager::OnSaveTransfer(wxCommandEvent& event)
 	{
 		persistent_ids.emplace_back(new_id);
 
-		const auto& account = Account::GetAccount(new_id);
-		if(account.GetPersistentId() == new_id)
+		const auto account = m_emulationController.GetAccount(new_id);
+		if(account)
 			m_save_account_list->Append(fmt::format("{:x} ({})", new_id,
-				boost::nowide::narrow(account.GetMiiName().data(), account.GetMiiName().size())),
+				boost::nowide::narrow(account->miiName)),
 				(void*)(uintptr_t)new_id);
 		else
 			m_save_account_list->Append(fmt::format("{:x}", new_id), (void*)(uintptr_t)new_id);
@@ -688,7 +689,7 @@ void TitleManager::OnSaveImport(wxCommandEvent& event)
 	if (!entry.has_value())
 		return;
 	
-	SaveImportWindow save_import(this, entry->title_id);
+	SaveImportWindow save_import(this, m_emulationController, entry->title_id);
 	if (save_import.ShowModal() == wxCANCEL)
 		return;
 
@@ -699,10 +700,10 @@ void TitleManager::OnSaveImport(wxCommandEvent& event)
 	{
 		persistent_ids.emplace_back(new_id);
 
-		const auto& account = Account::GetAccount(new_id);
-		if (account.GetPersistentId() == new_id)
+		const auto account = m_emulationController.GetAccount(new_id);
+		if (account)
 			m_save_account_list->Append(fmt::format("{:x} ({})", new_id,
-				boost::nowide::narrow(account.GetMiiName().data(), account.GetMiiName().size())),
+				boost::nowide::narrow(account->miiName)),
 				(void*)(uintptr_t)new_id);
 		else
 			m_save_account_list->Append(fmt::format("{:x}", new_id), (void*)(uintptr_t)new_id);
@@ -715,17 +716,24 @@ void TitleManager::InitiateConnect()
 	// init connection to download manager if queued
 #if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
 	uint32 persistentId = (uint32)(uintptr_t)m_account->GetClientData(m_account->GetSelection());
-	auto& account = Account::GetAccount(persistentId);
 #endif
 	DownloadManager* dlMgr = DownloadManager::GetInstance();
 	dlMgr->reset();
 	m_download_list->SetCurrentDownloadMgr(dlMgr);
 
-	std::string deviceCertBase64 = NCrypto::CertECC::GetDeviceCertificate().encodeToBase64();
-
-	if (!NCrypto::SEEPROM_IsPresent())
+	const auto context = m_emulationController.GetDownloadAccountContext(
+#if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
+		persistentId
+#else
+		std::nullopt
+#endif
+	);
+	if (!context)
 	{
-		SetDownloadStatusText(_("Dumped online files not found"));
+		if (context.error == Application::DownloadAccountError::InvalidCredentials)
+			SetDownloadStatusText(_("The selected account has invalid online credentials"));
+		else
+			SetDownloadStatusText(_("Dumped online files not found"));
 		return;
 	}
 
@@ -736,15 +744,9 @@ void TitleManager::InitiateConnect()
 		TitleManager::Callback_ConnectStatusUpdate,
 		TitleManager::Callback_AddDownloadableTitle,
 		TitleManager::Callback_RemoveDownloadableTitle);
-	std::string accountName;
-	std::array<uint8, 32> accountPassword;
-	std::string accountCountry;
-#if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
-	accountName = account.GetAccountId();
-	accountPassword = account.GetAccountPasswordCache();
-	accountCountry.assign(NCrypto::GetCountryAsString(account.GetCountry()));
-#endif
-	dlMgr->connect(accountName, accountPassword, NCrypto::SEEPROM_GetRegion(), accountCountry, NCrypto::GetDeviceId(), NCrypto::GetSerial(), deviceCertBase64);
+	dlMgr->connect(context.accountName, context.passwordHash,
+		static_cast<CafeConsoleRegion>(context.region), context.country,
+		context.deviceId, context.serial, context.deviceCertificateBase64);
 }
 
 void TitleManager::OnConnect(wxCommandEvent& event)

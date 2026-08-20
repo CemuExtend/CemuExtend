@@ -2,10 +2,13 @@
 
 #include <wx/dialog.h>
 
+namespace Application { class EmulationController; }
+
 class SaveImportWindow : public wxDialog
 {
 public:
-	SaveImportWindow(wxWindow* parent, uint64 title_id);
+	SaveImportWindow(wxWindow* parent, Application::EmulationController& emulationController,
+		uint64 title_id);
 
 	void EndModal(int retCode) override;
 
@@ -18,8 +21,8 @@ private:
 
 	uint32 m_target_id = 0;
 	const uint64 m_title_id;
+	Application::EmulationController& m_emulationController;
 	const fs::path m_source_file;
 	int m_return_code = wxCANCEL;
 };
-
 

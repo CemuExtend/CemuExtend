@@ -10,7 +10,6 @@
 #include "input/InputManager.h"
 #include "input/api/SDL/SDLControllerProvider.h"
 #include "wxgui/helpers/wxHelpers.h"
-#include "Cemu/ncrypto/ncrypto.h"
 #include "wxgui/input/HotkeySettings.h"
 #include "wxgui/debugger/DebuggerWindowAdapter.h"
 #include <wx/language.h>
@@ -801,13 +800,12 @@ bool CemuApp::CreateDefaultMLCFiles(const fs::path& mlc)
 		if (!fs::exists(countryFile))
 		{
 			std::ofstream file(countryFile);
-			for (sint32 i = 0; i < NCrypto::GetCountryCount(); i++)
+			for (const auto& country : wxGetApp().m_emulationController.ListAccountCountries())
 			{
-				const char* countryCode = NCrypto::GetCountryAsString(i);
-				if (boost::iequals(countryCode, "NN"))
+				if (boost::iequals(country.name, "NN"))
 					file << "NULL," << std::endl;
 				else
-					file << fmt::format(R"("{}",)", countryCode) << std::endl;
+					file << fmt::format(R"("{}",)", country.name) << std::endl;
 			}
 			file.flush();
 			file.close();

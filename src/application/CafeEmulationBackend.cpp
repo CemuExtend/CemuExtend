@@ -2,6 +2,7 @@
 
 #include "application/EmulationController.h"
 
+#include "Cafe/Account/Account.h"
 #include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
@@ -23,6 +24,7 @@
 #include "config/CemuConfig.h"
 #include "input/InputManager.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
+#include "Cemu/ncrypto/ncrypto.h"
 #include "Common/FileStream.h"
 #include "util/helpers/helpers.h"
 
@@ -89,6 +91,63 @@ namespace Application
 				.titleIds = std::move(package.titleIds),
 				.error = std::move(package.error),
 			};
+		}
+
+		AccountOnlineError TranslateAccountOnlineError(::OnlineAccountError error)
+		{
+			switch (error)
+			{
+			case ::OnlineAccountError::kNoAccountId:
+				return AccountOnlineError::NoAccountId;
+			case ::OnlineAccountError::kNoPasswordCached:
+				return AccountOnlineError::NoPasswordCached;
+			case ::OnlineAccountError::kPasswordCacheEmpty:
+				return AccountOnlineError::PasswordCacheEmpty;
+			case ::OnlineAccountError::kNoPrincipalId:
+				return AccountOnlineError::NoPrincipalId;
+			case ::OnlineAccountError::kNone:
+			default:
+				return AccountOnlineError::None;
+			}
+		}
+
+		AccountFileState TranslateAccountFileState(::OnlineValidator::FileState state)
+		{
+			switch (state)
+			{
+			case ::OnlineValidator::FileState::Corrupted:
+				return AccountFileState::Corrupted;
+			case ::OnlineValidator::FileState::Ok:
+				return AccountFileState::Ok;
+			case ::OnlineValidator::FileState::Missing:
+			default:
+				return AccountFileState::Missing;
+			}
+		}
+
+		AccountInfo TranslateAccount(const ::Account& account)
+		{
+			return {
+				.persistentId = account.GetPersistentId(),
+				.miiName = std::wstring(account.GetMiiName()),
+				.birthYear = account.GetBirthYear(),
+				.birthMonth = account.GetBirthMonth(),
+				.birthDay = account.GetBirthDay(),
+				.gender = account.GetGender(),
+				.email = std::string(account.GetEmail()),
+				.country = account.GetCountry(),
+				.validOnlineAccount = account.IsValidOnlineAccount(),
+			};
+		}
+
+		const ::Account* FindAccount(std::uint32_t persistentId)
+		{
+			const auto& accounts = ::Account::GetAccounts();
+			const auto found = std::ranges::find_if(accounts,
+				[persistentId](const auto& account) {
+					return account.GetPersistentId() == persistentId;
+				});
+			return found == accounts.end() ? nullptr : &*found;
 		}
 
 		GraphicPackPtr FindGraphicPack(std::string_view key)
@@ -2113,6 +2172,198 @@ namespace Application
 					return {TitleInstallError::CopyFailure,
 						"Unknown title installation failure", {}};
 				}
+			}
+
+			std::vector<AccountInfo> ListAccounts() const override
+			{
+				std::vector<AccountInfo> result;
+				const auto& accounts = ::Account::GetAccounts();
+				result.reserve(accounts.size());
+				for (const auto& account : accounts)
+					result.push_back(TranslateAccount(account));
+				return result;
+			}
+
+			std::optional<AccountInfo> GetAccount(
+				std::uint32_t persistentId) const override
+			{
+				const auto* account = FindAccount(persistentId);
+				return account ? std::optional{TranslateAccount(*account)} : std::nullopt;
+			}
+
+			std::uint32_t NextPersistentId() const override
+			{
+				return ::Account::GetNextPersistentId();
+			}
+
+			bool HasFreeAccountSlots() const override
+			{
+				return ::Account::HasFreeAccountSlots();
+			}
+
+			std::vector<AccountCountry> ListAccountCountries() const override
+			{
+				std::vector<AccountCountry> result;
+				for (std::uint32_t index = 0;
+					index < static_cast<std::uint32_t>(NCrypto::GetCountryCount()); ++index)
+				{
+					const char* country = NCrypto::GetCountryAsString(index);
+					if (country && (index == 0 || !boost::equals(country, "NN")))
+						result.push_back({index, country});
+				}
+				return result;
+			}
+
+			OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const override
+			{
+				return {
+					.requiredFilesAvailable = ActiveSettings::HasRequiredOnlineFiles(),
+					.otpPresent = NCrypto::OTP_IsPresent(),
+					.seepromPresent = NCrypto::SEEPROM_IsPresent(),
+					.consoleCertificateAvailable = NCrypto::HasDataForConsoleCert(),
+				};
+			}
+
+			DownloadAccountContext GetDownloadAccountContext(
+				std::optional<std::uint32_t> persistentId) const override
+			{
+				DownloadAccountContext result;
+				if (!ActiveSettings::HasRequiredOnlineFiles() || !NCrypto::OTP_IsPresent() ||
+					!NCrypto::SEEPROM_IsPresent() || !NCrypto::HasDataForConsoleCert())
+				{
+					result.error = DownloadAccountError::OnlineFilesMissing;
+					return result;
+				}
+
+				if (persistentId)
+				{
+					const auto* account = FindAccount(*persistentId);
+					if (!account)
+					{
+						result.error = DownloadAccountError::AccountNotFound;
+						return result;
+					}
+					const auto validation = account->ValidateOnlineFiles();
+					if (!validation.valid_account)
+					{
+						result.error = DownloadAccountError::InvalidCredentials;
+						return result;
+					}
+					result.accountName = account->GetAccountId();
+					result.passwordHash = account->GetAccountPasswordCache();
+					result.country = NCrypto::GetCountryAsString(account->GetCountry());
+				}
+
+				result.deviceCertificateBase64 =
+					NCrypto::CertECC::GetDeviceCertificate().encodeToBase64();
+				result.region = static_cast<std::uint32_t>(NCrypto::SEEPROM_GetRegion());
+				result.deviceId = NCrypto::GetDeviceId();
+				result.serial = NCrypto::GetSerial();
+				return result;
+			}
+
+			AccountValidation ValidateOnlineAccount(
+				std::uint32_t persistentId) const override
+			{
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {.accountError = AccountOnlineError::NoAccountId};
+				const auto validation = account->ValidateOnlineFiles();
+				return {
+					.validAccount = validation.valid_account,
+					.otp = TranslateAccountFileState(validation.otp),
+					.seeprom = TranslateAccountFileState(validation.seeprom),
+					.missingFiles = validation.missing_files,
+					.accountError = TranslateAccountOnlineError(validation.account_error),
+				};
+			}
+
+			AccountOperationResult CreateAccount(std::uint32_t persistentId,
+				std::wstring_view miiName) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+						"accounts cannot be changed while a title is running"};
+				if (persistentId < kMinimumPersistentId)
+					return {AccountOperationError::InvalidPersistentId,
+						"persistent id is below the supported range"};
+				if (miiName.empty())
+					return {AccountOperationError::InvalidMiiName,
+						"account name may not be empty"};
+				if (!::Account::HasFreeAccountSlots())
+					return {AccountOperationError::NoFreeSlots,
+						"all account slots are occupied"};
+				if (FindAccount(persistentId))
+					return {AccountOperationError::DuplicatePersistentId,
+						"persistent id is already in use"};
+				try
+				{
+					::Account account(persistentId, miiName);
+					const auto error = account.Save();
+					if (error)
+						return {AccountOperationError::IoFailure, error.message()};
+					::Account::RefreshAccounts();
+					return {AccountOperationError::None, {}, TranslateAccount(account)};
+				}
+				catch (const std::exception& exception)
+				{
+					return {AccountOperationError::BackendFailure, exception.what()};
+				}
+			}
+
+			AccountOperationResult UpdateAccount(std::uint32_t persistentId,
+				const AccountUpdate& update) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+						"accounts cannot be changed while a title is running"};
+				const auto* existing = FindAccount(persistentId);
+				if (!existing)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				if (update.miiName.empty())
+					return {AccountOperationError::InvalidMiiName,
+						"account name may not be empty"};
+				try
+				{
+					::Account account = *existing;
+					account.SetMiiName(update.miiName);
+					account.SetBirthYear(update.birthYear);
+					account.SetBirthMonth(update.birthMonth);
+					account.SetBirthDay(update.birthDay);
+					account.SetGender(update.gender);
+					account.SetEmail(update.email);
+					account.SetCountry(update.country);
+					const auto error = account.Save();
+					if (error)
+						return {AccountOperationError::IoFailure, error.message()};
+					::Account::RefreshAccounts();
+					return {AccountOperationError::None, {}, TranslateAccount(account)};
+				}
+				catch (const std::exception& exception)
+				{
+					return {AccountOperationError::BackendFailure, exception.what()};
+				}
+			}
+
+			AccountOperationResult DeleteAccount(
+				std::uint32_t persistentId) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+						"accounts cannot be changed while a title is running"};
+				const auto& accounts = ::Account::GetAccounts();
+				if (accounts.size() <= 1)
+					return {AccountOperationError::CannotDeleteOnlyAccount,
+						"the only account cannot be deleted"};
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				std::error_code error;
+				fs::remove_all(account->GetFileName().parent_path(), error);
+				if (error)
+					return {AccountOperationError::IoFailure, error.message()};
+				::Account::RefreshAccounts();
+				return {};
 			}
 
 			std::vector<GraphicPackInfo> ListGraphicPacks() const override

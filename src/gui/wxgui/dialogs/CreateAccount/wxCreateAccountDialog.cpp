@@ -1,5 +1,5 @@
 #include "wxgui/dialogs/CreateAccount/wxCreateAccountDialog.h"
-#include "Cafe/Account/Account.h"
+#include "application/EmulationController.h"
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -10,8 +10,10 @@
 #include <helpers/wxHelpers.h>
 #include "util/helpers/helpers.h"
 
-wxCreateAccountDialog::wxCreateAccountDialog(wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, _("Create new account"))
+wxCreateAccountDialog::wxCreateAccountDialog(wxWindow* parent,
+	Application::EmulationController& emulationController)
+	: wxDialog(parent, wxID_ANY, _("Create new account")),
+	m_emulationController(emulationController)
 {
 	auto* main_sizer = new wxFlexGridSizer(0, 2, 0, 0);
 	main_sizer->AddGrowableCol(1);
@@ -20,7 +22,8 @@ wxCreateAccountDialog::wxCreateAccountDialog(wxWindow* parent)
 
 	main_sizer->Add(new wxStaticText(this, wxID_ANY, "PersistentId"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 	
-	m_persistent_id = new wxTextCtrl(this, wxID_ANY, fmt::format("{:x}", Account::GetNextPersistentId()));
+	m_persistent_id = new wxTextCtrl(this, wxID_ANY,
+		fmt::format("{:x}", m_emulationController.NextPersistentId()));
 	m_persistent_id->SetToolTip(_("The persistent id is the internal folder name used for your saves. Only change this if you are importing saves from a Wii U with a specific id"));
 	main_sizer->Add(m_persistent_id, 1, wxALL | wxEXPAND, 5);
 
@@ -70,18 +73,19 @@ void wxCreateAccountDialog::OnOK(wxCommandEvent& event)
 	}
 
 	const auto id = GetPersistentId();
-	if(id < Account::kMinPersistendId)
+	if(id < Application::kMinimumPersistentId)
 	{
-		wxMessageBox(formatWxString(_("The persistent id must be greater than {:x}!"), Account::kMinPersistendId),
+		wxMessageBox(formatWxString(_("The persistent id must be greater than {:x}!"),
+			Application::kMinimumPersistentId),
 			_("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 	
-	const auto& account = Account::GetAccount(id);
-	if(account.GetPersistentId() == id)
+	const auto account = m_emulationController.GetAccount(id);
+	if(account)
 	{
 		const std::wstring msg = fmt::format(fmt::runtime(_("The persistent id {:x} is already in use by account {}!").ToStdWstring()), 
-			account.GetPersistentId(), std::wstring{ account.GetMiiName() });
+			account->persistentId, account->miiName);
 		wxMessageBox(msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}

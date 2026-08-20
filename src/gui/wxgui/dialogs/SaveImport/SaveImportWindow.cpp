@@ -1,4 +1,5 @@
 #include "SaveImportWindow.h"
+#include "application/EmulationController.h"
 
 #include "pugixml.hpp"
 #include <wx/sizer.h>
@@ -11,16 +12,16 @@
 #include <wx/msgdlg.h>
 #include "zip.h"
 
-#include "Cafe/Account/Account.h"
 #include "config/ActiveSettings.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
 #include "util/helpers/helpers.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "wxgui/helpers/wxHelpers.h"
 
-SaveImportWindow::SaveImportWindow(wxWindow* parent, uint64 title_id)
+SaveImportWindow::SaveImportWindow(wxWindow* parent,
+	Application::EmulationController& emulationController, uint64 title_id)
 	: wxDialog(parent, wxID_ANY, _("Import save entry"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	m_title_id(title_id)
+	m_title_id(title_id), m_emulationController(emulationController)
 {
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -37,13 +38,13 @@ SaveImportWindow::SaveImportWindow(wxWindow* parent, uint64 title_id)
 
 		row1->Add(new wxStaticText(this, wxID_ANY, _("Target")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
-		const auto& accounts = Account::GetAccounts();
+		const auto accounts = m_emulationController.ListAccounts();
 		m_target_selection = new wxComboBox(this, wxID_ANY);
 		for (const auto& account : accounts)
 		{
-			m_target_selection->Append(fmt::format("{:x} ({})", account.GetPersistentId(),
-				boost::nowide::narrow(account.GetMiiName().data(), account.GetMiiName().size())),
-				(void*)(uintptr_t)account.GetPersistentId());
+			m_target_selection->Append(fmt::format("{:x} ({})", account.persistentId,
+				boost::nowide::narrow(account.miiName)),
+				(void*)(uintptr_t)account.persistentId);
 		}
 		row1->Add(m_target_selection, 1, wxALL | wxEXPAND, 5);
 
@@ -156,9 +157,9 @@ void SaveImportWindow::OnImport(wxCommandEvent& event)
 	if (target_id == 0)
 	{
 		target_id = ConvertString<uint32>(m_target_selection->GetValue().ToStdString(), 16);
-		if (target_id < Account::kMinPersistendId)
+		if (target_id < Application::kMinimumPersistentId)
 		{
-			const auto msg = formatWxString(_("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"), Account::kMinPersistendId);
+			const auto msg = formatWxString(_("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"), Application::kMinimumPersistentId);
 			wxMessageBox(msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;
 		}

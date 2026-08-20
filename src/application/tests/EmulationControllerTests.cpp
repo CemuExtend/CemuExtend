@@ -221,6 +221,81 @@ namespace
 				progress({plan.requiredBytes, plan.requiredBytes, "meta/meta.xml"});
 			return {Application::TitleInstallError::None, {}, plan.targetPath};
 		}
+		std::vector<Application::AccountInfo> accounts{{
+			.persistentId = Application::kMinimumPersistentId,
+			.miiName = L"default",
+		}};
+		Application::DownloadAccountContext downloadAccountContext;
+		std::vector<Application::AccountInfo> ListAccounts() const override
+		{
+			return accounts;
+		}
+		std::optional<Application::AccountInfo> GetAccount(
+			std::uint32_t persistentId) const override
+		{
+			const auto found = std::ranges::find_if(accounts,
+				[persistentId](const auto& account) {
+					return account.persistentId == persistentId;
+				});
+			return found == accounts.end() ? std::nullopt : std::optional{*found};
+		}
+		std::uint32_t NextPersistentId() const override
+		{
+			return Application::kMinimumPersistentId +
+				static_cast<std::uint32_t>(accounts.size());
+		}
+		bool HasFreeAccountSlots() const override
+		{
+			return accounts.size() < Application::kMaximumAccountCount;
+		}
+		std::vector<Application::AccountCountry> ListAccountCountries() const override
+		{
+			return {{1, "US"}};
+		}
+		Application::OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const override
+		{
+			return {.requiredFilesAvailable = true, .otpPresent = true,
+				.seepromPresent = true, .consoleCertificateAvailable = true};
+		}
+		Application::DownloadAccountContext GetDownloadAccountContext(
+			std::optional<std::uint32_t>) const override
+		{
+			return downloadAccountContext;
+		}
+		Application::AccountValidation ValidateOnlineAccount(
+			std::uint32_t persistentId) const override
+		{
+			return {.validAccount = GetAccount(persistentId).has_value(),
+				.otp = Application::AccountFileState::Ok,
+				.seeprom = Application::AccountFileState::Ok};
+		}
+		Application::AccountOperationResult CreateAccount(
+			std::uint32_t persistentId, std::wstring_view miiName) override
+		{
+			accounts.push_back({.persistentId = persistentId,
+				.miiName = std::wstring(miiName)});
+			return {.account = accounts.back()};
+		}
+		Application::AccountOperationResult UpdateAccount(
+			std::uint32_t persistentId, const Application::AccountUpdate& update) override
+		{
+			auto found = std::ranges::find_if(accounts,
+				[persistentId](const auto& account) {
+					return account.persistentId == persistentId;
+				});
+			if (found == accounts.end())
+				return {Application::AccountOperationError::NotFound};
+			found->miiName = update.miiName;
+			return {.account = *found};
+		}
+		Application::AccountOperationResult DeleteAccount(
+			std::uint32_t persistentId) override
+		{
+			std::erase_if(accounts, [persistentId](const auto& account) {
+				return account.persistentId == persistentId;
+			});
+			return {};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -406,6 +481,38 @@ int main()
 	assert(controller.RefreshGraphicPacks());
 	controller.SaveGraphicPackState();
 	assert(backend.graphicPackRefreshes == 1 && backend.graphicPackSaves == 1);
+	const auto accounts = controller.ListAccounts();
+	assert(accounts.size() == 1 &&
+		accounts.front().persistentId == Application::kMinimumPersistentId &&
+		accounts.front().miiName == L"default");
+	assert(controller.GetAccount(Application::kMinimumPersistentId));
+	assert(!controller.GetAccount(0x8fffffff));
+	assert(controller.NextPersistentId() == Application::kMinimumPersistentId + 1);
+	assert(controller.HasFreeAccountSlots());
+	assert(controller.ListAccountCountries().front().name == "US");
+	const auto onlineEnvironment = controller.GetOnlineEnvironmentStatus();
+	assert(onlineEnvironment.requiredFilesAvailable && onlineEnvironment.otpPresent &&
+		onlineEnvironment.seepromPresent &&
+		onlineEnvironment.consoleCertificateAvailable);
+	backend.downloadAccountContext = {.accountName = "test-account", .region = 2};
+	const auto downloadContext = controller.GetDownloadAccountContext(
+		Application::kMinimumPersistentId);
+	assert(downloadContext && downloadContext.accountName == "test-account" &&
+		downloadContext.region == 2);
+	const auto validation = controller.ValidateOnlineAccount(
+		Application::kMinimumPersistentId);
+	assert(validation.validAccount &&
+		validation.otp == Application::AccountFileState::Ok &&
+		validation.seeprom == Application::AccountFileState::Ok);
+	const auto createdAccount = controller.CreateAccount(
+		Application::kMinimumPersistentId + 1, L"second");
+	assert(createdAccount && createdAccount.account->miiName == L"second");
+	Application::AccountUpdate accountUpdate{.miiName = L"updated"};
+	const auto updatedAccount = controller.UpdateAccount(
+		Application::kMinimumPersistentId + 1, accountUpdate);
+	assert(updatedAccount && updatedAccount.account->miiName == L"updated");
+	assert(controller.DeleteAccount(Application::kMinimumPersistentId + 1));
+	assert(controller.ListAccounts().size() == 1);
 	const auto stop = controller.Stop();
 	assert(stop.stopped);
 	assert(controller.State() == Application::EmulationState::Idle);

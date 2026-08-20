@@ -1,4 +1,5 @@
 #include "SaveTransfer.h"
+#include "application/EmulationController.h"
 
 #include "pugixml.hpp"
 #include <wx/sizer.h>
@@ -9,14 +10,15 @@
 #include <wx/frame.h>
 #include <wx/msgdlg.h>
 
-#include "Cafe/Account/Account.h"
 #include "config/ActiveSettings.h"
 #include "util/helpers/helpers.h"
 #include "wxgui/helpers/wxHelpers.h"
 
-SaveTransfer::SaveTransfer(wxWindow* parent, uint64 title_id, const wxString& source_account, uint32 source_id)
+SaveTransfer::SaveTransfer(wxWindow* parent,
+	Application::EmulationController& emulationController, uint64 title_id,
+	const wxString& source_account, uint32 source_id)
 : wxDialog(parent, wxID_ANY, _("Save transfer"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	m_title_id(title_id), m_source_id(source_id)
+	m_title_id(title_id), m_source_id(source_id), m_emulationController(emulationController)
 {
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -33,16 +35,16 @@ SaveTransfer::SaveTransfer(wxWindow* parent, uint64 title_id, const wxString& so
 
 		row1->Add(new wxStaticText(this, wxID_ANY, _("Target")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
-		const auto& accounts = Account::GetAccounts();
+		const auto accounts = m_emulationController.ListAccounts();
 		m_target_selection = new wxComboBox(this, wxID_ANY);
 		for (const auto& account : accounts)
 		{
-			if (account.GetPersistentId() == m_source_id)
+			if (account.persistentId == m_source_id)
 				continue;
 
-			m_target_selection->Append(fmt::format("{:x} ({})", account.GetPersistentId(),
-			                           boost::nowide::narrow(account.GetMiiName().data(), account.GetMiiName().size())),
-			               (void*)(uintptr_t)account.GetPersistentId());
+			m_target_selection->Append(fmt::format("{:x} ({})", account.persistentId,
+			                           boost::nowide::narrow(account.miiName)),
+			               (void*)(uintptr_t)account.persistentId);
 		}
 		row1->Add(m_target_selection, 1, wxALL | wxEXPAND, 5);
 
@@ -90,9 +92,9 @@ void SaveTransfer::OnTransfer(wxCommandEvent& event)
 	if (target_id == 0)
 	{
 		target_id = ConvertString<uint32>(m_target_selection->GetValue().ToStdString(), 16);
-		if(target_id < Account::kMinPersistendId)
+		if(target_id < Application::kMinimumPersistentId)
 		{
-			const auto msg = formatWxString(_("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"), Account::kMinPersistendId);
+			const auto msg = formatWxString(_("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"), Application::kMinimumPersistentId);
 			wxMessageBox(msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;
 		}

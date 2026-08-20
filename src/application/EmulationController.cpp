@@ -474,4 +474,76 @@ namespace Application
 		std::scoped_lock operationLock(m_operationMutex);
 		m_backend->SaveGraphicPackState();
 	}
+
+	std::vector<AccountInfo> EmulationController::ListAccounts() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListAccounts();
+	}
+
+	std::optional<AccountInfo> EmulationController::GetAccount(
+		std::uint32_t persistentId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetAccount(persistentId);
+	}
+
+	std::uint32_t EmulationController::NextPersistentId() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->NextPersistentId();
+	}
+
+	bool EmulationController::HasFreeAccountSlots() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->HasFreeAccountSlots();
+	}
+
+	std::vector<AccountCountry> EmulationController::ListAccountCountries() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListAccountCountries();
+	}
+
+	OnlineEnvironmentStatus EmulationController::GetOnlineEnvironmentStatus() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetOnlineEnvironmentStatus();
+	}
+
+	DownloadAccountContext EmulationController::GetDownloadAccountContext(
+		std::optional<std::uint32_t> persistentId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetDownloadAccountContext(persistentId);
+	}
+
+	AccountValidation EmulationController::ValidateOnlineAccount(
+		std::uint32_t persistentId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ValidateOnlineAccount(persistentId);
+	}
+
+	AccountOperationResult EmulationController::CreateAccount(
+		std::uint32_t persistentId, std::wstring_view miiName)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->CreateAccount(persistentId, miiName);
+	}
+
+	AccountOperationResult EmulationController::UpdateAccount(
+		std::uint32_t persistentId, const AccountUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->UpdateAccount(persistentId, update);
+	}
+
+	AccountOperationResult EmulationController::DeleteAccount(
+		std::uint32_t persistentId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteAccount(persistentId);
+	}
 }

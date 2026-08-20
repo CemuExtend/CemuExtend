@@ -2,7 +2,6 @@
 #include "config/CemuConfig.h"
 #include <wx/collpane.h>
 #include <wx/propgrid/propgrid.h>
-#include <Cafe/Account/Account.h>
 #include "application/EmulationController.h"
 
 class wxCheckBox;
@@ -164,7 +163,7 @@ private:
 	void OnMLCPathClear(wxCommandEvent& event);
 	void OnShowOnlineValidator(wxCommandEvent& event);
 	void OnAccountServiceChanged(wxCommandEvent& event);
-	static wxString GetOnlineAccountErrorMessage(OnlineAccountError error);
+	static wxString GetOnlineAccountErrorMessage(Application::AccountOnlineError error);
 
 	uint32 GetSelectedAccountPersistentId();
 

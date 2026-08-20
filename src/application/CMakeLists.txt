@@ -1,6 +1,7 @@
 add_library(CemuApplication STATIC
 	ApplicationHost.cpp
 	ApplicationHost.h
+	AccountFacade.h
 	ContentOperations.h
   ApplicationEvents.cpp
   ApplicationEvents.h
