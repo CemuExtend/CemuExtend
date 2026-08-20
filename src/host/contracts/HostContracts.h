@@ -107,6 +107,8 @@ namespace Host
 		[[nodiscard]] virtual std::filesystem::path GetExecutablePath() const = 0;
 		[[nodiscard]] virtual std::filesystem::path GetCachePath(
 			std::string_view relativePath) const = 0;
+		[[nodiscard]] virtual std::filesystem::path GetConfigPath(
+			std::string_view relativePath) const = 0;
 	};
 
 	class INativeSurfaceProvider

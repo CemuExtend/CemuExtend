@@ -288,6 +288,6 @@ void GettingStartedDialog::OnConfigureGPs(wxCommandEvent& event)
 
 void GettingStartedDialog::OnInputSettings(wxCommandEvent& event)
 {
-	InputSettings2 dialog(this, m_escapeDown);
+	InputSettings2 dialog(this, m_escapeDown, m_pathProvider);
 	dialog.ShowModal();
 }

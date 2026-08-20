@@ -3,6 +3,7 @@
 #include <wx/gbsizer.h>
 
 #include "input/InputManager.h"
+#include "host/contracts/HostContracts.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/helpers/wxControlObject.h"
 #include "wxgui/helpers/wxCustomData.h"
@@ -17,7 +18,6 @@
 #include <wx/bmpbuttn.h>
 #include <wx/settings.h>
 
-#include "config/ActiveSettings.h"
 #include "wxgui/input/InputAPIAddWindow.h"
 #include "input/ControllerFactory.h"
 
@@ -67,11 +67,13 @@ using wxControllerPageData = wxCustomData<ControllerPage>;
 
 
 InputSettings2::InputSettings2(wxWindow* parent,
-	std::function<bool()> escapeDown)
+	std::function<bool()> escapeDown,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Input settings")),
-	  m_escapeDown(std::move(escapeDown))
+	  m_escapeDown(std::move(escapeDown)),
+	  m_pathProvider(std::move(pathProvider))
 {
-	cemu_assert(static_cast<bool>(m_escapeDown));
+	cemu_assert(static_cast<bool>(m_escapeDown) && m_pathProvider);
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	g_inputConfigWindowHasFocus = true;
@@ -671,10 +673,11 @@ void InputSettings2::on_profile_delete(wxCommandEvent& event)
 	}
 	try
 	{
-		const fs::path old_path = ActiveSettings::GetConfigPath("controllerProfiles/{}.txt", selection);
+		const fs::path profilesPath = m_pathProvider->GetConfigPath("controllerProfiles");
+		const fs::path old_path = profilesPath / _utf8ToPath(fmt::format("{}.txt", selection));
 		fs::remove(old_path);
 
-		const fs::path path = ActiveSettings::GetConfigPath("controllerProfiles/{}.xml", selection);
+		const fs::path path = profilesPath / _utf8ToPath(fmt::format("{}.xml", selection));
 		fs::remove(path);
 
 		profile_names->ChangeValue(kDefaultProfileName);

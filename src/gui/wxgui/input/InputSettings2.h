@@ -5,6 +5,7 @@
 #include <wx/timer.h>
 
 #include <functional>
+#include <memory>
 
 #include "input/api/InputAPI.h"
 
@@ -12,11 +13,13 @@
 
 struct ControllerPage;
 class ControllerBase;
+namespace Host { class IPathProvider; }
 
 class InputSettings2 : public wxDialog
 {
 public:
-	InputSettings2(wxWindow* parent, std::function<bool()> escapeDown);
+	InputSettings2(wxWindow* parent, std::function<bool()> escapeDown,
+		std::shared_ptr<Host::IPathProvider> pathProvider);
 	~InputSettings2();
 
 private:
@@ -27,6 +30,7 @@ private:
 
 	wxBitmap m_connected, m_disconnected, m_low_battery;
 	std::function<bool()> m_escapeDown;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 
 	wxWindow* initialize_page(size_t index);
 

@@ -1075,7 +1075,7 @@ void MainWindow::OnOptionsInput(wxCommandEvent& event)
 		auto* frame = new InputSettings2(this,
 			[keyboardState = m_keyboardState] {
 				return keyboardState->IsKeyDown(Host::Key::Escape);
-			});
+			}, m_pathProvider);
 		frame->ShowModal();
 		frame->Destroy();
 		break;

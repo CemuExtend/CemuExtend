@@ -206,6 +206,11 @@ namespace
 			return ActiveSettings::GetCachePath(relativePath);
 		}
 
+		fs::path GetConfigPath(std::string_view relativePath) const override
+		{
+			return ActiveSettings::GetConfigPath(relativePath);
+		}
+
 		Host::NativeSurfaceSnapshot GetNativeSurfaces() const override
 		{
 			return m_state->NativeSurfaces();
