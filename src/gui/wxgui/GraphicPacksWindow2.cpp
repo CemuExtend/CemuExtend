@@ -184,12 +184,14 @@ void GraphicPacksWindow2::ExpandChildren(const std::vector<wxTreeItemId>& ids, s
 
 GraphicPacksWindow2::GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
 	Application::EmulationController& emulationController,
-	std::shared_ptr<IWxUiDispatcher> uiDispatcher)
+	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Graphic packs"), wxDefaultPosition, wxSize(1000,670), wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
 		m_emulationController(emulationController),
-		m_uiDispatcher(std::move(uiDispatcher))
+		m_uiDispatcher(std::move(uiDispatcher)),
+		m_pathProvider(std::move(pathProvider))
 {
-	cemu_assert(m_uiDispatcher != nullptr);
+	cemu_assert(m_uiDispatcher != nullptr && m_pathProvider != nullptr);
 	for (const auto& title : m_emulationController.ListTitles())
 		m_installed_games.push_back(title.titleId);
 	if (title_id_filter != 0)
@@ -578,7 +580,7 @@ void GraphicPacksWindow2::OnReloadShaders(wxCommandEvent& event)
 
 void GraphicPacksWindow2::OnClickCustomDownload(wxCommandEvent& event)
 {
-	DownloadCustomGraphicPackWindow frame(this);
+	DownloadCustomGraphicPackWindow frame(this, m_pathProvider);
 	if (frame.ShowModal() == wxID_OK)
 	{
 		if (m_emulationController.RefreshGraphicPacks())
@@ -588,7 +590,7 @@ void GraphicPacksWindow2::OnClickCustomDownload(wxCommandEvent& event)
 
 void GraphicPacksWindow2::OnCheckForUpdates(wxCommandEvent& event)
 {
-	DownloadGraphicPacksWindow frame(this, m_emulationController);
+	DownloadGraphicPacksWindow frame(this, m_emulationController, m_pathProvider);
 	SaveStateToConfig();
 	const int updateResult = frame.ShowModal();
 	if (updateResult == wxID_OK)

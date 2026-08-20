@@ -7,10 +7,10 @@
 #include <rapidjson/document.h>
 #include <boost/algorithm/string.hpp>
 
-#include "config/ActiveSettings.h"
 #include "Common/FileStream.h"
 
 #include "application/EmulationController.h"
+#include "host/contracts/HostContracts.h"
 
 struct DownloadGraphicPacksWindow::curlDownloadFileState_t
 {
@@ -62,10 +62,12 @@ bool DownloadGraphicPacksWindow::curlDownloadFile(const char *url, curlDownloadF
 }
 
 // returns true if the version matches
-bool checkGraphicPackDownloadedVersion(const char* nameVersion, bool& hasVersionFile)
+bool checkGraphicPackDownloadedVersion(const Host::IPathProvider& pathProvider,
+	const char* nameVersion, bool& hasVersionFile)
 {
 	hasVersionFile = false;
-	const auto path = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks/version.txt");
+	const auto path = pathProvider.GetUserDataPath(
+		"graphicPacks/downloadedGraphicPacks/version.txt");
 	std::unique_ptr<FileStream> file(FileStream::openFile2(path));
 
 	std::string versionInFile;
@@ -76,9 +78,11 @@ bool checkGraphicPackDownloadedVersion(const char* nameVersion, bool& hasVersion
 	return false;
 }
 
-void createGraphicPackDownloadedVersionFile(const char* nameVersion)
+void createGraphicPackDownloadedVersionFile(const Host::IPathProvider& pathProvider,
+	const char* nameVersion)
 {
-	const auto path = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks/version.txt");
+	const auto path = pathProvider.GetUserDataPath(
+		"graphicPacks/downloadedGraphicPacks/version.txt");
 	std::unique_ptr<FileStream> file(FileStream::createFile2(path));
 	if (file)
 		file->writeString(nameVersion);
@@ -88,9 +92,10 @@ void createGraphicPackDownloadedVersionFile(const char* nameVersion)
 	}
 }
 
-void deleteDownloadedGraphicPacks()
+void deleteDownloadedGraphicPacks(const Host::IPathProvider& pathProvider)
 {
-	const auto path = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks");
+	const auto path = pathProvider.GetUserDataPath(
+		"graphicPacks/downloadedGraphicPacks");
 	std::error_code er;
 	if (!fs::exists(path, er))
 		return;
@@ -179,7 +184,7 @@ void DownloadGraphicPacksWindow::UpdateThread()
 	const char* browserDownloadUrl = jsonDownloadUrl.GetString();
 	// check version
 	bool hasVersionFile = false;
-	if (checkGraphicPackDownloadedVersion(assetName, hasVersionFile))
+	if (checkGraphicPackDownloadedVersion(*m_pathProvider, assetName, hasVersionFile))
 	{
 		// already up to date
 		wxMessageBox(_("No updates available."), _("Graphic packs"), wxOK | wxCENTRE, this);
@@ -230,10 +235,12 @@ void DownloadGraphicPacksWindow::UpdateThread()
 		return;
 	}
 
-	auto path = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks");
+	const auto extractionRoot = m_pathProvider->GetUserDataPath(
+		"graphicPacks/downloadedGraphicPacks");
+	auto path = extractionRoot;
 	std::error_code er;
 	//fs::remove_all(path, er); -> Don't delete the whole folder and recreate it immediately afterwards because sometimes it just fails
-	deleteDownloadedGraphicPacks();
+	deleteDownloadedGraphicPacks(*m_pathProvider);
 	fs::create_directories(path, er); // make sure downloadedGraphicPacks folder exists
 
 	sint32 numEntries = zip_get_num_entries(za, 0);
@@ -250,7 +257,7 @@ void DownloadGraphicPacksWindow::UpdateThread()
 			std::strstr(sb.name, "..\\") != nullptr)
 			continue; // bad path
 
-		path = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks/{}", sb.name);
+		path = extractionRoot / _utf8ToPath(sb.name);
 
 		size_t sbNameLen = strlen(sb.name);
 		if(sbNameLen == 0)
@@ -286,16 +293,19 @@ void DownloadGraphicPacksWindow::UpdateThread()
 	}
 	
 	zip_error_fini(&error);
-	createGraphicPackDownloadedVersionFile(assetName);
+	createGraphicPackDownloadedVersionFile(*m_pathProvider, assetName);
 	m_threadState = ThreadFinished;
 }
 
 DownloadGraphicPacksWindow::DownloadGraphicPacksWindow(wxWindow* parent,
-	Application::EmulationController& emulationController)
+	Application::EmulationController& emulationController,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Checking version..."), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
 	m_threadState(ThreadRunning), m_stage(StageCheckVersion), m_currentStage(StageCheckVersion),
-	m_emulationController(emulationController)
+	m_emulationController(emulationController),
+	m_pathProvider(std::move(pathProvider))
 {
+	cemu_assert(m_pathProvider != nullptr);
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
 	m_processBar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_HORIZONTAL);

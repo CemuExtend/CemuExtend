@@ -14,13 +14,15 @@ class wxSplitterWindow;
 class wxPanel;
 class wxButton;
 class wxChoice;
+namespace Host { class IPathProvider; }
 
 class GraphicPacksWindow2 : public wxDialog
 {
 public:
 	GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
 		Application::EmulationController& emulationController,
-		std::shared_ptr<class IWxUiDispatcher> uiDispatcher);
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<Host::IPathProvider> pathProvider);
 	~GraphicPacksWindow2();
 
 	void UpdateTitleRunning(bool running);
@@ -31,6 +33,7 @@ private:
 	std::vector<uint64_t> m_installed_games;
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 
 	void ClearPresets();
 	void FillGraphicPackList() const;

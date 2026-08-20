@@ -32,6 +32,7 @@ public:
 struct WxFrontendContext
 {
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics;
+	std::shared_ptr<Host::IPathProvider> pathProvider;
 	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher;
 	std::shared_ptr<Host::IKeyboardState> keyboardState;

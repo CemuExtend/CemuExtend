@@ -12,6 +12,7 @@
 #include <memory>
 
 namespace Application { class EmulationController; }
+namespace Host { class IPathProvider; }
 
 class GettingStartedDialog : public wxDialog
 {
@@ -19,6 +20,7 @@ public:
 	GettingStartedDialog(Application::EmulationController& emulationController,
 		std::function<bool()> escapeDown,
 		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<Host::IPathProvider> pathProvider,
 		wxWindow* parent = nullptr);
 
 private:
@@ -35,6 +37,7 @@ private:
 	Application::EmulationController& m_emulationController;
 	std::function<bool()> m_escapeDown;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 
 	struct
 	{

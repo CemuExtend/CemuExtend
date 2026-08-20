@@ -328,7 +328,7 @@ bool CemuApp::OnInit()
 		GettingStartedDialog dia(m_emulationController,
 			[keyboardState = m_frontendContext->keyboardState] {
 				return keyboardState->IsKeyDown(Host::Key::Escape);
-			}, m_frontendContext->uiDispatcher, nullptr);
+			}, m_frontendContext->uiDispatcher, m_frontendContext->pathProvider, nullptr);
 		dia.ShowModal();
 		// make sure config is created. Gfx pack UI and input UI may create it earlier already, but we still want to update it
 		GetConfigHandle().Save();

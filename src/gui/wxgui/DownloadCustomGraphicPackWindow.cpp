@@ -1,5 +1,6 @@
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
-#include "config/ActiveSettings.h"
+#include "Common/FileStream.h"
+#include "host/contracts/HostContracts.h"
 
 #include <cstring>
 #include <filesystem>
@@ -62,10 +63,13 @@ static bool curlDownloadFile(const char *url, DownloadCustomGraphicPackWindow::c
 	return res == CURLE_OK;
 }
 
-DownloadCustomGraphicPackWindow::DownloadCustomGraphicPackWindow(wxWindow* parent)
+DownloadCustomGraphicPackWindow::DownloadCustomGraphicPackWindow(wxWindow* parent,
+    std::shared_ptr<Host::IPathProvider> pathProvider)
     : wxDialog(parent, wxID_ANY, _("Download Graphic Pack from URL"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-    m_stage(StageDone), m_currentStage(StageDone)
+    m_stage(StageDone), m_currentStage(StageDone),
+    m_pathProvider(std::move(pathProvider))
 {
+	cemu_assert(m_pathProvider != nullptr);
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     
     m_urlField = new wxTextCtrl(this, wxID_ANY, wxEmptyString);
@@ -279,7 +283,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread()
 		return;
 	}
     
-    auto path = ActiveSettings::GetUserDataPath("graphicPacks/customGraphicPacks");
+    auto path = m_pathProvider->GetUserDataPath("graphicPacks/customGraphicPacks");
     fs::create_directories(path);
     
     // check if zip root directly contains a rules.txt

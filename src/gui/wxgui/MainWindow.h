@@ -207,6 +207,7 @@ private:
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<WxFrontendContext> m_frontendContext;
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
 	std::shared_ptr<Host::IKeyboardState> m_keyboardState;

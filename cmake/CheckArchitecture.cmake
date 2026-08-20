@@ -61,7 +61,7 @@ foreach(source IN LISTS architecture_sources)
 
 	# Graphic-pack windows consume copied Application DTOs and commands only.
 	if(source MATCHES "/src/gui/wxgui/(GraphicPacksWindow2|DownloadGraphicPacksWindow|DownloadCustomGraphicPackWindow)\\.(h|cpp)$")
-		if(content MATCHES "#include[ \t]*[<\"]Cafe/|GraphicPack2|CafeSystem::|CafeTitleList::|LatteAsyncCommands")
+		if(content MATCHES "#include[ \t]*[<\"]Cafe/|GraphicPack2|CafeSystem::|CafeTitleList::|LatteAsyncCommands|#include[ \t]*[<\"]config/ActiveSettings|ActiveSettings::")
 			list(APPEND graphic_pack_ui_violations "${source}")
 		endif()
 	endif()

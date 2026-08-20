@@ -13,11 +13,13 @@
 #include <wx/textctrl.h>
 
 struct curlDownloadFileState_t;
+namespace Host { class IPathProvider; }
 
 class DownloadCustomGraphicPackWindow : public wxDialog
 {
 public:
-    DownloadCustomGraphicPackWindow(wxWindow* parent);
+    DownloadCustomGraphicPackWindow(wxWindow* parent,
+        std::shared_ptr<Host::IPathProvider> pathProvider);
     ~DownloadCustomGraphicPackWindow() override;
     
     int ShowModal() override;
@@ -63,4 +65,5 @@ private:
     wxStaticText* m_statusText;
     wxButton* m_downloadButton;
     std::thread m_thread;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 };

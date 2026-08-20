@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Host
@@ -93,6 +95,14 @@ namespace Host
 	public:
 		virtual ~IWindowMetrics() = default;
 		[[nodiscard]] virtual WindowMetricsSnapshot GetWindowMetrics() const = 0;
+	};
+
+	class IPathProvider
+	{
+	public:
+		virtual ~IPathProvider() = default;
+		[[nodiscard]] virtual std::filesystem::path GetUserDataPath(
+			std::string_view relativePath) const = 0;
 	};
 
 	class INativeSurfaceProvider

@@ -246,14 +246,16 @@ void GettingStartedDialog::OnClose(wxCloseEvent& event)
 GettingStartedDialog::GettingStartedDialog(
 	Application::EmulationController& emulationController,
 	std::function<bool()> escapeDown,
-	std::shared_ptr<IWxUiDispatcher> uiDispatcher, wxWindow* parent)
+	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<Host::IPathProvider> pathProvider, wxWindow* parent)
 	: wxDialog(parent, wxID_ANY, _("Getting started"), wxDefaultPosition, { 740,530 },
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_emulationController(emulationController),
 	  m_escapeDown(std::move(escapeDown)),
-	  m_uiDispatcher(std::move(uiDispatcher))
+	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_pathProvider(std::move(pathProvider))
 {
-	cemu_assert(static_cast<bool>(m_escapeDown) && m_uiDispatcher);
+	cemu_assert(static_cast<bool>(m_escapeDown) && m_uiDispatcher && m_pathProvider);
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
 	m_notebook = new wxSimplebook(this, wxID_ANY);
@@ -276,11 +278,11 @@ GettingStartedDialog::GettingStartedDialog(
 
 void GettingStartedDialog::OnConfigureGPs(wxCommandEvent& event)
 {
-	DownloadGraphicPacksWindow dialog(this, m_emulationController);
+	DownloadGraphicPacksWindow dialog(this, m_emulationController, m_pathProvider);
 	dialog.ShowModal();
 	(void)m_emulationController.RefreshGraphicPacks();
 	GraphicPacksWindow2 window(
-		this, 0, m_emulationController, m_uiDispatcher);
+		this, 0, m_emulationController, m_uiDispatcher, m_pathProvider);
 	window.ShowModal();
 }
 

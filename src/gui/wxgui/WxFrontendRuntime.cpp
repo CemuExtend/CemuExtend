@@ -165,6 +165,7 @@ namespace
 	}
 
 	class WxHostServices final : public Host::IWindowMetrics,
+		public Host::IPathProvider,
 		public Host::INativeSurfaceProvider,
 		public Host::INativeSurfacePublisher,
 		public Host::IKeyboardState,
@@ -183,6 +184,11 @@ namespace
 		Host::WindowMetricsSnapshot GetWindowMetrics() const override
 		{
 			return m_state->Metrics();
+		}
+
+		fs::path GetUserDataPath(std::string_view relativePath) const override
+		{
+			return ActiveSettings::GetUserDataPath(relativePath);
 		}
 
 		Host::NativeSurfaceSnapshot GetNativeSurfaces() const override
@@ -419,6 +425,7 @@ namespace
 		IAudioAPI::ConfigureNativeSurfaceProvider(hostServices.get());
 		auto context = std::make_shared<WxFrontendContext>();
 		context->windowMetrics = hostServices;
+		context->pathProvider = hostServices;
 		context->nativeSurfaces = hostServices;
 		context->nativeSurfacePublisher = hostServices;
 		context->keyboardState = hostServices;

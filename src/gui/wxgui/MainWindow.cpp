@@ -319,6 +319,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	  m_emulationController(emulationController),
 	  m_frontendContext(std::move(frontendContext)),
 	  m_windowMetrics(m_frontendContext->windowMetrics),
+	  m_pathProvider(m_frontendContext->pathProvider),
 	  m_nativeSurfaces(m_frontendContext->nativeSurfaces),
 	  m_nativeSurfacePublisher(m_frontendContext->nativeSurfacePublisher),
 	  m_keyboardState(m_frontendContext->keyboardState),
@@ -330,7 +331,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	  m_updateWindowTitles(m_frontendContext->updateWindowTitles),
 	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
-	cemu_assert(m_frontendContext && m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher &&
+	cemu_assert(m_frontendContext && m_windowMetrics && m_pathProvider && m_nativeSurfaces && m_nativeSurfacePublisher &&
 		m_keyboardState && m_inputHostEvents && m_windowState && m_mainWindowRegistry &&
 		m_uiDispatcher &&
 		m_showErrorDialog && m_updateWindowTitles);
@@ -1055,7 +1056,7 @@ void MainWindow::OnOptionsInput(wxCommandEvent& event)
 			titleId = *runningTitleId;
 
 		m_graphic_pack_window = new GraphicPacksWindow2(
-			this, titleId, m_emulationController, m_uiDispatcher);
+			this, titleId, m_emulationController, m_uiDispatcher, m_pathProvider);
 		m_graphic_pack_window->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnGraphicWindowClose, this);
 		m_graphic_pack_window->Show(true);
 
@@ -3123,7 +3124,7 @@ void MainWindow::OnGraphicWindowOpen(wxTitleIdEvent& event)
 	if (m_graphic_pack_window)
 		return;
 	m_graphic_pack_window = new GraphicPacksWindow2(
-		this, event.GetTitleId(), m_emulationController, m_uiDispatcher);
+		this, event.GetTitleId(), m_emulationController, m_uiDispatcher, m_pathProvider);
 	m_graphic_pack_window->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnGraphicWindowClose, this);
 	m_graphic_pack_window->Show(true);
 }
