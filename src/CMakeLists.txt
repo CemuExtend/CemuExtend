@@ -102,6 +102,19 @@ function(cemu_assert_target_has_no_edge target)
 	endforeach()
 endfunction()
 
+function(cemu_assert_target_has_direct_edges target)
+	if(NOT TARGET "${target}")
+		return()
+	endif()
+	get_target_property(direct_edges "${target}" LINK_LIBRARIES)
+	foreach(required IN LISTS ARGN)
+		if(NOT required IN_LIST direct_edges)
+			message(FATAL_ERROR
+				"Missing explicit architecture edge: ${target} -> ${required}")
+		endif()
+	endforeach()
+endfunction()
+
 function(cemu_assert_target_has_no_sources target)
 	if(NOT TARGET "${target}")
 		return()
@@ -130,6 +143,7 @@ cemu_assert_target_has_no_edge(CemuWxGuiCommon CemuCafe CemuApplication CemuWxGu
 cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDeviceAdapters CemuApplication CemuWxGui CemuWxDebuggerAdapters CemuWxRendererAdapters)
+cemu_assert_target_has_direct_edges(CemuWxGui CemuAudio CemuConfig CemuInput CemuUtil)
 cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.cpp
 	AudioDebuggerWindow.h
