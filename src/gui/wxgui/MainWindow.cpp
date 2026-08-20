@@ -766,16 +766,16 @@ void MainWindow::OnOpenFolder(wxCommandEvent& event)
 {
 	const auto id = event.GetId();
 	if(id == MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER)
-		wxLaunchDefaultApplication(wxHelper::FromPath(ActiveSettings::GetUserDataPath()));
+		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetUserDataPath("")));
 	else if(id == MAINFRAME_MENU_ID_FILE_OPEN_MLC_FOLDER)
-		wxLaunchDefaultApplication(wxHelper::FromPath(ActiveSettings::GetMlcPath()));
+		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetMlcPath()));
 	else if (id == MAINFRAME_MENU_ID_FILE_OPEN_SHADERCACHE_FOLDER)
-		wxLaunchDefaultApplication(wxHelper::FromPath(ActiveSettings::GetCachePath("shaderCache")));
+		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetCachePath("shaderCache")));
 }
 
 void MainWindow::OnClearSpotPassCache(wxCommandEvent& event)
 {
-	fs::path bossPath = ActiveSettings::GetMlcPath("usr/boss");
+	fs::path bossPath = m_pathProvider->GetMlcPath() / "usr/boss";
 	fs::remove_all(bossPath);
 	// recreate usr/boss/
 	fs::create_directory(bossPath);
@@ -1206,7 +1206,7 @@ void MainWindow::OnDebugSetting(wxCommandEvent& event)
 		{
 			try
 			{
-				const fs::path path(ActiveSettings::GetUserDataPath());
+				const fs::path path(m_pathProvider->GetUserDataPath(""));
 				fs::create_directories(path / "dump" / "curl");
 			}
 			catch (const std::exception& ex)
@@ -1288,7 +1288,7 @@ void MainWindow::OnDebugDumpGeneric(wxCommandEvent& event)
 	{
 		try
 		{
-			fs::create_directories(ActiveSettings::GetUserDataPath(dumpSubpath));
+			fs::create_directories(m_pathProvider->GetUserDataPath(dumpSubpath));
 		}
 		catch (const std::exception & ex)
 		{
