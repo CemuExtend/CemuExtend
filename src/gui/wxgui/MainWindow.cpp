@@ -502,6 +502,7 @@ void MainWindow::CreateGameListAndStatusBar()
     // game list
     m_game_list = new wxGameList(m_main_panel, m_emulationController,
 		m_uiDispatcher,
+		m_pathProvider,
 		[this](fs::path path) {
 			QueueEvent(new wxLaunchGameEvent(
 				std::move(path), wxLaunchGameEvent::INITIATED_BY::GAME_LIST));

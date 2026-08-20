@@ -28,6 +28,8 @@ wxDECLARE_EVENT(wxEVT_OPEN_GRAPHIC_PACK, wxTitleIdEvent);
 wxDECLARE_EVENT(wxEVT_GAMELIST_BEGIN_UPDATE, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_GAMELIST_END_UPDATE, wxCommandEvent);
 
+namespace Host { class IPathProvider; }
+
 class wxGameList : public wxListView
 {
 	friend class MainWindow;
@@ -41,6 +43,7 @@ public:
 
 	wxGameList(wxWindow* parent, Application::EmulationController& emulationController,
 		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<Host::IPathProvider> pathProvider,
 		std::function<void(fs::path)> requestLaunch,
 		wxWindowID id = wxID_ANY);
 	~wxGameList();
@@ -111,6 +114,7 @@ private:
 	std::vector<uint64> m_icon_load_queue;
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 	std::function<void(fs::path)> m_requestLaunch;
 	Application::TitleCatalogSubscription m_titleSubscription;
 	std::shared_ptr<std::atomic_bool> m_lifetime =

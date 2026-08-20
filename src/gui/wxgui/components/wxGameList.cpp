@@ -3,6 +3,7 @@
 
 #include "wxgui/helpers/wxCustomData.h"
 #include "wxCemuConfig.h"
+#include "host/contracts/HostContracts.h"
 #include "util/helpers/helpers.h"
 #include "wxgui/GameProfileWindow.h"
 
@@ -26,8 +27,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/tokenizer.hpp>
 
-#include "config/ActiveSettings.h"
-#include "config/LaunchSettings.h"
 #include "wxgui/helpers/wxHelpers.h"
 
 #include "../wxHelper.h"
@@ -61,17 +60,17 @@ void _stripPathFilename(fs::path& path)
 		path = path.parent_path();
 }
 
-std::vector<fs::path> _getCachesPaths(uint64 titleId)
+std::vector<fs::path> _getCachesPaths(const Host::IPathProvider& pathProvider, uint64 titleId)
 {
 	std::vector<fs::path> cachePaths{
-		ActiveSettings::GetCachePath(L"shaderCache/driver/vk/{:016x}.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/precompiled/{:016x}_spirv.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/precompiled/{:016x}_gl.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/precompiled/{:016x}_air.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/transferable/{:016x}_shaders.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/transferable/{:016x}_mtlshaders.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/transferable/{:016x}_vkpipeline.bin", titleId),
-		ActiveSettings::GetCachePath(L"shaderCache/transferable/{:016x}_mtlpipeline.bin", titleId)};
+		pathProvider.GetCachePath(fmt::format("shaderCache/driver/vk/{:016x}.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/precompiled/{:016x}_spirv.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/precompiled/{:016x}_gl.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/precompiled/{:016x}_air.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/transferable/{:016x}_shaders.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/transferable/{:016x}_mtlshaders.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/transferable/{:016x}_vkpipeline.bin", titleId)),
+		pathProvider.GetCachePath(fmt::format("shaderCache/transferable/{:016x}_mtlpipeline.bin", titleId))};
 
 	cachePaths.erase(std::remove_if(cachePaths.begin(), cachePaths.end(),
 									[](const fs::path& cachePath) {
@@ -136,13 +135,15 @@ bool writeICNS(const fs::path& pngPath, const fs::path& icnsPath) {
 wxGameList::wxGameList(wxWindow* parent,
 	Application::EmulationController& emulationController,
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<Host::IPathProvider> pathProvider,
 	std::function<void(fs::path)> requestLaunch, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, GetStyleFlags(Style::kList)),
 	  m_style(Style::kList), m_emulationController(emulationController),
 	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_pathProvider(std::move(pathProvider)),
 	  m_requestLaunch(std::move(requestLaunch))
 {
-	cemu_assert(m_uiDispatcher && static_cast<bool>(m_requestLaunch));
+	cemu_assert(m_uiDispatcher && m_pathProvider && static_cast<bool>(m_requestLaunch));
 	const auto& config = GetWxGUIConfig();
 
 	char transparent_bitmap[kIconWidth * kIconWidth * 4] = {};
@@ -682,7 +683,7 @@ void wxGameList::OnContextMenu(wxContextMenuEvent& event)
 			menu.Append(kContextMenuDLCFolder, _("&DLC directory"))->Enable(gameInfo->aocPath.has_value());
 
 			menu.AppendSeparator();
-			menu.Append(kContextMenuRemoveCache, _("&Remove shader caches"))->Enable(!_getCachesPaths(gameInfo->titleId).empty());
+			menu.Append(kContextMenuRemoveCache, _("&Remove shader caches"))->Enable(!_getCachesPaths(*m_pathProvider, gameInfo->titleId).empty());
 
 			menu.AppendSeparator();
 			menu.Append(kContextMenuEditGraphicPacks, _("&Edit graphic packs"));
@@ -797,7 +798,7 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 			}
 			case kContextMenuRemoveCache:
 			{
-				RemoveCache(_getCachesPaths(gameInfo->titleId), gameInfo->name);
+				RemoveCache(_getCachesPaths(*m_pathProvider, gameInfo->titleId), gameInfo->name);
 				break;
 			}
 			case kContextMenuEditGraphicPacks:
@@ -1423,7 +1424,7 @@ void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
 	const auto titleId = gameInfo.titleId;
 	const auto titleName = wxString::FromUTF8(gameInfo.name);
-	auto exePath = ActiveSettings::GetExecutablePath();
+	auto exePath = m_pathProvider->GetExecutablePath();
 	const char* flatpakId = getenv("FLATPAK_ID");
 
 	const wxString desktopEntryName = wxString::Format("%s.desktop", titleName);
@@ -1445,7 +1446,7 @@ void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 			cemuLog_log(LogType::Force, "Icon hasn't loaded");
 			return;
 		}
-		const fs::path outIconDir = ActiveSettings::GetUserDataPath("icons");
+		const fs::path outIconDir = m_pathProvider->GetUserDataPath("icons");
 
 		if (!fs::exists(outIconDir) && !fs::create_directories(outIconDir))
 		{
@@ -1502,7 +1503,7 @@ void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
 	const auto titleId = gameInfo.titleId;
 	const auto titleName = wxString::FromUTF8(gameInfo.name);
-	auto exePath = ActiveSettings::GetExecutablePath();
+	auto exePath = m_pathProvider->GetExecutablePath();
 
 	const wxString appName = wxString::Format("%s.app", titleName);
 	wxFileDialog entryDialog(this, _("Choose shortcut location"), "~/Applications", appName,
@@ -1633,7 +1634,7 @@ void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 {
 	const auto titleId = gameInfo.titleId;
 	const auto titleName = wxString::FromUTF8(gameInfo.name);
-	auto exePath = ActiveSettings::GetExecutablePath();
+	auto exePath = m_pathProvider->GetExecutablePath();
 
 	// Get '%APPDATA%\Microsoft\Windows\Start Menu\Programs' path
 	PWSTR userShortcutFolder;
@@ -1659,7 +1660,7 @@ void wxGameList::CreateShortcut(const Application::GameSummary& gameInfo)
 			return;
 		}
 		const auto icon = m_image_list_data.GetIcon(iconIdx);
-		const auto folder = ActiveSettings::GetUserDataPath("icons");
+		const auto folder = m_pathProvider->GetUserDataPath("icons");
 		if (!fs::exists(folder) && !fs::create_directories(folder))
 		{
 			cemuLog_log(LogType::Force, "Failed to create icon directory");

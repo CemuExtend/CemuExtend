@@ -69,7 +69,7 @@ foreach(source IN LISTS architecture_sources)
 	endif()
 
 	if(source MATCHES "/src/gui/wxgui/components/wxGameList\\.(h|cpp)$")
-		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeTitleList|GameInfo2|TitleInfo|iosu::pdm|fsc_extractFile|FSC_PRIORITY")
+		if(content MATCHES "#include[ \t]*[<\"]Cafe/|CafeTitleList|GameInfo2|TitleInfo|iosu::pdm|fsc_extractFile|FSC_PRIORITY|config/ActiveSettings|ActiveSettings::")
 			list(APPEND game_list_ui_violations "${source}")
 		endif()
 	endif()
