@@ -36,7 +36,7 @@
 
 #include "resource/embedded/resources.h"
 
-bool g_inputConfigWindowHasFocus = false;
+std::atomic_bool g_inputConfigWindowHasFocus{};
 
 using wxTypeData = wxCustomData<EmulatedController::Type>;
 using wxControllerData = wxCustomData<ControllerPtr>;
@@ -76,7 +76,7 @@ InputSettings2::InputSettings2(wxWindow* parent,
 	cemu_assert(static_cast<bool>(m_escapeDown) && m_pathProvider);
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-	g_inputConfigWindowHasFocus = true;
+	g_inputConfigWindowHasFocus.store(true, std::memory_order_release);
 
 	m_connected = wxHelper::LoadThemedBitmapFromPNG(INPUT_CONNECTED_png, sizeof(INPUT_CONNECTED_png), wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 	m_disconnected = wxHelper::LoadThemedBitmapFromPNG(INPUT_DISCONNECTED_png, sizeof(INPUT_DISCONNECTED_png), wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
@@ -130,7 +130,7 @@ InputSettings2::~InputSettings2()
 {
 	m_controller_changed.disconnect();
 
-	g_inputConfigWindowHasFocus = false;
+	g_inputConfigWindowHasFocus.store(false, std::memory_order_release);
 	m_timer->Stop();
 	InputManager::instance().save();
 }

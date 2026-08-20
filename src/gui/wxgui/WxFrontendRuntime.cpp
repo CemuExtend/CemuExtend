@@ -804,7 +804,7 @@ std::string GetKeyCodeName(uint32 button)
 
 bool InputConfigWindowHasFocus()
 {
-	return g_inputConfigWindowHasFocus;
+	return g_inputConfigWindowHasFocus.load(std::memory_order_acquire);
 }
 
 }

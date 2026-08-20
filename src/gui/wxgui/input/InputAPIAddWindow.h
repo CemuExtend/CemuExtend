@@ -2,7 +2,11 @@
 
 #include "input/api/InputAPI.h"
 
+#include <atomic>
+#include <cstdint>
+#include <mutex>
 #include <optional>
+#include <thread>
 #include <wx/dialog.h>
 #include <wx/panel.h>
 
@@ -53,9 +57,11 @@ private:
 
 	std::vector<ControllerPtr> m_controllers;
 	std::atomic_bool m_search_running = false;
+	std::uint64_t m_search_generation{};
+	std::thread m_search_thread;
 	struct AsyncThreadData
 	{
-		std::atomic_bool discardResult = false;
+		bool discardResult = false;
 		std::mutex mutex;
 	};
 	std::shared_ptr<AsyncThreadData> m_search_thread_data;
