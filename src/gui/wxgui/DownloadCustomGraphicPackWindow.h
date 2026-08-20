@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -37,7 +38,7 @@ public:
     };
     
 private:
-    void UpdateThread();
+	void UpdateThread(std::string downloadUrl, std::string folderName);
 	
 	enum DownloadStage_t
 	{

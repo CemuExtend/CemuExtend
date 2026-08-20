@@ -242,17 +242,31 @@ void DownloadCustomGraphicPackWindow::OnDownloadButton(const wxCommandEvent& eve
 {
     m_downloadButton->Disable();
     m_urlField->Disable();
+
+	const wxString urlText = m_urlField->GetValue();
+	const auto urlUtf8 = urlText.utf8_string();
+	std::string downloadUrl(urlUtf8.data(), urlUtf8.length());
+	std::string folderName = "NewCustomPack";
+	const int lastSlash = urlText.Find('/', true);
+	wxString fileNameBase = (lastSlash != wxNOT_FOUND) ? urlText.Mid(lastSlash + 1) : urlText;
+	const int lastDot = fileNameBase.Find('.', true);
+	if (lastDot != wxNOT_FOUND)
+		fileNameBase = fileNameBase.Left(lastDot);
+	fileNameBase.Trim(true).Trim(false);
+	if (!fileNameBase.IsEmpty())
+		folderName = fileNameBase.ToStdString();
     
     if (m_thread.joinable())
         m_thread.join();
     
-    m_thread = std::thread(&DownloadCustomGraphicPackWindow::UpdateThread, this);
+	m_thread = std::thread(&DownloadCustomGraphicPackWindow::UpdateThread, this,
+		std::move(downloadUrl), std::move(folderName));
 }
 
-void DownloadCustomGraphicPackWindow::UpdateThread()
+void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std::string folderName)
 {
     m_stage = StageDownloading;
-    if (curlDownloadFile(m_urlField->GetValue(), m_downloadState.get()) == false)
+    if (curlDownloadFile(downloadUrl.c_str(), m_downloadState.get()) == false)
     {
         m_stage = StageErrConnectFailed;
 		return;
@@ -296,24 +310,6 @@ void DownloadCustomGraphicPackWindow::UpdateThread()
     if (hasRootRulesTxt)
     {
         // make a folder and extract into that
-        wxString urlStr = m_urlField->GetValue();
-        std::string folderName = "NewCustomPack"; // fallback
-        
-        int lastSlash = urlStr.Find('/', true);
-        wxString fileNameBase = (lastSlash != wxNOT_FOUND) ? urlStr.Mid(lastSlash + 1) : urlStr;
-        
-        int lastDot = fileNameBase.Find('.', true);
-        if (lastDot != wxNOT_FOUND)
-        {
-            fileNameBase = fileNameBase.Left(lastDot);
-        }
-        
-        fileNameBase.Trim(true).Trim(false);
-        if (!fileNameBase.IsEmpty())
-        {
-            folderName = fileNameBase.ToStdString();
-        }
-        
         extractionRoot = path / folderName;
         fs::create_directories(extractionRoot);
     }

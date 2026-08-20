@@ -31,13 +31,23 @@ public:
 
 private:
 	void UpdateThread();
+	void DownloadAndInstall();
 
 	enum ThreadState_t
 	{
 		ThreadRunning,
+		ThreadAwaitingConfirmation,
+		ThreadPrompting,
 		ThreadCanceled,
 		ThreadError,
 		ThreadFinished,
+	};
+
+	enum Notification_t
+	{
+		NotificationNone,
+		NotificationConnectionFailed,
+		NotificationNoUpdates,
 	};
 
 	enum DownloadStage_t
@@ -47,10 +57,15 @@ private:
 		StageExtracting
 	};
 
+	void SetThreadResult(ThreadState_t result);
+
 	std::atomic<ThreadState_t> m_threadState;
 	std::atomic<DownloadStage_t> m_stage;
 	std::atomic<double> m_extractionProgress;
+	std::atomic<Notification_t> m_notification{NotificationNone};
 	std::string m_threadException;
+	std::string m_assetName;
+	std::string m_browserDownloadUrl;
 	std::thread m_thread;
 
 	DownloadStage_t m_currentStage;
