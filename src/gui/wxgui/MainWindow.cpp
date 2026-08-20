@@ -327,14 +327,16 @@ namespace
 
 MainWindow::MainWindow(Application::EmulationController& emulationController,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER),
 	  m_emulationController(emulationController),
 	  m_windowMetrics(std::move(windowMetrics)),
 	  m_nativeSurfaces(std::move(nativeSurfaces)),
+	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher)),
 	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
-	cemu_assert(m_windowMetrics && m_nativeSurfaces);
+	cemu_assert(m_windowMetrics && m_nativeSurfaces && m_nativeSurfacePublisher);
 #ifdef __WXMAC__
 	// Not necessary to set wxApp::s_macExitMenuItemId as automatically handled
 	wxApp::s_macAboutMenuItemId = MAINFRAME_MENU_ID_HELP_ABOUT;
@@ -342,27 +344,23 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 #endif
 	{
 		std::unique_lock lock(g_mutex);
-		g_window_info.window_main = initHandleContextFromWxWidgetsWindow(this);
 		g_mainFrame = this;
 	}
+	m_nativeWindowHandle = initHandleContextFromWxWidgetsWindow(this);
+	m_nativeWindowPublication =
+		m_nativeSurfacePublisher->PublishMainWindow(m_nativeWindowHandle);
 	const std::weak_ptr<std::atomic_bool> eventLifetime = m_applicationEventLifetime;
 	m_applicationEventSubscription = m_emulationController.Events().Subscribe(
 		[this, eventLifetime](const Application::Event& event) {
-			if (wxTheApp == nullptr || WindowSystem::IsShuttingDown())
-				return;
-			wxTheApp->CallAfter([this, eventLifetime, event] {
+			(void)WindowSystem::QueueUi([this, eventLifetime, event] {
 				const auto lifetime = eventLifetime.lock();
 				if (!lifetime || !lifetime->load(std::memory_order_acquire))
-					return;
-				if (WindowSystem::IsShuttingDown())
 					return;
 				HandleApplicationEvent(event);
 			});
 		});
 	m_emulationController.SetTextInputWakeCallback(+[] {
-		if (wxTheApp == nullptr || WindowSystem::IsShuttingDown()) return;
-		wxTheApp->CallAfter([] {
-			if (WindowSystem::IsShuttingDown()) return;
+		(void)WindowSystem::QueueUi([] {
 			if (g_mainFrame != nullptr) g_mainFrame->RefreshCemuExtendTextInput();
 		});
 	});
@@ -448,12 +446,13 @@ MainWindow::~MainWindow()
 	UpdateCemuExtendPointerConfinement(false);
 	// Publish invalid handles and wait for outstanding snapshots before wx destroys
 	// their native objects.  NativeHandleLease is a publication/destruction barrier.
-	WindowSystem::PublishCanvasHandle(true, {});
-	WindowSystem::PublishCanvasHandle(false, {});
-	WindowSystem::PublishPadWindowHandle({});
-	WindowSystem::PublishMainWindowHandle({});
+	(void)m_nativeSurfacePublisher->PublishCanvas(true, {});
+	(void)m_nativeSurfacePublisher->PublishCanvas(false, {});
+	(void)m_nativeSurfacePublisher->PublishPadWindow({});
+	m_nativeSurfacePublisher->ClearMainWindow(m_nativeWindowPublication);
 	if (m_padView)
 	{
+		m_padView->PrepareForDestroy();
 		m_padView->Destroy();
 		m_padView = nullptr;
 	}
@@ -891,7 +890,7 @@ void MainWindow::TogglePadView()
 			return;
 
 		m_padView = new PadViewFrame(this, m_emulationController,
-			m_windowMetrics, m_nativeSurfaces);
+			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
 
 		m_padView->Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnPadClose, this);
 
@@ -908,6 +907,7 @@ void MainWindow::TogglePadView()
 	}
 	else if (m_padView)
 	{
+		m_padView->PrepareForDestroy();
 		m_padView->Destroy();
 		m_padView = nullptr;
 	}
@@ -2051,7 +2051,7 @@ void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 		return;
 	}
 	++m_cemuextend_text_input_focus_retries;
-	wxTheApp->CallAfter([this, sequence] {
+	(void)WindowSystem::QueueUi([this, sequence] {
 		if (g_mainFrame == this)
 			EnsureCemuExtendTextInputFocus(sequence);
 	});
@@ -2186,12 +2186,12 @@ void MainWindow::CreateCanvas()
 	#ifdef ENABLE_VULKAN
 	if (ActiveSettings::GetGraphicsAPI() == kVulkan)
 		m_render_canvas = new VulkanCanvas(m_game_panel, wxSize(1280, 720), true,
-			m_windowMetrics, m_nativeSurfaces);
+			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
 	#endif
 	#ifdef ENABLE_METAL
 	if (ActiveSettings::GetGraphicsAPI() == kMetal)
 		m_render_canvas = new MetalCanvas(m_game_panel, wxSize(1280, 720), true,
-			m_windowMetrics, m_nativeSurfaces);
+			m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
 	#endif
 	if (!m_render_canvas)
 		cemu_assert(false && "Failed to create canvas or invalid graphics API selected");
@@ -2301,7 +2301,9 @@ void MainWindow::DestroyCanvas()
 	}
 	if (m_render_canvas)
 	{
-		WindowSystem::PublishCanvasHandle(true, {});
+		if (auto* canvas = dynamic_cast<IRenderCanvas*>(m_render_canvas))
+			canvas->PrepareForDestroy();
+		(void)m_nativeSurfacePublisher->PublishCanvas(true, {});
 		m_render_canvas->Destroy();
 		m_render_canvas = nullptr;
 	}
@@ -2362,13 +2364,21 @@ void MainWindow::OnDebuggerClose(wxCloseEvent& event)
 
 void MainWindow::OnPadClose(wxCloseEvent& event)
 {
+	auto* const closingPad = dynamic_cast<PadViewFrame*>(event.GetEventObject());
+	if (closingPad)
+		closingPad->PrepareForDestroy();
+	if (m_padView != closingPad)
+	{
+		event.Skip();
+		return;
+	}
 	auto& config = GetWxGUIConfig();
 	config.pad_open = false;
 	if (config.pad_position != Vector2i{ -1,-1 })
-		m_padView->GetPosition(&config.pad_position.x, &config.pad_position.y);
+		closingPad->GetPosition(&config.pad_position.x, &config.pad_position.y);
 
 	if (config.pad_size != Vector2i{ -1,-1 })
-		m_padView->GetSize(&config.pad_size.x, &config.pad_size.y);
+		closingPad->GetSize(&config.pad_size.x, &config.pad_size.y);
 
 	g_wxConfig.Save();
 

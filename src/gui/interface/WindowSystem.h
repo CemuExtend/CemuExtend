@@ -90,16 +90,19 @@ namespace WindowSystem
 
 	std::shared_ptr<Host::IWindowMetrics> GetWindowMetricsHost();
 	std::shared_ptr<Host::INativeSurfaceProvider> GetNativeSurfaceHost();
+	std::shared_ptr<Host::INativeSurfacePublisher> GetNativeSurfacePublisher();
 	// Prevents new asynchronous host work from being queued while wx tears down.
 	[[nodiscard]] bool IsShuttingDown();
 	void BeginShutdown();
 	void ResumeAfterFailedShutdown();
+	// Thread-safe temporary wx dispatch boundary. New work is rejected once
+	// shutdown begins, atomically with respect to queue submission.
+	[[nodiscard]] bool QueueUi(std::function<void()> callback);
+	[[nodiscard]] bool QueueUi(std::function<void()> callback,
+		std::function<void()> cancelled);
+	void ReleaseHostServices();
 
 	WindowInfo& GetWindowInfo();
-	void PublishMainWindowHandle(WindowHandleInfo handle);
-	void PublishPadWindowHandle(WindowHandleInfo handle);
-	void PublishCanvasHandle(bool mainWindow, WindowHandleInfo handle);
-
 	void UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 		std::optional<Application::WindowTitlePresentation> presentation = std::nullopt);
 	void GetWindowSize(int& w, int& h);

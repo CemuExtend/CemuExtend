@@ -75,11 +75,11 @@ uint32 fix_raw_keycode(uint32 keycode, uint32 raw_flags)
 	return keycode;
 }
 
-WindowSystem::WindowHandleInfo initHandleContextFromWxWidgetsWindow(wxWindow* wxw)
+Host::NativeWindowHandle initHandleContextFromWxWidgetsWindow(wxWindow* wxw)
 {
-	WindowSystem::WindowHandleInfo handleInfo;
+	Host::NativeWindowHandle handleInfo;
 #if BOOST_OS_WINDOWS
-	handleInfo.backend = WindowSystem::WindowHandleInfo::Backend::Windows;
+	handleInfo.backend = Host::NativeWindowBackend::Windows;
 	handleInfo.surface = reinterpret_cast<void*>(wxw->GetHWND());
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
 	GtkWidget* gtkWidget = (GtkWidget*)wxw->GetHandle(); // returns GtkWidget
@@ -88,7 +88,7 @@ WindowSystem::WindowHandleInfo initHandleContextFromWxWidgetsWindow(wxWindow* wx
 	GdkDisplay* gdkDisplay = gdk_window_get_display(gdkWindow);
 	if (GDK_IS_X11_WINDOW(gdkWindow))
 	{
-		handleInfo.backend = WindowSystem::WindowHandleInfo::Backend::X11;
+		handleInfo.backend = Host::NativeWindowBackend::X11;
 		handleInfo.surface = reinterpret_cast<void*>(gdk_x11_window_get_xid(gdkWindow));
 		handleInfo.display = gdk_x11_display_get_xdisplay(gdkDisplay);
 		if (!handleInfo.display)
@@ -99,7 +99,7 @@ WindowSystem::WindowHandleInfo initHandleContextFromWxWidgetsWindow(wxWindow* wx
 #ifdef HAS_WAYLAND
 	else if (GDK_IS_WAYLAND_WINDOW(gdkWindow))
 	{
-		handleInfo.backend = WindowSystem::WindowHandleInfo::Backend::Wayland;
+		handleInfo.backend = Host::NativeWindowBackend::Wayland;
 		handleInfo.surface = gdk_wayland_window_get_wl_surface(gdkWindow);
 		handleInfo.display = gdk_wayland_display_get_wl_display(gdkDisplay);
 	}
@@ -109,7 +109,7 @@ WindowSystem::WindowHandleInfo initHandleContextFromWxWidgetsWindow(wxWindow* wx
 		cemuLog_log(LogType::Force, "Unsuported GTK backend");
 	}
 #elif BOOST_OS_MACOS
-	handleInfo.backend = WindowSystem::WindowHandleInfo::Backend::Cocoa;
+	handleInfo.backend = Host::NativeWindowBackend::Cocoa;
 	handleInfo.surface = reinterpret_cast<void*>(wxw->GetHandle());
 #endif
 	return handleInfo;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "interface/WindowSystem.h"
+#include "host/contracts/HostContracts.h"
 #include <wx/control.h>
 #include <wx/listbase.h>
 #include <wx/string.h>
@@ -105,4 +105,4 @@ void update_slider_text(wxCommandEvent& event, const wxFormatString& format = "%
 
 uint32 fix_raw_keycode(uint32 keycode, uint32 raw_flags);
 
-WindowSystem::WindowHandleInfo initHandleContextFromWxWidgetsWindow(wxWindow* wxw);
+Host::NativeWindowHandle initHandleContextFromWxWidgetsWindow(wxWindow* wxw);

@@ -60,7 +60,8 @@ class MainWindow : public wxFrame
 public:
 	explicit MainWindow(Application::EmulationController& emulationController,
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
 	~MainWindow();
 
     void CreateGameListAndStatusBar();
@@ -199,6 +200,9 @@ private:
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
+	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+	Host::NativeWindowHandle m_nativeWindowHandle;
+	Host::NativeSurfacePublication m_nativeWindowPublication{};
 	Application::EventSubscription m_applicationEventSubscription;
 	std::shared_ptr<std::atomic_bool> m_applicationEventLifetime;
 	wxPoint m_mouse_position{};

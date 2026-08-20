@@ -240,7 +240,7 @@ void HotkeySettings::RunOnUi(std::function<void(MainWindow&)> action)
 {
 	if (wxTheApp == nullptr || s_mainWindow.load(std::memory_order_acquire) == nullptr)
 		return;
-	wxTheApp->CallAfter([action = std::move(action)] {
+	(void)WindowSystem::QueueUi([action = std::move(action)] {
 		if (auto* window = s_mainWindow.load(std::memory_order_acquire))
 			action(*window);
 	});

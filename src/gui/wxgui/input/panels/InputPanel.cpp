@@ -1,4 +1,5 @@
 #include "wxgui/input/panels/InputPanel.h"
+#include "interface/WindowSystem.h"
 
 #include <wx/textctrl.h>
 #include <wx/wupdlock.h>

@@ -6,14 +6,18 @@
 
 MetalCanvas::MetalCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
-	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS),
+	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
 {
 	Bind(wxEVT_PAINT, &MetalCanvas::OnPaint, this);
 	Bind(wxEVT_SIZE, &MetalCanvas::OnResize, this);
 
 	auto canvas = initHandleContextFromWxWidgetsWindow(this);
-	WindowSystem::PublishCanvasHandle(is_main_window, canvas);
+	m_nativeWindowHandle = canvas;
+	m_nativeSurfacePublication = m_nativeSurfacePublisher->PublishCanvas(
+		is_main_window, m_nativeWindowHandle);
 
 	try
 	{
@@ -40,11 +44,18 @@ MetalCanvas::~MetalCanvas()
 {
 	Unbind(wxEVT_PAINT, &MetalCanvas::OnPaint, this);
 	Unbind(wxEVT_SIZE, &MetalCanvas::OnResize, this);
+	PrepareForDestroy();
+}
 
+
+void MetalCanvas::PrepareForDestroy()
+{
+	if (std::exchange(m_preparedForDestroy, true))
+		return;
 	MetalRenderer* mtlr = (MetalRenderer*)g_renderer.get();
 	if (mtlr)
 		mtlr->ShutdownLayer(m_is_main_window);
-	WindowSystem::PublishCanvasHandle(m_is_main_window, {});
+	m_nativeSurfacePublisher->ClearCanvas(m_is_main_window, m_nativeSurfacePublication);
 }
 
 void MetalCanvas::OnPaint(wxPaintEvent& event)

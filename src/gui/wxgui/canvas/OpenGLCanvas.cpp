@@ -109,8 +109,13 @@ public:
 
 	~OpenGLCanvas() override
 	{
-		// todo - if this is the main window, make sure the renderer has been shut down
+		PrepareForDestroy();
+	}
 
+	void PrepareForDestroy() override
+	{
+		if (std::exchange(m_preparedForDestroy, true))
+			return;
 		if (m_is_main_window)
 			s_glCanvasManager.SetTVView(nullptr);
 		else
@@ -145,6 +150,7 @@ public:
 
 private:
 	int m_activeVSyncState = -1;
+	bool m_preparedForDestroy{};
 	//wxGLContext* m_context = nullptr;
 };
 

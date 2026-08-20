@@ -10,8 +10,10 @@
 
 VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
-	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS),
+	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
 {
 	Bind(wxEVT_PAINT, &VulkanCanvas::OnPaint, this);
 	Bind(wxEVT_SIZE, &VulkanCanvas::OnResize, this);
@@ -21,13 +23,15 @@ VulkanCanvas::VulkanCanvas(wxWindow* parent, const wxSize& size, bool is_main_wi
 
 	auto canvas = initHandleContextFromWxWidgetsWindow(this);
 	#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
-	if (canvas.backend == WindowSystem::WindowHandleInfo::Backend::Wayland)
+	if (canvas.backend == Host::NativeWindowBackend::Wayland)
 	{
 		m_subsurface = std::make_unique<wxWlSubsurface>(this);
 		canvas.surface = m_subsurface->getSurface();
 	}
 	#endif
-	WindowSystem::PublishCanvasHandle(is_main_window, canvas);
+	m_nativeWindowHandle = canvas;
+	m_nativeSurfacePublication = m_nativeSurfacePublisher->PublishCanvas(
+		is_main_window, m_nativeWindowHandle);
 
 	cemu_assert(g_vulkan_available);
 
@@ -56,14 +60,21 @@ VulkanCanvas::~VulkanCanvas()
 {
 	Unbind(wxEVT_PAINT, &VulkanCanvas::OnPaint, this);
 	Unbind(wxEVT_SIZE, &VulkanCanvas::OnResize, this);
+	PrepareForDestroy();
+}
 
+
+void VulkanCanvas::PrepareForDestroy()
+{
+	if (std::exchange(m_preparedForDestroy, true))
+		return;
 	if(!m_is_main_window)
 	{
 		VulkanRenderer* vkr = (VulkanRenderer*)g_renderer.get();
 		if(vkr)
 			vkr->StopUsingPadAndWait();
 	}
-	WindowSystem::PublishCanvasHandle(m_is_main_window, {});
+	m_nativeSurfacePublisher->ClearCanvas(m_is_main_window, m_nativeSurfacePublication);
 }
 
 void VulkanCanvas::OnPaint(wxPaintEvent& event)

@@ -1,6 +1,7 @@
 #include "interface/WindowSystem.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/PadViewFrame.h"
+#include "wxgui/canvas/IRenderCanvas.h"
 
 #include <wx/display.h>
 
@@ -32,12 +33,16 @@ extern WindowSystem::WindowInfo g_window_info;
 PadViewFrame::PadViewFrame(wxFrame* parent,
 	Application::EmulationController& emulationController,
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 	: wxFrame(nullptr, wxID_ANY, _("GamePad View"), wxDefaultPosition, wxDefaultSize, wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxCLOSE_BOX | wxWANTS_CHARS),
 	  m_emulationController(emulationController),
-	  m_windowMetrics(std::move(windowMetrics)), m_nativeSurfaces(std::move(nativeSurfaces))
+	  m_windowMetrics(std::move(windowMetrics)), m_nativeSurfaces(std::move(nativeSurfaces)),
+	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
 {
-	WindowSystem::PublishPadWindowHandle(initHandleContextFromWxWidgetsWindow(this));
+	m_nativeWindowHandle = initHandleContextFromWxWidgetsWindow(this);
+	m_nativeWindowPublication =
+		m_nativeSurfacePublisher->PublishPadWindow(m_nativeWindowHandle);
 
 	SetIcon(wxICON(M_WND_ICON128));
 	wxWindow::EnableTouchEvents(wxTOUCH_PAN_GESTURES);
@@ -65,9 +70,20 @@ PadViewFrame::PadViewFrame(wxFrame* parent,
 
 PadViewFrame::~PadViewFrame()
 {
-	WindowSystem::PublishPadWindowHandle({});
-	WindowSystem::PublishCanvasHandle(false, {});
+	PrepareForDestroy();
 	g_window_info.pad_open = false;
+}
+
+void PadViewFrame::PrepareForDestroy()
+{
+	if (std::exchange(m_preparedForDestroy, true))
+		return;
+	if (m_render_canvas)
+	{
+		if (auto* canvas = dynamic_cast<IRenderCanvas*>(m_render_canvas))
+			canvas->PrepareForDestroy();
+	}
+	m_nativeSurfacePublisher->ClearPadWindow(m_nativeWindowPublication);
 }
 
 bool PadViewFrame::Initialize()
@@ -88,7 +104,7 @@ void PadViewFrame::InitializeRenderCanvas()
 		#ifdef ENABLE_VULKAN
 		if (ActiveSettings::GetGraphicsAPI() == kVulkan)
 			m_render_canvas = new VulkanCanvas(this, wxSize(854, 480), false,
-				m_windowMetrics, m_nativeSurfaces);
+				m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
 		#endif
 		#ifdef ENABLE_OPENGL
 		if (ActiveSettings::GetGraphicsAPI() == kOpenGL)
@@ -98,7 +114,7 @@ void PadViewFrame::InitializeRenderCanvas()
 		#ifdef ENABLE_METAL
 		if (ActiveSettings::GetGraphicsAPI() == kMetal)
 			m_render_canvas = new MetalCanvas(this, wxSize(854, 480), false,
-				m_windowMetrics, m_nativeSurfaces);
+				m_windowMetrics, m_nativeSurfaces, m_nativeSurfacePublisher);
 		#endif
 		sizer->Add(m_render_canvas, 1, wxEXPAND, 0, nullptr);
 	}
@@ -127,7 +143,9 @@ void PadViewFrame::DestroyCanvas()
 {
 	if(!m_render_canvas)
 		return;
-	WindowSystem::PublishCanvasHandle(false, {});
+	if (auto* canvas = dynamic_cast<IRenderCanvas*>(m_render_canvas))
+		canvas->PrepareForDestroy();
+	(void)m_nativeSurfacePublisher->PublishCanvas(false, {});
 	m_render_canvas->Destroy();
 	m_render_canvas = nullptr;
 }

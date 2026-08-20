@@ -19,12 +19,14 @@ class PadViewFrame : public wxFrame
 public:
 	PadViewFrame(wxFrame* parent, Application::EmulationController& emulationController,
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
 	~PadViewFrame();
 
 	bool Initialize();
 	void InitializeRenderCanvas();
 	void DestroyCanvas();
+	void PrepareForDestroy();
 
 	void OnKeyUp(wxKeyEvent& event);
 	void OnChar(wxKeyEvent& event);
@@ -47,5 +49,9 @@ private:
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
+	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+	Host::NativeWindowHandle m_nativeWindowHandle;
+	Host::NativeSurfacePublication m_nativeWindowPublication{};
+	bool m_preparedForDestroy{};
 	Frontend::CemuExtendFrontendBridge m_cemuextend_bridge;
 };

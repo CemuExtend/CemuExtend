@@ -8,6 +8,8 @@ class IRenderCanvas
 public:
 	IRenderCanvas(bool is_main_window)
 		: m_is_main_window(is_main_window) {}
+	virtual ~IRenderCanvas() = default;
+	virtual void PrepareForDestroy() {}
 
 protected:
 	bool m_is_main_window;

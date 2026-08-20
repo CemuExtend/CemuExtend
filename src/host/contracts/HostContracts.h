@@ -8,6 +8,7 @@
 
 namespace Host
 {
+	using NativeSurfacePublication = std::uint64_t;
 	enum class NativeWindowBackend : std::uint8_t
 	{
 		X11,
@@ -22,6 +23,8 @@ namespace Host
 		NativeWindowBackend backend{NativeWindowBackend::X11};
 		void* display{};
 		void* surface{};
+
+		friend bool operator==(const NativeWindowHandle&, const NativeWindowHandle&) = default;
 	};
 
 	struct WindowMetricsSnapshot
@@ -79,6 +82,22 @@ namespace Host
 	public:
 		virtual ~INativeSurfaceProvider() = default;
 		[[nodiscard]] virtual NativeSurfaceSnapshot GetNativeSurfaces() const = 0;
+	};
+
+	class INativeSurfacePublisher
+	{
+	public:
+		virtual ~INativeSurfacePublisher() = default;
+		[[nodiscard]] virtual NativeSurfacePublication PublishMainWindow(
+			NativeWindowHandle handle) = 0;
+		virtual void ClearMainWindow(NativeSurfacePublication publication) = 0;
+		[[nodiscard]] virtual NativeSurfacePublication PublishPadWindow(
+			NativeWindowHandle handle) = 0;
+		virtual void ClearPadWindow(NativeSurfacePublication publication) = 0;
+		[[nodiscard]] virtual NativeSurfacePublication PublishCanvas(bool mainWindow,
+			NativeWindowHandle handle) = 0;
+		virtual void ClearCanvas(bool mainWindow,
+			NativeSurfacePublication publication) = 0;
 	};
 
 	class IKeyboardState

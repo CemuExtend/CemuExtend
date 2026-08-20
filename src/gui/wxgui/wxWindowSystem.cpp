@@ -44,6 +44,12 @@ MainWindow* g_mainFrame = nullptr;
 namespace
 {
 	std::atomic_bool s_wxFrontendStopping{false};
+	std::atomic_uint64_t s_nextNativeSurfacePublication{1};
+	Host::NativeSurfacePublication s_mainWindowPublication{};
+	Host::NativeSurfacePublication s_padWindowPublication{};
+	Host::NativeSurfacePublication s_mainCanvasPublication{};
+	Host::NativeSurfacePublication s_padCanvasPublication{};
+	std::mutex s_wxDispatchMutex;
 	struct NativeHandleLease
 	{
 		explicit NativeHandleLease(std::shared_mutex& mutex) : lock(mutex) {}
@@ -103,11 +109,8 @@ namespace
 	template<typename Callback>
 	bool QueueFrameCallback(Callback&& callback)
 	{
-		if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
-			return false;
-		wxTheApp->CallAfter([callback = std::forward<Callback>(callback)]() mutable {
-			if (s_wxFrontendStopping.load(std::memory_order_acquire))
-				return;
+		return WindowSystem::QueueUi(
+			[callback = std::forward<Callback>(callback)]() mutable {
 			MainWindow* frame{};
 			{
 				std::shared_lock lock(g_mutex);
@@ -118,11 +121,11 @@ namespace
 			if (frame)
 				callback(*frame);
 		});
-		return true;
 	}
 
 	class WxHostServices final : public Host::IWindowMetrics,
 		public Host::INativeSurfaceProvider,
+		public Host::INativeSurfacePublisher,
 		public Host::IKeyboardState,
 		public Host::IClipboard,
 		public Host::IExternalLauncher,
@@ -162,6 +165,57 @@ namespace
 				.padSurface = g_window_info.canvas_pad,
 				.lifetime = std::move(lease),
 			};
+		}
+
+		Host::NativeSurfacePublication PublishMainWindow(
+			Host::NativeWindowHandle handle) override
+		{
+			std::unique_lock lock(g_mutex);
+			g_window_info.window_main = handle;
+			return s_mainWindowPublication = s_nextNativeSurfacePublication.fetch_add(1);
+		}
+
+		void ClearMainWindow(Host::NativeSurfacePublication publication) override
+		{
+			std::unique_lock lock(g_mutex);
+			if (s_mainWindowPublication == publication)
+				g_window_info.window_main = {};
+		}
+
+		Host::NativeSurfacePublication PublishPadWindow(
+			Host::NativeWindowHandle handle) override
+		{
+			std::unique_lock lock(g_mutex);
+			g_window_info.window_pad = handle;
+			return s_padWindowPublication = s_nextNativeSurfacePublication.fetch_add(1);
+		}
+
+		void ClearPadWindow(Host::NativeSurfacePublication publication) override
+		{
+			std::unique_lock lock(g_mutex);
+			if (s_padWindowPublication == publication)
+				g_window_info.window_pad = {};
+		}
+
+		Host::NativeSurfacePublication PublishCanvas(bool mainWindow,
+			Host::NativeWindowHandle handle) override
+		{
+			std::unique_lock lock(g_mutex);
+			(mainWindow ? g_window_info.canvas_main : g_window_info.canvas_pad) = handle;
+			auto& publication = mainWindow ?
+				s_mainCanvasPublication : s_padCanvasPublication;
+			return publication = s_nextNativeSurfacePublication.fetch_add(1);
+		}
+
+		void ClearCanvas(bool mainWindow,
+			Host::NativeSurfacePublication publication) override
+		{
+			std::unique_lock lock(g_mutex);
+			auto& current = mainWindow ? g_window_info.canvas_main : g_window_info.canvas_pad;
+			const auto currentPublication = mainWindow ?
+				s_mainCanvasPublication : s_padCanvasPublication;
+			if (currentPublication == publication)
+				current = {};
 		}
 
 		bool IsKeyDown(Host::Key key) const override
@@ -213,15 +267,10 @@ namespace
 
 		bool OpenUrl(std::string url) override
 		{
-			if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
-				return false;
-			wxTheApp->CallAfter([url = std::move(url)] {
-				if (s_wxFrontendStopping.load(std::memory_order_acquire))
-					return;
+			return WindowSystem::QueueUi([url = std::move(url)] {
 				if (!wxLaunchDefaultBrowser(wxString::FromUTF8(url)))
 					cemuLog_log(LogType::Force, "Failed to open host browser URL: {}", url);
 			});
-			return true;
 		}
 
 		bool InputConfigurationHasFocus() const override
@@ -246,12 +295,10 @@ namespace
 			}
 			auto result = std::make_shared<std::promise<bool>>();
 			auto future = result->get_future();
-			if (!wxTheApp)
-				return false;
 			const auto pending = RegisterPendingUi([result] { result->set_value(false); });
 			if (!pending)
 				return false;
-			wxTheApp->CallAfter([id = *pending, result] {
+			if (!WindowSystem::QueueUi([id = *pending, result] {
 				if (!IsPendingUi(id))
 					return;
 				MainWindow* frame{};
@@ -265,7 +312,8 @@ namespace
 					frame->RecreateCanvasForHost();
 				if (CompletePendingUi(id))
 					result->set_value(available);
-			});
+			}))
+				CancelPendingUi(*pending);
 			// Keep the request registered until recreation finishes. BeginShutdown()
 			// cancels queued work and resolves this future; timing out after the UI
 			// has started recreating would race title rollback against canvas creation.
@@ -316,11 +364,7 @@ void Frontend::Run()
 	char* argv[1]{};
 	wxEntry(argc, argv);
 #endif
-	InputManager::instance().Shutdown();
-	Application::DisconnectHost();
-	InputManager::instance().ClearHost();
-	IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
-	s_wxHostServices.reset();
+	WindowSystem::ReleaseHostServices();
 }
 
 std::shared_ptr<Host::IWindowMetrics> WindowSystem::GetWindowMetricsHost()
@@ -333,6 +377,11 @@ std::shared_ptr<Host::INativeSurfaceProvider> WindowSystem::GetNativeSurfaceHost
 	return s_wxHostServices;
 }
 
+std::shared_ptr<Host::INativeSurfacePublisher> WindowSystem::GetNativeSurfacePublisher()
+{
+	return s_wxHostServices;
+}
+
 bool WindowSystem::IsShuttingDown()
 {
 	return s_wxFrontendStopping.load(std::memory_order_acquire);
@@ -340,13 +389,81 @@ bool WindowSystem::IsShuttingDown()
 
 void WindowSystem::BeginShutdown()
 {
-	s_wxFrontendStopping.store(true, std::memory_order_release);
+	{
+		std::scoped_lock lock(s_wxDispatchMutex);
+		s_wxFrontendStopping.store(true, std::memory_order_release);
+	}
 	CancelPendingUi();
 }
 
 void WindowSystem::ResumeAfterFailedShutdown()
 {
+	std::scoped_lock lock(s_wxDispatchMutex);
 	s_wxFrontendStopping.store(false, std::memory_order_release);
+}
+
+bool WindowSystem::QueueUi(std::function<void()> callback)
+{
+	std::scoped_lock lock(s_wxDispatchMutex);
+	if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
+		return false;
+	wxTheApp->CallAfter([callback = std::move(callback)]() mutable {
+		if (!s_wxFrontendStopping.load(std::memory_order_acquire))
+			callback();
+	});
+	return true;
+}
+
+bool WindowSystem::QueueUi(std::function<void()> callback,
+	std::function<void()> cancelled)
+{
+	struct Completion
+	{
+		std::atomic_bool completed{};
+		std::function<void()> callback;
+		std::function<void()> cancelled;
+	};
+	auto completion = std::make_shared<Completion>();
+	completion->callback = std::move(callback);
+	completion->cancelled = std::move(cancelled);
+	auto finish = [completion](bool runCallback) {
+		if (completion->completed.exchange(true, std::memory_order_acq_rel))
+			return;
+		(runCallback ? completion->callback : completion->cancelled)();
+	};
+	const auto pending = RegisterPendingUi([finish] { finish(false); });
+	if (!pending)
+	{
+		finish(false);
+		return false;
+	}
+	bool rejected{};
+	{
+		std::scoped_lock lock(s_wxDispatchMutex);
+		if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
+			rejected = true;
+		else
+			wxTheApp->CallAfter([id = *pending, finish] {
+				if (CompletePendingUi(id))
+					finish(true);
+			});
+	}
+	if (rejected)
+	{
+		CancelPendingUi(*pending);
+		return false;
+	}
+	return true;
+}
+
+void WindowSystem::ReleaseHostServices()
+{
+	BeginShutdown();
+	InputManager::instance().Shutdown();
+	Application::DisconnectHost();
+	InputManager::instance().ClearHost();
+	IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
+	s_wxHostServices.reset();
 }
 
 void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WindowSystem::ErrorCategory> /*errorId*/)
@@ -364,39 +481,16 @@ WindowSystem::WindowInfo& WindowSystem::GetWindowInfo()
 	return g_window_info;
 }
 
-void WindowSystem::PublishMainWindowHandle(WindowHandleInfo handle)
-{
-	std::unique_lock lock(g_mutex);
-	g_window_info.window_main = handle;
-}
-
-void WindowSystem::PublishPadWindowHandle(WindowHandleInfo handle)
-{
-	std::unique_lock lock(g_mutex);
-	g_window_info.window_pad = handle;
-}
-
-void WindowSystem::PublishCanvasHandle(bool mainWindow, WindowHandleInfo handle)
-{
-	std::unique_lock lock(g_mutex);
-	(mainWindow ? g_window_info.canvas_main : g_window_info.canvas_pad) = handle;
-}
-
 void WindowSystem::GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
-	if (!wxTheApp)
-	{
-		(*sharedCallback)(false, {});
-		return;
-	}
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false, {}); });
 	if (!pending)
 	{
 		(*sharedCallback)(false, {});
 		return;
 	}
-	wxTheApp->CallAfter([id = *pending, sharedCallback]() mutable {
+	if (!QueueUi([id = *pending, sharedCallback]() mutable {
 		if (!CompletePendingUi(id))
 			return;
 		if (!wxTheClipboard->Open())
@@ -408,24 +502,20 @@ void WindowSystem::GetClipboardTextAsync(std::function<void(bool, std::string)> 
 		const bool success = wxTheClipboard->GetData(data);
 		wxTheClipboard->Close();
 		(*sharedCallback)(success, success ? data.GetText().utf8_string() : std::string{});
-	});
+	}))
+		CancelPendingUi(*pending);
 }
 
 void WindowSystem::SetClipboardTextAsync(std::string text, std::function<void(bool)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
-	if (!wxTheApp)
-	{
-		(*sharedCallback)(false);
-		return;
-	}
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false); });
 	if (!pending)
 	{
 		(*sharedCallback)(false);
 		return;
 	}
-	wxTheApp->CallAfter([id = *pending, text = std::move(text), sharedCallback]() mutable {
+	if (!QueueUi([id = *pending, text = std::move(text), sharedCallback]() mutable {
 		if (!CompletePendingUi(id))
 			return;
 		if (!wxTheClipboard->Open())
@@ -438,7 +528,8 @@ void WindowSystem::SetClipboardTextAsync(std::string text, std::function<void(bo
 			wxTheClipboard->Flush();
 		wxTheClipboard->Close();
 		(*sharedCallback)(success);
-	});
+	}))
+		CancelPendingUi(*pending);
 }
 
 void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,

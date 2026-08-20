@@ -1,9 +1,12 @@
 #include "helpers/wxHelpers.h"
+#include "interface/WindowSystem.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/GraphicPacksWindow2.h"
 #include "wxgui/DownloadGraphicPacksWindow.h"
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
 #include "util/helpers/helpers.h"
+
+#include <wx/weakref.h>
 
 #if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 #include "resource/embedded/resources.h"
@@ -525,11 +528,13 @@ void GraphicPacksWindow2::ClearPresets()
 			{
 				m_preset_sizer->Detach(sizer);
 				parent_window->Hide();
-				CallAfter([=]()
-				{
-					parent_window->DestroyChildren();
-					delete static_box_sizer;
-				});
+				auto cleanup = [parent = wxWeakRef<wxStaticBox>(parent_window),
+					static_box_sizer]() mutable {
+					if (parent)
+						parent->DestroyChildren();
+					delete std::exchange(static_box_sizer, nullptr);
+				};
+				(void)WindowSystem::QueueUi(cleanup, cleanup);
 			}
 		}
 	}

@@ -1,4 +1,5 @@
 #include "wxgui/CemuApp.h"
+#include "interface/WindowSystem.h"
 #include "wxCemuConfig.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/wxgui.h"
@@ -362,7 +363,8 @@ bool CemuApp::OnInit()
 	Bind(wxEVT_ACTIVATE_APP, &CemuApp::ActivateApp, this);
 
 	m_mainFrame = new MainWindow(m_emulationController,
-		WindowSystem::GetWindowMetricsHost(), WindowSystem::GetNativeSurfaceHost());
+		WindowSystem::GetWindowMetricsHost(), WindowSystem::GetNativeSurfaceHost(),
+		WindowSystem::GetNativeSurfacePublisher());
 
 	{
 		std::unique_lock lock(g_mutex);
@@ -410,7 +412,7 @@ int CemuApp::OnExit()
 	}
 #endif
 	HotkeySettings::Shutdown();
-	InputManager::instance().Shutdown();
+	WindowSystem::ReleaseHostServices();
 	wxApp::OnExit();
 	wxTheClipboard->Flush();
 	int retValue = 0;

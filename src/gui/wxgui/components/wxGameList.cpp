@@ -1,4 +1,5 @@
 #include "wxgui/components/wxGameList.h"
+#include "interface/WindowSystem.h"
 
 #include "wxgui/helpers/wxCustomData.h"
 #include "wxCemuConfig.h"
@@ -194,7 +195,7 @@ wxGameList::wxGameList(wxWindow* parent,
 		[this, lifetime = m_lifetime](const Application::TitleCatalogEvent& event) {
 			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
 				return;
-			wxTheApp->CallAfter([this, lifetime, event] {
+			(void)WindowSystem::QueueUi([this, lifetime, event] {
 				if (lifetime->load(std::memory_order_acquire))
 					HandleTitleCatalogEvent(event);
 			});
@@ -1358,7 +1359,7 @@ void wxGameList::AsyncWorkerThread()
 		else if (wxTheApp)
 		{
 			auto lifetime = m_lifetime;
-			wxTheApp->CallAfter([this, lifetime, titleId, data = std::move(*data)]() mutable {
+			(void)WindowSystem::QueueUi([this, lifetime, titleId, data = std::move(*data)]() mutable {
 				if (lifetime->load(std::memory_order_acquire))
 					InstallLoadedIcon(titleId, std::move(data));
 			});
