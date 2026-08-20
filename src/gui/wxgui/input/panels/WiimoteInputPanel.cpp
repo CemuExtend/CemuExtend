@@ -30,8 +30,9 @@ constexpr WiimoteController::ButtonId g_kThirdColumnItems[] =
 	WiimoteController::kButtonId_Nunchuck_Up,WiimoteController::kButtonId_Nunchuck_Down,WiimoteController::kButtonId_Nunchuck_Left,WiimoteController::kButtonId_Nunchuck_Right
 };
 
-WiimoteInputPanel::WiimoteInputPanel(wxWindow* parent)
-	: InputPanel(parent)
+WiimoteInputPanel::WiimoteInputPanel(wxWindow* parent,
+	std::function<bool()> escapeDown)
+	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
 	bold_font.MakeBold();

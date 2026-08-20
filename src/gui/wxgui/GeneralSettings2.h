@@ -3,6 +3,7 @@
 #include <wx/collpane.h>
 #include <wx/propgrid/propgrid.h>
 #include "application/EmulationController.h"
+#include "host/contracts/HostContracts.h"
 
 class wxCheckBox;
 class wxCheckListBox;
@@ -22,7 +23,8 @@ class GeneralSettings2 : public wxDialog
 {
 public:
 	GeneralSettings2(wxWindow* parent, bool game_launched,
-		Application::EmulationController& emulationController);
+		Application::EmulationController& emulationController,
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~GeneralSettings2();
 
 	[[nodiscard]] bool ShouldReloadGamelist() const  { return m_reload_gamelist; }
@@ -38,6 +40,7 @@ private:
 	bool m_mlc_modified = false;
 	bool m_game_launched;
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 
 	bool m_has_account_change = false; // keep track of dirty state of accounts
 	std::vector<GraphicAPI> m_api_map; // map from dropdown index to GraphicsAPISetting, used in HandleGraphicsApiSelection

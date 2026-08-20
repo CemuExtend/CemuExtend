@@ -36,8 +36,9 @@ constexpr VPADController::ButtonId g_kFourthRowItems[] =
 };
 
 
-VPADInputPanel::VPADInputPanel(wxWindow* parent)
-	: InputPanel(parent)
+VPADInputPanel::VPADInputPanel(wxWindow* parent,
+	std::function<bool()> escapeDown)
+	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
 	bold_font.MakeBold();

@@ -4,6 +4,8 @@
 #include <wx/notebook.h>
 #include <wx/timer.h>
 
+#include <functional>
+
 #include "input/api/InputAPI.h"
 
 #include <boost/signals2/connection.hpp>
@@ -14,7 +16,7 @@ class ControllerBase;
 class InputSettings2 : public wxDialog
 {
 public:
-	InputSettings2(wxWindow* parent);
+	InputSettings2(wxWindow* parent, std::function<bool()> escapeDown);
 	~InputSettings2();
 
 private:
@@ -24,6 +26,7 @@ private:
 	wxTimer* m_timer;
 
 	wxBitmap m_connected, m_disconnected, m_low_battery;
+	std::function<bool()> m_escapeDown;
 
 	wxWindow* initialize_page(size_t index);
 
@@ -70,4 +73,3 @@ private:
 	// void on_controllers_refreshed(wxCommandEvent& event);
 
 };
-

@@ -4,12 +4,17 @@
 #include "wxCemuConfig.h"
 #include "input/api/Controller.h"
 
+#include <memory>
+
 class HotkeyEntry;
+class IWxUiDispatcher;
+class WxMainWindowRegistry;
 
 class HotkeySettings : public wxFrame
 {
 public:
-	static void Init();
+	static void Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+		std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry);
 
 	static void CaptureInput(wxKeyEvent& event);
 	static void CaptureInput(const ControllerState& currentState, const ControllerState& lastState);
@@ -18,6 +23,8 @@ public:
 	~HotkeySettings();
 
 private:
+	inline static std::weak_ptr<IWxUiDispatcher> s_uiDispatcher;
+	inline static std::weak_ptr<WxMainWindowRegistry> s_mainWindowRegistry;
 	static void RunOnUi(std::function<void(class MainWindow&)> action);
 	static std::unordered_map<sHotkeyCfg*, std::function<void(void)>> s_cfgHotkeyToFuncMap;
 	inline static std::unordered_map<uint16, std::function<void(void)>> s_keyboardHotkeyToFuncMap{};

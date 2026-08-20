@@ -6,6 +6,7 @@
 #include <wx/listctrl.h>
 
 #include <boost/optional.hpp> // std::optional doesn't support optional reference inner types yet
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -13,7 +14,9 @@ class wxDownloadManagerList : public wxListView
 {
 	friend class TitleManager;
 public:
-	wxDownloadManagerList(wxWindow* parent, wxWindowID id = wxID_ANY);
+	wxDownloadManagerList(wxWindow* parent,
+		std::function<void()> requestGameListRefresh,
+		wxWindowID id = wxID_ANY);
 	
 	enum ItemColumn
 	{
@@ -86,6 +89,7 @@ public:
 	boost::optional<const TitleEntry&> GetSelectedTitleEntry() const;
 
 private:
+	std::function<void()> m_requestGameListRefresh;
 	void AddColumns();
 	int Filter(const wxString& filter, const wxString& prefix, ItemColumn column);
 	boost::optional<TitleEntry&> GetSelectedTitleEntry();

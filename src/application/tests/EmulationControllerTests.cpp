@@ -75,7 +75,7 @@ namespace
 		Application::TextInputState GetTextInputState() override { return {}; }
 		void SubmitTextComposition(std::string_view, std::string_view,
 			std::uint32_t, std::uint32_t) override {}
-		void SetTextInputWakeCallback(void (*)()) override {}
+		void SetTextInputWakeCallback(std::function<void()>) override {}
 		void SaveCemodPermissionDecisions(std::uint64_t,
 			std::span<const Application::CemodPermissionDecision>) override {}
 		std::vector<Application::CemodPackage> DiscoverCemodCatalog() override { return {}; }

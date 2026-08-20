@@ -2,6 +2,8 @@
 
 #include <thread>
 #include <atomic>
+#include <functional>
+#include <memory>
 
 #include <wx/frame.h>
 #include <wx/button.h>
@@ -41,6 +43,9 @@ class TitleManager : public wxFrame
 {
 public:
 	TitleManager(wxWindow* parent, Application::EmulationController& emulationController,
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::function<void(fs::path)> requestLaunch,
+		std::function<void()> requestGameListRefresh,
 		TitleManagerPage default_page = TitleManagerPage::TitleManager);
 	~TitleManager();
 
@@ -69,6 +74,9 @@ private:
 
 	wxNotebook* m_notebook;
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::function<void(fs::path)> m_requestLaunch;
+	std::function<void()> m_requestGameListRefresh;
 
 	// title manager
 	wxTextCtrl* m_filter;

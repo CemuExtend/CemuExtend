@@ -9,7 +9,7 @@ class wxCheckBox;
 class VPADInputPanel : public InputPanel
 {
 public:
-	VPADInputPanel(wxWindow* parent);
+	VPADInputPanel(wxWindow* parent, std::function<bool()> escapeDown);
 
 	void on_timer(const EmulatedControllerPtr& emulated_controller, const ControllerPtr& controller) override;
 	virtual void load_controller(const EmulatedControllerPtr& controller) override;

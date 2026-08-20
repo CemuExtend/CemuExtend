@@ -8,12 +8,17 @@
 #include <wx/stattext.h>
 #include <wx/panel.h>
 
+#include <functional>
+#include <memory>
+
 namespace Application { class EmulationController; }
 
 class GettingStartedDialog : public wxDialog
 {
 public:
 	GettingStartedDialog(Application::EmulationController& emulationController,
+		std::function<bool()> escapeDown,
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
 		wxWindow* parent = nullptr);
 
 private:
@@ -28,6 +33,8 @@ private:
 
 	wxSimplebook* m_notebook;
 	Application::EmulationController& m_emulationController;
+	std::function<bool()> m_escapeDown;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
 
 	struct
 	{

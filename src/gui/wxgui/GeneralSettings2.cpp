@@ -2,7 +2,6 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/GeneralSettings2.h"
 #include "wxgui/CemuApp.h"
-#include "wxgui/WxFrontendRuntime.h"
 #include "wxgui/helpers/wxControlObject.h"
 #include "wxgui/CemodPluginManagerDialog.h"
 
@@ -1505,10 +1504,13 @@ wxPanel* GeneralSettings2::AddTcpGeckoPage(wxNotebook* notebook)
 }
 
 GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched,
-	Application::EmulationController& emulationController)
+	Application::EmulationController& emulationController,
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
-	  m_game_launched(game_launched), m_emulationController(emulationController)
+	  m_game_launched(game_launched), m_emulationController(emulationController),
+	  m_nativeSurfaces(std::move(nativeSurfaces))
 {
+	cemu_assert(m_nativeSurfaces != nullptr);
 	SetIcon(wxICON(X_SETTINGS));
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
@@ -2261,8 +2263,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 
 		m_graphic_device->Enable();
-		auto nativeSurfaceProvider = WxFrontendRuntime::GetNativeSurfaceHost();
-		const auto surfaces = nativeSurfaceProvider->GetNativeSurfaces();
+		const auto surfaces = m_nativeSurfaces->GetNativeSurfaces();
 		auto devices = WxRendererAdapters::EnumerateVulkanDevices(surfaces.mainWindow);
 		if(!devices.empty())
 		{

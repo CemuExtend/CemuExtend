@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <boost/optional.hpp> // std::optional doesn't support optional reference inner types yet
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -23,6 +24,8 @@ class wxTitleManagerList : public wxListView
 public:
 	wxTitleManagerList(wxWindow* parent,
 		Application::EmulationController& emulationController,
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::function<void(fs::path)> requestLaunch,
 		wxWindowID id = wxID_ANY);
 	~wxTitleManagerList();
 
@@ -149,6 +152,8 @@ private:
 	std::atomic_bool m_conversionCancelled{};
 
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::function<void(fs::path)> m_requestLaunch;
 	Application::TitleCatalogSubscription m_titleSubscription;
 	std::shared_ptr<std::atomic_bool> m_lifetime;
 };

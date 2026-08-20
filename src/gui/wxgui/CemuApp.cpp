@@ -1,5 +1,5 @@
 #include "wxgui/CemuApp.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 #include "wxCemuConfig.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/WxWindowState.h"
@@ -33,11 +33,24 @@
 
 wxIMPLEMENT_APP_NO_MAIN(CemuApp);
 
+namespace
+{
+	std::mutex s_frontendContextMutex;
+	std::shared_ptr<WxFrontendContext> s_pendingFrontendContext;
+}
+
 // forward declarations from main.cpp
 void UnitTests();
 void CemuCommonInit();
 
 void HandlePostUpdate();
+
+void CemuApp::SetFrontendContext(std::shared_ptr<WxFrontendContext> context)
+{
+	std::scoped_lock lock(s_frontendContextMutex);
+	cemu_assert(context && !s_pendingFrontendContext);
+	s_pendingFrontendContext = std::move(context);
+}
 // Translation strings to extract for gettext:
 void unused_translation_dummy()
 {
@@ -254,6 +267,11 @@ std::string TranslationCallback(std::string_view msgId)
 
 bool CemuApp::OnInit()
 {
+	{
+		std::scoped_lock lock(s_frontendContextMutex);
+		m_frontendContext = std::move(s_pendingFrontendContext);
+	}
+	cemu_assert(m_frontendContext != nullptr);
 #if __WXGTK__
 	GTKSuppressDiagnostics(G_LOG_LEVEL_MASK & ~G_LOG_FLAG_FATAL);
 #endif
@@ -307,7 +325,10 @@ bool CemuApp::OnInit()
 	if (isFirstStart)
 	{
 		// show the getting started dialog
-		GettingStartedDialog dia(m_emulationController, nullptr);
+		GettingStartedDialog dia(m_emulationController,
+			[keyboardState = m_frontendContext->keyboardState] {
+				return keyboardState->IsKeyDown(Host::Key::Escape);
+			}, m_frontendContext->uiDispatcher, nullptr);
 		dia.ShowModal();
 		// make sure config is created. Gfx pack UI and input UI may create it earlier already, but we still want to update it
 		GetConfigHandle().Save();
@@ -359,13 +380,10 @@ bool CemuApp::OnInit()
 
 	Bind(wxEVT_ACTIVATE_APP, &CemuApp::ActivateApp, this);
 
-	m_windowState = WxFrontendRuntime::GetWindowState();
-	m_mainWindowRegistry = WxFrontendRuntime::GetMainWindowRegistry();
+	m_windowState = m_frontendContext->windowState;
+	m_mainWindowRegistry = m_frontendContext->mainWindowRegistry;
 	cemu_assert(m_windowState && m_mainWindowRegistry);
-	m_mainFrame = new MainWindow(m_emulationController,
-		WxFrontendRuntime::GetWindowMetricsHost(), WxFrontendRuntime::GetNativeSurfaceHost(),
-		WxFrontendRuntime::GetNativeSurfacePublisher(), m_windowState,
-		m_mainWindowRegistry);
+	m_mainFrame = new MainWindow(m_emulationController, m_frontendContext);
 	auto* createdMainFrame = m_mainFrame;
 	m_mainFrame->Bind(wxEVT_DESTROY,
 		[this, createdMainFrame](wxWindowDestroyEvent& event) {
@@ -377,7 +395,8 @@ bool CemuApp::OnInit()
 
 	m_windowState->app_active = true;
 
-	HotkeySettings::Init();
+	HotkeySettings::Init(
+		m_frontendContext->uiDispatcher, m_mainWindowRegistry);
 
 	SetTopWindow(m_mainFrame);
 	m_mainFrame->Show();
@@ -417,7 +436,7 @@ int CemuApp::OnExit()
 		m_sdlEventPumpTimer = nullptr;
 	}
 #endif
-	WxFrontendRuntime::ReleaseHostServices();
+	m_frontendContext->releaseHostServices();
 	wxApp::OnExit();
 	wxTheClipboard->Flush();
 	int retValue = 0;

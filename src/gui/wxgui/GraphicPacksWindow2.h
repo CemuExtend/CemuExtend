@@ -8,6 +8,8 @@
 #include "wxcomponents/checktree.h"
 #include "application/EmulationController.h"
 
+#include <memory>
+
 class wxSplitterWindow;
 class wxPanel;
 class wxButton;
@@ -17,7 +19,8 @@ class GraphicPacksWindow2 : public wxDialog
 {
 public:
 	GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
-		Application::EmulationController& emulationController);
+		Application::EmulationController& emulationController,
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher);
 	~GraphicPacksWindow2();
 
 	void UpdateTitleRunning(bool running);
@@ -27,6 +30,7 @@ private:
 	bool m_filter_installed_games;
 	std::vector<uint64_t> m_installed_games;
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
 
 	void ClearPresets();
 	void FillGraphicPackList() const;

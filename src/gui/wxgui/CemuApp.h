@@ -7,12 +7,14 @@
 class MainWindow;
 class WxWindowState;
 class WxMainWindowRegistry;
+struct WxFrontendContext;
 class wxTimer;
 class wxTimerEvent;
 
 class CemuApp : public wxApp
 {
 public:
+	static void SetFrontendContext(std::shared_ptr<WxFrontendContext> context);
 	bool OnInit() override;
 	int OnExit() override;
 
@@ -38,6 +40,7 @@ private:
 	// Composition root: the application owns core lifecycle and publishes
 	// use-case events to whichever frontend is currently attached.
 	Application::EmulationController m_emulationController;
+	std::shared_ptr<WxFrontendContext> m_frontendContext;
 	MainWindow* m_mainFrame = nullptr;
 	std::shared_ptr<WxWindowState> m_windowState;
 	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;

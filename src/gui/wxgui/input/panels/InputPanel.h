@@ -3,6 +3,8 @@
 #include <wx/panel.h>
 #include <wx/settings.h>
 
+#include <functional>
+
 #include "input/emulated/EmulatedController.h"
 #include "input/api/Controller.h"
 
@@ -19,7 +21,7 @@ public:
 	const wxColour kKeyColourEditMode = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
 	const wxColour kKeyColourActiveMode = wxHelper::CalculateAccentColour(GetBackgroundColour());
 
-	InputPanel(wxWindow* parent);
+	InputPanel(wxWindow* parent, std::function<bool()> escapeDown);
 
 	ControllerPtr get_active_controller() const;
 
@@ -42,7 +44,7 @@ protected:
 	bool reset_focused_element();
 
 	bool m_right_down = false;
+	std::function<bool()> m_escapeDown;
 	int m_focused_element = wxID_NONE;
 	std::unordered_map<int, wxColour> m_color_backup;
 };
-

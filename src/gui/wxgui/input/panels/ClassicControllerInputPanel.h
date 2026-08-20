@@ -9,11 +9,11 @@ class wxInputDraw;
 class ClassicControllerInputPanel : public InputPanel
 {
 public:
-	ClassicControllerInputPanel(wxWindow* parent);
+	ClassicControllerInputPanel(wxWindow* parent,
+		std::function<bool()> escapeDown);
 
 private:
 	wxInputDraw* m_left_draw, * m_right_draw;
 
 	void add_button_row(wxGridBagSizer *sizer, sint32 row, sint32 column, const ClassicController::ButtonId &button_id);
 };
-

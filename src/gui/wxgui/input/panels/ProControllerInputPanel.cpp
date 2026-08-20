@@ -15,8 +15,9 @@ const ProController::ButtonId g_kThirdColumnItems[] = { ProController::kButtonId
 const ProController::ButtonId g_kFourthRowItems[] = { ProController::kButtonId_Up, ProController::kButtonId_Down, ProController::kButtonId_Left, ProController::kButtonId_Right };
 
 
-ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent)
-	: InputPanel(parent)
+ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent,
+	std::function<bool()> escapeDown)
+	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
 	bold_font.MakeBold();

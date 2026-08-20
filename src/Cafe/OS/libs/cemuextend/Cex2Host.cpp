@@ -267,7 +267,7 @@ struct Cex2Host::Impl
 	std::shared_ptr<Host::IClipboard> clipboard;
 	std::shared_ptr<Host::IWindowMetrics> windowMetrics;
 	std::uint64_t nextTextInputSequence{1};
-	void (*textInputWakeCallback)(){};
+	std::function<void()> textInputWakeCallback;
 	std::unordered_map<std::uint32_t, Session> sessions;
 	std::uint32_t nextSession{1};
 	std::uint64_t nextPointerPolicySequence{1};
@@ -1621,10 +1621,10 @@ void Cex2Host::TextCompositionEvent(std::string_view text,
 		static_cast<std::uint16_t>(InputEvent::TextComposition), payload);
 }
 
-void Cex2Host::SetTextInputWakeCallback(void (*callback)())
+void Cex2Host::SetTextInputWakeCallback(std::function<void()> callback)
 {
 	std::lock_guard lock(m_impl->mutex);
-	m_impl->textInputWakeCallback = callback;
+	m_impl->textInputWakeCallback = std::move(callback);
 }
 
 void Cex2Host::MouseEvent(cemuextend::wire::PointerSurface surface,

@@ -8,7 +8,7 @@
 class ProControllerInputPanel : public InputPanel
 {
 public:
-	ProControllerInputPanel(wxWindow* parent);
+	ProControllerInputPanel(wxWindow* parent, std::function<bool()> escapeDown);
 
 	void on_timer(const EmulatedControllerPtr& emulated_controller, const ControllerPtr& controller) override;
 

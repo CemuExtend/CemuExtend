@@ -1669,9 +1669,10 @@ namespace Application
 					text, preedit, cursor, selectionLength);
 			}
 
-			void SetTextInputWakeCallback(void (*callback)()) override
+			void SetTextInputWakeCallback(std::function<void()> callback) override
 			{
-				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(callback);
+				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback(
+					std::move(callback));
 			}
 
 			void SaveCemodPermissionDecisions(std::uint64_t titleId,

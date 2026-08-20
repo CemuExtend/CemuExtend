@@ -1,6 +1,6 @@
 #include "wxgui/input/HotkeySettings.h"
 #include "wxgui/canvas/RendererWindowAdapter.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 #include "wxgui/WxWindowState.h"
 #include <config/ActiveSettings.h>
 #include "input/InputManager.h"
@@ -177,8 +177,12 @@ HotkeySettings::~HotkeySettings()
 	}
 }
 
-void HotkeySettings::Init()
+void HotkeySettings::Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry)
 {
+	cemu_assert(uiDispatcher && mainWindowRegistry);
+	s_uiDispatcher = uiDispatcher;
+	s_mainWindowRegistry = mainWindowRegistry;
 	s_cfgHotkeyToFuncMap.insert({
 		{&s_cfgHotkeys.toggleFullscreen, [](void) {
 			 RunOnUi([](MainWindow& window) { window.SetFullScreen(!window.IsFullScreen()); });
@@ -231,12 +235,14 @@ void HotkeySettings::Init()
 
 void HotkeySettings::RunOnUi(std::function<void(MainWindow&)> action)
 {
-	auto registry = WxFrontendRuntime::GetMainWindowRegistry();
-	if (!registry)
+	auto uiDispatcher = s_uiDispatcher.lock();
+	auto mainWindowRegistry = s_mainWindowRegistry.lock();
+	if (!uiDispatcher || !mainWindowRegistry)
 		return;
-	(void)WxFrontendRuntime::QueueUi(
-		[registry = std::move(registry), action = std::move(action)] {
-		(void)registry->InvokeForUi(
+	(void)uiDispatcher->Queue(
+		[mainWindowRegistry = std::move(mainWindowRegistry),
+		 action = std::move(action)] {
+		(void)mainWindowRegistry->InvokeForUi(
 			[&](MainWindow& window) { action(window); });
 		});
 }

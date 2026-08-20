@@ -1,14 +1,15 @@
 #include "wxgui/input/panels/InputPanel.h"
-#include "wxgui/WxFrontendRuntime.h"
 
 #include <wx/textctrl.h>
 #include <wx/wupdlock.h>
 
 #include "wxgui/helpers/wxHelpers.h"
 
-InputPanel::InputPanel(wxWindow* parent)
-	: wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxWANTS_CHARS)
+InputPanel::InputPanel(wxWindow* parent, std::function<bool()> escapeDown)
+	: wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxWANTS_CHARS),
+	  m_escapeDown(std::move(escapeDown))
 {
+	cemu_assert(static_cast<bool>(m_escapeDown));
 	Bind(wxEVT_LEFT_UP, &InputPanel::on_left_click, this);
 }
 
@@ -27,7 +28,7 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 	const auto mapping = reinterpret_cast<uint64>(element->GetClientData());
 
 	// reset mapping
-	if(std::exchange(m_right_down, false) || WxFrontendRuntime::IsKeyDown(WxFrontendRuntime::PlatformKeyCodes::ESCAPE))
+	if(std::exchange(m_right_down, false) || m_escapeDown())
 	{
 		element->SetBackgroundColour(kKeyColourNormalMode);
 		m_color_backup[element->GetId()] = kKeyColourNormalMode;

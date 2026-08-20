@@ -66,9 +66,12 @@ struct ControllerPage
 using wxControllerPageData = wxCustomData<ControllerPage>;
 
 
-InputSettings2::InputSettings2(wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, _("Input settings"))
+InputSettings2::InputSettings2(wxWindow* parent,
+	std::function<bool()> escapeDown)
+	: wxDialog(parent, wxID_ANY, _("Input settings")),
+	  m_escapeDown(std::move(escapeDown))
 {
+	cemu_assert(static_cast<bool>(m_escapeDown));
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	g_inputConfigWindowHasFocus = true;
@@ -95,7 +98,7 @@ InputSettings2::InputSettings2(wxWindow* parent)
 
 	// init first/default page for fitting size
 	auto* page_data = (wxControllerPageData*)first_page->GetClientObject();
-	auto* panel = new VPADInputPanel(first_page);
+	auto* panel = new VPADInputPanel(first_page, m_escapeDown);
 	page_data->ref().m_panels[EmulatedController::Type::VPAD] = panel;
 
 	auto* first_page_sizer = dynamic_cast<wxGridBagSizer*>(first_page->GetSizer());
@@ -445,16 +448,16 @@ void InputSettings2::update_state()
 			switch (type)
 			{
 			case EmulatedController::Type::VPAD:
-				panel = new VPADInputPanel(page);
+				panel = new VPADInputPanel(page, m_escapeDown);
 				break;
 			case EmulatedController::Pro:
-				panel = new ProControllerInputPanel(page);
+				panel = new ProControllerInputPanel(page, m_escapeDown);
 				break;
 			case EmulatedController::Classic:
-				panel = new ClassicControllerInputPanel(page);
+				panel = new ClassicControllerInputPanel(page, m_escapeDown);
 				break;
 			case EmulatedController::Wiimote:
-				panel = new WiimoteInputPanel(page);
+				panel = new WiimoteInputPanel(page, m_escapeDown);
 				break;
 			default:
 				cemu_assert_debug(false);

@@ -19,14 +19,15 @@
 #include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
-#include "wxgui/MainWindow.h"
-#include "wxgui/WxFrontendRuntime.h"
 
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
-wxDownloadManagerList::wxDownloadManagerList(wxWindow* parent, wxWindowID id)
-	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL)
+wxDownloadManagerList::wxDownloadManagerList(wxWindow* parent,
+	std::function<void()> requestGameListRefresh, wxWindowID id)
+	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
+	  m_requestGameListRefresh(std::move(requestGameListRefresh))
 {
+	cemu_assert(static_cast<bool>(m_requestGameListRefresh));
 	AddColumns();
 
 	// tooltip TODO: extract class mb wxPanelTooltip
@@ -227,7 +228,7 @@ void wxDownloadManagerList::OnClose(wxCloseEvent& event)
 	// wait until all tasks are complete
 	if (m_context_worker.valid())
 		m_context_worker.get();
-	WxFrontendRuntime::RefreshGameList(); // todo: add games instead of fully refreshing game list if a game is downloaded
+	m_requestGameListRefresh(); // todo: add games instead of fully refreshing game list if a game is downloaded
 }
 
 void wxDownloadManagerList::OnColumnClick(wxListEvent& event)

@@ -13,6 +13,9 @@
 
 #include <future>
 #include <cstdint>
+#include <functional>
+#include <optional>
+#include <string_view>
 #include "application/EmulationController.h"
 #include "frontend/CemuExtendFrontendBridge.h"
 #include "host/contracts/HostContracts.h"
@@ -26,6 +29,9 @@ class wxLaunchGameEvent;
 class CemodPermissionDialog;
 class WxWindowState;
 class WxMainWindowRegistry;
+class IWxUiDispatcher;
+struct WxFrontendContext;
+enum class WxFrontendErrorCategory;
 
 wxDECLARE_EVENT(wxEVT_LAUNCH_GAME, wxLaunchGameEvent);
 wxDECLARE_EVENT(wxEVT_SET_WINDOW_TITLE, wxCommandEvent);
@@ -61,11 +67,7 @@ class MainWindow : public wxFrame
 
 public:
 	explicit MainWindow(Application::EmulationController& emulationController,
-		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
-		std::shared_ptr<WxWindowState> windowState,
-		std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry);
+		std::shared_ptr<WxFrontendContext> frontendContext);
 	~MainWindow();
 
     void CreateGameListAndStatusBar();
@@ -155,8 +157,9 @@ public:
 	static void ShowCursor(bool state);
 
 	uintptr_t GetRenderCanvasHWND();
-	static void RequestGameListRefresh();
-	static void RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIATED_BY initiatedBy);
+	void RequestGameListRefresh();
+	void RequestLaunchGame(fs::path filePath,
+		wxLaunchGameEvent::INITIATED_BY initiatedBy);
 
 	// Frontend host entry point for renderer canvas recreation.
 	void RecreateCanvasForHost();
@@ -202,11 +205,18 @@ private:
 
 	wxTimer* m_timer;
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<WxFrontendContext> m_frontendContext;
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 	std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+	std::shared_ptr<Host::IKeyboardState> m_keyboardState;
 	std::shared_ptr<WxWindowState> m_windowState;
 	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::function<void(std::string_view, std::string_view,
+		std::optional<WxFrontendErrorCategory>)> m_showErrorDialog;
+	std::function<void(bool, bool, double,
+		std::optional<Application::WindowTitlePresentation>)> m_updateWindowTitles;
 	Host::NativeWindowHandle m_nativeWindowHandle;
 	Host::NativeSurfacePublication m_nativeWindowPublication{};
 	Application::EventSubscription m_applicationEventSubscription;

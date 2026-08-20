@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -57,7 +58,7 @@ public:
 	void TextCompositionEvent(std::string_view text,
 		std::string_view preedit = {}, std::uint32_t preeditStart = 0,
 		std::uint32_t preeditCursor = 0);
-	void SetTextInputWakeCallback(void (*callback)());
+	void SetTextInputWakeCallback(std::function<void()> callback);
 	void KeyboardFocusLost();
 	void MouseEvent(cemuextend::wire::PointerSurface surface,
 		std::int32_t x, std::int32_t y, std::int32_t deltaX, std::int32_t deltaY,

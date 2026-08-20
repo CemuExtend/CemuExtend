@@ -1,5 +1,5 @@
 #include "wxgui/components/wxGameList.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 
 #include "wxgui/helpers/wxCustomData.h"
 #include "wxCemuConfig.h"
@@ -28,9 +28,7 @@
 
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
-#include "wxgui/CemuApp.h"
 #include "wxgui/helpers/wxHelpers.h"
-#include "wxgui/MainWindow.h"
 
 #include "../wxHelper.h"
 
@@ -136,10 +134,15 @@ bool writeICNS(const fs::path& pngPath, const fs::path& icnsPath) {
 }
 
 wxGameList::wxGameList(wxWindow* parent,
-	Application::EmulationController& emulationController, wxWindowID id)
+	Application::EmulationController& emulationController,
+	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::function<void(fs::path)> requestLaunch, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, GetStyleFlags(Style::kList)),
-	  m_style(Style::kList), m_emulationController(emulationController)
+	  m_style(Style::kList), m_emulationController(emulationController),
+	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_requestLaunch(std::move(requestLaunch))
 {
+	cemu_assert(m_uiDispatcher && static_cast<bool>(m_requestLaunch));
 	const auto& config = GetWxGUIConfig();
 
 	char transparent_bitmap[kIconWidth * kIconWidth * 4] = {};
@@ -195,7 +198,7 @@ wxGameList::wxGameList(wxWindow* parent,
 		[this, lifetime = m_lifetime](const Application::TitleCatalogEvent& event) {
 			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
 				return;
-			(void)WxFrontendRuntime::QueueUi([this, lifetime, event] {
+			(void)m_uiDispatcher->Queue([this, lifetime, event] {
 				if (lifetime->load(std::memory_order_acquire))
 					HandleTitleCatalogEvent(event);
 			});
@@ -715,7 +718,7 @@ void wxGameList::OnContextMenuSelected(wxCommandEvent& event)
 			{
 			case kContextMenuStart:
 			{
-				MainWindow::RequestLaunchGame(gameInfo->basePath, wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
+				m_requestLaunch(gameInfo->basePath);
 				break;
 			}
 			case kContextMenuFavorite:
@@ -1246,7 +1249,7 @@ void wxGameList::OnItemActivated(wxListEvent& event)
 	if (!game)
 		return;
 
-	MainWindow::RequestLaunchGame(game->basePath, wxLaunchGameEvent::INITIATED_BY::GAME_LIST);
+	m_requestLaunch(game->basePath);
 }
 
 void wxGameList::OnTimer(wxTimerEvent& event)
@@ -1359,7 +1362,7 @@ void wxGameList::AsyncWorkerThread()
 		else if (wxTheApp)
 		{
 			auto lifetime = m_lifetime;
-			(void)WxFrontendRuntime::QueueUi([this, lifetime, titleId, data = std::move(*data)]() mutable {
+			(void)m_uiDispatcher->Queue([this, lifetime, titleId, data = std::move(*data)]() mutable {
 				if (lifetime->load(std::memory_order_acquire))
 					InstallLoadedIcon(titleId, std::move(data));
 			});

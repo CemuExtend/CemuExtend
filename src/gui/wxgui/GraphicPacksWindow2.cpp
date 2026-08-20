@@ -1,5 +1,5 @@
 #include "helpers/wxHelpers.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/GraphicPacksWindow2.h"
 #include "wxgui/DownloadGraphicPacksWindow.h"
@@ -183,10 +183,13 @@ void GraphicPacksWindow2::ExpandChildren(const std::vector<wxTreeItemId>& ids, s
 }
 
 GraphicPacksWindow2::GraphicPacksWindow2(wxWindow* parent, uint64_t title_id_filter,
-	Application::EmulationController& emulationController)
+	Application::EmulationController& emulationController,
+	std::shared_ptr<IWxUiDispatcher> uiDispatcher)
 	: wxDialog(parent, wxID_ANY, _("Graphic packs"), wxDefaultPosition, wxSize(1000,670), wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
-		m_emulationController(emulationController)
+		m_emulationController(emulationController),
+		m_uiDispatcher(std::move(uiDispatcher))
 {
+	cemu_assert(m_uiDispatcher != nullptr);
 	for (const auto& title : m_emulationController.ListTitles())
 		m_installed_games.push_back(title.titleId);
 	if (title_id_filter != 0)
@@ -534,7 +537,7 @@ void GraphicPacksWindow2::ClearPresets()
 						parent->DestroyChildren();
 					delete std::exchange(static_box_sizer, nullptr);
 				};
-				(void)WxFrontendRuntime::QueueUi(cleanup, cleanup);
+				(void)m_uiDispatcher->Queue(cleanup, cleanup);
 			}
 		}
 	}

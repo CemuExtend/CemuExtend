@@ -278,9 +278,9 @@ namespace Application
 		m_backend->SubmitTextComposition(text, preedit, cursor, selectionLength);
 	}
 
-	void EmulationController::SetTextInputWakeCallback(void (*callback)())
+	void EmulationController::SetTextInputWakeCallback(std::function<void()> callback)
 	{
-		m_backend->SetTextInputWakeCallback(callback);
+		m_backend->SetTextInputWakeCallback(std::move(callback));
 	}
 
 	void EmulationController::SaveCemodPermissionDecisions(std::uint64_t titleId,

@@ -31,7 +31,7 @@ set(wx_window_state_violations "")
 
 foreach(source IN LISTS architecture_sources)
 	file(READ "${source}" content)
-	if(content MATCHES "gui/interface/WindowSystem\\.h|interface/WindowSystem\\.h|WindowSystem::")
+	if(content MATCHES "gui/interface/WindowSystem\\.h|interface/WindowSystem\\.h|WindowSystem::|WxFrontendRuntime\\.h|WxFrontendRuntime::")
 		list(APPEND frontend_runtime_violations "${source}")
 	endif()
 	if(content MATCHES "Frontend::GetHostServices|frontend/HostServices\\.h")

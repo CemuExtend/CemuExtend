@@ -7,6 +7,7 @@
 #include <wx/timer.h>
 #include <wx/panel.h>
 #include <wx/settings.h>
+#include <functional>
 #include "wxHelper.h"
 #include "util/helpers/Semaphore.h"
 
@@ -39,6 +40,8 @@ public:
 	};
 
 	wxGameList(wxWindow* parent, Application::EmulationController& emulationController,
+		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+		std::function<void(fs::path)> requestLaunch,
 		wxWindowID id = wxID_ANY);
 	~wxGameList();
 
@@ -107,6 +110,8 @@ private:
 
 	std::vector<uint64> m_icon_load_queue;
 	Application::EmulationController& m_emulationController;
+	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
+	std::function<void(fs::path)> m_requestLaunch;
 	Application::TitleCatalogSubscription m_titleSubscription;
 	std::shared_ptr<std::atomic_bool> m_lifetime =
 		std::make_shared<std::atomic_bool>(true);

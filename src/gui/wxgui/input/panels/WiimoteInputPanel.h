@@ -11,7 +11,7 @@ class wxInputDraw;
 class WiimoteInputPanel : public InputPanel
 {
 public:
-	WiimoteInputPanel(wxWindow* parent);
+	WiimoteInputPanel(wxWindow* parent, std::function<bool()> escapeDown);
 
 	void on_timer(const EmulatedControllerPtr& emulated_controller, const ControllerPtr& controller) override;
 
@@ -38,7 +38,6 @@ private:
 
 	void add_button_row(sint32 row, sint32 column, const WiimoteController::ButtonId &button_id);
 };
-
 
 
 

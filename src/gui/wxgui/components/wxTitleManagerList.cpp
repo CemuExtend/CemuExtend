@@ -1,5 +1,5 @@
 #include "wxgui/components/wxTitleManagerList.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 #include "application/EmulationController.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "util/helpers/SystemException.h"
@@ -8,6 +8,7 @@
 #include "wxgui/helpers/wxHelpers.h"
 
 #include <wx/imaglist.h>
+#include <wx/app.h>
 #include <wx/wupdlock.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
@@ -23,7 +24,6 @@
 
 #include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
-#include "wxgui/MainWindow.h"
 
 wxDEFINE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_TITLE_REMOVED, wxCommandEvent);
@@ -31,11 +31,16 @@ wxDEFINE_EVENT(wxEVT_TITLE_SEARCH_COMPLETE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
 wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
-	Application::EmulationController& emulationController, wxWindowID id)
+	Application::EmulationController& emulationController,
+	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+	std::function<void(fs::path)> requestLaunch, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
 	  m_emulationController(emulationController),
+	  m_uiDispatcher(std::move(uiDispatcher)),
+	  m_requestLaunch(std::move(requestLaunch)),
 	  m_lifetime(std::make_shared<std::atomic_bool>(true))
 {
+	cemu_assert(m_uiDispatcher && static_cast<bool>(m_requestLaunch));
 	AddColumns();
 
 	// tooltip TODO: extract class mb wxPanelTooltip
@@ -63,7 +68,7 @@ wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
 		[this, lifetime = std::move(lifetime)](const Application::TitleCatalogEvent& event) {
 			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
 				return;
-			(void)WxFrontendRuntime::QueueUi([this, lifetime, event] {
+			(void)m_uiDispatcher->Queue([this, lifetime, event] {
 				if (lifetime->load(std::memory_order_acquire))
 					HandleTitleCatalogEvent(event);
 			});
@@ -670,7 +675,7 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 		{
 			try
 			{
-				MainWindow::RequestLaunchGame(entry->path, wxLaunchGameEvent::INITIATED_BY::TITLE_MANAGER);
+				m_requestLaunch(entry->path);
 				Close();
 			}
 			catch (const std::exception& ex)

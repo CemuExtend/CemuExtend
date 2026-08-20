@@ -3,7 +3,7 @@
 #include "audio/IAudioAPI.h"
 #include "application/ApplicationHost.h"
 #include "frontend/FrontendRuntime.h"
-#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxFrontendContext.h"
 
 #include "helpers/wxHelpers.h"
 
@@ -39,6 +39,30 @@
 
 namespace
 {
+	enum class ErrorCategory
+	{
+		KeysFileCreation,
+		GraphicPacks,
+	};
+
+	std::shared_ptr<WxMainWindowRegistry> GetMainWindowRegistry();
+	[[nodiscard]] bool RuntimeIsShuttingDown();
+	void RuntimeBeginShutdown();
+	void RuntimeResumeAfterFailedShutdown();
+	[[nodiscard]] bool QueueUi(std::function<void()> callback);
+	[[nodiscard]] bool QueueUi(std::function<void()> callback,
+		std::function<void()> cancelled);
+	void RuntimeReleaseHostServices();
+	void ShowErrorDialog(std::string_view message, std::string_view title,
+		std::optional<ErrorCategory> errorCategory = {});
+	void GetClipboardTextAsync(std::function<void(bool, std::string)> callback);
+	void SetClipboardTextAsync(std::string text,
+		std::function<void(bool)> callback);
+	void UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
+		std::optional<Application::WindowTitlePresentation> presentation = std::nullopt);
+	std::string GetKeyCodeName(std::uint32_t key);
+	bool InputConfigWindowHasFocus();
+
 	std::atomic_bool s_wxFrontendStopping{false};
 	std::mutex s_wxDispatchMutex;
 	std::mutex s_runtimeObjectsMutex;
@@ -96,25 +120,25 @@ namespace
 			callback();
 	}
 
-	std::optional<uint32> ResolvePlatformKeyCode(WxFrontendRuntime::PlatformKeyCodes key)
+	std::optional<uint32> ResolvePlatformKeyCode(Host::Key key)
 	{
 		switch (key)
 		{
 #if BOOST_OS_WINDOWS
-		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return VK_LCONTROL;
-		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return VK_RCONTROL;
-		case WxFrontendRuntime::PlatformKeyCodes::TAB: return VK_TAB;
-		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return VK_ESCAPE;
+		case Host::Key::LeftControl: return VK_LCONTROL;
+		case Host::Key::RightControl: return VK_RCONTROL;
+		case Host::Key::Tab: return VK_TAB;
+		case Host::Key::Escape: return VK_ESCAPE;
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
-		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return GDK_KEY_Control_L;
-		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return GDK_KEY_Control_R;
-		case WxFrontendRuntime::PlatformKeyCodes::TAB: return GDK_KEY_Tab;
-		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return GDK_KEY_Escape;
+		case Host::Key::LeftControl: return GDK_KEY_Control_L;
+		case Host::Key::RightControl: return GDK_KEY_Control_R;
+		case Host::Key::Tab: return GDK_KEY_Tab;
+		case Host::Key::Escape: return GDK_KEY_Escape;
 #elif BOOST_OS_MACOS
-		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return kVK_Control;
-		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return kVK_RightControl;
-		case WxFrontendRuntime::PlatformKeyCodes::TAB: return kVK_Tab;
-		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return kVK_Escape;
+		case Host::Key::LeftControl: return kVK_Control;
+		case Host::Key::RightControl: return kVK_RightControl;
+		case Host::Key::Tab: return kVK_Tab;
+		case Host::Key::Escape: return kVK_Escape;
 #endif
 		}
 		return std::nullopt;
@@ -123,7 +147,7 @@ namespace
 	template<typename Callback>
 	bool QueueFrameCallback(Callback&& callback)
 	{
-		auto registry = WxFrontendRuntime::GetMainWindowRegistry();
+		auto registry = GetMainWindowRegistry();
 		if (!registry)
 			return false;
 		auto sharedCallback = std::make_shared<std::decay_t<Callback>>(
@@ -135,7 +159,7 @@ namespace
 		};
 		if (wxIsMainThread())
 			return !s_wxFrontendStopping.load(std::memory_order_acquire) && invoke();
-		return WxFrontendRuntime::QueueUi(
+		return QueueUi(
 			[invoke = std::move(invoke)]() mutable { (void)invoke(); });
 	}
 
@@ -201,32 +225,13 @@ namespace
 
 		bool IsKeyDown(Host::Key key) const override
 		{
-			using Host::Key;
-			WxFrontendRuntime::PlatformKeyCodes platformKey;
-			switch (key)
-			{
-			case Key::LeftControl:
-				platformKey = WxFrontendRuntime::PlatformKeyCodes::LCONTROL;
-				break;
-			case Key::RightControl:
-				platformKey = WxFrontendRuntime::PlatformKeyCodes::RCONTROL;
-				break;
-			case Key::Tab:
-				platformKey = WxFrontendRuntime::PlatformKeyCodes::TAB;
-				break;
-			case Key::Escape:
-				platformKey = WxFrontendRuntime::PlatformKeyCodes::ESCAPE;
-				break;
-			default:
-				return false;
-			}
-			const auto nativeKey = ResolvePlatformKeyCode(platformKey);
+			const auto nativeKey = ResolvePlatformKeyCode(key);
 			return nativeKey && m_state->IsKeyDown(*nativeKey);
 		}
 
 		std::string GetKeyName(std::uint32_t key) const override
 		{
-			return WxFrontendRuntime::GetKeyCodeName(key);
+			return GetKeyCodeName(key);
 		}
 
 		std::vector<Host::KeyState> GetKeyStates() const override
@@ -242,17 +247,17 @@ namespace
 
 		void GetTextAsync(std::function<void(bool, std::string)> callback) override
 		{
-			WxFrontendRuntime::GetClipboardTextAsync(std::move(callback));
+			GetClipboardTextAsync(std::move(callback));
 		}
 
 		void SetTextAsync(std::string text, std::function<void(bool)> callback) override
 		{
-			WxFrontendRuntime::SetClipboardTextAsync(std::move(text), std::move(callback));
+			SetClipboardTextAsync(std::move(text), std::move(callback));
 		}
 
 		bool OpenUrl(std::string url) override
 		{
-			return WxFrontendRuntime::QueueUi([url = std::move(url)] {
+			return QueueUi([url = std::move(url)] {
 				if (!wxLaunchDefaultBrowser(wxString::FromUTF8(url)))
 					cemuLog_log(LogType::Force, "Failed to open host browser URL: {}", url);
 			});
@@ -260,7 +265,7 @@ namespace
 
 		bool InputConfigurationHasFocus() const override
 		{
-			return WxFrontendRuntime::InputConfigWindowHasFocus();
+			return InputConfigWindowHasFocus();
 		}
 
 		bool RecreateCanvas() override
@@ -278,7 +283,7 @@ namespace
 			if (!pending)
 				return false;
 			auto mainWindowRegistry = m_mainWindowRegistry;
-			if (!WxFrontendRuntime::QueueUi([id = *pending, result,
+			if (!QueueUi([id = *pending, result,
 				mainWindowRegistry = std::move(mainWindowRegistry)] {
 				if (!IsPendingUi(id))
 					return;
@@ -301,7 +306,38 @@ namespace
 		std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 	};
 
-	void InstallWxHostServices()
+	class WxUiDispatcher final : public IWxUiDispatcher
+	{
+	public:
+		[[nodiscard]] bool IsShuttingDown() const override
+		{
+			return RuntimeIsShuttingDown();
+		}
+
+		void BeginShutdown() override
+		{
+			RuntimeBeginShutdown();
+		}
+
+		void ResumeAfterFailedShutdown() override
+		{
+			RuntimeResumeAfterFailedShutdown();
+		}
+
+		[[nodiscard]] bool Queue(std::function<void()> callback) override
+		{
+			return QueueUi(std::move(callback));
+		}
+
+		[[nodiscard]] bool Queue(std::function<void()> callback,
+			std::function<void()> cancelled) override
+		{
+			return QueueUi(
+				std::move(callback), std::move(cancelled));
+		}
+	};
+
+	std::shared_ptr<WxFrontendContext> InstallWxHostServices()
 	{
 		s_wxFrontendStopping.store(false, std::memory_order_release);
 		auto windowState = std::make_shared<WxWindowState>();
@@ -325,6 +361,33 @@ namespace
 			*hostServices, *hostServices);
 		InputManager::instance().Start();
 		IAudioAPI::ConfigureNativeSurfaceProvider(hostServices.get());
+		auto context = std::make_shared<WxFrontendContext>();
+		context->windowMetrics = hostServices;
+		context->nativeSurfaces = hostServices;
+		context->nativeSurfacePublisher = hostServices;
+		context->keyboardState = hostServices;
+		context->windowState = std::move(windowState);
+		context->mainWindowRegistry = std::move(mainWindowRegistry);
+		context->uiDispatcher = std::make_shared<WxUiDispatcher>();
+		context->showErrorDialog = [](std::string_view message,
+			std::string_view title,
+			std::optional<WxFrontendErrorCategory> category) {
+			std::optional<ErrorCategory> runtimeCategory;
+			if (category == WxFrontendErrorCategory::KeysFileCreation)
+				runtimeCategory = ErrorCategory::KeysFileCreation;
+			else if (category == WxFrontendErrorCategory::GraphicPacks)
+				runtimeCategory = ErrorCategory::GraphicPacks;
+			ShowErrorDialog(message, title, runtimeCategory);
+		};
+		context->updateWindowTitles = [](bool isIdle, bool isLoading, double fps,
+			std::optional<Application::WindowTitlePresentation> presentation) {
+			UpdateWindowTitles(
+				isIdle, isLoading, fps, std::move(presentation));
+		};
+		context->releaseHostServices = [] {
+			RuntimeReleaseHostServices();
+		};
+		return context;
 	}
 }
 
@@ -339,7 +402,7 @@ void _wxLaunch()
 void Frontend::Run()
 {
 	SetThreadName("cemu");
-	InstallWxHostServices();
+	CemuApp::SetFrontendContext(InstallWxHostServices());
 #if BOOST_OS_WINDOWS
 	// on Windows wxWidgets there is a bug where wxDirDialog->ShowModal will deadlock in Windows internals somehow
 	// moving the UI thread off the main thread fixes this
@@ -350,45 +413,23 @@ void Frontend::Run()
 	char* argv[1]{};
 	wxEntry(argc, argv);
 #endif
-	WxFrontendRuntime::ReleaseHostServices();
+	RuntimeReleaseHostServices();
 }
 
-std::shared_ptr<Host::IWindowMetrics> WxFrontendRuntime::GetWindowMetricsHost()
+namespace
 {
-	std::scoped_lock lock(s_runtimeObjectsMutex);
-	return s_wxHostServices;
-}
-
-std::shared_ptr<Host::INativeSurfaceProvider> WxFrontendRuntime::GetNativeSurfaceHost()
-{
-	std::scoped_lock lock(s_runtimeObjectsMutex);
-	return s_wxHostServices;
-}
-
-std::shared_ptr<Host::INativeSurfacePublisher> WxFrontendRuntime::GetNativeSurfacePublisher()
-{
-	std::scoped_lock lock(s_runtimeObjectsMutex);
-	return s_wxHostServices;
-}
-
-std::shared_ptr<WxWindowState> WxFrontendRuntime::GetWindowState()
-{
-	std::scoped_lock lock(s_runtimeObjectsMutex);
-	return s_wxWindowState;
-}
-
-std::shared_ptr<WxMainWindowRegistry> WxFrontendRuntime::GetMainWindowRegistry()
+std::shared_ptr<WxMainWindowRegistry> GetMainWindowRegistry()
 {
 	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_mainWindowRegistry;
 }
 
-bool WxFrontendRuntime::IsShuttingDown()
+bool RuntimeIsShuttingDown()
 {
 	return s_wxFrontendStopping.load(std::memory_order_acquire);
 }
 
-void WxFrontendRuntime::BeginShutdown()
+void RuntimeBeginShutdown()
 {
 	{
 		std::scoped_lock lock(s_wxDispatchMutex);
@@ -397,13 +438,13 @@ void WxFrontendRuntime::BeginShutdown()
 	CancelPendingUi();
 }
 
-void WxFrontendRuntime::ResumeAfterFailedShutdown()
+void RuntimeResumeAfterFailedShutdown()
 {
 	std::scoped_lock lock(s_wxDispatchMutex);
 	s_wxFrontendStopping.store(false, std::memory_order_release);
 }
 
-bool WxFrontendRuntime::QueueUi(std::function<void()> callback)
+bool QueueUi(std::function<void()> callback)
 {
 	std::scoped_lock lock(s_wxDispatchMutex);
 	if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
@@ -415,7 +456,7 @@ bool WxFrontendRuntime::QueueUi(std::function<void()> callback)
 	return true;
 }
 
-bool WxFrontendRuntime::QueueUi(std::function<void()> callback,
+bool QueueUi(std::function<void()> callback,
 	std::function<void()> cancelled)
 {
 	struct Completion
@@ -457,9 +498,9 @@ bool WxFrontendRuntime::QueueUi(std::function<void()> callback,
 	return true;
 }
 
-void WxFrontendRuntime::ReleaseHostServices()
+void RuntimeReleaseHostServices()
 {
-	BeginShutdown();
+	RuntimeBeginShutdown();
 	std::shared_ptr<WxHostServices> hostServices;
 	{
 		std::scoped_lock lock(s_runtimeObjectsMutex);
@@ -475,7 +516,7 @@ void WxFrontendRuntime::ReleaseHostServices()
 	IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
 }
 
-void WxFrontendRuntime::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WxFrontendRuntime::ErrorCategory> /*errorId*/)
+void ShowErrorDialog(std::string_view message, std::string_view title, std::optional<ErrorCategory> /*errorId*/)
 {
 	wxString caption;
 	if (title.empty())
@@ -485,7 +526,7 @@ void WxFrontendRuntime::ShowErrorDialog(std::string_view message, std::string_vi
 	wxMessageBox(wxString::FromUTF8(message), caption, wxOK | wxCENTRE | wxICON_ERROR);
 }
 
-void WxFrontendRuntime::GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
+void GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false, {}); });
@@ -510,7 +551,7 @@ void WxFrontendRuntime::GetClipboardTextAsync(std::function<void(bool, std::stri
 		CancelPendingUi(*pending);
 }
 
-void WxFrontendRuntime::SetClipboardTextAsync(std::string text, std::function<void(bool)> callback)
+void SetClipboardTextAsync(std::string text, std::function<void(bool)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false); });
@@ -536,7 +577,7 @@ void WxFrontendRuntime::SetClipboardTextAsync(std::string text, std::function<vo
 		CancelPendingUi(*pending);
 }
 
-void WxFrontendRuntime::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
+void UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 	std::optional<Application::WindowTitlePresentation> presentation)
 {
 	std::string windowText;
@@ -632,81 +673,7 @@ void WxFrontendRuntime::UpdateWindowTitles(bool isIdle, bool isLoading, double f
 	});
 }
 
-void WxFrontendRuntime::GetWindowSize(int& w, int& h)
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	w = state ? state->width.load() : 0;
-	h = state ? state->height.load() : 0;
-}
-
-void WxFrontendRuntime::GetPadWindowSize(int& w, int& h)
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	if (state && state->pad_open.load())
-	{
-		w = state->pad_width.load();
-		h = state->pad_height.load();
-	}
-	else
-	{
-		w = 0;
-		h = 0;
-	}
-}
-
-void WxFrontendRuntime::GetWindowPhysSize(int& w, int& h)
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	w = state ? state->phys_width.load() : 0;
-	h = state ? state->phys_height.load() : 0;
-}
-
-void WxFrontendRuntime::GetPadWindowPhysSize(int& w, int& h)
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	if (state && state->pad_open.load())
-	{
-		w = state->phys_pad_width.load();
-		h = state->phys_pad_height.load();
-	}
-	else
-	{
-		w = 0;
-		h = 0;
-	}
-}
-
-double WxFrontendRuntime::GetWindowDPIScale()
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	return state ? state->dpi_scale.load() : 1.0;
-}
-
-double WxFrontendRuntime::GetPadDPIScale()
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	return state && state->pad_open.load() ? state->pad_dpi_scale.load() : 1.0;
-}
-
-bool WxFrontendRuntime::IsPadWindowOpen()
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	return state && state->pad_open.load();
-}
-
-bool WxFrontendRuntime::IsKeyDown(uint32 key)
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	return state && state->IsKeyDown(key);
-}
-
-bool WxFrontendRuntime::IsKeyDown(PlatformKeyCodes platformKey)
-{
-	const auto key = ResolvePlatformKeyCode(platformKey);
-	return key && WxFrontendRuntime::IsKeyDown(*key);
-}
-
-std::string WxFrontendRuntime::GetKeyCodeName(uint32 button)
+std::string GetKeyCodeName(uint32 button)
 {
 #if BOOST_OS_WINDOWS
 	LONG scan_code = MapVirtualKeyA((UINT)button, MAPVK_VK_TO_VSC_EX);
@@ -748,40 +715,9 @@ std::string WxFrontendRuntime::GetKeyCodeName(uint32 button)
 #endif
 }
 
-bool WxFrontendRuntime::InputConfigWindowHasFocus()
+bool InputConfigWindowHasFocus()
 {
 	return g_inputConfigWindowHasFocus;
 }
 
-void WxFrontendRuntime::NotifyGameLoaded()
-{
-	(void)QueueFrameCallback([](MainWindow& frame) {
-		frame.OnGameLoaded();
-		frame.UpdateSettingsAfterGameLaunch();
-	});
-}
-
-void WxFrontendRuntime::NotifyGameExited()
-{
-	(void)QueueFrameCallback([](MainWindow& frame) {
-		frame.RestoreSettingsAfterGameExited();
-	});
-}
-
-void WxFrontendRuntime::RefreshGameList()
-{
-	(void)QueueFrameCallback([](MainWindow& frame) {
-		frame.RequestGameListRefresh();
-	});
-}
-
-void WxFrontendRuntime::CaptureInput(const ControllerState& currentState, const ControllerState& lastState)
-{
-	HotkeySettings::CaptureInput(currentState, lastState);
-}
-
-bool WxFrontendRuntime::IsFullScreen()
-{
-	auto state = WxFrontendRuntime::GetWindowState();
-	return state && state->is_fullscreen.load();
 }
