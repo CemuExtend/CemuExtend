@@ -1,6 +1,7 @@
 #include "wxgui/input/HotkeySettings.h"
 #include "wxgui/canvas/RendererWindowAdapter.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
+#include "wxgui/WxWindowState.h"
 #include <config/ActiveSettings.h>
 #include "input/InputManager.h"
 #include "HotkeySettings.h"
@@ -176,7 +177,7 @@ HotkeySettings::~HotkeySettings()
 	}
 }
 
-void HotkeySettings::Init(MainWindow* mainWindowFrame)
+void HotkeySettings::Init()
 {
 	s_cfgHotkeyToFuncMap.insert({
 		{&s_cfgHotkeys.toggleFullscreen, [](void) {
@@ -226,22 +227,18 @@ void HotkeySettings::Init(MainWindow* mainWindowFrame)
 			s_controllerHotkeyToFuncMap[controllerHotkey] = func;
 		}
 	}
-	s_mainWindow.store(mainWindowFrame, std::memory_order_release);
-}
-
-void HotkeySettings::Shutdown()
-{
-	s_mainWindow.store(nullptr, std::memory_order_release);
 }
 
 void HotkeySettings::RunOnUi(std::function<void(MainWindow&)> action)
 {
-	if (wxTheApp == nullptr || s_mainWindow.load(std::memory_order_acquire) == nullptr)
+	auto registry = WxFrontendRuntime::GetMainWindowRegistry();
+	if (!registry)
 		return;
-	(void)WindowSystem::QueueUi([action = std::move(action)] {
-		if (auto* window = s_mainWindow.load(std::memory_order_acquire))
-			action(*window);
-	});
+	(void)WxFrontendRuntime::QueueUi(
+		[registry = std::move(registry), action = std::move(action)] {
+		(void)registry->InvokeForUi(
+			[&](MainWindow& window) { action(window); });
+		});
 }
 
 void HotkeySettings::CreateColumnHeaders(void)

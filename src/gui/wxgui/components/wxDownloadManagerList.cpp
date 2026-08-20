@@ -20,7 +20,7 @@
 #include "wxgui/ChecksumTool.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "wxgui/MainWindow.h"
-#include "gui/interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
@@ -227,7 +227,7 @@ void wxDownloadManagerList::OnClose(wxCloseEvent& event)
 	// wait until all tasks are complete
 	if (m_context_worker.valid())
 		m_context_worker.get();
-	WindowSystem::RefreshGameList(); // todo: add games instead of fully refreshing game list if a game is downloaded
+	WxFrontendRuntime::RefreshGameList(); // todo: add games instead of fully refreshing game list if a game is downloaded
 }
 
 void wxDownloadManagerList::OnColumnClick(wxListEvent& event)

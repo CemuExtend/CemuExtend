@@ -19,12 +19,11 @@
 //wxgui + misc.
 #include "wxgui.h"
 #include "wxCemuConfig.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "wxHelper.h"
 #include "helpers/wxHelpers.h"
 #include "PadViewFrame.h"
 #include "WxWindowState.h"
-#include "WxFrontendRuntime.h"
 
 #if defined(__WXGTK__)
 #include <gtk/gtk.h>
@@ -344,7 +343,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	const std::weak_ptr<std::atomic_bool> eventLifetime = m_applicationEventLifetime;
 	m_applicationEventSubscription = m_emulationController.Events().Subscribe(
 		[this, eventLifetime](const Application::Event& event) {
-			(void)WindowSystem::QueueUi([this, eventLifetime, event] {
+			(void)WxFrontendRuntime::QueueUi([this, eventLifetime, event] {
 				const auto lifetime = eventLifetime.lock();
 				if (!lifetime || !lifetime->load(std::memory_order_acquire))
 					return;
@@ -352,7 +351,7 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 			});
 		});
 	m_emulationController.SetTextInputWakeCallback(+[] {
-		(void)WindowSystem::QueueUi([] {
+		(void)WxFrontendRuntime::QueueUi([] {
 			if (const auto registry = WxFrontendRuntime::GetMainWindowRegistry())
 				(void)registry->InvokeForUi(
 					[](MainWindow& frame) { frame.RefreshCemuExtendTextInput(); });
@@ -435,8 +434,7 @@ MainWindow::~MainWindow()
 	m_applicationEventLifetime->store(false, std::memory_order_release);
 	m_mainWindowRegistry->Unregister(*this);
 	m_applicationEventSubscription.Reset();
-	WindowSystem::BeginShutdown();
-	HotkeySettings::Shutdown();
+	WxFrontendRuntime::BeginShutdown();
 	m_emulationController.SetTextInputWakeCallback(nullptr);
 	UpdateCemuExtendPointerConfinement(false);
 	// Publish invalid handles and wait for outstanding snapshots before wx destroys
@@ -462,7 +460,7 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 	switch (event.type)
 	{
 	case EventType::LoadingStarted:
-		WindowSystem::UpdateWindowTitles(false, true, 0.0);
+		WxFrontendRuntime::UpdateWindowTitles(false, true, 0.0);
 		break;
 	case EventType::GameLoaded:
 		OnGameLoaded();
@@ -475,18 +473,18 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 		HandlePpcProcessExit();
 		break;
 	case EventType::PerformanceUpdated:
-		WindowSystem::UpdateWindowTitles(false, false, event.framesPerSecond,
+		WxFrontendRuntime::UpdateWindowTitles(false, false, event.framesPerSecond,
 			m_emulationController.CurrentWindowTitlePresentation());
 		break;
 	case EventType::Diagnostic:
 	{
-		std::optional<WindowSystem::ErrorCategory> category;
+		std::optional<WxFrontendRuntime::ErrorCategory> category;
 		if (event.diagnosticCode == Application::DiagnosticCode::KeyFileCreateFailed ||
 			event.diagnosticCode == Application::DiagnosticCode::KeyFileInvalidLine)
-			category = WindowSystem::ErrorCategory::KEYS_TXT_CREATION;
+			category = WxFrontendRuntime::ErrorCategory::KEYS_TXT_CREATION;
 		else if (event.diagnosticCode == Application::DiagnosticCode::GraphicPackInvalid)
-			category = WindowSystem::ErrorCategory::GRAPHIC_PACKS;
-		WindowSystem::ShowErrorDialog(event.diagnostic, _tr("Error"), category);
+			category = WxFrontendRuntime::ErrorCategory::GRAPHIC_PACKS;
+		WxFrontendRuntime::ShowErrorDialog(event.diagnostic, _tr("Error"), category);
 		break;
 	}
 	case EventType::GameListRefreshRequested:
@@ -537,7 +535,7 @@ wxString MainWindow::GetInitialWindowTitle()
 
 void MainWindow::OnClose(wxCloseEvent& event)
 {
-	if (!IsMaximized() && !WindowSystem::IsFullScreen())
+	if (!IsMaximized() && !WxFrontendRuntime::IsFullScreen())
 		m_restored_size = GetSize();
 
 	SaveSettings();
@@ -546,13 +544,13 @@ void MainWindow::OnClose(wxCloseEvent& event)
 		m_active_cemod_permission_dialog->EndModal(wxID_CANCEL);
 	ClosePpcThreadsViewer();
 	CloseMemorySearcher();
-	WindowSystem::BeginShutdown();
+	WxFrontendRuntime::BeginShutdown();
 	const auto shutdownResult = m_emulationController.ShutdownApplication();
 	if (!shutdownResult.stopped)
 	{
 		cemuLog_log(LogType::Force, "Failed to shut down emulation while closing: {}",
 			shutdownResult.diagnostic);
-		WindowSystem::ResumeAfterFailedShutdown();
+		WxFrontendRuntime::ResumeAfterFailedShutdown();
 		event.Veto();
 		return;
 	}
@@ -688,7 +686,7 @@ void MainWindow::RollbackFailedLaunchUi()
 	DestroyCanvas();
 	m_game_launched = false;
 	m_launched_game_name.clear();
-	if (WindowSystem::IsFullScreen())
+	if (WxFrontendRuntime::IsFullScreen())
 	{
 		m_windowState->is_fullscreen = false;
 		ShowFullScreen(false);
@@ -2045,7 +2043,7 @@ void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 	}
 	++m_cemuextend_text_input_focus_retries;
 	const std::weak_ptr<std::atomic_bool> lifetime = m_applicationEventLifetime;
-	(void)WindowSystem::QueueUi([this, lifetime, sequence] {
+	(void)WxFrontendRuntime::QueueUi([this, lifetime, sequence] {
 		const auto alive = lifetime.lock();
 		if (alive && alive->load(std::memory_order_acquire))
 			EnsureCemuExtendTextInputFocus(sequence);
@@ -2311,7 +2309,7 @@ void MainWindow::DestroyCanvas()
 
 void MainWindow::OnSizeEvent(wxSizeEvent& event)
 {
-	if (!IsMaximized() && !WindowSystem::IsFullScreen())
+	if (!IsMaximized() && !WxFrontendRuntime::IsFullScreen())
 		m_restored_size = GetSize();
 
 	const wxSize client_size = GetClientSize();
@@ -2342,7 +2340,7 @@ void MainWindow::OnDPIChangedEvent(wxDPIChangedEvent& event)
 
 void MainWindow::OnMove(wxMoveEvent& event)
 {
-	if (!IsMaximized() && !WindowSystem::IsFullScreen())
+	if (!IsMaximized() && !WxFrontendRuntime::IsFullScreen())
 		m_restored_position = GetPosition();
 
 	if (m_debugger_window && m_debugger_window->IsShown())
@@ -3151,7 +3149,7 @@ void MainWindow::RequestGameListRefresh()
 	if (wxIsMainThread())
 		request();
 	else
-		(void)WindowSystem::QueueUi(std::move(request));
+		(void)WxFrontendRuntime::QueueUi(std::move(request));
 }
 
 void MainWindow::RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIATED_BY initiatedBy)
@@ -3168,7 +3166,7 @@ void MainWindow::RequestLaunchGame(fs::path filePath, wxLaunchGameEvent::INITIAT
 	if (wxIsMainThread())
 		request();
 	else
-		(void)WindowSystem::QueueUi(std::move(request));
+		(void)WxFrontendRuntime::QueueUi(std::move(request));
 }
 
 void MainWindow::RecreateCanvasForHost()
@@ -3182,7 +3180,7 @@ void MainWindow::HandlePpcProcessExit()
 {
 	// this is called from the emulated PPC thread, so queue an event instead of handling it directly
 	const std::weak_ptr<std::atomic_bool> lifetime = m_applicationEventLifetime;
-	(void)WindowSystem::QueueUi([this, lifetime] {
+	(void)WxFrontendRuntime::QueueUi([this, lifetime] {
 		const auto alive = lifetime.lock();
 		if (alive && alive->load(std::memory_order_acquire))
 			QueueEvent(new wxCommandEvent(wxEVT_REQUEST_GAME_EXIT));

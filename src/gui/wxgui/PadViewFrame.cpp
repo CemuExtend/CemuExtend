@@ -1,4 +1,3 @@
-#include "interface/WindowSystem.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/PadViewFrame.h"
 #include "wxgui/WxWindowState.h"

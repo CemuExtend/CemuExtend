@@ -3,7 +3,7 @@
 #include "audio/IAudioAPI.h"
 #include "application/ApplicationHost.h"
 #include "frontend/FrontendRuntime.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 
 #include "helpers/wxHelpers.h"
 
@@ -26,7 +26,6 @@
 #include "wxgui/CemuApp.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/WxWindowState.h"
-#include "wxgui/WxFrontendRuntime.h"
 #include "config/ActiveSettings.h"
 #include "config/NetworkSettings.h"
 #include "config/CemuConfig.h"
@@ -97,25 +96,25 @@ namespace
 			callback();
 	}
 
-	std::optional<uint32> ResolvePlatformKeyCode(WindowSystem::PlatformKeyCodes key)
+	std::optional<uint32> ResolvePlatformKeyCode(WxFrontendRuntime::PlatformKeyCodes key)
 	{
 		switch (key)
 		{
 #if BOOST_OS_WINDOWS
-		case WindowSystem::PlatformKeyCodes::LCONTROL: return VK_LCONTROL;
-		case WindowSystem::PlatformKeyCodes::RCONTROL: return VK_RCONTROL;
-		case WindowSystem::PlatformKeyCodes::TAB: return VK_TAB;
-		case WindowSystem::PlatformKeyCodes::ESCAPE: return VK_ESCAPE;
+		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return VK_LCONTROL;
+		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return VK_RCONTROL;
+		case WxFrontendRuntime::PlatformKeyCodes::TAB: return VK_TAB;
+		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return VK_ESCAPE;
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
-		case WindowSystem::PlatformKeyCodes::LCONTROL: return GDK_KEY_Control_L;
-		case WindowSystem::PlatformKeyCodes::RCONTROL: return GDK_KEY_Control_R;
-		case WindowSystem::PlatformKeyCodes::TAB: return GDK_KEY_Tab;
-		case WindowSystem::PlatformKeyCodes::ESCAPE: return GDK_KEY_Escape;
+		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return GDK_KEY_Control_L;
+		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return GDK_KEY_Control_R;
+		case WxFrontendRuntime::PlatformKeyCodes::TAB: return GDK_KEY_Tab;
+		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return GDK_KEY_Escape;
 #elif BOOST_OS_MACOS
-		case WindowSystem::PlatformKeyCodes::LCONTROL: return kVK_Control;
-		case WindowSystem::PlatformKeyCodes::RCONTROL: return kVK_RightControl;
-		case WindowSystem::PlatformKeyCodes::TAB: return kVK_Tab;
-		case WindowSystem::PlatformKeyCodes::ESCAPE: return kVK_Escape;
+		case WxFrontendRuntime::PlatformKeyCodes::LCONTROL: return kVK_Control;
+		case WxFrontendRuntime::PlatformKeyCodes::RCONTROL: return kVK_RightControl;
+		case WxFrontendRuntime::PlatformKeyCodes::TAB: return kVK_Tab;
+		case WxFrontendRuntime::PlatformKeyCodes::ESCAPE: return kVK_Escape;
 #endif
 		}
 		return std::nullopt;
@@ -136,7 +135,7 @@ namespace
 		};
 		if (wxIsMainThread())
 			return !s_wxFrontendStopping.load(std::memory_order_acquire) && invoke();
-		return WindowSystem::QueueUi(
+		return WxFrontendRuntime::QueueUi(
 			[invoke = std::move(invoke)]() mutable { (void)invoke(); });
 	}
 
@@ -203,20 +202,20 @@ namespace
 		bool IsKeyDown(Host::Key key) const override
 		{
 			using Host::Key;
-			WindowSystem::PlatformKeyCodes platformKey;
+			WxFrontendRuntime::PlatformKeyCodes platformKey;
 			switch (key)
 			{
 			case Key::LeftControl:
-				platformKey = WindowSystem::PlatformKeyCodes::LCONTROL;
+				platformKey = WxFrontendRuntime::PlatformKeyCodes::LCONTROL;
 				break;
 			case Key::RightControl:
-				platformKey = WindowSystem::PlatformKeyCodes::RCONTROL;
+				platformKey = WxFrontendRuntime::PlatformKeyCodes::RCONTROL;
 				break;
 			case Key::Tab:
-				platformKey = WindowSystem::PlatformKeyCodes::TAB;
+				platformKey = WxFrontendRuntime::PlatformKeyCodes::TAB;
 				break;
 			case Key::Escape:
-				platformKey = WindowSystem::PlatformKeyCodes::ESCAPE;
+				platformKey = WxFrontendRuntime::PlatformKeyCodes::ESCAPE;
 				break;
 			default:
 				return false;
@@ -227,7 +226,7 @@ namespace
 
 		std::string GetKeyName(std::uint32_t key) const override
 		{
-			return WindowSystem::GetKeyCodeName(key);
+			return WxFrontendRuntime::GetKeyCodeName(key);
 		}
 
 		std::vector<Host::KeyState> GetKeyStates() const override
@@ -243,17 +242,17 @@ namespace
 
 		void GetTextAsync(std::function<void(bool, std::string)> callback) override
 		{
-			WindowSystem::GetClipboardTextAsync(std::move(callback));
+			WxFrontendRuntime::GetClipboardTextAsync(std::move(callback));
 		}
 
 		void SetTextAsync(std::string text, std::function<void(bool)> callback) override
 		{
-			WindowSystem::SetClipboardTextAsync(std::move(text), std::move(callback));
+			WxFrontendRuntime::SetClipboardTextAsync(std::move(text), std::move(callback));
 		}
 
 		bool OpenUrl(std::string url) override
 		{
-			return WindowSystem::QueueUi([url = std::move(url)] {
+			return WxFrontendRuntime::QueueUi([url = std::move(url)] {
 				if (!wxLaunchDefaultBrowser(wxString::FromUTF8(url)))
 					cemuLog_log(LogType::Force, "Failed to open host browser URL: {}", url);
 			});
@@ -261,7 +260,7 @@ namespace
 
 		bool InputConfigurationHasFocus() const override
 		{
-			return WindowSystem::InputConfigWindowHasFocus();
+			return WxFrontendRuntime::InputConfigWindowHasFocus();
 		}
 
 		bool RecreateCanvas() override
@@ -279,7 +278,7 @@ namespace
 			if (!pending)
 				return false;
 			auto mainWindowRegistry = m_mainWindowRegistry;
-			if (!WindowSystem::QueueUi([id = *pending, result,
+			if (!WxFrontendRuntime::QueueUi([id = *pending, result,
 				mainWindowRegistry = std::move(mainWindowRegistry)] {
 				if (!IsPendingUi(id))
 					return;
@@ -351,22 +350,22 @@ void Frontend::Run()
 	char* argv[1]{};
 	wxEntry(argc, argv);
 #endif
-	WindowSystem::ReleaseHostServices();
+	WxFrontendRuntime::ReleaseHostServices();
 }
 
-std::shared_ptr<Host::IWindowMetrics> WindowSystem::GetWindowMetricsHost()
+std::shared_ptr<Host::IWindowMetrics> WxFrontendRuntime::GetWindowMetricsHost()
 {
 	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
 }
 
-std::shared_ptr<Host::INativeSurfaceProvider> WindowSystem::GetNativeSurfaceHost()
+std::shared_ptr<Host::INativeSurfaceProvider> WxFrontendRuntime::GetNativeSurfaceHost()
 {
 	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
 }
 
-std::shared_ptr<Host::INativeSurfacePublisher> WindowSystem::GetNativeSurfacePublisher()
+std::shared_ptr<Host::INativeSurfacePublisher> WxFrontendRuntime::GetNativeSurfacePublisher()
 {
 	std::scoped_lock lock(s_runtimeObjectsMutex);
 	return s_wxHostServices;
@@ -384,12 +383,12 @@ std::shared_ptr<WxMainWindowRegistry> WxFrontendRuntime::GetMainWindowRegistry()
 	return s_mainWindowRegistry;
 }
 
-bool WindowSystem::IsShuttingDown()
+bool WxFrontendRuntime::IsShuttingDown()
 {
 	return s_wxFrontendStopping.load(std::memory_order_acquire);
 }
 
-void WindowSystem::BeginShutdown()
+void WxFrontendRuntime::BeginShutdown()
 {
 	{
 		std::scoped_lock lock(s_wxDispatchMutex);
@@ -398,13 +397,13 @@ void WindowSystem::BeginShutdown()
 	CancelPendingUi();
 }
 
-void WindowSystem::ResumeAfterFailedShutdown()
+void WxFrontendRuntime::ResumeAfterFailedShutdown()
 {
 	std::scoped_lock lock(s_wxDispatchMutex);
 	s_wxFrontendStopping.store(false, std::memory_order_release);
 }
 
-bool WindowSystem::QueueUi(std::function<void()> callback)
+bool WxFrontendRuntime::QueueUi(std::function<void()> callback)
 {
 	std::scoped_lock lock(s_wxDispatchMutex);
 	if (s_wxFrontendStopping.load(std::memory_order_acquire) || !wxTheApp)
@@ -416,7 +415,7 @@ bool WindowSystem::QueueUi(std::function<void()> callback)
 	return true;
 }
 
-bool WindowSystem::QueueUi(std::function<void()> callback,
+bool WxFrontendRuntime::QueueUi(std::function<void()> callback,
 	std::function<void()> cancelled)
 {
 	struct Completion
@@ -458,7 +457,7 @@ bool WindowSystem::QueueUi(std::function<void()> callback,
 	return true;
 }
 
-void WindowSystem::ReleaseHostServices()
+void WxFrontendRuntime::ReleaseHostServices()
 {
 	BeginShutdown();
 	std::shared_ptr<WxHostServices> hostServices;
@@ -476,7 +475,7 @@ void WindowSystem::ReleaseHostServices()
 	IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
 }
 
-void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WindowSystem::ErrorCategory> /*errorId*/)
+void WxFrontendRuntime::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<WxFrontendRuntime::ErrorCategory> /*errorId*/)
 {
 	wxString caption;
 	if (title.empty())
@@ -486,7 +485,7 @@ void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view ti
 	wxMessageBox(wxString::FromUTF8(message), caption, wxOK | wxCENTRE | wxICON_ERROR);
 }
 
-void WindowSystem::GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
+void WxFrontendRuntime::GetClipboardTextAsync(std::function<void(bool, std::string)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false, {}); });
@@ -511,7 +510,7 @@ void WindowSystem::GetClipboardTextAsync(std::function<void(bool, std::string)> 
 		CancelPendingUi(*pending);
 }
 
-void WindowSystem::SetClipboardTextAsync(std::string text, std::function<void(bool)> callback)
+void WxFrontendRuntime::SetClipboardTextAsync(std::string text, std::function<void(bool)> callback)
 {
 	auto sharedCallback = std::make_shared<decltype(callback)>(std::move(callback));
 	const auto pending = RegisterPendingUi([sharedCallback] { (*sharedCallback)(false); });
@@ -537,7 +536,7 @@ void WindowSystem::SetClipboardTextAsync(std::string text, std::function<void(bo
 		CancelPendingUi(*pending);
 }
 
-void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
+void WxFrontendRuntime::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 	std::optional<Application::WindowTitlePresentation> presentation)
 {
 	std::string windowText;
@@ -633,14 +632,14 @@ void WindowSystem::UpdateWindowTitles(bool isIdle, bool isLoading, double fps,
 	});
 }
 
-void WindowSystem::GetWindowSize(int& w, int& h)
+void WxFrontendRuntime::GetWindowSize(int& w, int& h)
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	w = state ? state->width.load() : 0;
 	h = state ? state->height.load() : 0;
 }
 
-void WindowSystem::GetPadWindowSize(int& w, int& h)
+void WxFrontendRuntime::GetPadWindowSize(int& w, int& h)
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	if (state && state->pad_open.load())
@@ -655,14 +654,14 @@ void WindowSystem::GetPadWindowSize(int& w, int& h)
 	}
 }
 
-void WindowSystem::GetWindowPhysSize(int& w, int& h)
+void WxFrontendRuntime::GetWindowPhysSize(int& w, int& h)
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	w = state ? state->phys_width.load() : 0;
 	h = state ? state->phys_height.load() : 0;
 }
 
-void WindowSystem::GetPadWindowPhysSize(int& w, int& h)
+void WxFrontendRuntime::GetPadWindowPhysSize(int& w, int& h)
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	if (state && state->pad_open.load())
@@ -677,37 +676,37 @@ void WindowSystem::GetPadWindowPhysSize(int& w, int& h)
 	}
 }
 
-double WindowSystem::GetWindowDPIScale()
+double WxFrontendRuntime::GetWindowDPIScale()
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	return state ? state->dpi_scale.load() : 1.0;
 }
 
-double WindowSystem::GetPadDPIScale()
+double WxFrontendRuntime::GetPadDPIScale()
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	return state && state->pad_open.load() ? state->pad_dpi_scale.load() : 1.0;
 }
 
-bool WindowSystem::IsPadWindowOpen()
+bool WxFrontendRuntime::IsPadWindowOpen()
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	return state && state->pad_open.load();
 }
 
-bool WindowSystem::IsKeyDown(uint32 key)
+bool WxFrontendRuntime::IsKeyDown(uint32 key)
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	return state && state->IsKeyDown(key);
 }
 
-bool WindowSystem::IsKeyDown(PlatformKeyCodes platformKey)
+bool WxFrontendRuntime::IsKeyDown(PlatformKeyCodes platformKey)
 {
 	const auto key = ResolvePlatformKeyCode(platformKey);
-	return key && WindowSystem::IsKeyDown(*key);
+	return key && WxFrontendRuntime::IsKeyDown(*key);
 }
 
-std::string WindowSystem::GetKeyCodeName(uint32 button)
+std::string WxFrontendRuntime::GetKeyCodeName(uint32 button)
 {
 #if BOOST_OS_WINDOWS
 	LONG scan_code = MapVirtualKeyA((UINT)button, MAPVK_VK_TO_VSC_EX);
@@ -749,12 +748,12 @@ std::string WindowSystem::GetKeyCodeName(uint32 button)
 #endif
 }
 
-bool WindowSystem::InputConfigWindowHasFocus()
+bool WxFrontendRuntime::InputConfigWindowHasFocus()
 {
 	return g_inputConfigWindowHasFocus;
 }
 
-void WindowSystem::NotifyGameLoaded()
+void WxFrontendRuntime::NotifyGameLoaded()
 {
 	(void)QueueFrameCallback([](MainWindow& frame) {
 		frame.OnGameLoaded();
@@ -762,26 +761,26 @@ void WindowSystem::NotifyGameLoaded()
 	});
 }
 
-void WindowSystem::NotifyGameExited()
+void WxFrontendRuntime::NotifyGameExited()
 {
 	(void)QueueFrameCallback([](MainWindow& frame) {
 		frame.RestoreSettingsAfterGameExited();
 	});
 }
 
-void WindowSystem::RefreshGameList()
+void WxFrontendRuntime::RefreshGameList()
 {
 	(void)QueueFrameCallback([](MainWindow& frame) {
 		frame.RequestGameListRefresh();
 	});
 }
 
-void WindowSystem::CaptureInput(const ControllerState& currentState, const ControllerState& lastState)
+void WxFrontendRuntime::CaptureInput(const ControllerState& currentState, const ControllerState& lastState)
 {
 	HotkeySettings::CaptureInput(currentState, lastState);
 }
 
-bool WindowSystem::IsFullScreen()
+bool WxFrontendRuntime::IsFullScreen()
 {
 	auto state = WxFrontendRuntime::GetWindowState();
 	return state && state->is_fullscreen.load();

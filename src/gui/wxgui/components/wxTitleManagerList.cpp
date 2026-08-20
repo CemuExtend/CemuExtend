@@ -1,5 +1,5 @@
 #include "wxgui/components/wxTitleManagerList.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "application/EmulationController.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "util/helpers/SystemException.h"
@@ -63,7 +63,7 @@ wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
 		[this, lifetime = std::move(lifetime)](const Application::TitleCatalogEvent& event) {
 			if (!lifetime->load(std::memory_order_acquire) || !wxTheApp)
 				return;
-			(void)WindowSystem::QueueUi([this, lifetime, event] {
+			(void)WxFrontendRuntime::QueueUi([this, lifetime, event] {
 				if (lifetime->load(std::memory_order_acquire))
 					HandleTitleCatalogEvent(event);
 			});

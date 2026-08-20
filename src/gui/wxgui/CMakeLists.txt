@@ -43,7 +43,7 @@ add_library(CemuWxGui STATIC
   GettingStartedDialog.h
   GraphicPacksWindow2.cpp
   GraphicPacksWindow2.h
-  wxWindowSystem.cpp
+  WxFrontendRuntime.cpp
   WxWindowState.cpp
   WxWindowState.h
   WxFrontendRuntime.h

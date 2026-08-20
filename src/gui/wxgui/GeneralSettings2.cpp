@@ -2,7 +2,7 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/GeneralSettings2.h"
 #include "wxgui/CemuApp.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "wxgui/helpers/wxControlObject.h"
 #include "wxgui/CemodPluginManagerDialog.h"
 
@@ -2261,7 +2261,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 
 		m_graphic_device->Enable();
-		auto nativeSurfaceProvider = WindowSystem::GetNativeSurfaceHost();
+		auto nativeSurfaceProvider = WxFrontendRuntime::GetNativeSurfaceHost();
 		const auto surfaces = nativeSurfaceProvider->GetNativeSurfaces();
 		auto devices = WxRendererAdapters::EnumerateVulkanDevices(surfaces.mainWindow);
 		if(!devices.empty())

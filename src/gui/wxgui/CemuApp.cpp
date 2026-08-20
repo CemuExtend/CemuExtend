@@ -1,9 +1,8 @@
 #include "wxgui/CemuApp.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "wxCemuConfig.h"
 #include "wxgui/MainWindow.h"
 #include "wxgui/WxWindowState.h"
-#include "wxgui/WxFrontendRuntime.h"
 #include "wxgui/wxgui.h"
 #include "config/CemuConfig.h"
 #include "config/ActiveSettings.h"
@@ -364,8 +363,8 @@ bool CemuApp::OnInit()
 	m_mainWindowRegistry = WxFrontendRuntime::GetMainWindowRegistry();
 	cemu_assert(m_windowState && m_mainWindowRegistry);
 	m_mainFrame = new MainWindow(m_emulationController,
-		WindowSystem::GetWindowMetricsHost(), WindowSystem::GetNativeSurfaceHost(),
-		WindowSystem::GetNativeSurfacePublisher(), m_windowState,
+		WxFrontendRuntime::GetWindowMetricsHost(), WxFrontendRuntime::GetNativeSurfaceHost(),
+		WxFrontendRuntime::GetNativeSurfacePublisher(), m_windowState,
 		m_mainWindowRegistry);
 	auto* createdMainFrame = m_mainFrame;
 	m_mainFrame->Bind(wxEVT_DESTROY,
@@ -378,7 +377,7 @@ bool CemuApp::OnInit()
 
 	m_windowState->app_active = true;
 
-	HotkeySettings::Init(m_mainFrame);
+	HotkeySettings::Init();
 
 	SetTopWindow(m_mainFrame);
 	m_mainFrame->Show();
@@ -418,8 +417,7 @@ int CemuApp::OnExit()
 		m_sdlEventPumpTimer = nullptr;
 	}
 #endif
-	HotkeySettings::Shutdown();
-	WindowSystem::ReleaseHostServices();
+	WxFrontendRuntime::ReleaseHostServices();
 	wxApp::OnExit();
 	wxTheClipboard->Flush();
 	int retValue = 0;

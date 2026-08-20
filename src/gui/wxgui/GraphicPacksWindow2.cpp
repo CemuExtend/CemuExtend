@@ -1,5 +1,5 @@
 #include "helpers/wxHelpers.h"
-#include "interface/WindowSystem.h"
+#include "wxgui/WxFrontendRuntime.h"
 #include "wxgui/wxgui.h"
 #include "wxgui/GraphicPacksWindow2.h"
 #include "wxgui/DownloadGraphicPacksWindow.h"
@@ -534,7 +534,7 @@ void GraphicPacksWindow2::ClearPresets()
 						parent->DestroyChildren();
 					delete std::exchange(static_box_sizer, nullptr);
 				};
-				(void)WindowSystem::QueueUi(cleanup, cleanup);
+				(void)WxFrontendRuntime::QueueUi(cleanup, cleanup);
 			}
 		}
 	}
