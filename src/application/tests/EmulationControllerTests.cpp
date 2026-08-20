@@ -296,6 +296,67 @@ namespace
 			});
 			return {};
 		}
+		std::vector<std::uint32_t> savePersistentIds{
+			Application::kMinimumPersistentId};
+		Application::SaveEntryLocation saveLocation{
+			Application::SaveEntryState::Directory, "save-directory"};
+		Application::SaveImportInspection saveInspection{
+			Application::SaveOperationError::None, {}, 0x1234, saveLocation};
+		int saveDeletes{};
+		int saveTransfers{};
+		int saveImports{};
+		int saveExports{};
+		std::vector<std::uint32_t> ListSavePersistentIds(std::uint64_t) const override
+		{
+			return savePersistentIds;
+		}
+		Application::SaveEntryLocation InspectSaveEntry(
+			std::uint64_t, std::uint32_t) const override
+		{
+			return saveLocation;
+		}
+		Application::SaveImportInspection InspectSaveImport(
+			const std::filesystem::path&, std::uint64_t,
+			std::uint32_t) const override
+		{
+			return saveInspection;
+		}
+		Application::SaveOperationResult DeleteSave(
+			std::uint64_t, std::uint32_t) override
+		{
+			++saveDeletes;
+			return {};
+		}
+		Application::SaveOperationResult TransferSave(
+			std::uint64_t, std::uint32_t, std::uint32_t, bool) override
+		{
+			++saveTransfers;
+			return {};
+		}
+		Application::SaveOperationResult ImportSave(
+			const std::filesystem::path&, std::uint64_t, std::uint32_t, bool,
+			Application::SaveProgressHandler progress,
+			Application::SaveCancellationCheck cancelled) override
+		{
+			++saveImports;
+			if (cancelled && cancelled())
+				return {Application::SaveOperationError::Cancelled, "cancelled"};
+			if (progress)
+				progress({1, 1, 4, 4, "save-file"});
+			return {};
+		}
+		Application::SaveOperationResult ExportSave(
+			std::uint64_t, std::uint32_t, const std::filesystem::path&, bool,
+			Application::SaveProgressHandler progress,
+			Application::SaveCancellationCheck cancelled) override
+		{
+			++saveExports;
+			if (cancelled && cancelled())
+				return {Application::SaveOperationError::Cancelled, "cancelled"};
+			if (progress)
+				progress({1, 1, 4, 4, "save-file"});
+			return {};
+		}
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
@@ -513,6 +574,26 @@ int main()
 	assert(updatedAccount && updatedAccount.account->miiName == L"updated");
 	assert(controller.DeleteAccount(Application::kMinimumPersistentId + 1));
 	assert(controller.ListAccounts().size() == 1);
+	assert(controller.ListSavePersistentIds(0x1234) == backend.savePersistentIds);
+	assert(controller.InspectSaveEntry(0x1234, Application::kMinimumPersistentId).path ==
+		"save-directory");
+	const auto saveInspection = controller.InspectSaveImport("save.zip", 0x1234,
+		Application::kMinimumPersistentId);
+	assert(saveInspection && saveInspection.sourceTitleId == 0x1234);
+	assert(controller.DeleteSave(0x1234, Application::kMinimumPersistentId));
+	assert(controller.TransferSave(0x1234, Application::kMinimumPersistentId,
+		Application::kMinimumPersistentId + 1, true));
+	Application::SaveOperationProgress saveProgress;
+	assert(controller.ImportSave("save.zip", 0x1234,
+		Application::kMinimumPersistentId, false,
+		[&](const auto& value) { saveProgress = value; }, [] { return false; }));
+	assert(saveProgress.bytesCompleted == 4);
+	assert(controller.ExportSave(0x1234, Application::kMinimumPersistentId,
+		"save-export.zip", true, {}, [] { return false; }));
+	assert(!controller.ImportSave("save.zip", 0x1234,
+		Application::kMinimumPersistentId, false, {}, [] { return true; }));
+	assert(backend.saveDeletes == 1 && backend.saveTransfers == 1 &&
+		backend.saveImports == 2 && backend.saveExports == 1);
 	const auto stop = controller.Stop();
 	assert(stop.stopped);
 	assert(controller.State() == Application::EmulationState::Idle);

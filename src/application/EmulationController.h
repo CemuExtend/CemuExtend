@@ -18,6 +18,7 @@
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/NfcFacade.h"
+#include "application/SaveFacade.h"
 #include "application/TitleCatalog.h"
 #include "application/TitleInstallFacade.h"
 
@@ -165,7 +166,7 @@ namespace Application
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
-		public ITitleInstallService, public IAccountService
+		public ITitleInstallService, public IAccountService, public ISaveService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -310,6 +311,26 @@ namespace Application
 			std::uint32_t persistentId, const AccountUpdate& update);
 		[[nodiscard]] AccountOperationResult DeleteAccount(
 			std::uint32_t persistentId);
+		[[nodiscard]] std::vector<std::uint32_t> ListSavePersistentIds(
+			std::uint64_t titleId) const;
+		[[nodiscard]] SaveEntryLocation InspectSaveEntry(
+			std::uint64_t titleId, std::uint32_t persistentId) const;
+		[[nodiscard]] SaveImportInspection InspectSaveImport(
+			const std::filesystem::path& archivePath, std::uint64_t titleId,
+			std::uint32_t persistentId) const;
+		[[nodiscard]] SaveOperationResult DeleteSave(
+			std::uint64_t titleId, std::uint32_t persistentId);
+		[[nodiscard]] SaveOperationResult TransferSave(
+			std::uint64_t titleId, std::uint32_t sourcePersistentId,
+			std::uint32_t targetPersistentId, bool overwrite);
+		[[nodiscard]] SaveOperationResult ImportSave(
+			const std::filesystem::path& archivePath, std::uint64_t titleId,
+			std::uint32_t persistentId, bool overwrite,
+			SaveProgressHandler progress = {}, SaveCancellationCheck cancelled = {});
+		[[nodiscard]] SaveOperationResult ExportSave(
+			std::uint64_t titleId, std::uint32_t persistentId,
+			const std::filesystem::path& archivePath, bool overwrite,
+			SaveProgressHandler progress = {}, SaveCancellationCheck cancelled = {});
 		[[nodiscard]] ApplicationEvents& Events() { return m_events; }
 		[[nodiscard]] const ApplicationEvents& Events() const { return m_events; }
 

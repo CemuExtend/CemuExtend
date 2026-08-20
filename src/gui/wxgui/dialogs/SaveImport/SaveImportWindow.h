@@ -22,7 +22,5 @@ private:
 	uint32 m_target_id = 0;
 	const uint64 m_title_id;
 	Application::EmulationController& m_emulationController;
-	const fs::path m_source_file;
 	int m_return_code = wxCANCEL;
 };
-

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include "SaveInfo.h"
 
 struct CafeSaveListCallbackEvent
@@ -20,6 +22,8 @@ public:
 	static void Initialize();
 	static void SetMLCPath(fs::path mlcPath);
 	static void Refresh();
+	[[nodiscard]] static bool IsScanning();
+	[[nodiscard]] static std::unique_lock<std::mutex> AcquireOperationLock();
 
 	static SaveInfo GetSaveByTitleId(TitleId titleId);
 

@@ -34,10 +34,17 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+#include <pugixml.hpp>
+#include <zip.h>
+
 #include <condition_variable>
+#include <charconv>
+#include <cctype>
 #include <deque>
 #include <fstream>
+#include <set>
 #include <shared_mutex>
+#include <sys/stat.h>
 
 namespace Application
 {
@@ -148,6 +155,352 @@ namespace Application
 					return account.GetPersistentId() == persistentId;
 				});
 			return found == accounts.end() ? nullptr : &*found;
+		}
+
+		constexpr std::uint64_t kMaximumSaveArchiveEntrySize = 128ULL * 1024 * 1024;
+		constexpr std::uint64_t kMaximumSaveArchiveTotalSize = 2ULL * 1024 * 1024 * 1024;
+		constexpr std::uint64_t kMaximumSaveArchiveEntries = 100000;
+
+		struct SaveArchiveEntry
+		{
+			zip_uint64_t index{};
+			fs::path relativePath;
+			std::uint64_t size{};
+			bool directory{};
+		};
+
+		struct SaveArchivePlan
+		{
+			SaveOperationError error{SaveOperationError::None};
+			std::string diagnostic;
+			std::optional<std::uint64_t> sourceTitleId;
+			std::vector<SaveArchiveEntry> entries;
+			std::uint64_t bytesTotal{};
+
+			[[nodiscard]] explicit operator bool() const
+			{
+				return error == SaveOperationError::None;
+			}
+		};
+
+		fs::path SaveUserRoot(std::uint64_t titleId)
+		{
+			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/user",
+				static_cast<std::uint32_t>(titleId >> 32),
+				static_cast<std::uint32_t>(titleId));
+		}
+
+		fs::path SaveAccountPath(std::uint64_t titleId, std::uint32_t persistentId)
+		{
+			return SaveUserRoot(titleId) / fmt::format("{:08x}", persistentId);
+		}
+
+		fs::path SaveInfoPath(std::uint64_t titleId)
+		{
+			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/meta/saveinfo.xml",
+				static_cast<std::uint32_t>(titleId >> 32),
+				static_cast<std::uint32_t>(titleId));
+		}
+
+		SaveEntryLocation InspectSaveEntryPath(const fs::path& path)
+		{
+			std::error_code ec;
+			const auto status = fs::symlink_status(path, ec);
+			if (ec == std::errc::no_such_file_or_directory ||
+				status.type() == fs::file_type::not_found)
+				return {SaveEntryState::Missing, path};
+			if (ec)
+				return {SaveEntryState::NonDirectory, path};
+			return {status.type() == fs::file_type::directory ?
+				SaveEntryState::Directory : SaveEntryState::NonDirectory, path};
+		}
+
+		std::optional<fs::path> NormalizeSaveArchivePath(std::string_view rawName)
+		{
+			if (rawName.empty() || rawName.front() == '/' || rawName.front() == '\\')
+				return std::nullopt;
+
+			std::string portableName(rawName);
+			std::ranges::replace(portableName, '\\', '/');
+			if (portableName.size() >= 2 &&
+				std::isalpha(static_cast<unsigned char>(portableName[0])) &&
+				portableName[1] == ':')
+				return std::nullopt;
+
+			const fs::path original = fs::u8path(portableName);
+			if (original.empty() || original.is_absolute() || original.has_root_path())
+				return std::nullopt;
+			for (const auto& component : original)
+			{
+				if (component == "..")
+					return std::nullopt;
+			}
+
+			const auto normalized = original.lexically_normal();
+			if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
+				normalized.has_root_path())
+				return std::nullopt;
+			for (const auto& component : normalized)
+			{
+				if (component == "..")
+					return std::nullopt;
+			}
+			return normalized;
+		}
+
+		bool IsZipSymlink(zip_t* archive, zip_uint64_t index)
+		{
+			zip_uint8_t operatingSystem{};
+			zip_uint32_t attributes{};
+			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
+				&attributes) != 0)
+				return false;
+			if (operatingSystem != ZIP_OPSYS_UNIX)
+				return false;
+			const auto unixMode = attributes >> 16;
+			return (unixMode & S_IFMT) == S_IFLNK;
+		}
+
+		SaveArchivePlan BuildSaveArchivePlan(const fs::path& archivePath)
+		{
+			SaveArchivePlan plan;
+			int zipError{};
+			zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
+				&zipError);
+			if (!archive)
+			{
+				plan.error = SaveOperationError::ArchiveInvalid;
+				plan.diagnostic = "unable to open save archive";
+				return plan;
+			}
+			const std::unique_ptr<zip_t, decltype(&zip_discard)> closeArchive(
+				archive, &zip_discard);
+
+			const auto entryCount = zip_get_num_entries(archive, 0);
+			if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) >
+				kMaximumSaveArchiveEntries)
+			{
+				plan.error = SaveOperationError::ArchiveInvalid;
+				plan.diagnostic = "save archive contains too many entries";
+				return plan;
+			}
+
+			std::set<std::string> normalizedNames;
+			bool metadataFound{};
+			for (zip_int64_t index = 0; index < entryCount; ++index)
+			{
+				zip_stat_t stat{};
+				zip_stat_init(&stat);
+				if (zip_stat_index(archive, static_cast<zip_uint64_t>(index), 0, &stat) != 0 ||
+					!stat.name)
+				{
+					plan.error = SaveOperationError::ArchiveInvalid;
+					plan.diagnostic = "unable to inspect save archive entry";
+					return plan;
+				}
+
+				const std::string_view rawName(stat.name);
+				if (rawName == "cemu_meta")
+				{
+					if (metadataFound)
+					{
+						plan.error = SaveOperationError::ArchiveInvalid;
+						plan.diagnostic = "save archive contains duplicate metadata";
+						return plan;
+					}
+					metadataFound = true;
+					if (stat.size > 256)
+					{
+						plan.error = SaveOperationError::ArchiveInvalid;
+						plan.diagnostic = "save archive metadata is too large";
+						return plan;
+					}
+					zip_file_t* file = zip_fopen_index(archive,
+						static_cast<zip_uint64_t>(index), 0);
+					if (!file)
+					{
+						plan.error = SaveOperationError::ArchiveInvalid;
+						plan.diagnostic = "unable to read save archive metadata";
+						return plan;
+					}
+					const std::unique_ptr<zip_file_t, void(*)(zip_file_t*)> closeFile(
+						file, [](zip_file_t* value) { (void)zip_fclose(value); });
+					std::string metadata(static_cast<std::size_t>(stat.size), '\0');
+					if (stat.size && zip_fread(file, metadata.data(), stat.size) !=
+						static_cast<zip_int64_t>(stat.size))
+					{
+						plan.error = SaveOperationError::ArchiveInvalid;
+						plan.diagnostic = "save archive metadata is truncated";
+						return plan;
+					}
+					constexpr std::string_view prefix = "titleId = ";
+					if (metadata.starts_with(prefix))
+					{
+						std::string_view value(metadata);
+						value.remove_prefix(prefix.size());
+						if (value.starts_with("0x") || value.starts_with("0X"))
+							value.remove_prefix(2);
+						std::uint64_t titleId{};
+						const auto parsed = std::from_chars(value.data(),
+							value.data() + value.size(), titleId, 16);
+						if (parsed.ec == std::errc())
+							plan.sourceTitleId = titleId;
+					}
+					continue;
+				}
+
+				if (IsZipSymlink(archive, static_cast<zip_uint64_t>(index)))
+				{
+					plan.error = SaveOperationError::PathUnsafe;
+					plan.diagnostic = "save archive contains a symbolic link";
+					return plan;
+				}
+				const auto relativePath = NormalizeSaveArchivePath(rawName);
+				if (!relativePath)
+				{
+					plan.error = SaveOperationError::PathUnsafe;
+					plan.diagnostic = "save archive contains an unsafe path";
+					return plan;
+				}
+				const auto normalizedName = relativePath->generic_string();
+				if (!normalizedNames.insert(normalizedName).second)
+				{
+					plan.error = SaveOperationError::ArchiveInvalid;
+					plan.diagnostic = "save archive contains duplicate paths";
+					return plan;
+				}
+
+				const bool directory = rawName.ends_with('/') || rawName.ends_with('\\');
+				if (!directory)
+				{
+					if (stat.size > kMaximumSaveArchiveEntrySize ||
+						plan.bytesTotal > kMaximumSaveArchiveTotalSize - stat.size)
+					{
+						plan.error = SaveOperationError::ArchiveInvalid;
+						plan.diagnostic = "save archive exceeds extraction limits";
+						return plan;
+					}
+					plan.bytesTotal += stat.size;
+				}
+				plan.entries.push_back({static_cast<zip_uint64_t>(index),
+					*relativePath, stat.size, directory});
+			}
+			return plan;
+		}
+
+		fs::path UniqueSiblingPath(const fs::path& target, std::string_view purpose)
+		{
+			static std::atomic_uint64_t sequence{};
+			const auto nonce = static_cast<std::uint64_t>(
+				std::chrono::steady_clock::now().time_since_epoch().count());
+			for (std::uint64_t attempt = 0; attempt != 1024; ++attempt)
+			{
+				const auto candidate = target.parent_path() /
+					fmt::format("{}.{}.{}", _pathToUtf8(target.filename()), purpose,
+						nonce + sequence.fetch_add(1) + attempt);
+				std::error_code ec;
+				if (!fs::exists(candidate, ec) && !ec)
+					return candidate;
+			}
+			return {};
+		}
+
+		void RemovePathQuietly(const fs::path& path)
+		{
+			if (path.empty())
+				return;
+			std::error_code ec;
+			fs::remove_all(path, ec);
+		}
+
+		struct SaveMetadataStage
+		{
+			fs::path original;
+			fs::path temporary;
+			bool changed{};
+		};
+
+		template<typename Modifier>
+		SaveOperationResult StageSaveMetadata(std::uint64_t titleId,
+			Modifier&& modifier, SaveMetadataStage& stage)
+		{
+			stage.original = SaveInfoPath(titleId);
+			std::error_code ec;
+			if (!fs::exists(stage.original, ec))
+				return ec ? SaveOperationResult{SaveOperationError::MetadataFailure,
+					ec.message()} : SaveOperationResult{};
+			if (ec || !fs::is_regular_file(stage.original, ec) || ec)
+				return {SaveOperationError::MetadataFailure,
+					"saveinfo.xml is not a regular file"};
+
+			pugi::xml_document document;
+			if (!document.load_file(stage.original.c_str()))
+				return {SaveOperationError::MetadataFailure,
+					"unable to parse saveinfo.xml"};
+			auto info = document.child("info");
+			if (!info)
+				return {SaveOperationError::MetadataFailure,
+					"saveinfo.xml is missing its info node"};
+			stage.changed = std::forward<Modifier>(modifier)(info);
+			if (!stage.changed)
+				return {};
+
+			stage.temporary = UniqueSiblingPath(stage.original, "staging");
+			if (stage.temporary.empty() || !document.save_file(stage.temporary.c_str()))
+			{
+				RemovePathQuietly(stage.temporary);
+				return {SaveOperationError::MetadataFailure,
+					"unable to stage saveinfo.xml"};
+			}
+			return {};
+		}
+
+		SaveOperationResult CommitSaveMetadata(SaveMetadataStage& stage)
+		{
+			if (!stage.changed)
+				return {};
+			const auto backup = UniqueSiblingPath(stage.original, "backup");
+			if (backup.empty())
+				return {SaveOperationError::MetadataFailure,
+					"unable to reserve saveinfo.xml backup path"};
+
+			std::error_code ec;
+			fs::rename(stage.original, backup, ec);
+			if (ec)
+				return {SaveOperationError::MetadataFailure, ec.message()};
+			fs::rename(stage.temporary, stage.original, ec);
+			if (ec)
+			{
+				std::error_code restoreError;
+				fs::rename(backup, stage.original, restoreError);
+				return {SaveOperationError::MetadataFailure,
+					restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+						restoreError.message()) : ec.message()};
+			}
+			RemovePathQuietly(backup);
+			stage.temporary.clear();
+			return {};
+		}
+
+		pugi::xml_node FindSaveAccountNode(pugi::xml_node info,
+			std::uint32_t persistentId)
+		{
+			const auto id = fmt::format("{:08x}", persistentId);
+			return info.find_child([&id](const pugi::xml_node& node) {
+				return boost::iequals(node.attribute("persistentId").as_string(), id);
+			});
+		}
+
+		SaveOperationResult BeginSaveMutation(std::unique_lock<std::mutex>& lock)
+		{
+			lock = CafeSaveList::AcquireOperationLock();
+			if (CafeSaveList::IsScanning())
+				return {SaveOperationError::Scanning,
+					"save catalog scan is still running"};
+			if (CafeSystem::IsTitleRunning())
+				return {SaveOperationError::TitleRunning,
+					"save data cannot be changed while a title is running"};
+			return {};
 		}
 
 		GraphicPackPtr FindGraphicPack(std::string_view key)
@@ -2363,6 +2716,590 @@ namespace Application
 				if (error)
 					return {AccountOperationError::IoFailure, error.message()};
 				::Account::RefreshAccounts();
+				return {};
+			}
+
+			std::vector<std::uint32_t> ListSavePersistentIds(
+				std::uint64_t titleId) const override
+			{
+				auto saveListLock = CafeSaveList::AcquireOperationLock();
+				std::vector<std::uint32_t> result;
+				std::error_code ec;
+				for (fs::directory_iterator iterator(SaveUserRoot(titleId), ec), end;
+					!ec && iterator != end; iterator.increment(ec))
+				{
+					const auto status = iterator->symlink_status(ec);
+					if (ec || status.type() != fs::file_type::directory ||
+						fs::is_empty(iterator->path(), ec) || ec)
+					{
+						ec.clear();
+						continue;
+					}
+					const auto name = iterator->path().filename().string();
+					if (name.size() != 8)
+						continue;
+					std::uint32_t persistentId{};
+					const auto parsed = std::from_chars(name.data(), name.data() + name.size(),
+						persistentId, 16);
+					if (parsed.ec == std::errc() && parsed.ptr == name.data() + name.size())
+						result.push_back(persistentId);
+				}
+				std::ranges::sort(result);
+				return result;
+			}
+
+			SaveEntryLocation InspectSaveEntry(std::uint64_t titleId,
+				std::uint32_t persistentId) const override
+			{
+				auto saveListLock = CafeSaveList::AcquireOperationLock();
+				return InspectSaveEntryPath(SaveAccountPath(titleId, persistentId));
+			}
+
+			SaveImportInspection InspectSaveImport(const fs::path& archivePath,
+				std::uint64_t titleId, std::uint32_t persistentId) const override
+			{
+				if (persistentId < kMinimumPersistentId)
+					return {SaveOperationError::InvalidPersistentId,
+						"persistent id is below the supported range"};
+				const auto plan = BuildSaveArchivePlan(archivePath);
+				if (!plan)
+					return {plan.error, plan.diagnostic};
+				auto saveListLock = CafeSaveList::AcquireOperationLock();
+				return {SaveOperationError::None, {}, plan.sourceTitleId,
+					InspectSaveEntryPath(SaveAccountPath(titleId, persistentId))};
+			}
+
+			SaveOperationResult DeleteSave(std::uint64_t titleId,
+				std::uint32_t persistentId) override
+			{
+				if (persistentId < kMinimumPersistentId)
+					return {SaveOperationError::InvalidPersistentId,
+						"persistent id is below the supported range"};
+				std::unique_lock<std::mutex> saveListLock;
+				if (auto status = BeginSaveMutation(saveListLock); !status)
+					return status;
+
+				const auto target = SaveAccountPath(titleId, persistentId);
+				if (InspectSaveEntryPath(target).state != SaveEntryState::Directory)
+					return {SaveOperationError::NotFound, "save directory no longer exists"};
+
+				SaveMetadataStage metadata;
+				auto metadataResult = StageSaveMetadata(titleId,
+					[persistentId](pugi::xml_node info) {
+						auto node = FindSaveAccountNode(info, persistentId);
+						return node ? info.remove_child(node) : false;
+					}, metadata);
+				if (!metadataResult)
+					return metadataResult;
+
+				const auto quarantine = UniqueSiblingPath(target, "deleted");
+				if (quarantine.empty())
+				{
+					RemovePathQuietly(metadata.temporary);
+					return {SaveOperationError::IoFailure,
+						"unable to reserve save deletion staging path"};
+				}
+				std::error_code ec;
+				fs::rename(target, quarantine, ec);
+				if (ec)
+				{
+					RemovePathQuietly(metadata.temporary);
+					return {SaveOperationError::IoFailure, ec.message()};
+				}
+				metadataResult = CommitSaveMetadata(metadata);
+				if (!metadataResult)
+				{
+					std::error_code restoreError;
+					fs::rename(quarantine, target, restoreError);
+					RemovePathQuietly(metadata.temporary);
+					if (restoreError)
+						metadataResult.diagnostic.append(fmt::format(
+							"; save restore failed: {}", restoreError.message()));
+					return metadataResult;
+				}
+				RemovePathQuietly(quarantine);
+				return {};
+			}
+
+			SaveOperationResult TransferSave(std::uint64_t titleId,
+				std::uint32_t sourcePersistentId, std::uint32_t targetPersistentId,
+				bool overwrite) override
+			{
+				if (sourcePersistentId < kMinimumPersistentId ||
+					targetPersistentId < kMinimumPersistentId ||
+					sourcePersistentId == targetPersistentId)
+					return {SaveOperationError::InvalidPersistentId,
+						"source and target persistent ids must be distinct and valid"};
+				std::unique_lock<std::mutex> saveListLock;
+				if (auto status = BeginSaveMutation(saveListLock); !status)
+					return status;
+
+				const auto source = SaveAccountPath(titleId, sourcePersistentId);
+				const auto target = SaveAccountPath(titleId, targetPersistentId);
+				if (InspectSaveEntryPath(source).state != SaveEntryState::Directory)
+					return {SaveOperationError::NotFound, "source save directory no longer exists"};
+				const auto targetState = InspectSaveEntryPath(target).state;
+				if (targetState == SaveEntryState::NonDirectory)
+					return {SaveOperationError::InvalidTarget,
+						"target save path is not a directory"};
+				if (targetState == SaveEntryState::Directory && !overwrite)
+					return {SaveOperationError::TargetExists,
+						"target account already has save data"};
+
+				SaveMetadataStage metadata;
+				auto metadataResult = StageSaveMetadata(titleId,
+					[sourcePersistentId, targetPersistentId](pugi::xml_node info) {
+						if (auto targetNode = FindSaveAccountNode(info, targetPersistentId))
+							info.remove_child(targetNode);
+						const auto targetId = fmt::format("{:08x}", targetPersistentId);
+						if (auto sourceNode = FindSaveAccountNode(info, sourcePersistentId))
+						{
+							sourceNode.attribute("persistentId").set_value(targetId.c_str());
+							return true;
+						}
+						auto account = info.append_child("account");
+						account.append_attribute("persistentId").set_value(targetId.c_str());
+						auto timestamp = account.append_child("timestamp");
+						const auto unixSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+							std::chrono::system_clock::now().time_since_epoch()).count();
+						constexpr std::int64_t unixToWiiEpoch = 946684800;
+						timestamp.text().set(fmt::format("{:016x}",
+							std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
+						return true;
+					}, metadata);
+				if (!metadataResult)
+					return metadataResult;
+
+				const auto staging = UniqueSiblingPath(source, "moving");
+				const auto backup = targetState == SaveEntryState::Directory ?
+					UniqueSiblingPath(target, "backup") : fs::path{};
+				if (staging.empty() || (targetState == SaveEntryState::Directory && backup.empty()))
+				{
+					RemovePathQuietly(metadata.temporary);
+					return {SaveOperationError::IoFailure,
+						"unable to reserve save transfer staging paths"};
+				}
+
+				std::error_code ec;
+				fs::rename(source, staging, ec);
+				if (ec)
+				{
+					RemovePathQuietly(metadata.temporary);
+					return {SaveOperationError::IoFailure, ec.message()};
+				}
+				if (!backup.empty())
+				{
+					fs::rename(target, backup, ec);
+					if (ec)
+					{
+						std::error_code ignored;
+						fs::rename(staging, source, ignored);
+						RemovePathQuietly(metadata.temporary);
+						return {SaveOperationError::IoFailure, ec.message()};
+					}
+				}
+				fs::rename(staging, target, ec);
+				if (ec)
+				{
+					std::error_code ignored;
+					if (!backup.empty())
+						fs::rename(backup, target, ignored);
+					fs::rename(staging, source, ignored);
+					RemovePathQuietly(metadata.temporary);
+					return {SaveOperationError::IoFailure, ec.message()};
+				}
+
+				metadataResult = CommitSaveMetadata(metadata);
+				if (!metadataResult)
+				{
+					std::error_code rollbackError;
+					fs::rename(target, staging, rollbackError);
+					if (!backup.empty())
+					{
+						std::error_code restoreTargetError;
+						fs::rename(backup, target, restoreTargetError);
+						if (restoreTargetError)
+							metadataResult.diagnostic.append(fmt::format(
+								"; target restore failed: {}", restoreTargetError.message()));
+					}
+					std::error_code restoreSourceError;
+					fs::rename(staging, source, restoreSourceError);
+					if (rollbackError || restoreSourceError)
+						metadataResult.diagnostic.append("; source restore failed");
+					RemovePathQuietly(metadata.temporary);
+					return metadataResult;
+				}
+
+				RemovePathQuietly(backup);
+				return {};
+			}
+
+			SaveOperationResult ImportSave(const fs::path& archivePath,
+				std::uint64_t titleId, std::uint32_t persistentId, bool overwrite,
+				SaveProgressHandler progress,
+				SaveCancellationCheck cancelled) override
+			{
+				if (persistentId < kMinimumPersistentId)
+					return {SaveOperationError::InvalidPersistentId,
+						"persistent id is below the supported range"};
+				std::unique_lock<std::mutex> saveListLock;
+				if (auto status = BeginSaveMutation(saveListLock); !status)
+					return status;
+
+				const auto plan = BuildSaveArchivePlan(archivePath);
+				if (!plan)
+					return {plan.error, plan.diagnostic};
+				const auto target = SaveAccountPath(titleId, persistentId);
+				const auto targetState = InspectSaveEntryPath(target).state;
+				if (targetState == SaveEntryState::NonDirectory)
+					return {SaveOperationError::InvalidTarget,
+						"target save path is not a directory"};
+				if (targetState == SaveEntryState::Directory && !overwrite)
+					return {SaveOperationError::TargetExists,
+						"target account already has save data"};
+
+				std::error_code ec;
+				fs::create_directories(target.parent_path(), ec);
+				if (ec)
+					return {SaveOperationError::IoFailure, ec.message()};
+				const auto staging = UniqueSiblingPath(target, "importing");
+				if (staging.empty() || !fs::create_directory(staging, ec) || ec)
+					return {SaveOperationError::IoFailure,
+						ec ? ec.message() : "unable to create save import staging directory"};
+
+				SaveMetadataStage metadata;
+				auto cleanup = [&] {
+					RemovePathQuietly(staging);
+					RemovePathQuietly(metadata.temporary);
+				};
+				try
+				{
+					int zipError{};
+					zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
+						&zipError);
+					if (!archive)
+					{
+						cleanup();
+						return {SaveOperationError::ArchiveInvalid,
+							"unable to reopen save archive"};
+					}
+					const std::unique_ptr<zip_t, decltype(&zip_discard)> closeArchive(
+						archive, &zip_discard);
+					std::array<char, 1024 * 1024> buffer{};
+					SaveOperationProgress progressValue{
+						.filesTotal = plan.entries.size(), .bytesTotal = plan.bytesTotal};
+					for (const auto& entry : plan.entries)
+					{
+						if (cancelled && cancelled())
+						{
+							cleanup();
+							return {SaveOperationError::Cancelled, "save import was cancelled"};
+						}
+						progressValue.currentPath = entry.relativePath;
+						const auto destination = staging / entry.relativePath;
+						if (entry.directory)
+						{
+							fs::create_directories(destination, ec);
+							if (ec)
+							{
+								cleanup();
+								return {SaveOperationError::IoFailure, ec.message()};
+							}
+						}
+						else
+						{
+							fs::create_directories(destination.parent_path(), ec);
+							if (ec)
+							{
+								cleanup();
+								return {SaveOperationError::IoFailure, ec.message()};
+							}
+							zip_file_t* file = zip_fopen_index(archive, entry.index, 0);
+							if (!file)
+							{
+								cleanup();
+								return {SaveOperationError::ArchiveInvalid,
+									"unable to read save archive entry"};
+							}
+							std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+							if (!output)
+							{
+								zip_fclose(file);
+								cleanup();
+								return {SaveOperationError::IoFailure,
+									"unable to create staged save file"};
+							}
+							std::uint64_t remaining = entry.size;
+							while (remaining)
+							{
+								if (cancelled && cancelled())
+								{
+									zip_fclose(file);
+									output.close();
+									cleanup();
+									return {SaveOperationError::Cancelled,
+										"save import was cancelled"};
+								}
+								const auto requested = static_cast<zip_uint64_t>(
+									std::min<std::uint64_t>(remaining, buffer.size()));
+								const auto read = zip_fread(file, buffer.data(), requested);
+								if (read != static_cast<zip_int64_t>(requested))
+								{
+									zip_fclose(file);
+									output.close();
+									cleanup();
+									return {SaveOperationError::ArchiveInvalid,
+										"save archive entry is truncated"};
+								}
+								output.write(buffer.data(), static_cast<std::streamsize>(read));
+								if (!output)
+								{
+									zip_fclose(file);
+									output.close();
+									cleanup();
+									return {SaveOperationError::IoFailure,
+										"unable to write staged save file"};
+								}
+								remaining -= static_cast<std::uint64_t>(read);
+								progressValue.bytesCompleted += static_cast<std::uint64_t>(read);
+								if (progress)
+									progress(progressValue);
+							}
+							output.close();
+							if (!output || zip_fclose(file) != 0)
+							{
+								cleanup();
+								return {SaveOperationError::ArchiveInvalid,
+									"unable to finalize staged save file"};
+							}
+						}
+						++progressValue.filesCompleted;
+						if (progress)
+							progress(progressValue);
+					}
+
+					auto metadataResult = StageSaveMetadata(titleId,
+						[persistentId](pugi::xml_node info) {
+							if (FindSaveAccountNode(info, persistentId))
+								return false;
+							const auto id = fmt::format("{:08x}", persistentId);
+							auto account = info.append_child("account");
+							account.append_attribute("persistentId").set_value(id.c_str());
+							auto timestamp = account.append_child("timestamp");
+							const auto unixSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+								std::chrono::system_clock::now().time_since_epoch()).count();
+							constexpr std::int64_t unixToWiiEpoch = 946684800;
+							timestamp.text().set(fmt::format("{:016x}",
+								std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
+							return true;
+						}, metadata);
+					if (!metadataResult)
+					{
+						cleanup();
+						return metadataResult;
+					}
+
+					const auto backup = targetState == SaveEntryState::Directory ?
+						UniqueSiblingPath(target, "backup") : fs::path{};
+					if (targetState == SaveEntryState::Directory && backup.empty())
+					{
+						cleanup();
+						return {SaveOperationError::IoFailure,
+							"unable to reserve save backup path"};
+					}
+					if (!backup.empty())
+					{
+						fs::rename(target, backup, ec);
+						if (ec)
+						{
+							cleanup();
+							return {SaveOperationError::IoFailure, ec.message()};
+						}
+					}
+					fs::rename(staging, target, ec);
+					if (ec)
+					{
+						std::error_code ignored;
+						if (!backup.empty())
+							fs::rename(backup, target, ignored);
+						cleanup();
+						return {SaveOperationError::IoFailure, ec.message()};
+					}
+					metadataResult = CommitSaveMetadata(metadata);
+					if (!metadataResult)
+					{
+						RemovePathQuietly(target);
+						std::error_code restoreError;
+						if (!backup.empty())
+							fs::rename(backup, target, restoreError);
+						if (restoreError)
+							metadataResult.diagnostic.append(fmt::format(
+								"; save restore failed: {}", restoreError.message()));
+						RemovePathQuietly(metadata.temporary);
+						return metadataResult;
+					}
+					RemovePathQuietly(backup);
+					return {};
+				}
+				catch (const std::exception& exception)
+				{
+					cleanup();
+					return {SaveOperationError::BackendFailure, exception.what()};
+				}
+			}
+
+			SaveOperationResult ExportSave(std::uint64_t titleId,
+				std::uint32_t persistentId, const fs::path& archivePath,
+				bool overwrite, SaveProgressHandler progress,
+				SaveCancellationCheck cancelled) override
+			{
+				if (persistentId < kMinimumPersistentId || archivePath.empty())
+					return {SaveOperationError::InvalidPersistentId,
+						"persistent id or archive path is invalid"};
+				std::unique_lock<std::mutex> saveListLock;
+				if (auto status = BeginSaveMutation(saveListLock); !status)
+					return status;
+				const auto source = SaveAccountPath(titleId, persistentId);
+				if (InspectSaveEntryPath(source).state != SaveEntryState::Directory)
+					return {SaveOperationError::NotFound, "save directory no longer exists"};
+
+				std::error_code ec;
+				const auto outputState = InspectSaveEntryPath(archivePath).state;
+				if (outputState == SaveEntryState::Directory)
+					return {SaveOperationError::InvalidTarget,
+						"archive target is a directory"};
+				if (outputState != SaveEntryState::Missing && !overwrite)
+					return {SaveOperationError::TargetExists,
+						"archive target already exists"};
+
+				std::vector<std::pair<fs::path, bool>> entries;
+				std::uint64_t bytesTotal{};
+				for (fs::recursive_directory_iterator iterator(source, ec), end;
+					!ec && iterator != end; iterator.increment(ec))
+				{
+					const auto status = iterator->symlink_status(ec);
+					if (ec || status.type() == fs::file_type::symlink ||
+						(status.type() != fs::file_type::directory &&
+						 status.type() != fs::file_type::regular))
+						return {SaveOperationError::PathUnsafe,
+							"save directory contains an unsupported entry"};
+					const bool directory = status.type() == fs::file_type::directory;
+					if (!directory)
+					{
+						const auto size = iterator->file_size(ec);
+						if (ec || bytesTotal > kMaximumSaveArchiveTotalSize - size)
+							return {SaveOperationError::IoFailure,
+								"save data exceeds export limits"};
+						bytesTotal += size;
+					}
+					entries.emplace_back(iterator->path(), directory);
+				}
+				if (ec)
+					return {SaveOperationError::IoFailure, ec.message()};
+
+				const auto staging = UniqueSiblingPath(archivePath, "exporting");
+				if (staging.empty())
+					return {SaveOperationError::IoFailure,
+						"unable to reserve save export staging path"};
+				int zipError{};
+				zip_t* archive = zip_open(_pathToUtf8(staging).c_str(),
+					ZIP_CREATE | ZIP_TRUNCATE, &zipError);
+				if (!archive)
+					return {SaveOperationError::IoFailure,
+						"unable to create save archive"};
+				auto failArchive = [&](SaveOperationError error, std::string diagnostic) {
+					zip_discard(archive);
+					RemovePathQuietly(staging);
+					return SaveOperationResult{error, std::move(diagnostic)};
+				};
+
+				SaveOperationProgress progressValue{
+					.filesTotal = entries.size(), .bytesTotal = bytesTotal};
+				for (const auto& [entryPath, directory] : entries)
+				{
+					if (cancelled && cancelled())
+						return failArchive(SaveOperationError::Cancelled,
+							"save export was cancelled");
+					const auto relative = fs::relative(entryPath, source, ec);
+					if (ec || relative.empty() || relative.has_root_path())
+						return failArchive(SaveOperationError::PathUnsafe,
+							"unable to derive safe archive path");
+					const auto archiveName = relative.generic_string();
+					progressValue.currentPath = relative;
+					if (directory)
+					{
+						if (zip_dir_add(archive, archiveName.c_str(), ZIP_FL_ENC_UTF_8) < 0)
+							return failArchive(SaveOperationError::IoFailure,
+								zip_strerror(archive));
+					}
+					else
+					{
+						zip_source_t* zipSource = zip_source_file(archive,
+							_pathToUtf8(entryPath).c_str(), 0, 0);
+						if (!zipSource)
+							return failArchive(SaveOperationError::IoFailure,
+								zip_strerror(archive));
+						if (zip_file_add(archive, archiveName.c_str(), zipSource,
+							ZIP_FL_ENC_UTF_8) < 0)
+						{
+							zip_source_free(zipSource);
+							return failArchive(SaveOperationError::IoFailure,
+								zip_strerror(archive));
+						}
+						progressValue.bytesCompleted += fs::file_size(entryPath, ec);
+						if (ec)
+							return failArchive(SaveOperationError::IoFailure, ec.message());
+					}
+					++progressValue.filesCompleted;
+					if (progress)
+						progress(progressValue);
+				}
+
+				const std::string metadata = fmt::format("titleId = {:#016x}", titleId);
+				zip_source_t* metadataSource = zip_source_buffer(archive, metadata.data(),
+					metadata.size(), 0);
+				if (!metadataSource || zip_file_add(archive, "cemu_meta", metadataSource,
+					ZIP_FL_ENC_UTF_8) < 0)
+				{
+					if (metadataSource)
+						zip_source_free(metadataSource);
+					return failArchive(SaveOperationError::IoFailure,
+						zip_strerror(archive));
+				}
+				if (zip_close(archive) != 0)
+					return failArchive(SaveOperationError::IoFailure,
+						"unable to finalize save archive");
+				archive = nullptr;
+
+				const auto backup = outputState == SaveEntryState::Missing ? fs::path{} :
+					UniqueSiblingPath(archivePath, "backup");
+				if (outputState != SaveEntryState::Missing && backup.empty())
+				{
+					RemovePathQuietly(staging);
+					return {SaveOperationError::IoFailure,
+						"unable to reserve archive backup path"};
+				}
+				if (!backup.empty())
+				{
+					fs::rename(archivePath, backup, ec);
+					if (ec)
+					{
+						RemovePathQuietly(staging);
+						return {SaveOperationError::IoFailure, ec.message()};
+					}
+				}
+				fs::rename(staging, archivePath, ec);
+				if (ec)
+				{
+					std::error_code restoreError;
+					if (!backup.empty())
+						fs::rename(backup, archivePath, restoreError);
+					RemovePathQuietly(staging);
+					return {SaveOperationError::IoFailure,
+						restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+							restoreError.message()) : ec.message()};
+				}
+				RemovePathQuietly(backup);
 				return {};
 			}
 

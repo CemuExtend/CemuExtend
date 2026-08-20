@@ -43,6 +43,16 @@ void CafeSaveList::Refresh()
 	t.detach();
 }
 
+bool CafeSaveList::IsScanning()
+{
+	return sSLWorkerThreadActive.load();
+}
+
+std::unique_lock<std::mutex> CafeSaveList::AcquireOperationLock()
+{
+	return std::unique_lock{sSLMutex};
+}
+
 void CafeSaveList::RefreshThreadWorker()
 {
 	SetThreadName("SaveListWorker");

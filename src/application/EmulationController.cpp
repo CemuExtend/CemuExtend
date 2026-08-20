@@ -546,4 +546,62 @@ namespace Application
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->DeleteAccount(persistentId);
 	}
+
+	std::vector<std::uint32_t> EmulationController::ListSavePersistentIds(
+		std::uint64_t titleId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListSavePersistentIds(titleId);
+	}
+
+	SaveEntryLocation EmulationController::InspectSaveEntry(
+		std::uint64_t titleId, std::uint32_t persistentId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->InspectSaveEntry(titleId, persistentId);
+	}
+
+	SaveImportInspection EmulationController::InspectSaveImport(
+		const std::filesystem::path& archivePath, std::uint64_t titleId,
+		std::uint32_t persistentId) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->InspectSaveImport(archivePath, titleId, persistentId);
+	}
+
+	SaveOperationResult EmulationController::DeleteSave(
+		std::uint64_t titleId, std::uint32_t persistentId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteSave(titleId, persistentId);
+	}
+
+	SaveOperationResult EmulationController::TransferSave(
+		std::uint64_t titleId, std::uint32_t sourcePersistentId,
+		std::uint32_t targetPersistentId, bool overwrite)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->TransferSave(titleId, sourcePersistentId,
+			targetPersistentId, overwrite);
+	}
+
+	SaveOperationResult EmulationController::ImportSave(
+		const std::filesystem::path& archivePath, std::uint64_t titleId,
+		std::uint32_t persistentId, bool overwrite,
+		SaveProgressHandler progress, SaveCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ImportSave(archivePath, titleId, persistentId, overwrite,
+			std::move(progress), std::move(cancelled));
+	}
+
+	SaveOperationResult EmulationController::ExportSave(
+		std::uint64_t titleId, std::uint32_t persistentId,
+		const std::filesystem::path& archivePath, bool overwrite,
+		SaveProgressHandler progress, SaveCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ExportSave(titleId, persistentId, archivePath, overwrite,
+			std::move(progress), std::move(cancelled));
+	}
 }

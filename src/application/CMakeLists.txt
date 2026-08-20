@@ -11,7 +11,8 @@ add_library(CemuApplication STATIC
   EmulationPresentation.h
   GameProfileFacade.h
   GraphicPackFacade.h
-  NfcFacade.h
+	NfcFacade.h
+	SaveFacade.h
   TitleCatalog.h
   TitleInstallFacade.h
 )
@@ -24,6 +25,8 @@ target_link_libraries(CemuApplication PRIVATE
 	cemuextend::wire
 	ZArchive::zarchive
 	OpenSSL::Crypto
+	libzip::zip
+	pugixml::pugixml
 )
 
 if(BUILD_TESTING)

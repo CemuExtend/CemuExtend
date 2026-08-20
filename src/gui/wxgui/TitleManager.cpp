@@ -26,13 +26,10 @@
 #include <wx/combobox.h>
 #include <wx/checkbox.h>
 
-#include <pugixml.hpp>
-#include <zip.h>
 #include <wx/dirdlg.h>
 #include <wx/notebook.h>
 #include <wx/settings.h>
 
-#include "config/ActiveSettings.h"
 #include "wxgui/dialogs/SaveImport/SaveImportWindow.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "wxgui/CemuApp.h"
@@ -398,26 +395,6 @@ void TitleManager::OnInstallTitle(wxCommandEvent& event)
 	}
 }
 
-static void PopulateSavePersistentIds(wxTitleManagerList::TitleEntry& entry)
-{
-	if (!entry.persistent_ids.empty())
-		return;
-	cemu_assert(entry.type == wxTitleManagerList::EntryType::Save);
-	fs::path savePath = entry.path / "user";
-	std::error_code ec;
-	for (auto it : fs::directory_iterator(savePath, ec))
-	{
-		if(!it.is_directory(ec))
-			continue;
-		if(fs::is_empty(it.path()))
-			continue;
-		std::string dirName = it.path().filename().string();
-		if(!std::regex_match(dirName, std::regex("[0-9a-fA-F]{8}")))
-			continue;
-		entry.persistent_ids.emplace_back(ConvertString<uint32>(dirName, 16));
-	}
-}
-
 void TitleManager::OnTitleSelected(wxListEvent& event)
 {
 	event.Skip();
@@ -428,7 +405,7 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 		m_save_panel->Show();
 		m_save_account_list->Clear();
 
-		PopulateSavePersistentIds(*entry);
+		entry->persistent_ids = m_emulationController.ListSavePersistentIds(entry->title_id);
 
 		// an account must be selected before any of the control buttons can be used
 		for(auto&& v : m_save_panel->GetChildren())
@@ -470,11 +447,12 @@ void TitleManager::OnSaveOpenDirectory(wxCommandEvent& event)
 
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection);
 
-	const fs::path target = ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/user/{:08x}", (uint32)(entry->title_id >> 32), (uint32)(entry->title_id & 0xFFFFFFFF), persistent_id);
-	if (!fs::exists(target) || !fs::is_directory(target))
+	const auto target = m_emulationController.InspectSaveEntry(entry->title_id,
+		persistent_id);
+	if (target.state != Application::SaveEntryState::Directory)
 		return;
 
-	wxLaunchDefaultApplication(wxHelper::FromPath(target));
+	wxLaunchDefaultApplication(wxHelper::FromPath(target.path));
 }
 
 void TitleManager::OnSaveDelete(wxCommandEvent& event)
@@ -498,51 +476,19 @@ void TitleManager::OnSaveDelete(wxCommandEvent& event)
 
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection_index);
 
-	const fs::path target = ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/user/{:08x}", (uint32)(entry->title_id >> 32), (uint32)(entry->title_id & 0xFFFFFFFF), persistent_id);
-	if (!fs::exists(target) || !fs::is_directory(target))
-		return;
-
-	// edit meta saveinfo.xml
-	bool meta_file_edited = false;
-	const fs::path saveinfo = ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/meta/saveinfo.xml", (uint32)(entry->title_id >> 32), (uint32)(entry->title_id & 0xFFFFFFFF));
-	if (fs::exists(saveinfo) || fs::is_regular_file(saveinfo))
+	const auto deleted = m_emulationController.DeleteSave(entry->title_id,
+		persistent_id);
+	if (!deleted)
 	{
-		pugi::xml_document doc;
-		if (doc.load_file(saveinfo.c_str()))
-		{
-			auto info_node = doc.child("info");
-			if(info_node)
-			{
-				auto persistend_id_string = fmt::format(L"{:08x}", persistent_id);
-				const auto delete_entry = info_node.find_child([&persistend_id_string](const pugi::xml_node& node)
-				{
-						return boost::iequals(node.attribute("persistentId").as_string(), persistend_id_string);
-				});
-				if (delete_entry)
-				{
-					info_node.remove_child(delete_entry);
-					meta_file_edited = doc.save_file(saveinfo.c_str());
-				}
-			}
-		}
-	}
-
-	if (!meta_file_edited)
-		cemuLog_log(LogType::Force, "TitleManager::OnSaveDelete: couldn't delete save entry in saveinfo.xml: {}", _pathToUtf8(saveinfo));
-
-	// remove from title entry
-	auto& persistent_ids = entry->persistent_ids;
-	persistent_ids.erase(std::remove(persistent_ids.begin(), persistent_ids.end(), persistent_id), persistent_ids.end());
-
-	std::error_code ec;
-	fs::remove_all(target, ec);
-	if (ec)
-	{
-		const auto error_msg = formatWxString(_("Error when trying to delete the save directory:\n{}"), GetSystemErrorMessage(ec));
+		const auto error_msg = formatWxString(_("Error when trying to delete the save directory:\n{}"),
+			deleted.diagnostic);
 		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE, this);
 		return;
 	}
 
+	auto& persistent_ids = entry->persistent_ids;
+	persistent_ids.erase(std::remove(persistent_ids.begin(), persistent_ids.end(),
+		persistent_id), persistent_ids.end());
 	m_save_account_list->Delete(selection_index);
 }
 
@@ -621,66 +567,14 @@ void TitleManager::OnSaveExport(wxCommandEvent& event)
 	if (path_dialog.ShowModal() != wxID_OK || path_dialog.GetPath().IsEmpty())
 		return;
 
-	const auto path = path_dialog.GetPath();
-	int ze;
-	auto* zip = zip_open(path.ToUTF8().data(), ZIP_CREATE | ZIP_TRUNCATE, &ze);
-	if (!zip)
+	const auto exported = m_emulationController.ExportSave(entry->title_id,
+		persistent_id, wxHelper::MakeFSPath(path_dialog.GetPath()), true);
+	if (!exported)
 	{
-		zip_error_t ziperror;
-		zip_error_init_with_code(&ziperror, ze);
-		const auto error_msg = formatWxString(_("Error when creating the zip for the save entry:\n{}"), zip_error_strerror(&ziperror));
+		const auto error_msg = formatWxString(_("Error when creating the zip for the save entry:\n{}"),
+			exported.diagnostic);
 		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-		return;
 	}
-
-	// grab all files to zip
-	const auto savedir = fs::path(entry->path).append(fmt::format("user/{:08x}", persistent_id));
-	const auto savedir_str = savedir.generic_u8string();
-	for(const auto& it : fs::recursive_directory_iterator(savedir))
-	{
-		if (it.path() == "." || it.path() == "..")
-			continue;
-
-		const auto entryname = it.path().generic_u8string();
-		if(fs::is_directory(it.path()))
-		{
-			if(zip_dir_add(zip, (const char*)entryname.substr(savedir_str.size() + 1).c_str(), ZIP_FL_ENC_UTF_8) < 0 )
-			{
-				const auto error_msg = formatWxString(_("Error when trying to add a directory to the zip:\n{}"), zip_strerror(zip));
-				wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-			}
-		}
-		else
-		{
-			auto* source = zip_source_file(zip, (const char*)entryname.c_str(), 0, 0);
-			if(!source)
-			{
-				const auto error_msg = formatWxString(_("Error when trying to add a file to the zip:\n{}"), zip_strerror(zip));
-				wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-			}
-
-			if (zip_file_add(zip, (const char*)entryname.substr(savedir_str.size() + 1).c_str(), source, ZIP_FL_ENC_UTF_8) < 0)
-			{
-				const auto error_msg = formatWxString(_("Error when trying to add a file to the zip:\n{}"), zip_strerror(zip));
-				wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-				
-				zip_source_free(source);
-			}
-		}
-	}
-
-	// add own metainfo like file and store title id for verification later
-	std::string metacontent = fmt::format("titleId = {:#016x}", entry->title_id);
-	auto* metabuff = zip_source_buffer(zip, metacontent.data(), metacontent.size(), 0);
-	if(zip_file_add(zip, "cemu_meta", metabuff, ZIP_FL_ENC_UTF_8) < 0)
-	{
-		const auto error_msg = formatWxString(_("Error when trying to add cemu_meta file to the zip:\n{}"), zip_strerror(zip));
-		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-
-		zip_source_free(metabuff);
-	}
-
-	zip_close(zip);
 }
 
 void TitleManager::OnSaveImport(wxCommandEvent& event)

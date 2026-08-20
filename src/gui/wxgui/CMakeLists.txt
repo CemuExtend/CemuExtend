@@ -257,7 +257,6 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuResource
   libzip::zip
   CemuComponents
-  pugixml::pugixml
   PUBLIC
   CURL::libcurl
 )
