@@ -983,7 +983,7 @@ void MainWindow::OpenSettings()
 	const auto language = config.language;
 
 	GeneralSettings2 frame(this, m_game_launched, m_emulationController,
-		m_nativeSurfaces);
+		m_nativeSurfaces, m_pathProvider);
 	frame.ShowModal();
 	const bool paths_modified = frame.ShouldReloadGamelist();
 	const bool mlc_modified = frame.MLCModified();

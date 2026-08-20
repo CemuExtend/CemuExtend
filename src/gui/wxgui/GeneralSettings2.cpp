@@ -1266,7 +1266,7 @@ void GeneralSettings2::RefreshCemodList()
 	m_cemod_status->SetLabel(wxString::FromUTF8(fmt::format(
 		"{} compatible package(s), {} rejected — {}",
 		m_cemod_principals.size(), rejected,
-		_pathToUtf8(ActiveSettings::GetUserDataPath("cemuextend/mods")))));
+		_pathToUtf8(m_pathProvider->GetUserDataPath("cemuextend/mods")))));
 	LoadCemodGrant();
 }
 
@@ -1505,12 +1505,14 @@ wxPanel* GeneralSettings2::AddTcpGeckoPage(wxNotebook* notebook)
 
 GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched,
 	Application::EmulationController& emulationController,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+	std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
 	  m_game_launched(game_launched), m_emulationController(emulationController),
-	  m_nativeSurfaces(std::move(nativeSurfaces))
+	  m_nativeSurfaces(std::move(nativeSurfaces)),
+	  m_pathProvider(std::move(pathProvider))
 {
-	cemu_assert(m_nativeSurfaces != nullptr);
+	cemu_assert(m_nativeSurfaces && m_pathProvider);
 	SetIcon(wxICON(X_SETTINGS));
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);

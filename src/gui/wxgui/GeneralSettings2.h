@@ -24,7 +24,8 @@ class GeneralSettings2 : public wxDialog
 public:
 	GeneralSettings2(wxWindow* parent, bool game_launched,
 		Application::EmulationController& emulationController,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+		std::shared_ptr<Host::IPathProvider> pathProvider);
 	~GeneralSettings2();
 
 	[[nodiscard]] bool ShouldReloadGamelist() const  { return m_reload_gamelist; }
@@ -41,6 +42,7 @@ private:
 	bool m_game_launched;
 	Application::EmulationController& m_emulationController;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
+	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 
 	bool m_has_account_change = false; // keep track of dirty state of accounts
 	std::vector<GraphicAPI> m_api_map; // map from dropdown index to GraphicsAPISetting, used in HandleGraphicsApiSelection
