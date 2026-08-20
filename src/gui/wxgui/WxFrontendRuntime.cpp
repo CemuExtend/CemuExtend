@@ -191,6 +191,11 @@ namespace
 			return ActiveSettings::GetUserDataPath(relativePath);
 		}
 
+		fs::path GetMlcPath() const override
+		{
+			return ActiveSettings::GetMlcPath();
+		}
+
 		Host::NativeSurfaceSnapshot GetNativeSurfaces() const override
 		{
 			return m_state->NativeSurfaces();

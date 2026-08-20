@@ -103,6 +103,7 @@ namespace Host
 		virtual ~IPathProvider() = default;
 		[[nodiscard]] virtual std::filesystem::path GetUserDataPath(
 			std::string_view relativePath) const = 0;
+		[[nodiscard]] virtual std::filesystem::path GetMlcPath() const = 0;
 	};
 
 	class INativeSurfaceProvider

@@ -146,7 +146,7 @@ private:
 	using Type_t = std::reference_wrapper<const ItemData>;
 	bool SortFunc(int column, const Type_t& v1, const Type_t& v2);
 
-	static wxString GetTitleEntryText(const TitleEntry& entry, ItemColumn column);
+	wxString GetTitleEntryText(const TitleEntry& entry, ItemColumn column) const;
 	static wxString GetTranslatedTitleEntryType(EntryType entryType);
 	std::future<bool> m_context_worker;
 	std::future<Application::ContentOperationResult> m_conversionWorker;

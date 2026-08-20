@@ -22,7 +22,6 @@
 
 #include <functional>
 
-#include "config/ActiveSettings.h"
 #include "wxgui/ChecksumTool.h"
 
 wxDEFINE_EVENT(wxEVT_TITLE_FOUND, wxCommandEvent);
@@ -726,7 +725,7 @@ void wxTitleManagerList::OnRemoveEntry(wxCommandEvent& event)
 	RemoveItem(*(TitleEntry*)event.GetClientData());
 }
 
-wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColumn column)
+wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColumn column) const
 {
 	switch (column)
 	{
@@ -761,7 +760,7 @@ wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColu
 	}
 	case ColumnLocation:
 	{
-		const auto relative_mlc_path = _pathToUtf8(entry.path.lexically_relative(ActiveSettings::GetMlcPath()));
+		const auto relative_mlc_path = _pathToUtf8(entry.path.lexically_relative(m_pathProvider->GetMlcPath()));
 		if (relative_mlc_path.starts_with("usr") || relative_mlc_path.starts_with("sys"))
 			return _("MLC");
 		else
