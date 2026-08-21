@@ -5,6 +5,7 @@
 #include "application/ApplicationHost.h"
 #include "application/EmulationController.h"
 #include "application/LoggingFacade.h"
+#include "application/EmulatedUsbFacade.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
@@ -812,6 +813,17 @@ namespace
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
 					m_nativeWindow->GetNativeWindow()));
 				m_callbackGate->target = this;
+				m_emulatedUsb.SetObserver([gate = m_callbackGate](const Application::UsbDeviceChange& change) {
+					std::scoped_lock lock(gate->mutex);
+					if (!gate->target) return;
+					auto* runtime = gate->target;
+					const auto payload = runtime->UsbDeviceChangeJson(change);
+					(void)runtime->PostToUi([runtime, payload] {
+						const auto window = runtime->m_windowByRole.find("emulated-usb-devices");
+						if (window != runtime->m_windowByRole.end())
+							runtime->EmitToWindow(window->second, "usb.devicesChanged", payload);
+					});
+				});
 				RegisterRpc();
 				m_applicationEvents = m_controller.Events().Subscribe(
 					[gate = m_callbackGate](const Application::Event& event) {
@@ -1516,6 +1528,7 @@ namespace
 			m_stopping.store(true, std::memory_order_release);
 			m_eventStopping->store(true, std::memory_order_release);
 			StopAllBackgroundJobs();
+			m_emulatedUsb.Close();
 			{
 				std::scoped_lock lock(m_callbackGate->mutex);
 				m_callbackGate->target = nullptr;
@@ -2537,6 +2550,53 @@ namespace
 			return {buffer.GetString(), buffer.GetSize()};
 		}
 
+		static void WriteUsbDescriptor(JsonWriter& writer,
+			const Application::UsbDeviceDescriptor& device)
+		{
+			writer.StartObject();
+			writer.Key("id"); writer.String(device.id.data(), device.id.size());
+			writer.Key("vendorId"); writer.Uint(device.vendorId);
+			writer.Key("productId"); writer.Uint(device.productId);
+			writer.Key("interfaceIndex"); writer.Uint(device.interfaceIndex);
+			writer.Key("interfaceSubClass"); writer.Uint(device.interfaceSubClass);
+			writer.Key("protocol"); writer.Uint(device.protocol);
+			writer.Key("maxPacketSizeRx"); writer.Uint(device.maxPacketSizeRx);
+			writer.Key("maxPacketSizeTx"); writer.Uint(device.maxPacketSizeTx);
+			writer.Key("opened"); writer.Bool(device.opened);
+			writer.EndObject();
+		}
+
+		std::string UsbModelJson(Application::EmulatedUsbModel model) const
+		{
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject(); writer.Key("generation"); writer.Uint64(model.generation);
+			writer.Key("emulatedDevices"); writer.StartArray();
+			for (const auto& device : model.emulatedDevices)
+			{
+				writer.StartObject(); writer.Key("id"); writer.String(device.id.data(), device.id.size());
+				writer.Key("name"); writer.String(device.name.data(), device.name.size());
+				writer.Key("vendorId"); writer.Uint(device.vendorId);
+				writer.Key("productId"); writer.Uint(device.productId);
+				writer.Key("enabled"); writer.Bool(device.enabled);
+				writer.Key("connected"); writer.Bool(device.connected); writer.EndObject();
+			}
+			writer.EndArray(); writer.Key("attachedDevices"); writer.StartArray();
+			for (const auto& device : model.attachedDevices) WriteUsbDescriptor(writer, device);
+			writer.EndArray(); writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		std::string UsbDeviceChangeJson(const Application::UsbDeviceChange& change) const
+		{
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer); writer.StartObject();
+			writer.Key("generation"); writer.Uint64(change.generation);
+			writer.Key("attached"); writer.Bool(change.attached);
+			writer.Key("device"); WriteUsbDescriptor(writer, change.device);
+			writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+		}
+
 		std::string HotkeySettingsResultJson(
 			const Application::HotkeySettingsResult& result) const
 		{
@@ -2819,6 +2879,17 @@ namespace
 			m_rpc.Register("hotkeys.get", [this](const rapidjson::Value&) {
 				RequireRole({"hotkey-settings"});
 				return HotkeySettingsJson(m_controller.GetHotkeySettings());
+			});
+			m_rpc.Register("usb.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"emulated-usb-devices"});
+				return UsbModelJson(m_emulatedUsb.GetModel());
+			});
+			m_rpc.Register("usb.setEnabled", [this](const rapidjson::Value& params) {
+				RequireRole({"emulated-usb-devices"});
+				return UsbModelJson(m_emulatedUsb.SetEnabled(RequiredString(params, "deviceId"),
+					static_cast<std::uint16_t>(RequiredBoundedUint(params, "vendorId", 0, 0xffff)),
+					static_cast<std::uint16_t>(RequiredBoundedUint(params, "productId", 0, 0xffff)),
+					RequiredBool(params, "enabled")));
 			});
 			m_rpc.Register("hotkeys.apply", [this](const rapidjson::Value& params) {
 				RequireRole({"hotkey-settings"});
@@ -3168,6 +3239,7 @@ namespace
 		std::unique_ptr<IRendererHost> m_rendererHost;
 		Application::EmulationController m_controller;
 		Application::LoggingFacade m_logging;
+		Application::EmulatedUsbFacade m_emulatedUsb{Application::CreateEmulatedUsbBackend()};
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
 		Application::EventSubscription m_applicationEvents;

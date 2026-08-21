@@ -11,6 +11,8 @@ add_library(CemuApplication STATIC
   CafeEmulationBackend.cpp
   EmulationController.cpp
   EmulationController.h
+	EmulatedUsbFacade.cpp
+	EmulatedUsbFacade.h
   EmulationPresentation.h
   FrontendSettingsFacade.h
 	HotkeySettingsFacade.h
@@ -62,4 +64,8 @@ if(BUILD_TESTING)
   add_executable(application_logging_facade_tests tests/LoggingFacadeTests.cpp)
   target_link_libraries(application_logging_facade_tests PRIVATE CemuApplication)
   add_test(NAME application_logging_facade_tests COMMAND application_logging_facade_tests)
+
+  add_executable(emulated_usb_facade_tests tests/EmulatedUsbFacadeTests.cpp)
+  target_link_libraries(emulated_usb_facade_tests PRIVATE CemuApplication)
+  add_test(NAME emulated_usb_facade_tests COMMAND emulated_usb_facade_tests)
 endif()

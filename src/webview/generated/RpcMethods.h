@@ -4,7 +4,7 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 54> RpcMethods{
+	inline constexpr std::array<std::string_view, 56> RpcMethods{
 		"system.bootstrap",
 		"system.quit",
 		"window.close",
@@ -36,6 +36,8 @@ namespace WebFrontend::Generated
 		"input.profileDelete",
 		"hotkeys.get",
 		"hotkeys.apply",
+		"usb.getModel",
+		"usb.setEnabled",
 		"graphicPacks.list",
 		"graphicPacks.setEnabled",
 		"graphicPacks.setPreset",

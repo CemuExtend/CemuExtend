@@ -7,6 +7,8 @@
 #include "Backend.h"
 #include "Whitelist.h"
 
+#include <unordered_map>
+
 namespace nsyshid
 {
 
@@ -22,6 +24,74 @@ namespace nsyshid
 	std::list<HIDClient_t*> HIDClientList;
 
 	std::recursive_mutex hidMutex;
+	std::mutex deviceObserverMutex;
+	std::unordered_map<DeviceObserverToken, DeviceObserver> deviceObservers;
+	DeviceObserverToken nextDeviceObserverToken = 1;
+
+	DeviceDescriptor CopyDescriptor(const std::shared_ptr<Device>& device)
+	{
+		return {
+			.id = fmt::format("{:04x}:{:04x}:{:02x}", device->m_vendorId,
+				device->m_productId, device->m_interfaceIndex),
+			.vendorId = device->m_vendorId,
+			.productId = device->m_productId,
+			.interfaceIndex = device->m_interfaceIndex,
+			.interfaceSubClass = device->m_interfaceSubClass,
+			.protocol = device->m_protocol,
+			.maxPacketSizeRx = device->m_maxPacketSizeRX,
+			.maxPacketSizeTx = device->m_maxPacketSizeTX,
+			.opened = device->IsOpened(),
+		};
+	}
+
+	void NotifyDeviceObservers(DeviceChange change)
+	{
+		std::vector<DeviceObserver> observers;
+		{
+			std::scoped_lock lock(deviceObserverMutex);
+			observers.reserve(deviceObservers.size());
+			for (const auto& [token, observer] : deviceObservers)
+			{
+				(void)token;
+				observers.push_back(observer);
+			}
+		}
+		for (const auto& observer : observers)
+		{
+			try { observer(change); }
+			catch (const std::exception& error)
+			{
+				cemuLog_logDebug(LogType::Force, "nsyshid device observer failed: {}", error.what());
+			}
+			catch (...) { cemuLog_logDebug(LogType::Force, "nsyshid device observer failed"); }
+		}
+	}
+
+	std::vector<DeviceDescriptor> EnumerateDeviceDescriptors()
+	{
+		std::lock_guard<std::recursive_mutex> lock(hidMutex);
+		std::vector<DeviceDescriptor> descriptors;
+		descriptors.reserve(deviceList.size());
+		for (const auto& device : deviceList)
+			descriptors.push_back(CopyDescriptor(device));
+		return descriptors;
+	}
+
+	DeviceObserverToken SubscribeDeviceChanges(DeviceObserver observer)
+	{
+		if (!observer)
+			throw std::invalid_argument("device observer is required");
+		std::scoped_lock lock(deviceObserverMutex);
+		const auto token = nextDeviceObserverToken++;
+		deviceObservers.emplace(token, std::move(observer));
+		return token;
+	}
+
+	void UnsubscribeDeviceChanges(DeviceObserverToken token)
+	{
+		std::scoped_lock lock(deviceObserverMutex);
+		deviceObservers.erase(token);
+	}
 
 	void AttachClientToList(HIDClient_t* hidClient)
 	{
@@ -185,6 +255,8 @@ namespace nsyshid
 
 	bool AttachDevice(const std::shared_ptr<Device>& device)
 	{
+		DeviceDescriptor descriptor;
+		{
 		std::lock_guard<std::recursive_mutex> lock(hidMutex);
 
 		// is the device already attached?
@@ -212,6 +284,7 @@ namespace nsyshid
 		hidDevice->handle = GenerateHIDHandle();
 		device->AssignHID(hidDevice);
 		deviceList.push_back(device);
+		descriptor = CopyDescriptor(device);
 
 		// do attach callbacks
 		for (auto client : HIDClientList)
@@ -222,11 +295,14 @@ namespace nsyshid
 		cemuLog_logDebug(LogType::Force, "nsyshid.AttachDevice(): device attached: {:04x}:{:04x}",
 						 device->m_vendorId,
 						 device->m_productId);
+		}
+		NotifyDeviceObservers({DeviceChangeKind::Attached, std::move(descriptor)});
 		return true;
 	}
 
 	void DetachDevice(const std::shared_ptr<Device>& device)
 	{
+		DeviceDescriptor descriptor;
 		{
 			std::lock_guard<std::recursive_mutex> lock(hidMutex);
 
@@ -239,6 +315,7 @@ namespace nsyshid
 								 device->m_productId);
 				return;
 			}
+			descriptor = CopyDescriptor(device);
 			deviceList.erase(it);
 
 			// do detach callbacks
@@ -250,6 +327,7 @@ namespace nsyshid
 		}
 
 		device->Close();
+		NotifyDeviceObservers({DeviceChangeKind::Detached, std::move(descriptor)});
 
 		cemuLog_logDebug(LogType::Force, "nsyshid.DetachDevice(): device removed: {:04x}:{:04x}",
 						 device->m_vendorId,

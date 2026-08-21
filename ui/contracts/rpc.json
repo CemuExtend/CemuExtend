@@ -1,6 +1,6 @@
 {
   "windowRoles": ["main-library", "general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "save-manager", "update-manager", "logging", "memory-searcher", "ppc-debugger", "audio-debugger", "texture-relations", "ppc-threads", "emulated-usb-devices", "checksum-tool", "getting-started", "about"],
-  "implementedWindowRoles": ["general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "logging", "checksum-tool", "getting-started", "about"],
+  "implementedWindowRoles": ["general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "logging", "emulated-usb-devices", "checksum-tool", "getting-started", "about"],
   "methods": [
     { "name": "system.bootstrap", "params": "undefined", "result": "Bootstrap" },
     { "name": "system.quit", "params": "undefined", "result": "EmptyResult" },
@@ -33,6 +33,8 @@
     { "name": "input.profileDelete", "params": "{ profile: string }", "result": "InputSettingsModel" },
     { "name": "hotkeys.get", "params": "undefined", "result": "HotkeySettingsModel" },
     { "name": "hotkeys.apply", "params": "HotkeySettingsUpdate", "result": "HotkeySettingsApplyResult" },
+    { "name": "usb.getModel", "params": "undefined", "result": "EmulatedUsbModel" },
+    { "name": "usb.setEnabled", "params": "{ deviceId: EmulatedUsbDeviceId; vendorId: number; productId: number; enabled: boolean }", "result": "EmulatedUsbModel" },
     { "name": "graphicPacks.list", "params": "undefined", "result": "GraphicPack[]" },
     { "name": "graphicPacks.setEnabled", "params": "{ key: string; enabled: boolean }", "result": "GraphicPackMutation" },
     { "name": "graphicPacks.setPreset", "params": "{ key: string; category: string; preset: string }", "result": "GraphicPackMutation" },
