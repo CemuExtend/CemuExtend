@@ -55,6 +55,19 @@ export type Title = {
 
 export type NativeEvent = { type: string; sequence: string; payload: unknown };
 
+export type LoggingLevel = "info" | "warning" | "error";
+export type LoggingEntry = { sequence: number; level: LoggingLevel; category: string; message: string };
+export type LoggingSnapshot = {
+  entries: LoggingEntry[];
+  firstAvailableSequence: number;
+  nextSequence: number;
+  droppedEntries: number;
+  retainedBytes: number;
+  truncated: boolean;
+};
+export type LoggingEntriesEvent = NativeEvent & { type: "logging.entries"; payload: LoggingSnapshot };
+export type LoggingClearedEvent = NativeEvent & { type: "logging.cleared"; payload: { clearedThroughSequence: number } };
+
 export type AboutInfo = {
   name: string;
   version: string;

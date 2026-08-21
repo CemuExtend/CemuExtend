@@ -4,6 +4,7 @@
 #include "application/ApplicationRuntime.h"
 #include "application/ApplicationHost.h"
 #include "application/EmulationController.h"
+#include "application/LoggingFacade.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
@@ -824,6 +825,12 @@ namespace
 						if (gate->target)
 							gate->target->Emit("titles.changed", "{}");
 					});
+				m_loggingEvents = m_logging.Subscribe(
+					[gate = m_callbackGate](const Application::LoggingEntry&) {
+						std::scoped_lock lock(gate->mutex);
+						if (gate->target)
+							gate->target->SignalLoggingChanged();
+					});
 				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, &m_mainBinding) != WEBVIEW_ERROR_OK)
 					throw std::runtime_error("failed to install the native RPC binding");
 				m_rpcBound = true;
@@ -1515,6 +1522,7 @@ namespace
 			}
 			m_titleEvents.Reset();
 			m_applicationEvents.Reset();
+			m_loggingEvents.Reset();
 			m_rpc.BeginShutdown();
 			constexpr unsigned maximumShutdownAttempts = 500;
 			unsigned shutdownAttempt{};
@@ -2217,6 +2225,74 @@ namespace
 			}
 		}
 
+		static std::string_view LoggingLevelName(Application::LoggingLevel level)
+		{
+			switch (level)
+			{
+			case Application::LoggingLevel::Warning: return "warning";
+			case Application::LoggingLevel::Error: return "error";
+			default: return "info";
+			}
+		}
+
+		static std::string LoggingSnapshotJson(const Application::LoggingSnapshot& snapshot)
+		{
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("entries"); writer.StartArray();
+			for (const auto& entry : snapshot.entries)
+			{
+				writer.StartObject();
+				writer.Key("sequence"); writer.Uint64(entry.sequence);
+				writer.Key("level"); writer.String(LoggingLevelName(entry.level).data());
+				writer.Key("category"); writer.String(entry.category.data(),
+					static_cast<rapidjson::SizeType>(entry.category.size()));
+				writer.Key("message"); writer.String(entry.message.data(),
+					static_cast<rapidjson::SizeType>(entry.message.size()));
+				writer.EndObject();
+			}
+			writer.EndArray();
+			writer.Key("firstAvailableSequence"); writer.Uint64(snapshot.firstAvailableSequence);
+			writer.Key("nextSequence"); writer.Uint64(snapshot.nextSequence);
+			writer.Key("droppedEntries"); writer.Uint64(snapshot.droppedEntries);
+			writer.Key("retainedBytes"); writer.Uint64(snapshot.retainedBytes);
+			writer.Key("truncated"); writer.Bool(snapshot.truncated);
+			writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		void SignalLoggingChanged()
+		{
+			if (m_loggingFlushPending.exchange(true, std::memory_order_acq_rel))
+				return;
+			if (!PostToUi([gate = m_callbackGate] {
+				std::scoped_lock lock(gate->mutex);
+				if (gate->target) gate->target->FlushLoggingEvents();
+			}))
+				m_loggingFlushPending.store(false, std::memory_order_release);
+		}
+
+		void FlushLoggingEvents()
+		{
+			m_loggingFlushPending.store(false, std::memory_order_release);
+			const auto snapshot = m_logging.Snapshot(m_lastForwardedLogSequence, 128);
+			const auto loggingWindow = m_windowByRole.find("logging");
+			if (loggingWindow == m_windowByRole.end())
+			{
+				m_lastForwardedLogSequence = snapshot.nextSequence == 0 ? 0 :
+					snapshot.nextSequence - 1;
+				return;
+			}
+			if (!snapshot.entries.empty())
+			{
+				m_lastForwardedLogSequence = snapshot.entries.back().sequence;
+				EmitToWindow(loggingWindow->second, "logging.entries",
+					LoggingSnapshotJson(snapshot));
+			}
+			if (snapshot.truncated) SignalLoggingChanged();
+		}
+
 		static void Invoke(const char* sequence, const char* arguments, void* context)
 		{
 			auto& binding = *static_cast<RpcBinding*>(context);
@@ -2876,6 +2952,21 @@ namespace
 					throw std::invalid_argument("the selected base installation is no longer available");
 				return Launch(entry->path);
 			});
+			m_rpc.Register("logging.getSnapshot", [this](const rapidjson::Value&) {
+				RequireRole({"logging"});
+				return LoggingSnapshotJson(m_logging.Snapshot());
+			});
+			m_rpc.Register("logging.clear", [this](const rapidjson::Value&) {
+				RequireRole({"logging"});
+				const auto clearedThroughSequence = m_logging.Clear();
+				m_lastForwardedLogSequence = std::max(m_lastForwardedLogSequence,
+					clearedThroughSequence);
+				EmitToWindow(m_invokingWindow, "logging.cleared",
+					std::string(R"({"clearedThroughSequence":)") +
+					std::to_string(clearedThroughSequence) + "}");
+				return std::string(R"({"clearedThroughSequence":)") +
+					std::to_string(clearedThroughSequence) + "}";
+			});
 			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"checksum-tool", "title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
@@ -3076,10 +3167,14 @@ namespace
 		std::shared_ptr<WebHostServices> m_hostServices;
 		std::unique_ptr<IRendererHost> m_rendererHost;
 		Application::EmulationController m_controller;
+		Application::LoggingFacade m_logging;
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
 		Application::EventSubscription m_applicationEvents;
 		Application::TitleCatalogSubscription m_titleEvents;
+		Application::LoggingSubscription m_loggingEvents;
+		std::atomic_bool m_loggingFlushPending{};
+		std::uint64_t m_lastForwardedLogSequence{};
 		std::atomic_bool m_stopping{};
 		std::shared_ptr<std::atomic_bool> m_eventStopping{std::make_shared<std::atomic_bool>()};
 		std::mutex m_eventMutex;

@@ -4,7 +4,7 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 52> RpcMethods{
+	inline constexpr std::array<std::string_view, 54> RpcMethods{
 		"system.bootstrap",
 		"system.quit",
 		"window.close",
@@ -46,6 +46,8 @@ namespace WebFrontend::Generated
 		"titleManager.getModel",
 		"titleManager.refresh",
 		"titleManager.launch",
+		"logging.getSnapshot",
+		"logging.clear",
 		"checksum.getModel",
 		"checksum.start",
 		"cemod.discover",

@@ -13,8 +13,10 @@ add_library(CemuApplication STATIC
   EmulationController.h
   EmulationPresentation.h
   FrontendSettingsFacade.h
-  HotkeySettingsFacade.h
-  HotkeySettingsFacade.cpp
+	HotkeySettingsFacade.h
+	HotkeySettingsFacade.cpp
+	LoggingFacade.h
+	LoggingFacade.cpp
   InputSettingsFacade.h
   GameProfileFacade.h
   GraphicPackFacade.h
@@ -56,4 +58,8 @@ if(BUILD_TESTING)
   add_executable(application_events_tests tests/ApplicationEventsTests.cpp)
   target_link_libraries(application_events_tests PRIVATE CemuApplication)
   add_test(NAME application_events_tests COMMAND application_events_tests)
+
+  add_executable(application_logging_facade_tests tests/LoggingFacadeTests.cpp)
+  target_link_libraries(application_logging_facade_tests PRIVATE CemuApplication)
+  add_test(NAME application_logging_facade_tests COMMAND application_logging_facade_tests)
 endif()
