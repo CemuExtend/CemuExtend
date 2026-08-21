@@ -167,6 +167,76 @@ namespace
 
 	using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 
+	std::uint64_t ParseDecimalUint64(std::string_view text, std::string_view name)
+	{
+		std::uint64_t value{};
+		const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+		if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+			throw std::invalid_argument(std::string(name) + " must be an unsigned decimal string");
+		return value;
+	}
+
+	std::string_view CemodErrorName(Application::CemodManagerError error)
+	{
+		switch (error)
+		{
+		case Application::CemodManagerError::None: return "none";
+		case Application::CemodManagerError::Conflict: return "conflict";
+		case Application::CemodManagerError::NotFound: return "notFound";
+		case Application::CemodManagerError::InvalidPermissions: return "invalidPermissions";
+		case Application::CemodManagerError::InspectionFailed: return "inspectionFailed";
+		case Application::CemodManagerError::SaveFailed: return "saveFailed";
+		case Application::CemodManagerError::ImportFailed: return "importFailed";
+		}
+		return "inspectionFailed";
+	}
+
+	std::string CemodSnapshotJson(const Application::CemodManagerSnapshot& snapshot)
+	{
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		writer.StartObject();
+		writer.Key("generation"); writer.String(std::to_string(snapshot.generation).c_str());
+		writer.Key("selectedTitleId");
+		if (snapshot.selectedTitleId) writer.String(TitleIdString(*snapshot.selectedTitleId).c_str()); else writer.Null();
+		writer.Key("packages"); writer.StartArray();
+		for (const auto& package : snapshot.packages)
+		{
+			writer.StartObject();
+			auto string = [&writer](const char* name, const std::string& value) { writer.Key(name); writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size())); };
+			string("packageKey", package.packageKey); string("modId", package.modId); string("principal", package.principal);
+			string("modIdentity", package.modIdentity); string("packageDigest", package.packageDigest); string("pluginName", package.pluginName);
+			string("author", package.author); string("version", package.version); string("description", package.description);
+			string("scope", package.scope); string("status", package.status); string("approvalReason", package.approvalReason);
+			writer.Key("titleIds"); writer.StartArray(); for (const auto titleId : package.titleIds) writer.String(TitleIdString(titleId).c_str()); writer.EndArray();
+			writer.Key("warnings"); writer.StartArray(); for (const auto& warning : package.warnings) writer.String(warning.data(), static_cast<rapidjson::SizeType>(warning.size())); writer.EndArray();
+			writer.Key("permissions"); writer.StartArray();
+			for (const auto& permission : package.permissions)
+			{
+				writer.StartObject(); string("name", permission.name); writer.Key("bit"); writer.String(std::to_string(permission.bit).c_str());
+				writer.Key("requested"); writer.Bool(permission.requested); writer.Key("granted"); writer.Bool(permission.granted);
+				writer.Key("dangerous"); writer.Bool(permission.dangerous); writer.Key("manifestMismatch"); writer.Bool(permission.manifestMismatch); writer.EndObject();
+			}
+			writer.EndArray();
+			writer.Key("requestedPermissions"); writer.String(std::to_string(package.requestedPermissions).c_str());
+			writer.Key("grantedPermissions"); writer.String(std::to_string(package.grantedPermissions).c_str());
+			writer.Key("approved"); writer.Bool(package.approved); writer.Key("signedPackage"); writer.Bool(package.signedPackage);
+			writer.Key("trustedNative"); writer.Bool(package.trustedNative); writer.Key("wups"); writer.Bool(package.wups);
+			writer.Key("headless"); writer.Bool(package.headless); writer.Key("runtimeAvailable"); writer.Bool(package.runtimeAvailable);
+			writer.Key("valid"); writer.Bool(package.valid); writer.EndObject();
+		}
+		writer.EndArray(); writer.Key("cancelled"); writer.Bool(snapshot.cancelled); writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	std::string CemodResultJson(const Application::CemodManagerResult& result)
+	{
+		return std::string(R"({"ok":)") + (result ? "true" : "false") +
+			R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
+			R"(,"diagnostic":)" + JsonString(result.diagnostic) +
+			R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
+	}
+
 	void WriteAccount(JsonWriter& writer, const Application::AccountInfo& account)
 	{
 		writer.StartObject();
@@ -782,6 +852,8 @@ namespace
 			std::uint64_t id{};
 			std::string role;
 			std::optional<std::uint64_t> titleContext;
+			std::string packageContext;
+			std::optional<std::uint64_t> generationContext;
 			webview_t webview{};
 			RpcBinding binding;
 			std::unique_ptr<IToolWindowSupport> nativeSupport;
@@ -896,6 +968,7 @@ namespace
 			constexpr std::size_t kMaximumBackgroundJobs = 4;
 			if (m_backgroundJobs.size() >= kMaximumBackgroundJobs)
 				throw std::runtime_error("too many background operations are in progress");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
@@ -917,8 +990,8 @@ namespace
 					auto progress = [gate, id, owner](
 						const Application::GraphicPackInstallProgress& value) {
 						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-							std::string(R"({"jobId":)") + std::to_string(id) +
-							R"(,"windowId":)" + std::to_string(owner) +
+							std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+							R"(,"windowId":)" + JsonString(std::to_string(owner)) +
 							R"(,"phase":)" + JsonString(GraphicPackInstallPhaseName(value.phase)) +
 							R"(,"completed":)" + std::to_string(value.completed) +
 							R"(,"total":)" + std::to_string(value.total) +
@@ -942,8 +1015,8 @@ namespace
 					rapidjson::StringBuffer buffer;
 					JsonWriter writer(buffer);
 					writer.StartObject();
-					writer.Key("jobId"); writer.Uint64(id);
-					writer.Key("windowId"); writer.Uint64(owner);
+					writer.Key("jobId"); writer.String(std::to_string(id).c_str());
+					writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
 					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
 					writer.Key("error"); writer.String(GraphicPackInstallErrorName(result.error).data());
 					writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
@@ -972,6 +1045,7 @@ namespace
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
@@ -1000,8 +1074,8 @@ namespace
 					};
 					auto progress = [gate, id, owner, phaseName](const Application::ContentOperationProgress& value) {
 						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-							std::string(R"({"jobId":)") + std::to_string(id) +
-							R"(,"windowId":)" + std::to_string(owner) +
+							std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+							R"(,"windowId":)" + JsonString(std::to_string(owner)) +
 							R"(,"phase":)" + JsonString(phaseName(value.phase)) +
 							R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
 							R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
@@ -1020,7 +1094,7 @@ namespace
 						result.checksum.reset();
 					}
 					rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-					writer.Key("jobId"); writer.Uint64(id); writer.Key("windowId"); writer.Uint64(owner);
+					writer.Key("jobId"); writer.String(std::to_string(id).c_str()); writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
 					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
 					auto errorName = [](Application::ContentOperationError error) {
 						switch (error) { case Application::ContentOperationError::None: return "none"; case Application::ContentOperationError::NotFound: return "notFound"; case Application::ContentOperationError::Cancelled: return "cancelled"; case Application::ContentOperationError::UnableToCreateOutput: return "unableToCreateOutput"; case Application::ContentOperationError::ReadFailure: return "readFailure"; case Application::ContentOperationError::VerificationFailure: return "verificationFailure"; case Application::ContentOperationError::RenameFailure: return "renameFailure"; } return "unknown";
@@ -1038,6 +1112,64 @@ namespace
 					writer.EndObject();
 					PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
 				});
+			}
+			catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
+			}
+			return id;
+		}
+
+		std::uint64_t StartCemodSnapshotJob(std::optional<std::uint64_t> titleId)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			if (m_backgroundJobs.size() >= 4)
+				throw std::runtime_error("too many background operations are in progress");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
+			const auto id = ++m_nextBackgroundJobId;
+			const auto owner = m_invokingWindow;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id; job->ownerWindow = owner;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner, titleId]
+					(std::stop_token stopToken) {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+						};
+						Application::CemodManagerResult result;
+						try
+						{
+							result.snapshot = controller->GetCemodManagerSnapshot(titleId, isCancelled);
+							if (result.snapshot.cancelled)
+								result.diagnostic = "CemuMod package inspection was cancelled";
+						}
+						catch (const std::exception& error)
+						{
+							result.error = Application::CemodManagerError::InspectionFailed;
+							result.diagnostic = error.what();
+						}
+						catch (...)
+						{
+							result.error = Application::CemodManagerError::InspectionFailed;
+							result.diagnostic = "CemuMod package inspection failed";
+						}
+						auto payload = std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+							R"(,"windowId":)" + JsonString(std::to_string(owner)) + R"(,"ok":)" +
+							(result ? "true" : "false") + R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
+							R"(,"diagnostic":)" + JsonString(result.diagnostic) +
+							R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
+						PostBackgroundJobEvent(gate, id, owner, "cemod.snapshot", std::move(payload), true);
+					});
 			}
 			catch (...)
 			{
@@ -1098,7 +1230,9 @@ namespace
 		}
 
 		std::uint64_t QueueToolWindow(std::string_view role, std::string requestId,
-			std::optional<std::uint64_t> titleContext = std::nullopt)
+			std::optional<std::uint64_t> titleContext = std::nullopt,
+			std::string packageContext = {},
+			std::optional<std::uint64_t> generationContext = std::nullopt)
 		{
 			if (m_rpc.IsShuttingDown())
 				throw std::runtime_error("the application is shutting down");
@@ -1110,12 +1244,16 @@ namespace
 			if (const auto existing = m_windowByRole.find(ownedRole);
 				existing != m_windowByRole.end())
 			{
+				if (role == "cemod-permissions")
+					throw std::runtime_error("an exact CemuMod approval dialog is already open");
 				const auto id = existing->second;
 				if (const auto found = m_toolWindows.find(id); found != m_toolWindows.end())
 				{
 					found->second->titleContext = titleContext;
+					found->second->packageContext = packageContext;
+					found->second->generationContext = generationContext;
 					Emit("window.contextChanged", std::string(R"({"windowId":)") +
-						std::to_string(id) + R"(,"titleId":)" +
+						JsonString(std::to_string(id)) + R"(,"titleId":)" +
 						(titleContext ? JsonString(TitleIdString(*titleContext)) : "null") + "}");
 				}
 				(void)PostToUi([this, id] {
@@ -1125,7 +1263,7 @@ namespace
 				});
 				if (!requestId.empty())
 					Emit("window.opened", std::string(R"({"requestId":)") +
-						JsonString(requestId) + R"(,"windowId":)" + std::to_string(id) +
+						JsonString(requestId) + R"(,"windowId":)" + JsonString(std::to_string(id)) +
 						R"(,"role":)" + JsonString(ownedRole) + "}");
 				return id;
 			}
@@ -1136,13 +1274,19 @@ namespace
 					context != m_pendingWindowContexts.end() && context->second != titleContext)
 					throw std::runtime_error(
 						"the window is already opening with a different title context");
+				if (m_pendingPackageContexts.at(ownedRole) != packageContext ||
+					m_pendingGenerationContexts.at(ownedRole) != generationContext)
+					throw std::runtime_error("the window is already opening with a different exact package context");
 				if (!requestId.empty())
 					m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 				return pending->second;
 			}
+			if (m_nextWindowId >= 9007199254740991ULL) throw std::runtime_error("tool window identifier space is exhausted");
 			const auto id = ++m_nextWindowId;
 			m_pendingWindowRoles.emplace(ownedRole, id);
 			m_pendingWindowContexts[ownedRole] = titleContext;
+			m_pendingPackageContexts[ownedRole] = std::move(packageContext);
+			m_pendingGenerationContexts[ownedRole] = generationContext;
 			if (!requestId.empty())
 				m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 			if (!PostToUi([this, role = ownedRole, id] {
@@ -1153,7 +1297,7 @@ namespace
 					for (const auto& requestId : requests.mapped())
 					{
 						auto payload = std::string(R"({"requestId":)") + JsonString(requestId) +
-							R"(,"windowId":)" + std::to_string(id) + R"(,"role":)" +
+							R"(,"windowId":)" + JsonString(std::to_string(id)) + R"(,"role":)" +
 							JsonString(role);
 						if (!message.empty()) payload += R"(,"message":)" + JsonString(message);
 						Emit(event, payload + "}");
@@ -1162,6 +1306,9 @@ namespace
 				if (m_rpc.IsShuttingDown())
 				{
 					m_pendingWindowRoles.erase(role);
+					m_pendingWindowContexts.erase(role);
+					m_pendingPackageContexts.erase(role);
+					m_pendingGenerationContexts.erase(role);
 					notify("window.openFailed", "the application is shutting down");
 					return;
 				}
@@ -1169,14 +1316,22 @@ namespace
 				{
 					const auto context = m_pendingWindowContexts.contains(role) ?
 						m_pendingWindowContexts.at(role) : std::optional<std::uint64_t>{};
-					CreateToolWindow(role, id, context);
+					const auto package = m_pendingPackageContexts.contains(role) ?
+						m_pendingPackageContexts.at(role) : std::string{};
+					const auto generation = m_pendingGenerationContexts.contains(role) ?
+						m_pendingGenerationContexts.at(role) : std::optional<std::uint64_t>{};
+					CreateToolWindow(role, id, context, package, generation);
 					m_pendingWindowContexts.erase(role);
+					m_pendingPackageContexts.erase(role);
+					m_pendingGenerationContexts.erase(role);
 					notify("window.opened");
 				}
 				catch (const std::exception& error)
 				{
 					m_pendingWindowRoles.erase(role);
 					m_pendingWindowContexts.erase(role);
+					m_pendingPackageContexts.erase(role);
+					m_pendingGenerationContexts.erase(role);
 					notify("window.openFailed", error.what());
 				}
 			}))
@@ -1184,13 +1339,16 @@ namespace
 				m_pendingWindowRoles.erase(ownedRole);
 				m_pendingWindowRequests.erase(ownedRole);
 				m_pendingWindowContexts.erase(ownedRole);
+				m_pendingPackageContexts.erase(ownedRole);
+				m_pendingGenerationContexts.erase(ownedRole);
 				throw std::runtime_error("the UI dispatcher is shutting down");
 			}
 			return id;
 		}
 
 		void CreateToolWindow(std::string_view role, std::uint64_t id,
-			std::optional<std::uint64_t> titleContext)
+			std::optional<std::uint64_t> titleContext, std::string packageContext,
+			std::optional<std::uint64_t> generationContext)
 		{
 			const auto& descriptor = DescribeWindow(role);
 			if (const auto existing = m_windowByRole.find(std::string(role));
@@ -1219,6 +1377,8 @@ namespace
 			window->id = id;
 			window->role = role;
 			window->titleContext = titleContext;
+			window->packageContext = std::move(packageContext);
+			window->generationContext = generationContext;
 			window->nativeSupport = CreateToolWindowSupport(
 				m_nativeWindow->GetNativeWindow(), descriptor.modal, [this, id] {
 					(void)PostToUi([this, id] { RequestToolWindowClose(id); });
@@ -1970,7 +2130,7 @@ namespace
 				return;
 			const auto sequence = ++m_eventSequence;
 			const auto event = std::string(R"({"type":)") + JsonString(type) +
-				R"(,"sequence":)" + std::to_string(sequence) + R"(,"payload":)" +
+				R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
 				std::string(payloadJson) + "}";
 			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
 				Base64(event) + "'),c=>c.charCodeAt(0)))));";
@@ -1997,7 +2157,7 @@ namespace
 				return;
 			const auto sequence = ++m_eventSequence;
 			const auto event = std::string(R"({"type":)") + JsonString(type) +
-				R"(,"sequence":)" + std::to_string(sequence) + R"(,"payload":)" +
+				R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
 				std::string(payloadJson) + "}";
 			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
 				Base64(event) + "'),c=>c.charCodeAt(0)))));";
@@ -2325,7 +2485,7 @@ namespace
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
 				auto result = std::string(R"({"windowId":)") +
-					std::to_string(m_invokingWindow) + R"(,"windowRole":)" +
+					JsonString(std::to_string(m_invokingWindow)) + R"(,"windowRole":)" +
 					JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
 					JsonString(BUILD_VERSION_STRING) + R"(,"platform":")" +
 #if BOOST_OS_WINDOWS
@@ -2339,9 +2499,16 @@ namespace
 				if (m_invokingWindow != 0)
 				{
 					const auto found = m_toolWindows.find(m_invokingWindow);
-					if (found != m_toolWindows.end() && found->second->titleContext)
-						result += R"(,"context":{"titleId":)" +
-							JsonString(TitleIdString(*found->second->titleContext)) + "}";
+					if (found != m_toolWindows.end() && (found->second->titleContext ||
+						!found->second->packageContext.empty() || found->second->generationContext))
+					{
+						result += R"(,"context":{)";
+						bool separator{};
+						if (found->second->titleContext) { result += R"("titleId":)" + JsonString(TitleIdString(*found->second->titleContext)); separator = true; }
+						if (!found->second->packageContext.empty()) { if (separator) result += ","; result += R"("packageKey":)" + JsonString(found->second->packageContext); separator = true; }
+						if (found->second->generationContext) { if (separator) result += ","; result += R"("generation":)" + JsonString(std::to_string(*found->second->generationContext)); }
+						result += "}";
+					}
 				}
 				result += R"(,"theme":"system","shuttingDown":)";
 				result += m_rpc.IsShuttingDown() ? "true}" : "false}";
@@ -2392,7 +2559,7 @@ namespace
 						titleContext = ParseTitleId(context->value);
 				}
 				const auto id = QueueToolWindow(roleName, std::string(requestId), titleContext);
-				return std::string(R"({"windowId":)") + std::to_string(id) + "}";
+				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
 			});
 			m_rpc.Register("window.focus", [this](const rapidjson::Value&) {
 				if (m_invokingWindow == 0)
@@ -2674,7 +2841,7 @@ namespace
 					throw std::invalid_argument("unknown graphic-pack install kind");
 				request.replaceExisting = RequiredBool(params, "replaceExisting");
 				const auto jobId = StartGraphicPackInstallJob(std::move(request));
-				return std::string(R"({"jobId":)") + std::to_string(jobId) + "}";
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(jobId)) + "}";
 			});
 			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
@@ -2727,10 +2894,52 @@ namespace
 				const auto entries = m_controller.ListManagedContent();
 				if (std::ranges::none_of(entries, [uid](const auto& entry) { return entry.locationUid == uid; }))
 					throw std::invalid_argument("locationUid is not present in the managed-content catalog");
-				return std::string(R"({"jobId":)") + std::to_string(StartChecksumJob(uid)) + "}";
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartChecksumJob(uid))) + "}";
+			});
+			m_rpc.Register("cemod.discover", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-manager", "cemod-permissions"});
+				std::optional<std::uint64_t> titleId;
+				if (params.IsObject() && params.HasMember("titleId")) titleId = ParseTitleId(params);
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartCemodSnapshotJob(titleId))) + "}";
+			});
+			m_rpc.Register("cemod.openPermissions", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-manager"});
+				const auto requestId = RequiredString(params, "requestId");
+				if (requestId.empty() || requestId.size() > 128) throw std::invalid_argument("requestId must contain between 1 and 128 characters");
+				const auto titleId = ParseTitleId(params);
+				const auto packageKey = RequiredString(params, "packageKey");
+				if (packageKey.empty() || packageKey.size() > 4096) throw std::invalid_argument("packageKey is invalid");
+				const auto generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
+				const auto id = QueueToolWindow("cemod-permissions", std::string(requestId), titleId, std::string(packageKey), generation);
+				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
+			});
+			m_rpc.Register("cemod.saveApproval", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-permissions"});
+				const auto found = m_toolWindows.find(m_invokingWindow);
+				if (found == m_toolWindows.end() || !found->second->titleContext || !found->second->generationContext)
+					throw std::runtime_error("approval context is unavailable");
+				Application::CemodApprovalUpdate update;
+				update.generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
+				update.titleId = ParseTitleId(params); update.packageKey = std::string(RequiredString(params, "packageKey"));
+				update.grantedPermissions = ParseDecimalUint64(RequiredString(params, "grantedPermissions"), "grantedPermissions");
+				update.approved = RequiredBool(params, "approved");
+				if (update.titleId != *found->second->titleContext || update.generation != *found->second->generationContext || update.packageKey != found->second->packageContext)
+					throw std::runtime_error("approval target does not match the exact modal context");
+				const auto result = m_controller.SaveCemodApproval(update);
+				if (result) Emit("cemod.changed", R"({"reason":"approval"})");
+				return CemodResultJson(result);
+			});
+			m_rpc.Register("cemod.importLegacy", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-manager"});
+				if (!RequiredBool(params, "confirmed")) throw std::invalid_argument("legacy import requires explicit confirmation");
+				const auto result = m_controller.ImportLegacyCemodPackageData(
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					ParseTitleId(params), RequiredString(params, "packageKey"));
+				if (result) Emit("cemod.changed", R"({"reason":"legacyImport"})");
+				return CemodResultJson(result);
 			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
-				const auto jobId = static_cast<std::uint64_t>(RequiredUint(params, "jobId"));
+				const auto jobId = ParseDecimalUint64(RequiredString(params, "jobId"), "jobId");
 				const auto job = m_backgroundJobs.find(jobId);
 				if (job == m_backgroundJobs.end() || job->second->ownerWindow != m_invokingWindow)
 					throw std::runtime_error("background job was not found for this window");
@@ -2857,6 +3066,8 @@ namespace
 		std::unordered_map<std::string, std::uint64_t> m_pendingWindowRoles;
 		std::unordered_map<std::string, std::vector<std::string>> m_pendingWindowRequests;
 		std::unordered_map<std::string, std::optional<std::uint64_t>> m_pendingWindowContexts;
+		std::unordered_map<std::string, std::string> m_pendingPackageContexts;
+		std::unordered_map<std::string, std::optional<std::uint64_t>> m_pendingGenerationContexts;
 		std::unordered_map<std::uint64_t, std::unique_ptr<BackgroundJob>> m_backgroundJobs;
 		std::uint64_t m_nextWindowId{};
 		std::uint64_t m_nextBackgroundJobId{};

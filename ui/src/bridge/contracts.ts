@@ -12,18 +12,30 @@ export type RpcResponse<T = unknown> =
   | { id: string; ok: false; error: RpcError };
 
 export type Bootstrap = {
-  windowId: number;
+  windowId: string;
   windowRole: ActiveWindowRole;
   appVersion: string;
   platform: string;
   theme: "light" | "dark" | "system";
   shuttingDown: boolean;
-  context?: { titleId?: string };
+  context?: { titleId?: string; packageKey?: string; generation?: string };
 };
 
 export type WindowOpenRequest =
 	| { role: "graphic-packs"; requestId: string; context?: { titleId?: string } }
 	| { role: Exclude<ImplementedToolWindowRole, "graphic-packs">; requestId: string };
+
+export type CemodPermission = { name: string; bit: string; requested: boolean; granted: boolean; dangerous: boolean; manifestMismatch: boolean };
+export type CemodPackage = {
+  packageKey: string; titleIds: string[]; modId: string; principal: string; modIdentity: string;
+  packageDigest: string; pluginName: string; author: string; version: string; description: string;
+  scope: string; status: string; approvalReason: string; warnings: string[]; permissions: CemodPermission[];
+  requestedPermissions: string; grantedPermissions: string; approved: boolean; signedPackage: boolean;
+  trustedNative: boolean; wups: boolean; headless: boolean; runtimeAvailable: boolean; valid: boolean;
+};
+export type CemodManagerSnapshot = { generation: string; selectedTitleId: string | null; packages: CemodPackage[]; cancelled: boolean };
+export type CemodManagerResult = { ok: boolean; error: "none" | "conflict" | "notFound" | "invalidPermissions" | "inspectionFailed" | "saveFailed" | "importFailed"; diagnostic: string; snapshot: CemodManagerSnapshot };
+export type CemodApprovalUpdate = { generation: string; titleId: string; packageKey: string; grantedPermissions: string; approved: boolean };
 
 export type ChecksumContent = { locationUid: string; titleId: string; name: string; version: number; region: string; type: "base" | "update" | "dlc" | "system"; format: "folder" | "wud" | "nus" | "wua" | "wuhb" };
 export type ChecksumModel = { entries: ChecksumContent[] };
@@ -41,7 +53,7 @@ export type Title = {
   iconDataUrl?: string;
 };
 
-export type NativeEvent = { type: string; sequence: number; payload: unknown };
+export type NativeEvent = { type: string; sequence: string; payload: unknown };
 
 export type AboutInfo = {
   name: string;

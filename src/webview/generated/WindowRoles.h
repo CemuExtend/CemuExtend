@@ -4,12 +4,14 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 9> ImplementedWindowRoles{
+	inline constexpr std::array<std::string_view, 11> ImplementedWindowRoles{
 		"general-settings",
 		"input-settings",
 		"hotkey-settings",
 		"graphic-packs",
 		"title-manager",
+		"cemod-manager",
+		"cemod-permissions",
 		"account-manager",
 		"checksum-tool",
 		"getting-started",

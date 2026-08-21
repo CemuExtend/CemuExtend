@@ -7,7 +7,7 @@ import { Modal } from "../components/Modal";
 type JobPayload = Record<string, unknown>;
 type InstallView = {
   request: GraphicPackInstallRequest;
-  jobId?: number;
+  jobId?: string;
   phase: string;
   completed: number;
   total: number;
@@ -16,7 +16,7 @@ type InstallView = {
   cancelling?: boolean;
 };
 
-export function GraphicPacksWindow({ windowId, initialTitleId }: { windowId: number; initialTitleId?: string }) {
+export function GraphicPacksWindow({ windowId, initialTitleId }: { windowId: string; initialTitleId?: string }) {
   const [packs, setPacks] = useState<GraphicPack[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -26,8 +26,8 @@ export function GraphicPacksWindow({ windowId, initialTitleId }: { windowId: num
   const [error, setError] = useState("");
   const [install, setInstall] = useState<InstallView>();
   const [customUrl, setCustomUrl] = useState("");
-  const activeJob = useRef<number | undefined>(undefined);
-  const pendingJobEvents = useRef(new Map<number, Array<{ type: string; payload: JobPayload }>>());
+  const activeJob = useRef<string | undefined>(undefined);
+  const pendingJobEvents = useRef(new Map<string, Array<{ type: string; payload: JobPayload }>>());
 
   const load = useCallback(async () => {
     const next = await invoke("graphicPacks.list");
@@ -37,7 +37,7 @@ export function GraphicPacksWindow({ windowId, initialTitleId }: { windowId: num
 
   const applyJobEvent = useCallback((type: string, payload: JobPayload) => {
     const jobId = payload.jobId;
-    if (typeof jobId !== "number") return;
+    if (typeof jobId !== "string") return;
     if (type === "jobs.progress") {
       setInstall((current) => current?.jobId === jobId ? { ...current, phase: typeof payload.phase === "string" ? payload.phase : current.phase, completed: typeof payload.completed === "number" ? payload.completed : 0, total: typeof payload.total === "number" ? payload.total : 0, currentPath: typeof payload.currentPath === "string" ? payload.currentPath : "" } : current);
       return;
@@ -72,7 +72,7 @@ export function GraphicPacksWindow({ windowId, initialTitleId }: { windowId: num
         setTitleId(typeof payload.titleId === "string" ? payload.titleId : undefined);
         return;
       }
-      if ((event.type !== "jobs.progress" && event.type !== "jobs.completed") || payload.windowId !== windowId || typeof payload.jobId !== "number") return;
+      if ((event.type !== "jobs.progress" && event.type !== "jobs.completed") || payload.windowId !== windowId || typeof payload.jobId !== "string") return;
       if (activeJob.current === payload.jobId) applyJobEvent(event.type, payload);
       else pendingJobEvents.current.set(payload.jobId, [...(pendingJobEvents.current.get(payload.jobId) ?? []), { type: event.type, payload }]);
     });

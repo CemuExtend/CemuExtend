@@ -9,21 +9,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export type WindowOpenCompletion = { windowId: number } | { error: string };
+export type WindowOpenCompletion = { windowId: string } | { error: string };
 
 export function matchWindowOpenEvent(type: string, payload: unknown, requestId: string): WindowOpenCompletion | undefined {
   if ((type !== "window.opened" && type !== "window.openFailed") || !isRecord(payload) || payload.requestId !== requestId) return undefined;
-  if (type === "window.opened" && typeof payload.windowId === "number" && Number.isSafeInteger(payload.windowId)) return { windowId: payload.windowId };
+  if (type === "window.opened" && typeof payload.windowId === "string" && /^[0-9]+$/.test(payload.windowId)) return { windowId: payload.windowId };
   return { error: typeof payload.message === "string" ? payload.message : "The native window could not be opened" };
 }
 
-export function openWindow(role: "graphic-packs", context?: { titleId?: string }): Promise<number>;
-export function openWindow(role: Exclude<ToolRole, "graphic-packs">): Promise<number>;
-export function openWindow(role: ToolRole, context?: { titleId?: string }): Promise<number> {
+export function openWindow(role: "graphic-packs", context?: { titleId?: string }): Promise<string>;
+export function openWindow(role: Exclude<ToolRole, "graphic-packs">): Promise<string>;
+export function openWindow(role: ToolRole, context?: { titleId?: string }): Promise<string> {
   const requestId = `open-${Date.now().toString(36)}-${(++nextOpenRequest).toString(36)}`;
-  return new Promise<number>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     let settled = false;
-    const finish = (result: { windowId: number } | { error: Error }) => {
+    const finish = (result: { windowId: string } | { error: Error }) => {
       if (settled) return;
       settled = true;
       unsubscribe();

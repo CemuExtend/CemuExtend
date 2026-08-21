@@ -7,17 +7,17 @@ import { activateJob, routeJobEvent } from "./checksumEvents";
 type Progress = { phase: string; filesCompleted: number; filesTotal: number; bytesCompleted: number; bytesTotal: number };
 type Result = { titleId: string; version: number; region: number; imageSha256: string; files: Array<{ path: string; sha256: string }> };
 
-export function ChecksumToolWindow({ windowId }: { windowId: number }) {
+export function ChecksumToolWindow({ windowId }: { windowId: string }) {
   const [model, setModel] = useState<ChecksumModel>({ entries: [] }); const [selectedUid, setSelectedUid] = useState(""); const [query, setQuery] = useState("");
-  const [progress, setProgress] = useState<Progress>(); const [result, setResult] = useState<Result>(); const [error, setError] = useState(""); const jobId = useRef<number | undefined>(undefined);
-  const pendingEvents = useRef(new Map<number, Array<{ type: string; payload: Record<string, unknown> }>>());
+  const [progress, setProgress] = useState<Progress>(); const [result, setResult] = useState<Result>(); const [error, setError] = useState(""); const jobId = useRef<string | undefined>(undefined);
+  const pendingEvents = useRef(new Map<string, Array<{ type: string; payload: Record<string, unknown> }>>());
   const applyJobEvent = useCallback((type: string, payload: Record<string, unknown>) => {
     if (type === "jobs.progress") setProgress({ phase: String(payload.phase ?? "working"), filesCompleted: Number(payload.filesCompleted ?? 0), filesTotal: Number(payload.filesTotal ?? 0), bytesCompleted: Number(payload.bytesCompleted ?? 0), bytesTotal: Number(payload.bytesTotal ?? 0) });
     else { jobId.current = undefined; setProgress(undefined); if (payload.ok === true && payload.checksum && typeof payload.checksum === "object") setResult(payload.checksum as Result); else setError(String(payload.diagnostic || "Checksum operation failed")); }
   }, []);
   useEffect(() => { void invoke("checksum.getModel").then((next) => { setModel(next); setSelectedUid(next.entries[0]?.locationUid ?? ""); }).catch((reason: unknown) => setError(String(reason))); return subscribe((event) => {
     if ((event.type !== "jobs.progress" && event.type !== "jobs.completed") || !event.payload || typeof event.payload !== "object") return; const payload = event.payload as Record<string, unknown>;
-    if (payload.windowId !== windowId || typeof payload.jobId !== "number") return;
+    if (payload.windowId !== windowId || typeof payload.jobId !== "string") return;
     routeJobEvent(pendingEvents.current, jobId.current, payload.jobId, { type: event.type, payload }, (queued) => applyJobEvent(queued.type, queued.payload));
   }); }, [applyJobEvent, windowId]);
   const entries = useMemo(() => { const needle = query.trim().toLocaleLowerCase(); return model.entries.filter((entry) => !needle || `${entry.name} ${entry.titleId} ${entry.type} ${entry.format}`.toLocaleLowerCase().includes(needle)); }, [model, query]);

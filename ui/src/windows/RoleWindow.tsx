@@ -8,8 +8,10 @@ import { GeneralSettingsWindow } from "./GeneralSettingsWindow";
 import { HotkeySettingsWindow } from "./HotkeySettingsWindow";
 import { ChecksumToolWindow } from "./ChecksumToolWindow";
 import { TitleManagerWindow } from "./TitleManagerWindow";
+import { CemodManagerWindow } from "./CemodManagerWindow";
+import { CemodPermissionsWindow } from "./CemodPermissionsWindow";
 
-export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: number; context?: { titleId?: string } }) {
+export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: string; context?: { titleId?: string; packageKey?: string; generation?: string } }) {
   switch (role) {
     case "about": return <AboutWindow />;
     case "account-manager": return <AccountManagerWindow />;
@@ -20,5 +22,7 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "hotkey-settings": return <HotkeySettingsWindow />;
     case "checksum-tool": return <ChecksumToolWindow windowId={windowId} />;
     case "title-manager": return <TitleManagerWindow windowId={windowId} />;
+    case "cemod-manager": return <CemodManagerWindow windowId={windowId} />;
+    case "cemod-permissions": return <CemodPermissionsWindow windowId={windowId} context={context} />;
   }
 }

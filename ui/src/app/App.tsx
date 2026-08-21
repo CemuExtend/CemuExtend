@@ -4,7 +4,7 @@ import type { Bootstrap } from "../bridge/contracts";
 import { Library } from "../features/titles/Library";
 import { RoleWindow } from "../windows/RoleWindow";
 
-const fallback: Bootstrap = { windowId: 0, windowRole: "main-library", appVersion: "development", platform: "unknown", theme: "system", shuttingDown: false };
+const fallback: Bootstrap = { windowId: "0", windowRole: "main-library", appVersion: "development", platform: "unknown", theme: "system", shuttingDown: false };
 
 export function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap>({ ...fallback, ...window.__CEMU_BOOTSTRAP__ });
