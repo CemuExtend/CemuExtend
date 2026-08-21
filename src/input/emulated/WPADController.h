@@ -1,8 +1,7 @@
 #pragma once
 
 #include "input/emulated/EmulatedController.h"
-#include "Cafe/OS/libs/padscore/padscore.h"
-#include "Cafe/OS/libs/vpad/vpad.h"
+#include "input/emulated/ControllerStatus.h"
 
 constexpr uint32 kWPADButtonRepeat = 0x80000000;
 

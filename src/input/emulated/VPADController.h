@@ -1,7 +1,7 @@
 #pragma once
 
 #include "input/emulated/EmulatedController.h"
-#include "Cafe/OS/libs/vpad/vpad.h"
+#include "input/emulated/ControllerStatus.h"
 
 
 class VPADController : public EmulatedController

@@ -10,7 +10,34 @@
 #include "Cafe/Filesystem/FST/FST.h"
 #include "util/helpers/StringHelpers.h"
 
-void requireConsole();
+namespace
+{
+	void requireConsole()
+	{
+#if BOOST_OS_WINDOWS
+		static bool consoleConnected = false;
+		if (consoleConnected)
+			return;
+
+		const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+		const DWORD fileType = GetFileType(output);
+		if (fileType == FILE_TYPE_UNKNOWN || fileType == FILE_TYPE_CHAR)
+		{
+			if (AttachConsole(ATTACH_PARENT_PROCESS) != FALSE)
+			{
+				freopen("CONOUT$", "w", stdout);
+				freopen("CONOUT$", "w", stderr);
+				freopen("CONIN$", "r", stdin);
+				consoleConnected = true;
+			}
+		}
+		else
+		{
+			consoleConnected = true;
+		}
+#endif
+	}
+}
 
 bool LaunchSettings::HandleCommandline(const wchar_t* lpCmdLine)
 {

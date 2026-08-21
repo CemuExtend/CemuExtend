@@ -1,5 +1,7 @@
 #pragma once
 
+#include "wxgui/CemuUpdateWorker.h"
+
 #include <wx/dialog.h>
 #include <wx/stattext.h>
 #include <wx/gauge.h>
@@ -41,12 +43,6 @@ private:
 	bool DownloadCemuZip(const std::string& url, const fs::path& filename);
 	bool ExtractUpdate(const fs::path& zipname, const fs::path& targetpath, std::string& cemuFolderName);
 
-	enum class WorkerOrder
-	{
-		Idle,
-		CheckVersion,
-		UpdateVersion,
-	};
 	enum class Result
 	{
 		NoUpdateAvailable,
@@ -58,10 +54,7 @@ private:
 		Success,
 		Error
 	};
-	std::mutex m_mutex;
-	std::condition_variable m_condition;
-	WorkerOrder m_order{WorkerOrder::CheckVersion};
-	std::atomic_bool m_stopRequested{false};
+	CemuUpdateWorkerMailbox m_workerMailbox{CemuUpdateWorkerMailbox::Work::CheckVersion};
 	void WorkerThread();
 
 	std::string m_downloadUrl, m_changelogUrl;

@@ -1,10 +1,8 @@
 add_library(CemuConfig
-    ActiveSettings.cpp
     ActiveSettings.h
     CemuConfig.cpp
     CemuConfig.h
     ConfigValue.h
-    LaunchSettings.cpp
     LaunchSettings.h
     NetworkSettings.cpp
     NetworkSettings.h
@@ -20,5 +18,4 @@ target_include_directories(CemuConfig PUBLIC "../")
 target_link_libraries(CemuConfig PRIVATE
 	CemuCommon
 	CemuComponents
-    Boost::program_options
 )

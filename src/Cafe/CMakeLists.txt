@@ -558,6 +558,8 @@ add_library(CemuCafe
 # by the Cafe target. Keeping these sources in the generic CemuComponents
 # archive hid reverse Cafe dependencies and produced a false target DAG.
 target_sources(CemuCafe PRIVATE
+  ../config/ActiveSettings.cpp
+  ../config/LaunchSettings.cpp
   ../Cemu/napi/napi_act.cpp
   ../Cemu/napi/napi_ec.cpp
   ../Cemu/napi/napi.cpp
@@ -742,7 +744,9 @@ target_link_libraries(CemuCafe PRIVATE
   CemuHostContracts
   CemuInput
   CemuExtendDomain
+	CemuResource
   CemuUtil
+  Boost::program_options
   cemuextend::wire
   ZArchive::zarchive
   imguiImpl

@@ -1,8 +1,8 @@
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
+#include "frontend/ArchiveInstallPolicy.h"
 #include "host/contracts/HostContracts.h"
 
 #include <cstring>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -26,25 +26,6 @@ namespace
 	constexpr zip_uint64_t kMaximumCustomPackFileSize = 128ULL * 1024ULL * 1024ULL;
 	constexpr zip_uint64_t kMaximumCustomPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
 	constexpr zip_uint64_t kMaximumCustomPackCompressionRatio = 1000;
-
-	std::optional<fs::path> NormalizeCustomPackArchivePath(std::string_view name)
-	{
-		if (name.empty() || name.front() == '/' || name.front() == '\\')
-			return std::nullopt;
-		std::string portableName(name);
-		std::replace(portableName.begin(), portableName.end(), '\\', '/');
-		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
-			portableName[1] == ':')
-			return std::nullopt;
-		const auto normalized = _utf8ToPath(portableName).lexically_normal();
-		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
-			normalized.has_root_name() || normalized.has_root_directory())
-			return std::nullopt;
-		for (const auto& component : normalized)
-			if (component == "..")
-				return std::nullopt;
-		return normalized;
-	}
 
 	bool IsCustomPackArchiveSymlink(zip_t* archive, zip_uint64_t index)
 	{
@@ -374,7 +355,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 	std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
 	zip_error_fini(&zipError);
 
-	const auto normalizedFolder = NormalizeCustomPackArchivePath(folderName);
+	const auto normalizedFolder = Frontend::ArchiveInstallPolicy::NormalizeRelativePath(folderName);
 	if (!normalizedFolder || normalizedFolder->has_parent_path())
 	{
 		m_stage = StageErrInvalidPack;
@@ -413,7 +394,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 			m_stage = StageErrInvalidPack;
 			return;
 		}
-		auto relativePath = NormalizeCustomPackArchivePath(stat.name);
+		auto relativePath = Frontend::ArchiveInstallPolicy::NormalizeRelativePath(stat.name);
 		if (!relativePath || !paths.emplace(*relativePath).second)
 		{
 			m_stage = StageErrInvalidPack;
@@ -533,11 +514,13 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 			m_stage = StageErrInvalidPack;
 		return;
 	}
-	fs::rename(staging, target, filesystemError);
-	if (filesystemError)
+	const auto commit = Frontend::ArchiveInstallPolicy::CommitStagedDirectory(
+		staging, target, {}, false);
+	if (!commit.committed)
 	{
 		cleanupStaging();
-		m_stage = fs::exists(target) ? StageErrConflict : StageErrInvalidPack;
+		m_stage = commit.error == Frontend::ArchiveInstallPolicy::CommitError::TargetExists ?
+			StageErrConflict : StageErrInvalidPack;
 		return;
 	}
 	m_extractionProgress = 1.0;

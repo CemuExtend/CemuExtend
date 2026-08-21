@@ -1,9 +1,9 @@
 add_library(CemuWxGui STATIC
-  canvas/IRenderCanvas.h
   CemuApp.cpp
   CemuApp.h
   CemuUpdateWindow.cpp
   CemuUpdateWindow.h
+  CemuUpdateWorker.h
 #  CemuExtend GUI models and WUPS/Aroma management UI
   CemodManagementModel.cpp
   CemodManagementModel.h
@@ -97,10 +97,22 @@ add_library(CemuWxGuiCommon STATIC
   helpers/wxCustomEvents.h
 )
 
-add_library(CemuWxRendererAdapters STATIC
+add_library(CemuWxAdapterContracts INTERFACE)
+target_sources(CemuWxAdapterContracts INTERFACE
   canvas/IRenderCanvas.h
-  canvas/RendererWindowAdapter.cpp
   canvas/RendererWindowAdapter.h
+  debugger/DebuggerWindowAdapter.h
+  debugger/MemorySearcherAdapter.h
+  EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h
+)
+target_include_directories(CemuWxAdapterContracts INTERFACE "../")
+target_link_libraries(CemuWxAdapterContracts INTERFACE
+  CemuHostContracts
+  wxWidgets::wxWidgets
+)
+
+add_library(CemuWxRendererAdapters STATIC
+  canvas/RendererWindowAdapter.cpp
 )
 
 # Debugger windows that intentionally inspect emulator internals live outside
@@ -116,7 +128,6 @@ add_library(CemuWxDebuggerAdapters STATIC
   debugger/DebuggerWindow2.cpp
   debugger/DebuggerWindow2.h
   debugger/DebuggerWindowAdapter.cpp
-  debugger/DebuggerWindowAdapter.h
   debugger/DisasmCtrl.cpp
   debugger/DisasmCtrl.h
   debugger/DumpCtrl.cpp
@@ -126,7 +137,6 @@ add_library(CemuWxDebuggerAdapters STATIC
   debugger/ModuleWindow.cpp
   debugger/ModuleWindow.h
   debugger/MemorySearcherAdapter.cpp
-  debugger/MemorySearcherAdapter.h
   debugger/RegisterWindow.cpp
   debugger/RegisterWindow.h
   debugger/SymbolCtrl.cpp
@@ -143,7 +153,6 @@ add_library(CemuWxDebuggerAdapters STATIC
 
 add_library(CemuWxDeviceAdapters STATIC
   EmulatedUSBDevices/EmulatedUSBDeviceAdapter.cpp
-  EmulatedUSBDevices/EmulatedUSBDeviceAdapter.h
   EmulatedUSBDevices/EmulatedUSBDeviceFrame.cpp
   EmulatedUSBDevices/EmulatedUSBDeviceFrame.h
 )
@@ -185,6 +194,7 @@ target_link_libraries(CemuWxRendererAdapters PRIVATE
   CemuCommon
   CemuHostContracts
   CemuConfig
+  CemuWxAdapterContracts
   PUBLIC wxWidgets::wxWidgets
 )
 
@@ -198,6 +208,7 @@ target_link_libraries(CemuWxDebuggerAdapters PRIVATE
   CemuConfig
   CemuResource
   CemuUtil
+  CemuWxAdapterContracts
   CemuWxGuiCommon
   PUBLIC wxWidgets::wxWidgets
 )
@@ -211,6 +222,7 @@ target_link_libraries(CemuWxDeviceAdapters PRIVATE
   CemuComponents
   CemuConfig
   CemuResource
+  CemuWxAdapterContracts
   PUBLIC wxWidgets::wxWidgets
 )
 
@@ -262,14 +274,22 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuInput
   CemuResource
   CemuUtil
-  CemuWxRendererAdapters
-  CemuWxDebuggerAdapters
-  CemuWxDeviceAdapters
+  CemuWxAdapterContracts
   libzip::zip
   CemuComponents
   CemuDownloadManager
   PUBLIC
   CURL::libcurl
+)
+
+# Composition target: the normal GUI compiles only against neutral contracts,
+# while the executable deliberately supplies the three implementation archives.
+add_library(CemuWxFrontend INTERFACE)
+target_link_libraries(CemuWxFrontend INTERFACE
+  CemuWxGui
+  CemuWxRendererAdapters
+  CemuWxDebuggerAdapters
+  CemuWxDeviceAdapters
 )
 
 if(ENABLE_WXWIDGETS AND UNIX AND NOT APPLE)

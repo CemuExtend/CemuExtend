@@ -1,4 +1,5 @@
 #include "wxgui/CemuApp.h"
+#include "application/ApplicationRuntime.h"
 #include "wxgui/WxFrontendContext.h"
 #include "wxCemuConfig.h"
 #include "wxgui/MainWindow.h"
@@ -39,11 +40,8 @@ namespace
 	std::shared_ptr<WxFrontendContext> s_pendingFrontendContext;
 }
 
-// forward declarations from main.cpp
+// Forward declaration for the executable-owned diagnostic suite.
 void UnitTests();
-void CemuCommonInit();
-
-void HandlePostUpdate();
 
 void CemuApp::SetFrontendContext(std::shared_ptr<WxFrontendContext> context)
 {

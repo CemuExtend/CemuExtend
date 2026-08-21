@@ -75,6 +75,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+std::atomic_bool g_isGPUInitFinished = false;
+
 #if BOOST_OS_LINUX
 #include <sys/sysinfo.h>
 #elif BOOST_OS_MACOS || BOOST_OS_BSD

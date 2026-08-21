@@ -1,4 +1,5 @@
 #include "wxgui/CemuUpdateWindow.h"
+#include "frontend/ArchiveInstallPolicy.h"
 
 #include "Common/version.h"
 #include "util/helpers/helpers.h"
@@ -21,7 +22,6 @@
 #include <curl/curl.h>
 #include <zip.h>
 #include <boost/tokenizer.hpp>
-#include <cctype>
 #include <fstream>
 
 
@@ -38,25 +38,6 @@ namespace
 	constexpr zip_uint64_t kMaximumUpdateTotalSize = 4ULL * 1024ULL * 1024ULL * 1024ULL;
 	constexpr zip_uint64_t kMaximumCompressionRatio = 1000;
 	constexpr curl_off_t kMaximumUpdateDownloadSize = 2LL * 1024LL * 1024LL * 1024LL;
-
-	std::optional<fs::path> NormalizeUpdateArchivePath(std::string_view name)
-	{
-		if (name.empty() || name.front() == '/' || name.front() == '\\')
-			return std::nullopt;
-		std::string portableName(name);
-		std::replace(portableName.begin(), portableName.end(), '\\', '/');
-		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
-			portableName[1] == ':')
-			return std::nullopt;
-		const fs::path normalized = _utf8ToPath(portableName).lexically_normal();
-		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
-			normalized.has_root_name() || normalized.has_root_directory())
-			return std::nullopt;
-		for (const auto& component : normalized)
-			if (component == "..")
-				return std::nullopt;
-		return normalized;
-	}
 
 	bool IsZipSymlink(zip_t* archive, zip_uint64_t index)
 	{
@@ -119,8 +100,7 @@ CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
 
 CemuUpdateWindow::~CemuUpdateWindow()
 {
-	m_stopRequested.store(true, std::memory_order_release);
-	m_condition.notify_all();
+	m_workerMailbox.RequestStop();
 	if (m_thread.joinable())
 		m_thread.join();
 	DeletePendingEvents();
@@ -246,7 +226,7 @@ int CemuUpdateWindow::ProgressCallback(void* clientp, curl_off_t dltotal, curl_o
 	curl_off_t ulnow)
 {
 	auto* thisptr = (CemuUpdateWindow*)clientp;
-	if (thisptr->m_stopRequested.load(std::memory_order_acquire) ||
+	if (thisptr->m_workerMailbox.StopRequested() ||
 		dlnow > kMaximumUpdateDownloadSize || dltotal > kMaximumUpdateDownloadSize)
 		return 1;
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS);
@@ -363,7 +343,7 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 		if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || stat.name == nullptr ||
 			IsZipSymlink(archive.get(), index))
 			return false;
-		const auto relativePath = NormalizeUpdateArchivePath(stat.name);
+		const auto relativePath = Frontend::ArchiveInstallPolicy::NormalizeRelativePath(stat.name);
 		if (!relativePath)
 			return false;
 		const bool directory = stat.name[std::strlen(stat.name) - 1] == '/' ||
@@ -390,7 +370,7 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 	m_gaugeMaxValue.store((int)count, std::memory_order_release);
 	for (std::size_t planIndex = 0; planIndex < plan.size(); ++planIndex)
 	{
-		if (m_stopRequested.load(std::memory_order_acquire))
+		if (m_workerMailbox.StopRequested())
 			return false;
 		const auto& entry = plan[planIndex];
 		const fs::path destination = targetpath / entry.relativePath;
@@ -416,7 +396,7 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 		zip_uint64_t remaining = entry.size;
 		while (remaining > 0)
 		{
-			if (m_stopRequested.load(std::memory_order_acquire))
+			if (m_workerMailbox.StopRequested())
 				return false;
 			const auto request = static_cast<zip_uint64_t>(std::min<std::size_t>(buffer.size(), remaining));
 			const auto read = zip_fread(file.get(), buffer.data(), request);
@@ -455,22 +435,15 @@ void CemuUpdateWindow::WorkerThread()
 
 	while (true)
 	{
-		WorkerOrder order;
-		std::unique_lock lock(m_mutex);
-		m_condition.wait(lock, [this] {
-			return m_stopRequested.load(std::memory_order_acquire) || m_order != WorkerOrder::Idle;
-		});
-
-		if (m_stopRequested.load(std::memory_order_acquire))
+		const auto order = m_workerMailbox.Wait();
+		if (!order)
 			break;
-		order = std::exchange(m_order, WorkerOrder::Idle);
-		lock.unlock();
 
 		try
 		{
-			if (order == WorkerOrder::CheckVersion)
+			if (*order == CemuUpdateWorkerMailbox::Work::CheckVersion)
 			{
-				if (m_stopRequested.load(std::memory_order_acquire))
+				if (m_workerMailbox.StopRequested())
 					break;
 				auto* event = new wxCommandEvent(wxEVT_RESULT);
 				if (QueryUpdateInfo(m_downloadUrl, m_changelogUrl))
@@ -480,7 +453,7 @@ void CemuUpdateWindow::WorkerThread()
 
 				wxQueueEvent(this, event);
 			}
-			else if (order == WorkerOrder::UpdateVersion)
+			else if (*order == CemuUpdateWorkerMailbox::Work::UpdateVersion)
 			{
 				// download update
 				const std::string url = m_downloadUrl;
@@ -502,14 +475,14 @@ void CemuUpdateWindow::WorkerThread()
 				}
 				else
 				{
-					if (m_stopRequested.load(std::memory_order_acquire))
+					if (m_workerMailbox.StopRequested())
 						break;
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
 					event->SetInt((int)Result::UpdateDownloadError);
 					wxQueueEvent(this, event);
 					continue;
 				}
-				if (m_stopRequested.load(std::memory_order_acquire))
+				if (m_workerMailbox.StopRequested())
 					break;
 
 				// extract
@@ -518,7 +491,7 @@ void CemuUpdateWindow::WorkerThread()
 				if (!ExtractUpdate(update_file, tmppath, cemuFolderName))
 				{
 					cemuLog_log(LogType::Force, "Extracting Cemu zip failed");
-					if (m_stopRequested.load(std::memory_order_acquire))
+					if (m_workerMailbox.StopRequested())
 						break;
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
 					event->SetInt((int)Result::ExtractError);
@@ -563,7 +536,7 @@ void CemuUpdateWindow::WorkerThread()
 					continue;
 				}
 
-				if (m_stopRequested.load(std::memory_order_acquire))
+				if (m_workerMailbox.StopRequested())
 					break;
 
 				// apply update
@@ -643,7 +616,7 @@ void CemuUpdateWindow::WorkerThread()
 			if (exists(tmppath))
 				remove_all(tmppath, ec);
 
-			if (!m_stopRequested.load(std::memory_order_acquire))
+			if (!m_workerMailbox.StopRequested())
 			{
 				auto* result_event = new wxCommandEvent(wxEVT_RESULT);
 				result_event->SetInt((int)Result::Error);
@@ -762,13 +735,8 @@ void CemuUpdateWindow::OnGaugeUpdate(wxCommandEvent& event)
 
 void CemuUpdateWindow::OnUpdateButton(const wxCommandEvent& event)
 {
-	std::unique_lock lock(m_mutex);
-	if (m_stopRequested.load(std::memory_order_acquire))
+	if (!m_workerMailbox.Request(CemuUpdateWorkerMailbox::Work::UpdateVersion))
 		return;
-	m_order = WorkerOrder::UpdateVersion;
-	lock.unlock();
-
-	m_condition.notify_all();
 
 	m_updateButton->Disable();
 

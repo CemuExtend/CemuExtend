@@ -1,5 +1,7 @@
 project(cemuMain)
 
+include("${CMAKE_SOURCE_DIR}/cmake/TargetArchitecture.cmake")
+
 option(CEMU_CXX_FLAGS "Additional flags used for compiling Cemu source code")
 if(CEMU_CXX_FLAGS)
 	add_compile_options(${CEMU_CXX_FLAGS})
@@ -106,7 +108,13 @@ function(cemu_assert_target_has_direct_edges target)
 	if(NOT TARGET "${target}")
 		return()
 	endif()
-	get_target_property(direct_edges "${target}" LINK_LIBRARIES)
+	set(direct_edges "")
+	foreach(property LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+		get_target_property(property_edges "${target}" "${property}")
+		if(property_edges)
+			list(APPEND direct_edges ${property_edges})
+		endif()
+	endforeach()
 	foreach(required IN LISTS ARGN)
 		if(NOT required IN_LIST direct_edges)
 			message(FATAL_ERROR
@@ -139,26 +147,65 @@ cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuComponents CemuCafe CemuConfig CemuInput CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
-# The normal GUI owns calls to the neutral adapter facades, so those direct
-# static-library edges must be explicit.  Adapter implementations may depend on
-# Cafe, but must never depend back on the normal GUI archive.
-cemu_assert_target_has_direct_edges(CemuWxGui
+# The normal GUI sees declarations only. The composition target is the sole
+# owner of implementation archive wiring.
+cemu_assert_target_has_direct_edges(CemuWxGui CemuWxAdapterContracts)
+cemu_assert_target_has_no_edge(CemuWxGui
+	CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+cemu_assert_target_has_direct_edges(CemuWxFrontend
+	CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+cemu_assert_target_has_no_edge(CemuWxAdapterContracts
+	CemuCafe CemuConfig CemuInput CemuApplication CemuWxGui
 	CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
 cemu_assert_target_has_no_edge(CemuWxGuiCommon CemuCafe CemuApplication CemuWxGui CemuWxDebuggerAdapters)
 cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDeviceAdapters CemuApplication CemuWxGui CemuWxDebuggerAdapters CemuWxRendererAdapters)
+cemu_assert_target_has_direct_edges(CemuWxRendererAdapters CemuWxAdapterContracts)
+cemu_assert_target_has_direct_edges(CemuWxDebuggerAdapters CemuWxAdapterContracts)
+cemu_assert_target_has_direct_edges(CemuWxDeviceAdapters CemuWxAdapterContracts)
 cemu_assert_target_has_direct_edges(CemuWxGui
 	CemuAudio CemuConfig CemuDownloadManager CemuInput CemuUtil)
-cemu_assert_target_has_direct_edges(CemuCafe CemuComponents CemuConfig CemuInput CemuUtil)
+cemu_assert_target_has_direct_edges(CemuCafe CemuComponents CemuConfig CemuInput CemuResource CemuUtil)
 cemu_assert_target_has_direct_edges(CemuConfig CemuComponents)
 cemu_assert_target_has_direct_edges(CemuDownloadManager
 	CemuCafe CemuComponents CemuConfig CemuUtil)
 cemu_assert_target_has_direct_edges(CemuInput CemuUtil)
+
+# Exact internal-target allow matrix. Third-party targets are intentionally
+# outside this matrix; every in-tree Cemu* edge must be named here.
+cemu_assert_target_internal_edges_allowed(CemuHostContracts)
+cemu_assert_target_internal_edges_allowed(CemuComponents
+	CemuCommon CemuHostContracts CemuUtil)
+cemu_assert_target_internal_edges_allowed(CemuInput
+	CemuCommon CemuHostContracts CemuUtil)
+cemu_assert_target_internal_edges_allowed(CemuConfig
+	CemuCommon CemuComponents)
+cemu_assert_target_internal_edges_allowed(CemuCafe
+	CemuCommon CemuComponents CemuConfig CemuHostContracts CemuInput CemuExtendDomain CemuResource CemuUtil CemuWaylandProtocols)
+cemu_assert_target_internal_edges_allowed(CemuDownloadManager
+	CemuCafe CemuCommon CemuComponents CemuConfig CemuHostContracts CemuUtil)
+cemu_assert_target_internal_edges_allowed(CemuApplication
+	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuUtil)
+cemu_assert_target_internal_edges_allowed(CemuWxAdapterContracts CemuHostContracts)
+cemu_assert_target_internal_edges_allowed(CemuWxGuiCommon CemuCommon)
+cemu_assert_target_internal_edges_allowed(CemuWxRendererAdapters
+	CemuCafe CemuCommon CemuHostContracts CemuConfig CemuWxAdapterContracts CemuWaylandProtocols)
+cemu_assert_target_internal_edges_allowed(CemuWxDebuggerAdapters
+	CemuCafe CemuCommon CemuComponents CemuConfig CemuResource CemuUtil CemuWxAdapterContracts CemuWxGuiCommon)
+cemu_assert_target_internal_edges_allowed(CemuWxDeviceAdapters
+	CemuCafe CemuCommon CemuComponents CemuConfig CemuResource CemuWxAdapterContracts)
+cemu_assert_target_internal_edges_allowed(CemuWxGui
+	CemuAudio CemuCommon CemuConfig CemuWxGuiCommon CemuApplication CemuExtendDomain
+	CemuFrontendModel CemuHostContracts CemuInput CemuResource CemuUtil
+	CemuWxAdapterContracts CemuComponents CemuDownloadManager CemuWaylandProtocols)
+cemu_assert_target_internal_edges_allowed(CemuWxFrontend
+	CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
 cemu_assert_target_has_no_sources(CemuComponents
 	napi.cpp napi_act.cpp napi_ec.cpp napi_helper.cpp napi_idbe.cpp napi_version.cpp
 	ncrypto.cpp nex.cpp nexFriends.cpp nexThread.cpp prudp.cpp ppcAssembler.cpp
 	DownloadManager.cpp DownloadManager.h)
+cemu_assert_target_has_no_sources(CemuConfig ActiveSettings.cpp LaunchSettings.cpp)
 cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.cpp
 	AudioDebuggerWindow.h
@@ -216,6 +263,44 @@ if(BUILD_TESTING)
 			-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}/cmake/tests/architecture_negative
 			-P ${CMAKE_SOURCE_DIR}/cmake/CheckArchitecture.cmake)
 	set_tests_properties(architecture_guards_negative_input PROPERTIES WILL_FAIL TRUE)
+	add_test(NAME architecture_targets_negative_input
+		COMMAND ${CMAKE_COMMAND}
+			-S "${CMAKE_SOURCE_DIR}/cmake/tests/target_architecture_negative"
+			-B "${CMAKE_BINARY_DIR}/architecture-target-negative"
+			-DCEMU_SOURCE_ROOT=${CMAKE_SOURCE_DIR})
+	set_tests_properties(architecture_targets_negative_input PROPERTIES WILL_FAIL TRUE)
+	add_executable(cemu_update_worker_tests
+		"${CMAKE_SOURCE_DIR}/cmake/tests/CemuUpdateWorkerTests.cpp")
+	target_include_directories(cemu_update_worker_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+	add_test(NAME cemu_update_worker_tests COMMAND cemu_update_worker_tests)
+	set_tests_properties(cemu_update_worker_tests PROPERTIES TIMEOUT 5)
+
+	function(cemu_add_static_self_containment_test test_name library)
+		if(NOT TARGET "${library}")
+			return()
+		endif()
+		add_executable("${test_name}"
+			"${CMAKE_SOURCE_DIR}/cmake/tests/StaticLibrarySelfContainment.cpp")
+		target_link_libraries("${test_name}" PRIVATE
+			"$<LINK_LIBRARY:WHOLE_ARCHIVE,${library}>" ${ARGN})
+	endfunction()
+
+	# Force every object from each architectural archive into a consumer. This
+	# catches missing direct/transitive dependencies that an ordinary static link
+	# can hide by never extracting the affected object.
+	cemu_add_static_self_containment_test(components_self_containment CemuComponents)
+	cemu_add_static_self_containment_test(input_self_containment CemuInput)
+	cemu_add_static_self_containment_test(config_self_containment CemuConfig)
+	cemu_add_static_self_containment_test(cafe_self_containment CemuCafe)
+	cemu_add_static_self_containment_test(download_manager_self_containment CemuDownloadManager)
+	cemu_add_static_self_containment_test(application_self_containment CemuApplication)
+	if(ENABLE_WXWIDGETS)
+		cemu_add_static_self_containment_test(renderer_adapter_self_containment CemuWxRendererAdapters)
+		cemu_add_static_self_containment_test(debugger_adapter_self_containment CemuWxDebuggerAdapters)
+		cemu_add_static_self_containment_test(device_adapter_self_containment CemuWxDeviceAdapters)
+		cemu_add_static_self_containment_test(wxgui_self_containment CemuWxGui
+			CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+	endif()
 endif()
 
 add_executable(CemuBin
@@ -388,7 +473,7 @@ target_link_libraries(CemuBin PRIVATE
 )
 
 if(ENABLE_WXWIDGETS)
-	target_link_libraries(CemuBin PRIVATE CemuWxGui)
+	target_link_libraries(CemuBin PRIVATE CemuWxFrontend)
 endif()
 
 if(UNIX AND NOT APPLE)

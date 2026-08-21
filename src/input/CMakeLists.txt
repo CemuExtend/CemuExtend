@@ -21,6 +21,7 @@ add_library(CemuInput
 	api/Keyboard/KeyboardController.cpp
 	api/Keyboard/KeyboardController.h
 	emulated/ProController.cpp
+	emulated/ControllerStatus.h
 	emulated/EmulatedController.h
 	emulated/EmulatedController.cpp
 	emulated/ProController.h

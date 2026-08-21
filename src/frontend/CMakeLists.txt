@@ -6,6 +6,8 @@ target_sources(CemuHostContracts INTERFACE
 target_include_directories(CemuHostContracts INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
 add_library(CemuFrontendModel STATIC
+  ArchiveInstallPolicy.cpp
+  ArchiveInstallPolicy.h
   CemuExtendFrontendBridge.cpp
   CemuExtendFrontendBridge.h
 )
@@ -18,4 +20,10 @@ if(BUILD_TESTING)
   )
   target_link_libraries(cemuextend_frontend_bridge_tests PRIVATE CemuFrontendModel)
   add_test(NAME cemuextend_frontend_bridge_tests COMMAND cemuextend_frontend_bridge_tests)
+
+  add_executable(archive_install_policy_tests
+    tests/ArchiveInstallPolicyTests.cpp
+  )
+  target_link_libraries(archive_install_policy_tests PRIVATE CemuFrontendModel)
+  add_test(NAME archive_install_policy_tests COMMAND archive_install_policy_tests)
 endif()

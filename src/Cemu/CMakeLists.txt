@@ -55,6 +55,7 @@ target_link_libraries(CemuComponents PRIVATE
   CemuCommon
   CemuHostContracts
   CemuUtil
+  ZLIB::ZLIB
 )
 
 target_link_libraries(CemuDownloadManager PRIVATE

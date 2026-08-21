@@ -1,8 +1,7 @@
 #include "application/EmulationController.h"
+#include "application/ApplicationRuntime.h"
 #include "frontend/FrontendRuntime.h"
 #include "input/InputManager.h"
-
-void CemuCommonInit();
 
 void Frontend::Run()
 {

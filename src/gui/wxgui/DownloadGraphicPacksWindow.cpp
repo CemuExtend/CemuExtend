@@ -1,7 +1,7 @@
 #include "wxgui/wxgui.h"
 #include "wxgui/DownloadGraphicPacksWindow.h"
+#include "frontend/ArchiveInstallPolicy.h"
 
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -22,25 +22,6 @@ namespace
 	constexpr zip_uint64_t kMaximumGraphicPackFileSize = 128ULL * 1024ULL * 1024ULL;
 	constexpr zip_uint64_t kMaximumGraphicPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
 	constexpr zip_uint64_t kMaximumGraphicPackCompressionRatio = 1000;
-
-	std::optional<fs::path> NormalizeGraphicPackArchivePath(std::string_view name)
-	{
-		if (name.empty() || name.front() == '/' || name.front() == '\\')
-			return std::nullopt;
-		std::string portableName(name);
-		std::replace(portableName.begin(), portableName.end(), '\\', '/');
-		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
-			portableName[1] == ':')
-			return std::nullopt;
-		const auto normalized = _utf8ToPath(portableName).lexically_normal();
-		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
-			normalized.has_root_name() || normalized.has_root_directory())
-			return std::nullopt;
-		for (const auto& component : normalized)
-			if (component == "..")
-				return std::nullopt;
-		return normalized;
-	}
 
 	bool IsGraphicPackArchiveSymlink(zip_t* archive, zip_uint64_t index)
 	{
@@ -138,6 +119,7 @@ bool checkGraphicPackDownloadedVersion(const Host::IPathProvider& pathProvider,
 	std::string versionInFile;
 	if (file && file->readLine(versionInFile))
 	{
+		hasVersionFile = true;
 		return boost::iequals(versionInFile, nameVersion);
 	}
 	return false;
@@ -301,7 +283,7 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 			SetThreadResult(ThreadError);
 			return;
 		}
-		auto relativePath = NormalizeGraphicPackArchivePath(stat.name);
+		auto relativePath = Frontend::ArchiveInstallPolicy::NormalizeRelativePath(stat.name);
 		if (!relativePath || !paths.emplace(*relativePath).second)
 		{
 			SetThreadResult(ThreadError);
@@ -427,43 +409,21 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 		return;
 	}
 
-	const bool hadTarget = fs::exists(target, filesystemError);
-	if (filesystemError)
+	const auto commit = Frontend::ArchiveInstallPolicy::CommitStagedDirectory(
+		staging, target, backup, true);
+	if (!commit.committed)
 	{
 		cleanupStaging();
+		if (commit.error == Frontend::ArchiveInstallPolicy::CommitError::RollbackFailed)
+			cemuLog_log(LogType::Force, "Graphic-pack rollback failed: {}",
+				commit.filesystemError.message());
 		SetThreadResult(ThreadError);
 		return;
 	}
-	if (hadTarget)
+	if (commit.error == Frontend::ArchiveInstallPolicy::CommitError::BackupCleanupFailed)
 	{
-		fs::rename(target, backup, filesystemError);
-		if (filesystemError)
-		{
-			cleanupStaging();
-			SetThreadResult(ThreadError);
-			return;
-		}
-	}
-	fs::rename(staging, target, filesystemError);
-	if (filesystemError)
-	{
-		if (hadTarget)
-		{
-			std::error_code rollbackError;
-			fs::rename(backup, target, rollbackError);
-			if (rollbackError)
-				cemuLog_log(LogType::Force, "Graphic-pack rollback failed: {}", rollbackError.message());
-		}
-		cleanupStaging();
-		SetThreadResult(ThreadError);
-		return;
-	}
-	if (hadTarget)
-	{
-		std::error_code cleanupError;
-		fs::remove_all(backup, cleanupError);
-		if (cleanupError)
-			cemuLog_log(LogType::Force, "Unable to remove old graphic-pack backup: {}", cleanupError.message());
+		cemuLog_log(LogType::Force, "Unable to remove old graphic-pack backup: {}",
+			commit.filesystemError.message());
 	}
 	m_extractionProgress = 1.0;
 	SetThreadResult(ThreadFinished);

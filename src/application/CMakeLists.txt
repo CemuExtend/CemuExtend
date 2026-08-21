@@ -1,6 +1,8 @@
 add_library(CemuApplication STATIC
 	ApplicationHost.cpp
 	ApplicationHost.h
+	ApplicationRuntime.cpp
+	ApplicationRuntime.h
 	AccountFacade.h
 	ContentOperations.h
   ApplicationEvents.cpp
@@ -19,10 +21,14 @@ add_library(CemuApplication STATIC
 
 target_include_directories(CemuApplication PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(CemuApplication PRIVATE
+	CemuAudio
 	CemuCafe
+	CemuCommon
+	CemuConfig
 	CemuInput
 	CemuComponents
 	CemuDownloadManager
+	CemuUtil
 	cemuextend::wire
 	ZArchive::zarchive
 	OpenSSL::Crypto

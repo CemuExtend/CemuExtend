@@ -1,6 +1,6 @@
 #include "config/CemuConfig.h"
+#include "config/NetworkSettings.h"
 #include "util/helpers/helpers.h"
-#include "config/ActiveSettings.h"
 
 std::optional<CemuExtendTitleGrant> CemuConfig::GetCemuExtendGrant(uint64 titleId) const
 {

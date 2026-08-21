@@ -176,7 +176,7 @@ void WPADController::WPADRead(WPADStatus_t* status)
 	}
 
 	status->dev = get_device_type();
-	status->err = WPAD_ERR_NONE;
+	status->err = kWpadErrorNone;
 }
 
 void WPADController::KPADRead(KPADStatus_t& status, const BtnRepeat& repeat)
