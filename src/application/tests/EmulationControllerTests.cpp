@@ -88,6 +88,7 @@ namespace
 		bool ImportLegacyCemodData(std::uint64_t, std::string_view,
 			std::string&) override { return false; }
 		std::vector<Application::TitleSummary> titles;
+		std::vector<Application::ManagedContentEntry> managedContent;
 		std::vector<Application::GameSummary> games;
 		std::vector<Application::TitleCatalogEvent> catalogEvents;
 		std::vector<std::filesystem::path> scanPaths;
@@ -96,6 +97,10 @@ namespace
 		bool titleSubscriptionStopped{};
 		std::filesystem::path addedTitle;
 		std::vector<Application::TitleSummary> ListTitles() const override { return titles; }
+		std::vector<Application::ManagedContentEntry> ListManagedContent() const override
+		{
+			return managedContent;
+		}
 		std::optional<Application::TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const override
 		{
@@ -583,10 +588,14 @@ int main()
 		Application::NfcTouchResult::Success);
 	assert(backend.nfcTouchPath == std::filesystem::path{"tag.nfc"});
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
+	backend.managedContent.push_back({.locationUid = 42, .titleId = 0x1234,
+		.path = "test-title", .name = "Test title", .version = 17,
+		.type = Application::ManagedContentType::Base});
 	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
 		.basePath = "test-title", .version = 17});
 	const auto titles = controller.ListTitles();
 	assert(titles.size() == 1 && titles.front().titleId == 0x1234);
+	assert(controller.ListManagedContent().front().locationUid == 42);
 	assert(controller.ResolveBaseTitle(0x1234)->path == "test-title");
 	assert(controller.ListGames().front().version == 17);
 	assert(controller.GetGame(0x1234)->name == "Test title");

@@ -150,6 +150,7 @@ namespace Application
 		virtual ~ITitleCatalog() = default;
 
 		[[nodiscard]] virtual std::vector<TitleSummary> ListTitles() const = 0;
+		[[nodiscard]] virtual std::vector<ManagedContentEntry> ListManagedContent() const = 0;
 		[[nodiscard]] virtual std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const = 0;
 		[[nodiscard]] virtual std::vector<GameSummary> ListGames() const = 0;

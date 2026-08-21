@@ -288,6 +288,7 @@ namespace Application
 		[[nodiscard]] HotkeySettingsResult ApplyHotkeySettings(
 			const HotkeySettingsUpdate& update);
 		[[nodiscard]] std::vector<TitleSummary> ListTitles() const;
+		[[nodiscard]] std::vector<ManagedContentEntry> ListManagedContent() const;
 		[[nodiscard]] std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const;
 		[[nodiscard]] std::vector<GameSummary> ListGames() const;

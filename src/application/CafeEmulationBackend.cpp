@@ -3149,6 +3149,23 @@ namespace Application
 				return result;
 			}
 
+			std::vector<ManagedContentEntry> ListManagedContent() const override
+			{
+				struct ListLease final
+				{
+					std::span<TitleInfo*> titles{CafeTitleList::AcquireInternalList()};
+					~ListLease() { CafeTitleList::ReleaseInternalList(); }
+				} lease;
+				std::vector<ManagedContentEntry> result;
+				result.reserve(lease.titles.size());
+				for (auto* title : lease.titles)
+				{
+					if (title)
+						result.push_back(TranslateManagedTitle(*title, true));
+				}
+				return result;
+			}
+
 			std::optional<TitleSummary> ResolveBaseTitle(std::uint64_t titleId) const override
 			{
 				TitleId baseTitleId{};
@@ -3481,7 +3498,15 @@ namespace Application
 						} unmount{title, mountPath};
 
 						std::vector<std::pair<std::string, std::uint64_t>> files;
-						std::function<bool(const std::string&)> collect = [&](const std::string& relative) {
+						constexpr std::size_t kMaximumChecksumFiles = 20000;
+						constexpr std::size_t kMaximumChecksumPath = 4096;
+						constexpr std::uint64_t kMaximumChecksumBytes = 2ULL * 1024 * 1024 * 1024 * 1024;
+						std::uint64_t collectedBytes{};
+						std::size_t collectedPathBytes{};
+						std::size_t collectedDirectories{};
+						std::string collectionLimitError;
+						std::function<bool(const std::string&, std::size_t)> collect =
+							[&](const std::string& relative, std::size_t depth) {
 							if (isCancelled())
 								return false;
 							sint32 status{};
@@ -3493,14 +3518,39 @@ namespace Application
 							FSCDirEntry entry;
 							while (fsc_nextDir(directory.get(), &entry))
 							{
+								const std::string_view component(entry.path);
+								if (component.empty() || component == "." || component == ".." ||
+									component.find_first_of("/\\\0") != std::string_view::npos)
+								{
+									collectionLimitError = "Title contains an invalid checksum path component";
+									return false;
+								}
 								const auto child = relative + entry.path;
 								if (entry.isDirectory)
 								{
-									if (!collect(child + "/"))
+									if (depth >= 256 || collectedDirectories >= 20000 ||
+										child.size() > kMaximumChecksumPath ||
+										child.size() > 4 * 1024 * 1024 - collectedPathBytes)
+									{
+										collectionLimitError = "Title exceeds the safe checksum directory depth or size limit";
+										return false;
+									}
+									++collectedDirectories;
+									collectedPathBytes += child.size();
+									if (!collect(child + "/", depth + 1))
 										return false;
 								}
 								else if (entry.isFile)
 								{
+									if (child.size() > kMaximumChecksumPath || files.size() >= kMaximumChecksumFiles ||
+										child.size() > 4 * 1024 * 1024 - collectedPathBytes ||
+										entry.fileSize > kMaximumChecksumBytes - collectedBytes)
+									{
+										collectionLimitError = "Title exceeds the safe checksum file, path, or size limit";
+										return false;
+									}
+									collectedBytes += static_cast<std::uint64_t>(entry.fileSize);
+									collectedPathBytes += child.size();
 									files.emplace_back(child,
 										static_cast<std::uint64_t>(entry.fileSize));
 									publish({ContentOperationPhase::Collecting, 0,
@@ -3509,10 +3559,11 @@ namespace Application
 							}
 							return true;
 						};
-						if (!collect(""))
+						if (!collect("", 0))
 							return {isCancelled() ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								isCancelled() ? "Checksum cancelled" :
+								collectionLimitError.empty() ? ContentOperationError::ReadFailure :
+								ContentOperationError::VerificationFailure,
+								isCancelled() ? "Checksum cancelled" : !collectionLimitError.empty() ? collectionLimitError :
 								"Unable to enumerate title files", std::nullopt};
 						std::ranges::sort(files, {}, &decltype(files)::value_type::first);
 						for (std::size_t index = 0; index < files.size(); ++index)

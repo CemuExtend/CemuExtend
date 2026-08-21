@@ -540,6 +540,16 @@ namespace
 		return value;
 	}
 
+	std::uint64_t ParseOpaqueUid(const rapidjson::Value& params)
+	{
+		const auto text = RequiredString(params, "locationUid");
+		std::uint64_t value{};
+		const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+		if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+			throw std::invalid_argument("locationUid must be an unsigned decimal string");
+		return value;
+	}
+
 	std::uint16_t UsbHidUsage(std::uint32_t key)
 	{
 		if (key >= 'A' && key <= 'Z') return static_cast<std::uint16_t>(0x04 + key - 'A');
@@ -896,6 +906,8 @@ namespace
 			auto gate = m_callbackGate;
 			auto* controller = &m_controller;
 			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
 			m_backgroundJobs.at(id)->worker = std::jthread(
 				[controller, gate = std::move(gate), cancelled, id, owner,
 					request = std::move(request)](std::stop_token stopToken) mutable {
@@ -944,6 +956,94 @@ namespace
 					PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
 						{buffer.GetString(), buffer.GetSize()}, true);
 				});
+			}
+			catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
+			}
+			return id;
+		}
+
+		std::uint64_t StartChecksumJob(std::uint64_t locationUid)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			if (m_backgroundJobs.size() >= 4)
+				throw std::runtime_error("too many background operations are in progress");
+			const auto id = ++m_nextBackgroundJobId;
+			const auto owner = m_invokingWindow;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id; job->ownerWindow = owner;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
+			m_backgroundJobs.at(id)->worker = std::jthread(
+				[controller, gate = std::move(gate), cancelled, id, owner, locationUid]
+				(std::stop_token stopToken) {
+					auto isCancelled = [cancelled, stopToken] {
+						return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+					};
+					auto phaseName = [](Application::ContentOperationPhase phase) {
+						switch (phase) {
+						case Application::ContentOperationPhase::Counting: return "counting";
+						case Application::ContentOperationPhase::Collecting: return "collecting";
+						case Application::ContentOperationPhase::Converting: return "converting";
+						case Application::ContentOperationPhase::Hashing: return "hashing";
+						case Application::ContentOperationPhase::Finalizing: return "finalizing";
+						} return "unknown";
+					};
+					auto progress = [gate, id, owner, phaseName](const Application::ContentOperationProgress& value) {
+						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+							std::string(R"({"jobId":)") + std::to_string(id) +
+							R"(,"windowId":)" + std::to_string(owner) +
+							R"(,"phase":)" + JsonString(phaseName(value.phase)) +
+							R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
+							R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+							R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+							R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+					};
+					Application::ContentChecksumResult result;
+					try { result = controller->ComputeTitleChecksum(locationUid, progress, isCancelled); }
+					catch (const std::exception& error) { result.error = Application::ContentOperationError::ReadFailure; result.diagnostic = error.what(); }
+					catch (...) { result.error = Application::ContentOperationError::ReadFailure; result.diagnostic = "checksum worker failed"; }
+					constexpr std::size_t kMaximumResultFiles = 20000;
+					if (result && result.checksum->files.size() > kMaximumResultFiles)
+					{
+						result.error = Application::ContentOperationError::VerificationFailure;
+						result.diagnostic = "checksum contains too many files to display safely";
+						result.checksum.reset();
+					}
+					rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+					writer.Key("jobId"); writer.Uint64(id); writer.Key("windowId"); writer.Uint64(owner);
+					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
+					auto errorName = [](Application::ContentOperationError error) {
+						switch (error) { case Application::ContentOperationError::None: return "none"; case Application::ContentOperationError::NotFound: return "notFound"; case Application::ContentOperationError::Cancelled: return "cancelled"; case Application::ContentOperationError::UnableToCreateOutput: return "unableToCreateOutput"; case Application::ContentOperationError::ReadFailure: return "readFailure"; case Application::ContentOperationError::VerificationFailure: return "verificationFailure"; case Application::ContentOperationError::RenameFailure: return "renameFailure"; } return "unknown";
+					};
+					writer.Key("error"); writer.String(errorName(result.error));
+					writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size());
+					writer.Key("checksum");
+					if (!result.checksum) writer.Null(); else {
+						const auto& checksum = *result.checksum; writer.StartObject();
+						writer.Key("titleId"); writer.String(TitleIdString(checksum.titleId).c_str());
+						writer.Key("version"); writer.Uint(checksum.version); writer.Key("region"); writer.Uint(checksum.region);
+						writer.Key("imageSha256"); writer.String(checksum.imageSha256.data(), checksum.imageSha256.size());
+						writer.Key("files"); writer.StartArray(); for (const auto& file : checksum.files) { writer.StartObject(); writer.Key("path"); writer.String(file.path.data(), file.path.size()); writer.Key("sha256"); writer.String(file.sha256.data(), file.sha256.size()); writer.EndObject(); } writer.EndArray(); writer.EndObject();
+					}
+					writer.EndObject();
+					PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
+				});
+			}
+			catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
+			}
 			return id;
 		}
 
@@ -2575,6 +2675,26 @@ namespace
 				request.replaceExisting = RequiredBool(params, "replaceExisting");
 				const auto jobId = StartGraphicPackInstallJob(std::move(request));
 				return std::string(R"({"jobId":)") + std::to_string(jobId) + "}";
+			});
+			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"checksum-tool"});
+				auto typeName = [](Application::ManagedContentType type) {
+					switch (type) { case Application::ManagedContentType::Update: return "update"; case Application::ManagedContentType::Dlc: return "dlc"; case Application::ManagedContentType::System: return "system"; default: return "base"; }
+				};
+				auto formatName = [](Application::ManagedContentFormat format) {
+					switch (format) { case Application::ManagedContentFormat::Wud: return "wud"; case Application::ManagedContentFormat::Nus: return "nus"; case Application::ManagedContentFormat::Wua: return "wua"; case Application::ManagedContentFormat::Wuhb: return "wuhb"; default: return "folder"; }
+				};
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("entries"); writer.StartArray();
+				for (const auto& entry : m_controller.ListManagedContent()) { writer.StartObject(); writer.Key("locationUid"); const auto uid = std::to_string(entry.locationUid); writer.String(uid.c_str()); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str()); writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); writer.Key("version"); writer.Uint(entry.version); writer.Key("region"); writer.String(entry.regionName.data(), entry.regionName.size()); writer.Key("type"); writer.String(typeName(entry.type)); writer.Key("format"); writer.String(formatName(entry.format)); writer.EndObject(); }
+				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("checksum.start", [this](const rapidjson::Value& params) {
+				RequireRole({"checksum-tool"});
+				const auto uid = ParseOpaqueUid(params);
+				const auto entries = m_controller.ListManagedContent();
+				if (std::ranges::none_of(entries, [uid](const auto& entry) { return entry.locationUid == uid; }))
+					throw std::invalid_argument("locationUid is not present in the managed-content catalog");
+				return std::string(R"({"jobId":)") + std::to_string(StartChecksumJob(uid)) + "}";
 			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
 				const auto jobId = static_cast<std::uint64_t>(RequiredUint(params, "jobId"));

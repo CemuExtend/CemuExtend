@@ -22,8 +22,11 @@ export type Bootstrap = {
 };
 
 export type WindowOpenRequest =
-  | { role: "graphic-packs"; requestId: string; context?: { titleId?: string } }
-  | { role: Exclude<ImplementedToolWindowRole, "graphic-packs">; requestId: string };
+	| { role: "graphic-packs"; requestId: string; context?: { titleId?: string } }
+	| { role: Exclude<ImplementedToolWindowRole, "graphic-packs">; requestId: string };
+
+export type ChecksumContent = { locationUid: string; titleId: string; name: string; version: number; region: string; type: "base" | "update" | "dlc" | "system"; format: "folder" | "wud" | "nus" | "wua" | "wuhb" };
+export type ChecksumModel = { entries: ChecksumContent[] };
 
 export type Title = {
   titleId: string;

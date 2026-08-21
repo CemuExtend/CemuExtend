@@ -13,3 +13,5 @@
 @media (max-width: 700px) { .toolbar { flex-wrap: wrap; }.toolbar input { flex-basis: 100%; }.title-host.grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .split-view { grid-template-columns: 1fr; }.selection-list { max-height: 35vh; }.pack-heading { flex-direction: column; } }
 @media (max-width: 760px) { .hotkey-grid { grid-template-columns: 1fr; } .hotkey-header { display: none; } }
+.checksum-results { display: grid; gap: 0.35rem; max-height: 20rem; overflow: auto; }
+.checksum-results > div { display: grid; grid-template-columns: minmax(20rem, auto) 1fr; gap: 0.75rem; font-size: 0.78rem; }

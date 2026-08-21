@@ -438,6 +438,12 @@ namespace Application
 		return m_backend->ListTitles();
 	}
 
+	std::vector<ManagedContentEntry> EmulationController::ListManagedContent() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListManagedContent();
+	}
+
 	std::optional<TitleSummary> EmulationController::ResolveBaseTitle(
 		std::uint64_t titleId) const
 	{
