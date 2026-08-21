@@ -1,13 +1,18 @@
 #include "Common/precompiled.h"
 
 #include "application/ApplicationRuntime.h"
+#include "application/ApplicationHost.h"
 #include "application/EmulationController.h"
+#include "audio/IAudioAPI.h"
+#include "frontend/CemuExtendFrontendBridge.h"
 #include "frontend/FrontendRuntime.h"
+#include "input/InputManager.h"
 #include "webview/MainWindowState.h"
 #include "webview/NativeWindowHost.h"
 #include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
 #include "webview/WebHostState.h"
+#include "webview/WebHostServices.h"
 #include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
 #include "util/helpers/helpers.h"
@@ -34,6 +39,7 @@ namespace
 	using WebFrontend::CreateRendererHost;
 	using WebFrontend::IRendererHost;
 	using WebFrontend::WebHostState;
+	using WebFrontend::WebHostServices;
 	class Runtime;
 	struct RuntimeCallbackGate
 	{
@@ -92,6 +98,108 @@ namespace
 		return value;
 	}
 
+	std::uint16_t UsbHidUsage(std::uint32_t key)
+	{
+		if (key >= 'A' && key <= 'Z') return static_cast<std::uint16_t>(0x04 + key - 'A');
+		if (key >= 'a' && key <= 'z') return static_cast<std::uint16_t>(0x04 + key - 'a');
+		if (key >= '1' && key <= '9') return static_cast<std::uint16_t>(0x1e + key - '1');
+		if (key == '0') return 0x27;
+#if BOOST_OS_WINDOWS
+		switch (key)
+		{
+		case VK_RETURN: return 0x28; case VK_ESCAPE: return 0x29; case VK_BACK: return 0x2a;
+		case VK_TAB: return 0x2b; case VK_SPACE: return 0x2c; case VK_CAPITAL: return 0x39;
+		case VK_F1: return 0x3a; case VK_F2: return 0x3b; case VK_F3: return 0x3c;
+		case VK_F4: return 0x3d; case VK_F5: return 0x3e; case VK_F6: return 0x3f;
+		case VK_F7: return 0x40; case VK_F8: return 0x41; case VK_F9: return 0x42;
+		case VK_F10: return 0x43; case VK_F11: return 0x44; case VK_F12: return 0x45;
+		case VK_INSERT: return 0x49; case VK_HOME: return 0x4a; case VK_PRIOR: return 0x4b;
+		case VK_DELETE: return 0x4c; case VK_END: return 0x4d; case VK_NEXT: return 0x4e;
+		case VK_RIGHT: return 0x4f; case VK_LEFT: return 0x50; case VK_DOWN: return 0x51;
+		case VK_UP: return 0x52; case VK_NUMLOCK: return 0x53;
+		case VK_LCONTROL: return 0xe0; case VK_LSHIFT: return 0xe1; case VK_LMENU: return 0xe2;
+		case VK_LWIN: return 0xe3; case VK_RCONTROL: return 0xe4; case VK_RSHIFT: return 0xe5;
+		case VK_RMENU: return 0xe6; case VK_RWIN: return 0xe7;
+		default: return 0;
+		}
+#elif BOOST_OS_MACOS
+		switch (key)
+		{
+		case 0x00: return 0x04; case 0x0b: return 0x05; case 0x08: return 0x06;
+		case 0x02: return 0x07; case 0x0e: return 0x08; case 0x03: return 0x09;
+		case 0x05: return 0x0a; case 0x04: return 0x0b; case 0x22: return 0x0c;
+		case 0x26: return 0x0d; case 0x28: return 0x0e; case 0x25: return 0x0f;
+		case 0x2e: return 0x10; case 0x2d: return 0x11; case 0x1f: return 0x12;
+		case 0x23: return 0x13; case 0x0c: return 0x14; case 0x0f: return 0x15;
+		case 0x01: return 0x16; case 0x11: return 0x17; case 0x20: return 0x18;
+		case 0x09: return 0x19; case 0x0d: return 0x1a; case 0x07: return 0x1b;
+		case 0x10: return 0x1c; case 0x06: return 0x1d;
+		case 0x12: return 0x1e; case 0x13: return 0x1f; case 0x14: return 0x20;
+		case 0x15: return 0x21; case 0x17: return 0x22; case 0x16: return 0x23;
+		case 0x1a: return 0x24; case 0x1c: return 0x25; case 0x19: return 0x26;
+		case 0x1d: return 0x27; case 0x1b: return 0x2d; case 0x18: return 0x2e;
+		case 0x21: return 0x2f; case 0x1e: return 0x30; case 0x2a: return 0x31;
+		case 0x29: return 0x33; case 0x27: return 0x34; case 0x32: return 0x35;
+		case 0x2b: return 0x36; case 0x2f: return 0x37; case 0x2c: return 0x38;
+		default: break;
+		}
+		static constexpr std::array<std::pair<std::uint32_t, std::uint16_t>, 33> usages{{
+			{0x24,0x28},{0x35,0x29},{0x33,0x2a},{0x30,0x2b},{0x31,0x2c},
+			{0x7a,0x3a},{0x78,0x3b},{0x63,0x3c},{0x76,0x3d},{0x60,0x3e},{0x61,0x3f},
+			{0x62,0x40},{0x64,0x41},{0x65,0x42},{0x6d,0x43},{0x67,0x44},{0x6f,0x45},
+			{0x72,0x49},{0x73,0x4a},{0x74,0x4b},{0x75,0x4c},{0x77,0x4d},{0x79,0x4e},
+			{0x7c,0x4f},{0x7b,0x50},{0x7d,0x51},{0x7e,0x52},
+			{0x3b,0xe0},{0x38,0xe1},{0x3a,0xe2},{0x37,0xe3},{0x3e,0xe4},{0x3c,0xe5}
+		}};
+		for (const auto& [native, usage] : usages) if (native == key) return usage;
+		return 0;
+#else
+		switch (key)
+		{
+		case 0xff0d: return 0x28; case 0xff1b: return 0x29; case 0xff08: return 0x2a;
+		case 0xff09: return 0x2b; case 0x20: return 0x2c; case 0xffe5: return 0x39;
+		case 0xffbe: return 0x3a; case 0xffbf: return 0x3b; case 0xffc0: return 0x3c;
+		case 0xffc1: return 0x3d; case 0xffc2: return 0x3e; case 0xffc3: return 0x3f;
+		case 0xffc4: return 0x40; case 0xffc5: return 0x41; case 0xffc6: return 0x42;
+		case 0xffc7: return 0x43; case 0xffc8: return 0x44; case 0xffc9: return 0x45;
+		case 0xff63: return 0x49; case 0xff50: return 0x4a; case 0xff55: return 0x4b;
+		case 0xffff: return 0x4c; case 0xff57: return 0x4d; case 0xff56: return 0x4e;
+		case 0xff53: return 0x4f; case 0xff51: return 0x50; case 0xff54: return 0x51;
+		case 0xff52: return 0x52; case 0xffe3: return 0xe0; case 0xffe1: return 0xe1;
+		case 0xffe9: return 0xe2; case 0xffeb: return 0xe3; case 0xffe4: return 0xe4;
+		case 0xffe2: return 0xe5; case 0xffea: return 0xe6; case 0xffec: return 0xe7;
+		default: return 0;
+		}
+#endif
+	}
+
+	std::vector<std::uint32_t> DecodeUtf8(std::string_view text)
+	{
+		std::vector<std::uint32_t> result;
+		for (std::size_t i = 0; i < text.size();)
+		{
+			const auto first = static_cast<unsigned char>(text[i++]);
+			std::uint32_t codepoint{};
+			std::size_t continuation{};
+			if (first < 0x80) codepoint = first;
+			else if ((first & 0xe0) == 0xc0) { codepoint = first & 0x1f; continuation = 1; }
+			else if ((first & 0xf0) == 0xe0) { codepoint = first & 0x0f; continuation = 2; }
+			else if ((first & 0xf8) == 0xf0) { codepoint = first & 0x07; continuation = 3; }
+			else continue;
+			if (i + continuation > text.size()) break;
+			bool valid = true;
+			for (std::size_t offset = 0; offset < continuation; ++offset)
+			{
+				const auto byte = static_cast<unsigned char>(text[i++]);
+				if ((byte & 0xc0) != 0x80) { valid = false; break; }
+				codepoint = (codepoint << 6) | (byte & 0x3f);
+			}
+			if (valid && codepoint <= 0x10ffff && !(codepoint >= 0xd800 && codepoint <= 0xdfff))
+				result.push_back(codepoint);
+		}
+		return result;
+	}
+
 	class Runtime final
 	{
 	public:
@@ -118,9 +226,9 @@ namespace
 				m_nativeWindow->SetMenuHandler(
 					[this](MenuCommand command) { HandleMenu(command); });
 				m_nativeWindow->SetMetricsHandler(
-					[state = m_hostState](Host::WindowMetricsSnapshot metrics) {
-						state->UpdateMetrics(metrics);
-					});
+					[this](Host::WindowMetricsSnapshot metrics) { HandleMetrics(metrics); });
+				m_nativeWindow->SetInputHandler(
+					[this](const WebFrontend::NativeInputEvent& event) { HandleNativeInput(event); });
 				m_nativeWindow->SetPadCloseHandler([this] {
 					const auto expectedGeneration = m_padGeneration;
 					PostToUi([this, expectedGeneration] {
@@ -130,6 +238,20 @@ namespace
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
 				m_rendererHost = CreateRendererHost(m_hostState, m_hostState, m_hostState);
+				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow,
+					[this](std::function<void()> action) { return PostToUi(std::move(action)); },
+					[this] { return RecreateCanvasForHost(); });
+				Application::ConnectHost({
+					.windowMetrics = m_hostServices,
+					.clipboard = m_hostServices,
+					.externalLauncher = m_hostServices,
+					.inputFocus = m_hostServices,
+					.canvas = m_hostServices,
+				});
+				InputManager::instance().ConfigureHost(*m_hostServices, *m_hostServices,
+					*m_hostServices, *m_hostServices);
+				IAudioAPI::ConfigureNativeSurfaceProvider(m_hostServices.get());
+				m_hostConnected = true;
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
 					m_nativeWindow->GetNativeWindow()));
 				m_callbackGate->target = this;
@@ -219,6 +341,18 @@ namespace
 			m_nativeWindow->SetMenuHandler({});
 			m_nativeWindow->SetMetricsHandler({});
 			m_nativeWindow->SetPadCloseHandler({});
+			m_nativeWindow->SetInputHandler({});
+			m_nativeWindow->UpdateTextInput({});
+			if (m_hostServices)
+				m_hostServices->Deactivate();
+			if (m_hostConnected)
+			{
+				InputManager::instance().Shutdown();
+				Application::DisconnectHost();
+				InputManager::instance().ClearHost();
+				IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
+				m_hostConnected = false;
+			}
 			if (m_webViewWidget)
 				m_nativeWindow->PrepareWebViewDestroy(m_webViewWidget);
 			if (m_rpcBound)
@@ -286,6 +420,7 @@ namespace
 		{
 			if (!ClosePadRenderRegion())
 				return false;
+			ReleaseNativeInput(true);
 			if (m_rendererHost)
 				m_rendererHost->PrepareMainDestroy();
 			m_nativeWindow->DestroyMainRenderRegion();
@@ -306,6 +441,7 @@ namespace
 			metrics.physicalPadWidth = 0;
 			metrics.physicalPadHeight = 0;
 			m_hostState->UpdateMetrics(metrics);
+			ReleasePointerSurface(Host::PointerSurface::Pad);
 			try
 			{
 				if (m_rendererHost)
@@ -356,6 +492,243 @@ namespace
 			}
 		}
 
+		void HandleMetrics(Host::WindowMetricsSnapshot metrics)
+		{
+			const auto previous = m_hostState->GetWindowMetrics();
+			m_hostState->UpdateMetrics(metrics);
+			if (previous.appActive != metrics.appActive)
+			{
+				m_controller.PointerFocusChanged(metrics.appActive);
+				if (!metrics.appActive && m_hostServices)
+				{
+					ReleaseNativeInput(false);
+				}
+			}
+		}
+
+		Frontend::CemuExtendFrontendBridge& PointerBridge(Host::PointerSurface surface)
+		{
+			return m_pointerBridges[surface == Host::PointerSurface::Main ? 0 : 1];
+		}
+
+		std::uint32_t PointerButtonMask(std::uint32_t nativeButton) const
+		{
+			using Button = Frontend::CemuExtendMouseButton;
+			switch (nativeButton)
+			{
+			case 1: return static_cast<std::uint32_t>(Button::Left);
+			case 3: return static_cast<std::uint32_t>(Button::Right);
+			case 2: return static_cast<std::uint32_t>(Button::Middle);
+			case 8: return static_cast<std::uint32_t>(Button::X1);
+			case 9: return static_cast<std::uint32_t>(Button::X2);
+			default: return 0;
+			}
+		}
+
+		Frontend::CemuExtendPointerDecision RefreshPointerPolicy(Host::PointerSurface surface)
+		{
+			auto& bridge = PointerBridge(surface);
+			const auto policy = m_controller.GetPointerPolicy();
+			const auto metrics = m_hostState->GetWindowMetrics();
+			const bool hasCanvas = surface == Host::PointerSurface::Main
+				? m_windowState && m_windowState->Snapshot().mode == WebFrontend::MainWindowContentMode::Playing
+				: m_nativeWindow->IsPadRenderRegionOpen();
+			const auto decision = bridge.ApplyPointerPolicy(policy.mode, policy.cursor,
+				policy.flags, metrics.appActive, hasCanvas);
+			m_nativeWindow->ApplyPointerPresentation({
+				.surface = surface,
+				.ownsPointer = decision.ownsPointer,
+				.showCursor = decision.showCursor,
+				.confine = decision.confine,
+				.enteringCapture = decision.enteringCapture,
+				.leavingPolicy = decision.leavingPolicy,
+				.requestRawMouse = decision.requestRawMouse,
+				.rawMouseEnabled = bridge.RawMouseRequested(),
+				.cursor = decision.cursor,
+			});
+			return decision;
+		}
+
+		void SubmitPointer(const WebFrontend::NativeInputEvent& event,
+			std::int32_t deltaX, std::int32_t deltaY, std::int32_t wheelX,
+			std::int32_t wheelY, std::uint32_t changedButtons, bool raw)
+		{
+			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];
+			const auto metrics = m_hostState->GetWindowMetrics();
+			m_controller.SubmitMouse({
+				.surface = event.surface == Host::PointerSurface::Main
+					? Application::PointerSurface::Tv : Application::PointerSurface::Drc,
+				.x = state.x, .y = state.y, .deltaX = deltaX, .deltaY = deltaY,
+				.wheelX = wheelX, .wheelY = wheelY,
+				.buttons = PointerBridge(event.surface).MouseButtons(),
+				.changedButtons = changedButtons,
+				.contentWidth = state.width, .contentHeight = state.height,
+				.insideContent = state.inside, .focused = metrics.appActive,
+				.flags = raw
+					? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
+					: static_cast<std::uint8_t>(0),
+			});
+		}
+
+		void ReleasePointerSurface(Host::PointerSurface surface)
+		{
+			const auto index = surface == Host::PointerSurface::Main ? 0U : 1U;
+			auto& bridge = m_pointerBridges[index];
+			const auto released = bridge.UpdateButtons(
+				Frontend::CemuExtendMouseTransition::Aggregate, 0xffffffffU, 0);
+			if (released.changed)
+			{
+				WebFrontend::NativeInputEvent event{.kind = WebFrontend::NativeInputKind::PointerButton,
+					.surface = surface};
+				SubmitPointer(event, 0, 0, 0, 0, released.changed, false);
+			}
+			(void)bridge.ApplyPointerPolicy(0, 0, 0, false, false);
+			bridge.ResetPointerPosition();
+			m_pointerStates[index] = {};
+			m_nativeWindow->ApplyPointerPresentation({.surface = surface,
+				.showCursor = true, .leavingPolicy = true});
+		}
+
+		void ReleaseNativeInput(bool resetTextInput)
+		{
+			if (m_hostServices) m_hostServices->ReleaseKeys();
+			m_controller.KeyboardFocusLost();
+			ReleasePointerSurface(Host::PointerSurface::Main);
+			ReleasePointerSurface(Host::PointerSurface::Pad);
+			if (resetTextInput)
+			{
+				m_textInputSequence = 0;
+				m_nativeWindow->UpdateTextInput({});
+			}
+		}
+
+		void HandleNativeInput(const WebFrontend::NativeInputEvent& event)
+		{
+			if (m_stopping.load(std::memory_order_acquire) || !m_hostServices)
+				return;
+			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];
+			auto& bridge = PointerBridge(event.surface);
+			switch (event.kind)
+			{
+			case WebFrontend::NativeInputKind::PointerMove:
+			{
+				(void)RefreshPointerPolicy(event.surface);
+				state = {event.x, event.y, event.contentWidth, event.contentHeight, event.insideContent};
+				m_hostServices->UpdateMousePosition(event.surface, {event.x, event.y});
+				const auto motion = bridge.UpdatePosition({event.x, event.y},
+					{event.contentWidth / 2, event.contentHeight / 2}, bridge.RawMouseRequested());
+				SubmitPointer(event, motion.delta.x, motion.delta.y, 0, 0, 0, motion.rawRelative);
+				break;
+			}
+			case WebFrontend::NativeInputKind::PointerButton:
+			{
+				(void)RefreshPointerPolicy(event.surface);
+				state = {event.x, event.y, event.contentWidth, event.contentHeight, event.insideContent};
+				const auto mask = PointerButtonMask(event.button);
+				const auto update = bridge.UpdateButtons(event.pressed
+					? Frontend::CemuExtendMouseTransition::Down
+					: Frontend::CemuExtendMouseTransition::Up, mask);
+				if (event.button == 1 || event.button == 3)
+					m_hostServices->UpdateMouseButton(event.surface,
+						event.button == 1 ? Host::PointerButton::Left : Host::PointerButton::Right,
+						event.pressed, {event.x, event.y});
+				SubmitPointer(event, 0, 0, 0, 0, update.changed, false);
+				break;
+			}
+			case WebFrontend::NativeInputKind::PointerWheel:
+			{
+				const auto wheelX = bridge.NormalizeWheel(event.wheelX, 120, true);
+				const auto wheelY = bridge.NormalizeWheel(event.wheelY, 120, false);
+				m_hostServices->UpdateMouseWheel(static_cast<float>(event.wheelY) / 120.0f,
+					wheelY);
+				SubmitPointer(event, 0, 0, wheelX, wheelY, 0, false);
+				break;
+			}
+			case WebFrontend::NativeInputKind::RawMouse:
+				(void)RefreshPointerPolicy(event.surface);
+				if (!bridge.RawMouseRequested())
+					break;
+				bridge.MarkRawMouseSeen();
+				bridge.RecordRawPosition({state.x, state.y});
+				SubmitPointer(event, event.deltaX, event.deltaY, 0, 0, 0, true);
+				break;
+			case WebFrontend::NativeInputKind::Touch:
+				m_hostServices->UpdateTouch(event.surface, {event.x, event.y}, event.pressed);
+				break;
+			case WebFrontend::NativeInputKind::Key:
+			{
+				m_hostServices->UpdateKey(event.key, event.pressed);
+				const auto usage = event.usage ? event.usage : UsbHidUsage(event.key);
+				if (usage)
+					m_controller.SubmitKeyboard(usage, event.pressed, event.modifiers);
+				break;
+			}
+			case WebFrontend::NativeInputKind::Character:
+				if (!m_textInputSequence)
+					for (const auto codepoint : DecodeUtf8(event.text))
+						if (codepoint >= 0x20 && codepoint != 0x7f)
+							m_controller.SubmitText(codepoint, event.repeat);
+				break;
+			case WebFrontend::NativeInputKind::FocusLost:
+				m_controller.PointerFocusChanged(false);
+				ReleaseNativeInput(false);
+				break;
+			case WebFrontend::NativeInputKind::DeviceChanged:
+				m_hostServices->NotifyDeviceChanged();
+				break;
+			case WebFrontend::NativeInputKind::TextComposition:
+				if (event.textSequence == m_textInputSequence && m_textInputSequence != 0)
+					m_controller.SubmitTextComposition(event.text, event.preedit,
+						event.textCursor, event.selectionLength);
+				break;
+			}
+		}
+
+		void RefreshTextInput()
+		{
+			const auto state = m_controller.GetTextInputState();
+			m_textInputSequence = state.active ? state.sequence : 0;
+			m_nativeWindow->UpdateTextInput({
+				.active = state.active, .sequence = state.sequence,
+				.initialText = state.initialText, .maximumLength = state.maximumLength,
+				.caretX = state.caretX, .caretY = state.caretY,
+				.lineHeight = state.lineHeight,
+			});
+			if (state.active)
+				m_controller.KeyboardFocusLost();
+		}
+
+		bool RecreateCanvasForHost()
+		{
+			if (!m_windowState || m_windowState->Snapshot().mode !=
+				WebFrontend::MainWindowContentMode::Playing)
+				return false;
+			if (!ClosePadRenderRegion())
+				return false;
+			ReleaseNativeInput(true);
+			try
+			{
+				m_rendererHost->PrepareMainDestroy();
+				m_nativeWindow->DestroyMainRenderRegion();
+				auto& region = m_nativeWindow->CreateMainRenderRegion();
+				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+				m_rendererHost->InitializeMain(region);
+				m_nativeWindow->ShowRenderRegion();
+				RefreshTextInput();
+				return true;
+			}
+			catch (const std::exception& error)
+			{
+				cemuLog_log(LogType::Force, "Native canvas recreation failed: {}", error.what());
+				try { m_rendererHost->AbandonMainInitialization(); }
+				catch (...) {}
+				m_nativeWindow->DestroyMainRenderRegion();
+				m_nativeWindow->ShowLibrary();
+				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+				return false;
+			}
+		}
+
 		void HandleMenu(MenuCommand command)
 		{
 			switch (command)
@@ -395,15 +768,19 @@ namespace
 				webview_eval(webview, pending->script.c_str());
 		}
 
-		void PostToUi(std::function<void()> action)
+		bool PostToUi(std::function<void()> action)
 		{
 			if (m_stopping.load(std::memory_order_acquire))
-				return;
+				return false;
 			auto pending = std::make_unique<PendingEvent>();
 			pending->stopping = m_eventStopping;
 			pending->beforeDispatch = std::move(action);
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
+			{
 				pending.release();
+				return true;
+			}
+			return false;
 		}
 
 		void Emit(std::string_view type, std::string_view payloadJson,
@@ -459,7 +836,9 @@ namespace
 					JsonString(event.diagnostic) + "}");
 				break;
 			case Application::EventType::GameListRefreshRequested: Emit("titles.changed", "{}"); break;
-			case Application::EventType::TextInputWakeRequested: Emit("input.textWakeRequested", "{}"); break;
+			case Application::EventType::TextInputWakeRequested:
+				Emit("input.textWakeRequested", "{}", [this] { RefreshTextInput(); });
+				break;
 			}
 		}
 
@@ -609,6 +988,7 @@ namespace
 		void* m_webViewWidget{};
 		RpcDispatcher m_rpc;
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
+		std::shared_ptr<WebHostServices> m_hostServices;
 		std::unique_ptr<IRendererHost> m_rendererHost;
 		Application::EmulationController m_controller;
 		std::unique_ptr<MainWindowState> m_windowState;
@@ -620,10 +1000,22 @@ namespace
 		std::mutex m_eventMutex;
 		std::uint64_t m_eventSequence{};
 		std::uint64_t m_padGeneration{};
+		struct PointerState
+		{
+			std::int32_t x{};
+			std::int32_t y{};
+			std::int32_t width{};
+			std::int32_t height{};
+			bool inside{};
+		};
+		std::array<PointerState, 2> m_pointerStates;
+		std::array<Frontend::CemuExtendFrontendBridge, 2> m_pointerBridges;
+		std::uint64_t m_textInputSequence{};
 		bool m_fullscreen{};
 		bool m_rpcBound{};
 		bool m_cleanedUp{};
 		bool m_applicationShutdown{};
+		bool m_hostConnected{};
 		Host::NativeSurfacePublication m_mainWindowPublication{};
 	};
 }

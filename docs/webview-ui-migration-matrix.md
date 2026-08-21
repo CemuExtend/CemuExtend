@@ -23,7 +23,7 @@ This matrix records the observed wxWidgets UI ownership and the destination cont
 | `ChecksumTool.*` | content checksum | `ContentOperations` | checksum-tool | modeless singleton | file/save dialog | required | Not started |
 | `LoggingWindow.*`, `components/wxLogCtrl.*` | streaming/exporting logs | logging façade required | logging | modeless singleton | save dialog | required | Not started |
 | `GettingStartedDialog.*` | first-run configuration | settings façade required | getting-started | modal | folder dialog | required | Not started |
-| `PadViewFrame.*` | independent GamePad render/input window | host render/input contracts | n/a | native tool window | render surface, DPI, mouse/touch | required | Not started |
+| `PadViewFrame.*` | independent GamePad render/input window | host render/input contracts | n/a | native tool window | render surface, DPI, mouse/touch | Docker build/CTest + lifecycle review | Completed |
 | `EmulatedUSBDevices/*` | emulated USB device management | device façade required | emulated-usb-devices | modeless singleton | device enumeration | required | Not started |
 | `MemorySearcherTool.*` | memory range search | debugger façade required | memory-searcher | modeless singleton | none | required | Not started |
 | `debugger/DebuggerWindow2.*` and controls | PPC debugger/disassembly/registers | debugger façade required | ppc-debugger | modeless singleton | none | required | Not started |
@@ -32,7 +32,7 @@ This matrix records the observed wxWidgets UI ownership and the destination cont
 | `windows/PPCThreadsViewer/*` | PPC thread viewer | debugger façade required | ppc-threads | modeless singleton | none | required | Not started |
 | `DownloadManager` menu/panel | download queue | operation façade required | update-manager | modeless | notifications | required | Not started |
 | About block in `MainWindow.cpp` | build/license information | build-info façade required | about | modal | external link launch | required | Not started |
-| `canvas/*Canvas.*`, `RendererWindowAdapter.*` | Vulkan/OpenGL/Metal host surfaces | frontend-neutral render region contract required | n/a | native child surface | GPU/native handle/input/IME | required | Not started |
+| `canvas/*Canvas.*`, `RendererWindowAdapter.*` | Vulkan/OpenGL/Metal host surfaces | frontend-neutral render/input/IME host contracts | n/a | native child surface | GPU/native handle, raw mouse, touch, IME | Docker build/CTest + bridge tests | In progress |
 | `wxCemuConfig.*`, `WxWindowState.*` | config/window persistence | application settings + host window state | n/a | native | geometry/DPI/fullscreen | required | Not started |
 
-The current branch establishes the selectable frontend, pinned webview dependency, embedded React library, typed base RPC dispatcher, ordered application-event bridge, and state-machine tests. It does **not** classify the remaining rows as completed.
+The current branch establishes the selectable frontend, pinned webview dependency, embedded React library, typed RPC dispatcher, ordered application-event bridge, persistent native main/render hosts, synchronized GamePad hosting, and native keyboard/mouse/touch/IME services. Rows remain conservative where Windows/macOS runtime validation or the corresponding React workflow is still outstanding.

@@ -86,6 +86,7 @@ ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
 ARG CEMU_FRONTEND=webview
+ARG CLEAN_BUILD=1
 
 WORKDIR /workspace/CemuExtend
 
@@ -113,7 +114,11 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
         echo "CMake configure failed (attempt $attempt/3); retrying in 5 seconds..."; \
         sleep 5; \
     done \
-    && cmake --build build/docker --clean-first --parallel \
+    && if [ "${CLEAN_BUILD}" = "1" ]; then \
+        cmake --build build/docker --clean-first --parallel; \
+    else \
+        cmake --build build/docker --parallel; \
+    fi \
     && ctest --test-dir build/docker --output-on-failure \
     && cp bin/Cemu_release /Cemu_release
 

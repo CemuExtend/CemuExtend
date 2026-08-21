@@ -196,7 +196,7 @@ cemu_assert_target_internal_edges_allowed(CemuApplication
 	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuWebRpc)
 cemu_assert_target_internal_edges_allowed(CemuWebFrontend
-	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuUtil CemuWebRpc
+	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuUtil CemuWebRpc
 	CemuWebRendererAdapters)
 cemu_assert_target_internal_edges_allowed(CemuWebRendererAdapters
 	CemuCafe CemuCommon CemuConfig CemuHostContracts)

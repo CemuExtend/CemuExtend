@@ -6,6 +6,8 @@
 #import <QuartzCore/QuartzCore.h>
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <stdexcept>
 #include <utility>
 
@@ -14,13 +16,56 @@ static bool CemuDispatchClose(void* context);
 static void CemuDispatchMetrics(void* context);
 static void CemuDispatchPadClose(void* context);
 static void CemuDispatchPadMetrics(void* context);
+@class CemuRenderView;
+static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInteger kind);
+static void CemuDispatchRenderFocusLost(void* context, BOOL pad);
+static void CemuDispatchTextComposition(void* context);
+static BOOL CemuDispatchTextCommand(void* context, SEL command);
 
-@interface CemuWebWindowDelegate : NSObject <NSWindowDelegate>
+@interface CemuRenderView : NSView
+{
+@public
+	void* inputContext;
+	BOOL padSurface;
+	BOOL captured;
+	BOOL confined;
+	BOOL rawMouseEnabled;
+}
+@end
+
+@interface CemuWebWindowDelegate : NSObject <NSWindowDelegate, NSTextFieldDelegate>
 {
 @public
 	void* context;
 }
 - (void)onMenu:(id)sender;
+@end
+
+@implementation CemuRenderView
+- (BOOL)acceptsFirstResponder { return YES; }
+- (BOOL)acceptsFirstMouse:(NSEvent*)event { (void)event; return YES; }
+- (void)mouseMoved:(NSEvent*)event { CemuDispatchRenderInput(self, event, 0); }
+- (void)mouseDragged:(NSEvent*)event { CemuDispatchRenderInput(self, event, 0); }
+- (void)rightMouseDragged:(NSEvent*)event { CemuDispatchRenderInput(self, event, 0); }
+- (void)otherMouseDragged:(NSEvent*)event { CemuDispatchRenderInput(self, event, 0); }
+- (void)mouseDown:(NSEvent*)event { CemuDispatchRenderInput(self, event, 1); }
+- (void)mouseUp:(NSEvent*)event { CemuDispatchRenderInput(self, event, 2); }
+- (void)rightMouseDown:(NSEvent*)event { CemuDispatchRenderInput(self, event, 1); }
+- (void)rightMouseUp:(NSEvent*)event { CemuDispatchRenderInput(self, event, 2); }
+- (void)otherMouseDown:(NSEvent*)event { CemuDispatchRenderInput(self, event, 1); }
+- (void)otherMouseUp:(NSEvent*)event { CemuDispatchRenderInput(self, event, 2); }
+- (void)scrollWheel:(NSEvent*)event { CemuDispatchRenderInput(self, event, 3); }
+- (void)keyDown:(NSEvent*)event { CemuDispatchRenderInput(self, event, 4); }
+- (void)keyUp:(NSEvent*)event { CemuDispatchRenderInput(self, event, 5); }
+- (void)touchesBeganWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 6); }
+- (void)touchesMovedWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 6); }
+- (void)touchesEndedWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 7); }
+- (void)touchesCancelledWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 7); }
+- (BOOL)resignFirstResponder
+{
+	CemuDispatchRenderFocusLost(inputContext, padSurface);
+	return [super resignFirstResponder];
+}
 @end
 
 @interface CemuWebPadWindowDelegate : NSObject <NSWindowDelegate>
@@ -79,6 +124,16 @@ static void CemuDispatchPadMetrics(void* context);
 	(void)notification;
 	CemuDispatchMetrics(context);
 }
+- (void)controlTextDidChange:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchTextComposition(context);
+}
+- (BOOL)control:(NSControl*)control textView:(NSTextView*)textView doCommandBySelector:(SEL)command
+{
+	(void)control; (void)textView;
+	return CemuDispatchTextCommand(context, command);
+}
 @end
 
 namespace WebFrontend
@@ -88,12 +143,15 @@ namespace WebFrontend
 		class CocoaRenderRegion final : public Host::IRenderRegion
 		{
 		public:
-			explicit CocoaRenderRegion(NSView* parent)
+			explicit CocoaRenderRegion(NSView* parent, INativeWindowHost::InputHandler* inputHandler)
 				: m_parent(parent)
 			{
-				m_view = [[NSView alloc] initWithFrame:[parent bounds]];
+				m_view = [[CemuRenderView alloc] initWithFrame:[parent bounds]];
+				m_view->inputContext = inputHandler;
+				m_view->padSurface = NO;
 				[m_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 				[m_view setWantsLayer:YES];
+				[m_view setAcceptsTouchEvents:YES];
 				[m_view setHidden:YES];
 				[parent addSubview:m_view];
 			}
@@ -123,6 +181,7 @@ namespace WebFrontend
 			}
 			void SetVisible(bool visible) override { [m_view setHidden:visible ? NO : YES]; }
 			void RequestFocus() override { [[m_view window] makeFirstResponder:m_view]; }
+			CemuRenderView* View() const { return m_view; }
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_view)
@@ -134,7 +193,7 @@ namespace WebFrontend
 
 		private:
 			NSView* m_parent{};
-			NSView* m_view{};
+			CemuRenderView* m_view{};
 			bool m_prepared{};
 		};
 
@@ -142,7 +201,7 @@ namespace WebFrontend
 		{
 		public:
 			CocoaPadRenderRegion(std::function<void()> closeHandler,
-				std::function<void()> metricsHandler)
+				std::function<void()> metricsHandler, INativeWindowHost::InputHandler* inputHandler)
 				: m_closeHandler(std::move(closeHandler)),
 				  m_metricsHandler(std::move(metricsHandler))
 			{
@@ -154,15 +213,19 @@ namespace WebFrontend
 					throw std::runtime_error("failed to create the native GamePad window");
 				[m_window setReleasedWhenClosed:NO];
 				[m_window setTitle:@"CemuExtend GamePad"];
-				m_view = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
+				m_view = [[CemuRenderView alloc] initWithFrame:[[m_window contentView] bounds]];
+				m_view->inputContext = inputHandler;
+				m_view->padSurface = YES;
 				[m_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 				[m_view setWantsLayer:YES];
+				[m_view setAcceptsTouchEvents:YES];
 				[m_window setContentView:m_view];
 				m_delegate = [[CemuWebPadWindowDelegate alloc] init];
 				m_delegate->context = this;
 				[m_window setDelegate:m_delegate];
 				[m_window center];
 				[m_window makeKeyAndOrderFront:nil];
+				[m_window setAcceptsMouseMovedEvents:YES];
 			}
 
 			~CocoaPadRenderRegion() override { PrepareForDestroy(); }
@@ -217,10 +280,11 @@ namespace WebFrontend
 			{
 				return m_window ? [m_window backingScaleFactor] : 1.0;
 			}
+			CemuRenderView* View() const { return m_view; }
 
 		private:
 			NSWindow* m_window{};
-			NSView* m_view{};
+			CemuRenderView* m_view{};
 			CemuWebPadWindowDelegate* m_delegate{};
 			std::function<void()> m_closeHandler;
 			std::function<void()> m_metricsHandler;
@@ -242,6 +306,7 @@ namespace WebFrontend
 					throw std::runtime_error("failed to create native Cocoa main window");
 				[m_window setReleasedWhenClosed:NO];
 				[m_window setTitle:@"CemuExtend"];
+				[m_window setAcceptsMouseMovedEvents:YES];
 				[m_window center];
 				m_delegate = [[CemuWebWindowDelegate alloc] init];
 				m_delegate->context = this;
@@ -251,8 +316,16 @@ namespace WebFrontend
 
 			~CocoaWindowHost() override
 			{
+				for (const bool hidden : m_cursorHidden) if (hidden) [NSCursor unhide];
+				CGAssociateMouseAndMouseCursorPosition(true);
 				DestroyPadRenderRegion();
 				DestroyMainRenderRegion();
+				if (m_textInput)
+				{
+					[m_textInput removeFromSuperview];
+					[m_textInput release];
+					m_textInput = nil;
+				}
 				m_delegate->context = nullptr;
 				[m_window setDelegate:nil];
 				[m_window close];
@@ -311,6 +384,12 @@ namespace WebFrontend
 				if (!m_root || widget != reinterpret_cast<void*>(m_webView))
 					return;
 				DestroyMainRenderRegion();
+				if (m_textInput)
+				{
+					[m_textInput removeFromSuperview];
+					[m_textInput release];
+					m_textInput = nil;
+				}
 				[m_webView retain];
 				[m_webView removeFromSuperview];
 				[m_window setContentView:m_webView];
@@ -337,7 +416,7 @@ namespace WebFrontend
 				if (!m_root)
 					throw std::logic_error("webview content host is not attached");
 				if (!m_renderRegion)
-					m_renderRegion = std::make_unique<CocoaRenderRegion>(m_root);
+					m_renderRegion = std::make_unique<CocoaRenderRegion>(m_root, &m_inputHandler);
 				return *m_renderRegion;
 			}
 			void DestroyMainRenderRegion() override { m_renderRegion.reset(); }
@@ -353,7 +432,7 @@ namespace WebFrontend
 				if (!m_padRenderRegion)
 					m_padRenderRegion = std::make_unique<CocoaPadRenderRegion>(
 						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
-						[this] { if (m_padMetricsEnabled) DispatchMetrics(); });
+						[this] { if (m_padMetricsEnabled) DispatchMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
 			}
 			void DestroyPadRenderRegion() override
@@ -384,6 +463,167 @@ namespace WebFrontend
 			void SetPadMetricsEnabled(bool enabled) override
 			{
 				m_padMetricsEnabled = enabled;
+			}
+			void SetInputHandler(InputHandler handler) override { m_inputHandler = std::move(handler); }
+			void ApplyPointerPresentation(const NativePointerPresentation& presentation) override
+			{
+				auto* view = presentation.surface == Host::PointerSurface::Main
+					? (m_renderRegion ? m_renderRegion->View() : nil)
+					: (m_padRenderRegion ? m_padRenderRegion->View() : nil);
+				if (!view) return;
+				const auto index = presentation.surface == Host::PointerSurface::Main ? 0U : 1U;
+				const bool wasCaptured = view->captured;
+				const bool captured = presentation.ownsPointer && !presentation.showCursor;
+				view->captured = captured;
+				view->confined = presentation.confine;
+				view->rawMouseEnabled = presentation.rawMouseEnabled;
+				NSCursor* cursor = [NSCursor arrowCursor];
+				switch (presentation.cursor)
+				{
+				case 1: cursor = [NSCursor IBeamCursor]; break;
+				case 3: cursor = [NSCursor resizeUpDownCursor]; break;
+				case 4: cursor = [NSCursor resizeLeftRightCursor]; break;
+				case 7: cursor = [NSCursor pointingHandCursor]; break;
+				case 8: cursor = [NSCursor operationNotAllowedCursor]; break;
+				default: break;
+				}
+				[cursor set];
+				if (!presentation.showCursor && !m_cursorHidden[index])
+				{
+					[NSCursor hide];
+					m_cursorHidden[index] = true;
+				}
+				else if (presentation.showCursor && m_cursorHidden[index])
+				{
+					[NSCursor unhide];
+					m_cursorHidden[index] = false;
+				}
+				if (presentation.enteringCapture)
+				{
+					CGAssociateMouseAndMouseCursorPosition(false);
+					const auto center = [view convertPoint:NSMakePoint(NSMidX([view bounds]), NSMidY([view bounds]))
+						toView:nil];
+					const auto screen = [[view window] convertPointToScreen:center];
+					CGWarpMouseCursorPosition(CGPointMake(screen.x, screen.y));
+				}
+				if (presentation.leavingPolicy)
+				{
+					view->captured = NO;
+					view->confined = NO;
+					CGAssociateMouseAndMouseCursorPosition(true);
+				}
+				else if (wasCaptured && !captured)
+				{
+					CGAssociateMouseAndMouseCursorPosition(true);
+				}
+			}
+			void UpdateTextInput(const NativeTextInputRequest& request) override
+			{
+				if (!request.active)
+				{
+					m_textInputSequence = 0;
+					if (m_textInput) [m_textInput setHidden:YES];
+					if (m_renderRegion) m_renderRegion->RequestFocus();
+					return;
+				}
+				if (!m_renderRegion || !m_root) return;
+				if (!m_textInput)
+				{
+					m_textInput = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 2, 24)];
+					[m_textInput setDelegate:m_delegate];
+					[m_textInput setBezeled:NO];
+					[m_textInput setDrawsBackground:NO];
+					[m_textInput setAlphaValue:0.01];
+					[m_root addSubview:m_textInput positioned:NSWindowAbove relativeTo:nil];
+				}
+				const auto bounds = m_renderRegion->GetBounds();
+				const auto x = std::clamp(request.caretX * bounds.width / 1280, 0, std::max(0, bounds.width - 1));
+				const auto yTop = std::clamp(request.caretY * bounds.height / 720, 0, std::max(0, bounds.height - 1));
+				const auto height = std::clamp(request.lineHeight * bounds.height / 720, 1, 64);
+				[m_textInput setFrame:NSMakeRect(x, std::max(0, bounds.height - yTop - height), 2, height)];
+				m_textMaximumLength = request.maximumLength;
+				if (m_textInputSequence != request.sequence)
+				{
+					m_textInputUpdating = true;
+					m_textInputSequence = request.sequence;
+					NSString* text = [[[NSString alloc] initWithBytes:request.initialText.data()
+						length:request.initialText.size() encoding:NSUTF8StringEncoding] autorelease];
+					[m_textInput setStringValue:text ?: @""];
+					m_textInputUpdating = false;
+				}
+				[m_textInput setHidden:NO];
+				[m_window makeFirstResponder:m_textInput];
+			}
+			std::string GetKeyName(std::uint32_t key) const override
+			{
+				return "Key " + std::to_string(key);
+			}
+			std::pair<bool, std::string> GetClipboardText() override
+			{
+				NSString* value = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+				if (!value) return {false, {}};
+				const char* text = [value UTF8String];
+				return {text != nullptr, text ? std::string(text) : std::string{}};
+			}
+			bool SetClipboardText(std::string text) override
+			{
+				NSString* value = [[[NSString alloc] initWithBytes:text.data() length:text.size()
+					encoding:NSUTF8StringEncoding] autorelease];
+				if (!value) return false;
+				auto* pasteboard = [NSPasteboard generalPasteboard];
+				[pasteboard clearContents];
+				return [pasteboard setString:value forType:NSPasteboardTypeString] == YES;
+			}
+			bool OpenExternalUrl(std::string url) override
+			{
+				NSString* value = [[[NSString alloc] initWithBytes:url.data() length:url.size()
+					encoding:NSUTF8StringEncoding] autorelease];
+				NSURL* target = value ? [NSURL URLWithString:value] : nil;
+				return target && [[NSWorkspace sharedWorkspace] openURL:target] == YES;
+			}
+			void DispatchTextComposition()
+			{
+				if (!m_textInput || m_textInputUpdating || !m_inputHandler || !m_textInputSequence)
+					return;
+				NSTextView* editor = (NSTextView*)[m_textInput currentEditor];
+				NSString* full = editor ? [editor string] : [m_textInput stringValue];
+				NSRange marked = editor && [editor hasMarkedText] ? [editor markedRange] : NSMakeRange(NSNotFound, 0);
+				NSString* preedit = marked.location != NSNotFound ? [full substringWithRange:marked] : @"";
+				NSMutableString* committed = [[full mutableCopy] autorelease];
+				if (marked.location != NSNotFound) [committed deleteCharactersInRange:marked];
+				if (m_textMaximumLength && [committed length] > m_textMaximumLength)
+				{
+					[committed deleteCharactersInRange:NSMakeRange(m_textMaximumLength,
+						[committed length] - m_textMaximumLength)];
+					m_textInputUpdating = true;
+					[m_textInput setStringValue:committed];
+					m_textInputUpdating = false;
+				}
+				const auto selected = editor ? [editor selectedRange] : NSMakeRange([committed length], 0);
+				const auto prefixLength = std::min(selected.location, [committed length]);
+				const char* committedUtf8 = [committed UTF8String];
+				const char* preeditUtf8 = [preedit UTF8String];
+				NSString* prefix = [committed substringToIndex:prefixLength];
+				m_inputHandler({.kind = NativeInputKind::TextComposition,
+					.text = committedUtf8 ? committedUtf8 : "", .preedit = preeditUtf8 ? preeditUtf8 : "",
+					.textCursor = static_cast<std::uint32_t>(strlen([prefix UTF8String] ?: "")),
+					.selectionLength = static_cast<std::uint32_t>(strlen(preeditUtf8 ?: "")),
+					.textSequence = m_textInputSequence});
+			}
+			BOOL DispatchTextCommand(SEL command)
+			{
+				if (command != @selector(insertNewline:) && command != @selector(insertNewlineIgnoringFieldEditor:))
+					return NO;
+				NSTextView* editor = (NSTextView*)[m_textInput currentEditor];
+				if (editor && [editor hasMarkedText]) return NO;
+				if (m_inputHandler)
+				{
+					m_inputHandler({.kind = NativeInputKind::Key, .key = 0x24,
+						.usage = 0x28, .pressed = true});
+					m_inputHandler({.kind = NativeInputKind::Key, .key = 0x24,
+						.usage = 0x28, .pressed = false});
+				}
+				return YES;
 			}
 			void DispatchMenu(NSInteger tag)
 			{
@@ -447,6 +687,7 @@ namespace WebFrontend
 			NSWindow* m_window{};
 			NSView* m_root{};
 			NSView* m_webView{};
+			NSTextField* m_textInput{};
 			CemuWebWindowDelegate* m_delegate{};
 			std::unique_ptr<CocoaRenderRegion> m_renderRegion;
 			std::unique_ptr<CocoaPadRenderRegion> m_padRenderRegion;
@@ -454,6 +695,11 @@ namespace WebFrontend
 			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
+			InputHandler m_inputHandler;
+			std::array<bool, 2> m_cursorHidden{};
+			std::uint64_t m_textInputSequence{};
+			std::uint32_t m_textMaximumLength{};
+			bool m_textInputUpdating{};
 			bool m_padMetricsEnabled{};
 			bool m_fullscreen{};
 		};
@@ -488,6 +734,16 @@ namespace WebFrontend
 	{
 		static_cast<CocoaPadRenderRegion*>(context)->DispatchMetrics();
 	}
+
+	void DispatchCocoaTextComposition(void* context)
+	{
+		static_cast<CocoaWindowHost*>(context)->DispatchTextComposition();
+	}
+
+	BOOL DispatchCocoaTextCommand(void* context, SEL command)
+	{
+		return static_cast<CocoaWindowHost*>(context)->DispatchTextCommand(command);
+	}
 }
 
 static void CemuDispatchMenu(void* context, NSInteger tag)
@@ -517,6 +773,123 @@ static void CemuDispatchPadMetrics(void* context)
 {
 	if (context)
 		WebFrontend::DispatchCocoaPadMetrics(context);
+}
+
+static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInteger kind)
+{
+	if (!view || !view->inputContext || !event) return;
+	auto* handler = static_cast<WebFrontend::INativeWindowHost::InputHandler*>(view->inputContext);
+	if (!handler || !*handler) return;
+	const auto surface = view->padSurface ? Host::PointerSurface::Pad : Host::PointerSurface::Main;
+	const auto bounds = [view bounds];
+	const auto physicalSize = [view convertSizeToBacking:bounds.size];
+	auto emit = [&](WebFrontend::NativeInputEvent input) {
+		input.surface = surface;
+		input.contentWidth = static_cast<std::int32_t>(physicalSize.width);
+		input.contentHeight = static_cast<std::int32_t>(physicalSize.height);
+		(*handler)(input);
+	};
+	const auto local = [view convertPoint:[event locationInWindow] fromView:nil];
+	const auto physical = [view convertPointToBacking:local];
+	const auto x = static_cast<std::int32_t>(physical.x);
+	const auto y = static_cast<std::int32_t>(physicalSize.height - physical.y);
+	const bool inside = NSPointInRect(local, bounds) == YES;
+	if (kind == 0)
+	{
+		if (view->captured && view->rawMouseEnabled)
+		{
+			const auto scale = [[view window] backingScaleFactor];
+			emit({.kind = WebFrontend::NativeInputKind::RawMouse,
+				.deltaX = static_cast<std::int32_t>([event deltaX] * scale),
+				.deltaY = static_cast<std::int32_t>([event deltaY] * scale)});
+			return;
+		}
+		emit({.kind = WebFrontend::NativeInputKind::PointerMove,
+			.x = x, .y = y, .insideContent = inside});
+		if (view->captured)
+		{
+			const auto center = NSMakePoint(NSMidX(bounds), NSMidY(bounds));
+			const auto windowPoint = [view convertPoint:center toView:nil];
+			const auto screenPoint = [[view window] convertPointToScreen:windowPoint];
+			CGWarpMouseCursorPosition(CGPointMake(screenPoint.x, screenPoint.y));
+			return;
+		}
+		if (view->confined && !inside)
+		{
+			const auto clamped = NSMakePoint(std::clamp(local.x, NSMinX(bounds), NSMaxX(bounds) - 1),
+				std::clamp(local.y, NSMinY(bounds), NSMaxY(bounds) - 1));
+			const auto windowPoint = [view convertPoint:clamped toView:nil];
+			const auto screenPoint = [[view window] convertPointToScreen:windowPoint];
+			CGWarpMouseCursorPosition(CGPointMake(screenPoint.x, screenPoint.y));
+		}
+		return;
+	}
+	if (kind == 1 || kind == 2)
+	{
+		const auto native = [event buttonNumber];
+		const std::uint32_t button = native == 0 ? 1 : native == 1 ? 3 : native == 2 ? 2 : native == 3 ? 8 : 9;
+		emit({.kind = WebFrontend::NativeInputKind::PointerButton, .x = x, .y = y,
+			.button = button, .pressed = kind == 1, .insideContent = inside});
+		return;
+	}
+	if (kind == 3)
+	{
+		emit({.kind = WebFrontend::NativeInputKind::PointerWheel,
+			.wheelX = static_cast<std::int32_t>([event scrollingDeltaX] * 120.0),
+			.wheelY = static_cast<std::int32_t>([event scrollingDeltaY] * 120.0)});
+		return;
+	}
+	if (kind == 4 || kind == 5)
+	{
+		const auto flags = [event modifierFlags];
+		const auto modifiers = static_cast<std::uint8_t>(
+			((flags & NSEventModifierFlagControl) ? 1U : 0U) |
+			((flags & NSEventModifierFlagShift) ? 2U : 0U) |
+			((flags & NSEventModifierFlagOption) ? 4U : 0U) |
+			((flags & NSEventModifierFlagCommand) ? 8U : 0U));
+		emit({.kind = WebFrontend::NativeInputKind::Key,
+			.key = static_cast<std::uint32_t>([event keyCode]), .modifiers = modifiers,
+			.pressed = kind == 4, .repeat = [event isARepeat] == YES});
+		if (kind == 4 && (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) == 0)
+		{
+			NSString* characters = [event characters];
+			const char* text = [characters UTF8String];
+			if (text) emit({.kind = WebFrontend::NativeInputKind::Character,
+				.repeat = [event isARepeat] == YES, .text = text});
+		}
+		return;
+	}
+	if (kind == 6 || kind == 7)
+	{
+		NSSet<NSTouch*>* touches = [event touchesMatchingPhase:NSTouchPhaseAny inView:view];
+		NSTouch* touch = [touches anyObject];
+		if (!touch) return;
+		const auto normalized = [touch normalizedPosition];
+		emit({.kind = WebFrontend::NativeInputKind::Touch,
+			.x = static_cast<std::int32_t>(normalized.x * physicalSize.width),
+			.y = static_cast<std::int32_t>((1.0 - normalized.y) * physicalSize.height),
+			.touchId = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>([touch identity])),
+			.pressed = kind == 6, .insideContent = true});
+	}
+}
+
+static void CemuDispatchRenderFocusLost(void* context, BOOL pad)
+{
+	if (!context) return;
+	auto* handler = static_cast<WebFrontend::INativeWindowHost::InputHandler*>(context);
+	if (handler && *handler)
+		(*handler)({.kind = WebFrontend::NativeInputKind::FocusLost,
+			.surface = pad ? Host::PointerSurface::Pad : Host::PointerSurface::Main});
+}
+
+static void CemuDispatchTextComposition(void* context)
+{
+	if (context) WebFrontend::DispatchCocoaTextComposition(context);
+}
+
+static BOOL CemuDispatchTextCommand(void* context, SEL command)
+{
+	return context ? WebFrontend::DispatchCocoaTextCommand(context, command) : NO;
 }
 
 #endif
