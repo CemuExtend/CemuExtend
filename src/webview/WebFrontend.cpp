@@ -387,7 +387,7 @@ namespace
 	};
 
 	constexpr std::array WindowDescriptors{
-		WindowDescriptor{"general-settings", "General Settings", 900, 680, true},
+		WindowDescriptor{"general-settings", "General Settings", 900, 680, false},
 		WindowDescriptor{"input-settings", "Input Settings", 980, 720, false},
 		WindowDescriptor{"hotkey-settings", "Hotkey Settings", 860, 620, false},
 		WindowDescriptor{"graphic-packs", "Graphic Packs", 1040, 760, false},
