@@ -2676,8 +2676,41 @@ namespace
 				const auto jobId = StartGraphicPackInstallJob(std::move(request));
 				return std::string(R"({"jobId":)") + std::to_string(jobId) + "}";
 			});
+			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"title-manager"});
+				auto typeName = [](Application::ManagedContentType type) {
+					switch (type) { case Application::ManagedContentType::Update: return "update"; case Application::ManagedContentType::Dlc: return "dlc"; case Application::ManagedContentType::System: return "system"; case Application::ManagedContentType::Save: return "save"; default: return "base"; }
+				};
+				auto formatName = [](Application::ManagedContentFormat format) {
+					switch (format) { case Application::ManagedContentFormat::Wud: return "wud"; case Application::ManagedContentFormat::Nus: return "nus"; case Application::ManagedContentFormat::Wua: return "wua"; case Application::ManagedContentFormat::Wuhb: return "wuhb"; default: return "folder"; }
+				};
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+				writer.Key("scanning"); writer.Bool(m_controller.IsTitleScanning()); writer.Key("entries"); writer.StartArray();
+				for (const auto& entry : m_controller.ListManagedContent())
+				{
+					writer.StartObject(); const auto uid = std::to_string(entry.locationUid);
+					writer.Key("locationUid"); writer.String(uid.c_str()); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str());
+					writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); const auto path = _pathToUtf8(entry.path); writer.Key("path"); writer.String(path.data(), path.size());
+					writer.Key("version"); writer.Uint(entry.version); writer.Key("region"); writer.String(entry.regionName.data(), entry.regionName.size());
+					writer.Key("type"); writer.String(typeName(entry.type)); writer.Key("format"); writer.String(formatName(entry.format));
+					writer.Key("canLaunch"); writer.Bool(entry.type == Application::ManagedContentType::Base);
+					writer.Key("canVerify"); writer.Bool(entry.type != Application::ManagedContentType::Save); writer.EndObject();
+				}
+				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("titleManager.refresh", [this](const rapidjson::Value&) {
+				RequireRole({"title-manager"}); m_controller.RefreshTitles(); return std::string("{}");
+			});
+			m_rpc.Register("titleManager.launch", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto uid = ParseOpaqueUid(params);
+				const auto entries = m_controller.ListManagedContent();
+				const auto entry = std::ranges::find(entries, uid, &Application::ManagedContentEntry::locationUid);
+				if (entry == entries.end() || entry->type != Application::ManagedContentType::Base)
+					throw std::invalid_argument("the selected base installation is no longer available");
+				return Launch(entry->path);
+			});
 			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
-				RequireRole({"checksum-tool"});
+				RequireRole({"checksum-tool", "title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
 					switch (type) { case Application::ManagedContentType::Update: return "update"; case Application::ManagedContentType::Dlc: return "dlc"; case Application::ManagedContentType::System: return "system"; default: return "base"; }
 				};
@@ -2689,7 +2722,7 @@ namespace
 				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("checksum.start", [this](const rapidjson::Value& params) {
-				RequireRole({"checksum-tool"});
+				RequireRole({"checksum-tool", "title-manager"});
 				const auto uid = ParseOpaqueUid(params);
 				const auto entries = m_controller.ListManagedContent();
 				if (std::ranges::none_of(entries, [uid](const auto& entry) { return entry.locationUid == uid; }))
@@ -2741,6 +2774,7 @@ namespace
 				return "{}";
 			});
 			m_rpc.Register("titles.launch", [this](const rapidjson::Value& params) {
+				RequireRole({"main-library"});
 				const auto game = m_controller.GetGame(ParseTitleId(params));
 				if (!game)
 					throw std::invalid_argument("titleId is not present in the game library");

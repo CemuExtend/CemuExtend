@@ -27,6 +27,8 @@ export type WindowOpenRequest =
 
 export type ChecksumContent = { locationUid: string; titleId: string; name: string; version: number; region: string; type: "base" | "update" | "dlc" | "system"; format: "folder" | "wud" | "nus" | "wua" | "wuhb" };
 export type ChecksumModel = { entries: ChecksumContent[] };
+export type TitleManagerEntry = Omit<ChecksumContent, "type"> & { type: ChecksumContent["type"] | "save"; path: string; canLaunch: boolean; canVerify: boolean };
+export type TitleManagerModel = { scanning: boolean; entries: TitleManagerEntry[] };
 
 export type Title = {
   titleId: string;

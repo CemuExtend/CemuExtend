@@ -7,6 +7,7 @@ import { InputSettingsWindow } from "./InputSettingsWindow";
 import { GeneralSettingsWindow } from "./GeneralSettingsWindow";
 import { HotkeySettingsWindow } from "./HotkeySettingsWindow";
 import { ChecksumToolWindow } from "./ChecksumToolWindow";
+import { TitleManagerWindow } from "./TitleManagerWindow";
 
 export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: number; context?: { titleId?: string } }) {
   switch (role) {
@@ -18,5 +19,6 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "general-settings": return <GeneralSettingsWindow />;
     case "hotkey-settings": return <HotkeySettingsWindow />;
     case "checksum-tool": return <ChecksumToolWindow windowId={windowId} />;
+    case "title-manager": return <TitleManagerWindow windowId={windowId} />;
   }
 }
