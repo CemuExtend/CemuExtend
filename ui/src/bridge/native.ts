@@ -1,4 +1,5 @@
-import type { RpcContract, RpcMethod, RpcRequest, RpcResponse } from "./contracts";
+import type { RpcRequest, RpcResponse } from "./contracts";
+import type { RpcContract, RpcMethod } from "../generated/contracts";
 
 let nextId = 0;
 

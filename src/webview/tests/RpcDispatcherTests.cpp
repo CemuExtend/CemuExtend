@@ -11,6 +11,8 @@ int main()
 			throw std::invalid_argument("value is required");
 		return std::string{"\""} + params["value"].GetString() + "\"";
 	});
+	const std::array<std::string_view, 1> methods{"echo"};
+	rpc.VerifyMethods(methods);
 	auto success = rpc.Dispatch(R"({"id":"1","method":"echo","params":{"value":"ok"}})");
 	assert(success.find(R"("ok":true)") != std::string::npos);
 	assert(success.find(R"("result":"ok")") != std::string::npos);

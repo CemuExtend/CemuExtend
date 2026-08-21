@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -18,6 +19,7 @@ namespace WebFrontend
 		using Handler = std::function<std::string(const rapidjson::Value& params)>;
 
 		void Register(std::string method, Handler handler);
+		void VerifyMethods(std::span<const std::string_view> methods) const;
 		[[nodiscard]] std::string Dispatch(std::string_view requestJson);
 		void BeginShutdown();
 		[[nodiscard]] bool IsShuttingDown() const;

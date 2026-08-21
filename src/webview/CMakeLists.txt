@@ -27,6 +27,7 @@ target_include_directories(CemuWebRpc PUBLIC
 
 add_library(CemuWebFrontend STATIC
   WebFrontend.cpp
+  generated/RpcMethods.h
   generated/WebAssets.h
 )
 if(TARGET cemu_web_assets)

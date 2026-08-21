@@ -38,6 +38,18 @@ namespace WebFrontend
 			throw std::logic_error("duplicate RPC method");
 	}
 
+	void RpcDispatcher::VerifyMethods(std::span<const std::string_view> methods) const
+	{
+		std::scoped_lock lock(m_mutex);
+		if (m_handlers.size() != methods.size())
+			throw std::logic_error("native RPC handlers do not match the generated contract");
+		for (const auto method : methods)
+		{
+			if (!m_handlers.contains(std::string(method)))
+				throw std::logic_error("generated RPC method has no native handler: " + std::string(method));
+		}
+	}
+
 	std::string RpcDispatcher::Dispatch(std::string_view requestJson)
 	{
 		if (requestJson.size() > 1024 * 1024)

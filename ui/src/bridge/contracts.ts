@@ -35,19 +35,6 @@ export type Title = {
 
 export type NativeEvent = { type: string; sequence: number; payload: unknown };
 
-export type RpcContract = {
-  "system.bootstrap": { params: undefined; result: Bootstrap };
-  "system.quit": { params: undefined; result: Record<string, never> };
-  "window.close": { params: undefined; result: Record<string, never> };
-  "window.getModel": { params: { role: WindowRole }; result: Record<string, unknown> };
-  "titles.list": { params: undefined; result: Title[] };
-  "titles.refresh": { params: undefined; result: Record<string, never> };
-  "titles.launch": { params: { titleId: string }; result: { titleId: string } };
-  "emulation.stop": { params: undefined; result: Record<string, never> };
-};
-
-export type RpcMethod = keyof RpcContract;
-
 declare global {
   interface Window {
     cemuInvoke?: (requestJson: string) => Promise<string>;

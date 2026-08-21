@@ -6,6 +6,7 @@
 #include "webview/MainWindowState.h"
 #include "webview/RpcDispatcher.h"
 #include "webview/generated/WebAssets.h"
+#include "webview/generated/RpcMethods.h"
 #include "util/helpers/helpers.h"
 
 #include <array>
@@ -311,6 +312,7 @@ namespace
 				(void)m_windowState->FinishEmulation();
 				return "{}";
 			});
+			m_rpc.VerifyMethods(WebFrontend::Generated::RpcMethods);
 		}
 
 		std::string Launch(const fs::path& path)
