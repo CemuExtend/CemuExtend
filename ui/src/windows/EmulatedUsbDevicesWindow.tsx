@@ -10,9 +10,9 @@ export function EmulatedUsbDevicesWindow() {
   const [model, setModel] = useState<EmulatedUsbModel>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState("");
-  const generation = useRef(0);
+  const generation = useRef("0");
   const install = useCallback((value: EmulatedUsbModel) => {
-    if (value.generation < generation.current) return;
+    if (BigInt(value.generation) < BigInt(generation.current)) return;
     generation.current = value.generation;
     setModel(value);
   }, []);

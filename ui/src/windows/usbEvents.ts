@@ -15,11 +15,12 @@ function descriptor(value: unknown): UsbDeviceDescriptor | undefined {
   return item as UsbDeviceDescriptor;
 }
 
-export function parseUsbDeviceChange(type: string, payload: unknown, currentGeneration: number): UsbDevicesChangedPayload | undefined {
+export function parseUsbDeviceChange(type: string, payload: unknown, currentGeneration: string): UsbDevicesChangedPayload | undefined {
   if (type !== "usb.devicesChanged" || !payload || typeof payload !== "object") return undefined;
   const item = payload as Record<string, unknown>;
   const device = descriptor(item.device);
-  if (!Number.isSafeInteger(item.generation) || (item.generation as number) <= currentGeneration ||
+  if (typeof item.generation !== "string" || !/^(0|[1-9][0-9]*)$/.test(item.generation) ||
+      BigInt(item.generation) <= BigInt(currentGeneration) ||
       typeof item.attached !== "boolean" || !device) return undefined;
-  return { generation: item.generation as number, attached: item.attached, device };
+  return { generation: item.generation, attached: item.attached, device };
 }

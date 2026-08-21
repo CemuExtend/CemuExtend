@@ -71,8 +71,8 @@ export type LoggingClearedEvent = NativeEvent & { type: "logging.cleared"; paylo
 export type UsbDeviceDescriptor = { id: string; vendorId: number; productId: number; interfaceIndex: number; interfaceSubClass: number; protocol: number; maxPacketSizeRx: number; maxPacketSizeTx: number; opened: boolean };
 export type EmulatedUsbDeviceId = "skylanders" | "infinity" | "dimensions";
 export type EmulatedUsbDevice = { id: EmulatedUsbDeviceId; name: string; vendorId: number; productId: number; enabled: boolean; connected: boolean };
-export type EmulatedUsbModel = { generation: number; emulatedDevices: EmulatedUsbDevice[]; attachedDevices: UsbDeviceDescriptor[] };
-export type UsbDevicesChangedPayload = { generation: number; attached: boolean; device: UsbDeviceDescriptor };
+export type EmulatedUsbModel = { generation: string; emulatedDevices: EmulatedUsbDevice[]; attachedDevices: UsbDeviceDescriptor[] };
+export type UsbDevicesChangedPayload = { generation: string; attached: boolean; device: UsbDeviceDescriptor };
 
 export type AboutInfo = {
   name: string;

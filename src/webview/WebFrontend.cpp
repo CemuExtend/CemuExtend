@@ -2455,7 +2455,7 @@ namespace
 				writer.StartObject(); writer.Key("deadzone"); writer.Double(value.deadzone);
 				writer.Key("range"); writer.Double(value.range); writer.EndObject();
 			};
-			writer.StartObject(); writer.Key("generation"); writer.Uint64(model.generation);
+			writer.StartObject(); writer.Key("generation"); writer.String(std::to_string(model.generation).c_str());
 			writer.Key("profiles"); writer.StartArray();
 			for (const auto& profile : model.profiles) writer.String(profile.data(), profile.size());
 			writer.EndArray(); writer.Key("availableApis"); writer.StartArray();
@@ -2591,7 +2591,7 @@ namespace
 		{
 			rapidjson::StringBuffer buffer;
 			JsonWriter writer(buffer); writer.StartObject();
-			writer.Key("generation"); writer.Uint64(change.generation);
+			writer.Key("generation"); writer.String(std::to_string(change.generation).c_str());
 			writer.Key("attached"); writer.Bool(change.attached);
 			writer.Key("device"); WriteUsbDescriptor(writer, change.device);
 			writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
