@@ -223,6 +223,11 @@ namespace WebFrontend
 			}
 			void SetCloseHandler(CloseHandler handler) override { m_closeHandler = std::move(handler); }
 			void SetMenuHandler(MenuHandler handler) override { m_menuHandler = std::move(handler); }
+			void SetMetricsHandler(MetricsHandler handler) override
+			{
+				m_metricsHandler = std::move(handler);
+				NotifyMetrics();
+			}
 
 		private:
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -242,7 +247,12 @@ namespace WebFrontend
 					if (self->m_closeHandler)
 						self->m_closeHandler();
 					return 0;
-				case WM_SIZE: self->ResizeChildren(); return 0;
+				case WM_SIZE:
+				case WM_DPICHANGED:
+				case WM_ACTIVATE:
+					self->ResizeChildren();
+					self->NotifyMetrics();
+					return 0;
 				case WM_COMMAND:
 					if (HIWORD(wparam) == 0 && LOWORD(wparam) >= FirstCommandId &&
 						LOWORD(wparam) < FirstCommandId + 12 && self->m_menuHandler)
@@ -266,6 +276,12 @@ namespace WebFrontend
 					MoveWindow(m_webView, 0, 0, area.right, area.bottom, TRUE);
 				if (m_renderRegion)
 					m_renderRegion->SetBounds({0, 0, area.right, area.bottom});
+			}
+
+			void NotifyMetrics()
+			{
+				if (m_metricsHandler && m_window)
+					m_metricsHandler(GetMetrics());
 			}
 
 			HMENU BuildMenu()
@@ -306,6 +322,7 @@ namespace WebFrontend
 			std::unique_ptr<WinRenderRegion> m_renderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
+			MetricsHandler m_metricsHandler;
 			WINDOWPLACEMENT m_windowPlacement{sizeof(m_windowPlacement)};
 			LONG m_windowStyle{};
 			bool m_fullscreen{};

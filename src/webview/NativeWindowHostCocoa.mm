@@ -11,6 +11,7 @@
 
 static void CemuDispatchMenu(void* context, NSInteger tag);
 static bool CemuDispatchClose(void* context);
+static void CemuDispatchMetrics(void* context);
 
 @interface CemuWebWindowDelegate : NSObject <NSWindowDelegate>
 {
@@ -29,6 +30,26 @@ static bool CemuDispatchClose(void* context);
 {
 	(void)sender;
 	return CemuDispatchClose(context) ? YES : NO;
+}
+- (void)windowDidResize:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchMetrics(context);
+}
+- (void)windowDidBecomeKey:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchMetrics(context);
+}
+- (void)windowDidResignKey:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchMetrics(context);
+}
+- (void)windowDidChangeBackingProperties:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchMetrics(context);
 }
 @end
 
@@ -124,7 +145,7 @@ namespace WebFrontend
 			Host::NativeWindowHandle GetMainWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Cocoa, nullptr,
-					reinterpret_cast<void*>(m_window)};
+					reinterpret_cast<void*>([m_window contentView])};
 			}
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
@@ -205,6 +226,11 @@ namespace WebFrontend
 			}
 			void SetCloseHandler(CloseHandler handler) override { m_closeHandler = std::move(handler); }
 			void SetMenuHandler(MenuHandler handler) override { m_menuHandler = std::move(handler); }
+			void SetMetricsHandler(MetricsHandler handler) override
+			{
+				m_metricsHandler = std::move(handler);
+				DispatchMetrics();
+			}
 			void DispatchMenu(NSInteger tag)
 			{
 				if (m_menuHandler && tag >= 0 && tag <= static_cast<NSInteger>(MenuCommand::About))
@@ -215,6 +241,11 @@ namespace WebFrontend
 				if (m_closeHandler)
 					m_closeHandler();
 				return false;
+			}
+			void DispatchMetrics()
+			{
+				if (m_metricsHandler && m_window)
+					m_metricsHandler(GetMetrics());
 			}
 
 		private:
@@ -266,6 +297,7 @@ namespace WebFrontend
 			std::unique_ptr<CocoaRenderRegion> m_renderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
+			MetricsHandler m_metricsHandler;
 			bool m_fullscreen{};
 		};
 	}
@@ -284,6 +316,11 @@ namespace WebFrontend
 	{
 		return static_cast<CocoaWindowHost*>(context)->DispatchClose();
 	}
+
+	void DispatchCocoaMetrics(void* context)
+	{
+		static_cast<CocoaWindowHost*>(context)->DispatchMetrics();
+	}
 }
 
 static void CemuDispatchMenu(void* context, NSInteger tag)
@@ -295,6 +332,12 @@ static void CemuDispatchMenu(void* context, NSInteger tag)
 static bool CemuDispatchClose(void* context)
 {
 	return context ? WebFrontend::DispatchCocoaClose(context) : false;
+}
+
+static void CemuDispatchMetrics(void* context)
+{
+	if (context)
+		WebFrontend::DispatchCocoaMetrics(context);
 }
 
 #endif

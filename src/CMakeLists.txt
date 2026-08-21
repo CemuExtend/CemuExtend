@@ -153,6 +153,7 @@ cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWebRpc CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWebFrontend CemuWxGui CemuWxFrontend
 	CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+cemu_assert_target_has_no_edge(CemuWebRendererAdapters CemuApplication CemuWxGui)
 # The normal GUI sees declarations only. The composition target is the sole
 # owner of implementation archive wiring.
 cemu_assert_target_has_direct_edges(CemuWxGui CemuWxAdapterContracts)
@@ -195,7 +196,10 @@ cemu_assert_target_internal_edges_allowed(CemuApplication
 	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuWebRpc)
 cemu_assert_target_internal_edges_allowed(CemuWebFrontend
-	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuUtil CemuWebRpc)
+	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuUtil CemuWebRpc
+	CemuWebRendererAdapters)
+cemu_assert_target_internal_edges_allowed(CemuWebRendererAdapters
+	CemuCafe CemuCommon CemuConfig CemuHostContracts)
 cemu_assert_target_internal_edges_allowed(CemuWxAdapterContracts CemuHostContracts)
 cemu_assert_target_internal_edges_allowed(CemuWxGuiCommon CemuCommon)
 cemu_assert_target_internal_edges_allowed(CemuWxRendererAdapters

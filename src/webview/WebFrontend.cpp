@@ -5,7 +5,9 @@
 #include "frontend/FrontendRuntime.h"
 #include "webview/MainWindowState.h"
 #include "webview/NativeWindowHost.h"
+#include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
+#include "webview/WebHostState.h"
 #include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
 #include "util/helpers/helpers.h"
@@ -29,6 +31,9 @@ namespace
 	using WebFrontend::CreateNativeWindowHost;
 	using WebFrontend::INativeWindowHost;
 	using WebFrontend::MenuCommand;
+	using WebFrontend::CreateRendererHost;
+	using WebFrontend::IRendererHost;
+	using WebFrontend::WebHostState;
 	class Runtime;
 	struct RuntimeCallbackGate
 	{
@@ -109,9 +114,16 @@ namespace
 				if (!m_webViewWidget)
 					throw std::runtime_error("failed to acquire the native webview widget");
 				m_nativeWindow->AttachWebView(m_webViewWidget);
-				m_nativeWindow->SetCloseHandler([this] { RequestShutdown(); });
+				m_nativeWindow->SetCloseHandler([this] { (void)RequestShutdown(); });
 				m_nativeWindow->SetMenuHandler(
 					[this](MenuCommand command) { HandleMenu(command); });
+				m_nativeWindow->SetMetricsHandler(
+					[state = m_hostState](Host::WindowMetricsSnapshot metrics) {
+						state->UpdateMetrics(metrics);
+					});
+				m_mainWindowPublication = m_hostState->PublishMainWindow(
+					m_nativeWindow->GetMainWindowHandle());
+				m_rendererHost = CreateRendererHost(m_hostState, m_hostState, m_hostState);
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
 					m_nativeWindow->GetNativeWindow()));
 				m_callbackGate->target = this;
@@ -176,12 +188,25 @@ namespace
 			m_titleEvents.Reset();
 			m_applicationEvents.Reset();
 			m_rpc.BeginShutdown();
+			constexpr unsigned maximumShutdownAttempts = 500;
+			unsigned shutdownAttempt{};
+			while (!TryShutdownApplication(false) &&
+				++shutdownAttempt < maximumShutdownAttempts)
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			if (!m_applicationShutdown)
+			{
+				cemuLog_log(LogType::Force,
+					"Cemu could not safely release emulation resources during final shutdown; terminating without destroying native renderer surfaces");
+				std::_Exit(EXIT_FAILURE);
+			}
+			DestroyMainRenderRegion();
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
 			if (!m_webview)
 				return;
 			m_nativeWindow->SetCloseHandler({});
 			m_nativeWindow->SetMenuHandler({});
+			m_nativeWindow->SetMetricsHandler({});
 			if (m_webViewWidget)
 				m_nativeWindow->PrepareWebViewDestroy(m_webViewWidget);
 			if (m_rpcBound)
@@ -189,15 +214,48 @@ namespace
 			webview_destroy(m_webview);
 			m_webview = nullptr;
 			m_webViewWidget = nullptr;
+			if (m_mainWindowPublication)
+			{
+				m_hostState->ClearMainWindow(m_mainWindowPublication);
+				m_mainWindowPublication = {};
+			}
 		}
 
-		void RequestShutdown()
+		bool RequestShutdown()
 		{
 			if (m_rpc.IsShuttingDown())
-				return;
+				return true;
+			if (!TryShutdownApplication())
+			{
+				Emit("system.diagnostic",
+					std::string(R"({"message":)") +
+					JsonString("Cemu could not stop the running title; shutdown was cancelled") + "}");
+				return false;
+			}
+			DestroyMainRenderRegion();
+			m_nativeWindow->ShowLibrary();
+			(void)m_windowState->FinishEmulation();
 			m_rpc.BeginShutdown();
 			(void)m_windowState->BeginShutdown();
 			webview_terminate(m_webview);
+			return true;
+		}
+
+		bool TryShutdownApplication(bool reportFailure = true)
+		{
+			if (m_applicationShutdown)
+				return true;
+			const auto result = m_controller.ShutdownApplication();
+			if (result.stopped)
+			{
+				m_applicationShutdown = true;
+				return true;
+			}
+			if (reportFailure)
+				cemuLog_log(LogType::Force,
+					"Web frontend shutdown could not release emulation resources: {}",
+					result.diagnostic);
+			return false;
 		}
 
 		void StopEmulation()
@@ -205,9 +263,16 @@ namespace
 			const auto result = m_controller.Stop();
 			if (!result.stopped)
 				return;
-			m_nativeWindow->DestroyMainRenderRegion();
+			DestroyMainRenderRegion();
 			m_nativeWindow->ShowLibrary();
 			(void)m_windowState->FinishEmulation();
+		}
+
+		void DestroyMainRenderRegion()
+		{
+			if (m_rendererHost)
+				m_rendererHost->PrepareMainDestroy();
+			m_nativeWindow->DestroyMainRenderRegion();
 		}
 
 		void HandleMenu(MenuCommand command)
@@ -215,7 +280,7 @@ namespace
 			switch (command)
 			{
 			case MenuCommand::EndEmulation: StopEmulation(); break;
-			case MenuCommand::Exit: RequestShutdown(); break;
+			case MenuCommand::Exit: (void)RequestShutdown(); break;
 			case MenuCommand::ToggleFullscreen:
 				m_fullscreen = !m_fullscreen;
 				m_nativeWindow->SetFullscreen(m_fullscreen);
@@ -281,7 +346,7 @@ namespace
 					if (state.mode != WebFrontend::MainWindowContentMode::Playing ||
 						state.generation != expectedGeneration)
 						return;
-					m_nativeWindow->DestroyMainRenderRegion();
+					DestroyMainRenderRegion();
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->FinishEmulation();
 				});
@@ -334,11 +399,13 @@ namespace
 					(m_rpc.IsShuttingDown() ? "true}" : "false}");
 			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
-				RequestShutdown();
+				if (!RequestShutdown())
+					throw std::runtime_error("the running title could not be stopped; shutdown was cancelled");
 				return "{}";
 			});
 			m_rpc.Register("window.close", [this](const rapidjson::Value&) {
-				webview_terminate(m_webview);
+				if (!RequestShutdown())
+					throw std::runtime_error("the running title could not be stopped; window close was cancelled");
 				return "{}";
 			});
 			m_rpc.Register("window.getModel", [this](const rapidjson::Value& params) {
@@ -396,7 +463,7 @@ namespace
 				const auto result = m_controller.Stop();
 				if (!result.stopped)
 					throw std::runtime_error(result.diagnostic);
-				m_nativeWindow->DestroyMainRenderRegion();
+				DestroyMainRenderRegion();
 				m_nativeWindow->ShowLibrary();
 				(void)m_windowState->FinishEmulation();
 				return "{}";
@@ -410,13 +477,16 @@ namespace
 				throw std::runtime_error("main window is not ready to launch a title");
 			const auto result = m_controller.Launch({path},
 				[this](const Application::LaunchResult&) {
-					(void)m_nativeWindow->CreateMainRenderRegion();
+					auto& region = m_nativeWindow->CreateMainRenderRegion();
+					m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+					m_rendererHost->InitializeMain(region);
 					if (!m_windowState->CommitLaunch())
 						throw std::runtime_error("main window content transition failed");
 					m_nativeWindow->ShowRenderRegion();
 				},
 				[this] {
-					m_nativeWindow->DestroyMainRenderRegion();
+					m_rendererHost->AbandonMainInitialization();
+					DestroyMainRenderRegion();
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->RollbackLaunch();
 				});
@@ -430,7 +500,7 @@ namespace
 				}
 				else
 				{
-					m_nativeWindow->DestroyMainRenderRegion();
+					DestroyMainRenderRegion();
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->RollbackLaunch();
 				}
@@ -443,6 +513,8 @@ namespace
 		webview_t m_webview{};
 		void* m_webViewWidget{};
 		RpcDispatcher m_rpc;
+		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
+		std::unique_ptr<IRendererHost> m_rendererHost;
 		Application::EmulationController m_controller;
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
@@ -455,6 +527,8 @@ namespace
 		bool m_fullscreen{};
 		bool m_rpcBound{};
 		bool m_cleanedUp{};
+		bool m_applicationShutdown{};
+		Host::NativeSurfacePublication m_mainWindowPublication{};
 	};
 }
 

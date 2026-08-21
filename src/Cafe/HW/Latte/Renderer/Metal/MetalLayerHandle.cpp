@@ -7,7 +7,7 @@ MetalLayerHandle::MetalLayerHandle(MTL::Device* device, const Vector2i& size, bo
 {
 	const auto window = g_renderer ? g_renderer->GetNativeSurfaces() :
 		Host::NativeSurfaceSnapshot{};
-    const auto& windowInfo = mainWindow ? window.mainWindow : window.padWindow;
+	const auto& windowInfo = mainWindow ? window.mainSurface : window.padSurface;
 
     m_layer = (CA::MetalLayer*)CreateMetalLayer(windowInfo.surface, m_layerScaleX, m_layerScaleY);
     m_layer->setDevice(device);

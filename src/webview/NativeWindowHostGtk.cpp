@@ -138,6 +138,25 @@ namespace WebFrontend
 							self.m_closeHandler();
 						return TRUE;
 					}), this);
+				g_signal_connect(m_window, "size-allocate", G_CALLBACK(+[](
+					GtkWidget*, GtkAllocation*, gpointer data) {
+						static_cast<GtkWindowHost*>(data)->NotifyMetrics();
+					}), this);
+				g_signal_connect(m_window, "window-state-event", G_CALLBACK(+[](
+					GtkWidget*, GdkEventWindowState*, gpointer data) -> gboolean {
+						static_cast<GtkWindowHost*>(data)->NotifyMetrics();
+						return FALSE;
+					}), this);
+				g_signal_connect(m_window, "focus-in-event", G_CALLBACK(+[](
+					GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+						static_cast<GtkWindowHost*>(data)->NotifyMetrics();
+						return FALSE;
+					}), this);
+				g_signal_connect(m_window, "focus-out-event", G_CALLBACK(+[](
+					GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+						static_cast<GtkWindowHost*>(data)->NotifyMetrics();
+						return FALSE;
+					}), this);
 			}
 
 			~GtkWindowHost() override
@@ -268,7 +287,19 @@ namespace WebFrontend
 				m_menuHandler = std::move(handler);
 			}
 
+			void SetMetricsHandler(MetricsHandler handler) override
+			{
+				m_metricsHandler = std::move(handler);
+				NotifyMetrics();
+			}
+
 		private:
+			void NotifyMetrics()
+			{
+				if (m_metricsHandler && m_window)
+					m_metricsHandler(GetMetrics());
+			}
+
 			GtkWidget* MenuItem(const char* label, MenuCommand command)
 			{
 				auto* item = gtk_menu_item_new_with_label(label);
@@ -322,6 +353,7 @@ namespace WebFrontend
 			std::unique_ptr<GtkRenderRegion> m_renderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
+			MetricsHandler m_metricsHandler;
 			bool m_fullscreen{};
 		};
 	}

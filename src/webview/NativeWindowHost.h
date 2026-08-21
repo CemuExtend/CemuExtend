@@ -27,6 +27,7 @@ namespace WebFrontend
 	public:
 		using CloseHandler = std::function<void()>;
 		using MenuHandler = std::function<void(MenuCommand)>;
+		using MetricsHandler = std::function<void(Host::WindowMetricsSnapshot)>;
 		virtual ~INativeWindowHost() = default;
 
 		[[nodiscard]] virtual void* GetNativeWindow() const = 0;
@@ -42,6 +43,7 @@ namespace WebFrontend
 		virtual void SetFullscreen(bool fullscreen) = 0;
 		virtual void SetCloseHandler(CloseHandler handler) = 0;
 		virtual void SetMenuHandler(MenuHandler handler) = 0;
+		virtual void SetMetricsHandler(MetricsHandler handler) = 0;
 	};
 
 	[[nodiscard]] std::unique_ptr<INativeWindowHost> CreateNativeWindowHost();

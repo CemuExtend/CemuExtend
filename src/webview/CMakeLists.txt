@@ -5,6 +5,18 @@ add_library(CemuWebRpc STATIC
   RpcDispatcher.h
 )
 
+add_library(CemuWebRendererAdapters STATIC
+  RendererHost.cpp
+  RendererHost.h
+)
+target_include_directories(CemuWebRendererAdapters PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(CemuWebRendererAdapters PRIVATE
+  CemuCafe
+  CemuCommon
+  CemuConfig
+  CemuHostContracts
+)
+
 option(CEMU_REGENERATE_WEB_UI "Regenerate embedded React assets during the C++ build" OFF)
 set(CEMU_WEB_ASSET_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/generated/WebAssets.h")
 if(CEMU_REGENERATE_WEB_UI)
@@ -26,8 +38,11 @@ target_include_directories(CemuWebRpc PUBLIC
 )
 
 add_library(CemuWebFrontend STATIC
-  NativeWindowHost.h
-  WebFrontend.cpp
+	NativeWindowHost.h
+	RendererHost.h
+	WebFrontend.cpp
+	WebHostState.cpp
+	WebHostState.h
   generated/RpcMethods.h
   generated/WebAssets.h
 )
@@ -54,6 +69,7 @@ target_link_libraries(CemuWebFrontend PRIVATE
   CemuHostContracts
   CemuWebRpc
   CemuUtil
+  CemuWebRendererAdapters
   webview::core_static
 )
 
@@ -65,4 +81,9 @@ if(BUILD_TESTING)
   add_executable(web_rpc_dispatcher_tests tests/RpcDispatcherTests.cpp)
   target_link_libraries(web_rpc_dispatcher_tests PRIVATE CemuWebRpc)
   add_test(NAME web_rpc_dispatcher_tests COMMAND web_rpc_dispatcher_tests)
+
+	add_executable(web_host_state_tests WebHostState.cpp tests/WebHostStateTests.cpp)
+	target_include_directories(web_host_state_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+	target_link_libraries(web_host_state_tests PRIVATE CemuHostContracts)
+	add_test(NAME web_host_state_tests COMMAND web_host_state_tests)
 endif()
