@@ -10,6 +10,10 @@ class MetalLayerHandle
 public:
     MetalLayerHandle() = default;
     MetalLayerHandle(MTL::Device* device, const Vector2i& size, bool mainWindow);
+	MetalLayerHandle(const MetalLayerHandle&) = delete;
+	MetalLayerHandle& operator=(const MetalLayerHandle&) = delete;
+	MetalLayerHandle(MetalLayerHandle&& other) noexcept;
+	MetalLayerHandle& operator=(MetalLayerHandle&& other) noexcept;
 
     ~MetalLayerHandle();
 
@@ -25,7 +29,7 @@ public:
 
 private:
     CA::MetalLayer* m_layer = nullptr;
-    float m_layerScaleX, m_layerScaleY;
+    float m_layerScaleX{1.0f}, m_layerScaleY{1.0f};
 
     CA::MetalDrawable* m_drawable = nullptr;
 };

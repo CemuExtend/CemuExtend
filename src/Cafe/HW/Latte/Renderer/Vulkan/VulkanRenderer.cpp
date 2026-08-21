@@ -568,7 +568,7 @@ VulkanRenderer::VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetri
 
 	// create tmp surface to create a logical device
 	const auto window = GetNativeSurfaces();
-	auto surface = CreateFramebufferSurface(m_instance, window.mainWindow);
+	auto surface = CreateFramebufferSurface(m_instance, window.mainSurface);
 
 	auto& config = GetConfig();
 	decltype(config.vk_graphic_device_uuid) zero{};
@@ -968,17 +968,21 @@ VulkanRenderer* VulkanRenderer::GetInstance()
 
 void VulkanRenderer::InitializeSurface(const Vector2i& size, bool mainWindow)
 {
+	auto swapchain = std::make_unique<SwapchainInfoVk>(mainWindow, size);
+	swapchain->Create();
 	if (mainWindow)
-	{
-		m_mainSwapchainInfo = std::make_unique<SwapchainInfoVk>(mainWindow, size);
-		m_mainSwapchainInfo->Create();
-	}
+		m_mainSwapchainInfo = std::move(swapchain);
 	else
-	{
-		m_padSwapchainInfo = std::make_unique<SwapchainInfoVk>(mainWindow, size);
-		// todo: figure out a way to exclusively create swapchain on main LatteThread
-		m_padSwapchainInfo->Create();
-	}
+		m_padSwapchainInfo = std::move(swapchain);
+}
+
+void VulkanRenderer::ShutdownPadSurface()
+{
+	if (!m_padSwapchainInfo)
+		return;
+	SubmitCommandBuffer();
+	WaitDeviceIdle();
+	m_padSwapchainInfo.reset();
 }
 
 const std::unique_ptr<SwapchainInfoVk>& VulkanRenderer::GetChainInfoPtr(bool mainWindow) const
@@ -1492,7 +1496,7 @@ std::vector<const char*> VulkanRenderer::CheckInstanceExtensionSupport(FeatureCo
 	requiredInstanceExtensions.emplace_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	#elif BOOST_OS_LINUX || BOOST_OS_BSD
 	const auto window = GetNativeSurfaces();
-	auto backend = window.mainWindow.backend;
+	auto backend = window.mainSurface.backend;
 	if(backend == Host::NativeWindowBackend::X11)
 		requiredInstanceExtensions.emplace_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
 	#if HAS_WAYLAND

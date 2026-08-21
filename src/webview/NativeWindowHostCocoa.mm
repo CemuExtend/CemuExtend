@@ -12,6 +12,8 @@
 static void CemuDispatchMenu(void* context, NSInteger tag);
 static bool CemuDispatchClose(void* context);
 static void CemuDispatchMetrics(void* context);
+static void CemuDispatchPadClose(void* context);
+static void CemuDispatchPadMetrics(void* context);
 
 @interface CemuWebWindowDelegate : NSObject <NSWindowDelegate>
 {
@@ -19,6 +21,32 @@ static void CemuDispatchMetrics(void* context);
 	void* context;
 }
 - (void)onMenu:(id)sender;
+@end
+
+@interface CemuWebPadWindowDelegate : NSObject <NSWindowDelegate>
+{
+@public
+	void* context;
+}
+@end
+
+@implementation CemuWebPadWindowDelegate
+- (BOOL)windowShouldClose:(id)sender
+{
+	(void)sender;
+	CemuDispatchPadClose(context);
+	return NO;
+}
+- (void)windowDidResize:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchPadMetrics(context);
+}
+- (void)windowDidChangeBackingProperties:(NSNotification*)notification
+{
+	(void)notification;
+	CemuDispatchPadMetrics(context);
+}
 @end
 
 @implementation CemuWebWindowDelegate
@@ -110,6 +138,95 @@ namespace WebFrontend
 			bool m_prepared{};
 		};
 
+		class CocoaPadRenderRegion final : public Host::IRenderRegion
+		{
+		public:
+			CocoaPadRenderRegion(std::function<void()> closeHandler,
+				std::function<void()> metricsHandler)
+				: m_closeHandler(std::move(closeHandler)),
+				  m_metricsHandler(std::move(metricsHandler))
+			{
+				const auto style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+					NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
+				m_window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 854, 480)
+					styleMask:style backing:NSBackingStoreBuffered defer:NO];
+				if (!m_window)
+					throw std::runtime_error("failed to create the native GamePad window");
+				[m_window setReleasedWhenClosed:NO];
+				[m_window setTitle:@"CemuExtend GamePad"];
+				m_view = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
+				[m_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				[m_view setWantsLayer:YES];
+				[m_window setContentView:m_view];
+				m_delegate = [[CemuWebPadWindowDelegate alloc] init];
+				m_delegate->context = this;
+				[m_window setDelegate:m_delegate];
+				[m_window center];
+				[m_window makeKeyAndOrderFront:nil];
+			}
+
+			~CocoaPadRenderRegion() override { PrepareForDestroy(); }
+			Host::NativeWindowHandle GetWindowHandle() const override
+			{
+				return {Host::NativeWindowBackend::Cocoa, nullptr,
+					reinterpret_cast<void*>(m_window)};
+			}
+			Host::NativeWindowHandle GetSurfaceHandle() const override
+			{
+				return {Host::NativeWindowBackend::Cocoa, nullptr,
+					reinterpret_cast<void*>(m_view)};
+			}
+			Host::RenderRegionBounds GetBounds() const override
+			{
+				const auto bounds = [m_view bounds];
+				return {0, 0, static_cast<std::int32_t>(bounds.size.width),
+					static_cast<std::int32_t>(bounds.size.height)};
+			}
+			void SetBounds(Host::RenderRegionBounds bounds) override
+			{
+				[m_window setContentSize:NSMakeSize(std::max(1, bounds.width),
+					std::max(1, bounds.height))];
+			}
+			void SetVisible(bool visible) override
+			{
+				if (visible)
+					[m_window orderFront:nil];
+				else
+					[m_window orderOut:nil];
+			}
+			void RequestFocus() override { [m_window makeKeyAndOrderFront:nil]; }
+			void PrepareForDestroy() override
+			{
+				if (std::exchange(m_prepared, true) || !m_window)
+					return;
+				m_closeHandler = {};
+				m_metricsHandler = {};
+				m_delegate->context = nullptr;
+				[m_window setDelegate:nil];
+				[m_window close];
+				[m_window release];
+				[m_view release];
+				[m_delegate release];
+				m_window = nil;
+				m_view = nil;
+				m_delegate = nil;
+			}
+			void DispatchClose() { if (m_closeHandler) m_closeHandler(); }
+			void DispatchMetrics() { if (m_metricsHandler) m_metricsHandler(); }
+			[[nodiscard]] double GetScaleFactor() const
+			{
+				return m_window ? [m_window backingScaleFactor] : 1.0;
+			}
+
+		private:
+			NSWindow* m_window{};
+			NSView* m_view{};
+			CemuWebPadWindowDelegate* m_delegate{};
+			std::function<void()> m_closeHandler;
+			std::function<void()> m_metricsHandler;
+			bool m_prepared{};
+		};
+
 		class CocoaWindowHost final : public INativeWindowHost
 		{
 		public:
@@ -123,6 +240,7 @@ namespace WebFrontend
 					styleMask:style backing:NSBackingStoreBuffered defer:NO];
 				if (!m_window)
 					throw std::runtime_error("failed to create native Cocoa main window");
+				[m_window setReleasedWhenClosed:NO];
 				[m_window setTitle:@"CemuExtend"];
 				[m_window center];
 				m_delegate = [[CemuWebWindowDelegate alloc] init];
@@ -133,6 +251,7 @@ namespace WebFrontend
 
 			~CocoaWindowHost() override
 			{
+				DestroyPadRenderRegion();
 				DestroyMainRenderRegion();
 				m_delegate->context = nullptr;
 				[m_window setDelegate:nil];
@@ -145,13 +264,13 @@ namespace WebFrontend
 			Host::NativeWindowHandle GetMainWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Cocoa, nullptr,
-					reinterpret_cast<void*>([m_window contentView])};
+					reinterpret_cast<void*>(m_window)};
 			}
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
 				const auto frame = [[m_window contentView] bounds];
 				const auto scale = [m_window backingScaleFactor];
-				return {
+				auto metrics = Host::WindowMetricsSnapshot{
 					.appActive = [m_window isKeyWindow] == YES,
 					.fullscreen = m_fullscreen,
 					.width = static_cast<std::int32_t>(frame.size.width),
@@ -160,6 +279,18 @@ namespace WebFrontend
 					.physicalHeight = static_cast<std::int32_t>(frame.size.height * scale),
 					.dpiScale = scale,
 				};
+				if (m_padRenderRegion)
+				{
+					const auto pad = m_padRenderRegion->GetBounds();
+					const auto padScale = m_padRenderRegion->GetScaleFactor();
+					metrics.padOpen = true;
+					metrics.padWidth = pad.width;
+					metrics.padHeight = pad.height;
+					metrics.physicalPadWidth = static_cast<std::int32_t>(pad.width * padScale);
+					metrics.physicalPadHeight = static_cast<std::int32_t>(pad.height * padScale);
+					metrics.padDpiScale = padScale;
+				}
+				return metrics;
 			}
 			void AttachWebView(void* widget) override
 			{
@@ -217,6 +348,21 @@ namespace WebFrontend
 				region.SetVisible(true);
 				region.RequestFocus();
 			}
+			Host::IRenderRegion& CreatePadRenderRegion() override
+			{
+				if (!m_padRenderRegion)
+					m_padRenderRegion = std::make_unique<CocoaPadRenderRegion>(
+						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
+						[this] { if (m_padMetricsEnabled) DispatchMetrics(); });
+				return *m_padRenderRegion;
+			}
+			void DestroyPadRenderRegion() override
+			{
+				m_padMetricsEnabled = false;
+				m_padRenderRegion.reset();
+				DispatchMetrics();
+			}
+			bool IsPadRenderRegionOpen() const override { return m_padRenderRegion != nullptr; }
 			void SetFullscreen(bool fullscreen) override
 			{
 				if (m_fullscreen == fullscreen)
@@ -230,6 +376,14 @@ namespace WebFrontend
 			{
 				m_metricsHandler = std::move(handler);
 				DispatchMetrics();
+			}
+			void SetPadCloseHandler(PadCloseHandler handler) override
+			{
+				m_padCloseHandler = std::move(handler);
+			}
+			void SetPadMetricsEnabled(bool enabled) override
+			{
+				m_padMetricsEnabled = enabled;
 			}
 			void DispatchMenu(NSInteger tag)
 			{
@@ -295,9 +449,12 @@ namespace WebFrontend
 			NSView* m_webView{};
 			CemuWebWindowDelegate* m_delegate{};
 			std::unique_ptr<CocoaRenderRegion> m_renderRegion;
+			std::unique_ptr<CocoaPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
+			PadCloseHandler m_padCloseHandler;
+			bool m_padMetricsEnabled{};
 			bool m_fullscreen{};
 		};
 	}
@@ -321,6 +478,16 @@ namespace WebFrontend
 	{
 		static_cast<CocoaWindowHost*>(context)->DispatchMetrics();
 	}
+
+	void DispatchCocoaPadClose(void* context)
+	{
+		static_cast<CocoaPadRenderRegion*>(context)->DispatchClose();
+	}
+
+	void DispatchCocoaPadMetrics(void* context)
+	{
+		static_cast<CocoaPadRenderRegion*>(context)->DispatchMetrics();
+	}
 }
 
 static void CemuDispatchMenu(void* context, NSInteger tag)
@@ -338,6 +505,18 @@ static void CemuDispatchMetrics(void* context)
 {
 	if (context)
 		WebFrontend::DispatchCocoaMetrics(context);
+}
+
+static void CemuDispatchPadClose(void* context)
+{
+	if (context)
+		WebFrontend::DispatchCocoaPadClose(context);
+}
+
+static void CemuDispatchPadMetrics(void* context)
+{
+	if (context)
+		WebFrontend::DispatchCocoaPadMetrics(context);
 }
 
 #endif

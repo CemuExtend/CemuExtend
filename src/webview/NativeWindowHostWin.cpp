@@ -16,6 +16,7 @@ namespace WebFrontend
 	{
 		constexpr wchar_t MainWindowClass[] = L"CemuExtendWebMainWindow";
 		constexpr wchar_t RenderWindowClass[] = L"CemuExtendRenderRegion";
+		constexpr wchar_t PadWindowClass[] = L"CemuExtendPadRenderRegion";
 		constexpr UINT FirstCommandId = 0x2000;
 
 		void RegisterWindowClasses()
@@ -91,6 +92,115 @@ namespace WebFrontend
 			bool m_prepared{};
 		};
 
+		class WinPadRenderRegion final : public Host::IRenderRegion
+		{
+		public:
+			WinPadRenderRegion(std::function<void()> closeHandler,
+				std::function<void()> metricsHandler)
+				: m_closeHandler(std::move(closeHandler)),
+				  m_metricsHandler(std::move(metricsHandler))
+			{
+				WNDCLASSEXW windowClass{sizeof(windowClass)};
+				windowClass.hInstance = GetModuleHandleW(nullptr);
+				windowClass.lpfnWndProc = &WinPadRenderRegion::WindowProc;
+				windowClass.lpszClassName = PadWindowClass;
+				windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+				windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+				if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+					throw std::runtime_error("failed to register the GamePad render window class");
+				m_window = CreateWindowExW(0, PadWindowClass, L"CemuExtend GamePad",
+					WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
+					870, 520, nullptr, nullptr, GetModuleHandleW(nullptr), this);
+				if (!m_window)
+					throw std::runtime_error("failed to create the native GamePad render window");
+				ShowWindow(m_window, SW_SHOW);
+				UpdateWindow(m_window);
+			}
+
+			~WinPadRenderRegion() override { PrepareForDestroy(); }
+			Host::NativeWindowHandle GetWindowHandle() const override
+			{
+				return {Host::NativeWindowBackend::Windows, nullptr, m_window};
+			}
+			Host::NativeWindowHandle GetSurfaceHandle() const override { return GetWindowHandle(); }
+			Host::RenderRegionBounds GetBounds() const override
+			{
+				RECT area{};
+				GetClientRect(m_window, &area);
+				return {0, 0, area.right, area.bottom};
+			}
+			void SetBounds(Host::RenderRegionBounds bounds) override
+			{
+				RECT frame{0, 0, std::max(1, bounds.width), std::max(1, bounds.height)};
+				AdjustWindowRectEx(&frame, static_cast<DWORD>(GetWindowLongW(m_window, GWL_STYLE)),
+					FALSE, static_cast<DWORD>(GetWindowLongW(m_window, GWL_EXSTYLE)));
+				SetWindowPos(m_window, nullptr, 0, 0, frame.right - frame.left,
+					frame.bottom - frame.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+			}
+			void SetVisible(bool visible) override { ShowWindow(m_window, visible ? SW_SHOW : SW_HIDE); }
+			void RequestFocus() override
+			{
+				SetForegroundWindow(m_window);
+				SetFocus(m_window);
+			}
+			void PrepareForDestroy() override
+			{
+				if (std::exchange(m_prepared, true) || !m_window)
+					return;
+				m_closeHandler = {};
+				m_metricsHandler = {};
+				DestroyWindow(m_window);
+				m_window = nullptr;
+			}
+
+		private:
+			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+			{
+				auto* self = reinterpret_cast<WinPadRenderRegion*>(
+					GetWindowLongPtrW(window, GWLP_USERDATA));
+				if (message == WM_NCCREATE)
+				{
+					self = static_cast<WinPadRenderRegion*>(
+						reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
+					self->m_window = window;
+					SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+				}
+				if (!self)
+					return DefWindowProcW(window, message, wparam, lparam);
+				switch (message)
+				{
+				case WM_CLOSE:
+					if (self->m_closeHandler)
+						self->m_closeHandler();
+					return 0;
+				case WM_SIZE:
+					if (self->m_metricsHandler)
+						self->m_metricsHandler();
+					return 0;
+				case WM_DPICHANGED:
+				{
+					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
+					SetWindowPos(window, nullptr, suggested->left, suggested->top,
+						suggested->right - suggested->left, suggested->bottom - suggested->top,
+						SWP_NOACTIVATE | SWP_NOZORDER);
+					if (self->m_metricsHandler)
+						self->m_metricsHandler();
+					return 0;
+				}
+				case WM_NCDESTROY:
+					SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+					self->m_window = nullptr;
+					break;
+				}
+				return DefWindowProcW(window, message, wparam, lparam);
+			}
+
+			HWND m_window{};
+			std::function<void()> m_closeHandler;
+			std::function<void()> m_metricsHandler;
+			bool m_prepared{};
+		};
+
 		class WinWindowHost final : public INativeWindowHost
 		{
 		public:
@@ -116,6 +226,7 @@ namespace WebFrontend
 
 			~WinWindowHost() override
 			{
+				DestroyPadRenderRegion();
 				DestroyMainRenderRegion();
 				if (m_window)
 					DestroyWindow(m_window);
@@ -133,15 +244,30 @@ namespace WebFrontend
 				RECT area{};
 				GetClientRect(m_window, &area);
 				const auto dpi = GetDpiForWindow(m_window);
-				return {
+				const auto scale = static_cast<double>(dpi) / 96.0;
+				auto metrics = Host::WindowMetricsSnapshot{
 					.appActive = GetForegroundWindow() == m_window,
 					.fullscreen = m_fullscreen,
-					.width = area.right,
-					.height = area.bottom,
+					.width = static_cast<std::int32_t>(std::lround(area.right / scale)),
+					.height = static_cast<std::int32_t>(std::lround(area.bottom / scale)),
 					.physicalWidth = area.right,
 					.physicalHeight = area.bottom,
-					.dpiScale = static_cast<double>(dpi) / 96.0,
+					.dpiScale = scale,
 				};
+				if (m_padRenderRegion)
+				{
+					const auto pad = m_padRenderRegion->GetBounds();
+					const auto padDpi = GetDpiForWindow(static_cast<HWND>(
+						m_padRenderRegion->GetWindowHandle().surface));
+					const auto padScale = static_cast<double>(padDpi) / 96.0;
+					metrics.padOpen = true;
+					metrics.padWidth = static_cast<std::int32_t>(std::lround(pad.width / padScale));
+					metrics.padHeight = static_cast<std::int32_t>(std::lround(pad.height / padScale));
+					metrics.physicalPadWidth = pad.width;
+					metrics.physicalPadHeight = pad.height;
+					metrics.padDpiScale = padScale;
+				}
+				return metrics;
 			}
 			void AttachWebView(void* widget) override
 			{
@@ -193,6 +319,21 @@ namespace WebFrontend
 				region.SetVisible(true);
 				region.RequestFocus();
 			}
+			Host::IRenderRegion& CreatePadRenderRegion() override
+			{
+				if (!m_padRenderRegion)
+					m_padRenderRegion = std::make_unique<WinPadRenderRegion>(
+						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
+						[this] { if (m_padMetricsEnabled) NotifyMetrics(); });
+				return *m_padRenderRegion;
+			}
+			void DestroyPadRenderRegion() override
+			{
+				m_padMetricsEnabled = false;
+				m_padRenderRegion.reset();
+				NotifyMetrics();
+			}
+			bool IsPadRenderRegionOpen() const override { return m_padRenderRegion != nullptr; }
 			void SetFullscreen(bool fullscreen) override
 			{
 				if (fullscreen == m_fullscreen)
@@ -228,6 +369,14 @@ namespace WebFrontend
 				m_metricsHandler = std::move(handler);
 				NotifyMetrics();
 			}
+			void SetPadCloseHandler(PadCloseHandler handler) override
+			{
+				m_padCloseHandler = std::move(handler);
+			}
+			void SetPadMetricsEnabled(bool enabled) override
+			{
+				m_padMetricsEnabled = enabled;
+			}
 
 		private:
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -248,11 +397,20 @@ namespace WebFrontend
 						self->m_closeHandler();
 					return 0;
 				case WM_SIZE:
-				case WM_DPICHANGED:
 				case WM_ACTIVATE:
 					self->ResizeChildren();
 					self->NotifyMetrics();
 					return 0;
+				case WM_DPICHANGED:
+				{
+					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
+					SetWindowPos(window, nullptr, suggested->left, suggested->top,
+						suggested->right - suggested->left, suggested->bottom - suggested->top,
+						SWP_NOACTIVATE | SWP_NOZORDER);
+					self->ResizeChildren();
+					self->NotifyMetrics();
+					return 0;
+				}
 				case WM_COMMAND:
 					if (HIWORD(wparam) == 0 && LOWORD(wparam) >= FirstCommandId &&
 						LOWORD(wparam) < FirstCommandId + 12 && self->m_menuHandler)
@@ -320,9 +478,12 @@ namespace WebFrontend
 			HWND m_webView{};
 			HMENU m_menu{};
 			std::unique_ptr<WinRenderRegion> m_renderRegion;
+			std::unique_ptr<WinPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
+			PadCloseHandler m_padCloseHandler;
+			bool m_padMetricsEnabled{};
 			WINDOWPLACEMENT m_windowPlacement{sizeof(m_windowPlacement)};
 			LONG m_windowStyle{};
 			bool m_fullscreen{};

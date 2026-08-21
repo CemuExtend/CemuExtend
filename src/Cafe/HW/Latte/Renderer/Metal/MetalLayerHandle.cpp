@@ -3,6 +3,8 @@
 
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 
+#include <utility>
+
 MetalLayerHandle::MetalLayerHandle(MTL::Device* device, const Vector2i& size, bool mainWindow)
 {
 	const auto window = g_renderer ? g_renderer->GetNativeSurfaces() :
@@ -19,6 +21,27 @@ MetalLayerHandle::~MetalLayerHandle()
 {
     if (m_layer)
         m_layer->release();
+}
+
+MetalLayerHandle::MetalLayerHandle(MetalLayerHandle&& other) noexcept
+	: m_layer(std::exchange(other.m_layer, nullptr)),
+	  m_layerScaleX(other.m_layerScaleX),
+	  m_layerScaleY(other.m_layerScaleY),
+	  m_drawable(std::exchange(other.m_drawable, nullptr))
+{
+}
+
+MetalLayerHandle& MetalLayerHandle::operator=(MetalLayerHandle&& other) noexcept
+{
+	if (this == &other)
+		return *this;
+	if (m_layer)
+		m_layer->release();
+	m_layer = std::exchange(other.m_layer, nullptr);
+	m_layerScaleX = other.m_layerScaleX;
+	m_layerScaleY = other.m_layerScaleY;
+	m_drawable = std::exchange(other.m_drawable, nullptr);
+	return *this;
 }
 
 void MetalLayerHandle::Resize(const Vector2i& size)

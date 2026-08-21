@@ -13,6 +13,8 @@ namespace WebFrontend
 		virtual void InitializeMain(Host::IRenderRegion& region) = 0;
 		virtual void AbandonMainInitialization() = 0;
 		virtual void PrepareMainDestroy() = 0;
+		virtual void InitializePad(Host::IRenderRegion& region) = 0;
+		virtual void PreparePadDestroy() = 0;
 	};
 
 	[[nodiscard]] std::unique_ptr<IRendererHost> CreateRendererHost(

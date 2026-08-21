@@ -22,6 +22,7 @@ LatteGPUState_t LatteGPUState = {};
 
 std::atomic_bool sLatteThreadRunning = false;
 std::atomic_bool sLatteThreadFinishedInit = false;
+std::atomic_bool sLatteThreadActive = false;
 
 void LatteThread_Exit();
 
@@ -163,6 +164,7 @@ int Latte_ThreadEntry()
 	// wait till a game is started
 	while( true )
 	{
+		LatteAsyncCommands_checkAndExecute();
 		if( CafeSystem::IsTitleRunning() )
 			break;
 
@@ -204,6 +206,7 @@ int Latte_ThreadEntry()
 	{
 		std::this_thread::yield();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		LatteAsyncCommands_checkAndExecute();
 		LatteThread_HandleOSScreen();
 		if (Latte_GetStopSignal())
 			LatteThread_Exit();
@@ -223,6 +226,7 @@ void Latte_Start()
 	std::unique_lock _lock(sLatteThreadStateMutex);
 	cemu_assert_debug(!sLatteThreadRunning);
 	sLatteThreadRunning = true;
+	sLatteThreadActive = true;
 	sLatteThreadFinishedInit = false;
 	sLatteThread = std::thread(Latte_ThreadEntry);
 	// wait until initialized
@@ -247,6 +251,12 @@ bool Latte_GetStopSignal()
 	return !sLatteThreadRunning;
 }
 
+void LatteThread_WaitUntilStopped()
+{
+	while (sLatteThreadActive.load(std::memory_order_acquire))
+		sLatteThreadActive.wait(true, std::memory_order_acquire);
+}
+
 void LatteThread_Exit()
 {
 	if (g_renderer)
@@ -267,6 +277,8 @@ void LatteThread_Exit()
 		delete renderer;
 		g_renderer.release();
 	}
+	sLatteThreadActive.store(false, std::memory_order_release);
+	sLatteThreadActive.notify_all();
 	// reset GPU7 state
 	std::memset(&LatteGPUState, 0, sizeof(LatteGPUState));
 	#if BOOST_OS_WINDOWS

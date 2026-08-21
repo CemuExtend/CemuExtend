@@ -121,6 +121,12 @@ namespace
 					[state = m_hostState](Host::WindowMetricsSnapshot metrics) {
 						state->UpdateMetrics(metrics);
 					});
+				m_nativeWindow->SetPadCloseHandler([this] {
+					const auto expectedGeneration = m_padGeneration;
+					PostToUi([this, expectedGeneration] {
+						(void)ClosePadRenderRegion(expectedGeneration);
+					});
+				});
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
 				m_rendererHost = CreateRendererHost(m_hostState, m_hostState, m_hostState);
@@ -199,7 +205,12 @@ namespace
 					"Cemu could not safely release emulation resources during final shutdown; terminating without destroying native renderer surfaces");
 				std::_Exit(EXIT_FAILURE);
 			}
-			DestroyMainRenderRegion();
+			if (!DestroyMainRenderRegion())
+			{
+				cemuLog_log(LogType::Force,
+					"Cemu could not safely detach native renderer surfaces during final shutdown");
+				std::_Exit(EXIT_FAILURE);
+			}
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
 			if (!m_webview)
@@ -207,6 +218,7 @@ namespace
 			m_nativeWindow->SetCloseHandler({});
 			m_nativeWindow->SetMenuHandler({});
 			m_nativeWindow->SetMetricsHandler({});
+			m_nativeWindow->SetPadCloseHandler({});
 			if (m_webViewWidget)
 				m_nativeWindow->PrepareWebViewDestroy(m_webViewWidget);
 			if (m_rpcBound)
@@ -232,7 +244,8 @@ namespace
 					JsonString("Cemu could not stop the running title; shutdown was cancelled") + "}");
 				return false;
 			}
-			DestroyMainRenderRegion();
+			if (!DestroyMainRenderRegion())
+				return false;
 			m_nativeWindow->ShowLibrary();
 			(void)m_windowState->FinishEmulation();
 			m_rpc.BeginShutdown();
@@ -263,16 +276,84 @@ namespace
 			const auto result = m_controller.Stop();
 			if (!result.stopped)
 				return;
-			DestroyMainRenderRegion();
+			if (!DestroyMainRenderRegion())
+				return;
 			m_nativeWindow->ShowLibrary();
 			(void)m_windowState->FinishEmulation();
 		}
 
-		void DestroyMainRenderRegion()
+		bool DestroyMainRenderRegion()
 		{
+			if (!ClosePadRenderRegion())
+				return false;
 			if (m_rendererHost)
 				m_rendererHost->PrepareMainDestroy();
 			m_nativeWindow->DestroyMainRenderRegion();
+			return true;
+		}
+
+		bool ClosePadRenderRegion(std::optional<std::uint64_t> expectedGeneration = {})
+		{
+			if (expectedGeneration && *expectedGeneration != m_padGeneration)
+				return true;
+			if (!m_nativeWindow->IsPadRenderRegionOpen())
+				return true;
+			m_nativeWindow->SetPadMetricsEnabled(false);
+			auto metrics = m_nativeWindow->GetMetrics();
+			metrics.padOpen = false;
+			metrics.padWidth = 0;
+			metrics.padHeight = 0;
+			metrics.physicalPadWidth = 0;
+			metrics.physicalPadHeight = 0;
+			m_hostState->UpdateMetrics(metrics);
+			try
+			{
+				if (m_rendererHost)
+					m_rendererHost->PreparePadDestroy();
+			}
+			catch (const std::exception& error)
+			{
+				m_nativeWindow->SetPadMetricsEnabled(true);
+				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+				cemuLog_log(LogType::Force, "Unable to safely close the GamePad surface: {}",
+					error.what());
+				Emit("system.diagnostic", std::string(R"({"message":)") +
+					JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
+				return false;
+			}
+			m_nativeWindow->DestroyPadRenderRegion();
+			++m_padGeneration;
+			return true;
+		}
+
+		void TogglePadRenderRegion()
+		{
+			if (m_controller.State() != Application::EmulationState::Running)
+			{
+				Emit("system.diagnostic", R"({"message":"GamePad view is only available while a title is running"})");
+				return;
+			}
+			if (m_nativeWindow->IsPadRenderRegionOpen())
+			{
+				(void)ClosePadRenderRegion();
+				return;
+			}
+			try
+			{
+				++m_padGeneration;
+				auto& region = m_nativeWindow->CreatePadRenderRegion();
+				m_rendererHost->InitializePad(region);
+				m_nativeWindow->SetPadMetricsEnabled(true);
+				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+				region.SetVisible(true);
+				region.RequestFocus();
+			}
+			catch (const std::exception& error)
+			{
+				(void)ClosePadRenderRegion();
+				Emit("system.diagnostic", std::string(R"({"message":)") +
+					JsonString(std::string("Unable to open GamePad view: ") + error.what()) + "}");
+			}
 		}
 
 		void HandleMenu(MenuCommand command)
@@ -286,7 +367,7 @@ namespace
 				m_nativeWindow->SetFullscreen(m_fullscreen);
 				break;
 			case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
-			case MenuCommand::TogglePadView: Emit("menu.command", R"({"command":"togglePadView"})"); break;
+			case MenuCommand::TogglePadView: TogglePadRenderRegion(); break;
 			case MenuCommand::GeneralSettings: Emit("menu.command", R"({"command":"generalSettings"})"); break;
 			case MenuCommand::InputSettings: Emit("menu.command", R"({"command":"inputSettings"})"); break;
 			case MenuCommand::GraphicPacks: Emit("menu.command", R"({"command":"graphicPacks"})"); break;
@@ -310,7 +391,19 @@ namespace
 				return;
 			if (pending->beforeDispatch)
 				pending->beforeDispatch();
-			webview_eval(webview, pending->script.c_str());
+			if (!pending->script.empty())
+				webview_eval(webview, pending->script.c_str());
+		}
+
+		void PostToUi(std::function<void()> action)
+		{
+			if (m_stopping.load(std::memory_order_acquire))
+				return;
+			auto pending = std::make_unique<PendingEvent>();
+			pending->stopping = m_eventStopping;
+			pending->beforeDispatch = std::move(action);
+			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
+				pending.release();
 		}
 
 		void Emit(std::string_view type, std::string_view payloadJson,
@@ -346,7 +439,8 @@ namespace
 					if (state.mode != WebFrontend::MainWindowContentMode::Playing ||
 						state.generation != expectedGeneration)
 						return;
-					DestroyMainRenderRegion();
+					if (!DestroyMainRenderRegion())
+						return;
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->FinishEmulation();
 				});
@@ -463,7 +557,8 @@ namespace
 				const auto result = m_controller.Stop();
 				if (!result.stopped)
 					throw std::runtime_error(result.diagnostic);
-				DestroyMainRenderRegion();
+				if (!DestroyMainRenderRegion())
+					throw std::runtime_error("native renderer surfaces could not be detached safely");
 				m_nativeWindow->ShowLibrary();
 				(void)m_windowState->FinishEmulation();
 				return "{}";
@@ -524,6 +619,7 @@ namespace
 		std::shared_ptr<std::atomic_bool> m_eventStopping{std::make_shared<std::atomic_bool>()};
 		std::mutex m_eventMutex;
 		std::uint64_t m_eventSequence{};
+		std::uint64_t m_padGeneration{};
 		bool m_fullscreen{};
 		bool m_rpcBound{};
 		bool m_cleanedUp{};
@@ -534,8 +630,36 @@ namespace
 
 void Frontend::Run()
 {
-	SetThreadName("cemu-web-ui");
 	CemuCommonInit();
+#if BOOST_OS_WINDOWS
+	std::exception_ptr uiFailure;
+	std::thread uiThread([&uiFailure] {
+		SetThreadName("cemu-web-ui");
+		const auto initialized = CoInitializeEx(nullptr,
+			COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+		if (FAILED(initialized))
+		{
+			uiFailure = std::make_exception_ptr(
+				std::runtime_error("failed to initialize the webview STA UI thread"));
+			return;
+		}
+		try
+		{
+			Runtime runtime;
+			runtime.Run();
+		}
+		catch (...)
+		{
+			uiFailure = std::current_exception();
+		}
+		CoUninitialize();
+	});
+	uiThread.join();
+	if (uiFailure)
+		std::rethrow_exception(uiFailure);
+#else
+	SetThreadName("cemu-web-ui");
 	Runtime runtime;
 	runtime.Run();
+#endif
 }

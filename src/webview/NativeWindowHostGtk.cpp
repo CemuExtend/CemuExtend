@@ -116,6 +116,84 @@ namespace WebFrontend
 			bool m_prepared{};
 		};
 
+		class GtkPadRenderRegion final : public Host::IRenderRegion
+		{
+		public:
+			explicit GtkPadRenderRegion(std::function<void()> closeHandler,
+				std::function<void()> metricsHandler)
+				: m_closeHandler(std::move(closeHandler)),
+				  m_metricsHandler(std::move(metricsHandler))
+			{
+				m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+				gtk_window_set_title(GTK_WINDOW(m_window), "CemuExtend GamePad");
+				gtk_window_set_default_size(GTK_WINDOW(m_window), 854, 480);
+				m_widget = gtk_drawing_area_new();
+				gtk_widget_set_can_focus(m_widget, TRUE);
+				gtk_container_add(GTK_CONTAINER(m_window), m_widget);
+				g_signal_connect(m_window, "delete-event", G_CALLBACK(+[](
+					GtkWidget*, GdkEvent*, gpointer data) -> gboolean {
+						auto& self = *static_cast<GtkPadRenderRegion*>(data);
+						if (self.m_closeHandler)
+							self.m_closeHandler();
+						return TRUE;
+					}), this);
+				g_signal_connect(m_widget, "size-allocate", G_CALLBACK(+[](
+					GtkWidget*, GtkAllocation*, gpointer data) {
+						auto& self = *static_cast<GtkPadRenderRegion*>(data);
+						if (self.m_metricsHandler)
+							self.m_metricsHandler();
+					}), this);
+				gtk_widget_show_all(m_window);
+				gtk_widget_realize(m_widget);
+				gtk_widget_grab_focus(m_widget);
+			}
+
+			~GtkPadRenderRegion() override { PrepareForDestroy(); }
+			Host::NativeWindowHandle GetWindowHandle() const override { return NativeHandle(m_window); }
+			Host::NativeWindowHandle GetSurfaceHandle() const override { return NativeHandle(m_widget); }
+			int GetScaleFactor() const { return gtk_widget_get_scale_factor(m_widget); }
+			Host::RenderRegionBounds GetBounds() const override
+			{
+				GtkAllocation allocation{};
+				gtk_widget_get_allocation(m_widget, &allocation);
+				return {0, 0, allocation.width, allocation.height};
+			}
+			void SetBounds(Host::RenderRegionBounds bounds) override
+			{
+				gtk_window_resize(GTK_WINDOW(m_window), std::max(1, bounds.width),
+					std::max(1, bounds.height));
+			}
+			void SetVisible(bool visible) override
+			{
+				if (visible)
+					gtk_widget_show(m_window);
+				else
+					gtk_widget_hide(m_window);
+			}
+			void RequestFocus() override
+			{
+				gtk_window_present(GTK_WINDOW(m_window));
+				gtk_widget_grab_focus(m_widget);
+			}
+			void PrepareForDestroy() override
+			{
+				if (std::exchange(m_prepared, true) || !m_window)
+					return;
+				m_closeHandler = {};
+				m_metricsHandler = {};
+				gtk_widget_destroy(m_window);
+				m_window = nullptr;
+				m_widget = nullptr;
+			}
+
+		private:
+			GtkWidget* m_window{};
+			GtkWidget* m_widget{};
+			std::function<void()> m_closeHandler;
+			std::function<void()> m_metricsHandler;
+			bool m_prepared{};
+		};
+
 		class GtkWindowHost final : public INativeWindowHost
 		{
 		public:
@@ -161,6 +239,7 @@ namespace WebFrontend
 
 			~GtkWindowHost() override
 			{
+				DestroyPadRenderRegion();
 				DestroyMainRenderRegion();
 				if (m_window)
 					gtk_widget_destroy(m_window);
@@ -177,7 +256,7 @@ namespace WebFrontend
 				GtkAllocation allocation{};
 				gtk_widget_get_allocation(m_stack ? m_stack : m_window, &allocation);
 				const auto scale = gtk_widget_get_scale_factor(m_window);
-				return {
+				auto metrics = Host::WindowMetricsSnapshot{
 					.appActive = gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE,
 					.fullscreen = m_fullscreen,
 					.width = allocation.width,
@@ -186,6 +265,18 @@ namespace WebFrontend
 					.physicalHeight = allocation.height * scale,
 					.dpiScale = static_cast<double>(scale),
 				};
+				if (m_padRenderRegion)
+				{
+					const auto pad = m_padRenderRegion->GetBounds();
+					const auto padScale = m_padRenderRegion->GetScaleFactor();
+					metrics.padOpen = true;
+					metrics.padWidth = pad.width;
+					metrics.padHeight = pad.height;
+					metrics.physicalPadWidth = pad.width * padScale;
+					metrics.physicalPadHeight = pad.height * padScale;
+					metrics.padDpiScale = static_cast<double>(padScale);
+				}
+				return metrics;
 			}
 
 			void AttachWebView(void* widget) override
@@ -262,6 +353,29 @@ namespace WebFrontend
 				region.RequestFocus();
 			}
 
+			Host::IRenderRegion& CreatePadRenderRegion() override
+			{
+				if (!m_padRenderRegion)
+				{
+					m_padRenderRegion = std::make_unique<GtkPadRenderRegion>(
+						[this] {
+							if (m_padCloseHandler)
+								m_padCloseHandler();
+						},
+						[this] { if (m_padMetricsEnabled) NotifyMetrics(); });
+				}
+				return *m_padRenderRegion;
+			}
+
+			void DestroyPadRenderRegion() override
+			{
+				m_padMetricsEnabled = false;
+				m_padRenderRegion.reset();
+				NotifyMetrics();
+			}
+
+			bool IsPadRenderRegionOpen() const override { return m_padRenderRegion != nullptr; }
+
 			void SetFullscreen(bool fullscreen) override
 			{
 				m_fullscreen = fullscreen;
@@ -291,6 +405,15 @@ namespace WebFrontend
 			{
 				m_metricsHandler = std::move(handler);
 				NotifyMetrics();
+			}
+
+			void SetPadCloseHandler(PadCloseHandler handler) override
+			{
+				m_padCloseHandler = std::move(handler);
+			}
+			void SetPadMetricsEnabled(bool enabled) override
+			{
+				m_padMetricsEnabled = enabled;
 			}
 
 		private:
@@ -351,9 +474,12 @@ namespace WebFrontend
 			GtkWidget* m_stack{};
 			GtkWidget* m_webView{};
 			std::unique_ptr<GtkRenderRegion> m_renderRegion;
+			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
 			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
+			PadCloseHandler m_padCloseHandler;
+			bool m_padMetricsEnabled{};
 			bool m_fullscreen{};
 		};
 	}

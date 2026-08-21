@@ -4,6 +4,7 @@
 #include "webview/OpenGLHost.h"
 
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
+#include "Cafe/HW/Latte/Core/LatteAsyncCommands.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
 
@@ -44,7 +45,11 @@ namespace WebFrontend
 				});
 			}
 
-			~RendererHost() override { PrepareMainDestroy(); }
+			~RendererHost() override
+			{
+				PreparePadDestroy();
+				PrepareMainDestroy();
+			}
 
 			void InitializeMain(Host::IRenderRegion& region) override
 			{
@@ -131,14 +136,138 @@ namespace WebFrontend
 					g_renderer.reset();
 			}
 
+			void InitializePad(Host::IRenderRegion& region) override
+			{
+				if (m_padSurfacePublication || m_padWindowPublication)
+					throw std::logic_error("the GamePad renderer surface is already initialized");
+				if (!g_renderer)
+					throw std::logic_error("the main renderer must be initialized before the GamePad surface");
+				const auto bounds = region.GetBounds();
+				if (bounds.width <= 0 || bounds.height <= 0)
+					throw std::runtime_error("the native GamePad render region has no drawable area");
+				m_padWindowPublication = m_nativeSurfacePublisher->PublishPadWindow(
+					region.GetWindowHandle());
+				m_padSurfacePublication = m_nativeSurfacePublisher->PublishCanvas(
+					false, region.GetSurfaceHandle());
+				try
+				{
+#ifdef ENABLE_OPENGL
+					if (m_api == kOpenGL)
+						m_openGLHost->AttachPad(region.GetSurfaceHandle());
+#endif
+					if (m_api == kMetal)
+					{
+#ifdef ENABLE_METAL
+						LatteAsyncCommands_runWithRendererPaused([bounds] {
+							MetalRenderer::GetInstance()->InitializeLayer(
+								{bounds.width, bounds.height}, false);
+						});
+#else
+						throw std::runtime_error("the configured Metal backend is unavailable");
+#endif
+					}
+					else
+						LatteAsyncCommands_runOnRendererThread([this, bounds] {
+						switch (m_api)
+						{
+#ifdef ENABLE_VULKAN
+						case kVulkan:
+							VulkanRenderer::GetInstance()->InitializeSurface(
+								{bounds.width, bounds.height}, false);
+							break;
+#endif
+#ifdef ENABLE_OPENGL
+						case kOpenGL:
+							m_openGLHost->ActivatePad();
+							break;
+#endif
+						default:
+							throw std::runtime_error("the configured GamePad graphics API is unavailable");
+						}
+						});
+					m_padRendererInitialized = true;
+				}
+				catch (...)
+				{
+#ifdef ENABLE_OPENGL
+					if (m_api == kOpenGL && m_openGLHost)
+						m_openGLHost->DetachPad();
+#endif
+					if (m_padSurfacePublication)
+						m_nativeSurfacePublisher->ClearCanvas(false, m_padSurfacePublication);
+					if (m_padWindowPublication)
+						m_nativeSurfacePublisher->ClearPadWindow(m_padWindowPublication);
+					m_padSurfacePublication = {};
+					m_padWindowPublication = {};
+					throw;
+				}
+			}
+
+			void PreparePadDestroy() override
+			{
+				if (!m_padSurfacePublication && !m_padWindowPublication)
+					return;
+				if (m_padRendererInitialized)
+				{
+					try
+					{
+						if (m_api == kMetal)
+						{
+#ifdef ENABLE_METAL
+							LatteAsyncCommands_runWithRendererPaused([] {
+								MetalRenderer::GetInstance()->ShutdownLayer(false);
+							});
+#endif
+						}
+						else
+							LatteAsyncCommands_runOnRendererThread([this] {
+								switch (m_api)
+								{
+#ifdef ENABLE_VULKAN
+								case kVulkan:
+									VulkanRenderer::GetInstance()->ShutdownPadSurface();
+									break;
+#endif
+#ifdef ENABLE_OPENGL
+								case kOpenGL:
+									m_openGLHost->DeactivatePad();
+									break;
+#endif
+								default: break;
+								}
+							});
+					}
+					catch (...)
+					{
+						if (!Latte_GetStopSignal())
+							throw;
+						LatteThread_WaitUntilStopped();
+					}
+				}
+#ifdef ENABLE_OPENGL
+				if (m_api == kOpenGL && m_openGLHost)
+					m_openGLHost->DetachPad();
+#endif
+				if (m_padSurfacePublication)
+					m_nativeSurfacePublisher->ClearCanvas(false, m_padSurfacePublication);
+				if (m_padWindowPublication)
+					m_nativeSurfacePublisher->ClearPadWindow(m_padWindowPublication);
+				m_padSurfacePublication = {};
+				m_padWindowPublication = {};
+				m_padRendererInitialized = false;
+			}
+
 		private:
 			std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 			std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 			std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
 			Host::NativeSurfacePublication m_mainPublication{};
+			Host::NativeSurfacePublication m_padWindowPublication{};
+			Host::NativeSurfacePublication m_padSurfacePublication{};
+			bool m_padRendererInitialized{};
 			GraphicAPI m_api{kVulkan};
 #ifdef ENABLE_OPENGL
-			std::unique_ptr<OpenGLCanvasCallbacks> m_openGLHost;
+			std::unique_ptr<INativeOpenGLHost> m_openGLHost;
 #endif
 		};
 	}

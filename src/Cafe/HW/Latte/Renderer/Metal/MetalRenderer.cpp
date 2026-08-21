@@ -317,6 +317,7 @@ void MetalRenderer::InitializeLayer(const Vector2i& size, bool mainWindow)
 
 void MetalRenderer::ShutdownLayer(bool mainWindow)
 {
+	Flush(true);
     GetLayer(mainWindow) = MetalLayerHandle();
 }
 

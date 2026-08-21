@@ -113,7 +113,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
         echo "CMake configure failed (attempt $attempt/3); retrying in 5 seconds..."; \
         sleep 5; \
     done \
-    && cmake --build build/docker --parallel \
+    && cmake --build build/docker --clean-first --parallel \
     && ctest --test-dir build/docker --output-on-failure \
     && cp bin/Cemu_release /Cemu_release
 
