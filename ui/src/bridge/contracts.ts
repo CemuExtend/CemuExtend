@@ -40,6 +40,13 @@ export type CemodApprovalUpdate = { generation: string; titleId: string; package
 export type ChecksumContent = { locationUid: string; titleId: string; name: string; version: number; region: string; type: "base" | "update" | "dlc" | "system"; format: "folder" | "wud" | "nus" | "wua" | "wuhb" };
 export type ChecksumModel = { entries: ChecksumContent[] };
 export type TitleManagerEntry = Omit<ChecksumContent, "type"> & { type: ChecksumContent["type"] | "save"; path: string; canLaunch: boolean; canVerify: boolean; canConvert: boolean; canDelete: boolean };
+
+export type MemoryValueType = "int8" | "int16" | "int32" | "int64" | "float32" | "float64";
+export type MemoryTypedValue = { type: MemoryValueType; text: string };
+export type MemoryAddress = { space: "wiiu-virtual"; value: string };
+export type MemorySearchSession = { sessionToken: string; generation: string; mapGeneration: string; bytesTotal: number };
+export type MemorySearchStatus = { generation: string; state: "scanning" | "complete" | "cancelled" | "failed"; bytesScanned: number; bytesTotal: number; resultCount: number; resultCapReached: boolean; scanCapReached: boolean; diagnostic: string };
+export type MemorySearchPage = { generation: string; offset: number; total: number; results: Array<{ address: MemoryAddress; value: MemoryTypedValue }> };
 export type TitleManagerModel = { scanning: boolean; entries: TitleManagerEntry[] };
 export type NativeSelection = { cancelled: true } | { cancelled: false; sourceToken: string; displayName: string };
 export type NativeDestination = { cancelled: true } | { cancelled: false; destinationToken: string };

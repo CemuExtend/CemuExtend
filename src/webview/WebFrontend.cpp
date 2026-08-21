@@ -7,6 +7,7 @@
 #include "application/LoggingFacade.h"
 #include "application/EmulatedUsbFacade.h"
 #include "application/DiagnosticFacade.h"
+#include "application/MemorySearchFacade.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
@@ -29,10 +30,13 @@
 
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <charconv>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 
 #include <rapidjson/document.h>
@@ -583,6 +587,150 @@ namespace
 		if (!value.IsNumber() || !std::isfinite(value.GetDouble()))
 			throw std::invalid_argument(std::string(name) + " must be a finite number");
 		return value.GetDouble();
+	}
+
+	Application::MemoryValueType ParseMemoryValueType(std::string_view type)
+	{
+		if (type == "int8") return Application::MemoryValueType::Int8;
+		if (type == "int16") return Application::MemoryValueType::Int16;
+		if (type == "int32") return Application::MemoryValueType::Int32;
+		if (type == "int64") return Application::MemoryValueType::Int64;
+		if (type == "float32") return Application::MemoryValueType::Float32;
+		if (type == "float64") return Application::MemoryValueType::Float64;
+		throw std::invalid_argument("unknown memory value type");
+	}
+
+	std::string_view MemoryValueTypeName(Application::MemoryValueType type)
+	{
+		switch (type)
+		{
+		case Application::MemoryValueType::Int8: return "int8";
+		case Application::MemoryValueType::Int16: return "int16";
+		case Application::MemoryValueType::Int32: return "int32";
+		case Application::MemoryValueType::Int64: return "int64";
+		case Application::MemoryValueType::Float32: return "float32";
+		case Application::MemoryValueType::Float64: return "float64";
+		}
+		throw std::invalid_argument("unknown memory value type");
+	}
+
+	template<typename T> T ParseMemoryInteger(std::string_view text)
+	{
+		T value{};
+		const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+		if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+			throw std::invalid_argument("memory value is outside the selected integer type");
+		return value;
+	}
+
+	Application::MemorySearchValue ParseMemoryValue(const rapidjson::Value& object)
+	{
+		const auto type = ParseMemoryValueType(RequiredString(object, "type"));
+		const auto text = RequiredString(object, "text");
+		switch (type)
+		{
+		case Application::MemoryValueType::Int8:
+			return {type, ParseMemoryInteger<std::int8_t>(text)};
+		case Application::MemoryValueType::Int16:
+			return {type, ParseMemoryInteger<std::int16_t>(text)};
+		case Application::MemoryValueType::Int32:
+			return {type, ParseMemoryInteger<std::int32_t>(text)};
+		case Application::MemoryValueType::Int64:
+			return {type, ParseMemoryInteger<std::int64_t>(text)};
+		case Application::MemoryValueType::Float32:
+		case Application::MemoryValueType::Float64:
+			{
+				std::string owned(text);
+				char* end{};
+				errno = 0;
+				const auto value = std::strtod(owned.c_str(), &end);
+				if (end != owned.c_str() + owned.size() || errno == ERANGE || !std::isfinite(value))
+					throw std::invalid_argument("memory value must be a finite number");
+				if (type == Application::MemoryValueType::Float32)
+				{
+					const auto narrowed = static_cast<float>(value);
+					if (!std::isfinite(narrowed))
+						throw std::invalid_argument("memory value is outside the float32 range");
+					return {type, narrowed};
+				}
+				return {type, value};
+			}
+		}
+		throw std::invalid_argument("unknown memory value type");
+	}
+
+	std::string MemoryValueText(const Application::MemorySearchValue& value)
+	{
+		return std::visit([](auto scalar) {
+			using T = decltype(scalar);
+			if constexpr (std::is_same_v<T, std::int8_t>) return std::to_string(static_cast<int>(scalar));
+			else if constexpr (std::is_floating_point_v<T>)
+				return fmt::format("{:.{}g}", scalar, std::numeric_limits<T>::max_digits10);
+			else return std::to_string(scalar);
+		}, value.value);
+	}
+
+	std::string MemorySessionJson(const Application::MemorySearchSessionInfo& info)
+	{
+		return std::string(R"({"sessionToken":)") + JsonString(info.sessionToken) +
+			R"(,"generation":")" + std::to_string(info.generation) +
+			R"(,"mapGeneration":")" + std::to_string(info.mapGeneration) +
+			R"(","bytesTotal":)" + std::to_string(info.bytesTotal) + "}";
+	}
+
+	std::string_view MemoryStateName(Application::MemorySearchState state)
+	{
+		switch (state)
+		{
+		case Application::MemorySearchState::Scanning: return "scanning";
+		case Application::MemorySearchState::Complete: return "complete";
+		case Application::MemorySearchState::Cancelled: return "cancelled";
+		case Application::MemorySearchState::Failed: return "failed";
+		}
+		return "failed";
+	}
+
+	std::string MemoryStatusJson(const Application::MemorySearchStatus& status)
+	{
+		return std::string(R"({"generation":")") + std::to_string(status.generation) +
+			R"(","state":)" + JsonString(MemoryStateName(status.state)) +
+			R"(,"bytesScanned":)" + std::to_string(status.bytesScanned) +
+			R"(,"bytesTotal":)" + std::to_string(status.bytesTotal) +
+			R"(,"resultCount":)" + std::to_string(status.resultCount) +
+			R"(,"resultCapReached":)" + (status.resultCapReached ? "true" : "false") +
+			R"(,"scanCapReached":)" + (status.scanCapReached ? "true" : "false") +
+			R"(,"diagnostic":)" + JsonString(status.diagnostic) + "}";
+	}
+
+	std::string MemoryPageJson(const Application::MemorySearchPage& page)
+	{
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		writer.StartObject();
+		writer.Key("generation");
+		const auto generation = std::to_string(page.generation);
+		writer.String(generation.data(), generation.size());
+		writer.Key("offset"); writer.Uint(page.offset);
+		writer.Key("total"); writer.Uint(page.total);
+		writer.Key("results"); writer.StartArray();
+		for (const auto& result : page.results)
+		{
+			writer.StartObject();
+			writer.Key("address"); writer.StartObject();
+			writer.Key("space"); writer.String("wiiu-virtual");
+			const auto address = fmt::format("0x{:08X}", result.address.value);
+			writer.Key("value"); writer.String(address.data(), address.size());
+			writer.EndObject();
+			writer.Key("value"); writer.StartObject();
+			const auto type = MemoryValueTypeName(result.value.type);
+			writer.Key("type"); writer.String(type.data(), type.size());
+			const auto text = MemoryValueText(result.value);
+			writer.Key("text"); writer.String(text.data(), text.size());
+			writer.EndObject();
+			writer.EndObject();
+		}
+		writer.EndArray(); writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
 	}
 
 	struct WindowDescriptor
@@ -1807,6 +1955,7 @@ namespace
 			auto window = std::move(found->second);
 			window->lifetime->store(false, std::memory_order_release);
 			m_updatePlans.RevokeOwner(id, window->generation);
+			m_memorySearch.CloseOwner(id);
 			CancelBackgroundJobsForWindow(id);
 			std::erase_if(m_saveTickets, [id](const auto& item) {
 				return item.second.ownerWindow == id;
@@ -1889,6 +2038,7 @@ namespace
 				return;
 			m_stopping.store(true, std::memory_order_release);
 			m_eventStopping->store(true, std::memory_order_release);
+			m_memorySearch.BeginShutdown();
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
 			{
@@ -3907,6 +4057,39 @@ namespace
 				return std::string(R"({"applied":)") + (result.applied ? "true" : "false") +
 					R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 			});
+			m_rpc.Register("memorySearch.start", [this](const rapidjson::Value& params) {
+				RequireRole({"memory-searcher"});
+				const auto& value = RequiredMember(params, "value");
+				return MemorySessionJson(m_memorySearch.Start(m_invokingWindow,
+					{ParseMemoryValue(value), RequiredBoundedUint(params, "maximumBytes", 1,
+						static_cast<std::uint32_t>(Application::MemorySearchFacade::MaximumScanBytes))}));
+			});
+			m_rpc.Register("memorySearch.filter", [this](const rapidjson::Value& params) {
+				RequireRole({"memory-searcher"});
+				return MemorySessionJson(m_memorySearch.Filter(m_invokingWindow,
+					RequiredString(params, "sessionToken"),
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					ParseMemoryValue(RequiredMember(params, "value"))));
+			});
+			m_rpc.Register("memorySearch.status", [this](const rapidjson::Value& params) {
+				RequireRole({"memory-searcher"});
+				return MemoryStatusJson(m_memorySearch.Status(m_invokingWindow,
+					RequiredString(params, "sessionToken")));
+			});
+			m_rpc.Register("memorySearch.page", [this](const rapidjson::Value& params) {
+				RequireRole({"memory-searcher"});
+				return MemoryPageJson(m_memorySearch.Page(m_invokingWindow,
+					RequiredString(params, "sessionToken"),
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					RequiredUint(params, "offset"), RequiredBoundedUint(params, "limit", 1,
+						Application::MemorySearchFacade::MaximumPageSize)));
+			});
+			m_rpc.Register("memorySearch.cancel", [this](const rapidjson::Value& params) {
+				RequireRole({"memory-searcher"});
+				m_memorySearch.Cancel(m_invokingWindow, RequiredString(params, "sessionToken"),
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"));
+				return std::string("{}");
+			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
 				const auto jobId = ParseDecimalUint64(RequiredString(params, "jobId"), "jobId");
 				const auto job = m_backgroundJobs.find(jobId);
@@ -4058,6 +4241,8 @@ namespace
 		Application::LoggingFacade m_logging;
 		Application::EmulatedUsbFacade m_emulatedUsb{Application::CreateEmulatedUsbBackend()};
 		Application::DiagnosticFacade m_diagnostics;
+		Application::MemorySearchFacade m_memorySearch{
+			Application::CreateCafeMemoryDiagnosticBackend()};
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
 		Application::EventSubscription m_applicationEvents;

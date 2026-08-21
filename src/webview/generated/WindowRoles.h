@@ -4,7 +4,7 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 18> ImplementedWindowRoles{
+	inline constexpr std::array<std::string_view, 19> ImplementedWindowRoles{
 		"general-settings",
 		"input-settings",
 		"hotkey-settings",
@@ -16,6 +16,7 @@ namespace WebFrontend::Generated
 		"save-manager",
 		"update-manager",
 		"logging",
+		"memory-searcher",
 		"audio-debugger",
 		"texture-relations",
 		"ppc-threads",

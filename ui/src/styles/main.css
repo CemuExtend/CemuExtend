@@ -37,3 +37,16 @@
 .diagnostic-table tbody tr:hover { background: var(--accent-soft); }
 .diagnostic-table .diagnostic-view td:first-child { padding-left: 1.5rem; color: var(--accent); }
 .diagnostic-pager { display: flex; justify-content: center; align-items: center; gap: .8rem; padding-top: .8rem; }
+.memory-search-window { height: 100vh; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.memory-search-controls { display: grid; grid-template-columns: 9rem minmax(14rem, 1fr) 9rem auto; gap: .75rem; align-items: end; padding: .9rem 0; }
+.memory-search-controls label { display: grid; gap: .3rem; color: var(--muted); font-size: .8rem; }
+.memory-search-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; min-height: 3.2rem; padding: .5rem 0; }
+.memory-search-summary progress { flex: 1 1 15rem; }
+.memory-search-summary .warning { padding: .35rem .55rem; }
+.memory-results { min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.memory-result-header, .memory-result-row { display: grid; grid-template-columns: minmax(10rem, .8fr) minmax(12rem, 2fr) minmax(6rem, .5fr); gap: 1rem; padding: .55rem .75rem; border-bottom: 1px solid var(--line); }
+.memory-result-header { position: sticky; top: 0; background: var(--panel); }
+.memory-result-row span { color: var(--muted); }
+.empty-results { padding: 1rem; color: var(--muted); }
+.memory-pagination { display: flex; justify-content: center; align-items: center; gap: .75rem; padding-top: .7rem; }
+@media (max-width: 820px) { .memory-search-controls { grid-template-columns: 1fr 2fr; } }
