@@ -6,9 +6,20 @@ add_library(CemuWebRpc STATIC
 )
 
 add_library(CemuWebRendererAdapters STATIC
+	OpenGLHost.h
   RendererHost.cpp
   RendererHost.h
 )
+if(ENABLE_OPENGL)
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		target_sources(CemuWebRendererAdapters PRIVATE OpenGLHostLinux.cpp)
+	elseif(WIN32)
+		target_sources(CemuWebRendererAdapters PRIVATE OpenGLHostWin.cpp)
+	elseif(APPLE)
+		target_sources(CemuWebRendererAdapters PRIVATE OpenGLHostCocoa.mm)
+		target_link_libraries(CemuWebRendererAdapters PRIVATE "-framework Cocoa" "-framework OpenGL")
+	endif()
+endif()
 target_include_directories(CemuWebRendererAdapters PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(CemuWebRendererAdapters PRIVATE
   CemuCafe

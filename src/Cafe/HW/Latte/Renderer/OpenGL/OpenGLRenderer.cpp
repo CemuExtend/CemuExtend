@@ -144,6 +144,12 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetri
 
 OpenGLRenderer::~OpenGLRenderer()
 {
+	if (!GLCanvas_MakeCurrent(false))
+	{
+		cemuLog_log(LogType::Force,
+			"Skipping explicit OpenGL object deletion because the native context is unavailable");
+		return;
+	}
 	if(m_pipeline != 0)
 		glDeleteProgramPipelines(1, &m_pipeline);
 
@@ -269,7 +275,7 @@ void LoadOpenGLImports()
 	void* libEGL = dlopen("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL);
 	if(!libEGL)
 	{
-		libGL = dlopen("libEGL.so", RTLD_NOW | RTLD_GLOBAL);
+		libEGL = dlopen("libEGL.so", RTLD_NOW | RTLD_GLOBAL);
 	}
 
 #define GLFUNC(__type, __name)	__name = (__type)_GetOpenGLFunction(libGL, _glXGetProcAddress, STRINGIFY(__name));
@@ -290,9 +296,22 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapInterval(EGLDisplay dpy, EGLint interval)
 #endif
 
 #elif BOOST_OS_MACOS
+#include <dlfcn.h>
+
+GL_IMPORT _GetOpenGLFunction(void* library, const char* name)
+{
+	return reinterpret_cast<GL_IMPORT>(dlsym(library, name));
+}
+
 void LoadOpenGLImports()
 {
-	cemu_assert_unimplemented();
+	void* openGL = dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL",
+		RTLD_NOW | RTLD_GLOBAL);
+	if (!openGL)
+		throw std::runtime_error("failed to load the macOS OpenGL framework");
+#define GLFUNC(__type, __name) __name = reinterpret_cast<__type>(_GetOpenGLFunction(openGL, STRINGIFY(__name)));
+#include "Common/GLInclude/glFunctions.h"
+#undef GLFUNC
 }
 #endif
 
@@ -302,7 +321,8 @@ void OpenGLRenderer::Initialize()
 	auto lock = cemuLog_acquire();
 	cemuLog_log(LogType::Force, "------- Init OpenGL graphics backend -------");
 
-	GLCanvas_MakeCurrent(false);
+	if (!GLCanvas_MakeCurrent(false))
+		throw std::runtime_error("failed to make the native OpenGL context current");
 	LoadOpenGLImports();
 	GetVendorInformation();	
 

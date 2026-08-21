@@ -1,6 +1,7 @@
 #include "Common/precompiled.h"
 
 #include "webview/RendererHost.h"
+#include "webview/OpenGLHost.h"
 
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
@@ -80,8 +81,12 @@ namespace WebFrontend
 #endif
 #ifdef ENABLE_OPENGL
 					case kOpenGL:
-						throw std::runtime_error(
-							"OpenGL requires a native context adapter that is not initialized");
+						m_openGLHost = CreateNativeOpenGLHost(
+							region.GetSurfaceHandle(), m_windowMetrics);
+						g_renderer = std::make_unique<OpenGLRenderer>(
+							m_windowMetrics, m_nativeSurfaces);
+						m_api = kOpenGL;
+						break;
 #endif
 					default:
 						throw std::runtime_error("the configured graphics API is unavailable");
@@ -92,6 +97,9 @@ namespace WebFrontend
 					m_nativeSurfacePublisher->ClearCanvas(true, m_mainPublication);
 					m_mainPublication = {};
 					g_renderer.reset();
+#ifdef ENABLE_OPENGL
+					m_openGLHost.reset();
+#endif
 					throw;
 				}
 			}
@@ -107,12 +115,20 @@ namespace WebFrontend
 #endif
 				m_nativeSurfacePublisher->ClearCanvas(true, m_mainPublication);
 				m_mainPublication = {};
+#ifdef ENABLE_OPENGL
+				m_openGLHost.reset();
+#endif
 			}
 
 			void AbandonMainInitialization() override
 			{
+#ifdef ENABLE_OPENGL
+				if (m_api == kOpenGL && m_openGLHost)
+					g_renderer.reset();
+#endif
 				PrepareMainDestroy();
-				g_renderer.reset();
+				if (g_renderer)
+					g_renderer.reset();
 			}
 
 		private:
@@ -121,6 +137,9 @@ namespace WebFrontend
 			std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
 			Host::NativeSurfacePublication m_mainPublication{};
 			GraphicAPI m_api{kVulkan};
+#ifdef ENABLE_OPENGL
+			std::unique_ptr<OpenGLCanvasCallbacks> m_openGLHost;
+#endif
 		};
 	}
 

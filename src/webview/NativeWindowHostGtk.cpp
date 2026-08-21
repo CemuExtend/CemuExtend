@@ -175,7 +175,7 @@ namespace WebFrontend
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
 				GtkAllocation allocation{};
-				gtk_widget_get_allocation(m_window, &allocation);
+				gtk_widget_get_allocation(m_stack ? m_stack : m_window, &allocation);
 				const auto scale = gtk_widget_get_scale_factor(m_window);
 				return {
 					.appActive = gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE,
