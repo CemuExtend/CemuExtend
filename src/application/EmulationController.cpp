@@ -419,6 +419,19 @@ namespace Application
 		return m_backend->DeleteInputProfile(profile);
 	}
 
+	HotkeySettingsModel EmulationController::GetHotkeySettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetHotkeySettings();
+	}
+
+	HotkeySettingsResult EmulationController::ApplyHotkeySettings(
+		const HotkeySettingsUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ApplyHotkeySettings(update);
+	}
+
 	std::vector<TitleSummary> EmulationController::ListTitles() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

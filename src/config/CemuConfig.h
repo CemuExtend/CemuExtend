@@ -430,6 +430,26 @@ struct fmt::formatter<CrashDump> : formatter<string_view> {
 #endif
 
 
+struct FrontendHotkeyBindingConfig
+{
+	static constexpr std::int16_t kControllerButtonCount = 50;
+	std::uint16_t keyboard_usage{};
+	std::uint8_t keyboard_modifiers{};
+	std::int16_t controller_button{-1};
+};
+
+struct FrontendHotkeyConfig
+{
+	std::int16_t controller_modifier{-1};
+	FrontendHotkeyBindingConfig toggle_fullscreen{0x44, 0, -1};
+	FrontendHotkeyBindingConfig toggle_fullscreen_alternative{0x28, 4, -1};
+	FrontendHotkeyBindingConfig exit_fullscreen{0x29, 0, -1};
+	FrontendHotkeyBindingConfig take_screenshot{0x45, 0, -1};
+	FrontendHotkeyBindingConfig toggle_fast_forward{};
+	FrontendHotkeyBindingConfig end_emulation{0x3e, 0, -1};
+	FrontendHotkeyBindingConfig exit_application{};
+};
+
 struct CemuConfig
 {
 	static constexpr uint32 kMinimumAccountPersistentId = 0x80000001;
@@ -463,9 +483,11 @@ struct CemuConfig
 
 	struct
 	{
+		FrontendHotkeyConfig hotkeys;
 		ConfigValue<bool> start_fullscreen{false};
 		ConfigValue<bool> open_pad{false};
 		ConfigValue<bool> check_updates{true};
+		ConfigValue<bool> save_screenshots{true};
 		ConfigValue<bool> setup_completed{false};
 	} frontend;
 

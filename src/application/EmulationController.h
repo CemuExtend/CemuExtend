@@ -16,6 +16,7 @@
 #include "application/ContentOperations.h"
 #include "application/EmulationPresentation.h"
 #include "application/FrontendSettingsFacade.h"
+#include "application/HotkeySettingsFacade.h"
 #include "application/InputSettingsFacade.h"
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
@@ -169,7 +170,8 @@ namespace Application
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
 		public ITitleInstallService, public IAccountService, public ISaveService,
-		public IFrontendSettingsService, public IInputSettingsService
+		public IFrontendSettingsService, public IInputSettingsService,
+		public IHotkeySettingsService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -282,6 +284,9 @@ namespace Application
 		[[nodiscard]] InputSettingsResult SaveInputProfile(
 			std::uint32_t player, std::string_view profile);
 		[[nodiscard]] InputSettingsResult DeleteInputProfile(std::string_view profile);
+		[[nodiscard]] HotkeySettingsModel GetHotkeySettings() const;
+		[[nodiscard]] HotkeySettingsResult ApplyHotkeySettings(
+			const HotkeySettingsUpdate& update);
 		[[nodiscard]] std::vector<TitleSummary> ListTitles() const;
 		[[nodiscard]] std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const;

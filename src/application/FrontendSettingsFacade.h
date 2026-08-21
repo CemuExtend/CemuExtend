@@ -15,6 +15,7 @@ namespace Application
 		bool startFullscreen{};
 		bool openPad{};
 		bool checkUpdates{true};
+		bool saveScreenshots{true};
 		bool updateChecksSupported{true};
 		bool portableMode{};
 		bool titleRunning{};
@@ -29,6 +30,7 @@ namespace Application
 		bool startFullscreen{};
 		bool openPad{};
 		bool checkUpdates{true};
+		bool saveScreenshots{true};
 		bool completeSetup{};
 	};
 

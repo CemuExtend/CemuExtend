@@ -711,6 +711,41 @@ namespace WebFrontend
 				CloseClipboard();
 				return success;
 			}
+			bool SetClipboardImage(std::span<const std::uint8_t> rgb,
+				std::int32_t width, std::int32_t height) override
+			{
+				if (width <= 0 || height <= 0 || rgb.size() !=
+					static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3 ||
+					!OpenClipboard(m_window)) return false;
+				const auto stride = (static_cast<std::size_t>(width) * 3 + 3) & ~std::size_t(3);
+				const auto pixelBytes = stride * static_cast<std::size_t>(height);
+				auto handle = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + pixelBytes);
+				if (!handle) { CloseClipboard(); return false; }
+				auto* memory = static_cast<std::uint8_t*>(GlobalLock(handle));
+				auto* header = reinterpret_cast<BITMAPINFOHEADER*>(memory);
+				*header = {.biSize = sizeof(BITMAPINFOHEADER), .biWidth = width,
+					.biHeight = height, .biPlanes = 1, .biBitCount = 24,
+					.biCompression = BI_RGB, .biSizeImage = static_cast<DWORD>(pixelBytes)};
+				auto* pixels = memory + sizeof(BITMAPINFOHEADER);
+				for (std::int32_t row = 0; row < height; ++row)
+				{
+					auto* destination = pixels + static_cast<std::size_t>(height - 1 - row) * stride;
+					const auto* source = rgb.data() + static_cast<std::size_t>(row) *
+						static_cast<std::size_t>(width) * 3;
+					for (std::int32_t column = 0; column < width; ++column)
+					{
+						destination[column * 3] = source[column * 3 + 2];
+						destination[column * 3 + 1] = source[column * 3 + 1];
+						destination[column * 3 + 2] = source[column * 3];
+					}
+				}
+				GlobalUnlock(handle);
+				EmptyClipboard();
+				const bool success = SetClipboardData(CF_DIB, handle) != nullptr;
+				if (!success) GlobalFree(handle);
+				CloseClipboard();
+				return success;
+			}
 			bool OpenExternalUrl(std::string url) override
 			{
 				const auto wide = Wide(url);

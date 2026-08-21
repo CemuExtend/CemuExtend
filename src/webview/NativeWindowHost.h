@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -124,6 +125,8 @@ namespace WebFrontend
 		[[nodiscard]] virtual std::string GetKeyName(std::uint32_t key) const = 0;
 		[[nodiscard]] virtual std::pair<bool, std::string> GetClipboardText() = 0;
 		[[nodiscard]] virtual bool SetClipboardText(std::string text) = 0;
+		[[nodiscard]] virtual bool SetClipboardImage(std::span<const std::uint8_t> rgb,
+			std::int32_t width, std::int32_t height) = 0;
 		[[nodiscard]] virtual bool OpenExternalUrl(std::string url) = 0;
 	};
 

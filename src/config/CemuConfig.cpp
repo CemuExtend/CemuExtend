@@ -2,6 +2,69 @@
 #include "config/NetworkSettings.h"
 #include "util/helpers/helpers.h"
 
+namespace
+{
+	std::uint16_t LegacyWxKeyToUsbUsage(int key)
+	{
+		if (key >= 'A' && key <= 'Z') return static_cast<std::uint16_t>(0x04 + key - 'A');
+		if (key >= 'a' && key <= 'z') return static_cast<std::uint16_t>(0x04 + key - 'a');
+		if (key >= '1' && key <= '9') return static_cast<std::uint16_t>(0x1e + key - '1');
+		if (key == '0') return 0x27;
+		if (key >= 340 && key <= 351) return static_cast<std::uint16_t>(0x3a + key - 340);
+		if (key >= 352 && key <= 363) return static_cast<std::uint16_t>(0x68 + key - 352);
+		if (key >= 324 && key <= 333)
+			return key == 324 ? 0x62 : static_cast<std::uint16_t>(0x58 + key - 324);
+		switch (key)
+		{
+		case 8: return 0x2a; case 9: return 0x2b; case 13: return 0x28;
+		case 27: return 0x29; case 32: return 0x2c; case 127: return 0x4c;
+		case '-': return 0x2d; case '=': return 0x2e; case '[': return 0x2f;
+		case ']': return 0x30; case '\\': return 0x31; case ';': return 0x33;
+		case '\'': return 0x34; case '`': return 0x35; case ',': return 0x36;
+		case '.': return 0x37; case '/': return 0x38;
+		case 310: return 0x48; case 311: return 0x39; case 312: return 0x4d;
+		case 313: return 0x4a; case 314: return 0x50; case 315: return 0x52;
+		case 316: return 0x4f; case 317: return 0x51; case 319: return 0x46;
+		case 303: return 0x9b; case 305: return 0x9c; case 318: return 0x77;
+		case 320: return 0x74; case 321: return 0x46; case 322: return 0x49;
+		case 323: return 0x75; case 334: return 0x55;
+		case 335: return 0x57; case 337: return 0x56; case 338: return 0x63;
+		case 336: return 0x85; case 339: return 0x54; case 364: return 0x53;
+		case 365: return 0x47; case 366: return 0x4b; case 367: return 0x4e;
+		case 368: return 0x2c; case 369: return 0x2b; case 370: return 0x58;
+		case 371: return 0x3a; case 372: return 0x3b; case 373: return 0x3c;
+		case 374: return 0x3d; case 375: return 0x5f; case 376: return 0x5c;
+		case 377: return 0x60; case 378: return 0x5e; case 379: return 0x5a;
+		case 380: return 0x61; case 381: return 0x5b; case 382: return 0x59;
+		case 383: return 0x5d; case 384: return 0x62; case 385: return 0x63;
+		case 386: return 0x67; case 387: return 0x55; case 388: return 0x57;
+		case 389: return 0x85; case 390: return 0x56; case 391: return 0x63;
+		case 392: return 0x54;
+		default: return 0;
+		}
+	}
+
+	bool LoadLegacyHotkey(XMLConfigParser& hotkeys, const char* name,
+		FrontendHotkeyBindingConfig& binding)
+	{
+		const std::string value = hotkeys.get(name, "");
+		if (value.empty()) return false;
+		unsigned raw{};
+		int controller{-1};
+		std::istringstream stream(value);
+		if (!(stream >> raw >> controller) || controller < -1 ||
+			controller >= FrontendHotkeyBindingConfig::kControllerButtonCount)
+			return false;
+		binding.keyboard_usage = LegacyWxKeyToUsbUsage(static_cast<int>(raw & 0x1fff));
+		binding.keyboard_modifiers = static_cast<std::uint8_t>(
+			((raw & 0x4000) ? 1U : 0U) | ((raw & 0x8000) ? 2U : 0U) |
+			((raw & 0x2000) ? 4U : 0U));
+		if (!binding.keyboard_usage) binding.keyboard_modifiers = 0;
+		binding.controller_button = static_cast<std::int16_t>(controller);
+		return true;
+	}
+}
+
 std::optional<CemuExtendTitleGrant> CemuConfig::GetCemuExtendGrant(uint64 titleId) const
 {
 	std::shared_lock lock(cemuextend_grants_mutex);
@@ -113,11 +176,31 @@ void CemuConfig::SetMLCPath(fs::path path, bool save)
 
 XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 {
+	auto rootParser = parser;
+	auto loadHotkey = [](XMLConfigParser& hotkeys, const char* name,
+		FrontendHotkeyBindingConfig& binding) {
+		const auto value = hotkeys.get(name, "");
+		if (!value || !*value) return;
+		std::istringstream stream(value);
+		unsigned usage{};
+		unsigned modifiers{};
+		int controller{-1};
+		if (stream >> usage >> modifiers >> controller && usage <= 0xffff &&
+			modifiers <= 0x0f && controller >= -1 &&
+			controller < FrontendHotkeyBindingConfig::kControllerButtonCount &&
+			!(usage >= 0xe0 && usage <= 0xe7))
+		{
+			binding.keyboard_usage = static_cast<std::uint16_t>(usage);
+			binding.keyboard_modifiers = static_cast<std::uint8_t>(modifiers);
+			binding.controller_button = static_cast<std::int16_t>(controller);
+		}
+	};
 	// These keys were historically owned by wxCemuConfig at the document root.
 	// Keep them as migration defaults while storing frontend-neutral values below.
 	bool legacyFullscreen = parser.get("fullscreen", false);
 	bool legacyOpenPad = parser.get("open_pad", false);
 	bool legacyCheckUpdates = parser.get("check_update", true);
+	bool legacySaveScreenshots = parser.get("save_screenshot", true);
 	auto new_parser = parser.get("content");
 	if (new_parser.valid())
 	{
@@ -125,6 +208,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		legacyFullscreen = parser.get("fullscreen", legacyFullscreen);
 		legacyOpenPad = parser.get("open_pad", legacyOpenPad);
 		legacyCheckUpdates = parser.get("check_update", legacyCheckUpdates);
+		legacySaveScreenshots = parser.get("save_screenshot", legacySaveScreenshots);
 	}
 
 	// general settings
@@ -147,9 +231,51 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		frontendNode.get("OpenPad", legacyOpenPad));
 	frontend.check_updates = parser.get("check_update",
 		frontendNode.get("CheckUpdates", legacyCheckUpdates));
+	frontend.save_screenshots = parser.get("save_screenshot",
+		frontendNode.get("SaveScreenshots", legacySaveScreenshots));
 	// Load is only called for an existing configuration. Treat old configurations
 	// as already onboarded unless the new frontend explicitly persisted otherwise.
 	frontend.setup_completed = frontendNode.get("SetupCompleted", true);
+	auto frontendHotkeys = frontendNode.get("Hotkeys");
+	if (frontendHotkeys.valid())
+	{
+		const auto modifier = frontendHotkeys.get("ControllerModifier", -1);
+		frontend.hotkeys.controller_modifier = modifier >= -1 &&
+			modifier < FrontendHotkeyBindingConfig::kControllerButtonCount ?
+			static_cast<std::int16_t>(modifier) : -1;
+		loadHotkey(frontendHotkeys, "ToggleFullscreen", frontend.hotkeys.toggle_fullscreen);
+		loadHotkey(frontendHotkeys, "ToggleFullscreenAlternative",
+			frontend.hotkeys.toggle_fullscreen_alternative);
+		loadHotkey(frontendHotkeys, "ExitFullscreen", frontend.hotkeys.exit_fullscreen);
+		loadHotkey(frontendHotkeys, "TakeScreenshot", frontend.hotkeys.take_screenshot);
+		loadHotkey(frontendHotkeys, "ToggleFastForward", frontend.hotkeys.toggle_fast_forward);
+		loadHotkey(frontendHotkeys, "EndEmulation", frontend.hotkeys.end_emulation);
+		loadHotkey(frontendHotkeys, "ExitApplication", frontend.hotkeys.exit_application);
+	}
+	else
+	{
+		auto legacyHotkeys = rootParser.get("Hotkeys");
+		if (legacyHotkeys.valid())
+		{
+			FrontendHotkeyBindingConfig modifier;
+			if (LoadLegacyHotkey(legacyHotkeys, "modifiers", modifier))
+				frontend.hotkeys.controller_modifier = modifier.controller_button;
+			(void)LoadLegacyHotkey(legacyHotkeys, "ToggleFullscreen",
+				frontend.hotkeys.toggle_fullscreen);
+			(void)LoadLegacyHotkey(legacyHotkeys, "ToggleFullscreenAlt",
+				frontend.hotkeys.toggle_fullscreen_alternative);
+			(void)LoadLegacyHotkey(legacyHotkeys, "ExitFullscreen",
+				frontend.hotkeys.exit_fullscreen);
+			(void)LoadLegacyHotkey(legacyHotkeys, "TakeScreenshot",
+				frontend.hotkeys.take_screenshot);
+			(void)LoadLegacyHotkey(legacyHotkeys, "ToggleFastForward",
+				frontend.hotkeys.toggle_fast_forward);
+			(void)LoadLegacyHotkey(legacyHotkeys, "EndEmulation",
+				frontend.hotkeys.end_emulation);
+			(void)LoadLegacyHotkey(legacyHotkeys, "ExitApplication",
+				frontend.hotkeys.exit_application);
+		}
+	}
 	console_language = parser.get("console_language", console_language.GetInitValue());
 
 	game_paths.clear();
@@ -492,7 +618,22 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	frontendNode.set("StartFullscreen", frontend.start_fullscreen.GetValue());
 	frontendNode.set("OpenPad", frontend.open_pad.GetValue());
 	frontendNode.set("CheckUpdates", frontend.check_updates.GetValue());
+	frontendNode.set("SaveScreenshots", frontend.save_screenshots.GetValue());
 	frontendNode.set("SetupCompleted", frontend.setup_completed.GetValue());
+	auto hotkeysNode = frontendNode.set("Hotkeys");
+	hotkeysNode.set("ControllerModifier", frontend.hotkeys.controller_modifier);
+	auto saveHotkey = [&hotkeysNode](const char* name,
+		const FrontendHotkeyBindingConfig& binding) {
+		hotkeysNode.set(name, fmt::format("{} {} {}", binding.keyboard_usage,
+			binding.keyboard_modifiers, binding.controller_button));
+	};
+	saveHotkey("ToggleFullscreen", frontend.hotkeys.toggle_fullscreen);
+	saveHotkey("ToggleFullscreenAlternative", frontend.hotkeys.toggle_fullscreen_alternative);
+	saveHotkey("ExitFullscreen", frontend.hotkeys.exit_fullscreen);
+	saveHotkey("TakeScreenshot", frontend.hotkeys.take_screenshot);
+	saveHotkey("ToggleFastForward", frontend.hotkeys.toggle_fast_forward);
+	saveHotkey("EndEmulation", frontend.hotkeys.end_emulation);
+	saveHotkey("ExitApplication", frontend.hotkeys.exit_application);
 
 	// config.set("cpu_mode", cpu_mode.GetValue());
 	//config.set("console_region", console_region.GetValue());

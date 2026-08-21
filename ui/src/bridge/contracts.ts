@@ -143,6 +143,7 @@ export type FrontendSettings = {
   startFullscreen: boolean;
   openPad: boolean;
   checkUpdates: boolean;
+  saveScreenshots: boolean;
   updateChecksSupported: boolean;
   portableMode: boolean;
   titleRunning: boolean;
@@ -151,7 +152,7 @@ export type FrontendSettings = {
 };
 
 export type FrontendSettingsUpdate = Pick<FrontendSettings,
-  "revision" | "gamePaths" | "startFullscreen" | "openPad" | "checkUpdates"> & {
+  "revision" | "gamePaths" | "startFullscreen" | "openPad" | "checkUpdates" | "saveScreenshots"> & {
   completeSetup: boolean;
 };
 
@@ -171,6 +172,12 @@ export type InputMapping = { mappingId: number; label: string; binding: string; 
 export type InputPlayer = { player: number; type: EmulatedControllerType; gameProfileLocked: boolean; profileName: string; controllers: PhysicalController[]; mappings: InputMapping[] };
 export type InputSettingsModel = { generation: number; players: InputPlayer[]; profiles: string[]; availableApis: string[] };
 export type InputDeviceCandidate = { token: number; api: string; displayName: string; connected: boolean };
+
+export type HotkeyAction = "toggleFullscreen" | "toggleFullscreenAlternative" | "exitFullscreen" | "takeScreenshot" | "toggleFastForward" | "endEmulation" | "exitApplication";
+export type HotkeyBinding = { action: HotkeyAction; keyboardUsage: number; keyboardModifiers: number; controllerButton: number | null; controllerLabel: string };
+export type HotkeySettingsModel = { revision: number; controllerModifier: number | null; controllerModifierLabel: string; controller: { token: number; displayName: string } | null; bindings: HotkeyBinding[] };
+export type HotkeySettingsUpdate = { revision: number; controllerModifier: number | null; bindings: Array<Omit<HotkeyBinding, "controllerLabel">> };
+export type HotkeySettingsApplyResult = { ok: boolean; error: "none" | "conflict" | "invalidBinding" | "duplicateBinding" | "saveFailed"; snapshot: HotkeySettingsModel; diagnostic: string };
 
 declare global {
   interface Window {

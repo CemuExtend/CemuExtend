@@ -87,6 +87,7 @@ target_link_libraries(CemuWebFrontend PRIVATE
   CemuWebRpc
   CemuUtil
   CemuWebRendererAdapters
+  PNG::PNG
   webview::core_static
 )
 

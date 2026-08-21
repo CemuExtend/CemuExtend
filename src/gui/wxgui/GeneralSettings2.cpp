@@ -1566,6 +1566,7 @@ void GeneralSettings2::StoreConfig()
 	wxGuiConfig.fullscreen_menubar = m_fullscreen_menubar->IsChecked();
 	wxGuiConfig.check_update = m_auto_update->IsChecked();
 	wxGuiConfig.save_screenshot = m_save_screenshot->IsChecked();
+	SyncWxFrontendSettingsToNeutral();
 	wxGuiConfig.receive_untested_updates = m_receive_untested_releases->IsChecked();
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
     wxGuiConfig.feral_gamemode = m_feral_gamemode->IsChecked();

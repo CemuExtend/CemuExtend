@@ -2025,6 +2025,7 @@ namespace Application
 				snapshot.startFullscreen = GetConfig().frontend.start_fullscreen.GetValue();
 				snapshot.openPad = GetConfig().frontend.open_pad.GetValue();
 				snapshot.checkUpdates = GetConfig().frontend.check_updates.GetValue();
+				snapshot.saveScreenshots = GetConfig().frontend.save_screenshots.GetValue();
 #if BOOST_OS_LINUX
 				snapshot.updateChecksSupported = std::getenv("APPIMAGE") != nullptr;
 #else
@@ -2037,6 +2038,7 @@ namespace Application
 				fingerprint.append(snapshot.startFullscreen ? "1" : "0");
 				fingerprint.append(snapshot.openPad ? "1" : "0");
 				fingerprint.append(snapshot.checkUpdates ? "1" : "0");
+				fingerprint.append(snapshot.saveScreenshots ? "1" : "0");
 				fingerprint.append(snapshot.setupCompleted ? "1" : "0");
 				{
 					std::scoped_lock stateLock(m_frontendSettingsStateMutex);
@@ -2129,12 +2131,14 @@ namespace Application
 				const bool oldFullscreen = config.frontend.start_fullscreen.GetValue();
 				const bool oldPad = config.frontend.open_pad.GetValue();
 				const bool oldUpdates = config.frontend.check_updates.GetValue();
+				const bool oldSaveScreenshots = config.frontend.save_screenshots.GetValue();
 				const bool oldSetup = config.frontend.setup_completed.GetValue();
 				auto restore = [&] {
 					config.game_paths = oldPaths;
 					config.frontend.start_fullscreen = oldFullscreen;
 					config.frontend.open_pad = oldPad;
 					config.frontend.check_updates = oldUpdates;
+					config.frontend.save_screenshots = oldSaveScreenshots;
 					config.frontend.setup_completed = oldSetup;
 					CafeTitleList::ClearScanPaths();
 					for (const auto& path : oldPaths)
@@ -2150,6 +2154,7 @@ namespace Application
 					config.frontend.start_fullscreen = update.startFullscreen;
 					config.frontend.open_pad = update.openPad;
 					config.frontend.check_updates = update.checkUpdates;
+					config.frontend.save_screenshots = update.saveScreenshots;
 					if (update.completeSetup)
 						config.frontend.setup_completed = true;
 					CafeTitleList::ClearScanPaths();
@@ -2175,6 +2180,107 @@ namespace Application
 						"unknown error while applying frontend settings"};
 				}
 				return {FrontendSettingsError::None, GetFrontendSettings(), {}};
+			}
+
+			HotkeySettingsModel GetHotkeySettings() const override
+			{
+				std::scoped_lock hotkeyLock(m_hotkeySettingsMutex);
+				HotkeySettingsModel model;
+				model.revision = m_hotkeySettingsRevision;
+				const auto& settings = GetConfig().frontend.hotkeys;
+				if (settings.controller_modifier >= 0)
+					model.controllerModifier = static_cast<std::uint32_t>(
+						settings.controller_modifier);
+				auto append = [&model](HotkeyAction action,
+					const FrontendHotkeyBindingConfig& binding) {
+					model.bindings.push_back({
+						.action = action,
+						.keyboardUsage = binding.keyboard_usage,
+						.keyboardModifiers = binding.keyboard_modifiers,
+						.controllerButton = binding.controller_button >= 0 ?
+							std::optional<std::uint32_t>(binding.controller_button) : std::nullopt,
+					});
+				};
+				append(HotkeyAction::ToggleFullscreen, settings.toggle_fullscreen);
+				append(HotkeyAction::ToggleFullscreenAlternative,
+					settings.toggle_fullscreen_alternative);
+				append(HotkeyAction::ExitFullscreen, settings.exit_fullscreen);
+				append(HotkeyAction::TakeScreenshot, settings.take_screenshot);
+				append(HotkeyAction::ToggleFastForward, settings.toggle_fast_forward);
+#ifdef CEMU_DEBUG_ASSERT
+				append(HotkeyAction::EndEmulation, settings.end_emulation);
+#endif
+				append(HotkeyAction::ExitApplication, settings.exit_application);
+				std::scoped_lock inputLock(m_inputSettingsMutex);
+				InputManager::instance().RunOnInputThread([this, &model] {
+					const auto emulated = InputManager::instance().get_controller(0);
+					if (!emulated) return;
+					const auto controllers = emulated->copy_controllers();
+					if (controllers.empty()) return;
+					model.controller = HotkeyController{
+						.token = TokenForInputController(controllers.front()),
+						.displayName = controllers.front()->display_name(),
+					};
+					if (model.controllerModifier)
+						model.controllerModifierLabel = controllers.front()->get_button_name(
+							*model.controllerModifier);
+					for (auto& binding : model.bindings)
+						if (binding.controllerButton)
+							binding.controllerLabel = controllers.front()->get_button_name(
+								*binding.controllerButton);
+				});
+				return model;
+			}
+
+			HotkeySettingsResult ApplyHotkeySettings(
+				const HotkeySettingsUpdate& update) override
+			{
+				static_assert(FrontendHotkeyBindingConfig::kControllerButtonCount == kButtonMAX);
+				std::scoped_lock hotkeyLock(m_hotkeySettingsMutex);
+				if (update.revision != m_hotkeySettingsRevision)
+					return {HotkeySettingsError::Conflict, GetHotkeySettings(),
+						"hotkey settings changed in another window"};
+#ifdef CEMU_DEBUG_ASSERT
+				constexpr bool endEmulationAvailable = true;
+#else
+				constexpr bool endEmulationAvailable = false;
+#endif
+				std::string validationDiagnostic;
+				if (const auto validation = ValidateHotkeySettingsUpdate(update,
+					endEmulationAvailable, validationDiagnostic);
+					validation != HotkeySettingsError::None)
+					return {validation, GetHotkeySettings(), std::move(validationDiagnostic)};
+
+				auto configLock = GetConfigHandle().Lock();
+				auto& config = GetConfig().frontend.hotkeys;
+				const auto previous = config;
+				config.controller_modifier = update.controllerModifier ?
+					static_cast<std::int16_t>(*update.controllerModifier) : -1;
+				auto assign = [&config](const HotkeyBinding& binding) {
+					FrontendHotkeyBindingConfig* target{};
+					switch (binding.action)
+					{
+					case HotkeyAction::ToggleFullscreen: target = &config.toggle_fullscreen; break;
+					case HotkeyAction::ToggleFullscreenAlternative: target = &config.toggle_fullscreen_alternative; break;
+					case HotkeyAction::ExitFullscreen: target = &config.exit_fullscreen; break;
+					case HotkeyAction::TakeScreenshot: target = &config.take_screenshot; break;
+					case HotkeyAction::ToggleFastForward: target = &config.toggle_fast_forward; break;
+					case HotkeyAction::EndEmulation: target = &config.end_emulation; break;
+					case HotkeyAction::ExitApplication: target = &config.exit_application; break;
+					}
+					*target = {binding.keyboardUsage, binding.keyboardModifiers,
+						binding.controllerButton ? static_cast<std::int16_t>(
+							*binding.controllerButton) : static_cast<std::int16_t>(-1)};
+				};
+				for (const auto& binding : update.bindings) assign(binding);
+				if (!GetConfigHandle().Save())
+				{
+					config = previous;
+					return {HotkeySettingsError::SaveFailed, GetHotkeySettings(),
+						"hotkey settings could not be saved"};
+				}
+				++m_hotkeySettingsRevision;
+				return {HotkeySettingsError::None, GetHotkeySettings(), {}};
 			}
 
 			InputSettingsModel GetInputSettings() const override
@@ -4933,6 +5039,8 @@ namespace Application
 			mutable std::string m_frontendSettingsFingerprint;
 			mutable std::uint64_t m_frontendSettingsRevision{1};
 			mutable std::recursive_mutex m_inputSettingsMutex;
+			mutable std::recursive_mutex m_hotkeySettingsMutex;
+			mutable std::uint64_t m_hotkeySettingsRevision{1};
 			mutable std::unordered_map<std::uint64_t, std::shared_ptr<ControllerBase>>
 				m_inputDeviceTokens;
 			mutable std::unordered_map<const ControllerBase*, std::uint64_t>

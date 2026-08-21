@@ -12,6 +12,8 @@ add_library(CemuApplication STATIC
   EmulationController.h
   EmulationPresentation.h
   FrontendSettingsFacade.h
+  HotkeySettingsFacade.h
+  HotkeySettingsFacade.cpp
   InputSettingsFacade.h
   GameProfileFacade.h
   GraphicPackFacade.h
@@ -43,6 +45,7 @@ if(BUILD_TESTING)
   add_executable(emulation_controller_tests
 	ApplicationEvents.cpp
     EmulationController.cpp
+	HotkeySettingsFacade.cpp
     tests/CafeBackendFactoryStub.cpp
     tests/EmulationControllerTests.cpp
   )

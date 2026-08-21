@@ -176,6 +176,7 @@ HotkeySettings::~HotkeySettings()
 	m_controllerTimer->Stop();
 	if (m_needToSave)
 	{
+		SyncWxFrontendSettingsToNeutral();
 		GetConfigHandle().Save();
 	}
 }

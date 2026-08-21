@@ -45,6 +45,7 @@ export function GettingStartedWindow() {
         startFullscreen,
         openPad,
         checkUpdates,
+        saveScreenshots: model.saveScreenshots,
         completeSetup: true,
       });
       setModel(result.snapshot);

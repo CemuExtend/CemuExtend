@@ -3,6 +3,7 @@
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 
 #include <algorithm>
+#include <cstring>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -769,6 +770,26 @@ namespace WebFrontend
 				auto* clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
 				gtk_clipboard_set_text(clipboard, text.data(), static_cast<gint>(text.size()));
 				gtk_clipboard_store(clipboard);
+				return true;
+			}
+			bool SetClipboardImage(std::span<const std::uint8_t> rgb,
+				std::int32_t width, std::int32_t height) override
+			{
+				if (width <= 0 || height <= 0 || rgb.size() !=
+					static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3)
+					return false;
+				auto* image = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, width, height);
+				if (!image) return false;
+				const auto stride = gdk_pixbuf_get_rowstride(image);
+				auto* target = gdk_pixbuf_get_pixels(image);
+				for (std::int32_t row = 0; row < height; ++row)
+					std::memcpy(target + row * stride, rgb.data() +
+						static_cast<std::size_t>(row) * static_cast<std::size_t>(width) * 3,
+						static_cast<std::size_t>(width) * 3);
+				auto* clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+				gtk_clipboard_set_image(clipboard, image);
+				gtk_clipboard_store(clipboard);
+				g_object_unref(image);
 				return true;
 			}
 			bool OpenExternalUrl(std::string url) override

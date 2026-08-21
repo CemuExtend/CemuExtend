@@ -139,7 +139,22 @@ struct wxCemuConfig
 	void Save(XMLConfigParser& parser);
 };
 
-typedef XMLChildConfig<wxCemuConfig, &wxCemuConfig::Load, &wxCemuConfig::Save> XMLWxCemuConfig_t;
+void SyncWxHotkeysToFrontend();
+void SyncWxFrontendSettingsToNeutral();
+
+class XMLWxCemuConfig_t final : public XMLChildConfig<wxCemuConfig,
+	&wxCemuConfig::Load, &wxCemuConfig::Save>
+{
+public:
+	using Base = XMLChildConfig<wxCemuConfig, &wxCemuConfig::Load, &wxCemuConfig::Save>;
+	using Base::Base;
+
+	bool Save()
+	{
+		SyncWxFrontendSettingsToNeutral();
+		return Base::Save();
+	}
+};
 
 extern XMLWxCemuConfig_t g_wxConfig;
 

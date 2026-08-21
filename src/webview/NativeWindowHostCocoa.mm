@@ -574,6 +574,27 @@ namespace WebFrontend
 				[pasteboard clearContents];
 				return [pasteboard setString:value forType:NSPasteboardTypeString] == YES;
 			}
+			bool SetClipboardImage(std::span<const std::uint8_t> rgb,
+				std::int32_t width, std::int32_t height) override
+			{
+				if (width <= 0 || height <= 0 || rgb.size() !=
+					static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3)
+					return false;
+				auto* representation = [[NSBitmapImageRep alloc]
+					initWithBitmapDataPlanes:nil pixelsWide:width pixelsHigh:height
+					bitsPerSample:8 samplesPerPixel:3 hasAlpha:NO isPlanar:NO
+					colorSpaceName:NSCalibratedRGBColorSpace bytesPerRow:width * 3 bitsPerPixel:24];
+				if (!representation) return false;
+				std::memcpy([representation bitmapData], rgb.data(), rgb.size());
+				auto* image = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
+				[image addRepresentation:representation];
+				auto* pasteboard = [NSPasteboard generalPasteboard];
+				[pasteboard clearContents];
+				const bool success = [pasteboard writeObjects:@[image]] == YES;
+				[image release];
+				[representation release];
+				return success;
+			}
 			bool OpenExternalUrl(std::string url) override
 			{
 				NSString* value = [[[NSString alloc] initWithBytes:url.data() length:url.size()

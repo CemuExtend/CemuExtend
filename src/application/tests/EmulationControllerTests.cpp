@@ -282,6 +282,7 @@ namespace
 			frontendSettings.startFullscreen = update.startFullscreen;
 			frontendSettings.openPad = update.openPad;
 			frontendSettings.checkUpdates = update.checkUpdates;
+			frontendSettings.saveScreenshots = update.saveScreenshots;
 			frontendSettings.setupCompleted |= update.completeSetup;
 			++frontendSettings.revision;
 			return {Application::FrontendSettingsError::None, frontendSettings, {}};
@@ -472,6 +473,19 @@ namespace
 		{
 			return {};
 		}
+		Application::HotkeySettingsModel hotkeySettings;
+		Application::HotkeySettingsModel GetHotkeySettings() const override
+		{
+			return hotkeySettings;
+		}
+		Application::HotkeySettingsResult ApplyHotkeySettings(
+			const Application::HotkeySettingsUpdate& update) override
+		{
+			hotkeySettings.revision = update.revision + 1;
+			hotkeySettings.controllerModifier = update.controllerModifier;
+			hotkeySettings.bindings = update.bindings;
+			return {.snapshot = hotkeySettings};
+		}
 	};
 
 	void VerifyFailure(Application::LaunchError error)
@@ -485,10 +499,51 @@ namespace
 		assert(backend.starts == 0);
 		assert(backend.aborts == 1);
 	}
+
+	Application::HotkeySettingsUpdate ValidHotkeyUpdate(bool includeEndEmulation)
+	{
+		Application::HotkeySettingsUpdate update;
+		update.revision = 1;
+		update.controllerModifier = 1;
+		for (const auto action : {
+			Application::HotkeyAction::ToggleFullscreen,
+			Application::HotkeyAction::ToggleFullscreenAlternative,
+			Application::HotkeyAction::ExitFullscreen,
+			Application::HotkeyAction::TakeScreenshot,
+			Application::HotkeyAction::ToggleFastForward,
+			Application::HotkeyAction::ExitApplication})
+			update.bindings.push_back({.action = action});
+		if (includeEndEmulation)
+			update.bindings.push_back({.action = Application::HotkeyAction::EndEmulation});
+		return update;
+	}
 }
 
 int main()
 {
+	{
+		std::string diagnostic;
+		auto release = ValidHotkeyUpdate(false);
+		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
+			Application::HotkeySettingsError::None);
+		auto debug = ValidHotkeyUpdate(true);
+		assert(Application::ValidateHotkeySettingsUpdate(debug, true, diagnostic) ==
+			Application::HotkeySettingsError::None);
+		release.bindings[0].keyboardUsage = 0x44;
+		release.bindings[1].keyboardUsage = 0x44;
+		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
+			Application::HotkeySettingsError::DuplicateBinding);
+		release = ValidHotkeyUpdate(false);
+		release.bindings[0].controllerButton = release.controllerModifier;
+		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
+			Application::HotkeySettingsError::DuplicateBinding);
+		release = ValidHotkeyUpdate(false);
+		release.bindings[0].keyboardUsage = 0xe0;
+		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
+			Application::HotkeySettingsError::InvalidBinding);
+		assert(Application::ValidateHotkeySettingsUpdate(debug, false, diagnostic) ==
+			Application::HotkeySettingsError::InvalidBinding);
+	}
 	FakeBackend backend;
 	Application::EmulationController controller(backend);
 	assert(controller.State() == Application::EmulationState::Idle);
@@ -659,10 +714,12 @@ int main()
 		.startFullscreen = true,
 		.openPad = true,
 		.checkUpdates = false,
+		.saveScreenshots = false,
 		.completeSetup = true,
 	});
 	assert(frontendUpdate && frontendUpdate.snapshot.revision ==
 		frontendSettings.revision + 1 && frontendUpdate.snapshot.setupCompleted &&
+		!frontendUpdate.snapshot.saveScreenshots &&
 		frontendUpdate.snapshot.gamePaths == std::vector<fs::path>{"/games"});
 	const auto staleFrontendUpdate = controller.ApplyFrontendSettings({
 		.expectedRevision = frontendSettings.revision,

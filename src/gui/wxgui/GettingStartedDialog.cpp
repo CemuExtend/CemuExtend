@@ -229,6 +229,7 @@ void GettingStartedDialog::OnClose(wxCloseEvent& event)
 	wxGUIConfig.fullscreen = m_page2.fullscreenCheckbox->GetValue();
 	wxGUIConfig.check_update = m_page2.updateCheckbox->GetValue();
 	wxGUIConfig.pad_open = m_page2.separateCheckbox->GetValue();
+	SyncWxFrontendSettingsToNeutral();
 
 	auto& config = GetConfig();
 	const fs::path gamePath = wxHelper::MakeFSPath(m_page1.gamePathPicker->GetPath());

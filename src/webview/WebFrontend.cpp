@@ -5,6 +5,8 @@
 #include "application/ApplicationHost.h"
 #include "application/EmulationController.h"
 #include "audio/IAudioAPI.h"
+#include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "config/ActiveSettings.h"
 #include "frontend/CemuExtendFrontendBridge.h"
 #include "frontend/FrontendRuntime.h"
 #include "input/InputManager.h"
@@ -32,6 +34,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include <webview/webview.h>
+#include <boost/nowide/cstdio.hpp>
+#include <png.h>
 
 namespace
 {
@@ -86,6 +90,71 @@ namespace
 			output.push_back(remaining > 2 ? alphabet[bits & 0x3f] : '=');
 		}
 		return output;
+	}
+
+	std::optional<fs::path> ScreenshotPath(bool mainWindow)
+	{
+		static std::mutex pathMutex;
+		std::scoped_lock lock(pathMutex);
+		const auto directory = ActiveSettings::GetUserDataPath("screenshots");
+		std::error_code error;
+		fs::create_directories(directory, error);
+		if (error) return {};
+		const auto now = std::chrono::system_clock::to_time_t(
+			std::chrono::system_clock::now());
+		std::tm local{};
+#if BOOST_OS_WINDOWS
+		localtime_s(&local, &now);
+#else
+		localtime_r(&now, &local);
+#endif
+		const auto stem = fmt::format("Screenshot_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}{}",
+			local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+			local.tm_hour, local.tm_min, local.tm_sec, mainWindow ? "" : "_GamePad");
+		for (unsigned suffix = 0; suffix < 1000; ++suffix)
+		{
+			const auto candidate = directory / (suffix == 0 ? fmt::format("{}.png", stem) :
+				fmt::format("{}_{}.png", stem, suffix + 1));
+			if (!fs::exists(candidate, error) && !error) return candidate;
+			error.clear();
+		}
+		return {};
+	}
+
+	bool WriteRgbPng(const fs::path& path, std::span<const std::uint8_t> pixels,
+		int width, int height)
+	{
+		if (width <= 0 || height <= 0 || pixels.size() !=
+			static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3)
+			return false;
+		auto temporary = path;
+		temporary += ".tmp";
+		const auto temporaryUtf8 = _pathToUtf8(temporary);
+		FILE* file = boost::nowide::fopen(temporaryUtf8.c_str(), "wb");
+		if (!file) return false;
+		png_image image{};
+		image.version = PNG_IMAGE_VERSION;
+		image.width = static_cast<png_uint_32>(width);
+		image.height = static_cast<png_uint_32>(height);
+		image.format = PNG_FORMAT_RGB;
+		const bool written = png_image_write_to_stdio(&image, file, 0,
+			pixels.data(), 0, nullptr) != 0;
+		png_image_free(&image);
+		const bool closed = std::fclose(file) == 0;
+		if (!written || !closed)
+		{
+			std::error_code ignored;
+			fs::remove(temporary, ignored);
+			return false;
+		}
+		std::error_code error;
+		fs::rename(temporary, path, error);
+		if (error)
+		{
+			fs::remove(temporary, error);
+			return false;
+		}
+		return true;
 	}
 
 	std::string TitleIdString(std::uint64_t titleId)
@@ -282,6 +351,7 @@ namespace
 		writer.Key("startFullscreen"); writer.Bool(snapshot.startFullscreen);
 		writer.Key("openPad"); writer.Bool(snapshot.openPad);
 		writer.Key("checkUpdates"); writer.Bool(snapshot.checkUpdates);
+		writer.Key("saveScreenshots"); writer.Bool(snapshot.saveScreenshots);
 		writer.Key("updateChecksSupported"); writer.Bool(snapshot.updateChecksSupported);
 		writer.Key("portableMode"); writer.Bool(snapshot.portableMode);
 		writer.Key("titleRunning"); writer.Bool(snapshot.titleRunning);
@@ -315,6 +385,45 @@ namespace
 			R"(,"error":)" + JsonString(FrontendSettingsErrorName(result.error)) +
 			R"(,"snapshot":)" + FrontendSettingsJson(result.snapshot) +
 			R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+	}
+
+	std::string_view HotkeyActionName(Application::HotkeyAction action)
+	{
+		switch (action)
+		{
+		case Application::HotkeyAction::ToggleFullscreen: return "toggleFullscreen";
+		case Application::HotkeyAction::ToggleFullscreenAlternative: return "toggleFullscreenAlternative";
+		case Application::HotkeyAction::ExitFullscreen: return "exitFullscreen";
+		case Application::HotkeyAction::TakeScreenshot: return "takeScreenshot";
+		case Application::HotkeyAction::ToggleFastForward: return "toggleFastForward";
+		case Application::HotkeyAction::EndEmulation: return "endEmulation";
+		case Application::HotkeyAction::ExitApplication: return "exitApplication";
+		}
+		return "toggleFullscreen";
+	}
+
+	Application::HotkeyAction ParseHotkeyAction(std::string_view action)
+	{
+		if (action == "toggleFullscreen") return Application::HotkeyAction::ToggleFullscreen;
+		if (action == "toggleFullscreenAlternative") return Application::HotkeyAction::ToggleFullscreenAlternative;
+		if (action == "exitFullscreen") return Application::HotkeyAction::ExitFullscreen;
+		if (action == "takeScreenshot") return Application::HotkeyAction::TakeScreenshot;
+		if (action == "toggleFastForward") return Application::HotkeyAction::ToggleFastForward;
+		if (action == "endEmulation") return Application::HotkeyAction::EndEmulation;
+		if (action == "exitApplication") return Application::HotkeyAction::ExitApplication;
+		throw std::invalid_argument("unknown hotkey action");
+	}
+
+	std::string_view HotkeySettingsErrorName(Application::HotkeySettingsError error)
+	{
+		switch (error)
+		{
+		case Application::HotkeySettingsError::Conflict: return "conflict";
+		case Application::HotkeySettingsError::InvalidBinding: return "invalidBinding";
+		case Application::HotkeySettingsError::DuplicateBinding: return "duplicateBinding";
+		case Application::HotkeySettingsError::SaveFailed: return "saveFailed";
+		default: return "none";
+		}
 	}
 
 	const rapidjson::Value& RequiredMember(const rapidjson::Value& object,
@@ -437,6 +546,13 @@ namespace
 		if (key >= 'a' && key <= 'z') return static_cast<std::uint16_t>(0x04 + key - 'a');
 		if (key >= '1' && key <= '9') return static_cast<std::uint16_t>(0x1e + key - '1');
 		if (key == '0') return 0x27;
+		switch (key)
+		{
+		case '-': return 0x2d; case '=': return 0x2e; case '[': return 0x2f;
+		case ']': return 0x30; case '\\': return 0x31; case ';': return 0x33;
+		case '\'': return 0x34; case '`': return 0x35; case ',': return 0x36;
+		case '.': return 0x37; case '/': return 0x38; default: break;
+		}
 #if BOOST_OS_WINDOWS
 		switch (key)
 		{
@@ -446,10 +562,25 @@ namespace
 		case VK_F4: return 0x3d; case VK_F5: return 0x3e; case VK_F6: return 0x3f;
 		case VK_F7: return 0x40; case VK_F8: return 0x41; case VK_F9: return 0x42;
 		case VK_F10: return 0x43; case VK_F11: return 0x44; case VK_F12: return 0x45;
+		case VK_F13: return 0x68; case VK_F14: return 0x69; case VK_F15: return 0x6a;
+		case VK_F16: return 0x6b; case VK_F17: return 0x6c; case VK_F18: return 0x6d;
+		case VK_F19: return 0x6e; case VK_F20: return 0x6f; case VK_F21: return 0x70;
+		case VK_F22: return 0x71; case VK_F23: return 0x72; case VK_F24: return 0x73;
+		case VK_SNAPSHOT: return 0x46; case VK_SCROLL: return 0x47; case VK_PAUSE: return 0x48;
 		case VK_INSERT: return 0x49; case VK_HOME: return 0x4a; case VK_PRIOR: return 0x4b;
 		case VK_DELETE: return 0x4c; case VK_END: return 0x4d; case VK_NEXT: return 0x4e;
 		case VK_RIGHT: return 0x4f; case VK_LEFT: return 0x50; case VK_DOWN: return 0x51;
 		case VK_UP: return 0x52; case VK_NUMLOCK: return 0x53;
+		case VK_DIVIDE: return 0x54; case VK_MULTIPLY: return 0x55;
+		case VK_SUBTRACT: return 0x56; case VK_ADD: return 0x57;
+		case VK_NUMPAD1: return 0x59; case VK_NUMPAD2: return 0x5a; case VK_NUMPAD3: return 0x5b;
+		case VK_NUMPAD4: return 0x5c; case VK_NUMPAD5: return 0x5d; case VK_NUMPAD6: return 0x5e;
+		case VK_NUMPAD7: return 0x5f; case VK_NUMPAD8: return 0x60; case VK_NUMPAD9: return 0x61;
+		case VK_NUMPAD0: return 0x62; case VK_DECIMAL: return 0x63; case VK_APPS: return 0x65;
+		case VK_OEM_MINUS: return 0x2d; case VK_OEM_PLUS: return 0x2e;
+		case VK_OEM_4: return 0x2f; case VK_OEM_6: return 0x30; case VK_OEM_5: return 0x31;
+		case VK_OEM_1: return 0x33; case VK_OEM_7: return 0x34; case VK_OEM_3: return 0x35;
+		case VK_OEM_COMMA: return 0x36; case VK_OEM_PERIOD: return 0x37; case VK_OEM_2: return 0x38;
 		case VK_LCONTROL: return 0xe0; case VK_LSHIFT: return 0xe1; case VK_LMENU: return 0xe2;
 		case VK_LWIN: return 0xe3; case VK_RCONTROL: return 0xe4; case VK_RSHIFT: return 0xe5;
 		case VK_RMENU: return 0xe6; case VK_RWIN: return 0xe7;
@@ -476,10 +607,12 @@ namespace
 		case 0x2b: return 0x36; case 0x2f: return 0x37; case 0x2c: return 0x38;
 		default: break;
 		}
-		static constexpr std::array<std::pair<std::uint32_t, std::uint16_t>, 33> usages{{
+		static constexpr std::array<std::pair<std::uint32_t, std::uint16_t>, 41> usages{{
 			{0x24,0x28},{0x35,0x29},{0x33,0x2a},{0x30,0x2b},{0x31,0x2c},
 			{0x7a,0x3a},{0x78,0x3b},{0x63,0x3c},{0x76,0x3d},{0x60,0x3e},{0x61,0x3f},
 			{0x62,0x40},{0x64,0x41},{0x65,0x42},{0x6d,0x43},{0x67,0x44},{0x6f,0x45},
+			{0x69,0x68},{0x6b,0x69},{0x71,0x6a},{0x6a,0x6b},
+			{0x40,0x6c},{0x4f,0x6d},{0x50,0x6e},{0x5a,0x6f},
 			{0x72,0x49},{0x73,0x4a},{0x74,0x4b},{0x75,0x4c},{0x77,0x4d},{0x79,0x4e},
 			{0x7c,0x4f},{0x7b,0x50},{0x7d,0x51},{0x7e,0x52},
 			{0x3b,0xe0},{0x38,0xe1},{0x3a,0xe2},{0x37,0xe3},{0x3e,0xe4},{0x3c,0xe5}
@@ -495,6 +628,10 @@ namespace
 		case 0xffc1: return 0x3d; case 0xffc2: return 0x3e; case 0xffc3: return 0x3f;
 		case 0xffc4: return 0x40; case 0xffc5: return 0x41; case 0xffc6: return 0x42;
 		case 0xffc7: return 0x43; case 0xffc8: return 0x44; case 0xffc9: return 0x45;
+		case 0xffca: return 0x68; case 0xffcb: return 0x69; case 0xffcc: return 0x6a;
+		case 0xffcd: return 0x6b; case 0xffce: return 0x6c; case 0xffcf: return 0x6d;
+		case 0xffd0: return 0x6e; case 0xffd1: return 0x6f; case 0xffd2: return 0x70;
+		case 0xffd3: return 0x71; case 0xffd4: return 0x72; case 0xffd5: return 0x73;
 		case 0xff63: return 0x49; case 0xff50: return 0x4a; case 0xff55: return 0x4b;
 		case 0xffff: return 0x4c; case 0xff57: return 0x4d; case 0xff56: return 0x4e;
 		case 0xff53: return 0x4f; case 0xff51: return 0x50; case 0xff54: return 0x51;
@@ -575,6 +712,11 @@ namespace
 				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow,
 					[this](std::function<void()> action) { return PostToUi(std::move(action)); },
 					[this] { return RecreateCanvasForHost(); });
+				RefreshHotkeyBindings(m_controller.GetHotkeySettings());
+				m_hostServices->SetControllerObserver(
+					[this](const ControllerState& current, const ControllerState& previous) {
+						HandleControllerHotkeys(current, previous);
+					});
 				Application::ConnectHost({
 					.windowMetrics = m_hostServices,
 					.clipboard = m_hostServices,
@@ -1004,6 +1146,7 @@ namespace
 				m_windowByRole.emplace(window->role, id);
 				m_toolWindows.emplace(id, std::move(window));
 				m_toolWindows.at(id)->nativeSupport->Show();
+				RefreshInputConfigurationFocus();
 				m_pendingWindowRoles.erase(std::string(role));
 				return;
 			}
@@ -1034,10 +1177,19 @@ namespace
 			CancelBackgroundJobsForWindow(id);
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
+			RefreshInputConfigurationFocus();
 			if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
 			webview_destroy(window->webview);
 			window->nativeSupport.reset();
 			MaybeTerminateAfterShutdown();
+		}
+
+		void RefreshInputConfigurationFocus()
+		{
+			const bool editing = m_windowByRole.contains("input-settings") ||
+				m_windowByRole.contains("hotkey-settings");
+			m_hotkeyEditing.store(editing, std::memory_order_release);
+			if (m_hostServices) m_hostServices->SetInputConfigurationFocused(editing);
 		}
 
 		void MaybeTerminateAfterShutdown() noexcept
@@ -1395,6 +1547,129 @@ namespace
 			}
 		}
 
+		void RefreshHotkeyBindings(const Application::HotkeySettingsModel& model)
+		{
+			std::scoped_lock lock(m_hotkeyMutex);
+			m_hotkeySettings = model;
+		}
+
+		std::optional<Application::HotkeyAction> MatchKeyboardHotkey(
+			std::uint16_t usage, std::uint8_t modifiers) const
+		{
+			if (!usage || m_hotkeyEditing.load(std::memory_order_acquire)) return {};
+			std::scoped_lock lock(m_hotkeyMutex);
+			const auto found = std::ranges::find_if(m_hotkeySettings.bindings,
+				[usage, modifiers](const Application::HotkeyBinding& binding) {
+					return binding.keyboardUsage == usage &&
+						binding.keyboardModifiers == (modifiers & 0x0f);
+				});
+			return found == m_hotkeySettings.bindings.end() ? std::nullopt :
+				std::optional{found->action};
+		}
+
+		void HandleControllerHotkeys(const ControllerState& current,
+			const ControllerState& previous)
+		{
+			if (m_stopping.load(std::memory_order_acquire) ||
+				m_hotkeyEditing.load(std::memory_order_acquire)) return;
+			std::optional<Application::HotkeyAction> action;
+			{
+				std::scoped_lock lock(m_hotkeyMutex);
+				if (!m_hotkeySettings.controllerModifier ||
+					!current.buttons.GetButtonState(*m_hotkeySettings.controllerModifier))
+					return;
+				for (const auto button : current.buttons.GetButtonList())
+				{
+					if (previous.buttons.GetButtonState(button)) continue;
+					const auto found = std::ranges::find_if(m_hotkeySettings.bindings,
+						[button](const Application::HotkeyBinding& binding) {
+							return binding.controllerButton == button;
+						});
+					if (found == m_hotkeySettings.bindings.end()) continue;
+					action = found->action;
+					break;
+				}
+			}
+			if (action)
+				(void)PostToUi([this, action = *action] { ExecuteHotkey(action); });
+		}
+
+		void ExecuteHotkey(Application::HotkeyAction action)
+		{
+			try
+			{
+				switch (action)
+				{
+				case Application::HotkeyAction::ToggleFullscreen:
+				case Application::HotkeyAction::ToggleFullscreenAlternative:
+					m_fullscreen = !m_fullscreen;
+					m_nativeWindow->SetFullscreen(m_fullscreen);
+					break;
+				case Application::HotkeyAction::ExitFullscreen:
+					if (m_fullscreen)
+					{
+						m_fullscreen = false;
+						m_nativeWindow->SetFullscreen(false);
+					}
+					break;
+				case Application::HotkeyAction::TakeScreenshot:
+					RequestScreenshot();
+					break;
+				case Application::HotkeyAction::ToggleFastForward:
+					ActiveSettings::SetTimerShiftFactor(
+						ActiveSettings::GetTimerShiftFactor() < 3 ? 3 : 1);
+					break;
+				case Application::HotkeyAction::EndEmulation:
+					StopEmulation();
+					break;
+				case Application::HotkeyAction::ExitApplication:
+					(void)RequestShutdown();
+					break;
+				}
+			}
+			catch (const std::exception& error)
+			{
+				Emit("system.diagnostic", std::string(R"({"message":)") +
+					JsonString(error.what()) + "}");
+			}
+		}
+
+		void RequestScreenshot()
+		{
+			if (!g_renderer)
+				throw std::runtime_error("a title must be running before taking a screenshot");
+			const bool saveToDisk = m_controller.GetFrontendSettings().saveScreenshots;
+			const auto gate = m_callbackGate;
+			const auto request = g_renderer->RequestScreenshot(
+				[saveToDisk, gate](const std::vector<std::uint8_t>& pixels, int width, int height,
+					bool mainWindow) -> std::optional<std::string> {
+					if (saveToDisk)
+					{
+						const auto path = ScreenshotPath(mainWindow);
+						if (!path || !WriteRgbPng(*path, pixels, width, height))
+							return std::string("Failed to save screenshot");
+						return std::string("Screenshot saved to ") + _pathToUtf8(*path);
+					}
+					auto copy = std::make_shared<std::vector<std::uint8_t>>(pixels);
+					bool queued{};
+					{
+						std::scoped_lock lock(gate->mutex);
+						if (gate->target)
+							queued = gate->target->PostToUi([gate, copy, width, height] {
+								std::scoped_lock callbackLock(gate->mutex);
+								if (!gate->target) return;
+								if (!gate->target->m_nativeWindow->SetClipboardImage(*copy, width, height))
+									gate->target->Emit("system.diagnostic",
+										R"({"message":"Failed to copy screenshot to the clipboard"})");
+							});
+					}
+					return queued ? std::optional<std::string>("Screenshot copied to clipboard") :
+						std::optional<std::string>("Failed to copy screenshot to clipboard");
+				});
+			if (!request)
+				throw std::runtime_error("a screenshot request is already active");
+		}
+
 		void HandleNativeInput(const WebFrontend::NativeInputEvent& event)
 		{
 			if (m_stopping.load(std::memory_order_acquire) || !m_hostServices)
@@ -1452,6 +1727,9 @@ namespace
 			{
 				m_hostServices->UpdateKey(event.key, event.pressed);
 				const auto usage = event.usage ? event.usage : UsbHidUsage(event.key);
+				if (!event.pressed && !event.repeat && !m_controller.SoftwareKeyboardActive())
+					if (const auto action = MatchKeyboardHotkey(usage, event.modifiers))
+						ExecuteHotkey(*action);
 				if (usage)
 					m_controller.SubmitKeyboard(usage, event.pressed, event.modifiers);
 				break;
@@ -1882,6 +2160,56 @@ namespace
 			return InputSettingsJson();
 		}
 
+		std::string HotkeySettingsJson(
+			const Application::HotkeySettingsModel& model) const
+		{
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("revision"); writer.Uint64(model.revision);
+			writer.Key("controllerModifier");
+			if (model.controllerModifier) writer.Uint(*model.controllerModifier);
+			else writer.Null();
+			writer.Key("controllerModifierLabel"); writer.String(
+				model.controllerModifierLabel.data(),
+				static_cast<rapidjson::SizeType>(model.controllerModifierLabel.size()));
+			writer.Key("controller");
+			if (model.controller)
+			{
+				writer.StartObject();
+				writer.Key("token"); writer.Uint64(model.controller->token);
+				writer.Key("displayName"); writer.String(model.controller->displayName.data(),
+					static_cast<rapidjson::SizeType>(model.controller->displayName.size()));
+				writer.EndObject();
+			}
+			else writer.Null();
+			writer.Key("bindings"); writer.StartArray();
+			for (const auto& binding : model.bindings)
+			{
+				writer.StartObject();
+				writer.Key("action"); writer.String(HotkeyActionName(binding.action).data());
+				writer.Key("keyboardUsage"); writer.Uint(binding.keyboardUsage);
+				writer.Key("keyboardModifiers"); writer.Uint(binding.keyboardModifiers);
+				writer.Key("controllerButton");
+				if (binding.controllerButton) writer.Uint(*binding.controllerButton);
+				else writer.Null();
+				writer.Key("controllerLabel"); writer.String(binding.controllerLabel.data(),
+					static_cast<rapidjson::SizeType>(binding.controllerLabel.size()));
+				writer.EndObject();
+			}
+			writer.EndArray(); writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		std::string HotkeySettingsResultJson(
+			const Application::HotkeySettingsResult& result) const
+		{
+			return std::string(R"({"ok":)") + (result ? "true" : "false") +
+				R"(,"error":)" + JsonString(HotkeySettingsErrorName(result.error)) +
+				R"(,"snapshot":)" + HotkeySettingsJson(result.snapshot) +
+				R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+		}
+
 		static Application::EmulatedControllerType ParseInputControllerType(
 			std::string_view value)
 		{
@@ -2014,6 +2342,7 @@ namespace
 				update.startFullscreen = RequiredBool(params, "startFullscreen");
 				update.openPad = RequiredBool(params, "openPad");
 				update.checkUpdates = RequiredBool(params, "checkUpdates");
+				update.saveScreenshots = RequiredBool(params, "saveScreenshots");
 				update.completeSetup = RequiredBool(params, "completeSetup");
 				const auto& paths = RequiredMember(params, "gamePaths");
 				if (!paths.IsArray())
@@ -2119,7 +2448,7 @@ namespace
 				RequireRole({"input-settings"}); return InputMutationJson(m_controller.ConnectInputDevice(RequiredUint64(params, "token")));
 			});
 			m_rpc.Register("input.captureButton", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"});
+				RequireRole({"input-settings", "hotkey-settings"});
 				const auto captured = m_controller.CaptureInputButton(RequiredUint64(params, "token"));
 				if (!captured) return std::string("null");
 				return std::string(R"({"id":)") + std::to_string(captured->id) +
@@ -2144,6 +2473,45 @@ namespace
 			m_rpc.Register("input.profileLoad", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.LoadInputProfile(RequiredUint(params, "player"), RequiredString(params, "profile"))); });
 			m_rpc.Register("input.profileSave", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.SaveInputProfile(RequiredUint(params, "player"), RequiredString(params, "profile"))); });
 			m_rpc.Register("input.profileDelete", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.DeleteInputProfile(RequiredString(params, "profile"))); });
+			m_rpc.Register("hotkeys.get", [this](const rapidjson::Value&) {
+				RequireRole({"hotkey-settings"});
+				return HotkeySettingsJson(m_controller.GetHotkeySettings());
+			});
+			m_rpc.Register("hotkeys.apply", [this](const rapidjson::Value& params) {
+				RequireRole({"hotkey-settings"});
+				Application::HotkeySettingsUpdate update;
+				update.revision = RequiredUint64(params, "revision");
+				const auto& modifier = RequiredMember(params, "controllerModifier");
+				if (!modifier.IsNull())
+				{
+					if (!modifier.IsUint())
+						throw std::invalid_argument("controllerModifier must be null or an unsigned integer");
+					update.controllerModifier = modifier.GetUint();
+				}
+				const auto& bindings = RequiredMember(params, "bindings");
+				if (!bindings.IsArray())
+					throw std::invalid_argument("bindings must be an array");
+				for (const auto& value : bindings.GetArray())
+				{
+					Application::HotkeyBinding binding;
+					binding.action = ParseHotkeyAction(RequiredString(value, "action"));
+					binding.keyboardUsage = static_cast<std::uint16_t>(
+						RequiredBoundedUint(value, "keyboardUsage", 0, 0xffff));
+					binding.keyboardModifiers = static_cast<std::uint8_t>(
+						RequiredBoundedUint(value, "keyboardModifiers", 0, 0x0f));
+					const auto& button = RequiredMember(value, "controllerButton");
+					if (!button.IsNull())
+					{
+						if (!button.IsUint())
+							throw std::invalid_argument("controllerButton must be null or an unsigned integer");
+						binding.controllerButton = button.GetUint();
+					}
+					update.bindings.push_back(binding);
+				}
+				const auto result = m_controller.ApplyHotkeySettings(update);
+				if (result) RefreshHotkeyBindings(result.snapshot);
+				return HotkeySettingsResultJson(result);
+			});
 			m_rpc.Register("graphicPacks.list", [this](const rapidjson::Value&) {
 				RequireRole({"graphic-packs"});
 				return GraphicPacksJson();
@@ -2362,6 +2730,9 @@ namespace
 		};
 		std::array<PointerState, 2> m_pointerStates;
 		std::array<Frontend::CemuExtendFrontendBridge, 2> m_pointerBridges;
+		mutable std::mutex m_hotkeyMutex;
+		Application::HotkeySettingsModel m_hotkeySettings;
+		std::atomic_bool m_hotkeyEditing{};
 		std::uint64_t m_textInputSequence{};
 		bool m_fullscreen{};
 		bool m_rpcBound{};
