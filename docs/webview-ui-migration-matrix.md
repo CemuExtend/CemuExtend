@@ -26,7 +26,7 @@ This matrix records the observed wxWidgets UI ownership and the destination cont
 | `PadViewFrame.*` | independent GamePad render/input window | host render/input contracts | n/a | native tool window | render surface, DPI, mouse/touch | Docker build/CTest + lifecycle review | Completed |
 | `EmulatedUSBDevices/*` | emulated USB device management | device façade required | emulated-usb-devices | modeless singleton | device enumeration | required | Not started |
 | `MemorySearcherTool.*` | memory range search | debugger façade required | memory-searcher | modeless singleton | none | required | Not started |
-| `debugger/DebuggerWindow2.*` and controls | PPC debugger/disassembly/registers | debugger façade required | ppc-debugger | modeless singleton | none | required | Not started |
+| `debugger/DebuggerWindow2.*` and controls | PPC debugger/disassembly/registers | `PpcDebuggerFacade` | ppc-debugger | modeless singleton | copied registers; bounded disassembly/breakpoint snapshots; opaque identities/generations | façade/model tests + role-authorized RPC + Docker build/CTest | Completed |
 | `AudioDebuggerWindow.*` | audio debugger | debugger façade required | audio-debugger | modeless singleton | none | required | Not started |
 | `windows/TextureRelationViewer/*` | texture relations | debugger façade required | texture-relations | modeless singleton | none | required | Not started |
 | `windows/PPCThreadsViewer/*` | PPC thread viewer | debugger façade required | ppc-threads | modeless singleton | none | required | Not started |

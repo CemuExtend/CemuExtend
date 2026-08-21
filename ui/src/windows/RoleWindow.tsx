@@ -18,6 +18,7 @@ import { PpcThreadsWindow } from "./PpcThreadsWindow";
 import { TextureRelationsWindow } from "./TextureRelationsWindow";
 import { AudioDebuggerWindow } from "./AudioDebuggerWindow";
 import { MemorySearcherWindow } from "./MemorySearcherWindow";
+import { PpcDebuggerWindow } from "./PpcDebuggerWindow";
 
 export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: string; context?: { titleId?: string; packageKey?: string; generation?: string } }) {
   switch (role) {
@@ -40,5 +41,6 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "texture-relations": return <TextureRelationsWindow />;
     case "audio-debugger": return <AudioDebuggerWindow />;
     case "memory-searcher": return <MemorySearcherWindow />;
+    case "ppc-debugger": return <PpcDebuggerWindow />;
   }
 }

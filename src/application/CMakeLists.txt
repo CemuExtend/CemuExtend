@@ -25,6 +25,8 @@ add_library(CemuApplication STATIC
   InputSettingsFacade.h
   MemorySearchFacade.h
   MemorySearchFacade.cpp
+  PpcDebuggerFacade.h
+  PpcDebuggerFacade.cpp
   GameProfileFacade.h
 	GraphicPackFacade.h
 	ManagedContentFacade.h
@@ -82,4 +84,8 @@ if(BUILD_TESTING)
   add_executable(memory_search_facade_tests tests/MemorySearchFacadeTests.cpp)
   target_link_libraries(memory_search_facade_tests PRIVATE CemuApplication)
   add_test(NAME memory_search_facade_tests COMMAND memory_search_facade_tests)
+
+  add_executable(ppc_debugger_facade_tests tests/PpcDebuggerFacadeTests.cpp)
+  target_link_libraries(ppc_debugger_facade_tests PRIVATE CemuApplication)
+  add_test(NAME ppc_debugger_facade_tests COMMAND ppc_debugger_facade_tests)
 endif()

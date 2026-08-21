@@ -4,7 +4,7 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 87> RpcMethods{
+	inline constexpr std::array<std::string_view, 92> RpcMethods{
 		"system.bootstrap",
 		"system.quit",
 		"window.close",
@@ -87,6 +87,11 @@ namespace WebFrontend::Generated
 		"memorySearch.status",
 		"memorySearch.page",
 		"memorySearch.cancel",
+		"ppcDebugger.snapshot",
+		"ppcDebugger.toggleBreakpoint",
+		"ppcDebugger.setBreakpointEnabled",
+		"ppcDebugger.deleteBreakpoint",
+		"ppcDebugger.control",
 		"jobs.cancel",
 		"titles.list",
 		"titles.refresh",

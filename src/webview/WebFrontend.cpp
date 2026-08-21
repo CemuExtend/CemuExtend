@@ -8,6 +8,7 @@
 #include "application/EmulatedUsbFacade.h"
 #include "application/DiagnosticFacade.h"
 #include "application/MemorySearchFacade.h"
+#include "application/PpcDebuggerFacade.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
@@ -731,6 +732,47 @@ namespace
 		}
 		writer.EndArray(); writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	std::string PpcDebuggerSnapshotJson(const Application::PpcDebuggerSnapshot& snapshot)
+	{
+		rapidjson::StringBuffer buffer; JsonWriter writer(buffer);
+		auto address = [](std::uint32_t value) { return fmt::format("{:08X}", value); };
+		writer.StartObject(); writer.Key("generation");
+		const auto generation = std::to_string(snapshot.generation);
+		writer.String(generation.data(), generation.size());
+		writer.Key("available"); writer.Bool(snapshot.available);
+		writer.Key("trapped"); writer.Bool(snapshot.trapped);
+		writer.Key("instructionPointer"); const auto ip = address(snapshot.instructionPointer.value);
+		writer.String(ip.data(), ip.size());
+		writer.Key("linkRegister"); const auto lr = address(snapshot.linkRegister);
+		writer.String(lr.data(), lr.size());
+		writer.Key("gpr"); writer.StartArray();
+		for (const auto value : snapshot.gpr) { const auto formatted = address(value); writer.String(formatted.data(), formatted.size()); }
+		writer.EndArray(); writer.Key("instructions"); writer.StartArray();
+		for (const auto& instruction : snapshot.instructions)
+		{
+			writer.StartObject(); const auto formattedAddress = address(instruction.address.value);
+			writer.Key("address"); writer.String(formattedAddress.data(), formattedAddress.size());
+			const auto opcode = address(instruction.opcode);
+			writer.Key("opcode"); writer.String(opcode.data(), opcode.size());
+			writer.Key("mnemonic"); writer.String(instruction.mnemonic.data(), instruction.mnemonic.size());
+			writer.Key("operands"); writer.String(instruction.operands.data(), instruction.operands.size());
+			writer.Key("current"); writer.Bool(instruction.current);
+			writer.Key("breakpoint"); writer.Bool(instruction.breakpoint); writer.EndObject();
+		}
+		writer.EndArray(); writer.Key("breakpoints"); writer.StartArray();
+		for (const auto& breakpoint : snapshot.breakpoints)
+		{
+			writer.StartObject(); writer.Key("identity"); writer.String(breakpoint.identity.data(), breakpoint.identity.size());
+			const auto formattedAddress = address(breakpoint.address.value);
+			writer.Key("address"); writer.String(formattedAddress.data(), formattedAddress.size());
+			writer.Key("enabled"); writer.Bool(breakpoint.enabled);
+			writer.Key("logging"); writer.Bool(breakpoint.logging); writer.EndObject();
+		}
+		writer.EndArray(); writer.Key("breakpointCapReached"); writer.Bool(snapshot.breakpointCapReached);
+		writer.Key("diagnostic"); writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
+		writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
 	}
 
 	struct WindowDescriptor
@@ -1956,6 +1998,7 @@ namespace
 			window->lifetime->store(false, std::memory_order_release);
 			m_updatePlans.RevokeOwner(id, window->generation);
 			m_memorySearch.CloseOwner(id);
+			m_ppcDebugger.CloseOwner(id);
 			CancelBackgroundJobsForWindow(id);
 			std::erase_if(m_saveTickets, [id](const auto& item) {
 				return item.second.ownerWindow == id;
@@ -2039,6 +2082,7 @@ namespace
 			m_stopping.store(true, std::memory_order_release);
 			m_eventStopping->store(true, std::memory_order_release);
 			m_memorySearch.BeginShutdown();
+			m_ppcDebugger.BeginShutdown();
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
 			{
@@ -4090,6 +4134,42 @@ namespace
 					ParseDecimalUint64(RequiredString(params, "generation"), "generation"));
 				return std::string("{}");
 			});
+			m_rpc.Register("ppcDebugger.snapshot", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-debugger"});
+				return PpcDebuggerSnapshotJson(m_ppcDebugger.Capture(m_invokingWindow,
+					{RequiredHexAddress(params, "center")}, RequiredBoundedUint(params,
+						"instructionCount", 1, Application::PpcDebuggerFacade::MaximumInstructionCount)));
+			});
+			m_rpc.Register("ppcDebugger.toggleBreakpoint", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-debugger"});
+				m_ppcDebugger.ToggleExecuteBreakpoint(m_invokingWindow,
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					{RequiredHexAddress(params, "address")}); return std::string("{}");
+			});
+			m_rpc.Register("ppcDebugger.setBreakpointEnabled", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-debugger"});
+				m_ppcDebugger.SetBreakpointEnabled(m_invokingWindow,
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					RequiredString(params, "identity"), RequiredBool(params, "enabled"));
+				return std::string("{}");
+			});
+			m_rpc.Register("ppcDebugger.deleteBreakpoint", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-debugger"});
+				m_ppcDebugger.DeleteBreakpoint(m_invokingWindow,
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+					RequiredString(params, "identity")); return std::string("{}");
+			});
+			m_rpc.Register("ppcDebugger.control", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-debugger"}); const auto command = RequiredString(params, "command");
+				const auto parsed = command == "break" ? Application::PpcDebuggerControl::Break :
+					command == "run" ? Application::PpcDebuggerControl::Run :
+					command == "stepInto" ? Application::PpcDebuggerControl::StepInto :
+					command == "stepOver" ? Application::PpcDebuggerControl::StepOver :
+					throw std::invalid_argument("unknown PPC debugger control command");
+				m_ppcDebugger.Control(m_invokingWindow,
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"), parsed);
+				return std::string("{}");
+			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
 				const auto jobId = ParseDecimalUint64(RequiredString(params, "jobId"), "jobId");
 				const auto job = m_backgroundJobs.find(jobId);
@@ -4243,6 +4323,8 @@ namespace
 		Application::DiagnosticFacade m_diagnostics;
 		Application::MemorySearchFacade m_memorySearch{
 			Application::CreateCafeMemoryDiagnosticBackend()};
+		Application::PpcDebuggerFacade m_ppcDebugger{
+			Application::CreateCafePpcDebuggerBackend()};
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
 		Application::EventSubscription m_applicationEvents;
