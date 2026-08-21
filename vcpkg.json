@@ -39,13 +39,6 @@
       "default-features": false
     },
     "zstd",
-    {
-      "name": "wxwidgets",
-      "default-features": false,
-      "features": [
-        "debug-support"
-      ]
-    },
     "openssl",
     {
       "name": "curl",
@@ -69,6 +62,18 @@
     },
     "libusb"
   ],
+  "features": {
+    "wx": {
+      "description": "Build the transitional wxWidgets frontend",
+      "dependencies": [
+        {
+          "name": "wxwidgets",
+          "default-features": false,
+          "features": ["debug-support"]
+        }
+      ]
+    }
+  },
   "overrides": [
     {
       "name": "glslang",

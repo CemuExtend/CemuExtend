@@ -39,6 +39,7 @@ RUN apt-get update \
         libudev-dev \
         libusb-1.0-0-dev \
         libwayland-dev \
+        libwebkit2gtk-4.1-dev \
         libx11-dev \
         libx11-xcb-dev \
         libxcursor-dev \
@@ -84,7 +85,7 @@ ARG BUILD_TYPE=Release
 ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
-ARG ENABLE_WXWIDGETS=ON
+ARG CEMU_FRONTEND=webview
 
 WORKDIR /workspace/CemuExtend
 
@@ -104,7 +105,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DGIT_HASH=${GIT_HASH} \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
-            -DENABLE_WXWIDGETS=${ENABLE_WXWIDGETS} \
+            -DCEMU_FRONTEND=${CEMU_FRONTEND} \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
         && break; \
