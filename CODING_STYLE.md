@@ -43,7 +43,8 @@ if (cond)
 
 ## Printing
 
-Avoid sprintf and similar C-style formatting API. Use `fmt::format()`.
+Avoid sprintf and similar C-style formatting API. Use `fmt::format()`.  
+In UI related code you can use `formatWxString`, but be aware that number formatting with this function will be locale dependent!
 
 ## Strings and encoding
 
@@ -52,6 +53,10 @@ We use UTF-8 encoded `std::string` where possible. Some conversions need special
 // std::filesystem::path <-> std::string (in precompiled.h)
 std::string _pathToUtf8(const fs::path& path);
 fs::path _utf8ToPath(std::string_view input);
+
+// wxString <-> std::string
+wxString wxString::FromUTF8(const std::string& s)
+std::string wxString::utf8_string();
 
 ```
 

@@ -114,6 +114,7 @@ This section refers to running `cmake -S...` (truncated).
       * Update vcpkg by running by the following command:
          * `git submodule update --remote dependencies/vcpkg`
       * If you are sure vcpkg is up to date, check the following logs:
+         * `Cemu/dependencies/vcpkg/buildtrees/wxwidgets/config-x64-linux-out.log`
          * `Cemu/dependencies/vcpkg/buildtrees/libsystemd/config-x64-linux-dbg-meson-log.txt.log`
          * `Cemu/dependencies/vcpkg/buildtrees/libsystemd/config-x64-linux-dbg-out.log`
 * Not able to find Ninja.
@@ -146,10 +147,6 @@ cmake --build build/nix --parallel
 
 The development build is written to `bin/Cemu_debug`. To build the packaged Nix output instead, run `nix build .#cemu-extend`; the executable is available as `result/bin/cemu`.
 
-The desktop build uses the React/WebView frontend by default. Pass
-`-DCEMU_FRONTEND=headless` for CLI and automated environments. The former
-`wx` frontend selection and its wxWidgets dependency are no longer supported.
-
 ## Docker
 
 The Dockerfile uses CemuExtend's vcpkg manifest and initializes all git submodules inside the image. Build from the CemuExtend directory:
@@ -161,10 +158,6 @@ docker run --rm -it cemu-extend:build
 ```
 
 The default image performs a Release build. Use `--build-arg BUILD_TYPE=Debug` for a Debug build. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
-
-`./docker-build.sh` builds the WebView desktop executable. To build the same
-core in headless mode, run `CEMU_FRONTEND=headless ./docker-build.sh`; the
-artifact is written as `result/bin/Cemu_headless`.
 
 
 ##### Building Errors
@@ -245,7 +238,7 @@ Or a higher version as desired.
 
 ### Installing Dependencies
 
-`sudo pkg install boost-libs cmake-core curl glslang gtk3 libzip ninja png pkgconf pugixml rapidjson sdl2 wayland wayland-protocols webkit2-gtk3 xorg zstd`
+`sudo pkg install boost-libs cmake-core curl glslang gtk3 libzip ninja png pkgconf pugixml rapidjson sdl2 wayland wayland-protocols wx32-gtk3 xorg zstd`
 
 ### Build Cemu on BSD with CMake
 
@@ -284,7 +277,7 @@ Example usage: `cmake -S . -B build -DCMAKE_BUILD_TYPE=release -DENABLE_SDL=ON -
 | ENABLE_SDL         |   | Enable SDLController controller API                                         | ON      |                    |
 | ENABLE_VCPKG       |   | Use VCPKG package manager to obtain dependencies                            | ON      |                    |
 | ENABLE_VULKAN      |   | Enable the Vulkan graphics backend                                          | ON      |                    |
-| CEMU_FRONTEND      |   | Frontend implementation (`webview` or `headless`)                           | webview |                    |
+| ENABLE_WXWIDGETS   |   | Enable wxWidgets UI                                                         | ON      | Currently required |
 | ENABLE_LIBUSB      |   | Enable libusb                                                               | ON      |                    |
 
 ### Windows

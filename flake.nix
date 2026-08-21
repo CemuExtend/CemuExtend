@@ -71,6 +71,7 @@
           pkg-config
           wayland-scanner
           wrapGAppsHook3
+          wxwidgets_3_3
         ];
 
         buildInputs = with pkgs; [
@@ -98,7 +99,7 @@
           vulkan-loader
           wayland
           wayland-protocols
-          webkitgtk_4_1
+          wxwidgets_3_3
           libx11
           libxrender
           zarchive
@@ -114,6 +115,21 @@
           (lib.cmakeFeature "EMULATOR_VERSION_MAJOR" "2")
           (lib.cmakeFeature "EMULATOR_VERSION_MINOR" "0")
         ];
+
+        postPatch = ''
+          # The Nixpkgs wxWidgets package exposes wx-config rather than the
+          # vcpkg wxWidgets::wxWidgets target.  The module already creates a
+          # complete wx::base interface target in this case, so provide the
+          # compatibility alias expected by CemuExtend.
+          substituteInPlace cmake/FindwxWidgets.cmake \
+            --replace-fail \
+              '	find_package_handle_standard_args(wxWidgets' \
+              '	if (NOT TARGET wxWidgets::wxWidgets AND TARGET wx::base)
+		add_library(wxWidgets::wxWidgets ALIAS wx::base)
+	endif()
+
+	find_package_handle_standard_args(wxWidgets'
+        '';
 
         preConfigure = ''
           rm -rf dependencies/imgui dependencies/Vulkan-Headers

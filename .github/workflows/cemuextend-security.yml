@@ -17,7 +17,7 @@ on:
       - 'src/Cafe/tests/PPCSandbox*'
       - 'src/Cafe/CMakeLists.txt'
       - 'src/config/CemuConfig*'
-      - 'src/webview/**'
+      - 'src/gui/wxgui/GeneralSettings2*'
       - 'src/util/MemMapper/MemMapper*'
       - 'dependencies/libcemuextend/**'
       - 'README.md'
@@ -61,7 +61,7 @@ jobs:
       - name: Build isolation tests
         run: >-
           cmake --build build/security --target
-          cemod_permission_tests
+          cemod_gui_model_tests cemod_permission_tests
           cemod_execution_context_tests cemod_instruction_policy_tests
           cex2_host_tests cemod_package_tests wups_binary_tests wups_runtime_tests
           wups_compatibility_tests cemod_runtime_tests CemuCafe

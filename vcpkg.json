@@ -62,6 +62,18 @@
     },
     "libusb"
   ],
+  "features": {
+    "wx": {
+      "description": "Build the transitional wxWidgets frontend",
+      "dependencies": [
+        {
+          "name": "wxwidgets",
+          "default-features": false,
+          "features": ["debug-support"]
+        }
+      ]
+    }
+  },
   "overrides": [
     {
       "name": "glslang",
@@ -70,6 +82,10 @@
     {
       "name": "sdl3",
       "version": "3.4.10"
+    },
+    {
+      "name": "wxwidgets",
+      "version": "3.3.3"
     }
   ]
 }

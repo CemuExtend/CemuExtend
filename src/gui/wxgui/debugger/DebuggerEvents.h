@@ -1,0 +1,12 @@
+#pragma once
+
+#include <wx/event.h>
+
+wxDECLARE_EVENT(wxEVT_UPDATE_VIEW, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_BREAKPOINT_HIT, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_RUN, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_BREAKPOINT_CHANGE, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_MOVE_TO_DISASM_ADDR, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_NOTIFY_MODULE_LOADED, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_NOTIFY_MODULE_UNLOADED, wxCommandEvent);
+wxDECLARE_EVENT(wxEVT_NOTIFY_GRAPHIC_PACKS_MODIFIED, wxCommandEvent);
