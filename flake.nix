@@ -193,7 +193,7 @@
 
           meta = {
             description = "CemuExtend Wii U emulator build for NixOS";
-            homepage = "https://github.com/PinkDiamondTeam/CemuExtend";
+            homepage = "https://github.com/CemuExtend/CemuExtend";
             license = lib.licenses.mpl20;
             mainProgram = "cemu";
             platforms = [ system ];

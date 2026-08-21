@@ -3412,7 +3412,7 @@ namespace
 					R"({"name":"React","license":"MIT","url":"https://github.com/facebook/react"},)"
 					R"({"name":"Bun","license":"MIT","url":"https://github.com/oven-sh/bun"},)"
 					R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
-					R"({"label":"CemuExtend source","url":"https://github.com/PinkDiamondTeam/CemuExtend"},)"
+					R"({"label":"CemuExtend source","url":"https://github.com/CemuExtend/CemuExtend"},)"
 					R"({"label":"Cemu project","url":"https://cemu.info/"}]})";
 			});
 			m_rpc.Register("settings.getFrontend", [this](const rapidjson::Value&) {
