@@ -50,6 +50,7 @@ export function Library() {
       <button onClick={() => void invoke("titles.refresh").then(load).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))}>Refresh</button>
       <button onClick={() => reportOpen(openNativeWindow("graphic-packs"))}>Graphic packs</button>
       <button onClick={() => reportOpen(openNativeWindow("cemod-manager"))}>CemuMods</button>
+      <button onClick={() => reportOpen(openNativeWindow("update-manager"))}>Updates</button>
       <button onClick={() => reportOpen(openNativeWindow("account-manager"))}>Accounts</button>
       <button onClick={() => reportOpen(openNativeWindow("about"))}>About</button>
     </section>

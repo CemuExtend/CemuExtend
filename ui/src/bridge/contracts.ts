@@ -181,6 +181,20 @@ export type GraphicPackInstallRequest = {
   replaceExisting: boolean;
 };
 
+export type TitleInstallSelection = {
+  planToken: string;
+  titleId: string;
+  titleName: string;
+  version: number;
+  kind: "unknown" | "base" | "demo" | "update" | "dlc" | "systemTitle" | "systemData";
+  conflict: "none" | "differentType" | "sameVersion" | "newerVersionInstalled";
+  installedVersion: number | null;
+  requiredBytes: number;
+  availableBytes: number;
+};
+
+export type UpdateManagerModel = { titleRunning: boolean };
+
 export type FrontendSettings = {
   revision: number;
   gamePaths: string[];

@@ -88,6 +88,23 @@ namespace WebFrontend
 				[NSApp activateIgnoringOtherApps:YES];
 			}
 
+			std::optional<std::filesystem::path> PickDirectory(std::string_view title) override
+			{
+				NSOpenPanel* panel = [NSOpenPanel openPanel];
+				[panel setCanChooseDirectories:YES];
+				[panel setCanChooseFiles:NO];
+				[panel setAllowsMultipleSelection:NO];
+				NSString* prompt = [[NSString alloc] initWithBytes:title.data()
+					length:title.size() encoding:NSUTF8StringEncoding];
+				[panel setTitle:prompt];
+				[prompt release];
+				if ([panel runModal] != NSModalResponseOK) return std::nullopt;
+				NSURL* selected = [[panel URLs] firstObject];
+				if (!selected || ![selected isFileURL])
+					throw std::runtime_error("selected folder has no filesystem path");
+				return std::filesystem::path([[selected path] fileSystemRepresentation]);
+			}
+
 		private:
 			NSWindow* m_window{};
 			NSWindow* m_parent{};

@@ -3,6 +3,8 @@ add_library(CemuWebRpc STATIC
   MainWindowState.h
   RpcDispatcher.cpp
   RpcDispatcher.h
+	UpdatePlanRegistry.cpp
+	UpdatePlanRegistry.h
 )
 
 add_library(CemuWebRendererAdapters STATIC
@@ -66,7 +68,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp NativeFileDialogGtk.cpp ToolWindowSupportGtk.cpp)
 elseif(WIN32)
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostWin.cpp NativeFileDialogWin.cpp ToolWindowSupportWin.cpp)
-  target_link_libraries(CemuWebFrontend PRIVATE comdlg32 imm32 shell32)
+  target_link_libraries(CemuWebFrontend PRIVATE comdlg32 imm32 shell32 ole32)
 elseif(APPLE)
   enable_language(OBJCXX)
 	target_sources(CemuWebFrontend PRIVATE NativeWindowHostCocoa.mm NativeFileDialogCocoa.mm ToolWindowSupportCocoa.mm)
@@ -105,4 +107,8 @@ if(BUILD_TESTING)
 	target_include_directories(web_host_state_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 	target_link_libraries(web_host_state_tests PRIVATE CemuHostContracts)
 	add_test(NAME web_host_state_tests COMMAND web_host_state_tests)
+
+	add_executable(web_update_plan_registry_tests tests/UpdatePlanRegistryTests.cpp)
+	target_link_libraries(web_update_plan_registry_tests PRIVATE CemuWebRpc)
+	add_test(NAME web_update_plan_registry_tests COMMAND web_update_plan_registry_tests)
 endif()

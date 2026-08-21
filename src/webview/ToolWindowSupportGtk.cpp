@@ -50,6 +50,27 @@ namespace WebFrontend
 				}
 			}
 
+			std::optional<std::filesystem::path> PickDirectory(std::string_view title) override
+			{
+				const std::string ownedTitle(title);
+				GtkWidget* dialog = gtk_file_chooser_dialog_new(ownedTitle.c_str(),
+					GTK_WINDOW(m_window), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+					"_Cancel", GTK_RESPONSE_CANCEL, "_Select", GTK_RESPONSE_ACCEPT, nullptr);
+				if (!dialog) throw std::runtime_error("failed to create the folder picker");
+				std::optional<std::filesystem::path> result;
+				if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+				{
+					gchar* selected = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+					if (selected)
+					{
+						result = std::filesystem::path(selected);
+						g_free(selected);
+					}
+				}
+				gtk_widget_destroy(dialog);
+				return result;
+			}
+
 		private:
 			GtkWidget* m_window{};
 			std::function<void()> m_closeHandler;

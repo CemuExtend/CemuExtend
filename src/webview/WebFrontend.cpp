@@ -18,6 +18,7 @@
 #include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
 #include "webview/ToolWindowSupport.h"
+#include "webview/UpdatePlanRegistry.h"
 #include "webview/WebHostState.h"
 #include "webview/WebHostServices.h"
 #include "webview/generated/WebAssets.h"
@@ -921,6 +922,7 @@ namespace
 		struct ToolWindow
 		{
 			std::uint64_t id{};
+			std::uint64_t generation{};
 			std::string role;
 			std::optional<std::uint64_t> titleContext;
 			std::string packageContext;
@@ -931,6 +933,8 @@ namespace
 			bool rpcBound{};
 			bool closeRequested{};
 			bool closing{};
+			std::shared_ptr<std::atomic_bool> lifetime{
+				std::make_shared<std::atomic_bool>(true)};
 		};
 
 		struct DeferredToolClose
@@ -948,6 +952,8 @@ namespace
 		{
 			std::uint64_t id{};
 			std::uint64_t ownerWindow{};
+			std::uint64_t ownerGeneration{};
+			std::weak_ptr<std::atomic_bool> ownerLifetime;
 			std::shared_ptr<std::atomic_bool> cancelled;
 			std::jthread worker;
 		};
@@ -1034,8 +1040,15 @@ namespace
 			const auto job = m_backgroundJobs.find(event.jobId);
 			if (job == m_backgroundJobs.end() || job->second->ownerWindow != event.ownerWindow)
 				return;
-			const bool ownerAlive = event.ownerWindow == 0 ||
-				m_toolWindows.contains(event.ownerWindow);
+			bool ownerAlive = event.ownerWindow == 0;
+			if (event.ownerWindow != 0)
+			{
+				const auto owner = m_toolWindows.find(event.ownerWindow);
+				const auto lifetime = job->second->ownerLifetime.lock();
+				ownerAlive = owner != m_toolWindows.end() && lifetime &&
+					lifetime->load(std::memory_order_acquire) &&
+					owner->second->generation == job->second->ownerGeneration;
+			}
 			if (ownerAlive)
 				EmitToWindow(event.ownerWindow, event.type, event.payload);
 			if (event.final)
@@ -1057,6 +1070,14 @@ namespace
 			auto job = std::make_unique<BackgroundJob>();
 			job->id = id;
 			job->ownerWindow = owner;
+			if (owner != 0)
+			{
+				const auto window = m_toolWindows.find(owner);
+				if (window == m_toolWindows.end())
+					throw std::runtime_error("background-job owner is no longer active");
+				job->ownerGeneration = window->second->generation;
+				job->ownerLifetime = window->second->lifetime;
+			}
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -1133,6 +1154,14 @@ namespace
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
 			job->id = id; job->ownerWindow = owner;
+			if (owner != 0)
+			{
+				const auto window = m_toolWindows.find(owner);
+				if (window == m_toolWindows.end())
+					throw std::runtime_error("background-job owner is no longer active");
+				job->ownerGeneration = window->second->generation;
+				job->ownerLifetime = window->second->lifetime;
+			}
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -1262,6 +1291,87 @@ namespace
 			return id;
 		}
 
+		std::uint64_t StartTitleInstallJob(Application::TitleInstallPlan plan,
+			Application::TitleInstallDecision decision)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			if (m_backgroundJobs.size() >= 4)
+				throw std::runtime_error("too many background operations are in progress");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL)
+				throw std::runtime_error("background job identifier space is exhausted");
+			const auto owner = m_invokingWindow;
+			const auto window = m_toolWindows.find(owner);
+			if (owner == 0 || window == m_toolWindows.end())
+				throw std::runtime_error("title installation requires a live tool-window owner");
+			const auto id = ++m_nextBackgroundJobId;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id;
+			job->ownerWindow = owner;
+			job->ownerGeneration = window->second->generation;
+			job->ownerLifetime = window->second->lifetime;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner,
+						plan = std::move(plan), decision](std::stop_token stopToken) mutable {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) ||
+								stopToken.stop_requested();
+						};
+						auto progress = [gate, id, owner](
+							const Application::TitleInstallProgress& value) {
+							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+								R"(,"phase":"installing","bytesCompleted":)" +
+								std::to_string(value.bytesCompleted) +
+								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+						};
+						Application::TitleInstallResult result;
+						try
+						{
+							result = controller->InstallTitle(plan, decision,
+								std::move(progress), std::move(isCancelled));
+						}
+						catch (const std::exception& error)
+						{
+							result = {Application::TitleInstallError::CopyFailure, error.what(), {}};
+						}
+						catch (...)
+						{
+							result = {Application::TitleInstallError::CopyFailure,
+								"title-install worker failed", {}};
+						}
+						rapidjson::StringBuffer buffer;
+						JsonWriter writer(buffer);
+						writer.StartObject();
+						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
+						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
+						writer.Key("ok"); writer.Bool(static_cast<bool>(result));
+						writer.Key("error"); writer.Uint(static_cast<unsigned>(result.error));
+						writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
+							static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+						writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
+						writer.EndObject();
+						PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
+							{buffer.GetString(), buffer.GetSize()}, true);
+					});
+			}
+			catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
+			}
+			return id;
+		}
+
 		std::string IssueSaveTicket(SaveTicket ticket)
 		{
 			if (m_saveTickets.size() >= 32)
@@ -1345,7 +1455,6 @@ namespace
 			catch (...) { m_backgroundJobs.erase(id); throw; }
 			return id;
 		}
-
 		void CancelBackgroundJobsForWindow(std::uint64_t owner) noexcept
 		{
 			for (auto& [id, job] : m_backgroundJobs)
@@ -1542,6 +1651,7 @@ namespace
 
 			auto window = std::make_unique<ToolWindow>();
 			window->id = id;
+			window->generation = ++m_nextWindowGeneration;
 			window->role = role;
 			window->titleContext = titleContext;
 			window->packageContext = std::move(packageContext);
@@ -1601,6 +1711,8 @@ namespace
 			const auto found = m_toolWindows.find(id);
 			if (found == m_toolWindows.end()) return;
 			auto window = std::move(found->second);
+			window->lifetime->store(false, std::memory_order_release);
+			m_updatePlans.RevokeOwner(id, window->generation);
 			CancelBackgroundJobsForWindow(id);
 			std::erase_if(m_saveTickets, [id](const auto& item) {
 				return item.second.ownerWindow == id;
@@ -3125,7 +3237,7 @@ namespace
 				return std::string("{}");
 			});
 			m_rpc.Register("graphicPacks.install", [this](const rapidjson::Value& params) {
-				RequireRole({"graphic-packs"});
+				RequireRole({"graphic-packs", "update-manager"});
 				Application::GraphicPackInstallRequest request;
 				const auto kind = RequiredString(params, "kind");
 				if (kind == "community")
@@ -3255,6 +3367,83 @@ namespace
 			m_rpc.Register("save.export.start", [this](const rapidjson::Value& params) {
 				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Export);
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartSaveArchiveJob(std::move(ticket)))) + "}";
+			});
+			m_rpc.Register("updates.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"update-manager"});
+				return std::string(R"({"titleRunning":)") +
+					(m_controller.IsTitleRunning() ? "true" : "false") + "}";
+			});
+			m_rpc.Register("updates.pickTitleSource", [this](const rapidjson::Value&) {
+				RequireRole({"update-manager"});
+				if (m_controller.IsTitleRunning())
+					throw std::runtime_error("titles cannot be installed while a game is running");
+				const auto owner = m_toolWindows.find(m_invokingWindow);
+				if (owner == m_toolWindows.end() || !owner->second->nativeSupport)
+					throw std::runtime_error("the update window is no longer active");
+				const auto selected = owner->second->nativeSupport->PickDirectory(
+					"Select the title folder containing code, content, and meta");
+				if (!selected) return std::string("null");
+				const auto planned = m_controller.PlanTitleInstall(*selected);
+				if (!planned)
+					throw std::runtime_error(planned.diagnostic.empty() ?
+						"the selected folder is not an installable title" : planned.diagnostic);
+				const auto& plan = *planned.plan;
+				const auto token = m_updatePlans.Issue(m_invokingWindow,
+					owner->second->generation, plan);
+				auto kindName = [](Application::TitleInstallKind kind) {
+					switch (kind) {
+					case Application::TitleInstallKind::Base: return "base";
+					case Application::TitleInstallKind::Demo: return "demo";
+					case Application::TitleInstallKind::Update: return "update";
+					case Application::TitleInstallKind::Dlc: return "dlc";
+					case Application::TitleInstallKind::SystemTitle: return "systemTitle";
+					case Application::TitleInstallKind::SystemData: return "systemData";
+					default: return "unknown";
+					}
+				};
+				auto conflictName = [](Application::TitleInstallConflict conflict) {
+					switch (conflict) {
+					case Application::TitleInstallConflict::DifferentType: return "differentType";
+					case Application::TitleInstallConflict::SameVersion: return "sameVersion";
+					case Application::TitleInstallConflict::NewerVersionInstalled: return "newerVersionInstalled";
+					default: return "none";
+					}
+				};
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("planToken"); writer.String(std::to_string(token).c_str());
+				writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
+				writer.Key("titleName"); writer.String(plan.titleName.data(), plan.titleName.size());
+				writer.Key("version"); writer.Uint(plan.version);
+				writer.Key("kind"); writer.String(kindName(plan.kind));
+				writer.Key("conflict"); writer.String(conflictName(plan.conflict));
+				writer.Key("installedVersion");
+				if (plan.installed.valid) writer.Uint(plan.installed.version); else writer.Null();
+				writer.Key("requiredBytes"); writer.Uint64(plan.requiredBytes);
+				writer.Key("availableBytes"); writer.Uint64(plan.availableBytes);
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("updates.installTitle", [this](const rapidjson::Value& params) {
+				RequireRole({"update-manager"});
+				if (m_controller.IsTitleRunning())
+					throw std::runtime_error("titles cannot be installed while a game is running");
+				const auto owner = m_toolWindows.find(m_invokingWindow);
+				if (owner == m_toolWindows.end())
+					throw std::runtime_error("the update window is no longer active");
+				auto plan = m_updatePlans.Take(
+					ParseDecimalUint64(RequiredString(params, "planToken"), "planToken"),
+					m_invokingWindow, owner->second->generation);
+				if (!plan)
+					throw std::invalid_argument("the title-install plan is missing, stale, or owned by another window");
+				const bool acceptConflict = RequiredBool(params, "acceptConflict");
+				if (plan->conflict != Application::TitleInstallConflict::None && !acceptConflict)
+					throw std::invalid_argument("the existing-title conflict must be accepted explicitly");
+				const auto decision = acceptConflict ? Application::TitleInstallDecision::AcceptConflict :
+					Application::TitleInstallDecision::Proceed;
+				return std::string(R"({"jobId":)") +
+					JsonString(std::to_string(StartTitleInstallJob(std::move(*plan), decision))) + "}";
 			});
 			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
@@ -3499,8 +3688,10 @@ namespace
 		std::unordered_map<std::uint64_t, std::unique_ptr<BackgroundJob>> m_backgroundJobs;
 		std::unordered_map<std::string, SaveTicket> m_saveTickets;
 		std::uint64_t m_nextWindowId{};
+		std::uint64_t m_nextWindowGeneration{};
 		std::uint64_t m_nextBackgroundJobId{};
 		std::uint64_t m_nextSaveTicketId{};
+		WebFrontend::UpdatePlanRegistry m_updatePlans;
 		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;

@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <utility>
 #include <windows.h>
+#include <shobjidl.h>
 
 namespace WebFrontend
 {
@@ -57,6 +58,36 @@ namespace WebFrontend
 				ShowWindow(m_window, SW_RESTORE);
 				SetForegroundWindow(m_window);
 				SetActiveWindow(m_window);
+			}
+
+			std::optional<std::filesystem::path> PickDirectory(std::string_view) override
+			{
+				IFileOpenDialog* dialog{};
+				const auto created = CoCreateInstance(CLSID_FileOpenDialog, nullptr,
+					CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+				if (FAILED(created)) throw std::runtime_error("failed to create the folder picker");
+				auto releaseDialog = std::unique_ptr<IFileOpenDialog, decltype([](IFileOpenDialog* value) {
+					if (value) value->Release();
+				})>(dialog);
+				DWORD options{};
+				if (FAILED(dialog->GetOptions(&options)) || FAILED(dialog->SetOptions(
+					options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)))
+					throw std::runtime_error("failed to configure the folder picker");
+				const auto shown = dialog->Show(m_window);
+				if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) return std::nullopt;
+				if (FAILED(shown)) throw std::runtime_error("folder picker failed");
+				IShellItem* item{};
+				if (FAILED(dialog->GetResult(&item)) || !item)
+					throw std::runtime_error("folder picker returned no selection");
+				auto releaseItem = std::unique_ptr<IShellItem, decltype([](IShellItem* value) {
+					if (value) value->Release();
+				})>(item);
+				PWSTR path{};
+				if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)) || !path)
+					throw std::runtime_error("selected folder has no filesystem path");
+				std::filesystem::path result(path);
+				CoTaskMemFree(path);
+				return result;
 			}
 
 		private:

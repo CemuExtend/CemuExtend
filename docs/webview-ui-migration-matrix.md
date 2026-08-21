@@ -19,7 +19,7 @@ This matrix records the observed wxWidgets UI ownership and the destination cont
 | `TitleManager.*`, `components/wxTitleManagerList.*` | installed content management | `TitleCatalog`, `TitleInstallFacade` | title-manager | modeless singleton | native install dialog | required | Not started |
 | `dialogs/CreateAccount/*` | account creation/edit | `AccountFacade` | account-manager | modal child | none | required | Not started |
 | `dialogs/SaveImport/*` | save import/transfer | `SaveFacade` | save-manager | modal | open/save dialogs | required | Not started |
-| `CemuUpdateWindow.*`, `GameUpdateWindow.*` | application/title update | update façade required | update-manager | modal | restart/install transaction | required | Not started |
+| `CemuUpdateWindow.*`, `GameUpdateWindow.*`, `DownloadGraphicPacksWindow.*` | title/community-pack update | `TitleInstallFacade`, `GraphicPackFacade` | update-manager | modal | native source picker; opaque plan and install transactions | plan ownership + React event + Docker build/CTest | Completed |
 | `ChecksumTool.*` | content checksum | `ContentOperations` | checksum-tool | modeless singleton | file/save dialog | required | Not started |
 | `LoggingWindow.*`, `components/wxLogCtrl.*` | streaming/exporting logs | logging façade required | logging | modeless singleton | save dialog | required | Not started |
 | `GettingStartedDialog.*` | first-run configuration | settings façade required | getting-started | modal | folder dialog | required | Not started |
