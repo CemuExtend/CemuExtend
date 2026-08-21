@@ -189,4 +189,35 @@ namespace Host
 		[[nodiscard]] virtual bool RecreateCanvas() = 0;
 	};
 
+	struct RenderRegionBounds
+	{
+		std::int32_t x{};
+		std::int32_t y{};
+		std::int32_t width{};
+		std::int32_t height{};
+	};
+
+	class IRenderRegion
+	{
+	public:
+		virtual ~IRenderRegion() = default;
+		[[nodiscard]] virtual NativeWindowHandle GetWindowHandle() const = 0;
+		[[nodiscard]] virtual NativeWindowHandle GetSurfaceHandle() const = 0;
+		[[nodiscard]] virtual RenderRegionBounds GetBounds() const = 0;
+		virtual void SetBounds(RenderRegionBounds bounds) = 0;
+		virtual void SetVisible(bool visible) = 0;
+		virtual void RequestFocus() = 0;
+		virtual void PrepareForDestroy() = 0;
+	};
+
+	class IRenderRegionFactory
+	{
+	public:
+		virtual ~IRenderRegionFactory() = default;
+		[[nodiscard]] virtual std::unique_ptr<IRenderRegion> CreateMainRegion(
+			NativeWindowHandle parent) = 0;
+		[[nodiscard]] virtual std::unique_ptr<IRenderRegion> CreatePadRegion(
+			NativeWindowHandle parent) = 0;
+	};
+
 }

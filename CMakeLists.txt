@@ -288,6 +288,13 @@ if (ENABLE_WXWIDGETS)
 endif()
 
 if(CEMU_FRONTEND STREQUAL "webview")
+	if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		message(FATAL_ERROR "The webview frontend supports Linux, Windows, and macOS only")
+	endif()
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		# The native window host uses GTK 3 APIs, matching Cemu's Linux platform layer.
+		set(WEBVIEW_WEBKITGTK_API "4.1" CACHE STRING "WebKitGTK API for the webview frontend" FORCE)
+	endif()
 	set(WEBVIEW_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
 	set(WEBVIEW_BUILD_STATIC_LIBRARY ON CACHE BOOL "" FORCE)
 	set(WEBVIEW_BUILD_TESTS OFF CACHE BOOL "" FORCE)

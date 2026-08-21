@@ -4,6 +4,7 @@
 #include "application/EmulationController.h"
 #include "frontend/FrontendRuntime.h"
 #include "webview/MainWindowState.h"
+#include "webview/NativeWindowHost.h"
 #include "webview/RpcDispatcher.h"
 #include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
@@ -25,6 +26,9 @@ namespace
 {
 	using WebFrontend::MainWindowState;
 	using WebFrontend::RpcDispatcher;
+	using WebFrontend::CreateNativeWindowHost;
+	using WebFrontend::INativeWindowHost;
+	using WebFrontend::MenuCommand;
 	class Runtime;
 	struct RuntimeCallbackGate
 	{
@@ -87,57 +91,57 @@ namespace
 	{
 	public:
 		Runtime()
-			: m_webview(webview_create(
+			: m_nativeWindow(CreateNativeWindowHost())
+		{
+			m_webview = webview_create(
 #if defined(NDEBUG)
 				0,
 #else
 				1,
 #endif
-				nullptr))
-		{
-			if (!m_webview)
-				throw std::runtime_error("failed to create the native webview window");
-			m_windowState = std::make_unique<MainWindowState>(
-				reinterpret_cast<std::uintptr_t>(webview_get_window(m_webview)));
-			m_callbackGate->target = this;
-			RegisterRpc();
-			m_applicationEvents = m_controller.Events().Subscribe(
-				[gate = m_callbackGate](const Application::Event& event) {
-					std::scoped_lock lock(gate->mutex);
-					if (gate->target)
-						gate->target->ForwardEvent(event);
-				});
-			m_titleEvents = m_controller.SubscribeTitleCatalog(
-				[gate = m_callbackGate](const Application::TitleCatalogEvent&) {
-					std::scoped_lock lock(gate->mutex);
-					if (gate->target)
-						gate->target->Emit("titles.changed", "{}");
-				});
-			if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, this) != WEBVIEW_ERROR_OK)
-				throw std::runtime_error("failed to install the native RPC binding");
-			webview_set_title(m_webview, "CemuExtend");
-			webview_set_size(m_webview, 1100, 720, WEBVIEW_HINT_NONE);
+				m_nativeWindow->GetNativeWindow());
+			try
+			{
+				if (!m_webview)
+					throw std::runtime_error("failed to create the native webview window");
+				m_webViewWidget = webview_get_native_handle(
+					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
+				if (!m_webViewWidget)
+					throw std::runtime_error("failed to acquire the native webview widget");
+				m_nativeWindow->AttachWebView(m_webViewWidget);
+				m_nativeWindow->SetCloseHandler([this] { RequestShutdown(); });
+				m_nativeWindow->SetMenuHandler(
+					[this](MenuCommand command) { HandleMenu(command); });
+				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
+					m_nativeWindow->GetNativeWindow()));
+				m_callbackGate->target = this;
+				RegisterRpc();
+				m_applicationEvents = m_controller.Events().Subscribe(
+					[gate = m_callbackGate](const Application::Event& event) {
+						std::scoped_lock lock(gate->mutex);
+						if (gate->target)
+							gate->target->ForwardEvent(event);
+					});
+				m_titleEvents = m_controller.SubscribeTitleCatalog(
+					[gate = m_callbackGate](const Application::TitleCatalogEvent&) {
+						std::scoped_lock lock(gate->mutex);
+						if (gate->target)
+							gate->target->Emit("titles.changed", "{}");
+					});
+				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, this) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to install the native RPC binding");
+				m_rpcBound = true;
+				webview_set_title(m_webview, "CemuExtend");
+				webview_set_size(m_webview, 1100, 720, WEBVIEW_HINT_NONE);
+			}
+			catch (...)
+			{
+				Cleanup();
+				throw;
+			}
 		}
 
-		~Runtime()
-		{
-			m_stopping.store(true, std::memory_order_release);
-			m_eventStopping->store(true, std::memory_order_release);
-			{
-				std::scoped_lock lock(m_callbackGate->mutex);
-				m_callbackGate->target = nullptr;
-			}
-			m_titleEvents.Reset();
-			m_applicationEvents.Reset();
-			m_rpc.BeginShutdown();
-			if (m_windowState)
-				(void)m_windowState->BeginShutdown();
-			if (m_webview)
-			{
-				webview_unbind(m_webview, "cemuInvoke");
-				webview_destroy(m_webview);
-			}
-		}
+		~Runtime() { Cleanup(); }
 
 		void Run()
 		{
@@ -154,24 +158,98 @@ namespace
 					WebAssets::htmlSize);
 				webview_set_html(m_webview, html.c_str());
 			}
+			m_nativeWindow->Show();
 			webview_run(m_webview);
 		}
 
 	private:
+		void Cleanup() noexcept
+		{
+			if (std::exchange(m_cleanedUp, true))
+				return;
+			m_stopping.store(true, std::memory_order_release);
+			m_eventStopping->store(true, std::memory_order_release);
+			{
+				std::scoped_lock lock(m_callbackGate->mutex);
+				m_callbackGate->target = nullptr;
+			}
+			m_titleEvents.Reset();
+			m_applicationEvents.Reset();
+			m_rpc.BeginShutdown();
+			if (m_windowState)
+				(void)m_windowState->BeginShutdown();
+			if (!m_webview)
+				return;
+			m_nativeWindow->SetCloseHandler({});
+			m_nativeWindow->SetMenuHandler({});
+			if (m_webViewWidget)
+				m_nativeWindow->PrepareWebViewDestroy(m_webViewWidget);
+			if (m_rpcBound)
+				webview_unbind(m_webview, "cemuInvoke");
+			webview_destroy(m_webview);
+			m_webview = nullptr;
+			m_webViewWidget = nullptr;
+		}
+
+		void RequestShutdown()
+		{
+			if (m_rpc.IsShuttingDown())
+				return;
+			m_rpc.BeginShutdown();
+			(void)m_windowState->BeginShutdown();
+			webview_terminate(m_webview);
+		}
+
+		void StopEmulation()
+		{
+			const auto result = m_controller.Stop();
+			if (!result.stopped)
+				return;
+			m_nativeWindow->DestroyMainRenderRegion();
+			m_nativeWindow->ShowLibrary();
+			(void)m_windowState->FinishEmulation();
+		}
+
+		void HandleMenu(MenuCommand command)
+		{
+			switch (command)
+			{
+			case MenuCommand::EndEmulation: StopEmulation(); break;
+			case MenuCommand::Exit: RequestShutdown(); break;
+			case MenuCommand::ToggleFullscreen:
+				m_fullscreen = !m_fullscreen;
+				m_nativeWindow->SetFullscreen(m_fullscreen);
+				break;
+			case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
+			case MenuCommand::TogglePadView: Emit("menu.command", R"({"command":"togglePadView"})"); break;
+			case MenuCommand::GeneralSettings: Emit("menu.command", R"({"command":"generalSettings"})"); break;
+			case MenuCommand::InputSettings: Emit("menu.command", R"({"command":"inputSettings"})"); break;
+			case MenuCommand::GraphicPacks: Emit("menu.command", R"({"command":"graphicPacks"})"); break;
+			case MenuCommand::TitleManager: Emit("menu.command", R"({"command":"titleManager"})"); break;
+			case MenuCommand::Logging: Emit("menu.command", R"({"command":"logging"})"); break;
+			case MenuCommand::About: Emit("menu.command", R"({"command":"about"})"); break;
+			}
+		}
+
 		struct PendingEvent
 		{
 			std::shared_ptr<std::atomic_bool> stopping;
+			std::function<void()> beforeDispatch;
 			std::string script;
 		};
 
 		static void DispatchEvent(webview_t webview, void* argument)
 		{
 			std::unique_ptr<PendingEvent> pending(static_cast<PendingEvent*>(argument));
-			if (!pending->stopping->load(std::memory_order_acquire))
-				webview_eval(webview, pending->script.c_str());
+			if (pending->stopping->load(std::memory_order_acquire))
+				return;
+			if (pending->beforeDispatch)
+				pending->beforeDispatch();
+			webview_eval(webview, pending->script.c_str());
 		}
 
-		void Emit(std::string_view type, std::string_view payloadJson)
+		void Emit(std::string_view type, std::string_view payloadJson,
+			std::function<void()> beforeDispatch = {})
 		{
 			std::scoped_lock eventLock(m_eventMutex);
 			if (m_stopping.load(std::memory_order_acquire))
@@ -182,6 +260,7 @@ namespace
 				std::string(payloadJson) + "}";
 			auto pending = std::make_unique<PendingEvent>();
 			pending->stopping = m_eventStopping;
+			pending->beforeDispatch = std::move(beforeDispatch);
 			pending->script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
 				Base64(event) + "'),c=>c.charCodeAt(0)))));";
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
@@ -195,9 +274,19 @@ namespace
 			case Application::EventType::LoadingStarted: Emit("emulation.loading", "{}"); break;
 			case Application::EventType::GameLoaded: Emit("emulation.loaded", "{}"); break;
 			case Application::EventType::GameExited:
-				(void)m_windowState->FinishEmulation();
-				Emit("emulation.exited", "{}");
+			{
+				const auto expectedGeneration = m_windowState->Snapshot().generation;
+				Emit("emulation.exited", "{}", [this, expectedGeneration] {
+					const auto state = m_windowState->Snapshot();
+					if (state.mode != WebFrontend::MainWindowContentMode::Playing ||
+						state.generation != expectedGeneration)
+						return;
+					m_nativeWindow->DestroyMainRenderRegion();
+					m_nativeWindow->ShowLibrary();
+					(void)m_windowState->FinishEmulation();
+				});
 				break;
+			}
 			case Application::EventType::PpcProcessExited:
 				Emit("emulation.processExited", std::string(R"({"status":)") +
 					std::to_string(event.processStatus) + "}");
@@ -245,9 +334,7 @@ namespace
 					(m_rpc.IsShuttingDown() ? "true}" : "false}");
 			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
-				m_rpc.BeginShutdown();
-				(void)m_windowState->BeginShutdown();
-				webview_terminate(m_webview);
+				RequestShutdown();
 				return "{}";
 			});
 			m_rpc.Register("window.close", [this](const rapidjson::Value&) {
@@ -309,6 +396,8 @@ namespace
 				const auto result = m_controller.Stop();
 				if (!result.stopped)
 					throw std::runtime_error(result.diagnostic);
+				m_nativeWindow->DestroyMainRenderRegion();
+				m_nativeWindow->ShowLibrary();
 				(void)m_windowState->FinishEmulation();
 				return "{}";
 			});
@@ -321,19 +410,38 @@ namespace
 				throw std::runtime_error("main window is not ready to launch a title");
 			const auto result = m_controller.Launch({path},
 				[this](const Application::LaunchResult&) {
+					(void)m_nativeWindow->CreateMainRenderRegion();
 					if (!m_windowState->CommitLaunch())
 						throw std::runtime_error("main window content transition failed");
+					m_nativeWindow->ShowRenderRegion();
 				},
-				[this] { (void)m_windowState->RollbackLaunch(); });
+				[this] {
+					m_nativeWindow->DestroyMainRenderRegion();
+					m_nativeWindow->ShowLibrary();
+					(void)m_windowState->RollbackLaunch();
+				});
 			if (!result)
 			{
-				(void)m_windowState->RollbackLaunch();
+				if (m_controller.State() == Application::EmulationState::Running)
+				{
+					(void)m_nativeWindow->CreateMainRenderRegion();
+					(void)m_windowState->CommitLaunch();
+					m_nativeWindow->ShowRenderRegion();
+				}
+				else
+				{
+					m_nativeWindow->DestroyMainRenderRegion();
+					m_nativeWindow->ShowLibrary();
+					(void)m_windowState->RollbackLaunch();
+				}
 				throw std::runtime_error(result.diagnostic.empty() ? "title launch failed" : result.diagnostic);
 			}
 			return std::string(R"({"titleId":")") + TitleIdString(result.titleId) + "\"}";
 		}
 
+		std::unique_ptr<INativeWindowHost> m_nativeWindow;
 		webview_t m_webview{};
+		void* m_webViewWidget{};
 		RpcDispatcher m_rpc;
 		Application::EmulationController m_controller;
 		std::unique_ptr<MainWindowState> m_windowState;
@@ -344,6 +452,9 @@ namespace
 		std::shared_ptr<std::atomic_bool> m_eventStopping{std::make_shared<std::atomic_bool>()};
 		std::mutex m_eventMutex;
 		std::uint64_t m_eventSequence{};
+		bool m_fullscreen{};
+		bool m_rpcBound{};
+		bool m_cleanedUp{};
 	};
 }
 
