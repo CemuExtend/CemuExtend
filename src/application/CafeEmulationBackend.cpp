@@ -17,6 +17,7 @@
 #include "Cafe/TitleList/SaveList.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
+#include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
@@ -107,6 +108,7 @@ namespace Application
 					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ?
 						CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 					.signedPackage = request.signedPackage,
+					.headless = request.headless,
 				});
 			}
 			return result;
@@ -125,6 +127,33 @@ namespace Application
 				.titleIds = std::move(package.titleIds),
 				.error = std::move(package.error),
 			};
+		}
+
+		std::uint64_t CemodCatalogFingerprint(std::span<const CemodManagerPackage> packages)
+		{
+			std::uint64_t value = 1469598103934665603ULL;
+			auto append = [&value](std::string_view text) {
+				for (const auto byte : text) { value ^= static_cast<unsigned char>(byte); value *= 1099511628211ULL; }
+			};
+			for (const auto& package : packages)
+			{
+				append(package.packageKey); append(package.modIdentity); append(package.status);
+				auto appendInteger = [&value](std::uint64_t integer) {
+					for (unsigned shift = 0; shift < 64; shift += 8)
+					{
+						value ^= static_cast<std::uint8_t>(integer >> shift);
+						value *= 1099511628211ULL;
+					}
+				};
+				appendInteger(package.requestedPermissions);
+				appendInteger(package.grantedPermissions);
+				appendInteger(package.approved);
+				appendInteger(package.headless);
+				appendInteger(package.valid);
+				for (const auto titleId : package.titleIds)
+					appendInteger(titleId);
+			}
+			return value == 0 ? 1 : value;
 		}
 
 		AccountOnlineError TranslateAccountOnlineError(::OnlineAccountError error)
@@ -3095,8 +3124,31 @@ namespace Application
 				std::span<const CemodPermissionDecision> decisions) override
 			{
 				for (const auto& decision : decisions)
+				{
 					GetConfig().SetCemuExtendModGrant(titleId, decision.principal,
 						{decision.grantedPermissions, decision.requestedPermissions, true});
+					// Bind the old launch dialog's decision to every currently installed
+					// isolated package for this principal.  Native packages use a different
+					// permission namespace and must be approved in the package manager.
+					for (const auto& package : cemuextend_hle::DiscoverCemods(titleId))
+					{
+						if (package.principal != decision.principal || !package.error.empty() ||
+							package.executionMode != ::CemodExecutionMode::Isolated)
+							continue;
+						const auto inspected = cemuextend_hle::InspectCemodPackage(package);
+						if (!inspected.valid || inspected.packageDigest.empty() ||
+							inspected.modIdentity.empty() ||
+							(inspected.requestedPermissions & ~cemuextend_hle::kCemodPermissionMask) != 0)
+							continue;
+						const auto key = cemuextend_hle::MakeCemodApprovalKey(
+							inspected.modIdentity, inspected.packageDigest);
+						GetConfig().SetCemuExtendPermissionApproval(titleId, key,
+							{inspected.packageDigest, inspected.modIdentity,
+								inspected.requestedPermissions,
+								decision.grantedPermissions & inspected.requestedPermissions,
+								true, false});
+					}
+				}
 				GetConfigHandle().Save();
 			}
 
@@ -3134,6 +3186,120 @@ namespace Application
 				std::string_view principal, std::string& error) override
 			{
 				return cemuextend_hle::ImportLegacyData(titleId, principal, error);
+			}
+
+			CemodManagerSnapshot GetCemodManagerSnapshot(
+				std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {}) override
+			{
+				CemodManagerSnapshot snapshot;
+				snapshot.selectedTitleId = titleId;
+				auto discovered = titleId ? cemuextend_hle::DiscoverCemods(*titleId) :
+					cemuextend_hle::DiscoverCemodCatalog();
+				snapshot.packages.reserve(discovered.size());
+				for (const auto& package : discovered)
+				{
+					if (cancelled && cancelled())
+					{
+						snapshot.packages.clear();
+						snapshot.generation = 0;
+						snapshot.cancelled = true;
+						return snapshot;
+					}
+					auto inspection = titleId ?
+						cemuextend_hle::InspectConfiguredCemodPackage(*titleId, package)
+							.value_or(cemuextend_hle::InspectCemodPackage(package)) :
+						cemuextend_hle::InspectCemodPackage(package);
+					CemodManagerPackage model;
+					model.packageKey = inspection.packageDigest;
+					if (model.packageKey.empty())
+					{
+						const auto path = _pathToUtf8(package.path);
+						std::uint64_t hash = 1469598103934665603ULL;
+						for (const auto byte : path) { hash ^= static_cast<unsigned char>(byte); hash *= 1099511628211ULL; }
+						model.packageKey = fmt::format("invalid-{:016x}", hash);
+					}
+					model.titleIds = package.titleIds; model.modId = inspection.modId;
+					model.principal = inspection.principal; model.modIdentity = inspection.modIdentity;
+					model.packageDigest = inspection.packageDigest; model.pluginName = inspection.pluginName;
+					model.author = inspection.author; model.version = inspection.version;
+					model.description = inspection.description;
+					model.scope = inspection.scope;
+					model.approvalReason = inspection.approvalReason;
+					model.requestedPermissions = inspection.requestedPermissions;
+					model.grantedPermissions = inspection.grantedPermissions;
+					model.approved = inspection.approved;
+					model.signedPackage = inspection.signedPackage;
+					model.trustedNative = package.executionMode == ::CemodExecutionMode::TrustedNative;
+					model.wups = inspection.wups; model.headless = inspection.headless;
+					model.runtimeAvailable = true;
+					model.valid = inspection.valid;
+					model.status = !model.valid ? "rejected" : model.approved ? "ready" : "disabled";
+					model.warnings = inspection.warnings;
+					for (const auto& permission : inspection.permissions)
+						model.permissions.push_back({permission.name,
+							permission.bit, permission.requested, permission.granted,
+							permission.dangerous, permission.manifestMismatch});
+					snapshot.packages.push_back(std::move(model));
+				}
+				if (cancelled && cancelled())
+				{
+					snapshot.packages.clear();
+					snapshot.generation = 0;
+					snapshot.cancelled = true;
+					return snapshot;
+				}
+				std::ranges::sort(snapshot.packages, {}, &CemodManagerPackage::packageKey);
+				snapshot.generation = CemodCatalogFingerprint(snapshot.packages);
+				return snapshot;
+			}
+
+			CemodManagerResult SaveCemodApproval(const CemodApprovalUpdate& update) override
+			{
+				auto snapshot = GetCemodManagerSnapshot(update.titleId);
+				if (snapshot.generation != update.generation)
+					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
+				const auto found = std::ranges::find(snapshot.packages, update.packageKey,
+					&CemodManagerPackage::packageKey);
+				if (found == snapshot.packages.end() || !found->valid ||
+					std::ranges::find(found->titleIds, update.titleId) == found->titleIds.end())
+					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
+				constexpr std::uint64_t kKnownPermissions = (1ULL << 11) - 1;
+				if ((found->requestedPermissions & ~kKnownPermissions) != 0 ||
+					(update.grantedPermissions & ~found->requestedPermissions) != 0)
+					return {CemodManagerError::InvalidPermissions, "The permission selection is invalid", std::move(snapshot)};
+				const auto approvalKey = cemuextend_hle::MakeCemodApprovalKey(
+					found->modIdentity, found->packageDigest);
+				auto configLock = GetConfigHandle().Lock();
+				const auto previous = GetConfig().GetCemuExtendPermissionApproval(update.titleId, approvalKey);
+				GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey,
+					{found->packageDigest, found->modIdentity, found->requestedPermissions,
+						update.approved ? update.grantedPermissions : 0, update.approved, false});
+				if (!GetConfigHandle().Save())
+				{
+					if (previous) GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey, *previous);
+					else GetConfig().RemoveCemuExtendPermissionApproval(update.titleId, approvalKey);
+					return {CemodManagerError::SaveFailed, "The approval could not be persisted", std::move(snapshot)};
+				}
+				configLock.unlock();
+				cemuextend_hle::ReloadCemodPermissions(update.titleId, found->principal);
+				return {CemodManagerError::None, {}, GetCemodManagerSnapshot(update.titleId)};
+			}
+
+			CemodManagerResult ImportLegacyCemodPackageData(std::uint64_t generation,
+				std::uint64_t titleId, std::string_view packageKey) override
+			{
+				auto snapshot = GetCemodManagerSnapshot(titleId);
+				if (snapshot.generation != generation)
+					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
+				const auto found = std::ranges::find(snapshot.packages, packageKey,
+					&CemodManagerPackage::packageKey);
+				if (found == snapshot.packages.end() || !found->valid ||
+					std::ranges::find(found->titleIds, titleId) == found->titleIds.end())
+					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
+				std::string error;
+				if (!cemuextend_hle::ImportLegacyData(titleId, found->principal, error))
+					return {CemodManagerError::ImportFailed, std::move(error), std::move(snapshot)};
+				return {CemodManagerError::None, {}, GetCemodManagerSnapshot(titleId)};
 			}
 
 			std::vector<TitleSummary> ListTitles() const override

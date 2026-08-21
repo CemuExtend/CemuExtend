@@ -87,6 +87,23 @@ namespace
 		}
 		bool ImportLegacyCemodData(std::uint64_t, std::string_view,
 			std::string&) override { return false; }
+		Application::CemodManagerSnapshot cemodManagerSnapshot;
+		Application::CemodManagerSnapshot GetCemodManagerSnapshot(
+			std::optional<std::uint64_t> titleId,
+			Application::CemodCancellationCheck = {}) override
+		{
+			auto result = cemodManagerSnapshot; result.selectedTitleId = titleId; return result;
+		}
+		Application::CemodManagerResult SaveCemodApproval(
+			const Application::CemodApprovalUpdate&) override
+		{
+			return {Application::CemodManagerError::None, {}, cemodManagerSnapshot};
+		}
+		Application::CemodManagerResult ImportLegacyCemodPackageData(
+			std::uint64_t, std::uint64_t, std::string_view) override
+		{
+			return {Application::CemodManagerError::None, {}, cemodManagerSnapshot};
+		}
 		std::vector<Application::TitleSummary> titles;
 		std::vector<Application::ManagedContentEntry> managedContent;
 		std::vector<Application::GameSummary> games;

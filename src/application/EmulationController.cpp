@@ -313,6 +313,27 @@ namespace Application
 		return m_backend->ImportLegacyCemodData(titleId, principal, error);
 	}
 
+	CemodManagerSnapshot EmulationController::GetCemodManagerSnapshot(
+		std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->GetCemodManagerSnapshot(titleId, std::move(cancelled));
+	}
+
+	CemodManagerResult EmulationController::SaveCemodApproval(
+		const CemodApprovalUpdate& update)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->SaveCemodApproval(update);
+	}
+
+	CemodManagerResult EmulationController::ImportLegacyCemodPackageData(
+		std::uint64_t generation, std::uint64_t titleId, std::string_view packageKey)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->ImportLegacyCemodPackageData(generation, titleId, packageKey);
+	}
+
 	FrontendSettingsSnapshot EmulationController::GetFrontendSettings() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

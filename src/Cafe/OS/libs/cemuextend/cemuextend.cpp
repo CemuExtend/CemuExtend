@@ -7,6 +7,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
+#include "Cemu/CemuExtend/CemodInspectionService.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/HW/Espresso/WupsDynLoadInterception.h"
@@ -204,6 +205,135 @@ namespace cemuextend_hle
 		}
 	}
 
+	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,
+		const std::optional<CemodInspectionApproval>& approval)
+	{
+		// The native/WUPS permission namespace is deliberately independent from
+		// the six CEX2 service bits in manifest.requestedPermissions.  WUPS
+		// inspection derives this mask itself; trusted ELF packages need the same
+		// treatment here so native bit 0 can never be mistaken for CEX2 read.
+		std::uint64_t inspectionPermissions = package.requestedPermissions;
+		if (package.executionMode == CemodExecutionMode::TrustedNative)
+		{
+			std::string error;
+			if (const auto inspected = CemodPackage::Inspect(package.path, error))
+			{
+				const auto& native = inspected->manifest.nativePermissions;
+				const std::array declared{native.nativeMemory, native.functionPatching,
+					native.physicalAddressPatching, native.filesystemRead,
+					native.filesystemWrite, native.network, native.mappedMemory,
+					native.notifications, native.contentRedirection,
+					!native.modules.empty(), native.pluginManagement};
+				inspectionPermissions = 0;
+				for (std::size_t index = 0; index < declared.size(); ++index)
+					if (declared[index]) inspectionPermissions |= 1ULL << index;
+			}
+		}
+		std::optional<CemuExtend::CemodApproval> domainApproval;
+		if (approval)
+			domainApproval = CemuExtend::CemodApproval{approval->packageDigest,
+				approval->modIdentity, approval->requestedPermissions,
+				approval->grantedPermissions, approval->approved, approval->headless};
+		const auto inspection = CemuExtend::CemodInspectionService::Inspect({
+			package.path, package.modId, package.principal, inspectionPermissions,
+			package.executionMode == CemodExecutionMode::TrustedNative ?
+				CemuExtend::CemodExecutionMode::TrustedNative : CemuExtend::CemodExecutionMode::Isolated,
+			package.signedPackage, package.titleIds, package.error}, domainApproval,
+			approval && approval->headless);
+		CemodInspectionInfo result;
+		result.modId = inspection.modId; result.principal = inspection.principal;
+		result.modIdentity = inspection.modIdentity; result.packageDigest = inspection.packageDigest;
+		result.pluginName = inspection.pluginName; result.author = inspection.author;
+		result.version = inspection.pluginVersion; result.description = inspection.description;
+		switch (inspection.scope)
+		{
+		case CemuExtend::CemodScope::Process: result.scope = "process"; break;
+		case CemuExtend::CemodScope::AromaNative: result.scope = "aromaNative"; break;
+		default: result.scope = "title"; break;
+		}
+		result.approvalReason = inspection.approval.reason;
+		result.requestedPermissions = inspection.approval.requested;
+		result.grantedPermissions = inspection.approval.granted;
+		result.approved = inspection.approval.result == CemuExtend::CemodApprovalResult::Approved;
+		result.signedPackage = inspection.signedPackage;
+		result.trustedNative = package.executionMode == CemodExecutionMode::TrustedNative;
+		result.wups = inspection.isWups; result.valid = inspection.Valid() && !inspection.packageDigest.empty();
+		result.headless = approval && approval->headless;
+		result.warnings = inspection.compatibilityWarnings;
+		result.warnings.insert(result.warnings.end(), inspection.permissionMismatches.begin(),
+			inspection.permissionMismatches.end());
+		if (!inspection.error.empty()) result.warnings.push_back(inspection.error);
+		auto permissionName = [](CemuExtend::CemodPermission permission) {
+			switch (permission)
+			{
+			case CemuExtend::CemodPermission::NativeMemory: return "Native memory";
+			case CemuExtend::CemodPermission::FunctionPatching: return "Function patching";
+			case CemuExtend::CemodPermission::PhysicalAddressPatching: return "Physical-address patching";
+			case CemuExtend::CemodPermission::FilesystemRead: return "Filesystem read";
+			case CemuExtend::CemodPermission::FilesystemWrite: return "Filesystem write";
+			case CemuExtend::CemodPermission::Network: return "Network";
+			case CemuExtend::CemodPermission::MappedMemory: return "Mapped memory";
+			case CemuExtend::CemodPermission::Notifications: return "Notifications";
+			case CemuExtend::CemodPermission::ContentRedirection: return "Content redirection";
+			case CemuExtend::CemodPermission::Modules: return "Aroma/WUMS modules";
+			case CemuExtend::CemodPermission::PluginManagement: return "WUPS plugin management";
+			}
+			return "Unknown permission";
+		};
+		for (const auto& permission : inspection.permissions)
+			result.permissions.push_back({permissionName(permission.permission), permission.bit,
+				permission.requested, permission.granted, permission.dangerous,
+				permission.manifestMismatch});
+		return result;
+	}
+
+	std::string MakeCemodApprovalKey(std::string_view modIdentity,
+		std::string_view packageDigest)
+	{
+		return CemuExtend::CemodInspectionService::MakeApprovalKey(modIdentity, packageDigest);
+	}
+
+	std::optional<CemodInspectionInfo> InspectConfiguredCemodPackage(
+		std::uint64_t titleId, const CemodPackageInfo& package)
+	{
+		auto inspection = InspectCemodPackage(package);
+		if (!inspection.valid || inspection.modIdentity.empty() || inspection.packageDigest.empty())
+			return std::nullopt;
+		const auto key = MakeCemodApprovalKey(inspection.modIdentity, inspection.packageDigest);
+		auto configured = GetConfig().GetCemuExtendPermissionApproval(titleId, key);
+		if (!configured && package.executionMode == CemodExecutionMode::Isolated &&
+			(inspection.requestedPermissions & ~static_cast<std::uint64_t>(kCemodPermissionMask)) == 0)
+		{
+			// One-time compatibility migration.  A legacy principal grant is never
+			// consulted as runtime fallback: it is copied only when it covers this
+			// request, and the copy is bound to the currently inspected digest,
+			// identity, and request set.  An existing exact deny always wins above.
+			const auto legacy = GetConfig().GetCemuExtendModGrant(titleId, package.principal);
+			if (legacy && legacy->approved &&
+				(inspection.requestedPermissions & ~legacy->approved_request_mask) == 0)
+			{
+				CemuExtendPermissionApproval migrated{inspection.packageDigest,
+					inspection.modIdentity, inspection.requestedPermissions,
+					legacy->permissions & inspection.requestedPermissions, true, false};
+				auto configLock = GetConfigHandle().Lock();
+				// Re-check under the config lock so a concurrent exact deny cannot be
+				// overwritten by migration.
+				configured = GetConfig().GetCemuExtendPermissionApproval(titleId, key);
+				if (!configured)
+				{
+					GetConfig().SetCemuExtendPermissionApproval(titleId, key, migrated);
+					if (GetConfigHandle().Save()) configured = std::move(migrated);
+					else GetConfig().RemoveCemuExtendPermissionApproval(titleId, key);
+				}
+			}
+		}
+		if (!configured) return std::nullopt;
+		return InspectCemodPackage(package, CemodInspectionApproval{
+			configured->packageDigest, configured->modIdentity,
+			configured->requestedPermissions, configured->grantedPermissions,
+			configured->approved, configured->explicitHeadlessDenial});
+	}
+
 	class CemuExtendModule final : public COSModule
 	{
 	public:
@@ -340,9 +470,12 @@ namespace cemuextend_hle
 				package.executionMode != CemodExecutionMode::TrustedNative ||
 				!package.mappedMemory || package.mem2ExpansionBytes == 0)
 				continue;
-			const auto grant = ResolveCemodGrant(titleId, package.modId,
-				package.principal, package.requestedPermissions & kCemodPermissionMask);
-			if (!grant.approved || package.mem2ExpansionBytes <= expansionBytes)
+			const auto exact = InspectConfiguredCemodPackage(titleId, package);
+			constexpr auto kMappedMemory = 1ULL <<
+				static_cast<unsigned>(CemuExtend::CemodPermission::MappedMemory);
+			if (!exact || !exact->approved ||
+				(exact->grantedPermissions & kMappedMemory) == 0 ||
+				package.mem2ExpansionBytes <= expansionBytes)
 				continue;
 			expansionBytes = package.mem2ExpansionBytes;
 			requestingMod = package.modId;
@@ -366,33 +499,42 @@ namespace cemuextend_hle
 
 	std::vector<CemodPermissionRequest> PendingCemodPermissionRequests(std::uint64_t titleId)
 	{
-		std::map<std::string, CemodPermissionRequest> grouped;
+		struct Aggregate
+		{
+			CemodPermissionRequest request;
+			std::uint32_t missingPermissions{};
+			bool needsApproval{};
+		};
+		std::map<std::string, Aggregate> grouped;
 		for (const auto& package : DiscoverCemods(titleId))
 		{
-			if (!package.error.empty()) continue;
-			const auto grant = ResolveCemodGrant(titleId, package.modId, package.principal,
-				package.requestedPermissions & kCemodPermissionMask);
-			// An unapproved package, including an already-trusted mod that added a
-			// permission, is exactly what this list must surface to the prompt.
+			// The legacy launch dialog only understands CEX2's six service bits.
+			// Native/WUPS approvals are managed by the exact-digest manager.
+			if (!package.error.empty() || package.executionMode == CemodExecutionMode::TrustedNative)
+				continue;
+			const auto exact = InspectConfiguredCemodPackage(titleId, package);
+			const auto requested = package.requestedPermissions & kCemodPermissionMask;
+			const auto exactGranted = exact && exact->approved ?
+				static_cast<std::uint32_t>(exact->grantedPermissions) : 0U;
+			const auto effectiveGranted = exactGranted & requested;
 			auto found = grouped.try_emplace(package.principal,
-				CemodPermissionRequest{package.modId, package.principal, 0,
-					grant.permissions & kCemodPermissionMask, package.executionMode,
-					package.signedPackage}).first;
-			auto& request = found->second;
-			request.requestedPermissions |= package.requestedPermissions & kCemodPermissionMask;
-			if (package.executionMode == CemodExecutionMode::TrustedNative)
-				request.executionMode = CemodExecutionMode::TrustedNative;
-			request.signedPackage = request.signedPackage && package.signedPackage;
+				Aggregate{CemodPermissionRequest{package.modId, package.principal, 0, 0,
+					package.executionMode, package.signedPackage, exact && exact->headless}}).first;
+			auto& aggregate = found->second;
+			aggregate.request.requestedPermissions |= requested;
+			aggregate.missingPermissions |= requested & ~effectiveGranted;
+			aggregate.needsApproval |= !exact || !exact->approved;
+			aggregate.request.headless = aggregate.request.headless || (exact && exact->headless);
+			aggregate.request.signedPackage = aggregate.request.signedPackage && package.signedPackage;
 		}
 
 		std::vector<CemodPermissionRequest> result;
-		for (auto& [principal, request] : grouped)
+		for (auto& [principal, aggregate] : grouped)
 		{
-			const auto grant = GetConfig().GetCemuExtendModGrant(titleId, principal)
-				.value_or(CemuExtendModGrant{});
-			if (NeedsCemodPermissionPrompt(request.requestedPermissions, grant.permissions,
-				grant.approved_request_mask, grant.approved))
-				result.push_back(std::move(request));
+			aggregate.request.grantedPermissions = aggregate.request.requestedPermissions &
+				~aggregate.missingPermissions;
+			if (aggregate.needsApproval || aggregate.missingPermissions != 0)
+				result.push_back(std::move(aggregate.request));
 		}
 		std::ranges::sort(result, [](const auto& left, const auto& right) {
 			if (left.modId != right.modId) return left.modId < right.modId;
@@ -433,19 +575,45 @@ namespace cemuextend_hle
 					_pathToUtf8(info.path), info.error);
 				continue;
 			}
-			std::string error;
-			auto package = CemodPackage::Load(info.path, titleId, error);
-			if (!package) continue;
-			const auto grant = ResolveCemodGrant(titleId, package->manifest.modId, package->principal,
-				package->manifest.requestedPermissions & kCemodPermissionMask);
-			if (!grant.approved || (package->manifest.requestedPermissions & ~grant.approved_request_mask) != 0)
+			// Inspect before loading, then inspect again after loading.  Approval is
+			// accepted only when both observations and the loaded manifest agree, so
+			// a package replacement cannot authorize different loaded bytes.
+			const auto before = InspectConfiguredCemodPackage(titleId, info);
+			if (!before || !before->approved)
 			{
 				cemuLog_log(LogType::Force,
-					"CemuExtend skipped unapproved cemod '{}' (approval or new permissions required)",
+					"CemuExtend skipped cemod '{}' without an exact package approval",
 					_pathToUtf8(info.path));
 				continue;
 			}
-			const auto permissions = grant.permissions & package->manifest.requestedPermissions;
+			if ((info.executionMode == CemodExecutionMode::TrustedNative || before->wups) &&
+				(before->requestedPermissions & ~before->grantedPermissions) != 0)
+			{
+				cemuLog_log(LogType::Force,
+					"CemuExtend skipped native cemod '{}' with denied native permissions",
+					_pathToUtf8(info.path));
+				continue;
+			}
+			std::string error;
+			auto package = CemodPackage::Load(info.path, titleId, error);
+			if (!package) continue;
+			const auto after = InspectConfiguredCemodPackage(titleId, info);
+			if (!after || !after->approved || after->packageDigest != before->packageDigest ||
+				after->modIdentity != before->modIdentity ||
+				after->requestedPermissions != before->requestedPermissions ||
+				package->manifest.modId != before->modId || package->principal != before->principal)
+			{
+				cemuLog_log(LogType::Force,
+					"CemuExtend rejected cemod '{}' changed while it was being loaded",
+					_pathToUtf8(info.path));
+				continue;
+			}
+			// Exact grants are the sole runtime authority.  Only isolated CEX2
+			// packages share the six-bit service namespace.  Native/WUPS permission
+			// bits must never be truncated and reinterpreted as CEX2 permissions.
+			const auto permissions = ExactRuntimeServicePermissions(before->grantedPermissions,
+				package->manifest.requestedPermissions,
+				info.executionMode == CemodExecutionMode::TrustedNative || before->wups);
 			if (package->IsTrustedNative()) trustedPermissions |= permissions;
 			approved.push_back({std::move(*package), info.path, permissions});
 		}
@@ -497,8 +665,16 @@ namespace cemuextend_hle
 			kDefaultReadMask, kDefaultWriteMask, kDefaultInjectMask});
 		const ModServicePermissions services{titleGrant.read_mask, titleGrant.write_mask,
 			titleGrant.inject_mask};
-		const auto permissions = GetConfig().GetCemuExtendModGrant(titleId, principal)
-			.value_or(CemuExtendModGrant{}).permissions;
+		std::uint32_t permissions{};
+		for (const auto& package : DiscoverCemods(titleId))
+		{
+			if (package.principal != principal || !package.error.empty()) continue;
+			const auto exact = InspectConfiguredCemodPackage(titleId, package);
+			if (!exact || !exact->approved) continue;
+			permissions |= ExactRuntimeServicePermissions(exact->grantedPermissions,
+				package.requestedPermissions,
+				package.executionMode == CemodExecutionMode::TrustedNative || exact->wups);
+		}
 		GetCemodRuntime().UpdatePermissions(principal, permissions, services);
 		GetCemodRuntime().EventAll(2); // permissions changed
 	}

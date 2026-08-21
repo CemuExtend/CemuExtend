@@ -14,6 +14,7 @@
 #include "application/ApplicationEvents.h"
 #include "application/AccountFacade.h"
 #include "application/ContentOperations.h"
+#include "application/CemodManagerFacade.h"
 #include "application/EmulationPresentation.h"
 #include "application/FrontendSettingsFacade.h"
 #include "application/HotkeySettingsFacade.h"
@@ -65,6 +66,7 @@ namespace Application
 		std::uint32_t grantedPermissions{};
 		CemodExecutionMode executionMode{CemodExecutionMode::Isolated};
 		bool signedPackage{};
+		bool headless{};
 	};
 
 	struct CemodPermissionDecision
@@ -171,7 +173,7 @@ namespace Application
 		public IContentOperations, public IGameProfileService,
 		public ITitleInstallService, public IAccountService, public ISaveService,
 		public IFrontendSettingsService, public IInputSettingsService,
-		public IHotkeySettingsService
+		public IHotkeySettingsService, public ICemodManagerService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -258,6 +260,13 @@ namespace Application
 		[[nodiscard]] CemuExtendServiceGrantDefaults ServiceGrantDefaults() const;
 		[[nodiscard]] bool ImportLegacyCemodData(std::uint64_t titleId,
 			std::string_view principal, std::string& error);
+		[[nodiscard]] CemodManagerSnapshot GetCemodManagerSnapshot(
+			std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {});
+		[[nodiscard]] CemodManagerResult SaveCemodApproval(
+			const CemodApprovalUpdate& update);
+		[[nodiscard]] CemodManagerResult ImportLegacyCemodPackageData(
+			std::uint64_t generation, std::uint64_t titleId,
+			std::string_view packageKey);
 		[[nodiscard]] FrontendSettingsSnapshot GetFrontendSettings() const;
 		[[nodiscard]] FrontendSettingsResult ApplyFrontendSettings(
 			const FrontendSettingsUpdate& update);
