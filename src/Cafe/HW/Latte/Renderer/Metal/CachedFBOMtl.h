@@ -7,16 +7,16 @@
 
 class CachedFBOMtl : public LatteCachedFBO
 {
-public:
+  public:
 	CachedFBOMtl(class MetalRenderer* metalRenderer, uint64 key);
 
 	~CachedFBOMtl();
 
 	MTL::RenderPassDescriptor* GetRenderPassDescriptor()
 	{
-	    return m_renderPassDescriptor;
+		return m_renderPassDescriptor;
 	}
 
-private:
-    MTL::RenderPassDescriptor* m_renderPassDescriptor = nullptr;
+  private:
+	MTL::RenderPassDescriptor* m_renderPassDescriptor = nullptr;
 };

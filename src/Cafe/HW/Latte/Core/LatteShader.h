@@ -20,8 +20,7 @@ LatteDecompilerShader* LatteSHRC_FindVertexShader(uint64 baseHash, uint64 auxHas
 LatteDecompilerShader* LatteSHRC_FindGeometryShader(uint64 baseHash, uint64 auxHash);
 LatteDecompilerShader* LatteSHRC_FindPixelShader(uint64 baseHash, uint64 auxHash);
 
-
-#define GPU7_PS_MAX_INPUTS	32
+#define GPU7_PS_MAX_INPUTS 32
 
 struct LatteShaderPSInputTable
 {
@@ -109,12 +108,12 @@ void LatteSHRC_RegisterShader(LatteDecompilerShader* shader, uint64 baseHash, ui
 
 void LatteShader_CleanupAfterCompile(LatteDecompilerShader* shader);
 
-#define SHADER_DUMP_TYPE_FETCH		0
-#define SHADER_DUMP_TYPE_VERTEX		1
-#define SHADER_DUMP_TYPE_GEOMETRY	2
-#define SHADER_DUMP_TYPE_PIXEL		3
-#define SHADER_DUMP_TYPE_COPY		4
-#define SHADER_DUMP_TYPE_COMPUTE	5
+#define SHADER_DUMP_TYPE_FETCH 0
+#define SHADER_DUMP_TYPE_VERTEX 1
+#define SHADER_DUMP_TYPE_GEOMETRY 2
+#define SHADER_DUMP_TYPE_PIXEL 3
+#define SHADER_DUMP_TYPE_COPY 4
+#define SHADER_DUMP_TYPE_COMPUTE 5
 
 void LatteShader_DumpShader(uint64 baseHash, uint64 auxHash, LatteDecompilerShader* shader);
 void LatteShader_DumpRawShader(uint64 baseHash, uint64 auxHash, uint32 type, uint8* programCode, uint32 programLen);

@@ -50,17 +50,17 @@
 
 namespace
 {
-	using WebFrontend::MainWindowState;
-	using WebFrontend::RpcDispatcher;
 	using WebFrontend::CreateNativeWindowHost;
-	using WebFrontend::INativeWindowHost;
-	using WebFrontend::MenuCommand;
 	using WebFrontend::CreateRendererHost;
+	using WebFrontend::CreateToolWindowSupport;
+	using WebFrontend::INativeWindowHost;
 	using WebFrontend::IRendererHost;
 	using WebFrontend::IToolWindowSupport;
-	using WebFrontend::CreateToolWindowSupport;
-	using WebFrontend::WebHostState;
+	using WebFrontend::MainWindowState;
+	using WebFrontend::MenuCommand;
+	using WebFrontend::RpcDispatcher;
 	using WebFrontend::WebHostServices;
+	using WebFrontend::WebHostState;
 	class Runtime;
 	struct RpcBinding
 	{
@@ -110,7 +110,8 @@ namespace
 		const auto directory = ActiveSettings::GetUserDataPath("screenshots");
 		std::error_code error;
 		fs::create_directories(directory, error);
-		if (error) return {};
+		if (error)
+			return {};
 		const auto now = std::chrono::system_clock::to_time_t(
 			std::chrono::system_clock::now());
 		std::tm local{};
@@ -120,36 +121,36 @@ namespace
 		localtime_r(&now, &local);
 #endif
 		const auto stem = fmt::format("Screenshot_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}{}",
-			local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
-			local.tm_hour, local.tm_min, local.tm_sec, mainWindow ? "" : "_GamePad");
+									  local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+									  local.tm_hour, local.tm_min, local.tm_sec, mainWindow ? "" : "_GamePad");
 		for (unsigned suffix = 0; suffix < 1000; ++suffix)
 		{
-			const auto candidate = directory / (suffix == 0 ? fmt::format("{}.png", stem) :
-				fmt::format("{}_{}.png", stem, suffix + 1));
-			if (!fs::exists(candidate, error) && !error) return candidate;
+			const auto candidate = directory / (suffix == 0 ? fmt::format("{}.png", stem) : fmt::format("{}_{}.png", stem, suffix + 1));
+			if (!fs::exists(candidate, error) && !error)
+				return candidate;
 			error.clear();
 		}
 		return {};
 	}
 
 	bool WriteRgbPng(const fs::path& path, std::span<const std::uint8_t> pixels,
-		int width, int height)
+					 int width, int height)
 	{
-		if (width <= 0 || height <= 0 || pixels.size() !=
-			static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3)
+		if (width <= 0 || height <= 0 || pixels.size() != static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3)
 			return false;
 		auto temporary = path;
 		temporary += ".tmp";
 		const auto temporaryUtf8 = _pathToUtf8(temporary);
 		FILE* file = boost::nowide::fopen(temporaryUtf8.c_str(), "wb");
-		if (!file) return false;
+		if (!file)
+			return false;
 		png_image image{};
 		image.version = PNG_IMAGE_VERSION;
 		image.width = static_cast<png_uint_32>(width);
 		image.height = static_cast<png_uint_32>(height);
 		image.format = PNG_FORMAT_RGB;
 		const bool written = png_image_write_to_stdio(&image, file, 0,
-			pixels.data(), 0, nullptr) != 0;
+													  pixels.data(), 0, nullptr) != 0;
 		png_image_free(&image);
 		const bool closed = std::fclose(file) == 0;
 		if (!written || !closed)
@@ -172,7 +173,7 @@ namespace
 	{
 		std::array<char, 17> text{};
 		std::snprintf(text.data(), text.size(), "%016llx",
-			static_cast<unsigned long long>(titleId));
+					  static_cast<unsigned long long>(titleId));
 		return text.data();
 	}
 
@@ -191,13 +192,20 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::CemodManagerError::None: return "none";
-		case Application::CemodManagerError::Conflict: return "conflict";
-		case Application::CemodManagerError::NotFound: return "notFound";
-		case Application::CemodManagerError::InvalidPermissions: return "invalidPermissions";
-		case Application::CemodManagerError::InspectionFailed: return "inspectionFailed";
-		case Application::CemodManagerError::SaveFailed: return "saveFailed";
-		case Application::CemodManagerError::ImportFailed: return "importFailed";
+		case Application::CemodManagerError::None:
+			return "none";
+		case Application::CemodManagerError::Conflict:
+			return "conflict";
+		case Application::CemodManagerError::NotFound:
+			return "notFound";
+		case Application::CemodManagerError::InvalidPermissions:
+			return "invalidPermissions";
+		case Application::CemodManagerError::InspectionFailed:
+			return "inspectionFailed";
+		case Application::CemodManagerError::SaveFailed:
+			return "saveFailed";
+		case Application::CemodManagerError::ImportFailed:
+			return "importFailed";
 		}
 		return "inspectionFailed";
 	}
@@ -207,51 +215,103 @@ namespace
 		rapidjson::StringBuffer buffer;
 		JsonWriter writer(buffer);
 		writer.StartObject();
-		writer.Key("generation"); writer.String(std::to_string(snapshot.generation).c_str());
+		writer.Key("generation");
+		writer.String(std::to_string(snapshot.generation).c_str());
 		writer.Key("selectedTitleId");
-		if (snapshot.selectedTitleId) writer.String(TitleIdString(*snapshot.selectedTitleId).c_str()); else writer.Null();
-		writer.Key("packages"); writer.StartArray();
+		if (snapshot.selectedTitleId)
+			writer.String(TitleIdString(*snapshot.selectedTitleId).c_str());
+		else
+			writer.Null();
+		writer.Key("packages");
+		writer.StartArray();
 		for (const auto& package : snapshot.packages)
 		{
 			writer.StartObject();
-			auto string = [&writer](const char* name, const std::string& value) { writer.Key(name); writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size())); };
-			string("packageKey", package.packageKey); string("modId", package.modId); string("principal", package.principal);
-			string("modIdentity", package.modIdentity); string("packageDigest", package.packageDigest); string("pluginName", package.pluginName);
-			string("author", package.author); string("version", package.version); string("description", package.description);
-			string("scope", package.scope); string("status", package.status); string("approvalReason", package.approvalReason);
-			writer.Key("titleIds"); writer.StartArray(); for (const auto titleId : package.titleIds) writer.String(TitleIdString(titleId).c_str()); writer.EndArray();
-			writer.Key("warnings"); writer.StartArray(); for (const auto& warning : package.warnings) writer.String(warning.data(), static_cast<rapidjson::SizeType>(warning.size())); writer.EndArray();
-			writer.Key("permissions"); writer.StartArray();
+			auto string = [&writer](const char* name, const std::string& value) {
+				writer.Key(name);
+				writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
+			};
+			string("packageKey", package.packageKey);
+			string("modId", package.modId);
+			string("principal", package.principal);
+			string("modIdentity", package.modIdentity);
+			string("packageDigest", package.packageDigest);
+			string("pluginName", package.pluginName);
+			string("author", package.author);
+			string("version", package.version);
+			string("description", package.description);
+			string("scope", package.scope);
+			string("status", package.status);
+			string("approvalReason", package.approvalReason);
+			writer.Key("titleIds");
+			writer.StartArray();
+			for (const auto titleId : package.titleIds)
+				writer.String(TitleIdString(titleId).c_str());
+			writer.EndArray();
+			writer.Key("warnings");
+			writer.StartArray();
+			for (const auto& warning : package.warnings)
+				writer.String(warning.data(), static_cast<rapidjson::SizeType>(warning.size()));
+			writer.EndArray();
+			writer.Key("permissions");
+			writer.StartArray();
 			for (const auto& permission : package.permissions)
 			{
-				writer.StartObject(); string("name", permission.name); writer.Key("bit"); writer.String(std::to_string(permission.bit).c_str());
-				writer.Key("requested"); writer.Bool(permission.requested); writer.Key("granted"); writer.Bool(permission.granted);
-				writer.Key("dangerous"); writer.Bool(permission.dangerous); writer.Key("manifestMismatch"); writer.Bool(permission.manifestMismatch); writer.EndObject();
+				writer.StartObject();
+				string("name", permission.name);
+				writer.Key("bit");
+				writer.String(std::to_string(permission.bit).c_str());
+				writer.Key("requested");
+				writer.Bool(permission.requested);
+				writer.Key("granted");
+				writer.Bool(permission.granted);
+				writer.Key("dangerous");
+				writer.Bool(permission.dangerous);
+				writer.Key("manifestMismatch");
+				writer.Bool(permission.manifestMismatch);
+				writer.EndObject();
 			}
 			writer.EndArray();
-			writer.Key("requestedPermissions"); writer.String(std::to_string(package.requestedPermissions).c_str());
-			writer.Key("grantedPermissions"); writer.String(std::to_string(package.grantedPermissions).c_str());
-			writer.Key("approved"); writer.Bool(package.approved); writer.Key("signedPackage"); writer.Bool(package.signedPackage);
-			writer.Key("trustedNative"); writer.Bool(package.trustedNative); writer.Key("wups"); writer.Bool(package.wups);
-			writer.Key("headless"); writer.Bool(package.headless); writer.Key("runtimeAvailable"); writer.Bool(package.runtimeAvailable);
-			writer.Key("valid"); writer.Bool(package.valid); writer.EndObject();
+			writer.Key("requestedPermissions");
+			writer.String(std::to_string(package.requestedPermissions).c_str());
+			writer.Key("grantedPermissions");
+			writer.String(std::to_string(package.grantedPermissions).c_str());
+			writer.Key("approved");
+			writer.Bool(package.approved);
+			writer.Key("signedPackage");
+			writer.Bool(package.signedPackage);
+			writer.Key("trustedNative");
+			writer.Bool(package.trustedNative);
+			writer.Key("wups");
+			writer.Bool(package.wups);
+			writer.Key("headless");
+			writer.Bool(package.headless);
+			writer.Key("runtimeAvailable");
+			writer.Bool(package.runtimeAvailable);
+			writer.Key("valid");
+			writer.Bool(package.valid);
+			writer.EndObject();
 		}
-		writer.EndArray(); writer.Key("cancelled"); writer.Bool(snapshot.cancelled); writer.EndObject();
+		writer.EndArray();
+		writer.Key("cancelled");
+		writer.Bool(snapshot.cancelled);
+		writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
 	}
 
 	std::string CemodResultJson(const Application::CemodManagerResult& result)
 	{
 		return std::string(R"({"ok":)") + (result ? "true" : "false") +
-			R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
-			R"(,"diagnostic":)" + JsonString(result.diagnostic) +
-			R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
+			   R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
+			   R"(,"diagnostic":)" + JsonString(result.diagnostic) +
+			   R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
 	}
 
 	void WriteAccount(JsonWriter& writer, const Application::AccountInfo& account)
 	{
 		writer.StartObject();
-		writer.Key("persistentId"); writer.Uint(account.persistentId);
+		writer.Key("persistentId");
+		writer.Uint(account.persistentId);
 		writer.Key("persistentIdHex");
 		std::array<char, 9> persistentId{};
 		std::snprintf(persistentId.data(), persistentId.size(), "%08x", account.persistentId);
@@ -259,14 +319,21 @@ namespace
 		writer.Key("miiName");
 		const auto miiName = boost::nowide::narrow(account.miiName);
 		writer.String(miiName.data(), static_cast<rapidjson::SizeType>(miiName.size()));
-		writer.Key("birthYear"); writer.Uint(account.birthYear);
-		writer.Key("birthMonth"); writer.Uint(account.birthMonth);
-		writer.Key("birthDay"); writer.Uint(account.birthDay);
-		writer.Key("gender"); writer.Uint(account.gender);
-		writer.Key("email"); writer.String(account.email.data(),
-			static_cast<rapidjson::SizeType>(account.email.size()));
-		writer.Key("country"); writer.Uint(account.country);
-		writer.Key("validOnlineAccount"); writer.Bool(account.validOnlineAccount);
+		writer.Key("birthYear");
+		writer.Uint(account.birthYear);
+		writer.Key("birthMonth");
+		writer.Uint(account.birthMonth);
+		writer.Key("birthDay");
+		writer.Uint(account.birthDay);
+		writer.Key("gender");
+		writer.Uint(account.gender);
+		writer.Key("email");
+		writer.String(account.email.data(),
+					  static_cast<rapidjson::SizeType>(account.email.size()));
+		writer.Key("country");
+		writer.Uint(account.country);
+		writer.Key("validOnlineAccount");
+		writer.Bool(account.validOnlineAccount);
 		writer.EndObject();
 	}
 
@@ -274,21 +341,31 @@ namespace
 	{
 		switch (service)
 		{
-		case Application::AccountNetworkService::Nintendo: return "nintendo";
-		case Application::AccountNetworkService::Pretendo: return "pretendo";
-		case Application::AccountNetworkService::Custom: return "custom";
-		case Application::AccountNetworkService::Plasma: return "plasma";
-		default: return "offline";
+		case Application::AccountNetworkService::Nintendo:
+			return "nintendo";
+		case Application::AccountNetworkService::Pretendo:
+			return "pretendo";
+		case Application::AccountNetworkService::Custom:
+			return "custom";
+		case Application::AccountNetworkService::Plasma:
+			return "plasma";
+		default:
+			return "offline";
 		}
 	}
 
 	Application::AccountNetworkService ParseAccountNetworkService(std::string_view service)
 	{
-		if (service == "offline") return Application::AccountNetworkService::Offline;
-		if (service == "nintendo") return Application::AccountNetworkService::Nintendo;
-		if (service == "pretendo") return Application::AccountNetworkService::Pretendo;
-		if (service == "custom") return Application::AccountNetworkService::Custom;
-		if (service == "plasma") return Application::AccountNetworkService::Plasma;
+		if (service == "offline")
+			return Application::AccountNetworkService::Offline;
+		if (service == "nintendo")
+			return Application::AccountNetworkService::Nintendo;
+		if (service == "pretendo")
+			return Application::AccountNetworkService::Pretendo;
+		if (service == "custom")
+			return Application::AccountNetworkService::Custom;
+		if (service == "plasma")
+			return Application::AccountNetworkService::Plasma;
 		throw std::invalid_argument("unknown account network service");
 	}
 
@@ -296,9 +373,12 @@ namespace
 	{
 		switch (state)
 		{
-		case Application::AccountFileState::Corrupted: return "corrupted";
-		case Application::AccountFileState::Ok: return "ok";
-		default: return "missing";
+		case Application::AccountFileState::Corrupted:
+			return "corrupted";
+		case Application::AccountFileState::Ok:
+			return "ok";
+		default:
+			return "missing";
 		}
 	}
 
@@ -306,11 +386,16 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::AccountOnlineError::NoAccountId: return "noAccountId";
-		case Application::AccountOnlineError::NoPasswordCached: return "noPasswordCached";
-		case Application::AccountOnlineError::PasswordCacheEmpty: return "passwordCacheEmpty";
-		case Application::AccountOnlineError::NoPrincipalId: return "noPrincipalId";
-		default: return "none";
+		case Application::AccountOnlineError::NoAccountId:
+			return "noAccountId";
+		case Application::AccountOnlineError::NoPasswordCached:
+			return "noPasswordCached";
+		case Application::AccountOnlineError::PasswordCacheEmpty:
+			return "passwordCacheEmpty";
+		case Application::AccountOnlineError::NoPrincipalId:
+			return "noPrincipalId";
+		default:
+			return "none";
 		}
 	}
 
@@ -326,38 +411,56 @@ namespace
 	{
 		writer.StartObject();
 		auto string = [&writer](const char* key, const std::string& value) {
-			writer.Key(key); writer.String(value.data(),
-				static_cast<rapidjson::SizeType>(value.size()));
+			writer.Key(key);
+			writer.String(value.data(),
+						  static_cast<rapidjson::SizeType>(value.size()));
 		};
-		string("key", pack.key); string("virtualPath", pack.virtualPath);
-		string("name", pack.name); string("description", pack.description);
-		writer.Key("version"); writer.Int(pack.version);
-		writer.Key("universal"); writer.Bool(pack.universal);
-		writer.Key("enabled"); writer.Bool(pack.enabled);
-		writer.Key("activated"); writer.Bool(pack.activated);
-		writer.Key("defaultEnabled"); writer.Bool(pack.defaultEnabled);
-		writer.Key("hasShaders"); writer.Bool(pack.hasShaders);
-		writer.Key("hasPatches"); writer.Bool(pack.hasPatches);
-		writer.Key("hasCustomVsync"); writer.Bool(pack.hasCustomVsync);
-		writer.Key("supportedVersion"); writer.Bool(pack.supportedVersion);
-		writer.Key("titleIds"); writer.StartArray();
+		string("key", pack.key);
+		string("virtualPath", pack.virtualPath);
+		string("name", pack.name);
+		string("description", pack.description);
+		writer.Key("version");
+		writer.Int(pack.version);
+		writer.Key("universal");
+		writer.Bool(pack.universal);
+		writer.Key("enabled");
+		writer.Bool(pack.enabled);
+		writer.Key("activated");
+		writer.Bool(pack.activated);
+		writer.Key("defaultEnabled");
+		writer.Bool(pack.defaultEnabled);
+		writer.Key("hasShaders");
+		writer.Bool(pack.hasShaders);
+		writer.Key("hasPatches");
+		writer.Bool(pack.hasPatches);
+		writer.Key("hasCustomVsync");
+		writer.Bool(pack.hasCustomVsync);
+		writer.Key("supportedVersion");
+		writer.Bool(pack.supportedVersion);
+		writer.Key("titleIds");
+		writer.StartArray();
 		for (const auto titleId : pack.titleIds)
 		{
 			const auto value = TitleIdString(titleId);
 			writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
 		}
 		writer.EndArray();
-		writer.Key("presetOrder"); writer.StartArray();
+		writer.Key("presetOrder");
+		writer.StartArray();
 		for (const auto& category : pack.presetOrder)
 			writer.String(category.data(), static_cast<rapidjson::SizeType>(category.size()));
 		writer.EndArray();
-		writer.Key("presets"); writer.StartArray();
+		writer.Key("presets");
+		writer.StartArray();
 		for (const auto& preset : pack.presets)
 		{
 			writer.StartObject();
-			string("category", preset.category); string("name", preset.name);
-			writer.Key("active"); writer.Bool(preset.active);
-			writer.Key("visible"); writer.Bool(preset.visible);
+			string("category", preset.category);
+			string("name", preset.name);
+			writer.Key("active");
+			writer.Bool(preset.active);
+			writer.Key("visible");
+			writer.Bool(preset.visible);
 			writer.EndObject();
 		}
 		writer.EndArray();
@@ -367,21 +470,27 @@ namespace
 	std::string GraphicPackMutationJson(const Application::GraphicPackResult& result)
 	{
 		if (!result)
-			throw std::runtime_error(result.diagnostic.empty() ?
-				"graphic pack operation failed" : result.diagnostic);
+			throw std::runtime_error(result.diagnostic.empty() ? "graphic pack operation failed" : result.diagnostic);
 		rapidjson::StringBuffer buffer;
 		JsonWriter writer(buffer);
 		writer.StartObject();
-		writer.Key("changed"); writer.Bool(result.changed);
-		writer.Key("titleRunning"); writer.Bool(result.titleRunning);
-		writer.Key("requiresRestart"); writer.Bool(result.requiresRestart);
-		writer.Key("applied"); writer.Bool(result.applied);
-		writer.Key("reloaded"); writer.Bool(result.reloaded);
-		writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
-			static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+		writer.Key("changed");
+		writer.Bool(result.changed);
+		writer.Key("titleRunning");
+		writer.Bool(result.titleRunning);
+		writer.Key("requiresRestart");
+		writer.Bool(result.requiresRestart);
+		writer.Key("applied");
+		writer.Bool(result.applied);
+		writer.Key("reloaded");
+		writer.Bool(result.reloaded);
+		writer.Key("diagnostic");
+		writer.String(result.diagnostic.data(),
+					  static_cast<rapidjson::SizeType>(result.diagnostic.size()));
 		if (result.info)
 		{
-			writer.Key("info"); WriteGraphicPack(writer, *result.info);
+			writer.Key("info");
+			WriteGraphicPack(writer, *result.info);
 		}
 		writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
@@ -392,10 +501,14 @@ namespace
 	{
 		switch (phase)
 		{
-		case Application::GraphicPackInstallPhase::Downloading: return "downloading";
-		case Application::GraphicPackInstallPhase::Extracting: return "extracting";
-		case Application::GraphicPackInstallPhase::Refreshing: return "refreshing";
-		default: return "checking";
+		case Application::GraphicPackInstallPhase::Downloading:
+			return "downloading";
+		case Application::GraphicPackInstallPhase::Extracting:
+			return "extracting";
+		case Application::GraphicPackInstallPhase::Refreshing:
+			return "refreshing";
+		default:
+			return "checking";
 		}
 	}
 
@@ -404,14 +517,22 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::GraphicPackInstallError::ConfirmationRequired: return "confirmationRequired";
-		case Application::GraphicPackInstallError::Cancelled: return "cancelled";
-		case Application::GraphicPackInstallError::InvalidUrl: return "invalidUrl";
-		case Application::GraphicPackInstallError::ConnectionFailed: return "connectionFailed";
-		case Application::GraphicPackInstallError::InvalidArchive: return "invalidArchive";
-		case Application::GraphicPackInstallError::Conflict: return "conflict";
-		case Application::GraphicPackInstallError::IoFailure: return "ioFailure";
-		default: return "none";
+		case Application::GraphicPackInstallError::ConfirmationRequired:
+			return "confirmationRequired";
+		case Application::GraphicPackInstallError::Cancelled:
+			return "cancelled";
+		case Application::GraphicPackInstallError::InvalidUrl:
+			return "invalidUrl";
+		case Application::GraphicPackInstallError::ConnectionFailed:
+			return "connectionFailed";
+		case Application::GraphicPackInstallError::InvalidArchive:
+			return "invalidArchive";
+		case Application::GraphicPackInstallError::Conflict:
+			return "conflict";
+		case Application::GraphicPackInstallError::IoFailure:
+			return "ioFailure";
+		default:
+			return "none";
 		}
 	}
 
@@ -421,25 +542,37 @@ namespace
 		rapidjson::StringBuffer buffer;
 		JsonWriter writer(buffer);
 		writer.StartObject();
-		writer.Key("revision"); writer.Uint64(snapshot.revision);
-		writer.Key("gamePaths"); writer.StartArray();
+		writer.Key("revision");
+		writer.Uint64(snapshot.revision);
+		writer.Key("gamePaths");
+		writer.StartArray();
 		for (const auto& path : snapshot.gamePaths)
 		{
 			const auto value = _pathToUtf8(path);
 			writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
 		}
 		writer.EndArray();
-		writer.Key("startFullscreen"); writer.Bool(snapshot.startFullscreen);
-		writer.Key("openPad"); writer.Bool(snapshot.openPad);
-		writer.Key("checkUpdates"); writer.Bool(snapshot.checkUpdates);
-		writer.Key("saveScreenshots"); writer.Bool(snapshot.saveScreenshots);
-		writer.Key("updateChecksSupported"); writer.Bool(snapshot.updateChecksSupported);
-		writer.Key("portableMode"); writer.Bool(snapshot.portableMode);
-		writer.Key("titleRunning"); writer.Bool(snapshot.titleRunning);
-		writer.Key("setupCompleted"); writer.Bool(snapshot.setupCompleted);
+		writer.Key("startFullscreen");
+		writer.Bool(snapshot.startFullscreen);
+		writer.Key("openPad");
+		writer.Bool(snapshot.openPad);
+		writer.Key("checkUpdates");
+		writer.Bool(snapshot.checkUpdates);
+		writer.Key("saveScreenshots");
+		writer.Bool(snapshot.saveScreenshots);
+		writer.Key("updateChecksSupported");
+		writer.Bool(snapshot.updateChecksSupported);
+		writer.Key("portableMode");
+		writer.Bool(snapshot.portableMode);
+		writer.Key("titleRunning");
+		writer.Bool(snapshot.titleRunning);
+		writer.Key("setupCompleted");
+		writer.Bool(snapshot.setupCompleted);
 		writer.Key("fullscreenOverride");
-		if (snapshot.fullscreenOverride) writer.Bool(*snapshot.fullscreenOverride);
-		else writer.Null();
+		if (snapshot.fullscreenOverride)
+			writer.Bool(*snapshot.fullscreenOverride);
+		else
+			writer.Null();
 		writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
 	}
@@ -448,14 +581,22 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::FrontendSettingsError::Conflict: return "conflict";
-		case Application::FrontendSettingsError::TitleRunning: return "titleRunning";
-		case Application::FrontendSettingsError::FullscreenOverride: return "fullscreenOverride";
-		case Application::FrontendSettingsError::UpdateUnsupported: return "updateUnsupported";
-		case Application::FrontendSettingsError::InvalidPath: return "invalidPath";
-		case Application::FrontendSettingsError::StorageFailed: return "storageFailed";
-		case Application::FrontendSettingsError::SaveFailed: return "saveFailed";
-		default: return "none";
+		case Application::FrontendSettingsError::Conflict:
+			return "conflict";
+		case Application::FrontendSettingsError::TitleRunning:
+			return "titleRunning";
+		case Application::FrontendSettingsError::FullscreenOverride:
+			return "fullscreenOverride";
+		case Application::FrontendSettingsError::UpdateUnsupported:
+			return "updateUnsupported";
+		case Application::FrontendSettingsError::InvalidPath:
+			return "invalidPath";
+		case Application::FrontendSettingsError::StorageFailed:
+			return "storageFailed";
+		case Application::FrontendSettingsError::SaveFailed:
+			return "saveFailed";
+		default:
+			return "none";
 		}
 	}
 
@@ -463,35 +604,49 @@ namespace
 		const Application::FrontendSettingsResult& result)
 	{
 		return std::string(R"({"ok":)") + (result ? "true" : "false") +
-			R"(,"error":)" + JsonString(FrontendSettingsErrorName(result.error)) +
-			R"(,"snapshot":)" + FrontendSettingsJson(result.snapshot) +
-			R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+			   R"(,"error":)" + JsonString(FrontendSettingsErrorName(result.error)) +
+			   R"(,"snapshot":)" + FrontendSettingsJson(result.snapshot) +
+			   R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 	}
 
 	std::string_view HotkeyActionName(Application::HotkeyAction action)
 	{
 		switch (action)
 		{
-		case Application::HotkeyAction::ToggleFullscreen: return "toggleFullscreen";
-		case Application::HotkeyAction::ToggleFullscreenAlternative: return "toggleFullscreenAlternative";
-		case Application::HotkeyAction::ExitFullscreen: return "exitFullscreen";
-		case Application::HotkeyAction::TakeScreenshot: return "takeScreenshot";
-		case Application::HotkeyAction::ToggleFastForward: return "toggleFastForward";
-		case Application::HotkeyAction::EndEmulation: return "endEmulation";
-		case Application::HotkeyAction::ExitApplication: return "exitApplication";
+		case Application::HotkeyAction::ToggleFullscreen:
+			return "toggleFullscreen";
+		case Application::HotkeyAction::ToggleFullscreenAlternative:
+			return "toggleFullscreenAlternative";
+		case Application::HotkeyAction::ExitFullscreen:
+			return "exitFullscreen";
+		case Application::HotkeyAction::TakeScreenshot:
+			return "takeScreenshot";
+		case Application::HotkeyAction::ToggleFastForward:
+			return "toggleFastForward";
+		case Application::HotkeyAction::EndEmulation:
+			return "endEmulation";
+		case Application::HotkeyAction::ExitApplication:
+			return "exitApplication";
 		}
 		return "toggleFullscreen";
 	}
 
 	Application::HotkeyAction ParseHotkeyAction(std::string_view action)
 	{
-		if (action == "toggleFullscreen") return Application::HotkeyAction::ToggleFullscreen;
-		if (action == "toggleFullscreenAlternative") return Application::HotkeyAction::ToggleFullscreenAlternative;
-		if (action == "exitFullscreen") return Application::HotkeyAction::ExitFullscreen;
-		if (action == "takeScreenshot") return Application::HotkeyAction::TakeScreenshot;
-		if (action == "toggleFastForward") return Application::HotkeyAction::ToggleFastForward;
-		if (action == "endEmulation") return Application::HotkeyAction::EndEmulation;
-		if (action == "exitApplication") return Application::HotkeyAction::ExitApplication;
+		if (action == "toggleFullscreen")
+			return Application::HotkeyAction::ToggleFullscreen;
+		if (action == "toggleFullscreenAlternative")
+			return Application::HotkeyAction::ToggleFullscreenAlternative;
+		if (action == "exitFullscreen")
+			return Application::HotkeyAction::ExitFullscreen;
+		if (action == "takeScreenshot")
+			return Application::HotkeyAction::TakeScreenshot;
+		if (action == "toggleFastForward")
+			return Application::HotkeyAction::ToggleFastForward;
+		if (action == "endEmulation")
+			return Application::HotkeyAction::EndEmulation;
+		if (action == "exitApplication")
+			return Application::HotkeyAction::ExitApplication;
 		throw std::invalid_argument("unknown hotkey action");
 	}
 
@@ -499,16 +654,21 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::HotkeySettingsError::Conflict: return "conflict";
-		case Application::HotkeySettingsError::InvalidBinding: return "invalidBinding";
-		case Application::HotkeySettingsError::DuplicateBinding: return "duplicateBinding";
-		case Application::HotkeySettingsError::SaveFailed: return "saveFailed";
-		default: return "none";
+		case Application::HotkeySettingsError::Conflict:
+			return "conflict";
+		case Application::HotkeySettingsError::InvalidBinding:
+			return "invalidBinding";
+		case Application::HotkeySettingsError::DuplicateBinding:
+			return "duplicateBinding";
+		case Application::HotkeySettingsError::SaveFailed:
+			return "saveFailed";
+		default:
+			return "none";
 		}
 	}
 
 	const rapidjson::Value& RequiredMember(const rapidjson::Value& object,
-		const char* name)
+										   const char* name)
 	{
 		if (!object.IsObject())
 			throw std::invalid_argument("RPC parameters must be an object");
@@ -567,7 +727,7 @@ namespace
 	}
 
 	std::uint32_t RequiredBoundedUint(const rapidjson::Value& object, const char* name,
-		std::uint32_t minimum, std::uint32_t maximum)
+									  std::uint32_t minimum, std::uint32_t maximum)
 	{
 		const auto value = RequiredUint(object, name);
 		if (value < minimum || value > maximum)
@@ -593,12 +753,18 @@ namespace
 
 	Application::MemoryValueType ParseMemoryValueType(std::string_view type)
 	{
-		if (type == "int8") return Application::MemoryValueType::Int8;
-		if (type == "int16") return Application::MemoryValueType::Int16;
-		if (type == "int32") return Application::MemoryValueType::Int32;
-		if (type == "int64") return Application::MemoryValueType::Int64;
-		if (type == "float32") return Application::MemoryValueType::Float32;
-		if (type == "float64") return Application::MemoryValueType::Float64;
+		if (type == "int8")
+			return Application::MemoryValueType::Int8;
+		if (type == "int16")
+			return Application::MemoryValueType::Int16;
+		if (type == "int32")
+			return Application::MemoryValueType::Int32;
+		if (type == "int64")
+			return Application::MemoryValueType::Int64;
+		if (type == "float32")
+			return Application::MemoryValueType::Float32;
+		if (type == "float64")
+			return Application::MemoryValueType::Float64;
 		throw std::invalid_argument("unknown memory value type");
 	}
 
@@ -606,17 +772,24 @@ namespace
 	{
 		switch (type)
 		{
-		case Application::MemoryValueType::Int8: return "int8";
-		case Application::MemoryValueType::Int16: return "int16";
-		case Application::MemoryValueType::Int32: return "int32";
-		case Application::MemoryValueType::Int64: return "int64";
-		case Application::MemoryValueType::Float32: return "float32";
-		case Application::MemoryValueType::Float64: return "float64";
+		case Application::MemoryValueType::Int8:
+			return "int8";
+		case Application::MemoryValueType::Int16:
+			return "int16";
+		case Application::MemoryValueType::Int32:
+			return "int32";
+		case Application::MemoryValueType::Int64:
+			return "int64";
+		case Application::MemoryValueType::Float32:
+			return "float32";
+		case Application::MemoryValueType::Float64:
+			return "float64";
 		}
 		throw std::invalid_argument("unknown memory value type");
 	}
 
-	template<typename T> T ParseMemoryInteger(std::string_view text)
+	template<typename T>
+	T ParseMemoryInteger(std::string_view text)
 	{
 		T value{};
 		const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -641,22 +814,22 @@ namespace
 			return {type, ParseMemoryInteger<std::int64_t>(text)};
 		case Application::MemoryValueType::Float32:
 		case Application::MemoryValueType::Float64:
+		{
+			std::string owned(text);
+			char* end{};
+			errno = 0;
+			const auto value = std::strtod(owned.c_str(), &end);
+			if (end != owned.c_str() + owned.size() || errno == ERANGE || !std::isfinite(value))
+				throw std::invalid_argument("memory value must be a finite number");
+			if (type == Application::MemoryValueType::Float32)
 			{
-				std::string owned(text);
-				char* end{};
-				errno = 0;
-				const auto value = std::strtod(owned.c_str(), &end);
-				if (end != owned.c_str() + owned.size() || errno == ERANGE || !std::isfinite(value))
-					throw std::invalid_argument("memory value must be a finite number");
-				if (type == Application::MemoryValueType::Float32)
-				{
-					const auto narrowed = static_cast<float>(value);
-					if (!std::isfinite(narrowed))
-						throw std::invalid_argument("memory value is outside the float32 range");
-					return {type, narrowed};
-				}
-				return {type, value};
+				const auto narrowed = static_cast<float>(value);
+				if (!std::isfinite(narrowed))
+					throw std::invalid_argument("memory value is outside the float32 range");
+				return {type, narrowed};
 			}
+			return {type, value};
+		}
 		}
 		throw std::invalid_argument("unknown memory value type");
 	}
@@ -665,29 +838,36 @@ namespace
 	{
 		return std::visit([](auto scalar) {
 			using T = decltype(scalar);
-			if constexpr (std::is_same_v<T, std::int8_t>) return std::to_string(static_cast<int>(scalar));
+			if constexpr (std::is_same_v<T, std::int8_t>)
+				return std::to_string(static_cast<int>(scalar));
 			else if constexpr (std::is_floating_point_v<T>)
 				return fmt::format("{:.{}g}", scalar, std::numeric_limits<T>::max_digits10);
-			else return std::to_string(scalar);
-		}, value.value);
+			else
+				return std::to_string(scalar);
+		},
+						  value.value);
 	}
 
 	std::string MemorySessionJson(const Application::MemorySearchSessionInfo& info)
 	{
 		return std::string(R"({"sessionToken":)") + JsonString(info.sessionToken) +
-			R"(,"generation":")" + std::to_string(info.generation) +
-			R"(,"mapGeneration":")" + std::to_string(info.mapGeneration) +
-			R"(","bytesTotal":)" + std::to_string(info.bytesTotal) + "}";
+			   R"(,"generation":")" + std::to_string(info.generation) +
+			   R"(,"mapGeneration":")" + std::to_string(info.mapGeneration) +
+			   R"(","bytesTotal":)" + std::to_string(info.bytesTotal) + "}";
 	}
 
 	std::string_view MemoryStateName(Application::MemorySearchState state)
 	{
 		switch (state)
 		{
-		case Application::MemorySearchState::Scanning: return "scanning";
-		case Application::MemorySearchState::Complete: return "complete";
-		case Application::MemorySearchState::Cancelled: return "cancelled";
-		case Application::MemorySearchState::Failed: return "failed";
+		case Application::MemorySearchState::Scanning:
+			return "scanning";
+		case Application::MemorySearchState::Complete:
+			return "complete";
+		case Application::MemorySearchState::Cancelled:
+			return "cancelled";
+		case Application::MemorySearchState::Failed:
+			return "failed";
 		}
 		return "failed";
 	}
@@ -695,13 +875,13 @@ namespace
 	std::string MemoryStatusJson(const Application::MemorySearchStatus& status)
 	{
 		return std::string(R"({"generation":")") + std::to_string(status.generation) +
-			R"(","state":)" + JsonString(MemoryStateName(status.state)) +
-			R"(,"bytesScanned":)" + std::to_string(status.bytesScanned) +
-			R"(,"bytesTotal":)" + std::to_string(status.bytesTotal) +
-			R"(,"resultCount":)" + std::to_string(status.resultCount) +
-			R"(,"resultCapReached":)" + (status.resultCapReached ? "true" : "false") +
-			R"(,"scanCapReached":)" + (status.scanCapReached ? "true" : "false") +
-			R"(,"diagnostic":)" + JsonString(status.diagnostic) + "}";
+			   R"(","state":)" + JsonString(MemoryStateName(status.state)) +
+			   R"(,"bytesScanned":)" + std::to_string(status.bytesScanned) +
+			   R"(,"bytesTotal":)" + std::to_string(status.bytesTotal) +
+			   R"(,"resultCount":)" + std::to_string(status.resultCount) +
+			   R"(,"resultCapReached":)" + (status.resultCapReached ? "true" : "false") +
+			   R"(,"scanCapReached":)" + (status.scanCapReached ? "true" : "false") +
+			   R"(,"diagnostic":)" + JsonString(status.diagnostic) + "}";
 	}
 
 	std::string MemoryPageJson(const Application::MemorySearchPage& page)
@@ -712,68 +892,113 @@ namespace
 		writer.Key("generation");
 		const auto generation = std::to_string(page.generation);
 		writer.String(generation.data(), generation.size());
-		writer.Key("offset"); writer.Uint(page.offset);
-		writer.Key("total"); writer.Uint(page.total);
-		writer.Key("results"); writer.StartArray();
+		writer.Key("offset");
+		writer.Uint(page.offset);
+		writer.Key("total");
+		writer.Uint(page.total);
+		writer.Key("results");
+		writer.StartArray();
 		for (const auto& result : page.results)
 		{
 			writer.StartObject();
-			writer.Key("address"); writer.StartObject();
-			writer.Key("space"); writer.String("wiiu-virtual");
+			writer.Key("address");
+			writer.StartObject();
+			writer.Key("space");
+			writer.String("wiiu-virtual");
 			const auto address = fmt::format("0x{:08X}", result.address.value);
-			writer.Key("value"); writer.String(address.data(), address.size());
+			writer.Key("value");
+			writer.String(address.data(), address.size());
 			writer.EndObject();
-			writer.Key("value"); writer.StartObject();
+			writer.Key("value");
+			writer.StartObject();
 			const auto type = MemoryValueTypeName(result.value.type);
-			writer.Key("type"); writer.String(type.data(), type.size());
+			writer.Key("type");
+			writer.String(type.data(), type.size());
 			const auto text = MemoryValueText(result.value);
-			writer.Key("text"); writer.String(text.data(), text.size());
+			writer.Key("text");
+			writer.String(text.data(), text.size());
 			writer.EndObject();
 			writer.EndObject();
 		}
-		writer.EndArray(); writer.EndObject();
+		writer.EndArray();
+		writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
 	}
 
 	std::string PpcDebuggerSnapshotJson(const Application::PpcDebuggerSnapshot& snapshot)
 	{
-		rapidjson::StringBuffer buffer; JsonWriter writer(buffer);
-		auto address = [](std::uint32_t value) { return fmt::format("{:08X}", value); };
-		writer.StartObject(); writer.Key("generation");
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		auto address = [](std::uint32_t value) {
+			return fmt::format("{:08X}", value);
+		};
+		writer.StartObject();
+		writer.Key("generation");
 		const auto generation = std::to_string(snapshot.generation);
 		writer.String(generation.data(), generation.size());
-		writer.Key("available"); writer.Bool(snapshot.available);
-		writer.Key("trapped"); writer.Bool(snapshot.trapped);
-		writer.Key("instructionPointer"); const auto ip = address(snapshot.instructionPointer.value);
+		writer.Key("available");
+		writer.Bool(snapshot.available);
+		writer.Key("trapped");
+		writer.Bool(snapshot.trapped);
+		writer.Key("instructionPointer");
+		const auto ip = address(snapshot.instructionPointer.value);
 		writer.String(ip.data(), ip.size());
-		writer.Key("linkRegister"); const auto lr = address(snapshot.linkRegister);
+		writer.Key("linkRegister");
+		const auto lr = address(snapshot.linkRegister);
 		writer.String(lr.data(), lr.size());
-		writer.Key("gpr"); writer.StartArray();
-		for (const auto value : snapshot.gpr) { const auto formatted = address(value); writer.String(formatted.data(), formatted.size()); }
-		writer.EndArray(); writer.Key("instructions"); writer.StartArray();
+		writer.Key("gpr");
+		writer.StartArray();
+		for (const auto value : snapshot.gpr)
+		{
+			const auto formatted = address(value);
+			writer.String(formatted.data(), formatted.size());
+		}
+		writer.EndArray();
+		writer.Key("instructions");
+		writer.StartArray();
 		for (const auto& instruction : snapshot.instructions)
 		{
-			writer.StartObject(); const auto formattedAddress = address(instruction.address.value);
-			writer.Key("address"); writer.String(formattedAddress.data(), formattedAddress.size());
+			writer.StartObject();
+			const auto formattedAddress = address(instruction.address.value);
+			writer.Key("address");
+			writer.String(formattedAddress.data(), formattedAddress.size());
 			const auto opcode = address(instruction.opcode);
-			writer.Key("opcode"); writer.String(opcode.data(), opcode.size());
-			writer.Key("mnemonic"); writer.String(instruction.mnemonic.data(), instruction.mnemonic.size());
-			writer.Key("operands"); writer.String(instruction.operands.data(), instruction.operands.size());
-			writer.Key("current"); writer.Bool(instruction.current);
-			writer.Key("breakpoint"); writer.Bool(instruction.breakpoint); writer.EndObject();
+			writer.Key("opcode");
+			writer.String(opcode.data(), opcode.size());
+			writer.Key("mnemonic");
+			writer.String(instruction.mnemonic.data(), instruction.mnemonic.size());
+			writer.Key("operands");
+			writer.String(instruction.operands.data(), instruction.operands.size());
+			writer.Key("current");
+			writer.Bool(instruction.current);
+			writer.Key("breakpoint");
+			writer.Bool(instruction.breakpoint);
+			writer.EndObject();
 		}
-		writer.EndArray(); writer.Key("breakpoints"); writer.StartArray();
+		writer.EndArray();
+		writer.Key("breakpoints");
+		writer.StartArray();
 		for (const auto& breakpoint : snapshot.breakpoints)
 		{
-			writer.StartObject(); writer.Key("identity"); writer.String(breakpoint.identity.data(), breakpoint.identity.size());
+			writer.StartObject();
+			writer.Key("identity");
+			writer.String(breakpoint.identity.data(), breakpoint.identity.size());
 			const auto formattedAddress = address(breakpoint.address.value);
-			writer.Key("address"); writer.String(formattedAddress.data(), formattedAddress.size());
-			writer.Key("enabled"); writer.Bool(breakpoint.enabled);
-			writer.Key("logging"); writer.Bool(breakpoint.logging); writer.EndObject();
+			writer.Key("address");
+			writer.String(formattedAddress.data(), formattedAddress.size());
+			writer.Key("enabled");
+			writer.Bool(breakpoint.enabled);
+			writer.Key("logging");
+			writer.Bool(breakpoint.logging);
+			writer.EndObject();
 		}
-		writer.EndArray(); writer.Key("breakpointCapReached"); writer.Bool(snapshot.breakpointCapReached);
-		writer.Key("diagnostic"); writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
-		writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+		writer.EndArray();
+		writer.Key("breakpointCapReached");
+		writer.Bool(snapshot.breakpointCapReached);
+		writer.Key("diagnostic");
+		writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
+		writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
 	}
 
 	struct WindowDescriptor
@@ -841,7 +1066,7 @@ namespace
 	}
 
 	std::uint32_t ParsePersistentId(const rapidjson::Value& params,
-		const char* field = "persistentId")
+									const char* field = "persistentId")
 	{
 		const auto text = RequiredString(params, field);
 		if (text.size() != 8)
@@ -865,9 +1090,12 @@ namespace
 	{
 		switch (state)
 		{
-		case Application::SaveEntryState::Directory: return "directory";
-		case Application::SaveEntryState::NonDirectory: return "nonDirectory";
-		default: return "missing";
+		case Application::SaveEntryState::Directory:
+			return "directory";
+		case Application::SaveEntryState::NonDirectory:
+			return "nonDirectory";
+		default:
+			return "missing";
 		}
 	}
 
@@ -875,121 +1103,442 @@ namespace
 	{
 		switch (error)
 		{
-		case Application::SaveOperationError::None: return "none";
-		case Application::SaveOperationError::InvalidPersistentId: return "invalidPersistentId";
-		case Application::SaveOperationError::TitleRunning: return "titleRunning";
-		case Application::SaveOperationError::Scanning: return "scanning";
-		case Application::SaveOperationError::NotFound: return "notFound";
-		case Application::SaveOperationError::TargetExists: return "targetExists";
-		case Application::SaveOperationError::InvalidTarget: return "invalidTarget";
-		case Application::SaveOperationError::ArchiveInvalid: return "archiveInvalid";
-		case Application::SaveOperationError::PathUnsafe: return "pathUnsafe";
-		case Application::SaveOperationError::Cancelled: return "cancelled";
-		case Application::SaveOperationError::IoFailure: return "ioFailure";
-		case Application::SaveOperationError::MetadataFailure: return "metadataFailure";
-		default: return "backendFailure";
+		case Application::SaveOperationError::None:
+			return "none";
+		case Application::SaveOperationError::InvalidPersistentId:
+			return "invalidPersistentId";
+		case Application::SaveOperationError::TitleRunning:
+			return "titleRunning";
+		case Application::SaveOperationError::Scanning:
+			return "scanning";
+		case Application::SaveOperationError::NotFound:
+			return "notFound";
+		case Application::SaveOperationError::TargetExists:
+			return "targetExists";
+		case Application::SaveOperationError::InvalidTarget:
+			return "invalidTarget";
+		case Application::SaveOperationError::ArchiveInvalid:
+			return "archiveInvalid";
+		case Application::SaveOperationError::PathUnsafe:
+			return "pathUnsafe";
+		case Application::SaveOperationError::Cancelled:
+			return "cancelled";
+		case Application::SaveOperationError::IoFailure:
+			return "ioFailure";
+		case Application::SaveOperationError::MetadataFailure:
+			return "metadataFailure";
+		default:
+			return "backendFailure";
 		}
 	}
 
 	std::uint16_t UsbHidUsage(std::uint32_t key)
 	{
-		if (key >= 'A' && key <= 'Z') return static_cast<std::uint16_t>(0x04 + key - 'A');
-		if (key >= 'a' && key <= 'z') return static_cast<std::uint16_t>(0x04 + key - 'a');
-		if (key >= '1' && key <= '9') return static_cast<std::uint16_t>(0x1e + key - '1');
-		if (key == '0') return 0x27;
+		if (key >= 'A' && key <= 'Z')
+			return static_cast<std::uint16_t>(0x04 + key - 'A');
+		if (key >= 'a' && key <= 'z')
+			return static_cast<std::uint16_t>(0x04 + key - 'a');
+		if (key >= '1' && key <= '9')
+			return static_cast<std::uint16_t>(0x1e + key - '1');
+		if (key == '0')
+			return 0x27;
 		switch (key)
 		{
-		case '-': return 0x2d; case '=': return 0x2e; case '[': return 0x2f;
-		case ']': return 0x30; case '\\': return 0x31; case ';': return 0x33;
-		case '\'': return 0x34; case '`': return 0x35; case ',': return 0x36;
-		case '.': return 0x37; case '/': return 0x38; default: break;
+		case '-':
+			return 0x2d;
+		case '=':
+			return 0x2e;
+		case '[':
+			return 0x2f;
+		case ']':
+			return 0x30;
+		case '\\':
+			return 0x31;
+		case ';':
+			return 0x33;
+		case '\'':
+			return 0x34;
+		case '`':
+			return 0x35;
+		case ',':
+			return 0x36;
+		case '.':
+			return 0x37;
+		case '/':
+			return 0x38;
+		default:
+			break;
 		}
 #if BOOST_OS_WINDOWS
 		switch (key)
 		{
-		case VK_RETURN: return 0x28; case VK_ESCAPE: return 0x29; case VK_BACK: return 0x2a;
-		case VK_TAB: return 0x2b; case VK_SPACE: return 0x2c; case VK_CAPITAL: return 0x39;
-		case VK_F1: return 0x3a; case VK_F2: return 0x3b; case VK_F3: return 0x3c;
-		case VK_F4: return 0x3d; case VK_F5: return 0x3e; case VK_F6: return 0x3f;
-		case VK_F7: return 0x40; case VK_F8: return 0x41; case VK_F9: return 0x42;
-		case VK_F10: return 0x43; case VK_F11: return 0x44; case VK_F12: return 0x45;
-		case VK_F13: return 0x68; case VK_F14: return 0x69; case VK_F15: return 0x6a;
-		case VK_F16: return 0x6b; case VK_F17: return 0x6c; case VK_F18: return 0x6d;
-		case VK_F19: return 0x6e; case VK_F20: return 0x6f; case VK_F21: return 0x70;
-		case VK_F22: return 0x71; case VK_F23: return 0x72; case VK_F24: return 0x73;
-		case VK_SNAPSHOT: return 0x46; case VK_SCROLL: return 0x47; case VK_PAUSE: return 0x48;
-		case VK_INSERT: return 0x49; case VK_HOME: return 0x4a; case VK_PRIOR: return 0x4b;
-		case VK_DELETE: return 0x4c; case VK_END: return 0x4d; case VK_NEXT: return 0x4e;
-		case VK_RIGHT: return 0x4f; case VK_LEFT: return 0x50; case VK_DOWN: return 0x51;
-		case VK_UP: return 0x52; case VK_NUMLOCK: return 0x53;
-		case VK_DIVIDE: return 0x54; case VK_MULTIPLY: return 0x55;
-		case VK_SUBTRACT: return 0x56; case VK_ADD: return 0x57;
-		case VK_NUMPAD1: return 0x59; case VK_NUMPAD2: return 0x5a; case VK_NUMPAD3: return 0x5b;
-		case VK_NUMPAD4: return 0x5c; case VK_NUMPAD5: return 0x5d; case VK_NUMPAD6: return 0x5e;
-		case VK_NUMPAD7: return 0x5f; case VK_NUMPAD8: return 0x60; case VK_NUMPAD9: return 0x61;
-		case VK_NUMPAD0: return 0x62; case VK_DECIMAL: return 0x63; case VK_APPS: return 0x65;
-		case VK_OEM_MINUS: return 0x2d; case VK_OEM_PLUS: return 0x2e;
-		case VK_OEM_4: return 0x2f; case VK_OEM_6: return 0x30; case VK_OEM_5: return 0x31;
-		case VK_OEM_1: return 0x33; case VK_OEM_7: return 0x34; case VK_OEM_3: return 0x35;
-		case VK_OEM_COMMA: return 0x36; case VK_OEM_PERIOD: return 0x37; case VK_OEM_2: return 0x38;
-		case VK_LCONTROL: return 0xe0; case VK_LSHIFT: return 0xe1; case VK_LMENU: return 0xe2;
-		case VK_LWIN: return 0xe3; case VK_RCONTROL: return 0xe4; case VK_RSHIFT: return 0xe5;
-		case VK_RMENU: return 0xe6; case VK_RWIN: return 0xe7;
-		default: return 0;
+		case VK_RETURN:
+			return 0x28;
+		case VK_ESCAPE:
+			return 0x29;
+		case VK_BACK:
+			return 0x2a;
+		case VK_TAB:
+			return 0x2b;
+		case VK_SPACE:
+			return 0x2c;
+		case VK_CAPITAL:
+			return 0x39;
+		case VK_F1:
+			return 0x3a;
+		case VK_F2:
+			return 0x3b;
+		case VK_F3:
+			return 0x3c;
+		case VK_F4:
+			return 0x3d;
+		case VK_F5:
+			return 0x3e;
+		case VK_F6:
+			return 0x3f;
+		case VK_F7:
+			return 0x40;
+		case VK_F8:
+			return 0x41;
+		case VK_F9:
+			return 0x42;
+		case VK_F10:
+			return 0x43;
+		case VK_F11:
+			return 0x44;
+		case VK_F12:
+			return 0x45;
+		case VK_F13:
+			return 0x68;
+		case VK_F14:
+			return 0x69;
+		case VK_F15:
+			return 0x6a;
+		case VK_F16:
+			return 0x6b;
+		case VK_F17:
+			return 0x6c;
+		case VK_F18:
+			return 0x6d;
+		case VK_F19:
+			return 0x6e;
+		case VK_F20:
+			return 0x6f;
+		case VK_F21:
+			return 0x70;
+		case VK_F22:
+			return 0x71;
+		case VK_F23:
+			return 0x72;
+		case VK_F24:
+			return 0x73;
+		case VK_SNAPSHOT:
+			return 0x46;
+		case VK_SCROLL:
+			return 0x47;
+		case VK_PAUSE:
+			return 0x48;
+		case VK_INSERT:
+			return 0x49;
+		case VK_HOME:
+			return 0x4a;
+		case VK_PRIOR:
+			return 0x4b;
+		case VK_DELETE:
+			return 0x4c;
+		case VK_END:
+			return 0x4d;
+		case VK_NEXT:
+			return 0x4e;
+		case VK_RIGHT:
+			return 0x4f;
+		case VK_LEFT:
+			return 0x50;
+		case VK_DOWN:
+			return 0x51;
+		case VK_UP:
+			return 0x52;
+		case VK_NUMLOCK:
+			return 0x53;
+		case VK_DIVIDE:
+			return 0x54;
+		case VK_MULTIPLY:
+			return 0x55;
+		case VK_SUBTRACT:
+			return 0x56;
+		case VK_ADD:
+			return 0x57;
+		case VK_NUMPAD1:
+			return 0x59;
+		case VK_NUMPAD2:
+			return 0x5a;
+		case VK_NUMPAD3:
+			return 0x5b;
+		case VK_NUMPAD4:
+			return 0x5c;
+		case VK_NUMPAD5:
+			return 0x5d;
+		case VK_NUMPAD6:
+			return 0x5e;
+		case VK_NUMPAD7:
+			return 0x5f;
+		case VK_NUMPAD8:
+			return 0x60;
+		case VK_NUMPAD9:
+			return 0x61;
+		case VK_NUMPAD0:
+			return 0x62;
+		case VK_DECIMAL:
+			return 0x63;
+		case VK_APPS:
+			return 0x65;
+		case VK_OEM_MINUS:
+			return 0x2d;
+		case VK_OEM_PLUS:
+			return 0x2e;
+		case VK_OEM_4:
+			return 0x2f;
+		case VK_OEM_6:
+			return 0x30;
+		case VK_OEM_5:
+			return 0x31;
+		case VK_OEM_1:
+			return 0x33;
+		case VK_OEM_7:
+			return 0x34;
+		case VK_OEM_3:
+			return 0x35;
+		case VK_OEM_COMMA:
+			return 0x36;
+		case VK_OEM_PERIOD:
+			return 0x37;
+		case VK_OEM_2:
+			return 0x38;
+		case VK_LCONTROL:
+			return 0xe0;
+		case VK_LSHIFT:
+			return 0xe1;
+		case VK_LMENU:
+			return 0xe2;
+		case VK_LWIN:
+			return 0xe3;
+		case VK_RCONTROL:
+			return 0xe4;
+		case VK_RSHIFT:
+			return 0xe5;
+		case VK_RMENU:
+			return 0xe6;
+		case VK_RWIN:
+			return 0xe7;
+		default:
+			return 0;
 		}
 #elif BOOST_OS_MACOS
 		switch (key)
 		{
-		case 0x00: return 0x04; case 0x0b: return 0x05; case 0x08: return 0x06;
-		case 0x02: return 0x07; case 0x0e: return 0x08; case 0x03: return 0x09;
-		case 0x05: return 0x0a; case 0x04: return 0x0b; case 0x22: return 0x0c;
-		case 0x26: return 0x0d; case 0x28: return 0x0e; case 0x25: return 0x0f;
-		case 0x2e: return 0x10; case 0x2d: return 0x11; case 0x1f: return 0x12;
-		case 0x23: return 0x13; case 0x0c: return 0x14; case 0x0f: return 0x15;
-		case 0x01: return 0x16; case 0x11: return 0x17; case 0x20: return 0x18;
-		case 0x09: return 0x19; case 0x0d: return 0x1a; case 0x07: return 0x1b;
-		case 0x10: return 0x1c; case 0x06: return 0x1d;
-		case 0x12: return 0x1e; case 0x13: return 0x1f; case 0x14: return 0x20;
-		case 0x15: return 0x21; case 0x17: return 0x22; case 0x16: return 0x23;
-		case 0x1a: return 0x24; case 0x1c: return 0x25; case 0x19: return 0x26;
-		case 0x1d: return 0x27; case 0x1b: return 0x2d; case 0x18: return 0x2e;
-		case 0x21: return 0x2f; case 0x1e: return 0x30; case 0x2a: return 0x31;
-		case 0x29: return 0x33; case 0x27: return 0x34; case 0x32: return 0x35;
-		case 0x2b: return 0x36; case 0x2f: return 0x37; case 0x2c: return 0x38;
-		default: break;
+		case 0x00:
+			return 0x04;
+		case 0x0b:
+			return 0x05;
+		case 0x08:
+			return 0x06;
+		case 0x02:
+			return 0x07;
+		case 0x0e:
+			return 0x08;
+		case 0x03:
+			return 0x09;
+		case 0x05:
+			return 0x0a;
+		case 0x04:
+			return 0x0b;
+		case 0x22:
+			return 0x0c;
+		case 0x26:
+			return 0x0d;
+		case 0x28:
+			return 0x0e;
+		case 0x25:
+			return 0x0f;
+		case 0x2e:
+			return 0x10;
+		case 0x2d:
+			return 0x11;
+		case 0x1f:
+			return 0x12;
+		case 0x23:
+			return 0x13;
+		case 0x0c:
+			return 0x14;
+		case 0x0f:
+			return 0x15;
+		case 0x01:
+			return 0x16;
+		case 0x11:
+			return 0x17;
+		case 0x20:
+			return 0x18;
+		case 0x09:
+			return 0x19;
+		case 0x0d:
+			return 0x1a;
+		case 0x07:
+			return 0x1b;
+		case 0x10:
+			return 0x1c;
+		case 0x06:
+			return 0x1d;
+		case 0x12:
+			return 0x1e;
+		case 0x13:
+			return 0x1f;
+		case 0x14:
+			return 0x20;
+		case 0x15:
+			return 0x21;
+		case 0x17:
+			return 0x22;
+		case 0x16:
+			return 0x23;
+		case 0x1a:
+			return 0x24;
+		case 0x1c:
+			return 0x25;
+		case 0x19:
+			return 0x26;
+		case 0x1d:
+			return 0x27;
+		case 0x1b:
+			return 0x2d;
+		case 0x18:
+			return 0x2e;
+		case 0x21:
+			return 0x2f;
+		case 0x1e:
+			return 0x30;
+		case 0x2a:
+			return 0x31;
+		case 0x29:
+			return 0x33;
+		case 0x27:
+			return 0x34;
+		case 0x32:
+			return 0x35;
+		case 0x2b:
+			return 0x36;
+		case 0x2f:
+			return 0x37;
+		case 0x2c:
+			return 0x38;
+		default:
+			break;
 		}
-		static constexpr std::array<std::pair<std::uint32_t, std::uint16_t>, 41> usages{{
-			{0x24,0x28},{0x35,0x29},{0x33,0x2a},{0x30,0x2b},{0x31,0x2c},
-			{0x7a,0x3a},{0x78,0x3b},{0x63,0x3c},{0x76,0x3d},{0x60,0x3e},{0x61,0x3f},
-			{0x62,0x40},{0x64,0x41},{0x65,0x42},{0x6d,0x43},{0x67,0x44},{0x6f,0x45},
-			{0x69,0x68},{0x6b,0x69},{0x71,0x6a},{0x6a,0x6b},
-			{0x40,0x6c},{0x4f,0x6d},{0x50,0x6e},{0x5a,0x6f},
-			{0x72,0x49},{0x73,0x4a},{0x74,0x4b},{0x75,0x4c},{0x77,0x4d},{0x79,0x4e},
-			{0x7c,0x4f},{0x7b,0x50},{0x7d,0x51},{0x7e,0x52},
-			{0x3b,0xe0},{0x38,0xe1},{0x3a,0xe2},{0x37,0xe3},{0x3e,0xe4},{0x3c,0xe5}
-		}};
-		for (const auto& [native, usage] : usages) if (native == key) return usage;
+		static constexpr std::array<std::pair<std::uint32_t, std::uint16_t>, 41> usages{{{0x24, 0x28}, {0x35, 0x29}, {0x33, 0x2a}, {0x30, 0x2b}, {0x31, 0x2c}, {0x7a, 0x3a}, {0x78, 0x3b}, {0x63, 0x3c}, {0x76, 0x3d}, {0x60, 0x3e}, {0x61, 0x3f}, {0x62, 0x40}, {0x64, 0x41}, {0x65, 0x42}, {0x6d, 0x43}, {0x67, 0x44}, {0x6f, 0x45}, {0x69, 0x68}, {0x6b, 0x69}, {0x71, 0x6a}, {0x6a, 0x6b}, {0x40, 0x6c}, {0x4f, 0x6d}, {0x50, 0x6e}, {0x5a, 0x6f}, {0x72, 0x49}, {0x73, 0x4a}, {0x74, 0x4b}, {0x75, 0x4c}, {0x77, 0x4d}, {0x79, 0x4e}, {0x7c, 0x4f}, {0x7b, 0x50}, {0x7d, 0x51}, {0x7e, 0x52}, {0x3b, 0xe0}, {0x38, 0xe1}, {0x3a, 0xe2}, {0x37, 0xe3}, {0x3e, 0xe4}, {0x3c, 0xe5}}};
+		for (const auto& [native, usage] : usages)
+			if (native == key)
+				return usage;
 		return 0;
 #else
 		switch (key)
 		{
-		case 0xff0d: return 0x28; case 0xff1b: return 0x29; case 0xff08: return 0x2a;
-		case 0xff09: return 0x2b; case 0x20: return 0x2c; case 0xffe5: return 0x39;
-		case 0xffbe: return 0x3a; case 0xffbf: return 0x3b; case 0xffc0: return 0x3c;
-		case 0xffc1: return 0x3d; case 0xffc2: return 0x3e; case 0xffc3: return 0x3f;
-		case 0xffc4: return 0x40; case 0xffc5: return 0x41; case 0xffc6: return 0x42;
-		case 0xffc7: return 0x43; case 0xffc8: return 0x44; case 0xffc9: return 0x45;
-		case 0xffca: return 0x68; case 0xffcb: return 0x69; case 0xffcc: return 0x6a;
-		case 0xffcd: return 0x6b; case 0xffce: return 0x6c; case 0xffcf: return 0x6d;
-		case 0xffd0: return 0x6e; case 0xffd1: return 0x6f; case 0xffd2: return 0x70;
-		case 0xffd3: return 0x71; case 0xffd4: return 0x72; case 0xffd5: return 0x73;
-		case 0xff63: return 0x49; case 0xff50: return 0x4a; case 0xff55: return 0x4b;
-		case 0xffff: return 0x4c; case 0xff57: return 0x4d; case 0xff56: return 0x4e;
-		case 0xff53: return 0x4f; case 0xff51: return 0x50; case 0xff54: return 0x51;
-		case 0xff52: return 0x52; case 0xffe3: return 0xe0; case 0xffe1: return 0xe1;
-		case 0xffe9: return 0xe2; case 0xffeb: return 0xe3; case 0xffe4: return 0xe4;
-		case 0xffe2: return 0xe5; case 0xffea: return 0xe6; case 0xffec: return 0xe7;
-		default: return 0;
+		case 0xff0d:
+			return 0x28;
+		case 0xff1b:
+			return 0x29;
+		case 0xff08:
+			return 0x2a;
+		case 0xff09:
+			return 0x2b;
+		case 0x20:
+			return 0x2c;
+		case 0xffe5:
+			return 0x39;
+		case 0xffbe:
+			return 0x3a;
+		case 0xffbf:
+			return 0x3b;
+		case 0xffc0:
+			return 0x3c;
+		case 0xffc1:
+			return 0x3d;
+		case 0xffc2:
+			return 0x3e;
+		case 0xffc3:
+			return 0x3f;
+		case 0xffc4:
+			return 0x40;
+		case 0xffc5:
+			return 0x41;
+		case 0xffc6:
+			return 0x42;
+		case 0xffc7:
+			return 0x43;
+		case 0xffc8:
+			return 0x44;
+		case 0xffc9:
+			return 0x45;
+		case 0xffca:
+			return 0x68;
+		case 0xffcb:
+			return 0x69;
+		case 0xffcc:
+			return 0x6a;
+		case 0xffcd:
+			return 0x6b;
+		case 0xffce:
+			return 0x6c;
+		case 0xffcf:
+			return 0x6d;
+		case 0xffd0:
+			return 0x6e;
+		case 0xffd1:
+			return 0x6f;
+		case 0xffd2:
+			return 0x70;
+		case 0xffd3:
+			return 0x71;
+		case 0xffd4:
+			return 0x72;
+		case 0xffd5:
+			return 0x73;
+		case 0xff63:
+			return 0x49;
+		case 0xff50:
+			return 0x4a;
+		case 0xff55:
+			return 0x4b;
+		case 0xffff:
+			return 0x4c;
+		case 0xff57:
+			return 0x4d;
+		case 0xff56:
+			return 0x4e;
+		case 0xff53:
+			return 0x4f;
+		case 0xff51:
+			return 0x50;
+		case 0xff54:
+			return 0x51;
+		case 0xff52:
+			return 0x52;
+		case 0xffe3:
+			return 0xe0;
+		case 0xffe1:
+			return 0xe1;
+		case 0xffe9:
+			return 0xe2;
+		case 0xffeb:
+			return 0xe3;
+		case 0xffe4:
+			return 0xe4;
+		case 0xffe2:
+			return 0xe5;
+		case 0xffea:
+			return 0xe6;
+		case 0xffec:
+			return 0xe7;
+		default:
+			return 0;
 		}
 #endif
 	}
@@ -1002,17 +1551,36 @@ namespace
 			const auto first = static_cast<unsigned char>(text[i++]);
 			std::uint32_t codepoint{};
 			std::size_t continuation{};
-			if (first < 0x80) codepoint = first;
-			else if ((first & 0xe0) == 0xc0) { codepoint = first & 0x1f; continuation = 1; }
-			else if ((first & 0xf0) == 0xe0) { codepoint = first & 0x0f; continuation = 2; }
-			else if ((first & 0xf8) == 0xf0) { codepoint = first & 0x07; continuation = 3; }
-			else continue;
-			if (i + continuation > text.size()) break;
+			if (first < 0x80)
+				codepoint = first;
+			else if ((first & 0xe0) == 0xc0)
+			{
+				codepoint = first & 0x1f;
+				continuation = 1;
+			}
+			else if ((first & 0xf0) == 0xe0)
+			{
+				codepoint = first & 0x0f;
+				continuation = 2;
+			}
+			else if ((first & 0xf8) == 0xf0)
+			{
+				codepoint = first & 0x07;
+				continuation = 3;
+			}
+			else
+				continue;
+			if (i + continuation > text.size())
+				break;
 			bool valid = true;
 			for (std::size_t offset = 0; offset < continuation; ++offset)
 			{
 				const auto byte = static_cast<unsigned char>(text[i++]);
-				if ((byte & 0xc0) != 0x80) { valid = false; break; }
+				if ((byte & 0xc0) != 0x80)
+				{
+					valid = false;
+					break;
+				}
 				codepoint = (codepoint << 6) | (byte & 0x3f);
 			}
 			if (valid && codepoint <= 0x10ffff && !(codepoint >= 0xd800 && codepoint <= 0xdfff))
@@ -1023,7 +1591,7 @@ namespace
 
 	class Runtime final
 	{
-	public:
+	  public:
 		Runtime()
 			: m_nativeWindow(CreateNativeWindowHost())
 		{
@@ -1060,9 +1628,7 @@ namespace
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
 				m_rendererHost = CreateRendererHost(m_hostState, m_hostState, m_hostState);
-				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow,
-					[this](std::function<void()> action) { return PostToUi(std::move(action)); },
-					[this] { return RecreateCanvasForHost(); });
+				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow, [this](std::function<void()> action) { return PostToUi(std::move(action)); }, [this] { return RecreateCanvasForHost(); });
 				RefreshHotkeyBindings(m_controller.GetHotkeySettings());
 				m_hostServices->SetControllerObserver(
 					[this](const ControllerState& current, const ControllerState& previous) {
@@ -1076,7 +1642,7 @@ namespace
 					.canvas = m_hostServices,
 				});
 				InputManager::instance().ConfigureHost(*m_hostServices, *m_hostServices,
-					*m_hostServices, *m_hostServices);
+													   *m_hostServices, *m_hostServices);
 				IAudioAPI::ConfigureNativeSurfaceProvider(m_hostServices.get());
 				m_hostConnected = true;
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
@@ -1084,7 +1650,8 @@ namespace
 				m_callbackGate->target = this;
 				m_emulatedUsb.SetObserver([gate = m_callbackGate](const Application::UsbDeviceChange& change) {
 					std::scoped_lock lock(gate->mutex);
-					if (!gate->target) return;
+					if (!gate->target)
+						return;
 					auto* runtime = gate->target;
 					const auto payload = runtime->UsbDeviceChangeJson(change);
 					(void)runtime->PostToUi([runtime, payload] {
@@ -1117,15 +1684,17 @@ namespace
 				m_rpcBound = true;
 				webview_set_title(m_webview, "CemuExtend");
 				webview_set_size(m_webview, 1100, 720, WEBVIEW_HINT_NONE);
-			}
-			catch (...)
+			} catch (...)
 			{
 				Cleanup();
 				throw;
 			}
 		}
 
-		~Runtime() { Cleanup(); }
+		~Runtime()
+		{
+			Cleanup();
+		}
 
 		void Run()
 		{
@@ -1134,7 +1703,7 @@ namespace
 			webview_run(m_webview);
 		}
 
-	private:
+	  private:
 		struct ToolWindow
 		{
 			std::uint64_t id{};
@@ -1184,7 +1753,13 @@ namespace
 			bool final{};
 		};
 
-		enum class SaveTicketKind { Import, Export, Delete, Transfer };
+		enum class SaveTicketKind
+		{
+			Import,
+			Export,
+			Delete,
+			Transfer
+		};
 		struct SaveTicket
 		{
 			std::uint64_t ownerWindow{};
@@ -1202,9 +1777,21 @@ namespace
 			std::uint64_t preferredLocationUid{};
 			Application::WuaConversionPlan plan;
 		};
-		struct InstallPlanRecord { std::uint64_t owner{}; Application::TitleInstallPlan plan; };
-		struct DeletePlanRecord { std::uint64_t owner{}; Application::ManagedContentDeletePlan plan; };
-		struct NativePathRecord { std::uint64_t owner{}; fs::path path; };
+		struct InstallPlanRecord
+		{
+			std::uint64_t owner{};
+			Application::TitleInstallPlan plan;
+		};
+		struct DeletePlanRecord
+		{
+			std::uint64_t owner{};
+			Application::ManagedContentDeletePlan plan;
+		};
+		struct NativePathRecord
+		{
+			std::uint64_t owner{};
+			fs::path path;
+		};
 		struct PendingLaunch
 		{
 			fs::path path;
@@ -1257,8 +1844,8 @@ namespace
 		}
 
 		static void PostBackgroundJobEvent(std::shared_ptr<RuntimeCallbackGate> gate,
-			std::uint64_t jobId, std::uint64_t ownerWindow, std::string type,
-			std::string payload, bool final)
+										   std::uint64_t jobId, std::uint64_t ownerWindow, std::string type,
+										   std::string payload, bool final)
 		{
 			auto event = std::make_shared<BackgroundJobEvent>(BackgroundJobEvent{
 				std::move(gate), jobId, ownerWindow, std::move(type), std::move(payload), final});
@@ -1284,8 +1871,8 @@ namespace
 				const auto owner = m_toolWindows.find(event.ownerWindow);
 				const auto lifetime = job->second->ownerLifetime.lock();
 				ownerAlive = owner != m_toolWindows.end() && lifetime &&
-					lifetime->load(std::memory_order_acquire) &&
-					owner->second->generation == job->second->ownerGeneration;
+							 lifetime->load(std::memory_order_acquire) &&
+							 owner->second->generation == job->second->ownerGeneration;
 			}
 			if (ownerAlive)
 				EmitToWindow(event.ownerWindow, event.type, event.payload);
@@ -1297,12 +1884,13 @@ namespace
 			Application::GraphicPackInstallRequest request)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			constexpr std::size_t kMaximumBackgroundJobs = 4;
 			if (m_backgroundJobs.size() >= kMaximumBackgroundJobs)
 				throw std::runtime_error("too many background operations are in progress");
-			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL)
+				throw std::runtime_error("background job identifier space is exhausted");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
@@ -1323,56 +1911,62 @@ namespace
 			m_backgroundJobs.emplace(id, std::move(job));
 			try
 			{
-			m_backgroundJobs.at(id)->worker = std::jthread(
-				[controller, gate = std::move(gate), cancelled, id, owner,
-					request = std::move(request)](std::stop_token stopToken) mutable {
-					auto isCancelled = [cancelled, stopToken] {
-						return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
-					};
-					auto progress = [gate, id, owner](
-						const Application::GraphicPackInstallProgress& value) {
-						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-							std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-							R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-							R"(,"phase":)" + JsonString(GraphicPackInstallPhaseName(value.phase)) +
-							R"(,"completed":)" + std::to_string(value.completed) +
-							R"(,"total":)" + std::to_string(value.total) +
-							R"(,"currentPath":)" + JsonString(value.currentPath) + "}", false);
-					};
-					Application::GraphicPackInstallResult result;
-					try
-					{
-						result = controller->InstallGraphicPacks(request, std::move(progress),
-							std::move(isCancelled));
-					}
-					catch (const std::exception& error)
-					{
-						result = {Application::GraphicPackInstallError::IoFailure, error.what()};
-					}
-					catch (...)
-					{
-						result = {Application::GraphicPackInstallError::IoFailure,
-							"graphic-pack worker failed with an unknown error"};
-					}
-					rapidjson::StringBuffer buffer;
-					JsonWriter writer(buffer);
-					writer.StartObject();
-					writer.Key("jobId"); writer.String(std::to_string(id).c_str());
-					writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
-					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
-					writer.Key("error"); writer.String(GraphicPackInstallErrorName(result.error).data());
-					writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
-						static_cast<rapidjson::SizeType>(result.diagnostic.size()));
-					writer.Key("upToDate"); writer.Bool(result.upToDate);
-					writer.Key("removedEnabledPaths"); writer.StartArray();
-					for (const auto& path : result.removedEnabledPaths)
-						writer.String(path.data(), static_cast<rapidjson::SizeType>(path.size()));
-					writer.EndArray(); writer.EndObject();
-					PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
-						{buffer.GetString(), buffer.GetSize()}, true);
-				});
-			}
-			catch (...)
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner,
+					 request = std::move(request)](std::stop_token stopToken) mutable {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+						};
+						auto progress = [gate, id, owner](
+											const Application::GraphicPackInstallProgress& value) {
+							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+												   std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+													   R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+													   R"(,"phase":)" + JsonString(GraphicPackInstallPhaseName(value.phase)) +
+													   R"(,"completed":)" + std::to_string(value.completed) +
+													   R"(,"total":)" + std::to_string(value.total) +
+													   R"(,"currentPath":)" + JsonString(value.currentPath) + "}",
+												   false);
+						};
+						Application::GraphicPackInstallResult result;
+						try
+						{
+							result = controller->InstallGraphicPacks(request, std::move(progress),
+																	 std::move(isCancelled));
+						} catch (const std::exception& error)
+						{
+							result = {Application::GraphicPackInstallError::IoFailure, error.what()};
+						} catch (...)
+						{
+							result = {Application::GraphicPackInstallError::IoFailure,
+									  "graphic-pack worker failed with an unknown error"};
+						}
+						rapidjson::StringBuffer buffer;
+						JsonWriter writer(buffer);
+						writer.StartObject();
+						writer.Key("jobId");
+						writer.String(std::to_string(id).c_str());
+						writer.Key("windowId");
+						writer.String(std::to_string(owner).c_str());
+						writer.Key("ok");
+						writer.Bool(static_cast<bool>(result));
+						writer.Key("error");
+						writer.String(GraphicPackInstallErrorName(result.error).data());
+						writer.Key("diagnostic");
+						writer.String(result.diagnostic.data(),
+									  static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+						writer.Key("upToDate");
+						writer.Bool(result.upToDate);
+						writer.Key("removedEnabledPaths");
+						writer.StartArray();
+						for (const auto& path : result.removedEnabledPaths)
+							writer.String(path.data(), static_cast<rapidjson::SizeType>(path.size()));
+						writer.EndArray();
+						writer.EndObject();
+						PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
+											   {buffer.GetString(), buffer.GetSize()}, true);
+					});
+			} catch (...)
 			{
 				m_backgroundJobs.erase(id);
 				throw;
@@ -1381,17 +1975,18 @@ namespace
 		}
 
 		std::uint64_t StartWuaConversionJob(Application::WuaConversionPlan plan,
-			fs::path outputPath)
+											fs::path outputPath)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
-			job->id = id; job->ownerWindow = owner;
+			job->id = id;
+			job->ownerWindow = owner;
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -1401,8 +1996,7 @@ namespace
 			{
 				m_backgroundJobs.at(id)->worker = std::jthread(
 					[controller, gate = std::move(gate), cancelled, id, owner,
-						plan = std::move(plan), outputPath = std::move(outputPath)]
-					(std::stop_token stopToken) mutable {
+					 plan = std::move(plan), outputPath = std::move(outputPath)](std::stop_token stopToken) mutable {
 						auto isCancelled = [cancelled, stopToken] {
 							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
 						};
@@ -1410,43 +2004,66 @@ namespace
 							static constexpr std::array phases{"counting", "collecting", "converting", "hashing", "finalizing"};
 							const auto index = std::min<std::size_t>(static_cast<std::size_t>(value.phase), phases.size() - 1);
 							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-								R"(,"operation":"wuaConversion","phase":)" + JsonString(phases[index]) +
-								R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
-								R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
-								R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
-								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+												   std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+													   R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+													   R"(,"operation":"wuaConversion","phase":)" + JsonString(phases[index]) +
+													   R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
+													   R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+													   R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+													   R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}",
+												   false);
 						};
 						Application::ContentOperationResult result;
-						try { result = controller->ConvertToWua(plan, outputPath, progress, isCancelled); }
-						catch (const std::exception& error) { result = {Application::ContentOperationError::ReadFailure, error.what()}; }
-						catch (...) { result = {Application::ContentOperationError::ReadFailure, "WUA conversion worker failed"}; }
-						rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
-						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
-						writer.Key("operation"); writer.String("wuaConversion"); writer.Key("ok"); writer.Bool(static_cast<bool>(result));
-						writer.Key("error"); writer.Uint(static_cast<unsigned>(result.error));
-						writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size()); writer.EndObject();
+						try
+						{
+							result = controller->ConvertToWua(plan, outputPath, progress, isCancelled);
+						} catch (const std::exception& error)
+						{
+							result = {Application::ContentOperationError::ReadFailure, error.what()};
+						} catch (...)
+						{
+							result = {Application::ContentOperationError::ReadFailure, "WUA conversion worker failed"};
+						}
+						rapidjson::StringBuffer buffer;
+						JsonWriter writer(buffer);
+						writer.StartObject();
+						writer.Key("jobId");
+						writer.String(std::to_string(id).c_str());
+						writer.Key("windowId");
+						writer.String(std::to_string(owner).c_str());
+						writer.Key("operation");
+						writer.String("wuaConversion");
+						writer.Key("ok");
+						writer.Bool(static_cast<bool>(result));
+						writer.Key("error");
+						writer.Uint(static_cast<unsigned>(result.error));
+						writer.Key("diagnostic");
+						writer.String(result.diagnostic.data(), result.diagnostic.size());
+						writer.EndObject();
 						PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
 					});
+			} catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
 			}
-			catch (...) { m_backgroundJobs.erase(id); throw; }
 			return id;
 		}
 
 		std::uint64_t StartChecksumJob(std::uint64_t locationUid)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
-			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL)
+				throw std::runtime_error("background job identifier space is exhausted");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
-			job->id = id; job->ownerWindow = owner;
+			job->id = id;
+			job->ownerWindow = owner;
 			if (owner != 0)
 			{
 				const auto window = m_toolWindows.find(owner);
@@ -1462,63 +2079,124 @@ namespace
 			m_backgroundJobs.emplace(id, std::move(job));
 			try
 			{
-			m_backgroundJobs.at(id)->worker = std::jthread(
-				[controller, gate = std::move(gate), cancelled, id, owner, locationUid]
-				(std::stop_token stopToken) {
-					auto isCancelled = [cancelled, stopToken] {
-						return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
-					};
-					auto phaseName = [](Application::ContentOperationPhase phase) {
-						switch (phase) {
-						case Application::ContentOperationPhase::Counting: return "counting";
-						case Application::ContentOperationPhase::Collecting: return "collecting";
-						case Application::ContentOperationPhase::Converting: return "converting";
-						case Application::ContentOperationPhase::Hashing: return "hashing";
-						case Application::ContentOperationPhase::Finalizing: return "finalizing";
-						} return "unknown";
-					};
-					auto progress = [gate, id, owner, phaseName](const Application::ContentOperationProgress& value) {
-						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-							std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-							R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-							R"(,"phase":)" + JsonString(phaseName(value.phase)) +
-							R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
-							R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
-							R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
-							R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
-					};
-					Application::ContentChecksumResult result;
-					try { result = controller->ComputeTitleChecksum(locationUid, progress, isCancelled); }
-					catch (const std::exception& error) { result.error = Application::ContentOperationError::ReadFailure; result.diagnostic = error.what(); }
-					catch (...) { result.error = Application::ContentOperationError::ReadFailure; result.diagnostic = "checksum worker failed"; }
-					constexpr std::size_t kMaximumResultFiles = 20000;
-					if (result && result.checksum->files.size() > kMaximumResultFiles)
-					{
-						result.error = Application::ContentOperationError::VerificationFailure;
-						result.diagnostic = "checksum contains too many files to display safely";
-						result.checksum.reset();
-					}
-					rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-					writer.Key("jobId"); writer.String(std::to_string(id).c_str()); writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
-					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
-					auto errorName = [](Application::ContentOperationError error) {
-						switch (error) { case Application::ContentOperationError::None: return "none"; case Application::ContentOperationError::NotFound: return "notFound"; case Application::ContentOperationError::Cancelled: return "cancelled"; case Application::ContentOperationError::UnableToCreateOutput: return "unableToCreateOutput"; case Application::ContentOperationError::ReadFailure: return "readFailure"; case Application::ContentOperationError::VerificationFailure: return "verificationFailure"; case Application::ContentOperationError::RenameFailure: return "renameFailure"; } return "unknown";
-					};
-					writer.Key("error"); writer.String(errorName(result.error));
-					writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size());
-					writer.Key("checksum");
-					if (!result.checksum) writer.Null(); else {
-						const auto& checksum = *result.checksum; writer.StartObject();
-						writer.Key("titleId"); writer.String(TitleIdString(checksum.titleId).c_str());
-						writer.Key("version"); writer.Uint(checksum.version); writer.Key("region"); writer.Uint(checksum.region);
-						writer.Key("imageSha256"); writer.String(checksum.imageSha256.data(), checksum.imageSha256.size());
-						writer.Key("files"); writer.StartArray(); for (const auto& file : checksum.files) { writer.StartObject(); writer.Key("path"); writer.String(file.path.data(), file.path.size()); writer.Key("sha256"); writer.String(file.sha256.data(), file.sha256.size()); writer.EndObject(); } writer.EndArray(); writer.EndObject();
-					}
-					writer.EndObject();
-					PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
-				});
-			}
-			catch (...)
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner, locationUid](std::stop_token stopToken) {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+						};
+						auto phaseName = [](Application::ContentOperationPhase phase) {
+							switch (phase)
+							{
+							case Application::ContentOperationPhase::Counting:
+								return "counting";
+							case Application::ContentOperationPhase::Collecting:
+								return "collecting";
+							case Application::ContentOperationPhase::Converting:
+								return "converting";
+							case Application::ContentOperationPhase::Hashing:
+								return "hashing";
+							case Application::ContentOperationPhase::Finalizing:
+								return "finalizing";
+							}
+							return "unknown";
+						};
+						auto progress = [gate, id, owner, phaseName](const Application::ContentOperationProgress& value) {
+							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+												   std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+													   R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+													   R"(,"phase":)" + JsonString(phaseName(value.phase)) +
+													   R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
+													   R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+													   R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+													   R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}",
+												   false);
+						};
+						Application::ContentChecksumResult result;
+						try
+						{
+							result = controller->ComputeTitleChecksum(locationUid, progress, isCancelled);
+						} catch (const std::exception& error)
+						{
+							result.error = Application::ContentOperationError::ReadFailure;
+							result.diagnostic = error.what();
+						} catch (...)
+						{
+							result.error = Application::ContentOperationError::ReadFailure;
+							result.diagnostic = "checksum worker failed";
+						}
+						constexpr std::size_t kMaximumResultFiles = 20000;
+						if (result && result.checksum->files.size() > kMaximumResultFiles)
+						{
+							result.error = Application::ContentOperationError::VerificationFailure;
+							result.diagnostic = "checksum contains too many files to display safely";
+							result.checksum.reset();
+						}
+						rapidjson::StringBuffer buffer;
+						JsonWriter writer(buffer);
+						writer.StartObject();
+						writer.Key("jobId");
+						writer.String(std::to_string(id).c_str());
+						writer.Key("windowId");
+						writer.String(std::to_string(owner).c_str());
+						writer.Key("ok");
+						writer.Bool(static_cast<bool>(result));
+						auto errorName = [](Application::ContentOperationError error) {
+							switch (error)
+							{
+							case Application::ContentOperationError::None:
+								return "none";
+							case Application::ContentOperationError::NotFound:
+								return "notFound";
+							case Application::ContentOperationError::Cancelled:
+								return "cancelled";
+							case Application::ContentOperationError::UnableToCreateOutput:
+								return "unableToCreateOutput";
+							case Application::ContentOperationError::ReadFailure:
+								return "readFailure";
+							case Application::ContentOperationError::VerificationFailure:
+								return "verificationFailure";
+							case Application::ContentOperationError::RenameFailure:
+								return "renameFailure";
+							}
+							return "unknown";
+						};
+						writer.Key("error");
+						writer.String(errorName(result.error));
+						writer.Key("diagnostic");
+						writer.String(result.diagnostic.data(), result.diagnostic.size());
+						writer.Key("checksum");
+						if (!result.checksum)
+							writer.Null();
+						else
+						{
+							const auto& checksum = *result.checksum;
+							writer.StartObject();
+							writer.Key("titleId");
+							writer.String(TitleIdString(checksum.titleId).c_str());
+							writer.Key("version");
+							writer.Uint(checksum.version);
+							writer.Key("region");
+							writer.Uint(checksum.region);
+							writer.Key("imageSha256");
+							writer.String(checksum.imageSha256.data(), checksum.imageSha256.size());
+							writer.Key("files");
+							writer.StartArray();
+							for (const auto& file : checksum.files)
+							{
+								writer.StartObject();
+								writer.Key("path");
+								writer.String(file.path.data(), file.path.size());
+								writer.Key("sha256");
+								writer.String(file.sha256.data(), file.sha256.size());
+								writer.EndObject();
+							}
+							writer.EndArray();
+							writer.EndObject();
+						}
+						writer.EndObject();
+						PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
+					});
+			} catch (...)
 			{
 				m_backgroundJobs.erase(id);
 				throw;
@@ -1529,15 +2207,17 @@ namespace
 		std::uint64_t StartCemodSnapshotJob(std::optional<std::uint64_t> titleId)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
-			if (m_nextBackgroundJobId >= 9007199254740991ULL) throw std::runtime_error("background job identifier space is exhausted");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL)
+				throw std::runtime_error("background job identifier space is exhausted");
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
-			job->id = id; job->ownerWindow = owner;
+			job->id = id;
+			job->ownerWindow = owner;
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -1546,8 +2226,7 @@ namespace
 			try
 			{
 				m_backgroundJobs.at(id)->worker = std::jthread(
-					[controller, gate = std::move(gate), cancelled, id, owner, titleId]
-					(std::stop_token stopToken) {
+					[controller, gate = std::move(gate), cancelled, id, owner, titleId](std::stop_token stopToken) {
 						auto isCancelled = [cancelled, stopToken] {
 							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
 						};
@@ -1557,26 +2236,23 @@ namespace
 							result.snapshot = controller->GetCemodManagerSnapshot(titleId, isCancelled);
 							if (result.snapshot.cancelled)
 								result.diagnostic = "CemuMod package inspection was cancelled";
-						}
-						catch (const std::exception& error)
+						} catch (const std::exception& error)
 						{
 							result.error = Application::CemodManagerError::InspectionFailed;
 							result.diagnostic = error.what();
-						}
-						catch (...)
+						} catch (...)
 						{
 							result.error = Application::CemodManagerError::InspectionFailed;
 							result.diagnostic = "CemuMod package inspection failed";
 						}
 						auto payload = std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-							R"(,"windowId":)" + JsonString(std::to_string(owner)) + R"(,"ok":)" +
-							(result ? "true" : "false") + R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
-							R"(,"diagnostic":)" + JsonString(result.diagnostic) +
-							R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
+									   R"(,"windowId":)" + JsonString(std::to_string(owner)) + R"(,"ok":)" +
+									   (result ? "true" : "false") + R"(,"error":)" + JsonString(CemodErrorName(result.error)) +
+									   R"(,"diagnostic":)" + JsonString(result.diagnostic) +
+									   R"(,"snapshot":)" + CemodSnapshotJson(result.snapshot) + "}";
 						PostBackgroundJobEvent(gate, id, owner, "cemod.snapshot", std::move(payload), true);
 					});
-			}
-			catch (...)
+			} catch (...)
 			{
 				m_backgroundJobs.erase(id);
 				throw;
@@ -1585,10 +2261,10 @@ namespace
 		}
 
 		std::uint64_t StartTitleInstallJob(Application::TitleInstallPlan plan,
-			Application::TitleInstallDecision decision)
+										   Application::TitleInstallDecision decision)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
@@ -1613,55 +2289,61 @@ namespace
 			{
 				m_backgroundJobs.at(id)->worker = std::jthread(
 					[controller, gate = std::move(gate), cancelled, id, owner,
-						plan = std::move(plan), decision](std::stop_token stopToken) mutable {
+					 plan = std::move(plan), decision](std::stop_token stopToken) mutable {
 						auto isCancelled = [cancelled, stopToken] {
 							return cancelled->load(std::memory_order_acquire) ||
-								stopToken.stop_requested();
+								   stopToken.stop_requested();
 						};
 						auto progress = [gate, id, owner](
-							const Application::TitleInstallProgress& value) {
+											const Application::TitleInstallProgress& value) {
 							const auto currentPath = _pathToUtf8(value.currentPath);
 							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-								R"(,"operation":"titleInstall","phase":"copying","bytesCompleted":)" +
-								std::to_string(value.bytesCompleted) +
-								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) +
-								R"(,"filesCompleted":0,"filesTotal":0,"currentPath":)" +
-								JsonString(currentPath) + "}", false);
+												   std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+													   R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+													   R"(,"operation":"titleInstall","phase":"copying","bytesCompleted":)" +
+													   std::to_string(value.bytesCompleted) +
+													   R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) +
+													   R"(,"filesCompleted":0,"filesTotal":0,"currentPath":)" +
+													   JsonString(currentPath) + "}",
+												   false);
 						};
 						Application::TitleInstallResult result;
 						try
 						{
 							result = controller->InstallTitle(plan, decision,
-								std::move(progress), std::move(isCancelled));
-						}
-						catch (const std::exception& error)
+															  std::move(progress), std::move(isCancelled));
+						} catch (const std::exception& error)
 						{
 							result = {Application::TitleInstallError::CopyFailure, error.what(), {}};
-						}
-						catch (...)
+						} catch (...)
 						{
 							result = {Application::TitleInstallError::CopyFailure,
-								"title-install worker failed", {}};
+									  "title-install worker failed",
+									  {}};
 						}
 						rapidjson::StringBuffer buffer;
 						JsonWriter writer(buffer);
 						writer.StartObject();
-						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
-						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
-						writer.Key("operation"); writer.String("titleInstall");
-						writer.Key("ok"); writer.Bool(static_cast<bool>(result));
-						writer.Key("error"); writer.Uint(static_cast<unsigned>(result.error));
-						writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
-							static_cast<rapidjson::SizeType>(result.diagnostic.size()));
-						writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
+						writer.Key("jobId");
+						writer.String(std::to_string(id).c_str());
+						writer.Key("windowId");
+						writer.String(std::to_string(owner).c_str());
+						writer.Key("operation");
+						writer.String("titleInstall");
+						writer.Key("ok");
+						writer.Bool(static_cast<bool>(result));
+						writer.Key("error");
+						writer.Uint(static_cast<unsigned>(result.error));
+						writer.Key("diagnostic");
+						writer.String(result.diagnostic.data(),
+									  static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+						writer.Key("titleId");
+						writer.String(TitleIdString(plan.titleId).c_str());
 						writer.EndObject();
 						PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
-							{buffer.GetString(), buffer.GetSize()}, true);
+											   {buffer.GetString(), buffer.GetSize()}, true);
 					});
-			}
-			catch (...)
+			} catch (...)
 			{
 				m_backgroundJobs.erase(id);
 				throw;
@@ -1692,7 +2374,7 @@ namespace
 		std::uint64_t StartSaveArchiveJob(SaveTicket ticket)
 		{
 			if (std::ranges::any_of(m_backgroundJobs,
-				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+									[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
 				throw std::runtime_error("this window already has a background operation in progress");
 			if (m_backgroundJobs.size() >= 4)
 				throw std::runtime_error("too many background operations are in progress");
@@ -1701,7 +2383,8 @@ namespace
 			const auto id = ++m_nextBackgroundJobId;
 			const auto owner = m_invokingWindow;
 			auto job = std::make_unique<BackgroundJob>();
-			job->id = id; job->ownerWindow = owner;
+			job->id = id;
+			job->ownerWindow = owner;
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -1711,45 +2394,60 @@ namespace
 			{
 				m_backgroundJobs.at(id)->worker = std::jthread(
 					[controller, gate = std::move(gate), cancelled, id, owner,
-						ticket = std::move(ticket)](std::stop_token stopToken) mutable {
+					 ticket = std::move(ticket)](std::stop_token stopToken) mutable {
 						auto isCancelled = [cancelled, stopToken] {
 							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
 						};
 						auto progress = [gate, id, owner](const Application::SaveOperationProgress& value) {
 							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
-								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
-								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-								R"(,"phase":"archive","filesCompleted":)" + std::to_string(value.filesCompleted) +
-								R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
-								R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
-								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+												   std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+													   R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+													   R"(,"phase":"archive","filesCompleted":)" + std::to_string(value.filesCompleted) +
+													   R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+													   R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+													   R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}",
+												   false);
 						};
 						Application::SaveOperationResult result;
 						try
 						{
 							if (ticket.kind == SaveTicketKind::Import)
 								result = controller->ImportSave(ticket.archivePath, ticket.titleId,
-									ticket.targetPersistentId, ticket.overwrite, progress, isCancelled);
+																ticket.targetPersistentId, ticket.overwrite, progress, isCancelled);
 							else
 								result = controller->ExportSave(ticket.titleId, ticket.sourcePersistentId,
-									ticket.archivePath, ticket.overwrite, progress, isCancelled);
+																ticket.archivePath, ticket.overwrite, progress, isCancelled);
+						} catch (const std::exception& error)
+						{
+							result = {Application::SaveOperationError::BackendFailure, error.what()};
+						} catch (...)
+						{
+							result = {Application::SaveOperationError::BackendFailure, "save worker failed"};
 						}
-						catch (const std::exception& error)
-						{ result = {Application::SaveOperationError::BackendFailure, error.what()}; }
-						catch (...) { result = {Application::SaveOperationError::BackendFailure, "save worker failed"}; }
-						rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
-						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
-						writer.Key("ok"); writer.Bool(static_cast<bool>(result)); writer.Key("operation");
+						rapidjson::StringBuffer buffer;
+						JsonWriter writer(buffer);
+						writer.StartObject();
+						writer.Key("jobId");
+						writer.String(std::to_string(id).c_str());
+						writer.Key("windowId");
+						writer.String(std::to_string(owner).c_str());
+						writer.Key("ok");
+						writer.Bool(static_cast<bool>(result));
+						writer.Key("operation");
 						writer.String(ticket.kind == SaveTicketKind::Import ? "import" : "export");
-						writer.Key("error"); writer.String(SaveErrorName(result.error).data());
-						writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size());
+						writer.Key("error");
+						writer.String(SaveErrorName(result.error).data());
+						writer.Key("diagnostic");
+						writer.String(result.diagnostic.data(), result.diagnostic.size());
 						writer.EndObject();
 						PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
-							{buffer.GetString(), buffer.GetSize()}, true);
+											   {buffer.GetString(), buffer.GetSize()}, true);
 					});
+			} catch (...)
+			{
+				m_backgroundJobs.erase(id);
+				throw;
 			}
-			catch (...) { m_backgroundJobs.erase(id); throw; }
 			return id;
 		}
 		void CancelBackgroundJobsForWindow(std::uint64_t owner) noexcept
@@ -1788,14 +2486,15 @@ namespace
 				return;
 			}
 			const std::string html(reinterpret_cast<const char*>(WebAssets::html),
-				WebAssets::htmlSize);
+								   WebAssets::htmlSize);
 			if (webview_set_html(webview, html.c_str()) != WEBVIEW_ERROR_OK)
 				throw std::runtime_error("failed to load embedded web UI assets");
 		}
 
 		std::string_view RoleForWindow(std::uint64_t windowId) const
 		{
-			if (windowId == 0) return "main-library";
+			if (windowId == 0)
+				return "main-library";
 			const auto found = m_toolWindows.find(windowId);
 			if (found == m_toolWindows.end())
 				throw std::runtime_error("the RPC caller window is no longer active");
@@ -1803,10 +2502,10 @@ namespace
 		}
 
 		std::uint64_t QueueToolWindow(std::string_view role, std::string requestId,
-			std::optional<std::uint64_t> titleContext = std::nullopt,
-			std::string packageContext = {},
-			std::optional<std::uint64_t> generationContext = std::nullopt,
-			bool launchContinuation = false)
+									  std::optional<std::uint64_t> titleContext = std::nullopt,
+									  std::string packageContext = {},
+									  std::optional<std::uint64_t> generationContext = std::nullopt,
+									  bool launchContinuation = false)
 		{
 			if (m_rpc.IsShuttingDown())
 				throw std::runtime_error("the application is shutting down");
@@ -1827,8 +2526,8 @@ namespace
 					found->second->packageContext = packageContext;
 					found->second->generationContext = generationContext;
 					Emit("window.contextChanged", std::string(R"({"windowId":)") +
-						JsonString(std::to_string(id)) + R"(,"titleId":)" +
-						(titleContext ? JsonString(TitleIdString(*titleContext)) : "null") + "}");
+													  JsonString(std::to_string(id)) + R"(,"titleId":)" +
+													  (titleContext ? JsonString(TitleIdString(*titleContext)) : "null") + "}");
 				}
 				(void)PostToUi([this, id] {
 					if (const auto found = m_toolWindows.find(id);
@@ -1837,8 +2536,8 @@ namespace
 				});
 				if (!requestId.empty())
 					Emit("window.opened", std::string(R"({"requestId":)") +
-						JsonString(requestId) + R"(,"windowId":)" + JsonString(std::to_string(id)) +
-						R"(,"role":)" + JsonString(ownedRole) + "}");
+											  JsonString(requestId) + R"(,"windowId":)" + JsonString(std::to_string(id)) +
+											  R"(,"role":)" + JsonString(ownedRole) + "}");
 				return id;
 			}
 			if (const auto pending = m_pendingWindowRoles.find(ownedRole);
@@ -1855,7 +2554,8 @@ namespace
 					m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 				return pending->second;
 			}
-			if (m_nextWindowId >= 9007199254740991ULL) throw std::runtime_error("tool window identifier space is exhausted");
+			if (m_nextWindowId >= 9007199254740991ULL)
+				throw std::runtime_error("tool window identifier space is exhausted");
 			const auto id = ++m_nextWindowId;
 			if (launchContinuation)
 			{
@@ -1870,63 +2570,61 @@ namespace
 			if (!requestId.empty())
 				m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 			if (!PostToUi([this, role = ownedRole, id, launchContinuation] {
-				auto notify = [this, &role, id](std::string_view event,
-					std::string_view message = {}) {
-					const auto requests = m_pendingWindowRequests.extract(role);
-					if (requests.empty()) return;
-					for (const auto& requestId : requests.mapped())
+					auto notify = [this, &role, id](std::string_view event,
+													std::string_view message = {}) {
+						const auto requests = m_pendingWindowRequests.extract(role);
+						if (requests.empty())
+							return;
+						for (const auto& requestId : requests.mapped())
+						{
+							auto payload = std::string(R"({"requestId":)") + JsonString(requestId) +
+										   R"(,"windowId":)" + JsonString(std::to_string(id)) + R"(,"role":)" +
+										   JsonString(role);
+							if (!message.empty())
+								payload += R"(,"message":)" + JsonString(message);
+							Emit(event, payload + "}");
+						}
+					};
+					if (launchContinuation && (!m_pendingLaunch ||
+											   m_pendingLaunch->permissionWindow != id))
 					{
-						auto payload = std::string(R"({"requestId":)") + JsonString(requestId) +
-							R"(,"windowId":)" + JsonString(std::to_string(id)) + R"(,"role":)" +
-							JsonString(role);
-						if (!message.empty()) payload += R"(,"message":)" + JsonString(message);
-						Emit(event, payload + "}");
+						m_pendingWindowRoles.erase(role);
+						m_pendingWindowContexts.erase(role);
+						m_pendingPackageContexts.erase(role);
+						m_pendingGenerationContexts.erase(role);
+						return;
 					}
-				};
-				if (launchContinuation && (!m_pendingLaunch ||
-					m_pendingLaunch->permissionWindow != id))
-				{
-					m_pendingWindowRoles.erase(role);
-					m_pendingWindowContexts.erase(role);
-					m_pendingPackageContexts.erase(role);
-					m_pendingGenerationContexts.erase(role);
-					return;
-				}
-				if (m_rpc.IsShuttingDown())
-				{
-					m_pendingWindowRoles.erase(role);
-					m_pendingWindowContexts.erase(role);
-					m_pendingPackageContexts.erase(role);
-					m_pendingGenerationContexts.erase(role);
-					notify("window.openFailed", "the application is shutting down");
-					HandleLaunchPermissionOpenFailure(id,
-						"Application shutdown prevented the approval dialog from opening.");
-					return;
-				}
-				try
-				{
-					const auto context = m_pendingWindowContexts.contains(role) ?
-						m_pendingWindowContexts.at(role) : std::optional<std::uint64_t>{};
-					const auto package = m_pendingPackageContexts.contains(role) ?
-						m_pendingPackageContexts.at(role) : std::string{};
-					const auto generation = m_pendingGenerationContexts.contains(role) ?
-						m_pendingGenerationContexts.at(role) : std::optional<std::uint64_t>{};
-					CreateToolWindow(role, id, context, package, generation);
-					m_pendingWindowContexts.erase(role);
-					m_pendingPackageContexts.erase(role);
-					m_pendingGenerationContexts.erase(role);
-					notify("window.opened");
-				}
-				catch (const std::exception& error)
-				{
-					m_pendingWindowRoles.erase(role);
-					m_pendingWindowContexts.erase(role);
-					m_pendingPackageContexts.erase(role);
-					m_pendingGenerationContexts.erase(role);
-					notify("window.openFailed", error.what());
-					HandleLaunchPermissionOpenFailure(id, error.what());
-				}
-			}))
+					if (m_rpc.IsShuttingDown())
+					{
+						m_pendingWindowRoles.erase(role);
+						m_pendingWindowContexts.erase(role);
+						m_pendingPackageContexts.erase(role);
+						m_pendingGenerationContexts.erase(role);
+						notify("window.openFailed", "the application is shutting down");
+						HandleLaunchPermissionOpenFailure(id,
+														  "Application shutdown prevented the approval dialog from opening.");
+						return;
+					}
+					try
+					{
+						const auto context = m_pendingWindowContexts.contains(role) ? m_pendingWindowContexts.at(role) : std::optional<std::uint64_t>{};
+						const auto package = m_pendingPackageContexts.contains(role) ? m_pendingPackageContexts.at(role) : std::string{};
+						const auto generation = m_pendingGenerationContexts.contains(role) ? m_pendingGenerationContexts.at(role) : std::optional<std::uint64_t>{};
+						CreateToolWindow(role, id, context, package, generation);
+						m_pendingWindowContexts.erase(role);
+						m_pendingPackageContexts.erase(role);
+						m_pendingGenerationContexts.erase(role);
+						notify("window.opened");
+					} catch (const std::exception& error)
+					{
+						m_pendingWindowRoles.erase(role);
+						m_pendingWindowContexts.erase(role);
+						m_pendingPackageContexts.erase(role);
+						m_pendingGenerationContexts.erase(role);
+						notify("window.openFailed", error.what());
+						HandleLaunchPermissionOpenFailure(id, error.what());
+					}
+				}))
 			{
 				m_pendingWindowRoles.erase(ownedRole);
 				m_pendingWindowRequests.erase(ownedRole);
@@ -1939,8 +2637,8 @@ namespace
 		}
 
 		void CreateToolWindow(std::string_view role, std::uint64_t id,
-			std::optional<std::uint64_t> titleContext, std::string packageContext,
-			std::optional<std::uint64_t> generationContext)
+							  std::optional<std::uint64_t> titleContext, std::string packageContext,
+							  std::optional<std::uint64_t> generationContext)
 		{
 			const auto& descriptor = DescribeWindow(role);
 			if (const auto existing = m_windowByRole.find(std::string(role));
@@ -1989,12 +2687,12 @@ namespace
 			{
 				window->binding = {this, window->webview, window->id};
 				if (webview_bind(window->webview, "cemuInvoke", &Runtime::Invoke,
-					&window->binding) != WEBVIEW_ERROR_OK)
+								 &window->binding) != WEBVIEW_ERROR_OK)
 					throw std::runtime_error("failed to bind tool window RPC");
 				window->rpcBound = true;
 				webview_set_title(window->webview, std::string(descriptor.title).c_str());
 				webview_set_size(window->webview, descriptor.width, descriptor.height,
-					WEBVIEW_HINT_NONE);
+								 WEBVIEW_HINT_NONE);
 				LoadWebView(window->webview);
 				m_windowByRole.emplace(window->role, id);
 				m_toolWindows.emplace(id, std::move(window));
@@ -2002,8 +2700,7 @@ namespace
 				RefreshInputConfigurationFocus();
 				m_pendingWindowRoles.erase(std::string(role));
 				return;
-			}
-			catch (...)
+			} catch (...)
 			{
 				m_windowByRole.erase(std::string(role));
 				if (!window)
@@ -2014,9 +2711,12 @@ namespace
 						m_toolWindows.erase(inserted);
 					}
 				}
-				if (!window) throw;
-				if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
-				if (window->webview) webview_destroy(window->webview);
+				if (!window)
+					throw;
+				if (window->rpcBound)
+					webview_unbind(window->webview, "cemuInvoke");
+				if (window->webview)
+					webview_destroy(window->webview);
 				window->nativeSupport.reset();
 				throw;
 			}
@@ -2025,16 +2725,16 @@ namespace
 		void CloseToolWindow(std::uint64_t id) noexcept
 		{
 			const auto found = m_toolWindows.find(id);
-			if (found == m_toolWindows.end()) return;
+			if (found == m_toolWindows.end())
+				return;
 			auto window = std::move(found->second);
 			const bool launchPermissionWindow = m_pendingLaunch &&
-				m_pendingLaunch->permissionWindow == id;
+												m_pendingLaunch->permissionWindow == id;
 			const bool launchOwnerWindow = m_pendingLaunch &&
-				m_pendingLaunch->ownerWindow == id;
-			const auto launchPermissionWindowId = launchOwnerWindow ?
-				m_pendingLaunch->permissionWindow : 0;
+										   m_pendingLaunch->ownerWindow == id;
+			const auto launchPermissionWindowId = launchOwnerWindow ? m_pendingLaunch->permissionWindow : 0;
 			const bool continueLaunch = launchPermissionWindow &&
-				m_pendingLaunch->decisionSaved && m_pendingLaunch->approved;
+										m_pendingLaunch->decisionSaved && m_pendingLaunch->approved;
 			window->lifetime->store(false, std::memory_order_release);
 			m_updatePlans.RevokeOwner(id, window->generation);
 			m_memorySearch.CloseOwner(id);
@@ -2051,13 +2751,14 @@ namespace
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
 			RefreshInputConfigurationFocus();
-			if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
+			if (window->rpcBound)
+				webview_unbind(window->webview, "cemuInvoke");
 			webview_destroy(window->webview);
 			window->nativeSupport.reset();
 			if (launchOwnerWindow)
 			{
 				CancelPendingLaunch("cancelled",
-					"Closing the launch owner cancelled the pending title launch.");
+									"Closing the launch owner cancelled the pending title launch.");
 				if (m_toolWindows.contains(launchPermissionWindowId))
 					RequestToolWindowClose(launchPermissionWindowId);
 			}
@@ -2068,26 +2769,23 @@ namespace
 					try
 					{
 						if (!PostToUi([this, id] {
-							if (m_pendingLaunch &&
-								m_pendingLaunch->permissionWindow == id &&
-								m_pendingLaunch->decisionSaved &&
-								m_pendingLaunch->approved)
-								ResumePendingLaunchNoexcept();
-						}))
+								if (m_pendingLaunch &&
+									m_pendingLaunch->permissionWindow == id &&
+									m_pendingLaunch->decisionSaved &&
+									m_pendingLaunch->approved)
+									ResumePendingLaunchNoexcept();
+							}))
 							CancelPendingLaunch("shutdown",
-								"The UI dispatcher stopped before title launch could resume.");
-					}
-					catch (...)
+												"The UI dispatcher stopped before title launch could resume.");
+					} catch (...)
 					{
 						CancelPendingLaunch("failed",
-							"Title launch continuation could not be queued.");
+											"Title launch continuation could not be queued.");
 					}
 				}
 				else
 					CancelPendingLaunch(m_pendingLaunch->decisionSaved ? "permissionDenied" : "cancelled",
-						m_pendingLaunch->decisionSaved ?
-							"The exact package approval was denied." :
-							"The exact package approval was cancelled.");
+										m_pendingLaunch->decisionSaved ? "The exact package approval was denied." : "The exact package approval was cancelled.");
 			}
 			MaybeTerminateAfterShutdown();
 		}
@@ -2095,9 +2793,10 @@ namespace
 		void RefreshInputConfigurationFocus()
 		{
 			const bool editing = m_windowByRole.contains("input-settings") ||
-				m_windowByRole.contains("hotkey-settings");
+								 m_windowByRole.contains("hotkey-settings");
 			m_hotkeyEditing.store(editing, std::memory_order_release);
-			if (m_hostServices) m_hostServices->SetInputConfigurationFocused(editing);
+			if (m_hostServices)
+				m_hostServices->SetInputConfigurationFocused(editing);
 		}
 
 		void MaybeTerminateAfterShutdown() noexcept
@@ -2122,14 +2821,14 @@ namespace
 			pending->gate = m_callbackGate;
 			pending->windowId = id;
 			if (webview_dispatch(window.webview, &Runtime::DispatchToolCloseAfterDrain,
-				pending.get()) == WEBVIEW_ERROR_OK)
+								 pending.get()) == WEBVIEW_ERROR_OK)
 			{
 				pending.release();
 				return;
 			}
 			window.closing = false;
 			cemuLog_log(LogType::Force,
-				"Failed to drain tool window {} before close; keeping it alive", id);
+						"Failed to drain tool window {} before close; keeping it alive", id);
 		}
 
 		void RequestAllToolWindowsClose() noexcept
@@ -2141,13 +2840,15 @@ namespace
 				(void)window;
 				ids.push_back(id);
 			}
-			for (const auto id : ids) RequestToolWindowClose(id);
+			for (const auto id : ids)
+				RequestToolWindowClose(id);
 		}
 
 		void CloseAllToolWindows() noexcept
 		{
 			m_pendingWindowRoles.clear();
-			while (!m_toolWindows.empty()) CloseToolWindow(m_toolWindows.begin()->first);
+			while (!m_toolWindows.empty())
+				CloseToolWindow(m_toolWindows.begin()->first);
 		}
 
 		void Cleanup() noexcept
@@ -2159,7 +2860,7 @@ namespace
 			m_memorySearch.BeginShutdown();
 			m_ppcDebugger.BeginShutdown();
 			CancelPendingLaunch("shutdown",
-				"Application shutdown cancelled the pending title launch.");
+								"Application shutdown cancelled the pending title launch.");
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
 			{
@@ -2173,18 +2874,18 @@ namespace
 			constexpr unsigned maximumShutdownAttempts = 500;
 			unsigned shutdownAttempt{};
 			while (!TryShutdownApplication(false) &&
-				++shutdownAttempt < maximumShutdownAttempts)
+				   ++shutdownAttempt < maximumShutdownAttempts)
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			if (!m_applicationShutdown)
 			{
 				cemuLog_log(LogType::Force,
-					"Cemu could not safely release emulation resources during final shutdown; terminating without destroying native renderer surfaces");
+							"Cemu could not safely release emulation resources during final shutdown; terminating without destroying native renderer surfaces");
 				std::_Exit(EXIT_FAILURE);
 			}
 			if (!DestroyMainRenderRegion())
 			{
 				cemuLog_log(LogType::Force,
-					"Cemu could not safely detach native renderer surfaces during final shutdown");
+							"Cemu could not safely detach native renderer surfaces during final shutdown");
 				std::_Exit(EXIT_FAILURE);
 			}
 			if (m_windowState)
@@ -2227,12 +2928,12 @@ namespace
 			if (m_rpc.IsShuttingDown())
 				return true;
 			CancelPendingLaunch("shutdown",
-				"Application shutdown cancelled the pending title launch.");
+								"Application shutdown cancelled the pending title launch.");
 			if (!TryShutdownApplication())
 			{
 				Emit("system.diagnostic",
-					std::string(R"({"message":)") +
-					JsonString("Cemu could not stop the running title; shutdown was cancelled") + "}");
+					 std::string(R"({"message":)") +
+						 JsonString("Cemu could not stop the running title; shutdown was cancelled") + "}");
 				return false;
 			}
 			if (!DestroyMainRenderRegion())
@@ -2261,8 +2962,8 @@ namespace
 			}
 			if (reportFailure)
 				cemuLog_log(LogType::Force,
-					"Web frontend shutdown could not release emulation resources: {}",
-					result.diagnostic);
+							"Web frontend shutdown could not release emulation resources: {}",
+							result.diagnostic);
 			return false;
 		}
 
@@ -2307,15 +3008,14 @@ namespace
 			{
 				if (m_rendererHost)
 					m_rendererHost->PreparePadDestroy();
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				m_nativeWindow->SetPadMetricsEnabled(true);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				cemuLog_log(LogType::Force, "Unable to safely close the GamePad surface: {}",
-					error.what());
+							error.what());
 				Emit("system.diagnostic", std::string(R"({"message":)") +
-					JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
+											  JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
 				return false;
 			}
 			m_nativeWindow->DestroyPadRenderRegion();
@@ -2344,12 +3044,11 @@ namespace
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				region.SetVisible(true);
 				region.RequestFocus();
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				(void)ClosePadRenderRegion();
 				Emit("system.diagnostic", std::string(R"({"message":)") +
-					JsonString(std::string("Unable to open GamePad view: ") + error.what()) + "}");
+											  JsonString(std::string("Unable to open GamePad view: ") + error.what()) + "}");
 			}
 		}
 
@@ -2377,12 +3076,18 @@ namespace
 			using Button = Frontend::CemuExtendMouseButton;
 			switch (nativeButton)
 			{
-			case 1: return static_cast<std::uint32_t>(Button::Left);
-			case 3: return static_cast<std::uint32_t>(Button::Right);
-			case 2: return static_cast<std::uint32_t>(Button::Middle);
-			case 8: return static_cast<std::uint32_t>(Button::X1);
-			case 9: return static_cast<std::uint32_t>(Button::X2);
-			default: return 0;
+			case 1:
+				return static_cast<std::uint32_t>(Button::Left);
+			case 3:
+				return static_cast<std::uint32_t>(Button::Right);
+			case 2:
+				return static_cast<std::uint32_t>(Button::Middle);
+			case 8:
+				return static_cast<std::uint32_t>(Button::X1);
+			case 9:
+				return static_cast<std::uint32_t>(Button::X2);
+			default:
+				return 0;
 			}
 		}
 
@@ -2392,10 +3097,10 @@ namespace
 			const auto policy = m_controller.GetPointerPolicy();
 			const auto metrics = m_hostState->GetWindowMetrics();
 			const bool hasCanvas = surface == Host::PointerSurface::Main
-				? m_windowState && m_windowState->Snapshot().mode == WebFrontend::MainWindowContentMode::Playing
-				: m_nativeWindow->IsPadRenderRegionOpen();
+									   ? m_windowState && m_windowState->Snapshot().mode == WebFrontend::MainWindowContentMode::Playing
+									   : m_nativeWindow->IsPadRenderRegionOpen();
 			const auto decision = bridge.ApplyPointerPolicy(policy.mode, policy.cursor,
-				policy.flags, metrics.appActive, hasCanvas);
+															policy.flags, metrics.appActive, hasCanvas);
 			m_nativeWindow->ApplyPointerPresentation({
 				.surface = surface,
 				.ownsPointer = decision.ownsPointer,
@@ -2411,23 +3116,30 @@ namespace
 		}
 
 		void SubmitPointer(const WebFrontend::NativeInputEvent& event,
-			std::int32_t deltaX, std::int32_t deltaY, std::int32_t wheelX,
-			std::int32_t wheelY, std::uint32_t changedButtons, bool raw)
+						   std::int32_t deltaX, std::int32_t deltaY, std::int32_t wheelX,
+						   std::int32_t wheelY, std::uint32_t changedButtons, bool raw)
 		{
 			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];
 			const auto metrics = m_hostState->GetWindowMetrics();
 			m_controller.SubmitMouse({
 				.surface = event.surface == Host::PointerSurface::Main
-					? Application::PointerSurface::Tv : Application::PointerSurface::Drc,
-				.x = state.x, .y = state.y, .deltaX = deltaX, .deltaY = deltaY,
-				.wheelX = wheelX, .wheelY = wheelY,
+							   ? Application::PointerSurface::Tv
+							   : Application::PointerSurface::Drc,
+				.x = state.x,
+				.y = state.y,
+				.deltaX = deltaX,
+				.deltaY = deltaY,
+				.wheelX = wheelX,
+				.wheelY = wheelY,
 				.buttons = PointerBridge(event.surface).MouseButtons(),
 				.changedButtons = changedButtons,
-				.contentWidth = state.width, .contentHeight = state.height,
-				.insideContent = state.inside, .focused = metrics.appActive,
+				.contentWidth = state.width,
+				.contentHeight = state.height,
+				.insideContent = state.inside,
+				.focused = metrics.appActive,
 				.flags = raw
-					? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
-					: static_cast<std::uint8_t>(0),
+							 ? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
+							 : static_cast<std::uint8_t>(0),
 			});
 		}
 
@@ -2440,19 +3152,21 @@ namespace
 			if (released.changed)
 			{
 				WebFrontend::NativeInputEvent event{.kind = WebFrontend::NativeInputKind::PointerButton,
-					.surface = surface};
+													.surface = surface};
 				SubmitPointer(event, 0, 0, 0, 0, released.changed, false);
 			}
 			(void)bridge.ApplyPointerPolicy(0, 0, 0, false, false);
 			bridge.ResetPointerPosition();
 			m_pointerStates[index] = {};
 			m_nativeWindow->ApplyPointerPresentation({.surface = surface,
-				.showCursor = true, .leavingPolicy = true});
+													  .showCursor = true,
+													  .leavingPolicy = true});
 		}
 
 		void ReleaseNativeInput(bool resetTextInput)
 		{
-			if (m_hostServices) m_hostServices->ReleaseKeys();
+			if (m_hostServices)
+				m_hostServices->ReleaseKeys();
 			m_controller.KeyboardFocusLost();
 			ReleasePointerSurface(Host::PointerSurface::Main);
 			ReleasePointerSurface(Host::PointerSurface::Pad);
@@ -2472,22 +3186,23 @@ namespace
 		std::optional<Application::HotkeyAction> MatchKeyboardHotkey(
 			std::uint16_t usage, std::uint8_t modifiers) const
 		{
-			if (!usage || m_hotkeyEditing.load(std::memory_order_acquire)) return {};
+			if (!usage || m_hotkeyEditing.load(std::memory_order_acquire))
+				return {};
 			std::scoped_lock lock(m_hotkeyMutex);
 			const auto found = std::ranges::find_if(m_hotkeySettings.bindings,
-				[usage, modifiers](const Application::HotkeyBinding& binding) {
-					return binding.keyboardUsage == usage &&
-						binding.keyboardModifiers == (modifiers & 0x0f);
-				});
-			return found == m_hotkeySettings.bindings.end() ? std::nullopt :
-				std::optional{found->action};
+													[usage, modifiers](const Application::HotkeyBinding& binding) {
+														return binding.keyboardUsage == usage &&
+															   binding.keyboardModifiers == (modifiers & 0x0f);
+													});
+			return found == m_hotkeySettings.bindings.end() ? std::nullopt : std::optional{found->action};
 		}
 
 		void HandleControllerHotkeys(const ControllerState& current,
-			const ControllerState& previous)
+									 const ControllerState& previous)
 		{
 			if (m_stopping.load(std::memory_order_acquire) ||
-				m_hotkeyEditing.load(std::memory_order_acquire)) return;
+				m_hotkeyEditing.load(std::memory_order_acquire))
+				return;
 			std::optional<Application::HotkeyAction> action;
 			{
 				std::scoped_lock lock(m_hotkeyMutex);
@@ -2496,12 +3211,14 @@ namespace
 					return;
 				for (const auto button : current.buttons.GetButtonList())
 				{
-					if (previous.buttons.GetButtonState(button)) continue;
+					if (previous.buttons.GetButtonState(button))
+						continue;
 					const auto found = std::ranges::find_if(m_hotkeySettings.bindings,
-						[button](const Application::HotkeyBinding& binding) {
-							return binding.controllerButton == button;
-						});
-					if (found == m_hotkeySettings.bindings.end()) continue;
+															[button](const Application::HotkeyBinding& binding) {
+																return binding.controllerButton == button;
+															});
+					if (found == m_hotkeySettings.bindings.end())
+						continue;
 					action = found->action;
 					break;
 				}
@@ -2542,11 +3259,10 @@ namespace
 					(void)RequestShutdown();
 					break;
 				}
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				Emit("system.diagnostic", std::string(R"({"message":)") +
-					JsonString(error.what()) + "}");
+											  JsonString(error.what()) + "}");
 			}
 		}
 
@@ -2558,7 +3274,7 @@ namespace
 			const auto gate = m_callbackGate;
 			const auto request = g_renderer->RequestScreenshot(
 				[saveToDisk, gate](const std::vector<std::uint8_t>& pixels, int width, int height,
-					bool mainWindow) -> std::optional<std::string> {
+								   bool mainWindow) -> std::optional<std::string> {
 					if (saveToDisk)
 					{
 						const auto path = ScreenshotPath(mainWindow);
@@ -2573,14 +3289,14 @@ namespace
 						if (gate->target)
 							queued = gate->target->PostToUi([gate, copy, width, height] {
 								std::scoped_lock callbackLock(gate->mutex);
-								if (!gate->target) return;
+								if (!gate->target)
+									return;
 								if (!gate->target->m_nativeWindow->SetClipboardImage(*copy, width, height))
 									gate->target->Emit("system.diagnostic",
-										R"({"message":"Failed to copy screenshot to the clipboard"})");
+													   R"({"message":"Failed to copy screenshot to the clipboard"})");
 							});
 					}
-					return queued ? std::optional<std::string>("Screenshot copied to clipboard") :
-						std::optional<std::string>("Failed to copy screenshot to clipboard");
+					return queued ? std::optional<std::string>("Screenshot copied to clipboard") : std::optional<std::string>("Failed to copy screenshot to clipboard");
 				});
 			if (!request)
 				throw std::runtime_error("a screenshot request is already active");
@@ -2600,7 +3316,7 @@ namespace
 				state = {event.x, event.y, event.contentWidth, event.contentHeight, event.insideContent};
 				m_hostServices->UpdateMousePosition(event.surface, {event.x, event.y});
 				const auto motion = bridge.UpdatePosition({event.x, event.y},
-					{event.contentWidth / 2, event.contentHeight / 2}, bridge.RawMouseRequested());
+														  {event.contentWidth / 2, event.contentHeight / 2}, bridge.RawMouseRequested());
 				SubmitPointer(event, motion.delta.x, motion.delta.y, 0, 0, 0, motion.rawRelative);
 				break;
 			}
@@ -2610,12 +3326,13 @@ namespace
 				state = {event.x, event.y, event.contentWidth, event.contentHeight, event.insideContent};
 				const auto mask = PointerButtonMask(event.button);
 				const auto update = bridge.UpdateButtons(event.pressed
-					? Frontend::CemuExtendMouseTransition::Down
-					: Frontend::CemuExtendMouseTransition::Up, mask);
+															 ? Frontend::CemuExtendMouseTransition::Down
+															 : Frontend::CemuExtendMouseTransition::Up,
+														 mask);
 				if (event.button == 1 || event.button == 3)
 					m_hostServices->UpdateMouseButton(event.surface,
-						event.button == 1 ? Host::PointerButton::Left : Host::PointerButton::Right,
-						event.pressed, {event.x, event.y});
+													  event.button == 1 ? Host::PointerButton::Left : Host::PointerButton::Right,
+													  event.pressed, {event.x, event.y});
 				SubmitPointer(event, 0, 0, 0, 0, update.changed, false);
 				break;
 			}
@@ -2624,7 +3341,7 @@ namespace
 				const auto wheelX = bridge.NormalizeWheel(event.wheelX, 120, true);
 				const auto wheelY = bridge.NormalizeWheel(event.wheelY, 120, false);
 				m_hostServices->UpdateMouseWheel(static_cast<float>(event.wheelY) / 120.0f,
-					wheelY);
+												 wheelY);
 				SubmitPointer(event, 0, 0, wheelX, wheelY, 0, false);
 				break;
 			}
@@ -2666,7 +3383,7 @@ namespace
 			case WebFrontend::NativeInputKind::TextComposition:
 				if (event.textSequence == m_textInputSequence && m_textInputSequence != 0)
 					m_controller.SubmitTextComposition(event.text, event.preedit,
-						event.textCursor, event.selectionLength);
+													   event.textCursor, event.selectionLength);
 				break;
 			}
 		}
@@ -2676,9 +3393,12 @@ namespace
 			const auto state = m_controller.GetTextInputState();
 			m_textInputSequence = state.active ? state.sequence : 0;
 			m_nativeWindow->UpdateTextInput({
-				.active = state.active, .sequence = state.sequence,
-				.initialText = state.initialText, .maximumLength = state.maximumLength,
-				.caretX = state.caretX, .caretY = state.caretY,
+				.active = state.active,
+				.sequence = state.sequence,
+				.initialText = state.initialText,
+				.maximumLength = state.maximumLength,
+				.caretX = state.caretX,
+				.caretY = state.caretY,
 				.lineHeight = state.lineHeight,
 			});
 			if (state.active)
@@ -2688,7 +3408,7 @@ namespace
 		bool RecreateCanvasForHost()
 		{
 			if (!m_windowState || m_windowState->Snapshot().mode !=
-				WebFrontend::MainWindowContentMode::Playing)
+									  WebFrontend::MainWindowContentMode::Playing)
 				return false;
 			if (!ClosePadRenderRegion())
 				return false;
@@ -2703,12 +3423,14 @@ namespace
 				m_nativeWindow->ShowRenderRegion();
 				RefreshTextInput();
 				return true;
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				cemuLog_log(LogType::Force, "Native canvas recreation failed: {}", error.what());
-				try { m_rendererHost->AbandonMainInitialization(); }
-				catch (...) {}
+				try
+				{
+					m_rendererHost->AbandonMainInitialization();
+				} catch (...)
+				{}
 				m_nativeWindow->DestroyMainRenderRegion();
 				m_nativeWindow->ShowLibrary();
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
@@ -2722,26 +3444,45 @@ namespace
 			{
 				switch (command)
 				{
-				case MenuCommand::EndEmulation: StopEmulation(); break;
-				case MenuCommand::Exit: (void)RequestShutdown(); break;
+				case MenuCommand::EndEmulation:
+					StopEmulation();
+					break;
+				case MenuCommand::Exit:
+					(void)RequestShutdown();
+					break;
 				case MenuCommand::ToggleFullscreen:
 					m_fullscreen = !m_fullscreen;
 					m_nativeWindow->SetFullscreen(m_fullscreen);
 					break;
-				case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
-				case MenuCommand::TogglePadView: TogglePadRenderRegion(); break;
-				case MenuCommand::GeneralSettings: (void)QueueToolWindow("general-settings", {}); break;
-				case MenuCommand::InputSettings: (void)QueueToolWindow("input-settings", {}); break;
-				case MenuCommand::GraphicPacks: (void)QueueToolWindow("graphic-packs", {}); break;
-				case MenuCommand::TitleManager: (void)QueueToolWindow("title-manager", {}); break;
-				case MenuCommand::Logging: (void)QueueToolWindow("logging", {}); break;
-				case MenuCommand::About: (void)QueueToolWindow("about", {}); break;
+				case MenuCommand::Load:
+					Emit("menu.command", R"({"command":"load"})");
+					break;
+				case MenuCommand::TogglePadView:
+					TogglePadRenderRegion();
+					break;
+				case MenuCommand::GeneralSettings:
+					(void)QueueToolWindow("general-settings", {});
+					break;
+				case MenuCommand::InputSettings:
+					(void)QueueToolWindow("input-settings", {});
+					break;
+				case MenuCommand::GraphicPacks:
+					(void)QueueToolWindow("graphic-packs", {});
+					break;
+				case MenuCommand::TitleManager:
+					(void)QueueToolWindow("title-manager", {});
+					break;
+				case MenuCommand::Logging:
+					(void)QueueToolWindow("logging", {});
+					break;
+				case MenuCommand::About:
+					(void)QueueToolWindow("about", {});
+					break;
 				}
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				Emit("system.diagnostic", std::string(R"({"message":)") +
-					JsonString(error.what()) + "}");
+											  JsonString(error.what()) + "}");
 			}
 		}
 
@@ -2779,26 +3520,28 @@ namespace
 		}
 
 		void Emit(std::string_view type, std::string_view payloadJson,
-			std::function<void()> beforeDispatch = {})
+				  std::function<void()> beforeDispatch = {})
 		{
 			std::scoped_lock eventLock(m_eventMutex);
 			if (m_stopping.load(std::memory_order_acquire))
 				return;
 			const auto sequence = ++m_eventSequence;
 			const auto event = std::string(R"({"type":)") + JsonString(type) +
-				R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
-				std::string(payloadJson) + "}";
+							   R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
+							   std::string(payloadJson) + "}";
 			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-				Base64(event) + "'),c=>c.charCodeAt(0)))));";
+								Base64(event) + "'),c=>c.charCodeAt(0)))));";
 			auto pending = std::make_unique<PendingEvent>();
 			pending->stopping = m_eventStopping;
 			pending->beforeDispatch = [this, beforeDispatch = std::move(beforeDispatch), script] {
-				if (beforeDispatch) beforeDispatch();
+				if (beforeDispatch)
+					beforeDispatch();
 				webview_eval(m_webview, script.c_str());
 				for (const auto& [id, window] : m_toolWindows)
 				{
 					(void)id;
-					if (window->webview) webview_eval(window->webview, script.c_str());
+					if (window->webview)
+						webview_eval(window->webview, script.c_str());
 				}
 			};
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
@@ -2806,17 +3549,17 @@ namespace
 		}
 
 		void EmitToWindow(std::uint64_t windowId, std::string_view type,
-			std::string_view payloadJson)
+						  std::string_view payloadJson)
 		{
 			std::scoped_lock eventLock(m_eventMutex);
 			if (m_stopping.load(std::memory_order_acquire))
 				return;
 			const auto sequence = ++m_eventSequence;
 			const auto event = std::string(R"({"type":)") + JsonString(type) +
-				R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
-				std::string(payloadJson) + "}";
+							   R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
+							   std::string(payloadJson) + "}";
 			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-				Base64(event) + "'),c=>c.charCodeAt(0)))));";
+								Base64(event) + "'),c=>c.charCodeAt(0)))));";
 			auto pending = std::make_unique<PendingEvent>();
 			pending->stopping = m_eventStopping;
 			pending->beforeDispatch = [this, windowId, script] {
@@ -2837,8 +3580,12 @@ namespace
 		{
 			switch (event.type)
 			{
-			case Application::EventType::LoadingStarted: Emit("emulation.loading", "{}"); break;
-			case Application::EventType::GameLoaded: Emit("emulation.loaded", "{}"); break;
+			case Application::EventType::LoadingStarted:
+				Emit("emulation.loading", "{}");
+				break;
+			case Application::EventType::GameLoaded:
+				Emit("emulation.loaded", "{}");
+				break;
 			case Application::EventType::GameExited:
 			{
 				const auto expectedGeneration = m_windowState->Snapshot().generation;
@@ -2856,17 +3603,19 @@ namespace
 			}
 			case Application::EventType::PpcProcessExited:
 				Emit("emulation.processExited", std::string(R"({"status":)") +
-					std::to_string(event.processStatus) + "}");
+													std::to_string(event.processStatus) + "}");
 				break;
 			case Application::EventType::PerformanceUpdated:
 				Emit("emulation.performance", std::string(R"({"fps":)") +
-					std::to_string(event.framesPerSecond) + "}");
+												  std::to_string(event.framesPerSecond) + "}");
 				break;
 			case Application::EventType::Diagnostic:
 				Emit("system.diagnostic", std::string(R"({"message":)") +
-					JsonString(event.diagnostic) + "}");
+											  JsonString(event.diagnostic) + "}");
 				break;
-			case Application::EventType::GameListRefreshRequested: Emit("titles.changed", "{}"); break;
+			case Application::EventType::GameListRefreshRequested:
+				Emit("titles.changed", "{}");
+				break;
 			case Application::EventType::TextInputWakeRequested:
 				Emit("input.textWakeRequested", "{}", [this] { RefreshTextInput(); });
 				break;
@@ -2877,9 +3626,12 @@ namespace
 		{
 			switch (level)
 			{
-			case Application::LoggingLevel::Warning: return "warning";
-			case Application::LoggingLevel::Error: return "error";
-			default: return "info";
+			case Application::LoggingLevel::Warning:
+				return "warning";
+			case Application::LoggingLevel::Error:
+				return "error";
+			default:
+				return "info";
 			}
 		}
 
@@ -2888,24 +3640,34 @@ namespace
 			rapidjson::StringBuffer buffer;
 			JsonWriter writer(buffer);
 			writer.StartObject();
-			writer.Key("entries"); writer.StartArray();
+			writer.Key("entries");
+			writer.StartArray();
 			for (const auto& entry : snapshot.entries)
 			{
 				writer.StartObject();
-				writer.Key("sequence"); writer.String(std::to_string(entry.sequence).c_str());
-				writer.Key("level"); writer.String(LoggingLevelName(entry.level).data());
-				writer.Key("category"); writer.String(entry.category.data(),
-					static_cast<rapidjson::SizeType>(entry.category.size()));
-				writer.Key("message"); writer.String(entry.message.data(),
-					static_cast<rapidjson::SizeType>(entry.message.size()));
+				writer.Key("sequence");
+				writer.String(std::to_string(entry.sequence).c_str());
+				writer.Key("level");
+				writer.String(LoggingLevelName(entry.level).data());
+				writer.Key("category");
+				writer.String(entry.category.data(),
+							  static_cast<rapidjson::SizeType>(entry.category.size()));
+				writer.Key("message");
+				writer.String(entry.message.data(),
+							  static_cast<rapidjson::SizeType>(entry.message.size()));
 				writer.EndObject();
 			}
 			writer.EndArray();
-			writer.Key("firstAvailableSequence"); writer.String(std::to_string(snapshot.firstAvailableSequence).c_str());
-			writer.Key("nextSequence"); writer.String(std::to_string(snapshot.nextSequence).c_str());
-			writer.Key("droppedEntries"); writer.String(std::to_string(snapshot.droppedEntries).c_str());
-			writer.Key("retainedBytes"); writer.String(std::to_string(snapshot.retainedBytes).c_str());
-			writer.Key("truncated"); writer.Bool(snapshot.truncated);
+			writer.Key("firstAvailableSequence");
+			writer.String(std::to_string(snapshot.firstAvailableSequence).c_str());
+			writer.Key("nextSequence");
+			writer.String(std::to_string(snapshot.nextSequence).c_str());
+			writer.Key("droppedEntries");
+			writer.String(std::to_string(snapshot.droppedEntries).c_str());
+			writer.Key("retainedBytes");
+			writer.String(std::to_string(snapshot.retainedBytes).c_str());
+			writer.Key("truncated");
+			writer.Bool(snapshot.truncated);
 			writer.EndObject();
 			return {buffer.GetString(), buffer.GetSize()};
 		}
@@ -2915,9 +3677,10 @@ namespace
 			if (m_loggingFlushPending.exchange(true, std::memory_order_acq_rel))
 				return;
 			if (!PostToUi([gate = m_callbackGate] {
-				std::scoped_lock lock(gate->mutex);
-				if (gate->target) gate->target->FlushLoggingEvents();
-			}))
+					std::scoped_lock lock(gate->mutex);
+					if (gate->target)
+						gate->target->FlushLoggingEvents();
+				}))
 				m_loggingFlushPending.store(false, std::memory_order_release);
 		}
 
@@ -2928,17 +3691,17 @@ namespace
 			const auto loggingWindow = m_windowByRole.find("logging");
 			if (loggingWindow == m_windowByRole.end())
 			{
-				m_lastForwardedLogSequence = snapshot.nextSequence == 0 ? 0 :
-					snapshot.nextSequence - 1;
+				m_lastForwardedLogSequence = snapshot.nextSequence == 0 ? 0 : snapshot.nextSequence - 1;
 				return;
 			}
 			if (!snapshot.entries.empty())
 			{
 				m_lastForwardedLogSequence = snapshot.entries.back().sequence;
 				EmitToWindow(loggingWindow->second, "logging.entries",
-					LoggingSnapshotJson(snapshot));
+							 LoggingSnapshotJson(snapshot));
 			}
-			if (snapshot.truncated) SignalLoggingChanged();
+			if (snapshot.truncated)
+				SignalLoggingChanged();
 		}
 
 		static void Invoke(const char* sequence, const char* arguments, void* context)
@@ -2964,7 +3727,7 @@ namespace
 				auto pending = std::make_unique<DeferredMainTermination>();
 				pending->gate = self.m_callbackGate;
 				if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
-					&Runtime::DispatchMainTerminationAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
+																	 &Runtime::DispatchMainTerminationAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
 					pending.release();
 				else
 				{
@@ -2982,7 +3745,7 @@ namespace
 					pending->gate = self.m_callbackGate;
 					pending->windowId = binding.windowId;
 					if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
-						&Runtime::DispatchToolCloseAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
+																		 &Runtime::DispatchToolCloseAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
 						pending.release();
 					else
 					{
@@ -3007,35 +3770,51 @@ namespace
 			rapidjson::StringBuffer buffer;
 			JsonWriter writer(buffer);
 			writer.StartObject();
-			writer.Key("accounts"); writer.StartArray();
+			writer.Key("accounts");
+			writer.StartArray();
 			for (const auto& account : snapshot.accounts)
 				WriteAccount(writer, account);
 			writer.EndArray();
-			writer.Key("countries"); writer.StartArray();
+			writer.Key("countries");
+			writer.StartArray();
 			for (const auto& country : snapshot.countries)
 			{
 				writer.StartObject();
-				writer.Key("code"); writer.Uint(country.code);
-				writer.Key("name"); writer.String(country.name.data(),
-					static_cast<rapidjson::SizeType>(country.name.size()));
+				writer.Key("code");
+				writer.Uint(country.code);
+				writer.Key("name");
+				writer.String(country.name.data(),
+							  static_cast<rapidjson::SizeType>(country.name.size()));
 				writer.EndObject();
 			}
 			writer.EndArray();
-			writer.Key("nextPersistentId"); writer.Uint(snapshot.nextPersistentId);
-			writer.Key("hasFreeSlots"); writer.Bool(snapshot.hasFreeSlots);
-			writer.Key("activePersistentId"); writer.Uint(snapshot.activePersistentId);
-			writer.Key("titleRunning"); writer.Bool(snapshot.titleRunning);
-			writer.Key("networkSettings"); writer.StartArray();
+			writer.Key("nextPersistentId");
+			writer.Uint(snapshot.nextPersistentId);
+			writer.Key("hasFreeSlots");
+			writer.Bool(snapshot.hasFreeSlots);
+			writer.Key("activePersistentId");
+			writer.Uint(snapshot.activePersistentId);
+			writer.Key("titleRunning");
+			writer.Bool(snapshot.titleRunning);
+			writer.Key("networkSettings");
+			writer.StartArray();
 			for (const auto& setting : snapshot.networkSettings)
 			{
 				writer.StartObject();
-				writer.Key("persistentId"); writer.Uint(setting.persistentId);
-				writer.Key("service"); writer.String(AccountNetworkServiceName(setting.service).data());
-				writer.Key("validation"); writer.StartObject();
-				writer.Key("validAccount"); writer.Bool(setting.validation.validAccount);
-				writer.Key("otp"); writer.String(AccountFileStateName(setting.validation.otp).data());
-				writer.Key("seeprom"); writer.String(AccountFileStateName(setting.validation.seeprom).data());
-				writer.Key("missingFiles"); writer.StartArray();
+				writer.Key("persistentId");
+				writer.Uint(setting.persistentId);
+				writer.Key("service");
+				writer.String(AccountNetworkServiceName(setting.service).data());
+				writer.Key("validation");
+				writer.StartObject();
+				writer.Key("validAccount");
+				writer.Bool(setting.validation.validAccount);
+				writer.Key("otp");
+				writer.String(AccountFileStateName(setting.validation.otp).data());
+				writer.Key("seeprom");
+				writer.String(AccountFileStateName(setting.validation.seeprom).data());
+				writer.Key("missingFiles");
+				writer.StartArray();
 				for (const auto& file : setting.validation.missingFiles)
 				{
 					const auto value = boost::nowide::narrow(file);
@@ -3049,10 +3828,14 @@ namespace
 			}
 			writer.EndArray();
 			const auto& environment = snapshot.onlineEnvironment;
-			writer.Key("onlineEnvironment"); writer.StartObject();
-			writer.Key("requiredFilesAvailable"); writer.Bool(environment.requiredFilesAvailable);
-			writer.Key("otpPresent"); writer.Bool(environment.otpPresent);
-			writer.Key("seepromPresent"); writer.Bool(environment.seepromPresent);
+			writer.Key("onlineEnvironment");
+			writer.StartObject();
+			writer.Key("requiredFilesAvailable");
+			writer.Bool(environment.requiredFilesAvailable);
+			writer.Key("otpPresent");
+			writer.Bool(environment.otpPresent);
+			writer.Key("seepromPresent");
+			writer.Bool(environment.seepromPresent);
 			writer.Key("consoleCertificateAvailable");
 			writer.Bool(environment.consoleCertificateAvailable);
 			writer.EndObject();
@@ -3079,68 +3862,129 @@ namespace
 			auto typeName = [](Application::EmulatedControllerType type) {
 				switch (type)
 				{
-				case Application::EmulatedControllerType::GamePad: return "gamePad";
-				case Application::EmulatedControllerType::ProController: return "proController";
-				case Application::EmulatedControllerType::ClassicController: return "classicController";
-				case Application::EmulatedControllerType::Wiimote: return "wiimote";
-				default: return "disabled";
+				case Application::EmulatedControllerType::GamePad:
+					return "gamePad";
+				case Application::EmulatedControllerType::ProController:
+					return "proController";
+				case Application::EmulatedControllerType::ClassicController:
+					return "classicController";
+				case Application::EmulatedControllerType::Wiimote:
+					return "wiimote";
+				default:
+					return "disabled";
 				}
 			};
 			auto writeAxis = [&writer](const Application::ControllerAxisSettings& value) {
-				writer.StartObject(); writer.Key("deadzone"); writer.Double(value.deadzone);
-				writer.Key("range"); writer.Double(value.range); writer.EndObject();
+				writer.StartObject();
+				writer.Key("deadzone");
+				writer.Double(value.deadzone);
+				writer.Key("range");
+				writer.Double(value.range);
+				writer.EndObject();
 			};
-			writer.StartObject(); writer.Key("generation"); writer.String(std::to_string(model.generation).c_str());
-			writer.Key("profiles"); writer.StartArray();
-			for (const auto& profile : model.profiles) writer.String(profile.data(), profile.size());
-			writer.EndArray(); writer.Key("availableApis"); writer.StartArray();
-			for (const auto& api : model.availableApis) writer.String(api.data(), api.size());
-			writer.EndArray(); writer.Key("players"); writer.StartArray();
+			writer.StartObject();
+			writer.Key("generation");
+			writer.String(std::to_string(model.generation).c_str());
+			writer.Key("profiles");
+			writer.StartArray();
+			for (const auto& profile : model.profiles)
+				writer.String(profile.data(), profile.size());
+			writer.EndArray();
+			writer.Key("availableApis");
+			writer.StartArray();
+			for (const auto& api : model.availableApis)
+				writer.String(api.data(), api.size());
+			writer.EndArray();
+			writer.Key("players");
+			writer.StartArray();
 			for (const auto& player : model.players)
 			{
-				writer.StartObject(); writer.Key("player"); writer.Uint(player.player);
-				writer.Key("type"); writer.String(typeName(player.type));
-				writer.Key("gameProfileLocked"); writer.Bool(player.gameProfileLocked);
-				writer.Key("profileName"); writer.String(player.profileName.data(), player.profileName.size());
-				writer.Key("controllers"); writer.StartArray();
+				writer.StartObject();
+				writer.Key("player");
+				writer.Uint(player.player);
+				writer.Key("type");
+				writer.String(typeName(player.type));
+				writer.Key("gameProfileLocked");
+				writer.Bool(player.gameProfileLocked);
+				writer.Key("profileName");
+				writer.String(player.profileName.data(), player.profileName.size());
+				writer.Key("controllers");
+				writer.StartArray();
 				for (const auto& controller : player.controllers)
 				{
-					writer.StartObject(); writer.Key("token"); writer.Uint64(controller.token);
-					writer.Key("api"); writer.String(controller.api.data(), controller.api.size());
-					writer.Key("displayName"); writer.String(controller.displayName.data(), controller.displayName.size());
-					writer.Key("connected"); writer.Bool(controller.connected);
-					writer.Key("hasBattery"); writer.Bool(controller.hasBattery);
-					writer.Key("lowBattery"); writer.Bool(controller.lowBattery);
-					writer.Key("hasMotion"); writer.Bool(controller.hasMotion);
-					writer.Key("hasRumble"); writer.Bool(controller.hasRumble);
-					if (controller.wiimoteExtension) { writer.Key("wiimoteExtension"); writer.String(controller.wiimoteExtension->data(), controller.wiimoteExtension->size()); }
-					writer.Key("settings"); writer.StartObject(); writer.Key("axis"); writeAxis(controller.settings.axis);
-					writer.Key("rotation"); writeAxis(controller.settings.rotation); writer.Key("trigger"); writeAxis(controller.settings.trigger);
-					writer.Key("rumble"); writer.Double(controller.settings.rumble); writer.Key("motion"); writer.Bool(controller.settings.motion);
-					if (controller.settings.packetDelay) { writer.Key("packetDelay"); writer.Uint(*controller.settings.packetDelay); }
+					writer.StartObject();
+					writer.Key("token");
+					writer.Uint64(controller.token);
+					writer.Key("api");
+					writer.String(controller.api.data(), controller.api.size());
+					writer.Key("displayName");
+					writer.String(controller.displayName.data(), controller.displayName.size());
+					writer.Key("connected");
+					writer.Bool(controller.connected);
+					writer.Key("hasBattery");
+					writer.Bool(controller.hasBattery);
+					writer.Key("lowBattery");
+					writer.Bool(controller.lowBattery);
+					writer.Key("hasMotion");
+					writer.Bool(controller.hasMotion);
+					writer.Key("hasRumble");
+					writer.Bool(controller.hasRumble);
+					if (controller.wiimoteExtension)
+					{
+						writer.Key("wiimoteExtension");
+						writer.String(controller.wiimoteExtension->data(), controller.wiimoteExtension->size());
+					}
+					writer.Key("settings");
+					writer.StartObject();
+					writer.Key("axis");
+					writeAxis(controller.settings.axis);
+					writer.Key("rotation");
+					writeAxis(controller.settings.rotation);
+					writer.Key("trigger");
+					writeAxis(controller.settings.trigger);
+					writer.Key("rumble");
+					writer.Double(controller.settings.rumble);
+					writer.Key("motion");
+					writer.Bool(controller.settings.motion);
+					if (controller.settings.packetDelay)
+					{
+						writer.Key("packetDelay");
+						writer.Uint(*controller.settings.packetDelay);
+					}
 					writer.EndObject();
 					writer.EndObject();
 				}
-				writer.EndArray(); writer.Key("mappings"); writer.StartArray();
+				writer.EndArray();
+				writer.Key("mappings");
+				writer.StartArray();
 				for (const auto& mapping : player.mappings)
 				{
-					writer.StartObject(); writer.Key("mappingId"); writer.Uint64(mapping.mappingId);
-					writer.Key("label"); writer.String(mapping.label.data(), mapping.label.size());
-					writer.Key("binding"); writer.String(mapping.binding.data(), mapping.binding.size());
-					if (mapping.controllerToken) { writer.Key("controllerToken"); writer.Uint64(*mapping.controllerToken); }
+					writer.StartObject();
+					writer.Key("mappingId");
+					writer.Uint64(mapping.mappingId);
+					writer.Key("label");
+					writer.String(mapping.label.data(), mapping.label.size());
+					writer.Key("binding");
+					writer.String(mapping.binding.data(), mapping.binding.size());
+					if (mapping.controllerToken)
+					{
+						writer.Key("controllerToken");
+						writer.Uint64(*mapping.controllerToken);
+					}
 					writer.EndObject();
 				}
-				writer.EndArray(); writer.EndObject();
+				writer.EndArray();
+				writer.EndObject();
 			}
-			writer.EndArray(); writer.EndObject();
+			writer.EndArray();
+			writer.EndObject();
 			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		std::string InputMutationJson(const Application::InputSettingsResult& result) const
 		{
 			if (!result)
-				throw std::runtime_error(result.diagnostic.empty() ?
-					"input settings operation failed" : result.diagnostic);
+				throw std::runtime_error(result.diagnostic.empty() ? "input settings operation failed" : result.diagnostic);
 			return InputSettingsJson();
 		}
 
@@ -3150,54 +3994,78 @@ namespace
 			rapidjson::StringBuffer buffer;
 			JsonWriter writer(buffer);
 			writer.StartObject();
-			writer.Key("revision"); writer.Uint64(model.revision);
+			writer.Key("revision");
+			writer.Uint64(model.revision);
 			writer.Key("controllerModifier");
-			if (model.controllerModifier) writer.Uint(*model.controllerModifier);
-			else writer.Null();
-			writer.Key("controllerModifierLabel"); writer.String(
+			if (model.controllerModifier)
+				writer.Uint(*model.controllerModifier);
+			else
+				writer.Null();
+			writer.Key("controllerModifierLabel");
+			writer.String(
 				model.controllerModifierLabel.data(),
 				static_cast<rapidjson::SizeType>(model.controllerModifierLabel.size()));
 			writer.Key("controller");
 			if (model.controller)
 			{
 				writer.StartObject();
-				writer.Key("token"); writer.Uint64(model.controller->token);
-				writer.Key("displayName"); writer.String(model.controller->displayName.data(),
-					static_cast<rapidjson::SizeType>(model.controller->displayName.size()));
+				writer.Key("token");
+				writer.Uint64(model.controller->token);
+				writer.Key("displayName");
+				writer.String(model.controller->displayName.data(),
+							  static_cast<rapidjson::SizeType>(model.controller->displayName.size()));
 				writer.EndObject();
 			}
-			else writer.Null();
-			writer.Key("bindings"); writer.StartArray();
+			else
+				writer.Null();
+			writer.Key("bindings");
+			writer.StartArray();
 			for (const auto& binding : model.bindings)
 			{
 				writer.StartObject();
-				writer.Key("action"); writer.String(HotkeyActionName(binding.action).data());
-				writer.Key("keyboardUsage"); writer.Uint(binding.keyboardUsage);
-				writer.Key("keyboardModifiers"); writer.Uint(binding.keyboardModifiers);
+				writer.Key("action");
+				writer.String(HotkeyActionName(binding.action).data());
+				writer.Key("keyboardUsage");
+				writer.Uint(binding.keyboardUsage);
+				writer.Key("keyboardModifiers");
+				writer.Uint(binding.keyboardModifiers);
 				writer.Key("controllerButton");
-				if (binding.controllerButton) writer.Uint(*binding.controllerButton);
-				else writer.Null();
-				writer.Key("controllerLabel"); writer.String(binding.controllerLabel.data(),
-					static_cast<rapidjson::SizeType>(binding.controllerLabel.size()));
+				if (binding.controllerButton)
+					writer.Uint(*binding.controllerButton);
+				else
+					writer.Null();
+				writer.Key("controllerLabel");
+				writer.String(binding.controllerLabel.data(),
+							  static_cast<rapidjson::SizeType>(binding.controllerLabel.size()));
 				writer.EndObject();
 			}
-			writer.EndArray(); writer.EndObject();
+			writer.EndArray();
+			writer.EndObject();
 			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		static void WriteUsbDescriptor(JsonWriter& writer,
-			const Application::UsbDeviceDescriptor& device)
+									   const Application::UsbDeviceDescriptor& device)
 		{
 			writer.StartObject();
-			writer.Key("id"); writer.String(device.id.data(), device.id.size());
-			writer.Key("vendorId"); writer.Uint(device.vendorId);
-			writer.Key("productId"); writer.Uint(device.productId);
-			writer.Key("interfaceIndex"); writer.Uint(device.interfaceIndex);
-			writer.Key("interfaceSubClass"); writer.Uint(device.interfaceSubClass);
-			writer.Key("protocol"); writer.Uint(device.protocol);
-			writer.Key("maxPacketSizeRx"); writer.Uint(device.maxPacketSizeRx);
-			writer.Key("maxPacketSizeTx"); writer.Uint(device.maxPacketSizeTx);
-			writer.Key("opened"); writer.Bool(device.opened);
+			writer.Key("id");
+			writer.String(device.id.data(), device.id.size());
+			writer.Key("vendorId");
+			writer.Uint(device.vendorId);
+			writer.Key("productId");
+			writer.Uint(device.productId);
+			writer.Key("interfaceIndex");
+			writer.Uint(device.interfaceIndex);
+			writer.Key("interfaceSubClass");
+			writer.Uint(device.interfaceSubClass);
+			writer.Key("protocol");
+			writer.Uint(device.protocol);
+			writer.Key("maxPacketSizeRx");
+			writer.Uint(device.maxPacketSizeRx);
+			writer.Key("maxPacketSizeTx");
+			writer.Uint(device.maxPacketSizeTx);
+			writer.Key("opened");
+			writer.Bool(device.opened);
 			writer.EndObject();
 		}
 
@@ -3205,96 +4073,206 @@ namespace
 		{
 			rapidjson::StringBuffer buffer;
 			JsonWriter writer(buffer);
-			writer.StartObject(); writer.Key("generation"); writer.Uint64(model.generation);
-			writer.Key("emulatedDevices"); writer.StartArray();
+			writer.StartObject();
+			writer.Key("generation");
+			writer.Uint64(model.generation);
+			writer.Key("emulatedDevices");
+			writer.StartArray();
 			for (const auto& device : model.emulatedDevices)
 			{
-				writer.StartObject(); writer.Key("id"); writer.String(device.id.data(), device.id.size());
-				writer.Key("name"); writer.String(device.name.data(), device.name.size());
-				writer.Key("vendorId"); writer.Uint(device.vendorId);
-				writer.Key("productId"); writer.Uint(device.productId);
-				writer.Key("enabled"); writer.Bool(device.enabled);
-				writer.Key("connected"); writer.Bool(device.connected); writer.EndObject();
+				writer.StartObject();
+				writer.Key("id");
+				writer.String(device.id.data(), device.id.size());
+				writer.Key("name");
+				writer.String(device.name.data(), device.name.size());
+				writer.Key("vendorId");
+				writer.Uint(device.vendorId);
+				writer.Key("productId");
+				writer.Uint(device.productId);
+				writer.Key("enabled");
+				writer.Bool(device.enabled);
+				writer.Key("connected");
+				writer.Bool(device.connected);
+				writer.EndObject();
 			}
-			writer.EndArray(); writer.Key("attachedDevices"); writer.StartArray();
-			for (const auto& device : model.attachedDevices) WriteUsbDescriptor(writer, device);
-			writer.EndArray(); writer.EndObject();
+			writer.EndArray();
+			writer.Key("attachedDevices");
+			writer.StartArray();
+			for (const auto& device : model.attachedDevices)
+				WriteUsbDescriptor(writer, device);
+			writer.EndArray();
+			writer.EndObject();
 			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		std::string UsbDeviceChangeJson(const Application::UsbDeviceChange& change) const
 		{
 			rapidjson::StringBuffer buffer;
-			JsonWriter writer(buffer); writer.StartObject();
-			writer.Key("generation"); writer.String(std::to_string(change.generation).c_str());
-			writer.Key("attached"); writer.Bool(change.attached);
-			writer.Key("device"); WriteUsbDescriptor(writer, change.device);
-			writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("generation");
+			writer.String(std::to_string(change.generation).c_str());
+			writer.Key("attached");
+			writer.Bool(change.attached);
+			writer.Key("device");
+			WriteUsbDescriptor(writer, change.device);
+			writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		std::string HotkeySettingsResultJson(
 			const Application::HotkeySettingsResult& result) const
 		{
 			return std::string(R"({"ok":)") + (result ? "true" : "false") +
-				R"(,"error":)" + JsonString(HotkeySettingsErrorName(result.error)) +
-				R"(,"snapshot":)" + HotkeySettingsJson(result.snapshot) +
-				R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+				   R"(,"error":)" + JsonString(HotkeySettingsErrorName(result.error)) +
+				   R"(,"snapshot":)" + HotkeySettingsJson(result.snapshot) +
+				   R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 		}
 
 		std::string TextureDiagnosticJson(const Application::TextureDiagnosticPage& page) const
 		{
-			rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-			writer.Key("generation"); writer.String(std::to_string(page.generation).c_str());
-			writer.Key("offset"); writer.Uint64(page.offset); writer.Key("total"); writer.Uint64(page.total);
-			writer.Key("truncated"); writer.Bool(page.truncated); writer.Key("available"); writer.Bool(page.available);
-			writer.Key("diagnostic"); writer.String(page.diagnostic.data(), page.diagnostic.size());
-			writer.Key("rows"); writer.StartArray();
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("generation");
+			writer.String(std::to_string(page.generation).c_str());
+			writer.Key("offset");
+			writer.Uint64(page.offset);
+			writer.Key("total");
+			writer.Uint64(page.total);
+			writer.Key("truncated");
+			writer.Bool(page.truncated);
+			writer.Key("available");
+			writer.Bool(page.available);
+			writer.Key("diagnostic");
+			writer.String(page.diagnostic.data(), page.diagnostic.size());
+			writer.Key("rows");
+			writer.StartArray();
 			for (const auto& row : page.rows)
 			{
-				writer.StartObject(); writer.Key("id"); writer.String(row.id.data(), row.id.size());
-				if (!row.parentId.empty()) { writer.Key("parentId"); writer.String(row.parentId.data(), row.parentId.size()); }
-				writer.Key("kind"); writer.String(row.view ? "view" : "texture");
-				writer.Key("active"); writer.Bool(row.active); writer.Key("updatedOnGpu"); writer.Bool(row.updatedOnGpu);
-				writer.Key("depthFormat"); writer.Bool(row.depthFormat); writer.Key("dimension"); writer.String(row.dimension.data(), row.dimension.size());
-				writer.Key("format"); writer.String(row.format.data(), row.format.size());
-				writer.Key("width"); writer.Uint(row.width); writer.Key("height"); writer.Uint(row.height); writer.Key("depth"); writer.Uint(row.depth);
-				writer.Key("pitch"); writer.Uint(row.pitch); writer.Key("tileMode"); writer.Uint(row.tileMode);
-				writer.Key("firstSlice"); writer.Uint(row.firstSlice); writer.Key("sliceCount"); writer.Uint(row.sliceCount);
-				writer.Key("firstMip"); writer.Uint(row.firstMip); writer.Key("mipCount"); writer.Uint(row.mipCount);
-				writer.Key("ageMilliseconds"); writer.Uint(row.ageMilliseconds); writer.Key("alternativeViewCount"); writer.Uint(row.alternativeViewCount);
-				writer.Key("resolutionOverridden"); writer.Bool(row.resolutionOverridden);
-				writer.Key("effectiveWidth"); writer.Uint(row.effectiveWidth); writer.Key("effectiveHeight"); writer.Uint(row.effectiveHeight); writer.Key("effectiveDepth"); writer.Uint(row.effectiveDepth);
+				writer.StartObject();
+				writer.Key("id");
+				writer.String(row.id.data(), row.id.size());
+				if (!row.parentId.empty())
+				{
+					writer.Key("parentId");
+					writer.String(row.parentId.data(), row.parentId.size());
+				}
+				writer.Key("kind");
+				writer.String(row.view ? "view" : "texture");
+				writer.Key("active");
+				writer.Bool(row.active);
+				writer.Key("updatedOnGpu");
+				writer.Bool(row.updatedOnGpu);
+				writer.Key("depthFormat");
+				writer.Bool(row.depthFormat);
+				writer.Key("dimension");
+				writer.String(row.dimension.data(), row.dimension.size());
+				writer.Key("format");
+				writer.String(row.format.data(), row.format.size());
+				writer.Key("width");
+				writer.Uint(row.width);
+				writer.Key("height");
+				writer.Uint(row.height);
+				writer.Key("depth");
+				writer.Uint(row.depth);
+				writer.Key("pitch");
+				writer.Uint(row.pitch);
+				writer.Key("tileMode");
+				writer.Uint(row.tileMode);
+				writer.Key("firstSlice");
+				writer.Uint(row.firstSlice);
+				writer.Key("sliceCount");
+				writer.Uint(row.sliceCount);
+				writer.Key("firstMip");
+				writer.Uint(row.firstMip);
+				writer.Key("mipCount");
+				writer.Uint(row.mipCount);
+				writer.Key("ageMilliseconds");
+				writer.Uint(row.ageMilliseconds);
+				writer.Key("alternativeViewCount");
+				writer.Uint(row.alternativeViewCount);
+				writer.Key("resolutionOverridden");
+				writer.Bool(row.resolutionOverridden);
+				writer.Key("effectiveWidth");
+				writer.Uint(row.effectiveWidth);
+				writer.Key("effectiveHeight");
+				writer.Uint(row.effectiveHeight);
+				writer.Key("effectiveDepth");
+				writer.Uint(row.effectiveDepth);
 				writer.EndObject();
 			}
-			writer.EndArray(); writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+			writer.EndArray();
+			writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		std::string AudioDiagnosticJson(const Application::AudioVoiceDiagnosticPage& page) const
 		{
-			rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-			writer.Key("generation"); writer.String(std::to_string(page.generation).c_str()); writer.Key("offset"); writer.Uint64(page.offset);
-			writer.Key("total"); writer.Uint64(page.total); writer.Key("available"); writer.Bool(page.available);
-			writer.Key("diagnostic"); writer.String(page.diagnostic.data(), page.diagnostic.size()); writer.Key("rows"); writer.StartArray();
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("generation");
+			writer.String(std::to_string(page.generation).c_str());
+			writer.Key("offset");
+			writer.Uint64(page.offset);
+			writer.Key("total");
+			writer.Uint64(page.total);
+			writer.Key("available");
+			writer.Bool(page.available);
+			writer.Key("diagnostic");
+			writer.String(page.diagnostic.data(), page.diagnostic.size());
+			writer.Key("rows");
+			writer.StartArray();
 			for (const auto& row : page.rows)
 			{
-				writer.StartObject(); writer.Key("id"); writer.String(row.id.data(), row.id.size()); writer.Key("index"); writer.Uint(row.index);
-				writer.Key("format"); writer.String(row.format.data(), row.format.size()); writer.Key("currentOffset"); writer.Uint(row.currentOffset);
-				writer.Key("loopOffset"); writer.Uint(row.loopOffset); writer.Key("endOffset"); writer.Uint(row.endOffset); writer.Key("looping"); writer.Bool(row.looping);
-				writer.Key("volume"); writer.Uint(row.volume); writer.Key("volumeDelta"); writer.Int(row.volumeDelta); writer.Key("sourceRatio"); writer.Uint(row.sourceRatio);
-				writer.Key("lowPassEnabled"); writer.Bool(row.lowPassEnabled); writer.Key("biquadEnabled"); writer.Bool(row.biquadEnabled);
-				writer.Key("deviceMix"); writer.String(row.deviceMix.data(), row.deviceMix.size()); writer.EndObject();
+				writer.StartObject();
+				writer.Key("id");
+				writer.String(row.id.data(), row.id.size());
+				writer.Key("index");
+				writer.Uint(row.index);
+				writer.Key("format");
+				writer.String(row.format.data(), row.format.size());
+				writer.Key("currentOffset");
+				writer.Uint(row.currentOffset);
+				writer.Key("loopOffset");
+				writer.Uint(row.loopOffset);
+				writer.Key("endOffset");
+				writer.Uint(row.endOffset);
+				writer.Key("looping");
+				writer.Bool(row.looping);
+				writer.Key("volume");
+				writer.Uint(row.volume);
+				writer.Key("volumeDelta");
+				writer.Int(row.volumeDelta);
+				writer.Key("sourceRatio");
+				writer.Uint(row.sourceRatio);
+				writer.Key("lowPassEnabled");
+				writer.Bool(row.lowPassEnabled);
+				writer.Key("biquadEnabled");
+				writer.Bool(row.biquadEnabled);
+				writer.Key("deviceMix");
+				writer.String(row.deviceMix.data(), row.deviceMix.size());
+				writer.EndObject();
 			}
-			writer.EndArray(); writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+			writer.EndArray();
+			writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
 		}
 
 		static Application::EmulatedControllerType ParseInputControllerType(
 			std::string_view value)
 		{
-			if (value == "disabled") return Application::EmulatedControllerType::Disabled;
-			if (value == "gamePad") return Application::EmulatedControllerType::GamePad;
-			if (value == "proController") return Application::EmulatedControllerType::ProController;
-			if (value == "classicController") return Application::EmulatedControllerType::ClassicController;
-			if (value == "wiimote") return Application::EmulatedControllerType::Wiimote;
+			if (value == "disabled")
+				return Application::EmulatedControllerType::Disabled;
+			if (value == "gamePad")
+				return Application::EmulatedControllerType::GamePad;
+			if (value == "proController")
+				return Application::EmulatedControllerType::ProController;
+			if (value == "classicController")
+				return Application::EmulatedControllerType::ClassicController;
+			if (value == "wiimote")
+				return Application::EmulatedControllerType::Wiimote;
 			throw std::invalid_argument("unknown emulated controller type");
 		}
 
@@ -3302,28 +4280,43 @@ namespace
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
 				auto result = std::string(R"({"windowId":)") +
-					JsonString(std::to_string(m_invokingWindow)) + R"(,"windowRole":)" +
-					JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
-					JsonString(BUILD_VERSION_STRING) + R"(,"platform":")" +
+							  JsonString(std::to_string(m_invokingWindow)) + R"(,"windowRole":)" +
+							  JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
+							  JsonString(BUILD_VERSION_STRING) + R"(,"platform":")" +
 #if BOOST_OS_WINDOWS
-					"windows"
+							  "windows"
 #elif BOOST_OS_MACOS
 					"macos"
 #else
 					"linux"
 #endif
-					+ "\"";
+							  + "\"";
 				if (m_invokingWindow != 0)
 				{
 					const auto found = m_toolWindows.find(m_invokingWindow);
 					if (found != m_toolWindows.end() && (found->second->titleContext ||
-						!found->second->packageContext.empty() || found->second->generationContext))
+														 !found->second->packageContext.empty() || found->second->generationContext))
 					{
 						result += R"(,"context":{)";
 						bool separator{};
-						if (found->second->titleContext) { result += R"("titleId":)" + JsonString(TitleIdString(*found->second->titleContext)); separator = true; }
-						if (!found->second->packageContext.empty()) { if (separator) result += ","; result += R"("packageKey":)" + JsonString(found->second->packageContext); separator = true; }
-						if (found->second->generationContext) { if (separator) result += ","; result += R"("generation":)" + JsonString(std::to_string(*found->second->generationContext)); }
+						if (found->second->titleContext)
+						{
+							result += R"("titleId":)" + JsonString(TitleIdString(*found->second->titleContext));
+							separator = true;
+						}
+						if (!found->second->packageContext.empty())
+						{
+							if (separator)
+								result += ",";
+							result += R"("packageKey":)" + JsonString(found->second->packageContext);
+							separator = true;
+						}
+						if (found->second->generationContext)
+						{
+							if (separator)
+								result += ",";
+							result += R"("generation":)" + JsonString(std::to_string(*found->second->generationContext));
+						}
 						result += "}";
 					}
 				}
@@ -3363,7 +4356,7 @@ namespace
 				if (role == params.MemberEnd() || !role->value.IsString())
 					throw std::invalid_argument("role is required");
 				const std::string_view roleName(role->value.GetString(),
-					role->value.GetStringLength());
+												role->value.GetStringLength());
 				const auto requestId = RequiredString(params, "requestId");
 				if (requestId.empty() || requestId.size() > 128)
 					throw std::invalid_argument("requestId must contain between 1 and 128 characters");
@@ -3382,7 +4375,7 @@ namespace
 				if (m_invokingWindow == 0)
 					m_nativeWindow->Show();
 				else if (const auto found = m_toolWindows.find(m_invokingWindow);
-					found != m_toolWindows.end() && found->second->nativeSupport)
+						 found != m_toolWindows.end() && found->second->nativeSupport)
 					found->second->nativeSupport->Focus();
 				return std::string("{}");
 			});
@@ -3393,7 +4386,7 @@ namespace
 					std::string_view("https://cemu.info/"),
 				};
 				if (std::ranges::none_of(allowedOrigins,
-					[url](std::string_view origin) { return url.starts_with(origin); }))
+										 [url](std::string_view origin) { return url.starts_with(origin); }))
 					throw std::invalid_argument("the external URL origin is not allowed");
 				if (!m_nativeWindow->OpenExternalUrl(std::string(url)))
 					throw std::runtime_error("the operating system could not open the URL");
@@ -3402,18 +4395,18 @@ namespace
 			m_rpc.Register("about.get", [this](const rapidjson::Value&) {
 				RequireRole({"about"});
 				return std::string(R"({"name":"CemuExtend","version":)") +
-					JsonString(BUILD_VERSION_STRING) + R"(,"commit":)" +
-					JsonString(CEMU_EXTEND_COMMIT_HASH) + R"(,"buildDate":)" +
-					JsonString(__DATE__ " " __TIME__) +
-					R"(,"frontend":"webview-react","webviewEngine":)" +
-					JsonString("webview/webview " WEBVIEW_VERSION_NUMBER) +
-					R"(,"originalAuthors":["Exzap","Petergov"],"libraries":[)"
-					R"({"name":"webview/webview","license":"MIT","url":"https://github.com/webview/webview"},)"
-					R"({"name":"React","license":"MIT","url":"https://github.com/facebook/react"},)"
-					R"({"name":"Bun","license":"MIT","url":"https://github.com/oven-sh/bun"},)"
-					R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
-					R"({"label":"CemuExtend source","url":"https://github.com/CemuExtend/CemuExtend"},)"
-					R"({"label":"Cemu project","url":"https://cemu.info/"}]})";
+					   JsonString(BUILD_VERSION_STRING) + R"(,"commit":)" +
+					   JsonString(CEMU_EXTEND_COMMIT_HASH) + R"(,"buildDate":)" +
+					   JsonString(__DATE__ " " __TIME__) +
+					   R"(,"frontend":"webview-react","webviewEngine":)" +
+					   JsonString("webview/webview " WEBVIEW_VERSION_NUMBER) +
+					   R"(,"originalAuthors":["Exzap","Petergov"],"libraries":[)"
+					   R"({"name":"webview/webview","license":"MIT","url":"https://github.com/webview/webview"},)"
+					   R"({"name":"React","license":"MIT","url":"https://github.com/facebook/react"},)"
+					   R"({"name":"Bun","license":"MIT","url":"https://github.com/oven-sh/bun"},)"
+					   R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
+					   R"({"label":"CemuExtend source","url":"https://github.com/CemuExtend/CemuExtend"},)"
+					   R"({"label":"Cemu project","url":"https://cemu.info/"}]})";
 			});
 			m_rpc.Register("settings.getFrontend", [this](const rapidjson::Value&) {
 				RequireRole({"getting-started", "general-settings"});
@@ -3448,10 +4441,9 @@ namespace
 			m_rpc.Register("accounts.create", [this](const rapidjson::Value& params) {
 				RequireRole({"account-manager", "general-settings"});
 				const auto result = m_controller.CreateAccount(RequiredUint(params, "persistentId"),
-					boost::nowide::widen(RequiredString(params, "miiName")));
+															   boost::nowide::widen(RequiredString(params, "miiName")));
 				if (!result || !result.account)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"account creation failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "account creation failed" : result.diagnostic);
 				return AccountJson(*result.account);
 			});
 			m_rpc.Register("accounts.update", [this](const rapidjson::Value& params) {
@@ -3470,23 +4462,21 @@ namespace
 				update.country = RequiredUint(params, "country");
 				const auto countries = m_controller.ListAccountCountries();
 				if (std::ranges::none_of(countries,
-					[&update](const Application::AccountCountry& country) {
-						return country.code == update.country;
-					}))
+										 [&update](const Application::AccountCountry& country) {
+											 return country.code == update.country;
+										 }))
 					throw std::invalid_argument("country is not supported");
 				const auto result = m_controller.UpdateAccount(
 					RequiredUint(params, "persistentId"), update);
 				if (!result || !result.account)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"account update failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "account update failed" : result.diagnostic);
 				return AccountJson(*result.account);
 			});
 			m_rpc.Register("accounts.delete", [this](const rapidjson::Value& params) {
 				RequireRole({"account-manager", "general-settings"});
 				const auto result = m_controller.DeleteAccount(RequiredUint(params, "persistentId"));
 				if (!result)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"account deletion failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "account deletion failed" : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("accounts.setActive", [this](const rapidjson::Value& params) {
@@ -3494,8 +4484,7 @@ namespace
 				const auto result = m_controller.SetActiveAccount(
 					RequiredUint(params, "persistentId"));
 				if (!result)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"active account update failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "active account update failed" : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("accounts.setNetworkService", [this](const rapidjson::Value& params) {
@@ -3504,53 +4493,90 @@ namespace
 					RequiredUint(params, "persistentId"),
 					ParseAccountNetworkService(RequiredString(params, "service")));
 				if (!result)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"network service update failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "network service update failed" : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("input.getModel", [this](const rapidjson::Value&) {
-				RequireRole({"input-settings"}); return InputSettingsJson();
+				RequireRole({"input-settings"});
+				return InputSettingsJson();
 			});
 			m_rpc.Register("input.enumerate", [this](const rapidjson::Value& params) {
 				RequireRole({"input-settings"});
 				const auto result = m_controller.EnumerateInputDevices(RequiredString(params, "api"));
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "input device enumeration failed" : result.diagnostic);
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartArray();
-				for (const auto& device : result.devices) { writer.StartObject(); writer.Key("token"); writer.Uint64(device.token); writer.Key("api"); writer.String(device.api.data(), device.api.size()); writer.Key("displayName"); writer.String(device.displayName.data(), device.displayName.size()); writer.Key("connected"); writer.Bool(device.connected); writer.EndObject(); }
-				writer.EndArray(); return std::string(buffer.GetString(), buffer.GetSize());
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? "input device enumeration failed" : result.diagnostic);
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartArray();
+				for (const auto& device : result.devices)
+				{
+					writer.StartObject();
+					writer.Key("token");
+					writer.Uint64(device.token);
+					writer.Key("api");
+					writer.String(device.api.data(), device.api.size());
+					writer.Key("displayName");
+					writer.String(device.displayName.data(), device.displayName.size());
+					writer.Key("connected");
+					writer.Bool(device.connected);
+					writer.EndObject();
+				}
+				writer.EndArray();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("input.setType", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); return InputMutationJson(m_controller.SetEmulatedController(RequiredUint(params, "player"), ParseInputControllerType(RequiredString(params, "type")), RequiredBool(params, "preserveDevices")));
+				RequireRole({"input-settings"});
+				return InputMutationJson(m_controller.SetEmulatedController(RequiredUint(params, "player"), ParseInputControllerType(RequiredString(params, "type")), RequiredBool(params, "preserveDevices")));
 			});
 			m_rpc.Register("input.addDevice", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); return InputMutationJson(m_controller.AddInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
+				RequireRole({"input-settings"});
+				return InputMutationJson(m_controller.AddInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
 			});
 			m_rpc.Register("input.removeDevice", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); return InputMutationJson(m_controller.RemoveInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
+				RequireRole({"input-settings"});
+				return InputMutationJson(m_controller.RemoveInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
 			});
 			m_rpc.Register("input.connectDevice", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); return InputMutationJson(m_controller.ConnectInputDevice(RequiredUint64(params, "token")));
+				RequireRole({"input-settings"});
+				return InputMutationJson(m_controller.ConnectInputDevice(RequiredUint64(params, "token")));
 			});
 			m_rpc.Register("input.captureButton", [this](const rapidjson::Value& params) {
 				RequireRole({"input-settings", "hotkey-settings"});
 				const auto captured = m_controller.CaptureInputButton(RequiredUint64(params, "token"));
-				if (!captured) return std::string("null");
+				if (!captured)
+					return std::string("null");
 				return std::string(R"({"id":)") + std::to_string(captured->id) +
-					R"(,"label":)" + JsonString(captured->label) + "}";
+					   R"(,"label":)" + JsonString(captured->label) + "}";
 			});
 			m_rpc.Register("input.setMapping", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); return InputMutationJson(m_controller.SetInputMapping(RequiredUint(params, "player"), RequiredUint64(params, "mappingId"), RequiredUint64(params, "controllerToken"), RequiredUint64(params, "buttonId")));
+				RequireRole({"input-settings"});
+				return InputMutationJson(m_controller.SetInputMapping(RequiredUint(params, "player"), RequiredUint64(params, "mappingId"), RequiredUint64(params, "controllerToken"), RequiredUint64(params, "buttonId")));
 			});
 			m_rpc.Register("input.clearMapping", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); std::optional<std::uint64_t> mapping;
-				if (params.IsObject()) if (const auto found = params.FindMember("mappingId"); found != params.MemberEnd()) { if (!found->value.IsUint64()) throw std::invalid_argument("mappingId must be an unsigned integer"); mapping = found->value.GetUint64(); }
+				RequireRole({"input-settings"});
+				std::optional<std::uint64_t> mapping;
+				if (params.IsObject())
+					if (const auto found = params.FindMember("mappingId"); found != params.MemberEnd())
+					{
+						if (!found->value.IsUint64())
+							throw std::invalid_argument("mappingId must be an unsigned integer");
+						mapping = found->value.GetUint64();
+					}
 				return InputMutationJson(m_controller.ClearInputMapping(RequiredUint(params, "player"), mapping));
 			});
 			m_rpc.Register("input.setDeviceSettings", [this](const rapidjson::Value& params) {
-				RequireRole({"input-settings"}); const auto& value = RequiredMember(params, "settings");
-				auto axis = [](const rapidjson::Value& object) { return Application::ControllerAxisSettings{static_cast<float>(RequiredDouble(object, "deadzone")), static_cast<float>(RequiredDouble(object, "range"))}; };
+				RequireRole({"input-settings"});
+				const auto& value = RequiredMember(params, "settings");
+				auto axis = [](const rapidjson::Value& object) {
+					return Application::ControllerAxisSettings{static_cast<float>(RequiredDouble(object, "deadzone")), static_cast<float>(RequiredDouble(object, "range"))};
+				};
 				Application::PhysicalControllerSettings settings{axis(RequiredMember(value, "axis")), axis(RequiredMember(value, "rotation")), axis(RequiredMember(value, "trigger")), static_cast<float>(RequiredDouble(value, "rumble")), RequiredBool(value, "motion")};
-				if (const auto found = value.FindMember("packetDelay"); found != value.MemberEnd()) { if (!found->value.IsUint()) throw std::invalid_argument("packetDelay must be an unsigned integer"); settings.packetDelay = found->value.GetUint(); }
+				if (const auto found = value.FindMember("packetDelay"); found != value.MemberEnd())
+				{
+					if (!found->value.IsUint())
+						throw std::invalid_argument("packetDelay must be an unsigned integer");
+					settings.packetDelay = found->value.GetUint();
+				}
 				return InputMutationJson(m_controller.SetPhysicalControllerSettings(RequiredUint64(params, "token"), settings));
 			});
 			m_rpc.Register("input.calibrate", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.CalibrateInputDevice(RequiredUint64(params, "token"))); });
@@ -3568,9 +4594,9 @@ namespace
 			m_rpc.Register("usb.setEnabled", [this](const rapidjson::Value& params) {
 				RequireRole({"emulated-usb-devices"});
 				return UsbModelJson(m_emulatedUsb.SetEnabled(RequiredString(params, "deviceId"),
-					static_cast<std::uint16_t>(RequiredBoundedUint(params, "vendorId", 0, 0xffff)),
-					static_cast<std::uint16_t>(RequiredBoundedUint(params, "productId", 0, 0xffff)),
-					RequiredBool(params, "enabled")));
+															 static_cast<std::uint16_t>(RequiredBoundedUint(params, "vendorId", 0, 0xffff)),
+															 static_cast<std::uint16_t>(RequiredBoundedUint(params, "productId", 0, 0xffff)),
+															 RequiredBool(params, "enabled")));
 			});
 			m_rpc.Register("hotkeys.apply", [this](const rapidjson::Value& params) {
 				RequireRole({"hotkey-settings"});
@@ -3604,7 +4630,8 @@ namespace
 					update.bindings.push_back(binding);
 				}
 				const auto result = m_controller.ApplyHotkeySettings(update);
-				if (result) RefreshHotkeyBindings(result.snapshot);
+				if (result)
+					RefreshHotkeyBindings(result.snapshot);
 				return HotkeySettingsResultJson(result);
 			});
 			m_rpc.Register("graphicPacks.list", [this](const rapidjson::Value&) {
@@ -3615,7 +4642,8 @@ namespace
 				RequireRole({"graphic-packs"});
 				const auto result = m_controller.SetGraphicPackEnabled(
 					RequiredString(params, "key"), RequiredBool(params, "enabled"));
-				if (result) m_controller.SaveGraphicPackState();
+				if (result)
+					m_controller.SaveGraphicPackState();
 				return GraphicPackMutationJson(result);
 			});
 			m_rpc.Register("graphicPacks.setPreset", [this](const rapidjson::Value& params) {
@@ -3623,7 +4651,8 @@ namespace
 				const auto result = m_controller.SetGraphicPackPreset(
 					RequiredString(params, "key"), RequiredString(params, "category"),
 					RequiredString(params, "preset"));
-				if (result) m_controller.SaveGraphicPackState();
+				if (result)
+					m_controller.SaveGraphicPackState();
 				return GraphicPackMutationJson(result);
 			});
 			m_rpc.Register("graphicPacks.reload", [this](const rapidjson::Value& params) {
@@ -3635,17 +4664,18 @@ namespace
 				RequireRole({"graphic-packs"});
 				const auto result = m_controller.RefreshGraphicPacks();
 				if (!result)
-					throw std::runtime_error(result.diagnostic.empty() ?
-						"graphic pack refresh failed" : result.diagnostic);
+					throw std::runtime_error(result.diagnostic.empty() ? "graphic pack refresh failed" : result.diagnostic);
 				rapidjson::StringBuffer buffer;
 				JsonWriter writer(buffer);
 				writer.StartObject();
-				writer.Key("removedEnabledPaths"); writer.StartArray();
+				writer.Key("removedEnabledPaths");
+				writer.StartArray();
 				for (const auto& path : result.removedEnabledPaths)
 					writer.String(path.data(), static_cast<rapidjson::SizeType>(path.size()));
 				writer.EndArray();
-				writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
-					static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+				writer.Key("diagnostic");
+				writer.String(result.diagnostic.data(),
+							  static_cast<rapidjson::SizeType>(result.diagnostic.size()));
 				writer.EndObject();
 				return std::string(buffer.GetString(), buffer.GetSize());
 			});
@@ -3675,40 +4705,73 @@ namespace
 				RequireRole({"save-manager"});
 				const auto content = m_controller.ListManagedContent();
 				const auto accounts = m_controller.ListAccounts();
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-				writer.Key("scanning"); writer.Bool(m_controller.IsTitleScanning());
-				writer.Key("accounts"); writer.StartArray();
-				for (const auto& account : accounts) { writer.StartObject();
-					writer.Key("persistentId"); writer.String(PersistentIdString(account.persistentId).c_str());
-					const auto name = boost::nowide::narrow(account.miiName); writer.Key("name"); writer.String(name.data(), name.size()); writer.EndObject(); }
-				writer.EndArray(); writer.Key("titles"); writer.StartArray();
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("scanning");
+				writer.Bool(m_controller.IsTitleScanning());
+				writer.Key("accounts");
+				writer.StartArray();
+				for (const auto& account : accounts)
+				{
+					writer.StartObject();
+					writer.Key("persistentId");
+					writer.String(PersistentIdString(account.persistentId).c_str());
+					const auto name = boost::nowide::narrow(account.miiName);
+					writer.Key("name");
+					writer.String(name.data(), name.size());
+					writer.EndObject();
+				}
+				writer.EndArray();
+				writer.Key("titles");
+				writer.StartArray();
 				for (const auto& entry : content)
 				{
-					if (entry.type != Application::ManagedContentType::Save) continue;
-					writer.StartObject(); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str());
-					writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); writer.Key("saves"); writer.StartArray();
+					if (entry.type != Application::ManagedContentType::Save)
+						continue;
+					writer.StartObject();
+					writer.Key("titleId");
+					writer.String(TitleIdString(entry.titleId).c_str());
+					writer.Key("name");
+					writer.String(entry.name.data(), entry.name.size());
+					writer.Key("saves");
+					writer.StartArray();
 					for (const auto persistentId : m_controller.ListSavePersistentIds(entry.titleId))
 					{
 						const auto location = m_controller.InspectSaveEntry(entry.titleId, persistentId);
-						writer.StartObject(); writer.Key("persistentId"); writer.String(PersistentIdString(persistentId).c_str());
-						writer.Key("state"); writer.String(SaveStateName(location.state).data());
+						writer.StartObject();
+						writer.Key("persistentId");
+						writer.String(PersistentIdString(persistentId).c_str());
+						writer.Key("state");
+						writer.String(SaveStateName(location.state).data());
 						const auto account = std::ranges::find(accounts, persistentId, &Application::AccountInfo::persistentId);
 						writer.Key("accountName");
-						if (account == accounts.end()) writer.String(""); else { const auto name = boost::nowide::narrow(account->miiName); writer.String(name.data(), name.size()); }
+						if (account == accounts.end())
+							writer.String("");
+						else
+						{
+							const auto name = boost::nowide::narrow(account->miiName);
+							writer.String(name.data(), name.size());
+						}
 						writer.EndObject();
 					}
-					writer.EndArray(); writer.EndObject();
+					writer.EndArray();
+					writer.EndObject();
 				}
-				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+				writer.EndArray();
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("save.inspect", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				RequireRole({"save-manager"});
+				const auto titleId = ParseTitleId(params);
 				const auto persistentId = ParsePersistentId(params);
 				const auto location = m_controller.InspectSaveEntry(titleId, persistentId);
 				return std::string(R"({"state":)") + JsonString(SaveStateName(location.state)) + "}";
 			});
 			m_rpc.Register("save.delete.prepare", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				RequireRole({"save-manager"});
+				const auto titleId = ParseTitleId(params);
 				const auto persistentId = ParsePersistentId(params);
 				if (m_controller.InspectSaveEntry(titleId, persistentId).state != Application::SaveEntryState::Directory)
 					throw std::invalid_argument("the selected save no longer exists");
@@ -3716,15 +4779,20 @@ namespace
 				return std::string(R"({"confirmationToken":)") + JsonString(token) + "}";
 			});
 			m_rpc.Register("save.delete", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Delete);
+				RequireRole({"save-manager"});
+				auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Delete);
 				const auto result = m_controller.DeleteSave(ticket.titleId, ticket.sourcePersistentId);
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("save.transfer.inspect", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
-				const auto source = ParsePersistentId(params, "sourcePersistentId"); const auto target = ParsePersistentId(params, "targetPersistentId");
-				if (source == target) throw std::invalid_argument("source and target persistent ids must differ");
+				RequireRole({"save-manager"});
+				const auto titleId = ParseTitleId(params);
+				const auto source = ParsePersistentId(params, "sourcePersistentId");
+				const auto target = ParsePersistentId(params, "targetPersistentId");
+				if (source == target)
+					throw std::invalid_argument("source and target persistent ids must differ");
 				if (m_controller.InspectSaveEntry(titleId, source).state != Application::SaveEntryState::Directory)
 					throw std::invalid_argument("the source save no longer exists");
 				const auto targetLocation = m_controller.InspectSaveEntry(titleId, target);
@@ -3733,63 +4801,82 @@ namespace
 				const bool overwrite = targetLocation.state == Application::SaveEntryState::Directory;
 				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Transfer, {}, titleId, source, target, overwrite});
 				return std::string(R"({"targetState":)") + JsonString(SaveStateName(targetLocation.state)) +
-					R"(,"confirmationToken":)" + JsonString(token) + "}";
+					   R"(,"confirmationToken":)" + JsonString(token) + "}";
 			});
 			m_rpc.Register("save.transfer", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Transfer);
+				RequireRole({"save-manager"});
+				auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Transfer);
 				const auto result = m_controller.TransferSave(ticket.titleId, ticket.sourcePersistentId, ticket.targetPersistentId, ticket.overwrite);
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("save.import.pick", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				RequireRole({"save-manager"});
+				const auto titleId = ParseTitleId(params);
 				const auto window = m_toolWindows.find(m_invokingWindow);
-				if (window == m_toolWindows.end()) throw std::runtime_error("save window is closing");
+				if (window == m_toolWindows.end())
+					throw std::runtime_error("save window is closing");
 				const auto selected = WebFrontend::SelectArchiveToOpen(window->second->nativeSupport->GetWindow(), "Select a zipped save file");
-				if (!selected) return std::string(R"({"selected":false})");
+				if (!selected)
+					return std::string(R"({"selected":false})");
 				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Import, *selected, titleId});
 				return std::string(R"({"selected":true,"fileToken":)") + JsonString(token) + R"(,"name":)" + JsonString(_pathToUtf8(selected->filename())) + "}";
 			});
 			m_rpc.Register("save.import.inspect", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto token = std::string(RequiredString(params, "fileToken"));
+				RequireRole({"save-manager"});
+				const auto token = std::string(RequiredString(params, "fileToken"));
 				const auto found = m_saveTickets.find(token);
 				if (found == m_saveTickets.end() || found->second.ownerWindow != m_invokingWindow || found->second.kind != SaveTicketKind::Import)
 					throw std::invalid_argument("import file token is invalid or expired");
-				const auto titleId = ParseTitleId(params); const auto persistentId = ParsePersistentId(params);
-				if (titleId != found->second.titleId) throw std::invalid_argument("titleId does not match the native file selection");
+				const auto titleId = ParseTitleId(params);
+				const auto persistentId = ParsePersistentId(params);
+				if (titleId != found->second.titleId)
+					throw std::invalid_argument("titleId does not match the native file selection");
 				const auto inspection = m_controller.InspectSaveImport(found->second.archivePath, titleId, persistentId);
-				if (!inspection) throw std::runtime_error(inspection.diagnostic.empty() ? std::string(SaveErrorName(inspection.error)) : inspection.diagnostic);
-				if (inspection.target.state == Application::SaveEntryState::NonDirectory) throw std::invalid_argument("a non-directory entry blocks the target save");
-				found->second.targetPersistentId = persistentId; found->second.overwrite = inspection.target.state == Application::SaveEntryState::Directory;
+				if (!inspection)
+					throw std::runtime_error(inspection.diagnostic.empty() ? std::string(SaveErrorName(inspection.error)) : inspection.diagnostic);
+				if (inspection.target.state == Application::SaveEntryState::NonDirectory)
+					throw std::invalid_argument("a non-directory entry blocks the target save");
+				found->second.targetPersistentId = persistentId;
+				found->second.overwrite = inspection.target.state == Application::SaveEntryState::Directory;
 				const bool mismatch = inspection.sourceTitleId && *inspection.sourceTitleId != 0 && *inspection.sourceTitleId != titleId;
 				return std::string(R"({"confirmationToken":)") + JsonString(token) + R"(,"targetState":)" + JsonString(SaveStateName(inspection.target.state)) +
-					R"(,"sourceTitleId":)" + (inspection.sourceTitleId ? JsonString(TitleIdString(*inspection.sourceTitleId)) : "null") +
-					R"(,"titleMismatch":)" + (mismatch ? "true" : "false") + "}";
+					   R"(,"sourceTitleId":)" + (inspection.sourceTitleId ? JsonString(TitleIdString(*inspection.sourceTitleId)) : "null") +
+					   R"(,"titleMismatch":)" + (mismatch ? "true" : "false") + "}";
 			});
 			m_rpc.Register("save.import.start", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Import);
-				if (!ticket.targetPersistentId) throw std::invalid_argument("import archive has not been inspected");
+				RequireRole({"save-manager"});
+				auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Import);
+				if (!ticket.targetPersistentId)
+					throw std::invalid_argument("import archive has not been inspected");
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartSaveArchiveJob(std::move(ticket)))) + "}";
 			});
 			m_rpc.Register("save.export.pick", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params); const auto persistentId = ParsePersistentId(params);
+				RequireRole({"save-manager"});
+				const auto titleId = ParseTitleId(params);
+				const auto persistentId = ParsePersistentId(params);
 				if (m_controller.InspectSaveEntry(titleId, persistentId).state != Application::SaveEntryState::Directory)
 					throw std::invalid_argument("the selected save no longer exists");
-				const auto window = m_toolWindows.find(m_invokingWindow); if (window == m_toolWindows.end()) throw std::runtime_error("save window is closing");
+				const auto window = m_toolWindows.find(m_invokingWindow);
+				if (window == m_toolWindows.end())
+					throw std::runtime_error("save window is closing");
 				const auto name = TitleIdString(titleId) + "-" + PersistentIdString(persistentId) + ".zip";
 				const auto selected = WebFrontend::SelectArchiveToSave(window->second->nativeSupport->GetWindow(), "Export save archive", name);
-				if (!selected) return std::string(R"({"selected":false})");
+				if (!selected)
+					return std::string(R"({"selected":false})");
 				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Export, *selected, titleId, persistentId, 0, true});
 				return std::string(R"({"selected":true,"confirmationToken":)") + JsonString(token) + R"(,"name":)" + JsonString(_pathToUtf8(selected->filename())) + "}";
 			});
 			m_rpc.Register("save.export.start", [this](const rapidjson::Value& params) {
-				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Export);
+				RequireRole({"save-manager"});
+				auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Export);
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartSaveArchiveJob(std::move(ticket)))) + "}";
 			});
 			m_rpc.Register("updates.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"update-manager"});
 				return std::string(R"({"titleRunning":)") +
-					(m_controller.IsTitleRunning() ? "true" : "false") + "}";
+					   (m_controller.IsTitleRunning() ? "true" : "false") + "}";
 			});
 			m_rpc.Register("updates.pickTitleSource", [this](const rapidjson::Value&) {
 				RequireRole({"update-manager"});
@@ -3800,46 +4887,70 @@ namespace
 					throw std::runtime_error("the update window is no longer active");
 				const auto selected = owner->second->nativeSupport->PickDirectory(
 					"Select the title folder containing code, content, and meta");
-				if (!selected) return std::string("null");
+				if (!selected)
+					return std::string("null");
 				const auto planned = m_controller.PlanTitleInstall(*selected);
 				if (!planned)
-					throw std::runtime_error(planned.diagnostic.empty() ?
-						"the selected folder is not an installable title" : planned.diagnostic);
+					throw std::runtime_error(planned.diagnostic.empty() ? "the selected folder is not an installable title" : planned.diagnostic);
 				const auto& plan = *planned.plan;
 				const auto token = m_updatePlans.Issue(m_invokingWindow,
-					owner->second->generation, plan);
+													   owner->second->generation, plan);
 				auto kindName = [](Application::TitleInstallKind kind) {
-					switch (kind) {
-					case Application::TitleInstallKind::Base: return "base";
-					case Application::TitleInstallKind::Demo: return "demo";
-					case Application::TitleInstallKind::Update: return "update";
-					case Application::TitleInstallKind::Dlc: return "dlc";
-					case Application::TitleInstallKind::SystemTitle: return "systemTitle";
-					case Application::TitleInstallKind::SystemData: return "systemData";
-					default: return "unknown";
+					switch (kind)
+					{
+					case Application::TitleInstallKind::Base:
+						return "base";
+					case Application::TitleInstallKind::Demo:
+						return "demo";
+					case Application::TitleInstallKind::Update:
+						return "update";
+					case Application::TitleInstallKind::Dlc:
+						return "dlc";
+					case Application::TitleInstallKind::SystemTitle:
+						return "systemTitle";
+					case Application::TitleInstallKind::SystemData:
+						return "systemData";
+					default:
+						return "unknown";
 					}
 				};
 				auto conflictName = [](Application::TitleInstallConflict conflict) {
-					switch (conflict) {
-					case Application::TitleInstallConflict::DifferentType: return "differentType";
-					case Application::TitleInstallConflict::SameVersion: return "sameVersion";
-					case Application::TitleInstallConflict::NewerVersionInstalled: return "newerVersionInstalled";
-					default: return "none";
+					switch (conflict)
+					{
+					case Application::TitleInstallConflict::DifferentType:
+						return "differentType";
+					case Application::TitleInstallConflict::SameVersion:
+						return "sameVersion";
+					case Application::TitleInstallConflict::NewerVersionInstalled:
+						return "newerVersionInstalled";
+					default:
+						return "none";
 					}
 				};
 				rapidjson::StringBuffer buffer;
 				JsonWriter writer(buffer);
 				writer.StartObject();
-				writer.Key("planToken"); writer.String(std::to_string(token).c_str());
-				writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
-				writer.Key("titleName"); writer.String(plan.titleName.data(), plan.titleName.size());
-				writer.Key("version"); writer.Uint(plan.version);
-				writer.Key("kind"); writer.String(kindName(plan.kind));
-				writer.Key("conflict"); writer.String(conflictName(plan.conflict));
+				writer.Key("planToken");
+				writer.String(std::to_string(token).c_str());
+				writer.Key("titleId");
+				writer.String(TitleIdString(plan.titleId).c_str());
+				writer.Key("titleName");
+				writer.String(plan.titleName.data(), plan.titleName.size());
+				writer.Key("version");
+				writer.Uint(plan.version);
+				writer.Key("kind");
+				writer.String(kindName(plan.kind));
+				writer.Key("conflict");
+				writer.String(conflictName(plan.conflict));
 				writer.Key("installedVersion");
-				if (plan.installed.valid) writer.Uint(plan.installed.version); else writer.Null();
-				writer.Key("requiredBytes"); writer.Uint64(plan.requiredBytes);
-				writer.Key("availableBytes"); writer.Uint64(plan.availableBytes);
+				if (plan.installed.valid)
+					writer.Uint(plan.installed.version);
+				else
+					writer.Null();
+				writer.Key("requiredBytes");
+				writer.Uint64(plan.requiredBytes);
+				writer.Key("availableBytes");
+				writer.Uint64(plan.availableBytes);
 				writer.EndObject();
 				return std::string(buffer.GetString(), buffer.GetSize());
 			});
@@ -3858,10 +4969,9 @@ namespace
 				const bool acceptConflict = RequiredBool(params, "acceptConflict");
 				if (plan->conflict != Application::TitleInstallConflict::None && !acceptConflict)
 					throw std::invalid_argument("the existing-title conflict must be accepted explicitly");
-				const auto decision = acceptConflict ? Application::TitleInstallDecision::AcceptConflict :
-					Application::TitleInstallDecision::Proceed;
+				const auto decision = acceptConflict ? Application::TitleInstallDecision::AcceptConflict : Application::TitleInstallDecision::Proceed;
 				return std::string(R"({"jobId":)") +
-					JsonString(std::to_string(StartTitleInstallJob(std::move(*plan), decision))) + "}";
+					   JsonString(std::to_string(StartTitleInstallJob(std::move(*plan), decision))) + "}";
 			});
 			m_rpc.Register("diagnostics.getTextureRelations", [this](const rapidjson::Value& params) {
 				RequireRole({"texture-relations"});
@@ -3880,32 +4990,85 @@ namespace
 			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
-					switch (type) { case Application::ManagedContentType::Update: return "update"; case Application::ManagedContentType::Dlc: return "dlc"; case Application::ManagedContentType::System: return "system"; case Application::ManagedContentType::Save: return "save"; default: return "base"; }
+					switch (type)
+					{
+					case Application::ManagedContentType::Update:
+						return "update";
+					case Application::ManagedContentType::Dlc:
+						return "dlc";
+					case Application::ManagedContentType::System:
+						return "system";
+					case Application::ManagedContentType::Save:
+						return "save";
+					default:
+						return "base";
+					}
 				};
 				auto formatName = [](Application::ManagedContentFormat format) {
-					switch (format) { case Application::ManagedContentFormat::Wud: return "wud"; case Application::ManagedContentFormat::Nus: return "nus"; case Application::ManagedContentFormat::Wua: return "wua"; case Application::ManagedContentFormat::Wuhb: return "wuhb"; default: return "folder"; }
+					switch (format)
+					{
+					case Application::ManagedContentFormat::Wud:
+						return "wud";
+					case Application::ManagedContentFormat::Nus:
+						return "nus";
+					case Application::ManagedContentFormat::Wua:
+						return "wua";
+					case Application::ManagedContentFormat::Wuhb:
+						return "wuhb";
+					default:
+						return "folder";
+					}
 				};
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-				writer.Key("scanning"); writer.Bool(m_controller.IsTitleScanning()); writer.Key("entries"); writer.StartArray();
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("scanning");
+				writer.Bool(m_controller.IsTitleScanning());
+				writer.Key("entries");
+				writer.StartArray();
 				for (const auto& entry : m_controller.ListManagedContent())
 				{
-					writer.StartObject(); const auto uid = std::to_string(entry.locationUid);
-					writer.Key("locationUid"); writer.String(uid.c_str()); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str());
-					writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); const auto path = _pathToUtf8(entry.path); writer.Key("path"); writer.String(path.data(), path.size());
-					writer.Key("version"); writer.Uint(entry.version); writer.Key("region"); writer.String(entry.regionName.data(), entry.regionName.size());
-					writer.Key("type"); writer.String(typeName(entry.type)); writer.Key("format"); writer.String(formatName(entry.format));
-					writer.Key("canLaunch"); writer.Bool(entry.type == Application::ManagedContentType::Base);
-					writer.Key("canVerify"); writer.Bool(entry.type != Application::ManagedContentType::Save);
-					writer.Key("canConvert"); writer.Bool(entry.type != Application::ManagedContentType::Save && entry.format != Application::ManagedContentFormat::Wua);
-					writer.Key("canDelete"); writer.Bool(Application::IsManagedContentDeletionSupported(entry.type) && !m_controller.IsTitleScanning() && !m_controller.IsTitleRunning()); writer.EndObject();
+					writer.StartObject();
+					const auto uid = std::to_string(entry.locationUid);
+					writer.Key("locationUid");
+					writer.String(uid.c_str());
+					writer.Key("titleId");
+					writer.String(TitleIdString(entry.titleId).c_str());
+					writer.Key("name");
+					writer.String(entry.name.data(), entry.name.size());
+					const auto path = _pathToUtf8(entry.path);
+					writer.Key("path");
+					writer.String(path.data(), path.size());
+					writer.Key("version");
+					writer.Uint(entry.version);
+					writer.Key("region");
+					writer.String(entry.regionName.data(), entry.regionName.size());
+					writer.Key("type");
+					writer.String(typeName(entry.type));
+					writer.Key("format");
+					writer.String(formatName(entry.format));
+					writer.Key("canLaunch");
+					writer.Bool(entry.type == Application::ManagedContentType::Base);
+					writer.Key("canVerify");
+					writer.Bool(entry.type != Application::ManagedContentType::Save);
+					writer.Key("canConvert");
+					writer.Bool(entry.type != Application::ManagedContentType::Save && entry.format != Application::ManagedContentFormat::Wua);
+					writer.Key("canDelete");
+					writer.Bool(Application::IsManagedContentDeletionSupported(entry.type) && !m_controller.IsTitleScanning() && !m_controller.IsTitleRunning());
+					writer.EndObject();
 				}
-				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+				writer.EndArray();
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("titleManager.refresh", [this](const rapidjson::Value&) {
-				RequireRole({"title-manager"}); m_controller.RefreshTitles(); return std::string("{}");
+				RequireRole({"title-manager"});
+				m_controller.RefreshTitles();
+				return std::string("{}");
 			});
 			m_rpc.Register("titleManager.launch", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto uid = ParseOpaqueUid(params);
+				RequireRole({"title-manager"});
+				const auto uid = ParseOpaqueUid(params);
 				const auto entries = m_controller.ListManagedContent();
 				const auto entry = std::ranges::find(entries, uid, &Application::ManagedContentEntry::locationUid);
 				if (entry == entries.end() || entry->type != Application::ManagedContentType::Base)
@@ -3920,17 +5083,18 @@ namespace
 				RequireRole({"logging"});
 				const auto clearedThroughSequence = m_logging.Clear();
 				m_lastForwardedLogSequence = std::max(m_lastForwardedLogSequence,
-					clearedThroughSequence);
+													  clearedThroughSequence);
 				EmitToWindow(m_invokingWindow, "logging.cleared",
-					std::string(R"({"clearedThroughSequence":)") +
-					JsonString(std::to_string(clearedThroughSequence)) + "}");
+							 std::string(R"({"clearedThroughSequence":)") +
+								 JsonString(std::to_string(clearedThroughSequence)) + "}");
 				return std::string(R"({"clearedThroughSequence":)") +
-					JsonString(std::to_string(clearedThroughSequence)) + "}";
+					   JsonString(std::to_string(clearedThroughSequence)) + "}";
 			});
 			m_rpc.Register("titleManager.pickInstallSource", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
 				const auto selected = m_nativeWindow->PickTitleInstallSource();
-				if (!selected) return std::string(R"({"cancelled":true})");
+				if (!selected)
+					return std::string(R"({"cancelled":true})");
 				std::error_code pathError;
 				auto metadata = fs::canonical(_utf8ToPath(*selected), pathError);
 				if (pathError || metadata.filename() != "meta.xml" ||
@@ -3940,116 +5104,268 @@ namespace
 				const auto token = ++m_nextOperationToken;
 				m_installSources.emplace(token, NativePathRecord{m_invokingWindow, std::move(source)});
 				return std::string(R"({"cancelled":false,"sourceToken":)") + JsonString(std::to_string(token)) +
-					R"(,"displayName":)" + JsonString(_pathToUtf8(metadata.parent_path().parent_path().filename())) + "}";
+					   R"(,"displayName":)" + JsonString(_pathToUtf8(metadata.parent_path().parent_path().filename())) + "}";
 			});
 			m_rpc.Register("titleManager.planInstall", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto sourceToken = ParseDecimalUint64(
+				RequireRole({"title-manager"});
+				const auto sourceToken = ParseDecimalUint64(
 					RequiredString(params, "sourceToken"), "sourceToken");
 				const auto source = m_installSources.find(sourceToken);
 				if (source == m_installSources.end() || source->second.owner != m_invokingWindow)
 					throw std::invalid_argument("install source token is invalid or expired");
-				const auto path = source->second.path; m_installSources.erase(source);
+				const auto path = source->second.path;
+				m_installSources.erase(source);
 				const auto result = m_controller.PlanTitleInstall(path);
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "unable to plan title installation" : result.diagnostic);
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? "unable to plan title installation" : result.diagnostic);
 				const auto token = ++m_nextOperationToken;
 				m_installPlans.emplace(token, InstallPlanRecord{m_invokingWindow, *result.plan});
-				auto kindName = [](Application::TitleInstallKind kind) { switch (kind) {
-					case Application::TitleInstallKind::Base: return "base"; case Application::TitleInstallKind::Demo: return "demo";
-					case Application::TitleInstallKind::Update: return "update"; case Application::TitleInstallKind::Dlc: return "dlc";
-					case Application::TitleInstallKind::SystemTitle: return "systemTitle"; case Application::TitleInstallKind::SystemData: return "systemData";
-					default: return "unknown"; }};
-				auto conflictName = [](Application::TitleInstallConflict conflict) { switch (conflict) {
-					case Application::TitleInstallConflict::DifferentType: return "differentType"; case Application::TitleInstallConflict::SameVersion: return "sameVersion";
-					case Application::TitleInstallConflict::NewerVersionInstalled: return "newerVersionInstalled"; default: return "none"; }};
-				const auto& plan = *result.plan; rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-				writer.Key("planToken"); writer.String(std::to_string(token).c_str()); writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
-				writer.Key("titleName"); writer.String(plan.titleName.data(), plan.titleName.size()); writer.Key("version"); writer.Uint(plan.version);
-				writer.Key("kind"); writer.String(kindName(plan.kind)); writer.Key("conflict"); writer.String(conflictName(plan.conflict));
-				writer.Key("requiredBytes"); writer.Uint64(plan.requiredBytes); writer.Key("availableBytes"); writer.Uint64(plan.availableBytes); writer.EndObject();
+				auto kindName = [](Application::TitleInstallKind kind) {
+					switch (kind)
+					{
+					case Application::TitleInstallKind::Base:
+						return "base";
+					case Application::TitleInstallKind::Demo:
+						return "demo";
+					case Application::TitleInstallKind::Update:
+						return "update";
+					case Application::TitleInstallKind::Dlc:
+						return "dlc";
+					case Application::TitleInstallKind::SystemTitle:
+						return "systemTitle";
+					case Application::TitleInstallKind::SystemData:
+						return "systemData";
+					default:
+						return "unknown";
+					}
+				};
+				auto conflictName = [](Application::TitleInstallConflict conflict) {
+					switch (conflict)
+					{
+					case Application::TitleInstallConflict::DifferentType:
+						return "differentType";
+					case Application::TitleInstallConflict::SameVersion:
+						return "sameVersion";
+					case Application::TitleInstallConflict::NewerVersionInstalled:
+						return "newerVersionInstalled";
+					default:
+						return "none";
+					}
+				};
+				const auto& plan = *result.plan;
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("planToken");
+				writer.String(std::to_string(token).c_str());
+				writer.Key("titleId");
+				writer.String(TitleIdString(plan.titleId).c_str());
+				writer.Key("titleName");
+				writer.String(plan.titleName.data(), plan.titleName.size());
+				writer.Key("version");
+				writer.Uint(plan.version);
+				writer.Key("kind");
+				writer.String(kindName(plan.kind));
+				writer.Key("conflict");
+				writer.String(conflictName(plan.conflict));
+				writer.Key("requiredBytes");
+				writer.Uint64(plan.requiredBytes);
+				writer.Key("availableBytes");
+				writer.Uint64(plan.availableBytes);
+				writer.EndObject();
 				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("titleManager.startInstall", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto token = ParseDecimalUint64(
+				RequireRole({"title-manager"});
+				const auto token = ParseDecimalUint64(
 					RequiredString(params, "planToken"), "planToken");
 				const auto found = m_installPlans.find(token);
 				if (found == m_installPlans.end() || found->second.owner != m_invokingWindow)
 					throw std::invalid_argument("install plan token is invalid or expired");
-				auto plan = std::move(found->second.plan); m_installPlans.erase(found);
+				auto plan = std::move(found->second.plan);
+				m_installPlans.erase(found);
 				const auto decisionText = RequiredString(params, "decision");
 				const auto decision = decisionText == "acceptConflict" ? Application::TitleInstallDecision::AcceptConflict : Application::TitleInstallDecision::Proceed;
-				if (decisionText != "proceed" && decisionText != "acceptConflict") throw std::invalid_argument("unknown install decision");
+				if (decisionText != "proceed" && decisionText != "acceptConflict")
+					throw std::invalid_argument("unknown install decision");
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartTitleInstallJob(std::move(plan), decision))) + "}";
 			});
 			m_rpc.Register("titleManager.planWua", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto uid = ParseOpaqueUid(params);
+				RequireRole({"title-manager"});
+				const auto uid = ParseOpaqueUid(params);
 				const auto entries = m_controller.ListManagedContent();
 				const auto entry = std::ranges::find(entries, uid, &Application::ManagedContentEntry::locationUid);
 				if (entry == entries.end() || entry->type == Application::ManagedContentType::Save)
 					throw std::invalid_argument("the selected installation is no longer convertible");
 				auto plan = m_controller.PlanWuaConversion(entry->titleId, uid);
-				if (!plan || plan->items.empty()) throw std::runtime_error("no installed content was found for conversion");
-				const auto token = ++m_nextOperationToken; const auto suggested = plan->suggestedFileName;
+				if (!plan || plan->items.empty())
+					throw std::runtime_error("no installed content was found for conversion");
+				const auto token = ++m_nextOperationToken;
+				const auto suggested = plan->suggestedFileName;
 				m_wuaPlans.emplace(token, WuaPlanRecord{m_invokingWindow, entry->titleId, uid, *plan});
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("planToken"); writer.String(std::to_string(token).c_str());
-				writer.Key("suggestedFileName"); writer.String(suggested.data(), suggested.size()); writer.Key("items"); writer.StartArray();
-				for (const auto& item : plan->items) { writer.StartObject(); writer.Key("titleId"); writer.String(TitleIdString(item.titleId).c_str()); writer.Key("version"); writer.Uint(item.version);
-					writer.Key("role"); writer.String(item.role == Application::ContentRole::Update ? "update" : item.role == Application::ContentRole::Dlc ? "dlc" : "base");
-					writer.Key("displayPath"); writer.String(item.displayPath.data(), item.displayPath.size()); writer.EndObject(); }
-				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("planToken");
+				writer.String(std::to_string(token).c_str());
+				writer.Key("suggestedFileName");
+				writer.String(suggested.data(), suggested.size());
+				writer.Key("items");
+				writer.StartArray();
+				for (const auto& item : plan->items)
+				{
+					writer.StartObject();
+					writer.Key("titleId");
+					writer.String(TitleIdString(item.titleId).c_str());
+					writer.Key("version");
+					writer.Uint(item.version);
+					writer.Key("role");
+					writer.String(item.role == Application::ContentRole::Update ? "update" : item.role == Application::ContentRole::Dlc ? "dlc"
+																																		: "base");
+					writer.Key("displayPath");
+					writer.String(item.displayPath.data(), item.displayPath.size());
+					writer.EndObject();
+				}
+				writer.EndArray();
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("titleManager.pickWuaDestination", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); auto suggested = RequiredString(params, "suggestedFileName");
+				RequireRole({"title-manager"});
+				auto suggested = RequiredString(params, "suggestedFileName");
 				const auto selected = m_nativeWindow->PickWuaDestination(std::string(suggested));
-				if (!selected) return std::string(R"({"cancelled":true})");
-				auto path = _utf8ToPath(*selected); if (path.extension() != ".wua") path += ".wua";
-				const auto token = ++m_nextOperationToken; m_wuaDestinations.emplace(token, NativePathRecord{m_invokingWindow, std::move(path)});
+				if (!selected)
+					return std::string(R"({"cancelled":true})");
+				auto path = _utf8ToPath(*selected);
+				if (path.extension() != ".wua")
+					path += ".wua";
+				const auto token = ++m_nextOperationToken;
+				m_wuaDestinations.emplace(token, NativePathRecord{m_invokingWindow, std::move(path)});
 				return std::string(R"({"cancelled":false,"destinationToken":)") + JsonString(std::to_string(token)) + "}";
 			});
 			m_rpc.Register("titleManager.startWua", [this](const rapidjson::Value& params) {
 				RequireRole({"title-manager"});
 				const auto planToken = ParseDecimalUint64(RequiredString(params, "planToken"), "planToken");
 				const auto destinationToken = ParseDecimalUint64(RequiredString(params, "destinationToken"), "destinationToken");
-				const auto stored = m_wuaPlans.find(planToken); const auto destination = m_wuaDestinations.find(destinationToken);
+				const auto stored = m_wuaPlans.find(planToken);
+				const auto destination = m_wuaDestinations.find(destinationToken);
 				if (stored == m_wuaPlans.end() || destination == m_wuaDestinations.end() || stored->second.owner != m_invokingWindow || destination->second.owner != m_invokingWindow)
 					throw std::invalid_argument("WUA plan or destination token is invalid or expired");
-				auto record = std::move(stored->second); auto output = std::move(destination->second.path); m_wuaPlans.erase(stored); m_wuaDestinations.erase(destination);
+				auto record = std::move(stored->second);
+				auto output = std::move(destination->second.path);
+				m_wuaPlans.erase(stored);
+				m_wuaDestinations.erase(destination);
 				const auto current = m_controller.PlanWuaConversion(record.titleId, record.preferredLocationUid);
 				auto same = [](const Application::WuaConversionPlan& left, const Application::WuaConversionPlan& right) {
-					if (left.items.size() != right.items.size()) return false;
-					for (std::size_t i = 0; i < left.items.size(); ++i) { const auto& a = left.items[i]; const auto& b = right.items[i];
-						if (a.locationUid != b.locationUid || a.titleId != b.titleId || a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role || a.displayPath != b.displayPath) return false; }
+					if (left.items.size() != right.items.size())
+						return false;
+					for (std::size_t i = 0; i < left.items.size(); ++i)
+					{
+						const auto& a = left.items[i];
+						const auto& b = right.items[i];
+						if (a.locationUid != b.locationUid || a.titleId != b.titleId || a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role || a.displayPath != b.displayPath)
+							return false;
+					}
 					return true;
 				};
-				if (!current || !same(record.plan, *current)) throw std::runtime_error("WUA conversion plan is stale; review the current installed content again");
+				if (!current || !same(record.plan, *current))
+					throw std::runtime_error("WUA conversion plan is stale; review the current installed content again");
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartWuaConversionJob(std::move(*current), std::move(output)))) + "}";
 			});
 			m_rpc.Register("titleManager.planDelete", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto result = m_controller.PlanManagedContentDelete(ParseOpaqueUid(params));
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "unable to plan managed-content deletion" : result.diagnostic);
-				const auto token = ++m_nextOperationToken; m_deletePlans.emplace(token, DeletePlanRecord{m_invokingWindow, *result.plan});
-				const auto& plan = *result.plan; rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("planToken"); writer.String(std::to_string(token).c_str());
-				writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str()); writer.Key("name"); writer.String(plan.name.data(), plan.name.size());
-				writer.Key("displayPath"); writer.String(plan.displayPath.data(), plan.displayPath.size()); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+				RequireRole({"title-manager"});
+				const auto result = m_controller.PlanManagedContentDelete(ParseOpaqueUid(params));
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? "unable to plan managed-content deletion" : result.diagnostic);
+				const auto token = ++m_nextOperationToken;
+				m_deletePlans.emplace(token, DeletePlanRecord{m_invokingWindow, *result.plan});
+				const auto& plan = *result.plan;
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("planToken");
+				writer.String(std::to_string(token).c_str());
+				writer.Key("titleId");
+				writer.String(TitleIdString(plan.titleId).c_str());
+				writer.Key("name");
+				writer.String(plan.name.data(), plan.name.size());
+				writer.Key("displayPath");
+				writer.String(plan.displayPath.data(), plan.displayPath.size());
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("titleManager.delete", [this](const rapidjson::Value& params) {
-				RequireRole({"title-manager"}); const auto token = ParseDecimalUint64(
-					RequiredString(params, "planToken"), "planToken"); const auto found = m_deletePlans.find(token);
-				if (found == m_deletePlans.end() || found->second.owner != m_invokingWindow) throw std::invalid_argument("delete plan token is invalid or expired");
-				auto plan = std::move(found->second.plan); m_deletePlans.erase(found); const auto result = m_controller.DeleteManagedContent(plan);
-				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "managed-content deletion failed" : result.diagnostic);
+				RequireRole({"title-manager"});
+				const auto token = ParseDecimalUint64(
+					RequiredString(params, "planToken"), "planToken");
+				const auto found = m_deletePlans.find(token);
+				if (found == m_deletePlans.end() || found->second.owner != m_invokingWindow)
+					throw std::invalid_argument("delete plan token is invalid or expired");
+				auto plan = std::move(found->second.plan);
+				m_deletePlans.erase(found);
+				const auto result = m_controller.DeleteManagedContent(plan);
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ? "managed-content deletion failed" : result.diagnostic);
 				return std::string("{}");
 			});
 			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"checksum-tool", "title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
-					switch (type) { case Application::ManagedContentType::Update: return "update"; case Application::ManagedContentType::Dlc: return "dlc"; case Application::ManagedContentType::System: return "system"; default: return "base"; }
+					switch (type)
+					{
+					case Application::ManagedContentType::Update:
+						return "update";
+					case Application::ManagedContentType::Dlc:
+						return "dlc";
+					case Application::ManagedContentType::System:
+						return "system";
+					default:
+						return "base";
+					}
 				};
 				auto formatName = [](Application::ManagedContentFormat format) {
-					switch (format) { case Application::ManagedContentFormat::Wud: return "wud"; case Application::ManagedContentFormat::Nus: return "nus"; case Application::ManagedContentFormat::Wua: return "wua"; case Application::ManagedContentFormat::Wuhb: return "wuhb"; default: return "folder"; }
+					switch (format)
+					{
+					case Application::ManagedContentFormat::Wud:
+						return "wud";
+					case Application::ManagedContentFormat::Nus:
+						return "nus";
+					case Application::ManagedContentFormat::Wua:
+						return "wua";
+					case Application::ManagedContentFormat::Wuhb:
+						return "wuhb";
+					default:
+						return "folder";
+					}
 				};
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("entries"); writer.StartArray();
-				for (const auto& entry : m_controller.ListManagedContent()) { writer.StartObject(); writer.Key("locationUid"); const auto uid = std::to_string(entry.locationUid); writer.String(uid.c_str()); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str()); writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); writer.Key("version"); writer.Uint(entry.version); writer.Key("region"); writer.String(entry.regionName.data(), entry.regionName.size()); writer.Key("type"); writer.String(typeName(entry.type)); writer.Key("format"); writer.String(formatName(entry.format)); writer.EndObject(); }
-				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("entries");
+				writer.StartArray();
+				for (const auto& entry : m_controller.ListManagedContent())
+				{
+					writer.StartObject();
+					writer.Key("locationUid");
+					const auto uid = std::to_string(entry.locationUid);
+					writer.String(uid.c_str());
+					writer.Key("titleId");
+					writer.String(TitleIdString(entry.titleId).c_str());
+					writer.Key("name");
+					writer.String(entry.name.data(), entry.name.size());
+					writer.Key("version");
+					writer.Uint(entry.version);
+					writer.Key("region");
+					writer.String(entry.regionName.data(), entry.regionName.size());
+					writer.Key("type");
+					writer.String(typeName(entry.type));
+					writer.Key("format");
+					writer.String(formatName(entry.format));
+					writer.EndObject();
+				}
+				writer.EndArray();
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("checksum.start", [this](const rapidjson::Value& params) {
 				RequireRole({"checksum-tool", "title-manager"});
@@ -4062,16 +5378,19 @@ namespace
 			m_rpc.Register("cemod.discover", [this](const rapidjson::Value& params) {
 				RequireRole({"cemod-manager", "cemod-permissions"});
 				std::optional<std::uint64_t> titleId;
-				if (params.IsObject() && params.HasMember("titleId")) titleId = ParseTitleId(params);
+				if (params.IsObject() && params.HasMember("titleId"))
+					titleId = ParseTitleId(params);
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartCemodSnapshotJob(titleId))) + "}";
 			});
 			m_rpc.Register("cemod.openPermissions", [this](const rapidjson::Value& params) {
 				RequireRole({"cemod-manager"});
 				const auto requestId = RequiredString(params, "requestId");
-				if (requestId.empty() || requestId.size() > 128) throw std::invalid_argument("requestId must contain between 1 and 128 characters");
+				if (requestId.empty() || requestId.size() > 128)
+					throw std::invalid_argument("requestId must contain between 1 and 128 characters");
 				const auto titleId = ParseTitleId(params);
 				const auto packageKey = RequiredString(params, "packageKey");
-				if (packageKey.empty() || packageKey.size() > 4096) throw std::invalid_argument("packageKey is invalid");
+				if (packageKey.empty() || packageKey.size() > 4096)
+					throw std::invalid_argument("packageKey is invalid");
 				const auto generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
 				const auto id = QueueToolWindow("cemod-permissions", std::string(requestId), titleId, std::string(packageKey), generation);
 				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
@@ -4083,7 +5402,8 @@ namespace
 					throw std::runtime_error("approval context is unavailable");
 				Application::CemodApprovalUpdate update;
 				update.generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
-				update.titleId = ParseTitleId(params); update.packageKey = std::string(RequiredString(params, "packageKey"));
+				update.titleId = ParseTitleId(params);
+				update.packageKey = std::string(RequiredString(params, "packageKey"));
 				update.grantedPermissions = ParseDecimalUint64(RequiredString(params, "grantedPermissions"), "grantedPermissions");
 				update.approved = RequiredBool(params, "approved");
 				if (update.titleId != *found->second->titleContext || update.generation != *found->second->generationContext || update.packageKey != found->second->packageContext)
@@ -4105,11 +5425,13 @@ namespace
 			});
 			m_rpc.Register("cemod.importLegacy", [this](const rapidjson::Value& params) {
 				RequireRole({"cemod-manager"});
-				if (!RequiredBool(params, "confirmed")) throw std::invalid_argument("legacy import requires explicit confirmation");
+				if (!RequiredBool(params, "confirmed"))
+					throw std::invalid_argument("legacy import requires explicit confirmation");
 				const auto result = m_controller.ImportLegacyCemodPackageData(
 					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
 					ParseTitleId(params), RequiredString(params, "packageKey"));
-				if (result) Emit("cemod.changed", R"({"reason":"legacyImport"})");
+				if (result)
+					Emit("cemod.changed", R"({"reason":"legacyImport"})");
 				return CemodResultJson(result);
 			});
 			m_rpc.Register("diagnostics.ppcThreadsSnapshot", [this](const rapidjson::Value&) {
@@ -4118,54 +5440,108 @@ namespace
 				auto stateName = [](Application::PpcThreadState state) -> const char* {
 					switch (state)
 					{
-					case Application::PpcThreadState::None: return "none";
-					case Application::PpcThreadState::Ready: return "ready";
-					case Application::PpcThreadState::Running: return "running";
-					case Application::PpcThreadState::Waiting: return "waiting";
-					case Application::PpcThreadState::Moribund: return "moribund";
-					case Application::PpcThreadState::Suspended: return "suspended";
-					default: return "unknown";
+					case Application::PpcThreadState::None:
+						return "none";
+					case Application::PpcThreadState::Ready:
+						return "ready";
+					case Application::PpcThreadState::Running:
+						return "running";
+					case Application::PpcThreadState::Waiting:
+						return "waiting";
+					case Application::PpcThreadState::Moribund:
+						return "moribund";
+					case Application::PpcThreadState::Suspended:
+						return "suspended";
+					default:
+						return "unknown";
 					}
 				};
-				auto hex = [](std::uint32_t value) { return fmt::format("{:08X}", value); };
-				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
-				writer.Key("generation"); writer.String(std::to_string(snapshot.generation).c_str());
-				writer.Key("available"); writer.Bool(snapshot.available);
-				writer.Key("diagnostic"); writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
-				writer.Key("threads"); writer.StartArray();
+				auto hex = [](std::uint32_t value) {
+					return fmt::format("{:08X}", value);
+				};
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("generation");
+				writer.String(std::to_string(snapshot.generation).c_str());
+				writer.Key("available");
+				writer.Bool(snapshot.available);
+				writer.Key("diagnostic");
+				writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
+				writer.Key("threads");
+				writer.StartArray();
 				for (const auto& thread : snapshot.threads)
 				{
 					writer.StartObject();
-					const auto address = hex(thread.address); writer.Key("address"); writer.String(address.c_str());
-					const auto identity = fmt::format("{:016X}", thread.identity); writer.Key("identity"); writer.String(identity.c_str());
-					const auto entry = hex(thread.entryPoint); writer.Key("entryPoint"); writer.String(entry.c_str());
-					const auto stackLow = hex(thread.stackLow); writer.Key("stackLow"); writer.String(stackLow.c_str());
-					const auto stackHigh = hex(thread.stackHigh); writer.Key("stackHigh"); writer.String(stackHigh.c_str());
-					const auto pc = hex(thread.instructionPointer); writer.Key("instructionPointer"); writer.String(pc.c_str());
-					const auto lr = hex(thread.linkRegister); writer.Key("linkRegister"); writer.String(lr.c_str());
-					writer.Key("state"); writer.String(stateName(thread.state));
-					writer.Key("requestedAffinity"); writer.Uint(thread.requestedAffinity);
-					writer.Key("effectiveAffinity"); writer.Uint(thread.effectiveAffinity);
-					writer.Key("basePriority"); writer.Int(thread.basePriority);
-					writer.Key("effectivePriority"); writer.Int(thread.effectivePriority);
-					const auto wake = std::to_string(thread.wakeUpTime); writer.Key("wakeUpTime"); writer.String(wake.c_str());
-					const auto cycles = std::to_string(thread.totalCycles); writer.Key("totalCycles"); writer.String(cycles.c_str());
-					writer.Key("name"); writer.String(thread.name.data(), thread.name.size());
-					writer.Key("gpr"); writer.StartArray();
+					const auto address = hex(thread.address);
+					writer.Key("address");
+					writer.String(address.c_str());
+					const auto identity = fmt::format("{:016X}", thread.identity);
+					writer.Key("identity");
+					writer.String(identity.c_str());
+					const auto entry = hex(thread.entryPoint);
+					writer.Key("entryPoint");
+					writer.String(entry.c_str());
+					const auto stackLow = hex(thread.stackLow);
+					writer.Key("stackLow");
+					writer.String(stackLow.c_str());
+					const auto stackHigh = hex(thread.stackHigh);
+					writer.Key("stackHigh");
+					writer.String(stackHigh.c_str());
+					const auto pc = hex(thread.instructionPointer);
+					writer.Key("instructionPointer");
+					writer.String(pc.c_str());
+					const auto lr = hex(thread.linkRegister);
+					writer.Key("linkRegister");
+					writer.String(lr.c_str());
+					writer.Key("state");
+					writer.String(stateName(thread.state));
+					writer.Key("requestedAffinity");
+					writer.Uint(thread.requestedAffinity);
+					writer.Key("effectiveAffinity");
+					writer.Uint(thread.effectiveAffinity);
+					writer.Key("basePriority");
+					writer.Int(thread.basePriority);
+					writer.Key("effectivePriority");
+					writer.Int(thread.effectivePriority);
+					const auto wake = std::to_string(thread.wakeUpTime);
+					writer.Key("wakeUpTime");
+					writer.String(wake.c_str());
+					const auto cycles = std::to_string(thread.totalCycles);
+					writer.Key("totalCycles");
+					writer.String(cycles.c_str());
+					writer.Key("name");
+					writer.String(thread.name.data(), thread.name.size());
+					writer.Key("gpr");
+					writer.StartArray();
 					for (const auto value : {thread.gpr3, thread.gpr4, thread.gpr5, thread.gpr6, thread.gpr7})
-					{ const auto formatted = hex(value); writer.String(formatted.c_str()); }
-					writer.EndArray(); writer.Key("cancelRequested"); writer.Bool(thread.cancelRequested);
-					writer.Key("suspensionOwnedByFacade"); writer.Bool(thread.suspensionOwnedByFacade);
+					{
+						const auto formatted = hex(value);
+						writer.String(formatted.c_str());
+					}
+					writer.EndArray();
+					writer.Key("cancelRequested");
+					writer.Bool(thread.cancelRequested);
+					writer.Key("suspensionOwnedByFacade");
+					writer.Bool(thread.suspensionOwnedByFacade);
 					if (thread.waitingMutex != 0)
 					{
-						writer.Key("waitingMutex"); writer.StartObject();
-						const auto mutex = hex(thread.waitingMutex); writer.Key("address"); writer.String(mutex.c_str());
-						const auto owner = hex(thread.mutexOwner); writer.Key("owner"); writer.String(owner.c_str());
-						writer.Key("lockCount"); writer.Uint(thread.mutexLockCount); writer.EndObject();
+						writer.Key("waitingMutex");
+						writer.StartObject();
+						const auto mutex = hex(thread.waitingMutex);
+						writer.Key("address");
+						writer.String(mutex.c_str());
+						const auto owner = hex(thread.mutexOwner);
+						writer.Key("owner");
+						writer.String(owner.c_str());
+						writer.Key("lockCount");
+						writer.Uint(thread.mutexLockCount);
+						writer.EndObject();
 					}
 					writer.EndObject();
 				}
-				writer.EndArray(); writer.EndObject();
+				writer.EndArray();
+				writer.EndObject();
 				return std::string(buffer.GetString(), buffer.GetSize());
 			});
 			m_rpc.Register("diagnostics.ppcThreadCommand", [this](const rapidjson::Value& params) {
@@ -4176,88 +5552,95 @@ namespace
 				request.threadAddress = RequiredHexAddress(params, "threadAddress");
 				request.threadIdentity = RequiredHexIdentity(params, "threadIdentity");
 				const auto command = RequiredString(params, "command");
-				if (command == "suspend") request.command = Application::PpcThreadCommand::Suspend;
-				else if (command == "resume") request.command = Application::PpcThreadCommand::Resume;
+				if (command == "suspend")
+					request.command = Application::PpcThreadCommand::Suspend;
+				else if (command == "resume")
+					request.command = Application::PpcThreadCommand::Resume;
 				else
 				{
 					request.command = Application::PpcThreadCommand::AdjustPriority;
-					if (command == "boost1") request.priorityDelta = -1;
-					else if (command == "boost5") request.priorityDelta = -5;
-					else if (command == "decrease1") request.priorityDelta = 1;
-					else if (command == "decrease5") request.priorityDelta = 5;
-					else throw std::invalid_argument("unknown PPC thread command");
+					if (command == "boost1")
+						request.priorityDelta = -1;
+					else if (command == "boost5")
+						request.priorityDelta = -5;
+					else if (command == "decrease1")
+						request.priorityDelta = 1;
+					else if (command == "decrease5")
+						request.priorityDelta = 5;
+					else
+						throw std::invalid_argument("unknown PPC thread command");
 				}
 				const auto result = m_controller.ExecutePpcThreadCommand(request);
 				return std::string(R"({"applied":)") + (result.applied ? "true" : "false") +
-					R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+					   R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 			});
 			m_rpc.Register("memorySearch.start", [this](const rapidjson::Value& params) {
 				RequireRole({"memory-searcher"});
 				const auto& value = RequiredMember(params, "value");
 				return MemorySessionJson(m_memorySearch.Start(m_invokingWindow,
-					{ParseMemoryValue(value), RequiredBoundedUint(params, "maximumBytes", 1,
-						static_cast<std::uint32_t>(Application::MemorySearchFacade::MaximumScanBytes))}));
+															  {ParseMemoryValue(value), RequiredBoundedUint(params, "maximumBytes", 1,
+																											static_cast<std::uint32_t>(Application::MemorySearchFacade::MaximumScanBytes))}));
 			});
 			m_rpc.Register("memorySearch.filter", [this](const rapidjson::Value& params) {
 				RequireRole({"memory-searcher"});
 				return MemorySessionJson(m_memorySearch.Filter(m_invokingWindow,
-					RequiredString(params, "sessionToken"),
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
-					ParseMemoryValue(RequiredMember(params, "value"))));
+															   RequiredString(params, "sessionToken"),
+															   ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+															   ParseMemoryValue(RequiredMember(params, "value"))));
 			});
 			m_rpc.Register("memorySearch.status", [this](const rapidjson::Value& params) {
 				RequireRole({"memory-searcher"});
 				return MemoryStatusJson(m_memorySearch.Status(m_invokingWindow,
-					RequiredString(params, "sessionToken")));
+															  RequiredString(params, "sessionToken")));
 			});
 			m_rpc.Register("memorySearch.page", [this](const rapidjson::Value& params) {
 				RequireRole({"memory-searcher"});
 				return MemoryPageJson(m_memorySearch.Page(m_invokingWindow,
-					RequiredString(params, "sessionToken"),
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
-					RequiredUint(params, "offset"), RequiredBoundedUint(params, "limit", 1,
-						Application::MemorySearchFacade::MaximumPageSize)));
+														  RequiredString(params, "sessionToken"),
+														  ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+														  RequiredUint(params, "offset"), RequiredBoundedUint(params, "limit", 1, Application::MemorySearchFacade::MaximumPageSize)));
 			});
 			m_rpc.Register("memorySearch.cancel", [this](const rapidjson::Value& params) {
 				RequireRole({"memory-searcher"});
 				m_memorySearch.Cancel(m_invokingWindow, RequiredString(params, "sessionToken"),
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"));
+									  ParseDecimalUint64(RequiredString(params, "generation"), "generation"));
 				return std::string("{}");
 			});
 			m_rpc.Register("ppcDebugger.snapshot", [this](const rapidjson::Value& params) {
 				RequireRole({"ppc-debugger"});
 				return PpcDebuggerSnapshotJson(m_ppcDebugger.Capture(m_invokingWindow,
-					{RequiredHexAddress(params, "center")}, RequiredBoundedUint(params,
-						"instructionCount", 1, Application::PpcDebuggerFacade::MaximumInstructionCount)));
+																	 {RequiredHexAddress(params, "center")}, RequiredBoundedUint(params, "instructionCount", 1, Application::PpcDebuggerFacade::MaximumInstructionCount)));
 			});
 			m_rpc.Register("ppcDebugger.toggleBreakpoint", [this](const rapidjson::Value& params) {
 				RequireRole({"ppc-debugger"});
 				m_ppcDebugger.ToggleExecuteBreakpoint(m_invokingWindow,
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
-					{RequiredHexAddress(params, "address")}); return std::string("{}");
+													  ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+													  {RequiredHexAddress(params, "address")});
+				return std::string("{}");
 			});
 			m_rpc.Register("ppcDebugger.setBreakpointEnabled", [this](const rapidjson::Value& params) {
 				RequireRole({"ppc-debugger"});
 				m_ppcDebugger.SetBreakpointEnabled(m_invokingWindow,
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
-					RequiredString(params, "identity"), RequiredBool(params, "enabled"));
+												   ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+												   RequiredString(params, "identity"), RequiredBool(params, "enabled"));
 				return std::string("{}");
 			});
 			m_rpc.Register("ppcDebugger.deleteBreakpoint", [this](const rapidjson::Value& params) {
 				RequireRole({"ppc-debugger"});
 				m_ppcDebugger.DeleteBreakpoint(m_invokingWindow,
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
-					RequiredString(params, "identity")); return std::string("{}");
+											   ParseDecimalUint64(RequiredString(params, "generation"), "generation"),
+											   RequiredString(params, "identity"));
+				return std::string("{}");
 			});
 			m_rpc.Register("ppcDebugger.control", [this](const rapidjson::Value& params) {
-				RequireRole({"ppc-debugger"}); const auto command = RequiredString(params, "command");
-				const auto parsed = command == "break" ? Application::PpcDebuggerControl::Break :
-					command == "run" ? Application::PpcDebuggerControl::Run :
-					command == "stepInto" ? Application::PpcDebuggerControl::StepInto :
-					command == "stepOver" ? Application::PpcDebuggerControl::StepOver :
-					throw std::invalid_argument("unknown PPC debugger control command");
+				RequireRole({"ppc-debugger"});
+				const auto command = RequiredString(params, "command");
+				const auto parsed = command == "break" ? Application::PpcDebuggerControl::Break : command == "run"	  ? Application::PpcDebuggerControl::Run
+																							  : command == "stepInto" ? Application::PpcDebuggerControl::StepInto
+																							  : command == "stepOver" ? Application::PpcDebuggerControl::StepOver
+																													  : throw std::invalid_argument("unknown PPC debugger control command");
 				m_ppcDebugger.Control(m_invokingWindow,
-					ParseDecimalUint64(RequiredString(params, "generation"), "generation"), parsed);
+									  ParseDecimalUint64(RequiredString(params, "generation"), "generation"), parsed);
 				return std::string("{}");
 			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
@@ -4287,8 +5670,8 @@ namespace
 					{
 						std::array<char, 11> date{};
 						std::snprintf(date.data(), date.size(), "%04u-%02u-%02u",
-							game.playStats.lastPlayedYear, game.playStats.lastPlayedMonth,
-							game.playStats.lastPlayedDay);
+									  game.playStats.lastPlayedYear, game.playStats.lastPlayedMonth,
+									  game.playStats.lastPlayedDay);
 						item.AddMember("lastPlayed", rapidjson::Value(date.data(), allocator), allocator);
 					}
 					else
@@ -4340,8 +5723,10 @@ namespace
 			if (!m_windowState->BeginLaunch())
 				throw std::runtime_error("main window is not ready to launch a title");
 			m_pendingLaunch = PendingLaunch{path, titleId, m_invokingWindow, ownerGeneration};
-			try { return ContinuePendingLaunch(); }
-			catch (...)
+			try
+			{
+				return ContinuePendingLaunch();
+			} catch (...)
 			{
 				CancelPendingLaunch("failed", "Title launch preflight failed.");
 				throw;
@@ -4369,13 +5754,13 @@ namespace
 				m_pendingLaunch->decisionSaved = false;
 				m_pendingLaunch->approved = false;
 				(void)QueueToolWindow("cemod-permissions", {}, approval.titleId,
-					approval.packageKey, approval.generation, true);
+									  approval.packageKey, approval.generation, true);
 				Emit("titles.launchState", std::string(
-					R"({"status":"awaitingPermission","titleId":)") +
-					JsonString(TitleIdString(approval.titleId)) + R"(,"packageKey":)" +
-					JsonString(approval.packageKey) + "}");
+											   R"({"status":"awaitingPermission","titleId":)") +
+											   JsonString(TitleIdString(approval.titleId)) + R"(,"packageKey":)" +
+											   JsonString(approval.packageKey) + "}");
 				return std::string(R"({"status":"awaitingPermission","titleId":)") +
-					JsonString(TitleIdString(approval.titleId)) + "}";
+					   JsonString(TitleIdString(approval.titleId)) + "}";
 			}
 
 			const auto path = m_pendingLaunch->path;
@@ -4384,8 +5769,7 @@ namespace
 			const bool launchFullscreen = frontendSettings.fullscreenOverride.value_or(
 				frontendSettings.startFullscreen);
 			const bool previousFullscreen = m_fullscreen;
-			const auto result = m_controller.Launch({path},
-				[this, launchFullscreen](const Application::LaunchResult&) {
+			const auto result = m_controller.Launch({path}, [this, launchFullscreen](const Application::LaunchResult&) {
 					if (m_fullscreen != launchFullscreen)
 					{
 						m_fullscreen = launchFullscreen;
@@ -4396,9 +5780,7 @@ namespace
 					m_rendererHost->InitializeMain(region);
 					if (!m_windowState->CommitLaunch())
 						throw std::runtime_error("main window content transition failed");
-					m_nativeWindow->ShowRenderRegion();
-				},
-				[this, previousFullscreen] {
+					m_nativeWindow->ShowRenderRegion(); }, [this, previousFullscreen] {
 					m_rendererHost->AbandonMainInitialization();
 					DestroyMainRenderRegion();
 					m_nativeWindow->ShowLibrary();
@@ -4407,8 +5789,7 @@ namespace
 					{
 						m_fullscreen = previousFullscreen;
 						m_nativeWindow->SetFullscreen(previousFullscreen);
-					}
-				});
+					} });
 			if (!result)
 			{
 				m_pendingLaunch.reset();
@@ -4424,44 +5805,44 @@ namespace
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->RollbackLaunch();
 				}
-				const auto diagnostic = result.diagnostic.empty() ?
-					"title launch failed" : result.diagnostic;
+				const auto diagnostic = result.diagnostic.empty() ? "title launch failed" : result.diagnostic;
 				Emit("titles.launchState", std::string(R"({"status":"failed","titleId":)") +
-					JsonString(TitleIdString(expectedTitleId)) + R"(,"diagnostic":)" +
-					JsonString(diagnostic) + "}");
+											   JsonString(TitleIdString(expectedTitleId)) + R"(,"diagnostic":)" +
+											   JsonString(diagnostic) + "}");
 				throw std::runtime_error(diagnostic);
 			}
 			m_pendingLaunch.reset();
 			if (frontendSettings.openPad && !m_nativeWindow->IsPadRenderRegionOpen())
 				TogglePadRenderRegion();
 			Emit("titles.launchState", std::string(R"({"status":"started","titleId":)") +
-				JsonString(TitleIdString(result.titleId)) + "}");
+										   JsonString(TitleIdString(result.titleId)) + "}");
 			return std::string(R"({"status":"started","titleId":)") +
-				JsonString(TitleIdString(result.titleId)) + "}";
+				   JsonString(TitleIdString(result.titleId)) + "}";
 		}
 
 		void CancelPendingLaunch(std::string_view status,
-			std::string_view diagnostic) noexcept
+								 std::string_view diagnostic) noexcept
 		{
-			if (!m_pendingLaunch) return;
+			if (!m_pendingLaunch)
+				return;
 			const auto titleId = m_pendingLaunch->titleId;
 			m_pendingLaunch.reset();
 			if (m_windowState && m_windowState->Snapshot().mode ==
-				WebFrontend::MainWindowContentMode::LaunchPending)
+									 WebFrontend::MainWindowContentMode::LaunchPending)
 				(void)m_windowState->RollbackLaunch();
 			try
 			{
 				if (!m_rpc.IsShuttingDown())
 					Emit("titles.launchState", std::string(R"({"status":)") +
-						JsonString(status) + R"(,"titleId":)" +
-						JsonString(TitleIdString(titleId)) + R"(,"diagnostic":)" +
-						JsonString(diagnostic) + "}");
-			}
-			catch (...) {}
+												   JsonString(status) + R"(,"titleId":)" +
+												   JsonString(TitleIdString(titleId)) + R"(,"diagnostic":)" +
+												   JsonString(diagnostic) + "}");
+			} catch (...)
+			{}
 		}
 
 		void HandleLaunchPermissionOpenFailure(std::uint64_t windowId,
-			std::string_view diagnostic) noexcept
+											   std::string_view diagnostic) noexcept
 		{
 			if (m_pendingLaunch && m_pendingLaunch->permissionWindow == windowId)
 				CancelPendingLaunch("failed", diagnostic);
@@ -4469,12 +5850,13 @@ namespace
 
 		void ResumePendingLaunchNoexcept() noexcept
 		{
-			try { (void)ContinuePendingLaunch(); }
-			catch (const std::exception& error)
+			try
+			{
+				(void)ContinuePendingLaunch();
+			} catch (const std::exception& error)
 			{
 				CancelPendingLaunch("failed", error.what());
-			}
-			catch (...)
+			} catch (...)
 			{
 				CancelPendingLaunch("failed", "Unknown title launch continuation failure.");
 			}
@@ -4553,7 +5935,7 @@ namespace
 		bool m_mainReplyPending{};
 		Host::NativeSurfacePublication m_mainWindowPublication{};
 	};
-}
+} // namespace
 
 void Frontend::Run()
 {
@@ -4575,7 +5957,7 @@ void Frontend::Run()
 	std::thread uiThread([&uiFailure] {
 		SetThreadName("cemu-web-ui");
 		const auto initialized = CoInitializeEx(nullptr,
-			COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+												COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 		if (FAILED(initialized))
 		{
 			uiFailure = std::make_exception_ptr(
@@ -4586,8 +5968,7 @@ void Frontend::Run()
 		{
 			Runtime runtime;
 			runtime.Run();
-		}
-		catch (...)
+		} catch (...)
 		{
 			uiFailure = std::current_exception();
 		}

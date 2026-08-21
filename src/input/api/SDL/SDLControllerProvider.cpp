@@ -63,7 +63,7 @@ std::vector<std::shared_ptr<ControllerBase>> SDLControllerProvider::get_controll
 
 	TempState lock(SDL_LockJoysticks, SDL_UnlockJoysticks);
 	int gamepad_count = 0;
-	SDL_JoystickID *gamepad_ids = SDL_GetGamepads(&gamepad_count);
+	SDL_JoystickID* gamepad_ids = SDL_GetGamepads(&gamepad_count);
 	if (gamepad_ids)
 	{
 		for (size_t i = 0; i < gamepad_count; ++i)
@@ -86,7 +86,7 @@ int SDLControllerProvider::get_index(size_t guid_index, const SDL_GUID& guid) co
 	size_t index = 0;
 	int gamepad_count = 0;
 	TempState lock(SDL_LockJoysticks, SDL_UnlockJoysticks);
-	SDL_JoystickID *gamepad_ids = SDL_GetGamepads(&gamepad_count);
+	SDL_JoystickID* gamepad_ids = SDL_GetGamepads(&gamepad_count);
 	if (gamepad_ids)
 	{
 		for (size_t i = 0; i < gamepad_count; ++i)
@@ -157,129 +157,129 @@ void SDLControllerProvider::HandleSDLEvent(SDL_Event& event)
 {
 	switch (event.type)
 	{
-		case SDL_EVENT_QUIT:
-		{
-			std::scoped_lock _l(s_mutex);
-			s_running = false;
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_AXIS_MOTION: /**< Game controller axis motion */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_BUTTON_DOWN: /**< Game controller button pressed */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_BUTTON_UP: /**< Game controller button released */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_ADDED: /**< A new Game controller has been inserted into the system */
-		{
-			std::scoped_lock _l(s_mutex);
-			InputManager::instance().on_device_changed();
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_REMOVED: /**< An opened Game controller has been removed */
-		{
-			std::scoped_lock _l(s_mutex);
-			InputManager::instance().on_device_changed();
-			s_motion_states.erase(event.gdevice.which);
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_REMAPPED: 			/**< The controller mapping was updated */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN:		/**< Game controller touchpad was touched */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:		/**< Game controller touchpad finger was moved */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_TOUCHPAD_UP:			/**< Game controller touchpad finger was lifted */
-		{
-			break;
-		}
-		case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:		/**< Game controller sensor was updated */
-		{
-			SDL_JoystickID id = event.gsensor.which;
-			uint64_t ts = event.gsensor.timestamp;
-			std::scoped_lock _l(s_mutex);
-			auto& state = s_motion_states[id];
-			auto& tracking = state.tracking;
+	case SDL_EVENT_QUIT:
+	{
+		std::scoped_lock _l(s_mutex);
+		s_running = false;
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION: /**< Game controller axis motion */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN: /**< Game controller button pressed */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_BUTTON_UP: /**< Game controller button released */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_ADDED: /**< A new Game controller has been inserted into the system */
+	{
+		std::scoped_lock _l(s_mutex);
+		InputManager::instance().on_device_changed();
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_REMOVED: /**< An opened Game controller has been removed */
+	{
+		std::scoped_lock _l(s_mutex);
+		InputManager::instance().on_device_changed();
+		s_motion_states.erase(event.gdevice.which);
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_REMAPPED: /**< The controller mapping was updated */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN: /**< Game controller touchpad was touched */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION: /**< Game controller touchpad finger was moved */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_TOUCHPAD_UP: /**< Game controller touchpad finger was lifted */
+	{
+		break;
+	}
+	case SDL_EVENT_GAMEPAD_SENSOR_UPDATE: /**< Game controller sensor was updated */
+	{
+		SDL_JoystickID id = event.gsensor.which;
+		uint64_t ts = event.gsensor.timestamp;
+		std::scoped_lock _l(s_mutex);
+		auto& state = s_motion_states[id];
+		auto& tracking = state.tracking;
 
-			if (event.gsensor.sensor == SDL_SENSOR_ACCEL)
+		if (event.gsensor.sensor == SDL_SENSOR_ACCEL)
+		{
+			const auto dif = ts - tracking.lastTimestampAccel;
+			if (dif <= 0)
 			{
-				const auto dif = ts - tracking.lastTimestampAccel;
-				if (dif <= 0)
-				{
-					break;
-				}
-
-				if (dif >= 10000000000)
-				{
-					tracking.hasAcc = false;
-					tracking.hasGyro = false;
-					tracking.lastTimestampAccel = ts;
-					break;
-				}
-
-				tracking.lastTimestampAccel = ts;
-				tracking.acc[0] = -event.gsensor.data[0] / 9.81f;
-				tracking.acc[1] = -event.gsensor.data[1] / 9.81f;
-				tracking.acc[2] = -event.gsensor.data[2] / 9.81f;
-				tracking.hasAcc = true;
+				break;
 			}
-			if (event.gsensor.sensor == SDL_SENSOR_GYRO)
+
+			if (dif >= 10000000000)
 			{
-				const auto dif = ts - tracking.lastTimestampGyro;
-				if (dif <= 0)
-				{
-					break;
-				}
-
-				if (dif >= 10000000000)
-				{
-					tracking.hasAcc = false;
-					tracking.hasGyro = false;
-					tracking.lastTimestampGyro = ts;
-					break;
-				}
-
-				tracking.lastTimestampGyro = ts;
-				tracking.gyro[0] = event.gsensor.data[0];
-				tracking.gyro[1] = -event.gsensor.data[1];
-				tracking.gyro[2] = -event.gsensor.data[2];
-				tracking.hasGyro = true;
-			}
-			if (tracking.hasAcc && tracking.hasGyro)
-			{
-				auto ts = std::max(tracking.lastTimestampGyro, tracking.lastTimestampAccel);
-
-				if (ts > tracking.lastTimestampIntegrate)
-				{
-					const auto tsDif = ts - tracking.lastTimestampIntegrate;
-					tracking.lastTimestampIntegrate = ts;
-					float tsDifD = (float)tsDif / 1000000000.0f;
-
-					if (tsDifD >= 1.0f)
-					{
-						tsDifD = 1.0f;
-					}
-
-					state.handler.processMotionSample(tsDifD, tracking.gyro.x, tracking.gyro.y, tracking.gyro.z, tracking.acc.x, -tracking.acc.y, -tracking.acc.z);
-					state.data = state.handler.getMotionSample();
-				}
-
 				tracking.hasAcc = false;
 				tracking.hasGyro = false;
+				tracking.lastTimestampAccel = ts;
+				break;
 			}
-			break;
+
+			tracking.lastTimestampAccel = ts;
+			tracking.acc[0] = -event.gsensor.data[0] / 9.81f;
+			tracking.acc[1] = -event.gsensor.data[1] / 9.81f;
+			tracking.acc[2] = -event.gsensor.data[2] / 9.81f;
+			tracking.hasAcc = true;
 		}
+		if (event.gsensor.sensor == SDL_SENSOR_GYRO)
+		{
+			const auto dif = ts - tracking.lastTimestampGyro;
+			if (dif <= 0)
+			{
+				break;
+			}
+
+			if (dif >= 10000000000)
+			{
+				tracking.hasAcc = false;
+				tracking.hasGyro = false;
+				tracking.lastTimestampGyro = ts;
+				break;
+			}
+
+			tracking.lastTimestampGyro = ts;
+			tracking.gyro[0] = event.gsensor.data[0];
+			tracking.gyro[1] = -event.gsensor.data[1];
+			tracking.gyro[2] = -event.gsensor.data[2];
+			tracking.hasGyro = true;
+		}
+		if (tracking.hasAcc && tracking.hasGyro)
+		{
+			auto ts = std::max(tracking.lastTimestampGyro, tracking.lastTimestampAccel);
+
+			if (ts > tracking.lastTimestampIntegrate)
+			{
+				const auto tsDif = ts - tracking.lastTimestampIntegrate;
+				tracking.lastTimestampIntegrate = ts;
+				float tsDifD = (float)tsDif / 1000000000.0f;
+
+				if (tsDifD >= 1.0f)
+				{
+					tsDifD = 1.0f;
+				}
+
+				state.handler.processMotionSample(tsDifD, tracking.gyro.x, tracking.gyro.y, tracking.gyro.z, tracking.acc.x, -tracking.acc.y, -tracking.acc.z);
+				state.data = state.handler.getMotionSample();
+			}
+
+			tracking.hasAcc = false;
+			tracking.hasGyro = false;
+		}
+		break;
+	}
 	}
 }
 

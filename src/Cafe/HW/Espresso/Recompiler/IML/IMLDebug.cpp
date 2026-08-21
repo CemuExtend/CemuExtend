@@ -123,7 +123,7 @@ void IMLDebug_PrintLivenessRangeInfo(StringBuf& currentLineText, IMLSegment* iml
 	{
 		if (subrangeItr->interval.start.GetInstructionIndexEx() == offset)
 		{
-			if(subrangeItr->interval.start.IsInstructionIndex() && !subrangeItr->interval.start.IsOnInputEdge())
+			if (subrangeItr->interval.start.IsInstructionIndex() && !subrangeItr->interval.start.IsOnInputEdge())
 				currentLineText.add(".");
 			else
 				currentLineText.add("|");
@@ -132,7 +132,7 @@ void IMLDebug_PrintLivenessRangeInfo(StringBuf& currentLineText, IMLSegment* iml
 		}
 		else if (subrangeItr->interval.end.GetInstructionIndexEx() == offset)
 		{
-			if(subrangeItr->interval.end.IsInstructionIndex() && !subrangeItr->interval.end.IsOnOutputEdge())
+			if (subrangeItr->interval.end.IsInstructionIndex() && !subrangeItr->interval.end.IsOnOutputEdge())
 				currentLineText.add("*    ");
 			else
 				currentLineText.add("|    ");
@@ -192,7 +192,7 @@ std::string IMLDebug_GetConditionName(IMLCondition cond)
 
 void IMLDebug_DisassembleInstruction(const IMLInstruction& inst, std::string& disassemblyLineOut)
 {
-	const sint32 lineOffsetParameters = 10;//18;
+	const sint32 lineOffsetParameters = 10; // 18;
 
 	StringBuf strOutput(1024);
 	strOutput.reset();
@@ -205,7 +205,7 @@ void IMLDebug_DisassembleInstruction(const IMLInstruction& inst, std::string& di
 		while ((sint32)strOutput.getLen() < lineOffsetParameters)
 			strOutput.add(" ");
 
-		if(inst.type == PPCREC_IML_TYPE_R_NAME)
+		if (inst.type == PPCREC_IML_TYPE_R_NAME)
 			IMLDebug_AppendRegisterParam(strOutput, inst.op_r_name.regR);
 
 		strOutput.add("name_");
@@ -213,10 +213,10 @@ void IMLDebug_DisassembleInstruction(const IMLInstruction& inst, std::string& di
 		{
 			strOutput.addFmt("r{}", inst.op_r_name.name - PPCREC_NAME_R0);
 		}
-		if (inst.op_r_name.name >= PPCREC_NAME_FPR_HALF && inst.op_r_name.name < (PPCREC_NAME_FPR_HALF + 32*2))
+		if (inst.op_r_name.name >= PPCREC_NAME_FPR_HALF && inst.op_r_name.name < (PPCREC_NAME_FPR_HALF + 32 * 2))
 		{
-			strOutput.addFmt("f{}", inst.op_r_name.name - ((PPCREC_NAME_FPR_HALF - inst.op_r_name.name)/2));
-			if ((inst.op_r_name.name-PPCREC_NAME_FPR_HALF)&1)
+			strOutput.addFmt("f{}", inst.op_r_name.name - ((PPCREC_NAME_FPR_HALF - inst.op_r_name.name) / 2));
+			if ((inst.op_r_name.name - PPCREC_NAME_FPR_HALF) & 1)
 				strOutput.add(".ps1");
 			else
 				strOutput.add(".ps0");
@@ -246,7 +246,6 @@ void IMLDebug_DisassembleInstruction(const IMLInstruction& inst, std::string& di
 			strOutput.add(", ");
 			IMLDebug_AppendRegisterParam(strOutput, inst.op_r_name.regR, true);
 		}
-
 	}
 	else if (inst.type == PPCREC_IML_TYPE_R_R)
 	{
@@ -489,7 +488,7 @@ void IMLDebug_DumpSegment(ppcImlGenContext_t* ctx, IMLSegment* imlSegment, bool 
 		IMLDebug_PrintLivenessRangeInfo(strOutput, imlSegment, RA_INTER_RANGE_START);
 		cemuLog_log(LogType::Force, "{}", strOutput.c_str());
 	}
-	//debug_printf("\n");
+	// debug_printf("\n");
 	strOutput.reset();
 
 	std::string disassemblyLine;
@@ -501,7 +500,7 @@ void IMLDebug_DumpSegment(ppcImlGenContext_t* ctx, IMLSegment* imlSegment, bool 
 			continue;
 		strOutput.reset();
 		strOutput.addFmt("{:02x} ", i);
-		//cemuLog_log(LogType::Force, "{:02x} ", i);
+		// cemuLog_log(LogType::Force, "{:02x} ", i);
 		disassemblyLine.clear();
 		IMLDebug_DisassembleInstruction(inst, disassemblyLine);
 		strOutput.add(disassemblyLine);

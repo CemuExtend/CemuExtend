@@ -92,7 +92,10 @@ namespace // TCPGecko commands
 	}
 	void WriteBE32(uint8_t* p, uint32_t v)
 	{
-		p[0] = uint8_t(v >> 24); p[1] = uint8_t(v >> 16); p[2] = uint8_t(v >> 8); p[3] = uint8_t(v);
+		p[0] = uint8_t(v >> 24);
+		p[1] = uint8_t(v >> 16);
+		p[2] = uint8_t(v >> 8);
+		p[3] = uint8_t(v);
 	}
 
 	std::atomic_bool s_consolePaused{false};
@@ -129,7 +132,7 @@ namespace // TCPGecko commands
 	std::mutex s_breakpointMutex;
 	std::unordered_set<uint32_t> s_breakpointAddresses;
 
-}
+} // namespace
 
 TcpGeckoServer::TcpGeckoServer(uint16_t port, bool allowLan)
 	: m_port(port), m_allowLan(allowLan)
@@ -226,8 +229,8 @@ void TcpGeckoServer::ThreadFunc()
 
 		char ipStr[64] = {};
 		snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u",
-			(unsigned)(uint8_t)(clientAddr.sin_addr.s_addr), (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 8),
-			(unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 16), (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 24));
+				 (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr), (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 8),
+				 (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 16), (unsigned)(uint8_t)(clientAddr.sin_addr.s_addr >> 24));
 
 		LatteOverlay_pushNotification(fmt::format("TCPGecko is now connected to {}!", ipStr), 3000);
 		ProcessClient(clientSocket, ipStr);
@@ -309,56 +312,138 @@ void TcpGeckoServer::ProcessClient(SOCKET clientSocket, const std::string& clien
 		bool ok = true;
 		switch (command)
 		{
-		case COMMAND_WRITE_8: ok = CmdWrite(clientSocket, 1); break;
-		case COMMAND_WRITE_16: ok = CmdWrite(clientSocket, 2); break;
-		case COMMAND_WRITE_32: ok = CmdWrite(clientSocket, 4); break;
+		case COMMAND_WRITE_8:
+			ok = CmdWrite(clientSocket, 1);
+			break;
+		case COMMAND_WRITE_16:
+			ok = CmdWrite(clientSocket, 2);
+			break;
+		case COMMAND_WRITE_32:
+			ok = CmdWrite(clientSocket, 4);
+			break;
 		case COMMAND_READ_MEMORY:
-		case COMMAND_READ_MEMORY_KERNEL: ok = CmdReadMemory(clientSocket); break;
-		case COMMAND_VALIDATE_ADDRESS_RANGE: ok = CmdValidateAddressRange(clientSocket); break;
-		case COMMAND_MEMORY_DISASSEMBLE: ok = CmdDisassemble(clientSocket); break;
-		case COMMAND_KERNEL_WRITE: ok = CmdWrite(clientSocket, 4); break;
+		case COMMAND_READ_MEMORY_KERNEL:
+			ok = CmdReadMemory(clientSocket);
+			break;
+		case COMMAND_VALIDATE_ADDRESS_RANGE:
+			ok = CmdValidateAddressRange(clientSocket);
+			break;
+		case COMMAND_MEMORY_DISASSEMBLE:
+			ok = CmdDisassemble(clientSocket);
+			break;
+		case COMMAND_KERNEL_WRITE:
+			ok = CmdWrite(clientSocket, 4);
+			break;
 		case COMMAND_KERNEL_READ:
 		{
 			uint8_t addrBuf[4];
-			if (!RecvExact(clientSocket, addrBuf, 4)) { ok = false; break; }
+			if (!RecvExact(clientSocket, addrBuf, 4))
+			{
+				ok = false;
+				break;
+			}
 			uint32_t address = ReadBE32(addrBuf);
 			uint32_t value = memory_isAddressRangeAccessible(address, 4) ? memory_readU32(address) : 0;
 			ok = SendU32(clientSocket, value);
 			break;
 		}
-		case COMMAND_TAKE_SCREEN_SHOT: ok = CmdTakeScreenShot(clientSocket); break;
-		case COMMAND_UPLOAD_MEMORY: ok = CmdUploadMemory(clientSocket); break;
-		case COMMAND_SERVER_STATUS: ok = CmdServerStatus(clientSocket); break;
-		case COMMAND_GET_DATA_BUFFER_SIZE: ok = CmdGetDataBufferSize(clientSocket); break;
-		case COMMAND_READ_FILE: ok = CmdReadFile(clientSocket); break;
-		case COMMAND_READ_DIRECTORY: ok = CmdReadDirectory(clientSocket); break;
-		case COMMAND_REPLACE_FILE: ok = CmdReplaceFile(clientSocket); break;
-		case COMMAND_GET_CODE_HANDLER_ADDRESS: ok = CmdGetCodeHandlerAddress(clientSocket); break;
-		case COMMAND_READ_THREADS: ok = CmdReadThreads(clientSocket); break;
-		case COMMAND_ACCOUNT_IDENTIFIER: ok = CmdAccountIdentifier(clientSocket); break;
-		case COMMAND_FOLLOW_POINTER: ok = CmdFollowPointer(clientSocket); break;
-		case COMMAND_REMOTE_PROCEDURE_CALL: ok = CmdRemoteProcedureCall(clientSocket); break;
-		case COMMAND_GET_SYMBOL: ok = CmdGetSymbol(clientSocket); break;
-		case COMMAND_MEMORY_SEARCH_32: ok = CmdMemorySearch32(clientSocket); break;
-		case COMMAND_ADVANCED_MEMORY_SEARCH: ok = CmdAdvancedMemorySearch(clientSocket); break;
-		case COMMAND_EXECUTE_ASSEMBLY: ok = CmdExecuteAssembly(clientSocket); break;
-		case COMMAND_PAUSE_CONSOLE: ok = CmdPauseConsole(clientSocket); break;
-		case COMMAND_RESUME_CONSOLE: ok = CmdResumeConsole(clientSocket); break;
-		case COMMAND_IS_CONSOLE_PAUSED: ok = CmdIsConsolePaused(clientSocket); break;
-		case COMMAND_SERVER_VERSION: ok = CmdServerVersion(clientSocket); break;
-		case COMMAND_GET_OS_VERSION: ok = CmdGetOsVersion(clientSocket); break;
-		case COMMAND_SET_DATA_BREAKPOINT: ok = CmdSetDataBreakpoint(clientSocket); break;
-		case COMMAND_SET_INSTRUCTION_BREAKPOINT: ok = CmdSetInstructionBreakpoint(clientSocket); break;
-		case COMMAND_TOGGLE_BREAKPOINT: ok = CmdToggleBreakpoint(clientSocket); break;
-		case COMMAND_REMOVE_ALL_BREAKPOINTS: ok = CmdRemoveAllBreakpoints(clientSocket); break;
-		case COMMAND_POKE_REGISTERS: ok = CmdPokeRegisters(clientSocket); break;
-		case COMMAND_GET_STACK_TRACE: ok = CmdGetStackTrace(clientSocket); break;
-		case COMMAND_GET_ENTRY_POINT_ADDRESS: ok = CmdGetEntryPointAddress(clientSocket); break;
-		case COMMAND_RUN_KERNEL_COPY_SERVICE: break;
-		case COMMAND_IOSU_HAX_READ_FILE: break;
-		case COMMAND_GET_VERSION_HASH: ok = SendU32(clientSocket, kVersionHash); break;
-		case COMMAND_PERSIST_ASSEMBLY: ok = CmdPersistAssembly(clientSocket); break;
-		case COMMAND_CLEAR_ASSEMBLY: ok = CmdClearAssembly(clientSocket); break;
+		case COMMAND_TAKE_SCREEN_SHOT:
+			ok = CmdTakeScreenShot(clientSocket);
+			break;
+		case COMMAND_UPLOAD_MEMORY:
+			ok = CmdUploadMemory(clientSocket);
+			break;
+		case COMMAND_SERVER_STATUS:
+			ok = CmdServerStatus(clientSocket);
+			break;
+		case COMMAND_GET_DATA_BUFFER_SIZE:
+			ok = CmdGetDataBufferSize(clientSocket);
+			break;
+		case COMMAND_READ_FILE:
+			ok = CmdReadFile(clientSocket);
+			break;
+		case COMMAND_READ_DIRECTORY:
+			ok = CmdReadDirectory(clientSocket);
+			break;
+		case COMMAND_REPLACE_FILE:
+			ok = CmdReplaceFile(clientSocket);
+			break;
+		case COMMAND_GET_CODE_HANDLER_ADDRESS:
+			ok = CmdGetCodeHandlerAddress(clientSocket);
+			break;
+		case COMMAND_READ_THREADS:
+			ok = CmdReadThreads(clientSocket);
+			break;
+		case COMMAND_ACCOUNT_IDENTIFIER:
+			ok = CmdAccountIdentifier(clientSocket);
+			break;
+		case COMMAND_FOLLOW_POINTER:
+			ok = CmdFollowPointer(clientSocket);
+			break;
+		case COMMAND_REMOTE_PROCEDURE_CALL:
+			ok = CmdRemoteProcedureCall(clientSocket);
+			break;
+		case COMMAND_GET_SYMBOL:
+			ok = CmdGetSymbol(clientSocket);
+			break;
+		case COMMAND_MEMORY_SEARCH_32:
+			ok = CmdMemorySearch32(clientSocket);
+			break;
+		case COMMAND_ADVANCED_MEMORY_SEARCH:
+			ok = CmdAdvancedMemorySearch(clientSocket);
+			break;
+		case COMMAND_EXECUTE_ASSEMBLY:
+			ok = CmdExecuteAssembly(clientSocket);
+			break;
+		case COMMAND_PAUSE_CONSOLE:
+			ok = CmdPauseConsole(clientSocket);
+			break;
+		case COMMAND_RESUME_CONSOLE:
+			ok = CmdResumeConsole(clientSocket);
+			break;
+		case COMMAND_IS_CONSOLE_PAUSED:
+			ok = CmdIsConsolePaused(clientSocket);
+			break;
+		case COMMAND_SERVER_VERSION:
+			ok = CmdServerVersion(clientSocket);
+			break;
+		case COMMAND_GET_OS_VERSION:
+			ok = CmdGetOsVersion(clientSocket);
+			break;
+		case COMMAND_SET_DATA_BREAKPOINT:
+			ok = CmdSetDataBreakpoint(clientSocket);
+			break;
+		case COMMAND_SET_INSTRUCTION_BREAKPOINT:
+			ok = CmdSetInstructionBreakpoint(clientSocket);
+			break;
+		case COMMAND_TOGGLE_BREAKPOINT:
+			ok = CmdToggleBreakpoint(clientSocket);
+			break;
+		case COMMAND_REMOVE_ALL_BREAKPOINTS:
+			ok = CmdRemoveAllBreakpoints(clientSocket);
+			break;
+		case COMMAND_POKE_REGISTERS:
+			ok = CmdPokeRegisters(clientSocket);
+			break;
+		case COMMAND_GET_STACK_TRACE:
+			ok = CmdGetStackTrace(clientSocket);
+			break;
+		case COMMAND_GET_ENTRY_POINT_ADDRESS:
+			ok = CmdGetEntryPointAddress(clientSocket);
+			break;
+		case COMMAND_RUN_KERNEL_COPY_SERVICE:
+			break;
+		case COMMAND_IOSU_HAX_READ_FILE:
+			break;
+		case COMMAND_GET_VERSION_HASH:
+			ok = SendU32(clientSocket, kVersionHash);
+			break;
+		case COMMAND_PERSIST_ASSEMBLY:
+			ok = CmdPersistAssembly(clientSocket);
+			break;
+		case COMMAND_CLEAR_ASSEMBLY:
+			ok = CmdClearAssembly(clientSocket);
+			break;
 		default:
 			cemuLog_log(LogType::Force, "TCPGecko: unknown command byte {:#04x} from {}, closing connection", command, clientIp);
 			return;
@@ -406,7 +491,11 @@ bool TcpGeckoServer::CmdReadMemory(SOCKET s)
 			const uint8_t* src = memory_getPointerFromVirtualOffset(start);
 			for (uint32_t i = 0; i < length; i++)
 			{
-				if (src[i] != 0) { allZero = false; break; }
+				if (src[i] != 0)
+				{
+					allZero = false;
+					break;
+				}
 			}
 			if (!allZero)
 			{
@@ -494,9 +583,17 @@ bool TcpGeckoServer::CmdReadFile(SOCKET s)
 	if (!file)
 		return SendU32(s, (uint32_t)(int32_t)(status == FSC_STATUS_OK ? -1 : status));
 
-	if (!SendU32(s, 0)) { fsc_close(file); return false; }
+	if (!SendU32(s, 0))
+	{
+		fsc_close(file);
+		return false;
+	}
 	uint32_t totalBytes = fsc_getFileSize(file);
-	if (!SendU32(s, totalBytes)) { fsc_close(file); return false; }
+	if (!SendU32(s, totalBytes))
+	{
+		fsc_close(file);
+		return false;
+	}
 
 	uint32_t totalRead = 0;
 	while (totalRead < totalBytes)
@@ -505,7 +602,11 @@ bool TcpGeckoServer::CmdReadFile(SOCKET s)
 		uint32_t bytesRead = fsc_readFile(file, m_buffer.data(), chunk);
 		if (bytesRead == 0)
 			break;
-		if (!SendExact(s, m_buffer.data(), bytesRead)) { fsc_close(file); return false; }
+		if (!SendExact(s, m_buffer.data(), bytesRead))
+		{
+			fsc_close(file);
+			return false;
+		}
 		totalRead += bytesRead;
 	}
 	fsc_close(file);
@@ -526,21 +627,40 @@ bool TcpGeckoServer::CmdReadDirectory(SOCKET s)
 	if (!dir)
 		return SendU32(s, (uint32_t)(int32_t)(status == FSC_STATUS_OK ? -1 : status));
 
-	if (!SendU32(s, 0)) { fsc_close(dir); return false; }
+	if (!SendU32(s, 0))
+	{
+		fsc_close(dir);
+		return false;
+	}
 	FSCDirEntry entry{};
 	while (fsc_nextDir(dir, &entry))
 	{
 		char nameBuffer[256] = {};
 		strncpy(nameBuffer, entry.path, sizeof(nameBuffer) - 1);
-		if (!SendExact(s, nameBuffer, sizeof(nameBuffer))) { fsc_close(dir); return false; }
-		if (!SendU32(s, entry.isDirectory ? 1u : 0u)) { fsc_close(dir); return false; }
-		if (!SendU32(s, entry.fileSize)) { fsc_close(dir); return false; }
+		if (!SendExact(s, nameBuffer, sizeof(nameBuffer)))
+		{
+			fsc_close(dir);
+			return false;
+		}
+		if (!SendU32(s, entry.isDirectory ? 1u : 0u))
+		{
+			fsc_close(dir);
+			return false;
+		}
+		if (!SendU32(s, entry.fileSize))
+		{
+			fsc_close(dir);
+			return false;
+		}
 	}
 	fsc_close(dir);
 	char terminator[256] = {};
-	if (!SendExact(s, terminator, sizeof(terminator))) return false;
-	if (!SendU32(s, 0)) return false;
-	if (!SendU32(s, 0)) return false;
+	if (!SendExact(s, terminator, sizeof(terminator)))
+		return false;
+	if (!SendU32(s, 0))
+		return false;
+	if (!SendU32(s, 0))
+		return false;
 	return true;
 }
 
@@ -555,23 +675,43 @@ bool TcpGeckoServer::CmdReplaceFile(SOCKET s)
 
 	sint32 status = FSC_STATUS_UNDEFINED;
 	FSCVirtualFile* file = fsc_open(path.c_str(),
-		FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::WRITE_PERMISSION | FSC_ACCESS_FLAG::FILE_ALLOW_CREATE | FSC_ACCESS_FLAG::FILE_ALWAYS_CREATE,
-		&status);
+									FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::WRITE_PERMISSION | FSC_ACCESS_FLAG::FILE_ALLOW_CREATE | FSC_ACCESS_FLAG::FILE_ALWAYS_CREATE,
+									&status);
 	if (!file)
 		return SendU32(s, (uint32_t)(int32_t)(status == FSC_STATUS_OK ? -1 : status));
 
-	if (!SendU32(s, 0)) { fsc_close(file); return false; }
-	if (!SendU32(s, kDataBufferSize)) { fsc_close(file); return false; }
+	if (!SendU32(s, 0))
+	{
+		fsc_close(file);
+		return false;
+	}
+	if (!SendU32(s, kDataBufferSize))
+	{
+		fsc_close(file);
+		return false;
+	}
 
 	while (true)
 	{
 		uint8_t lenBuf[4];
-		if (!RecvExact(s, lenBuf, 4)) { fsc_close(file); return false; }
+		if (!RecvExact(s, lenBuf, 4))
+		{
+			fsc_close(file);
+			return false;
+		}
 		uint32_t dataLength = ReadBE32(lenBuf);
 		if (dataLength == 0)
 			break;
-		if (dataLength > kDataBufferSize) { fsc_close(file); return false; }
-		if (!RecvExact(s, m_buffer.data(), dataLength)) { fsc_close(file); return false; }
+		if (dataLength > kDataBufferSize)
+		{
+			fsc_close(file);
+			return false;
+		}
+		if (!RecvExact(s, m_buffer.data(), dataLength))
+		{
+			fsc_close(file);
+			return false;
+		}
 		fsc_writeFile(file, m_buffer.data(), dataLength);
 	}
 	fsc_close(file);
@@ -930,16 +1070,16 @@ bool TcpGeckoServer::CmdTakeScreenShot(SOCKET s)
 	auto result = std::make_shared<ScreenshotResult>();
 
 	auto requestId = g_renderer ? g_renderer->RequestScreenshot(
-		[result](const std::vector<uint8>& rgb, int width, int height, bool mainWindow) -> std::optional<std::string>
-		{
-			std::lock_guard lock(result->mutex);
-			result->data = rgb;
-			result->width = width;
-			result->height = height;
-			result->ready = true;
-			result->cv.notify_all();
-			return std::nullopt;
-		}) : std::nullopt;
+									  [result](const std::vector<uint8>& rgb, int width, int height, bool mainWindow) -> std::optional<std::string> {
+										  std::lock_guard lock(result->mutex);
+										  result->data = rgb;
+										  result->width = width;
+										  result->height = height;
+										  result->ready = true;
+										  result->cv.notify_all();
+										  return std::nullopt;
+									  })
+								: std::nullopt;
 
 	if (!requestId.has_value())
 		return SendU32(s, 0);
@@ -986,4 +1126,4 @@ namespace TcpGecko
 		CodeHandler::Tick();
 		GuestJobs::Tick();
 	}
-}
+} // namespace TcpGecko

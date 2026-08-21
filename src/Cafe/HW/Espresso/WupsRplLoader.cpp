@@ -20,12 +20,12 @@ namespace
 
 	class RplWupsModuleLoader final : public IWupsModuleLoader
 	{
-	public:
+	  public:
 		bool Map(std::span<const std::byte> image, std::string_view moduleName,
-			std::uint64_t owner, std::uint32_t generation,
-			const CemodPackage& package, const WupsMetadata& metadata,
-			const std::shared_ptr<IWupsRuntimeServices>& services,
-			RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) override
+				 std::uint64_t owner, std::uint32_t generation,
+				 const CemodPackage& package, const WupsMetadata& metadata,
+				 const std::shared_ptr<IWupsRuntimeServices>& services,
+				 RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) override
 		{
 			module = nullptr;
 			lifetimeId = 0;
@@ -62,11 +62,11 @@ namespace
 			options.owner = owner;
 			options.generation = generation;
 			options.resolveImport = [services, resolverContext, owner, generation](
-				std::string_view importModule, std::string_view symbol, bool isData,
-				std::string& resolveError) -> std::optional<MPTR> {
+										std::string_view importModule, std::string_view symbol, bool isData,
+										std::string& resolveError) -> std::optional<MPTR> {
 				return services->ResolveImport(resolverContext->package,
-					resolverContext->metadata, owner, generation, importModule, symbol,
-					isData ? WupsSymbolKind::Data : WupsSymbolKind::Function, resolveError);
+											   resolverContext->metadata, owner, generation, importModule, symbol,
+											   isData ? WupsSymbolKind::Data : WupsSymbolKind::Function, resolveError);
 			};
 			const auto bytes = std::span<const uint8>(
 				reinterpret_cast<const uint8*>(image.data()), image.size());
@@ -75,44 +75,41 @@ namespace
 			return module != nullptr && lifetimeId != 0;
 		}
 
-	private:
+	  private:
 		bool m_reservedTitleCodeGuard{};
 
-	public:
-
+	  public:
 		bool Relocate(RPLModule* module, std::uint64_t lifetimeId,
-			std::string& error) override
+					  std::string& error) override
 		{
 			return RPLLoader_LinkExternalModule(module, lifetimeId, error);
 		}
 
 		bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
-			std::uint32_t targetVirtualAddress,
-			std::span<const std::uint32_t> argumentWords,
-			std::uint32_t& result, std::string& error,
-			bool aggregateByReference = false) override
+					std::uint32_t targetVirtualAddress,
+					std::span<const std::uint32_t> argumentWords,
+					std::uint32_t& result, std::string& error,
+					bool aggregateByReference = false) override
 		{
 			return WupsGuestCallback::Invoke(module, lifetimeId, targetVirtualAddress,
-				argumentWords, result, error, aggregateByReference);
+											 argumentWords, result, error, aggregateByReference);
 		}
 
 		bool ResolveAddress(RPLModule* module, std::uint64_t lifetimeId,
-			std::uint32_t virtualAddress, std::uint32_t size,
-			WupsSymbolKind kind, std::uint32_t& mappedAddress,
-			std::string& error) override
+							std::uint32_t virtualAddress, std::uint32_t size,
+							WupsSymbolKind kind, std::uint32_t& mappedAddress,
+							std::string& error) override
 		{
 			error.clear();
 			mappedAddress = 0;
 			RPLModuleLease lease;
 			if (!RPLLoader_AcquireExternalModuleLease(
-				module, lifetimeId, lease, error))
+					module, lifetimeId, lease, error))
 				return false;
-			const auto addressKind = kind == WupsSymbolKind::Function ?
-				RPLModuleAddressKind::Executable :
-				RPLModuleAddressKind::Writable;
+			const auto addressKind = kind == WupsSymbolKind::Function ? RPLModuleAddressKind::Executable : RPLModuleAddressKind::Writable;
 			MPTR resolved{};
 			if (!RPLLoader_ResolveModuleAddress(
-				lease, virtualAddress, size, addressKind, resolved))
+					lease, virtualAddress, size, addressKind, resolved))
 			{
 				error = fmt::format(
 					"external RPL virtual address 0x{:08x} is not a mapped {} range",
@@ -125,12 +122,12 @@ namespace
 		}
 
 		bool QueryMappedLayout(RPLModule* module, std::uint64_t lifetimeId,
-			WupsMappedLayout& layout, std::string& error) override
+							   WupsMappedLayout& layout, std::string& error) override
 		{
 			layout = {};
 			RPLModuleLease lease;
 			if (!RPLLoader_AcquireExternalModuleLease(
-				module, lifetimeId, lease, error))
+					module, lifetimeId, lease, error))
 				return false;
 			RPLMappedLayoutSnapshot snapshot;
 			if (!RPLLoader_QueryMappedLayout(lease, snapshot))
@@ -143,12 +140,12 @@ namespace
 			layout.sections.reserve(snapshot.sections.size());
 			for (auto& section : snapshot.sections)
 				layout.sections.push_back({std::move(section.name), section.address,
-					section.size, section.flags});
+										   section.size, section.flags});
 			return true;
 		}
 
 		bool Unload(RPLModule* module, std::uint64_t lifetimeId,
-			std::string& error) override
+					std::string& error) override
 		{
 			return RPLLoader_UnloadExternalModule(module, lifetimeId, error);
 		}
@@ -156,11 +153,11 @@ namespace
 
 	class RplWumsModuleLoader final : public IWumsModuleLoader
 	{
-	public:
+	  public:
 		bool Map(std::span<const std::byte> image,
-			std::string_view moduleName, const ModuleProviderOwner& owner,
-			WumsImportResolver resolver, RPLModule*& module,
-			std::uint64_t& lifetimeId, std::string& error) override
+				 std::string_view moduleName, const ModuleProviderOwner& owner,
+				 WumsImportResolver resolver, RPLModule*& module,
+				 std::uint64_t& lifetimeId, std::string& error) override
 		{
 			RPLLoadOptions options;
 			options.callEntrypoint = false;
@@ -175,11 +172,10 @@ namespace
 					std::string_view importModule,
 					std::string_view symbol, bool isData,
 					std::string& resolveError) -> std::optional<MPTR> {
-					return resolver(importModule, symbol,
-						isData ? WupsSymbolKind::Data :
-							WupsSymbolKind::Function,
-						resolveError);
-				};
+				return resolver(importModule, symbol,
+								isData ? WupsSymbolKind::Data : WupsSymbolKind::Function,
+								resolveError);
+			};
 			const auto bytes = std::span<const uint8>(
 				reinterpret_cast<const uint8*>(image.data()), image.size());
 			module = RPLLoader_LoadExternalModuleFromMemory(
@@ -188,35 +184,32 @@ namespace
 		}
 
 		bool Link(RPLModule* module, std::uint64_t lifetimeId,
-			std::string& error) override
+				  std::string& error) override
 		{
 			return RPLLoader_LinkExternalModule(module, lifetimeId, error);
 		}
 
 		bool ResolveAddress(RPLModule* module, std::uint64_t lifetimeId,
-			std::uint32_t virtualAddress, std::uint32_t size,
-			WupsSymbolKind kind, std::uint32_t& mappedAddress,
-			std::string& error) override
+							std::uint32_t virtualAddress, std::uint32_t size,
+							WupsSymbolKind kind, std::uint32_t& mappedAddress,
+							std::string& error) override
 		{
 			error.clear();
 			mappedAddress = 0;
 			RPLModuleLease lease;
 			if (!RPLLoader_AcquireExternalModuleLease(
-				module, lifetimeId, lease, error))
+					module, lifetimeId, lease, error))
 				return false;
 			MPTR resolved{};
 			if (!RPLLoader_ResolveModuleAddress(
-				lease, virtualAddress, size,
-				kind == WupsSymbolKind::Function ?
-					RPLModuleAddressKind::Executable :
-					RPLModuleAddressKind::Writable,
-				resolved))
+					lease, virtualAddress, size,
+					kind == WupsSymbolKind::Function ? RPLModuleAddressKind::Executable : RPLModuleAddressKind::Writable,
+					resolved))
 			{
 				error = fmt::format(
 					"WUMS address 0x{:08x} is not a mapped {} range",
 					virtualAddress,
-					kind == WupsSymbolKind::Function ?
-						"executable" : "writable");
+					kind == WupsSymbolKind::Function ? "executable" : "writable");
 				return false;
 			}
 			mappedAddress = resolved;
@@ -224,9 +217,9 @@ namespace
 		}
 
 		bool Invoke(RPLModule* module, std::uint64_t lifetimeId,
-			std::uint32_t target,
-			std::span<const std::uint32_t> arguments,
-			std::uint32_t& result, std::string& error) override
+					std::uint32_t target,
+					std::span<const std::uint32_t> arguments,
+					std::uint32_t& result, std::string& error) override
 		{
 			// WUMS module entrypoints take scalar arguments, not a
 			// wups_loader_*_args_t aggregate.
@@ -235,7 +228,7 @@ namespace
 		}
 
 		bool Unload(RPLModule* module, std::uint64_t lifetimeId,
-			std::string& error) override
+					std::string& error) override
 		{
 			return RPLLoader_UnloadExternalModule(
 				module, lifetimeId, error);
@@ -244,10 +237,10 @@ namespace
 
 	class RplWumsRuntimeServices final : public IWumsRuntimeServices
 	{
-	public:
+	  public:
 		bool PrepareHook(const WumsInspection& inspection,
-			const ModuleProviderOwner&, WumsHookType type,
-			WumsHookInvocation& invocation, std::string& error) override
+						 const ModuleProviderOwner&, WumsHookType type,
+						 WumsHookInvocation& invocation, std::string& error) override
 		{
 			invocation = {};
 			switch (type)
@@ -278,11 +271,11 @@ namespace
 		}
 
 		void ReleaseModule(const WumsInspection&,
-			const ModuleProviderOwner&) override
+						   const ModuleProviderOwner&) override
 		{
 		}
 	};
-}
+} // namespace
 
 std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader()
 {

@@ -32,7 +32,7 @@ namespace TcpGecko::CodeHandler
 			std::memcpy(ptr, data, size);
 			PPCRecompiler_invalidateRange(address, address + size);
 		}
-	}
+	} // namespace
 
 	void Install()
 	{
@@ -54,7 +54,7 @@ namespace TcpGecko::CodeHandler
 		SetEnabled(true);
 
 		cemuLog_log(LogType::Force, "TCPGecko: installed {} code handler at {:#010x}",
-			version == TcpGeckoHandlerVersion::General ? "general" : "latest", kCodeHandlerInstallAddress);
+					version == TcpGeckoHandlerVersion::General ? "general" : "latest", kCodeHandlerInstallAddress);
 	}
 
 	void Uninstall()
@@ -96,4 +96,4 @@ namespace TcpGecko::CodeHandler
 		const uint32_t lineCount = (endAddress - destinationAddress) / 8;
 		LatteOverlay_pushNotification(fmt::format("TCPGecko: {} lines of code applied!", lineCount), 3000);
 	}
-}
+} // namespace TcpGecko::CodeHandler

@@ -6,7 +6,7 @@
 namespace WebFrontend
 {
 	std::uint64_t UpdatePlanRegistry::Issue(std::uint64_t ownerWindow,
-		std::uint64_t ownerGeneration, Application::TitleInstallPlan plan)
+											std::uint64_t ownerGeneration, Application::TitleInstallPlan plan)
 	{
 		if (ownerWindow == 0 || ownerGeneration == 0)
 			throw std::invalid_argument("update plans require a live tool-window owner");
@@ -15,7 +15,7 @@ namespace WebFrontend
 			throw std::runtime_error("too many pending update plans");
 		const auto token = ++m_nextToken;
 		m_plans.emplace(token, OwnedPlan{token, ownerWindow, ownerGeneration,
-			std::move(plan)});
+										 std::move(plan)});
 		return token;
 	}
 
@@ -32,11 +32,11 @@ namespace WebFrontend
 	}
 
 	void UpdatePlanRegistry::RevokeOwner(std::uint64_t ownerWindow,
-		std::uint64_t ownerGeneration)
+										 std::uint64_t ownerGeneration)
 	{
 		std::erase_if(m_plans, [=](const auto& entry) {
 			return entry.second.ownerWindow == ownerWindow &&
-				entry.second.ownerGeneration == ownerGeneration;
+				   entry.second.ownerGeneration == ownerGeneration;
 		});
 	}
-}
+} // namespace WebFrontend

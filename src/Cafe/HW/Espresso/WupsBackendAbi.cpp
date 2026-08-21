@@ -35,9 +35,8 @@ const WupsBackendExportDescriptor* FindWupsBackendExport(
 	std::string_view name, WupsSymbolKind kind)
 {
 	const auto found = std::ranges::find_if(kExports,
-		[name, kind](const auto& export_) {
-			return export_.name == name && export_.kind == kind;
-		});
+											[name, kind](const auto& export_) {
+												return export_.name == name && export_.kind == kind;
+											});
 	return found == kExports.end() ? nullptr : &*found;
 }
-

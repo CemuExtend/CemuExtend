@@ -15,4 +15,4 @@ namespace coreinit
 	uint32 OSDynLoad_FindExport(uint32 moduleHandle, uint32 isData, const char* exportName, betype<MPTR>* addrOut);
 
 	void InitializeDynLoad();
-}
+} // namespace coreinit

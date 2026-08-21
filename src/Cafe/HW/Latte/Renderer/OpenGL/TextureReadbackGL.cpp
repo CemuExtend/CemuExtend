@@ -10,19 +10,19 @@ LatteTextureReadbackInfoGL::LatteTextureReadbackInfoGL(LatteTextureView* texture
 	// handle format
 	if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 4;
+		m_image_size = baseTexture->width * baseTexture->height * 4;
 		m_texFormatGL = GL_RGBA;
 		m_texDataTypeGL = GL_UNSIGNED_BYTE;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_SRGB)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 4;
+		m_image_size = baseTexture->width * baseTexture->height * 4;
 		m_texFormatGL = GL_RGBA;
 		m_texDataTypeGL = GL_UNSIGNED_BYTE;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R32_G32_B32_A32_FLOAT)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 16;
+		m_image_size = baseTexture->width * baseTexture->height * 16;
 		m_texFormatGL = GL_RGBA;
 		m_texDataTypeGL = GL_FLOAT;
 	}
@@ -30,13 +30,13 @@ LatteTextureReadbackInfoGL::LatteTextureReadbackInfoGL(LatteTextureView* texture
 	{
 		if (baseTexture->isDepth)
 		{
-			m_image_size = baseTexture->width*baseTexture->height * 4;
+			m_image_size = baseTexture->width * baseTexture->height * 4;
 			m_texFormatGL = GL_DEPTH_COMPONENT;
 			m_texDataTypeGL = GL_FLOAT;
 		}
 		else
 		{
-			m_image_size = baseTexture->width*baseTexture->height * 4;
+			m_image_size = baseTexture->width * baseTexture->height * 4;
 			m_texFormatGL = GL_RED;
 			m_texDataTypeGL = GL_FLOAT;
 		}
@@ -45,33 +45,33 @@ LatteTextureReadbackInfoGL::LatteTextureReadbackInfoGL(LatteTextureView* texture
 	{
 		if (baseTexture->isDepth)
 		{
-			m_image_size = baseTexture->width*baseTexture->height * 2;
+			m_image_size = baseTexture->width * baseTexture->height * 2;
 			m_texFormatGL = GL_DEPTH_COMPONENT;
 			m_texDataTypeGL = GL_UNSIGNED_SHORT;
 			cemu_assert_unimplemented();
 		}
 		else
 		{
-			m_image_size = baseTexture->width*baseTexture->height * 2;
+			m_image_size = baseTexture->width * baseTexture->height * 2;
 			m_texFormatGL = GL_RED;
 			m_texDataTypeGL = GL_UNSIGNED_SHORT;
 		}
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_G16_B16_A16_FLOAT)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 8;
+		m_image_size = baseTexture->width * baseTexture->height * 8;
 		m_texFormatGL = GL_RGBA;
 		m_texDataTypeGL = GL_HALF_FLOAT;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_UNORM)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 2;
+		m_image_size = baseTexture->width * baseTexture->height * 2;
 		m_texFormatGL = GL_RG;
 		m_texDataTypeGL = GL_UNSIGNED_BYTE;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_G16_B16_A16_UNORM)
 	{
-		m_image_size = baseTexture->width*baseTexture->height * 8;
+		m_image_size = baseTexture->width * baseTexture->height * 8;
 		m_texFormatGL = GL_RGBA;
 		m_texDataTypeGL = GL_UNSIGNED_SHORT;
 	}
@@ -84,10 +84,10 @@ LatteTextureReadbackInfoGL::LatteTextureReadbackInfoGL(LatteTextureView* texture
 
 LatteTextureReadbackInfoGL::~LatteTextureReadbackInfoGL()
 {
-	if(imageCopyFinSync != 0)
+	if (imageCopyFinSync != 0)
 		glDeleteSync(imageCopyFinSync);
 
-	if(texImageBufferGL)
+	if (texImageBufferGL)
 		glDeleteBuffers(1, &texImageBufferGL);
 }
 
@@ -110,20 +110,19 @@ void LatteTextureReadbackInfoGL::StartTransfer()
 bool LatteTextureReadbackInfoGL::IsFinished()
 {
 	GLenum status = glClientWaitSync(imageCopyFinSync, 0, 0);
-		if (status == GL_TIMEOUT_EXPIRED)
-			return false;
-		else if (status == GL_ALREADY_SIGNALED || status == GL_SIGNALED)
-			return true;
-		else
-			throw std::runtime_error("_updateFinishedTransfers(): Error during readback sync check\n");
+	if (status == GL_TIMEOUT_EXPIRED)
+		return false;
+	else if (status == GL_ALREADY_SIGNALED || status == GL_SIGNALED)
+		return true;
+	else
+		throw std::runtime_error("_updateFinishedTransfers(): Error during readback sync check\n");
 }
 
 uint8* LatteTextureReadbackInfoGL::GetData()
 {
-		glBindBuffer(GL_PIXEL_PACK_BUFFER, texImageBufferGL);
-		return (uint8*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, texImageBufferGL);
+	return (uint8*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 }
-
 
 void LatteTextureReadbackInfoGL::ReleaseData()
 {

@@ -9,13 +9,13 @@ namespace ZirEmitter
 {
 	class GLSL
 	{
-	public:
+	  public:
 		GLSL() {};
 
 		// emit function code and append to output string buffer
 		void Emit(ZpIR::ZpIRFunction* irFunction, StringBuf* output);
 
-	private:
+	  private:
 		void GenerateBasicBlockCode(ZpIR::ZpIRBasicBlock& basicBlock);
 
 		void HandleInstruction(ZpIR::IR::InsRR* ins);
@@ -26,22 +26,22 @@ namespace ZirEmitter
 		void appendSourceString(DualStringBuffer* buf, ZpIR::IRReg irReg);
 		void getRegisterName(char buf[16], ZpIR::IRReg irReg);
 
-	private:
+	  private:
 		ZpIR::ZpIRFunction* m_irFunction{};
 		StringBuf* m_glslSource{};
 
-		struct 
+		struct
 		{
-			ZpIR::ZpIRBasicBlock* currentBasicBlock{ nullptr };
+			ZpIR::ZpIRBasicBlock* currentBasicBlock{nullptr};
 			std::vector<uint8> regReadTracking;
 			std::vector<DualStringBuffer*> regInlinedExpression;
 
-			bool CanInlineRegister(ZpIR::IRReg reg) const 
+			bool CanInlineRegister(ZpIR::IRReg reg) const
 			{
 				cemu_assert_debug(ZpIR::isRegVar(reg));
 				return regReadTracking[ZpIR::getRegIndex(reg)] <= 1;
 			};
-		}m_blockContext;
+		} m_blockContext;
 
 		void AssignResult(ZpIR::IRReg irReg, DualStringBuffer* buf, bool forceNoInline = false);
 
@@ -57,4 +57,4 @@ namespace ZirEmitter
 		std::vector<DualStringBuffer*> m_stringBufferCache;
 	};
 
-}
+} // namespace ZirEmitter

@@ -66,9 +66,9 @@ struct GuestWupsPluginSectionInfoV1
 };
 
 static_assert(sizeof(GuestWupsPluginInformationV2) ==
-	kWupsBackendPluginInformationSize);
+			  kWupsBackendPluginInformationSize);
 static_assert(sizeof(GuestWupsPluginSectionInfoV1) ==
-	kWupsBackendSectionInformationSize);
+			  kWupsBackendSectionInformationSize);
 
 enum class WupsBackendExportId : std::uint8_t
 {
@@ -103,4 +103,3 @@ struct WupsBackendExportDescriptor
 WupsBackendExportDescriptors();
 [[nodiscard]] const WupsBackendExportDescriptor* FindWupsBackendExport(
 	std::string_view name, WupsSymbolKind kind = WupsSymbolKind::Function);
-

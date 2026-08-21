@@ -15,60 +15,60 @@ typedef struct
 	uint32 errorCode;
 	uint32 callId;
 	uint32 methodId;
-	uint8  protocolId;
+	uint8 protocolId;
 	nexPacketBuffer data;
 	void* custom;
-}nexServiceResponse_t;
+} nexServiceResponse_t;
 
 typedef struct
 {
 	nexService* nex;
 	uint32 callId;
 	uint32 methodId;
-	uint8  protocolId;
+	uint8 protocolId;
 	nexPacketBuffer data;
 	void* custom;
-}nexServiceRequest_t;
+} nexServiceRequest_t;
 
 class prudpClient;
 
 class nexService
 {
-private:
+  private:
 	typedef struct
 	{
 		uint8 protocolId;
 		uint32 methodId;
 		uint32 callId;
-		void(*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse);
+		void (*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse);
 		void* custom;
-		bool handleError; // if set to true, call nexServiceResponse with errorCode set (else the callback is skipped when the call is not successful)
+		bool handleError;	// if set to true, call nexServiceResponse with errorCode set (else the callback is skipped when the call is not successful)
 		uint32 requestTime; // timestamp of when the request was sent
 		// alternative callback handler
 		std::function<void(nexServiceResponse_t*)> cb2;
-	}nexActiveRequestInfo_t;
+	} nexActiveRequestInfo_t;
 
-	typedef struct  
+	typedef struct
 	{
 		uint8 protocolId;
 		uint32 methodId;
 		bool callHandlerIfError;
-		//nexPacketBuffer* parameter;
+		// nexPacketBuffer* parameter;
 		std::vector<uint8> parameterData;
-		void(*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse);
+		void (*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse);
 		void* custom;
 		// alternative callback handler
 		std::function<void(nexServiceResponse_t*)> cb2;
-	}queuedRequest_t;
+	} queuedRequest_t;
 
 	typedef struct
 	{
 		uint8 protocol;
-		void(*processRequest)(nexServiceRequest_t* request);
+		void (*processRequest)(nexServiceRequest_t* request);
 		void* custom;
-	}protocolHandler_t;
+	} protocolHandler_t;
 
-public:
+  public:
 	static const int STATE_CONNECTING = 0;
 	static const int STATE_CONNECTED = 1;
 	static const int STATE_DISCONNECTED = 2;
@@ -81,9 +81,9 @@ public:
 
 	const uint8 PROTOCOL_BIT_REQUEST = 0x80;
 
-	void callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, void(*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse), void* custom, bool callHandlerIfError = false);
+	void callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, void (*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse), void* custom, bool callHandlerIfError = false);
 	void callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, std::function<void(nexServiceResponse_t*)> cb, bool callHandlerIfError);
-	void registerProtocolRequestHandler(uint8 protocol, void(*processRequest)(nexServiceRequest_t* request), void* custom);
+	void registerProtocolRequestHandler(uint8 protocol, void (*processRequest)(nexServiceRequest_t* request), void* custom);
 	void sendRequestResponse(nexServiceRequest_t* request, uint32 errorCode, uint8* data, sint32 length);
 	void update();
 	prudpClient* getPRUDPConnection();
@@ -92,14 +92,15 @@ public:
 	void destroy();
 	bool isMarkedForDestruction();
 
-private:
+  private:
 	nexService();
 	~nexService();
 	void updateTemporaryConnections();
 	void updateNexServiceConnection();
 	void processQueuedRequest(queuedRequest_t* queuedRequest);
-private:
-	//bool serviceIsConnected;
+
+  private:
+	// bool serviceIsConnected;
 	uint8 connectionState;
 	prudpClient* conNexService;
 	bool isAsync;

@@ -135,7 +135,7 @@ namespace Application
 
 	class IGraphicPackService
 	{
-	public:
+	  public:
 		virtual ~IGraphicPackService() = default;
 		[[nodiscard]] virtual std::vector<GraphicPackInfo> ListGraphicPacks() const = 0;
 		[[nodiscard]] virtual GraphicPackResult SetGraphicPackEnabled(
@@ -150,4 +150,4 @@ namespace Application
 			GraphicPackInstallCancellationCheck cancelled) = 0;
 		virtual void SaveGraphicPackState() = 0;
 	};
-}
+} // namespace Application

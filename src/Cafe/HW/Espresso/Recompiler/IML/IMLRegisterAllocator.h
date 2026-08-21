@@ -4,7 +4,7 @@
 // specifically optimized towards storing typical range of physical register indices (expected to be below 64)
 class IMLPhysRegisterSet
 {
-public:
+  public:
 	void SetAvailable(uint32 index)
 	{
 		cemu_assert_debug(index < 64);
@@ -107,8 +107,8 @@ public:
 		return std::popcount(m_regBitmask);
 	}
 
-private:
-	uint64 m_regBitmask{ 0 };
+  private:
+	uint64 m_regBitmask{0};
 };
 
 struct IMLRegisterAllocatorParameters

@@ -18,7 +18,7 @@ uint64 QueryRamUsage()
 	}
 }
 
-void QueryProcTime(uint64 &out_now, uint64 &out_user, uint64 &out_kernel)
+void QueryProcTime(uint64& out_now, uint64& out_user, uint64& out_kernel)
 {
 	FILETIME ftime, fkernel, fuser;
 	LARGE_INTEGER now, kernel, user;
@@ -63,7 +63,7 @@ void QueryCoreTimes(uint32 count, std::vector<ProcessorTime>& out)
 	{
 		for (auto i = 0; i < count; ++i)
 		{
-			out[i] = { };
+			out[i] = {};
 		}
 	}
 }

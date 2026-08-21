@@ -3,10 +3,10 @@
 #include "Cafe/OS/RPL/COSModule.h"
 
 // base defines for GX2
-#define GX2_TRUE	1
-#define GX2_FALSE	0
-#define GX2_ENABLE	1
-#define GX2_DISABLE	0
+#define GX2_TRUE 1
+#define GX2_FALSE 0
+#define GX2_ENABLE 1
+#define GX2_DISABLE 0
 
 #include "GX2_Surface.h"
 
@@ -32,7 +32,7 @@ void gx2Export_GX2CalcGeometryShaderOutputRingBufferSize(PPCInterpreter_t* hCPU)
 
 // write gather / command queue
 
-#define GX2_COMMAND_RING_BUFFER_SIZE	(64*1024*1024) // 64MB
+#define GX2_COMMAND_RING_BUFFER_SIZE (64 * 1024 * 1024) // 64MB
 
 void gx2Export_GX2GetContextStateDisplayList(PPCInterpreter_t* hCPU);
 
@@ -51,10 +51,10 @@ void gx2Export_GX2SampleBottomGPUCycle(PPCInterpreter_t* hCPU);
 
 // color/depth buffers
 
-#define GX2_SCAN_TARGET_TV				1
-#define GX2_SCAN_TARGET_TV_RIGH			2
-#define GX2_SCAN_TARGET_DRC_FIRST		4
-#define GX2_SCAN_TARGET_DRC_SECOND		8
+#define GX2_SCAN_TARGET_TV 1
+#define GX2_SCAN_TARGET_TV_RIGH 2
+#define GX2_SCAN_TARGET_DRC_FIRST 4
+#define GX2_SCAN_TARGET_DRC_SECOND 8
 
 void gx2Export_GX2InitColorBufferRegs(PPCInterpreter_t* hCPU);
 void gx2Export_GX2InitDepthBufferRegs(PPCInterpreter_t* hCPU);
@@ -65,7 +65,7 @@ void gx2Export_GX2MarkScanBufferCopied(PPCInterpreter_t* hCPU);
 
 // special state
 
-#define GX2_SPECIAL_STATE_COUNT			9
+#define GX2_SPECIAL_STATE_COUNT 9
 
 // context state
 

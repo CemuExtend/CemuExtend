@@ -10,7 +10,7 @@
 
 class RendererShaderMtl : public RendererShader
 {
-    friend class ShaderMtlThreadPool;
+	friend class ShaderMtlThreadPool;
 
 	enum class COMPILATION_STATE : uint32
 	{
@@ -20,12 +20,12 @@ class RendererShaderMtl : public RendererShader
 		DONE
 	};
 
-public:
-    static void ShaderCacheLoading_begin(uint64 cacheTitleId);
-    static void ShaderCacheLoading_end();
-    static void ShaderCacheLoading_Close();
+  public:
+	static void ShaderCacheLoading_begin(uint64 cacheTitleId);
+	static void ShaderCacheLoading_end();
+	static void ShaderCacheLoading_Close();
 
-    static void Initialize();
+	static void Initialize();
 	static void Shutdown();
 
 	RendererShaderMtl(class MetalRenderer* mtlRenderer, ShaderType type, uint64 baseHash, uint64 auxHash, bool isGameShader, bool isGfxPackShader, const std::string& mslCode);
@@ -33,19 +33,19 @@ public:
 
 	MTL::Function* GetFunction() const
 	{
-	    return m_function;
+		return m_function;
 	}
 
 	void PreponeCompilation(bool isRenderThread) override;
 	bool IsCompiled() override;
 	bool WaitForCompiled() override;
 
-private:
-    class MetalRenderer* m_mtlr;
+  private:
+	class MetalRenderer* m_mtlr;
 
 	MTL::Function* m_function = nullptr;
 
-	StateSemaphore<COMPILATION_STATE> m_compilationState{ COMPILATION_STATE::NONE };
+	StateSemaphore<COMPILATION_STATE> m_compilationState{COMPILATION_STATE::NONE};
 
 	std::string m_mslCode;
 
@@ -53,11 +53,11 @@ private:
 
 	MTL::Library* LibraryFromSource();
 
-	//MTL::Library* LibraryFromAIR(std::span<uint8> data);
+	// MTL::Library* LibraryFromAIR(std::span<uint8> data);
 
 	void CompileInternal();
 
-	//void CompileToAIR();
+	// void CompileToAIR();
 
 	void FinishCompilation();
 };

@@ -75,13 +75,12 @@ const char kSchema[] = R"(
 })";
 
 ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& controller,
-	Application::ManagedContentEntry entry,
-	std::shared_ptr<Host::IPathProvider> pathProvider)
+						   Application::ManagedContentEntry entry,
+						   std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY,
-		formatWxString(_("Title checksum of {:08x}-{:08x}"),
-			(uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF)),
-		wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW |
-			wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+			   formatWxString(_("Title checksum of {:08x}-{:08x}"),
+							  (uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF)),
+			   wxDefaultPosition, wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
 	  m_controller(controller), m_entry(std::move(entry)),
 	  m_pathProvider(std::move(pathProvider))
 {
@@ -91,9 +90,9 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& c
 	{
 		auto* box_sizer = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Verifying integrity of game files...")), wxVERTICAL);
 		auto* box = box_sizer->GetStaticBox();
-		
+
 		m_progress = new wxGauge(box, wxID_ANY, 100, wxDefaultPosition, wxDefaultSize, wxGA_HORIZONTAL | wxGA_SMOOTH);
-		m_progress->SetMinSize({ 400, -1 });
+		m_progress->SetMinSize({400, -1});
 		m_progress->SetValue(0);
 		box_sizer->Add(m_progress, 0, wxALL | wxEXPAND, 5);
 
@@ -107,13 +106,12 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& c
 	{
 		auto* box_sizer = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Control")), wxHORIZONTAL);
 		auto* box = box_sizer->GetStaticBox();
-		
+
 		m_verify_online = new wxButton(box, wxID_ANY, _("Verify online"));
 		m_verify_online->SetToolTip(_("Verifies the checksum online"));
 		m_verify_online->Disable();
 		m_verify_online->Bind(wxEVT_BUTTON, &ChecksumTool::OnVerifyOnline, this);
-		m_verify_online->Bind(wxEVT_ENABLE, [this](wxCommandEvent&)
-		{
+		m_verify_online->Bind(wxEVT_ENABLE, [this](wxCommandEvent&) {
 			++m_enable_verify_button;
 			if (m_enable_verify_button >= 2)
 			{
@@ -122,19 +120,20 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& c
 				const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
 
 				const auto checksum_path = m_pathProvider->GetUserDataPath(
-					"resources/checksums") / _utf8ToPath(default_file);
+											   "resources/checksums") /
+										   _utf8ToPath(default_file);
 				if (exists(checksum_path))
 					m_verify_online->Enable();
 			}
 		});
 		box_sizer->Add(m_verify_online, 0, wxALL | wxEXPAND, 5);
-		
+
 		m_verify_local = new wxButton(box, wxID_ANY, _("Verify with local file"));
 		m_verify_online->SetToolTip(_("Verifies the checksum with a local JSON file you can select"));
 		m_verify_local->Disable();
 		m_verify_local->Bind(wxEVT_BUTTON, &ChecksumTool::OnVerifyLocal, this);
 		box_sizer->Add(m_verify_local, 0, wxALL | wxEXPAND, 5);
-		
+
 		m_export_button = new wxButton(box, wxID_ANY, _("Export"));
 		m_verify_online->SetToolTip(_("Export the title checksum data to a local JSON file"));
 		m_export_button->Disable();
@@ -159,12 +158,11 @@ ChecksumTool::ChecksumTool(wxWindow* parent, Application::EmulationController& c
 		try
 		{
 			DoWork();
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			cemuLog_log(LogType::Force, "Checksum worker failed: {}", exception.what());
 			wxQueueEvent(this, new wxSetGaugeValue(0, m_progress, m_status,
-				wxString::FromUTF8(exception.what())));
+												   wxString::FromUTF8(exception.what())));
 		}
 	});
 }
@@ -179,11 +177,10 @@ ChecksumTool::~ChecksumTool()
 		try
 		{
 			m_online_ready.get();
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			cemuLog_log(LogType::Force, "Checksum metadata worker failed: {}",
-				exception.what());
+						exception.what());
 		}
 	}
 	DeletePendingEvents();
@@ -298,7 +295,7 @@ void ChecksumTool::LoadOnlineData() const
 				const auto numEntries = zip_get_num_entries(za, 0);
 				for (sint64 i = 0; i < numEntries; i++)
 				{
-					zip_stat_t sb = { 0 };
+					zip_stat_t sb = {0};
 					if (zip_stat_index(za, i, 0, &sb) != 0)
 						continue;
 
@@ -356,12 +353,11 @@ void ChecksumTool::LoadOnlineData() const
 				}
 			}
 		}
-	}
-	catch(const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "error on updating json checksum data: {}", ex.what());
 	}
-	
+
 	wxQueueEvent(m_verify_online, new wxCommandEvent(wxEVT_ENABLE));
 }
 
@@ -371,7 +367,7 @@ void ChecksumTool::OnSetGaugevalue(wxSetGaugeValue& event)
 	event.GetTextCtrl()->SetLabelText(event.GetText());
 
 	// no error
-	if(event.GetInt() == 0 && event.GetValue() == 100)
+	if (event.GetInt() == 0 && event.GetValue() == 100)
 	{
 		m_export_button->Enable();
 		m_verify_local->Enable();
@@ -385,7 +381,7 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 	wxDirDialog dialog(this, _("Export checksum entry"), "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
 	if (dialog.ShowModal() != wxID_OK || dialog.GetPath().IsEmpty())
 		return;
-	
+
 	rapidjson::Document doc;
 	doc.SetObject();
 	auto& a = doc.GetAllocator();
@@ -406,15 +402,15 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 	doc.AddMember("version", m_entry.version, a);
 	if (!m_json_entry.wud_hash.empty())
 		doc.AddMember("wud_hash", rapidjson::StringRef(m_json_entry.wud_hash.c_str(), m_json_entry.wud_hash.size()), a);
-	
+
 	rapidjson::Value entry_array(rapidjson::kArrayType);
 
 	rapidjson::Value file_array(rapidjson::kArrayType);
-	for(const auto& file : m_json_entry.file_hashes)
+	for (const auto& file : m_json_entry.file_hashes)
 	{
 		rapidjson::Value file_entry;
 		file_entry.SetObject();
-		
+
 		file_entry.AddMember("file", rapidjson::StringRef(file.first.c_str(), file.first.size()), a);
 		file_entry.AddMember("hash", rapidjson::StringRef(file.second.c_str(), file.second.size()), a);
 
@@ -423,15 +419,15 @@ void ChecksumTool::OnExportChecksums(wxCommandEvent& event)
 
 	doc.AddMember("files", file_array, a);
 
-	std::filesystem::path target_file{ dialog.GetPath().c_str().AsInternal() };
+	std::filesystem::path target_file{dialog.GetPath().c_str().AsInternal()};
 	target_file /= fmt::format("{}_v{}.json", title_id_str, m_entry.version);
-	
+
 	std::ofstream file(target_file);
-	if(file.is_open())
+	if (file.is_open())
 	{
 		rapidjson::OStreamWrapper osw(file);
 		rapidjson::PrettyWriter<rapidjson::OStreamWrapper> writer(osw);
-		//rapidjson::GenericSchemaValidator<rapidjson::SchemaDocument, rapidjson::Writer<rapidjson::StringBuffer> > validator(schema, writer);
+		// rapidjson::GenericSchemaValidator<rapidjson::SchemaDocument, rapidjson::Writer<rapidjson::StringBuffer> > validator(schema, writer);
 		doc.Accept(writer);
 		wxMessageBox(_("Export successful"), wxMessageBoxCaptionStr, wxOK | wxCENTRE, this);
 	}
@@ -451,18 +447,18 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 	if (!doc.Accept(validator))
 	{
 		//// validation error:
-		//rapidjson::StringBuffer sb;
-		//validator.GetInvalidSchemaPointer().StringifyUriFragment(sb);
-		//printf("Invalid schema: %s\n", sb.GetString());
-		//printf("Invalid keyword: %s\n", validator.GetInvalidSchemaKeyword());
-		//sb.Clear();
-		//validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
-		//printf("Invalid document: %s\n", sb.GetString());
+		// rapidjson::StringBuffer sb;
+		// validator.GetInvalidSchemaPointer().StringifyUriFragment(sb);
+		// printf("Invalid schema: %s\n", sb.GetString());
+		// printf("Invalid keyword: %s\n", validator.GetInvalidSchemaKeyword());
+		// sb.Clear();
+		// validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
+		// printf("Invalid document: %s\n", sb.GetString());
 		///*
-		//Invalid schema: #
-		//Invalid keyword: required
-		//Invalid document: #
-		// */
+		// Invalid schema: #
+		// Invalid keyword: required
+		// Invalid document: #
+		//  */
 
 		wxMessageBox(_("JSON file doesn't satisfy needed schema"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
@@ -505,7 +501,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 				wxMessageBox(_("The verification data doesn't include a WUD hash!"), _("Error"), wxOK | wxCENTRE | wxICON_WARNING, this);
 				return;
 			}
-			if(!boost::iequals(test_entry.wud_hash, m_json_entry.wud_hash))
+			if (!boost::iequals(test_entry.wud_hash, m_json_entry.wud_hash))
 			{
 				wxMessageBox(formatWxString(_("Your game image is invalid!\n\nYour hash:\n{}\n\nExpected hash:\n{}"), m_json_entry.wud_hash, test_entry.wud_hash), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 				return;
@@ -515,8 +511,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 		{
 			std::map<std::string_view, std::pair<std::string, std::string>> invalid_hashes;
 			std::vector<std::string_view> missing_files;
-			const auto writeMismatchInfoToLog = [this, &missing_files, &invalid_hashes]()
-			{
+			const auto writeMismatchInfoToLog = [this, &missing_files, &invalid_hashes]() {
 				wxFileDialog dialog(this, _("Select a file to export the errors"), wxEmptyString, wxEmptyString, "Error list (*.txt)|*.txt", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 				if (dialog.ShowModal() != wxID_OK || dialog.GetPath().IsEmpty())
 					return;
@@ -572,7 +567,7 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 					str << _("The following files are missing:").ToUTF8().data() << "\n";
 					for (const auto& v : missing_files)
 						str << v << "\n";
-					if(invalid_hashes.size() > 0)
+					if (invalid_hashes.size() > 0)
 						str << "\n";
 				}
 				if (invalid_hashes.size() > 0)
@@ -588,8 +583,9 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 			else if (missing_files.empty() && !invalid_hashes.empty())
 			{
 				const int result = wxMessageBox(formatWxString(
-						_("{} files have an invalid hash!\nDo you want to export a list of them to a file?"),
-						invalid_hashes.size()), _("Error"), wxYES_NO | wxCENTRE | wxICON_ERROR, this);
+													_("{} files have an invalid hash!\nDo you want to export a list of them to a file?"),
+													invalid_hashes.size()),
+												_("Error"), wxYES_NO | wxCENTRE | wxICON_ERROR, this);
 				if (result == wxYES)
 				{
 					writeMismatchInfoToLog();
@@ -599,34 +595,34 @@ void ChecksumTool::VerifyJsonEntry(const rapidjson::Document& doc)
 			else if (!missing_files.empty() && !invalid_hashes.empty())
 			{
 				const int result = wxMessageBox(formatWxString(
-						_("Multiple issues with your game files have been found!\nDo you want to export them to a file?"),
-						invalid_hashes.size()), _("Error"), wxYES_NO | wxCENTRE | wxICON_ERROR, this);
+													_("Multiple issues with your game files have been found!\nDo you want to export them to a file?"),
+													invalid_hashes.size()),
+												_("Error"), wxYES_NO | wxCENTRE | wxICON_ERROR, this);
 				if (result == wxYES)
 				{
 					writeMismatchInfoToLog();
 				}
 				return;
-			}	
+			}
 		}
 		wxMessageBox(_("Your game files are valid"), _("Success"), wxOK | wxCENTRE, this);
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		wxMessageBox(formatWxString(_("JSON parse error: {}"), ex.what()), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 	}
-
 }
 
 void ChecksumTool::OnVerifyOnline(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
 	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
-	
+
 	const auto checksum_path = m_pathProvider->GetUserDataPath(
-		"resources/checksums") / _utf8ToPath(default_file);
-	if(!exists(checksum_path))
+								   "resources/checksums") /
+							   _utf8ToPath(default_file);
+	if (!exists(checksum_path))
 		return;
-	
+
 	std::ifstream file(checksum_path);
 	if (!file.is_open())
 	{
@@ -650,18 +646,18 @@ void ChecksumTool::OnVerifyLocal(wxCommandEvent& event)
 {
 	const auto title_id_str = fmt::format("{:016x}", m_json_entry.title_id);
 	const auto default_file = fmt::format("{}_v{}.json", title_id_str, m_entry.version);
-	wxFileDialog file_dialog(this, _("Open checksum entry"), "", default_file.c_str(),"JSON files (*.json)|*.json", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	wxFileDialog file_dialog(this, _("Open checksum entry"), "", default_file.c_str(), "JSON files (*.json)|*.json", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 	if (file_dialog.ShowModal() != wxID_OK || file_dialog.GetPath().IsEmpty())
 		return;
 
-	std::filesystem::path filename{ file_dialog.GetPath().c_str().AsInternal() };
+	std::filesystem::path filename{file_dialog.GetPath().c_str().AsInternal()};
 	std::ifstream file(filename);
-	if(!file.is_open())
+	if (!file.is_open())
 	{
 		wxMessageBox(_("Can't open file!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
-		return;	
+		return;
 	}
-	
+
 	rapidjson::IStreamWrapper str(file);
 	rapidjson::Document d;
 	d.ParseStream(str);
@@ -676,8 +672,7 @@ void ChecksumTool::OnVerifyLocal(wxCommandEvent& event)
 
 void ChecksumTool::RunChecksum()
 {
-	const auto result = m_controller.ComputeTitleChecksum(m_entry.locationUid,
-		[this](const Application::ContentOperationProgress& progress) {
+	const auto result = m_controller.ComputeTitleChecksum(m_entry.locationUid, [this](const Application::ContentOperationProgress& progress) {
 			int percent{};
 			wxString status;
 			if (progress.phase == Application::ContentOperationPhase::Collecting)
@@ -699,8 +694,7 @@ void ChecksumTool::RunChecksum()
 				status = formatWxString(_("Hashing game file: {}/{}"),
 					progress.filesCompleted, progress.filesTotal);
 			}
-			wxQueueEvent(this, new wxSetGaugeValue(percent, m_progress, m_status, status));
-		}, [this] { return !m_running.load(std::memory_order_acquire); });
+			wxQueueEvent(this, new wxSetGaugeValue(percent, m_progress, m_status, status)); }, [this] { return !m_running.load(std::memory_order_acquire); });
 	if (result.error == Application::ContentOperationError::Cancelled)
 		return;
 	if (!result)
@@ -714,10 +708,9 @@ void ChecksumTool::RunChecksum()
 	for (const auto& file : result.checksum->files)
 		m_json_entry.file_hashes.emplace(file.path, file.sha256);
 	wxQueueEvent(this, new wxSetGaugeValue(100, m_progress, m_status,
-		m_json_entry.wud_hash.empty() ?
-			formatWxString(_("Generated checksum of {} game files"),
-				m_json_entry.file_hashes.size()) :
-			_("Generated checksum of game image")));
+										   m_json_entry.wud_hash.empty() ? formatWxString(_("Generated checksum of {} game files"),
+																						  m_json_entry.file_hashes.size())
+																		 : _("Generated checksum of game image")));
 }
 
 void ChecksumTool::DoWork()

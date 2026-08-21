@@ -4,15 +4,15 @@
 using f32 = float;
 using f64 = double;
 
-inline void zpir_debug_assert(bool _cond) 
+inline void zpir_debug_assert(bool _cond)
 {
-	if(!_cond)
+	if (!_cond)
 		assert_dbg();
 }
 
 namespace ZpIR
 {
-	//enum class ZpIRCmdForm : uint8
+	// enum class ZpIRCmdForm : uint8
 	//{
 	//	FORM_VOID, // no-op
 	//	FORM_ZERO, // opcode without operands
@@ -26,7 +26,7 @@ namespace ZpIR
 
 	//};
 
-	//enum class ZpIROpcodeDepr : uint8
+	// enum class ZpIROpcodeDepr : uint8
 	//{
 	//	OP_VOID,
 	//	// FORM_1OP
@@ -43,7 +43,7 @@ namespace ZpIR
 	//	// memory
 	//	OP_MEM_READ,
 	//	OP_MEM_WRITE,
-	//};
+	// };
 
 	enum class DataType : uint8
 	{
@@ -70,15 +70,24 @@ namespace ZpIR
 	typedef uint64 LocationSymbolName;
 	typedef uint32 ZpIRPhysicalReg;
 
-	inline bool isRegVar(IRReg r) { return r < 0x8000; };
-	inline bool isConstVar(IRReg r) { return r >= 0x8000; };
-	inline uint16 getRegIndex(IRReg r) { return (uint16)r & 0x7FFF; };
+	inline bool isRegVar(IRReg r)
+	{
+		return r < 0x8000;
+	};
+	inline bool isConstVar(IRReg r)
+	{
+		return r >= 0x8000;
+	};
+	inline uint16 getRegIndex(IRReg r)
+	{
+		return (uint16)r & 0x7FFF;
+	};
 
 	namespace IR
 	{
 		enum class OpCode : uint8
 		{
-			UNDEF = 0, // undefined 
+			UNDEF = 0, // undefined
 			// basic opcodes
 			MOV,
 
@@ -89,24 +98,22 @@ namespace ZpIR
 			DIV, // division
 
 			// conversion
-			BITCAST, // like MOV, but allows registers of different types. No value conversion happens, raw bit copy
+			BITCAST,	 // like MOV, but allows registers of different types. No value conversion happens, raw bit copy
 			SWAP_ENDIAN, // swap endianness
 			CONVERT_INT_TO_FLOAT,
 			CONVERT_FLOAT_TO_INT,
 
 			// misc
 			IMPORT_SINGLE, // import into a single IRReg. Depr: Make this like EXPORT where there is a 1-4 regs variant and one for more
-			IMPORT, // import from external/custom resource into 1-4 IRReg
-			
+			IMPORT,		   // import from external/custom resource into 1-4 IRReg
+
 			EXPORT, // export 1-4 registers to external/custom resource
 			// EXPORT_MANY // for when more than 4 registers are needed
-			
-
 
 			// vector
 			EXTRACT_ELEMENT, // extract a scalar type from a vector type
-			// some notes: We need this for texture read instructions. Where the result is a vec4 (f32x4) and this is how we can extract individual registers from that
-			//             update -> We may also instead just let the texture sample instruction specify 4 output registers
+							 // some notes: We need this for texture read instructions. Where the result is a vec4 (f32x4) and this is how we can extract individual registers from that
+							 //             update -> We may also instead just let the texture sample instruction specify 4 output registers
 		};
 
 		enum class OpForm : uint8
@@ -122,23 +129,22 @@ namespace ZpIR
 		// instruction base class
 		class __InsBase
 		{
-		public:
-
+		  public:
 			OpCode opcode;
 			OpForm opform;
 			__InsBase* next;
-		protected:
-			__InsBase(OpCode opcode, OpForm opform) : opcode(opcode), opform(opform) { };
+
+		  protected:
+			__InsBase(OpCode opcode, OpForm opform) : opcode(opcode), opform(opform) {};
 		};
 
 		// adapted base class, instruction forms inherit from this
 		template<typename TInstr, OpForm TOpForm>
 		class __InsBaseWithForm : public __InsBase
 		{
-		public:
-
-			//OpCode opcode;
-			//OpForm opform;
+		  public:
+			// OpCode opcode;
+			// OpForm opform;
 			//__InsBase* next;
 
 			static const OpForm getForm()
@@ -153,13 +159,13 @@ namespace ZpIR
 				return (TInstr*)instructionBase;
 			}
 
-		protected:
-			__InsBaseWithForm(OpCode opcode) : __InsBase(opcode, TOpForm) { };
+		  protected:
+			__InsBaseWithForm(OpCode opcode) : __InsBase(opcode, TOpForm) {};
 		};
 
 		class InsRR : public __InsBaseWithForm<InsRR, OpForm::RR>
 		{
-		public:
+		  public:
 			InsRR(OpCode opcode, IRReg rA, IRReg rB) : __InsBaseWithForm(opcode), rA(rA), rB(rB) {};
 
 			IRReg rA;
@@ -168,7 +174,7 @@ namespace ZpIR
 
 		class InsRRR : public __InsBaseWithForm<InsRRR, OpForm::RRR>
 		{
-		public:
+		  public:
 			InsRRR(OpCode opcode, IRReg rA, IRReg rB, IRReg rC) : __InsBaseWithForm(opcode), rA(rA), rB(rB), rC(rC) {};
 
 			IRReg rA;
@@ -181,7 +187,7 @@ namespace ZpIR
 
 		class InsEXPORT : public __InsBaseWithForm<InsEXPORT, OpForm::EXPORT>
 		{
-		public:
+		  public:
 			InsEXPORT(LocationSymbolName exportSymbol, IRReg r) : __InsBaseWithForm(OpCode::EXPORT), exportSymbol(exportSymbol)
 			{
 				regArray[0] = r;
@@ -190,13 +196,16 @@ namespace ZpIR
 
 			InsEXPORT(LocationSymbolName exportSymbol, IRReg r0, IRReg r1) : __InsBaseWithForm(OpCode::EXPORT), exportSymbol(exportSymbol)
 			{
-				regArray[0] = r0; regArray[1] = r1;
+				regArray[0] = r0;
+				regArray[1] = r1;
 				count = 2;
 			};
 
 			InsEXPORT(LocationSymbolName exportSymbol, IRReg r0, IRReg r1, IRReg r2) : __InsBaseWithForm(OpCode::EXPORT), exportSymbol(exportSymbol)
 			{
-				regArray[0] = r0; regArray[1] = r1; regArray[2] = r2;
+				regArray[0] = r0;
+				regArray[1] = r1;
+				regArray[2] = r2;
 				count = 3;
 			};
 
@@ -212,7 +221,7 @@ namespace ZpIR
 			InsEXPORT(LocationSymbolName exportSymbol, std::span<IRReg> regs) : __InsBaseWithForm(OpCode::EXPORT), exportSymbol(exportSymbol)
 			{
 				zpir_debug_assert(regs.size() <= 4);
-				for(size_t i=0; i<regs.size(); i++)
+				for (size_t i = 0; i < regs.size(); i++)
 					regArray[i] = regs[i];
 				count = (uint16)regs.size();
 			};
@@ -224,7 +233,7 @@ namespace ZpIR
 
 		class InsIMPORT : public __InsBaseWithForm<InsIMPORT, OpForm::IMPORT>
 		{
-		public:
+		  public:
 			InsIMPORT(LocationSymbolName importSymbol, IRReg r) : __InsBaseWithForm(OpCode::IMPORT), importSymbol(importSymbol)
 			{
 				regArray[0] = r;
@@ -233,13 +242,16 @@ namespace ZpIR
 
 			InsIMPORT(LocationSymbolName importSymbol, IRReg r0, IRReg r1) : __InsBaseWithForm(OpCode::IMPORT), importSymbol(importSymbol)
 			{
-				regArray[0] = r0; regArray[1] = r1;
+				regArray[0] = r0;
+				regArray[1] = r1;
 				count = 2;
 			};
 
 			InsIMPORT(LocationSymbolName importSymbol, IRReg r0, IRReg r1, IRReg r2) : __InsBaseWithForm(OpCode::IMPORT), importSymbol(importSymbol)
 			{
-				regArray[0] = r0; regArray[1] = r1; regArray[2] = r2;
+				regArray[0] = r0;
+				regArray[1] = r1;
+				regArray[2] = r2;
 				count = 3;
 			};
 
@@ -264,16 +276,16 @@ namespace ZpIR
 			IRReg regArray[4]; // up to 4 registers
 			LocationSymbolName importSymbol;
 		};
-	};
+	}; // namespace IR
 
 	// IR register definition stored in basic block
-	struct IRRegDef 
+	struct IRRegDef
 	{
 		IRRegDef(DataType type, uint8 elementCount) : type(type), elementCount(elementCount) {};
 
 		DataType type;
 		uint8 elementCount; // 1 = scalar
-		ZpIRPhysicalReg physicalRegister{ std::numeric_limits<ZpIRPhysicalReg>::max()};
+		ZpIRPhysicalReg physicalRegister{std::numeric_limits<ZpIRPhysicalReg>::max()};
 		// todo - information about spilling location? (it depends on the architecture so we should keep this out of the core IR)
 		bool hasAssignedPhysicalRegister() const
 		{
@@ -292,13 +304,38 @@ namespace ZpIR
 		IRRegConstDef() = default;
 		// todo - support for constants with more than one element?
 
-		IRRegConstDef& setU32(uint32 v) { value_u32 = v; type = DataType::U32; return *this; };
-		IRRegConstDef& setS32(sint32 v) { value_s32 = v; type = DataType::S32; return *this; };
-		IRRegConstDef& setF32(f32 v) { value_f32 = v; type = DataType::F32; return *this; };
-		IRRegConstDef& setPtr(void* v) { value_ptr = v; type = DataType::POINTER; return *this; };
-		IRRegConstDef& setRaw(uint32 v, DataType regType) { value_u32 = v; type = regType; return *this; };
+		IRRegConstDef& setU32(uint32 v)
+		{
+			value_u32 = v;
+			type = DataType::U32;
+			return *this;
+		};
+		IRRegConstDef& setS32(sint32 v)
+		{
+			value_s32 = v;
+			type = DataType::S32;
+			return *this;
+		};
+		IRRegConstDef& setF32(f32 v)
+		{
+			value_f32 = v;
+			type = DataType::F32;
+			return *this;
+		};
+		IRRegConstDef& setPtr(void* v)
+		{
+			value_ptr = v;
+			type = DataType::POINTER;
+			return *this;
+		};
+		IRRegConstDef& setRaw(uint32 v, DataType regType)
+		{
+			value_u32 = v;
+			type = regType;
+			return *this;
+		};
 
-		DataType type{ DataType::NONE };
+		DataType type{DataType::NONE};
 		union
 		{
 			uint32 value_u32;
@@ -337,8 +374,8 @@ namespace ZpIR
 		std::vector<IRRegConstDef> m_consts;
 		std::vector<IRBBImport> m_imports;
 		std::vector<IRBBExport> m_exports;
-		ZpIRBasicBlock* m_branchNotTaken{ nullptr }; // next block if branch not taken or no branch present
-		ZpIRBasicBlock* m_branchTaken{ nullptr }; // next block if branch is taken
+		ZpIRBasicBlock* m_branchNotTaken{nullptr}; // next block if branch not taken or no branch present
+		ZpIRBasicBlock* m_branchTaken{nullptr};	   // next block if branch is taken
 
 		void* m_workbuffer{}; // can be used as temporary storage for information
 
@@ -429,7 +466,6 @@ namespace ZpIR
 			return m_workbuffer;
 		}
 
-
 		DataType getRegType(IRReg reg)
 		{
 			uint32 index = (uint32)reg;
@@ -495,10 +531,10 @@ namespace ZpIR
 		std::vector<ZpIRBasicBlock*> m_entryBlocks;
 		std::vector<ZpIRBasicBlock*> m_exitBlocks;
 
-		struct  
+		struct
 		{
 			bool registersAllocated{false};
-		}state;
+		} state;
 	};
 
 	// helpers for shader code
@@ -512,9 +548,10 @@ namespace ZpIR
 				LOC_TYPE_UNIFORM_BUFFER = 2,
 				LOC_TYPE_ATTRIBUTE = 3,
 			};
-		public:
+
+		  public:
 			ShaderImportLocation() = default;
-			ShaderImportLocation(LocationSymbolName loc) 
+			ShaderImportLocation(LocationSymbolName loc)
 			{
 				uint64 v = (uint64)loc;
 
@@ -560,8 +597,8 @@ namespace ZpIR
 				channelIndex = m_indexB;
 			}
 
-			operator LocationSymbolName() const 
-			{ 
+			operator LocationSymbolName() const
+			{
 				uint64 v = 0;
 				v |= ((uint64)m_locType << 56);
 				v |= ((uint64)m_indexA << 0);
@@ -572,7 +609,7 @@ namespace ZpIR
 
 			std::string GetDebugName()
 			{
-				const char elementTable[] = { 'x' , 'y', 'z', 'w' };
+				const char elementTable[] = {'x', 'y', 'z', 'w'};
 
 				if (m_locType == LOC_TYPE_UNIFORM_REGISTER)
 					return fmt::format("UniformReg[{0}].{1}", m_indexA >> 2, elementTable[m_indexA & 3]);
@@ -582,11 +619,11 @@ namespace ZpIR
 				return "Unknown";
 			}
 
-		private:
+		  private:
 			LOC_TYPE m_locType{};
 			uint16 m_indexA{};
 			uint16 m_indexB{};
-			//LocationSymbolName m_symbolName{};
+			// LocationSymbolName m_symbolName{};
 			static_assert(sizeof(LocationSymbolName) == 8);
 		};
 
@@ -597,7 +634,8 @@ namespace ZpIR
 				LOC_TYPE_POSITION = 1,
 				LOC_TYPE_OUTPUT = 2,
 			};
-		public:
+
+		  public:
 			ShaderExportLocation() = default;
 			ShaderExportLocation(LocationSymbolName loc)
 			{
@@ -651,22 +689,22 @@ namespace ZpIR
 
 			std::string GetDebugName()
 			{
-				const char elementTable[] = { 'x' , 'y', 'z', 'w' };
+				const char elementTable[] = {'x', 'y', 'z', 'w'};
 
-				//if (m_locType == LOC_TYPE_UNIFORM_REGISTER)
+				// if (m_locType == LOC_TYPE_UNIFORM_REGISTER)
 				//	return fmt::format("UniformReg[{0}].{1}", m_indexA >> 2, elementTable[m_indexA & 3]);
-				//if (m_locType == LOC_TYPE_ATTRIBUTE)
+				// if (m_locType == LOC_TYPE_ATTRIBUTE)
 				//	return fmt::format("VertexAttribute[{0}].{1}", m_indexA, elementTable[m_indexB]);
 
 				return "Unknown";
 			}
 
-		private:
+		  private:
 			LOC_TYPE m_locType{};
 			uint16 m_indexA{};
 			uint16 m_indexB{};
 			static_assert(sizeof(LocationSymbolName) == 8);
 		};
 
-	};
-}
+	}; // namespace ShaderSubset
+} // namespace ZpIR

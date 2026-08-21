@@ -16,11 +16,11 @@ class wxTextCtrl;
 
 class CemodPluginManagerDialog final : public wxDialog
 {
-public:
+  public:
 	CemodPluginManagerDialog(wxWindow* parent, std::uint64_t titleId,
-		Application::EmulationController& emulationController);
+							 Application::EmulationController& emulationController);
 
-private:
+  private:
 	void RefreshPlugins();
 	void ShowPlugin(std::size_t index);
 	void SaveApproval();

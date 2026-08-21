@@ -24,7 +24,7 @@ namespace WebFrontend
 
 	class MainWindowState final
 	{
-	public:
+	  public:
 		explicit MainWindowState(std::uintptr_t mainWindowIdentity);
 
 		[[nodiscard]] bool BeginLaunch();
@@ -34,8 +34,8 @@ namespace WebFrontend
 		[[nodiscard]] bool BeginShutdown();
 		[[nodiscard]] MainWindowSnapshot Snapshot() const;
 
-	private:
+	  private:
 		mutable std::mutex m_mutex;
 		MainWindowSnapshot m_state;
 	};
-}
+} // namespace WebFrontend

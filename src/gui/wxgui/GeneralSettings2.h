@@ -21,18 +21,24 @@ wxDECLARE_EVENT(wxEVT_ACCOUNTLIST_REFRESH, wxCommandEvent);
 
 class GeneralSettings2 : public wxDialog
 {
-public:
+  public:
 	GeneralSettings2(wxWindow* parent, bool game_launched,
-		Application::EmulationController& emulationController,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::IPathProvider> pathProvider);
+					 Application::EmulationController& emulationController,
+					 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+					 std::shared_ptr<Host::IPathProvider> pathProvider);
 	~GeneralSettings2();
 
-	[[nodiscard]] bool ShouldReloadGamelist() const  { return m_reload_gamelist; }
-	[[nodiscard]] bool MLCModified() const  { return m_mlc_modified; }
+	[[nodiscard]] bool ShouldReloadGamelist() const
+	{
+		return m_reload_gamelist;
+	}
+	[[nodiscard]] bool MLCModified() const
+	{
+		return m_mlc_modified;
+	}
 	void OnClose(wxCloseEvent& event);
 
-private:
+  private:
 	void ValidateConfig();
 	void StoreConfig();
 	void DisableSettings(bool game_launched);
@@ -47,7 +53,6 @@ private:
 	bool m_has_account_change = false; // keep track of dirty state of accounts
 	std::vector<GraphicAPI> m_api_map; // map from dropdown index to GraphicsAPISetting, used in HandleGraphicsApiSelection
 
-
 	wxPanel* AddGeneralPage(wxNotebook* notebook);
 	wxPanel* AddGraphicsPage(wxNotebook* notebook);
 	wxPanel* AddAudioPage(wxNotebook* notebook);
@@ -58,24 +63,24 @@ private:
 	wxPanel* AddTcpGeckoPage(wxNotebook* notebook);
 
 	// General
-	wxChoice * m_language;
+	wxChoice* m_language;
 	wxCheckBox* m_save_window_position_size;
 	wxCheckBox* m_save_padwindow_position_size;
-	wxCheckBox* m_discord_presence, *m_fullscreen_menubar;
-	wxCheckBox* m_auto_update, *m_receive_untested_releases, *m_save_screenshot;
+	wxCheckBox *m_discord_presence, *m_fullscreen_menubar;
+	wxCheckBox *m_auto_update, *m_receive_untested_releases, *m_save_screenshot;
 	wxCheckBox* m_disable_screensaver;
 	wxCheckBox* m_play_boot_sound;
 #if BOOST_OS_WINDOWS
 	wxChoice* m_msw_theme;
 #endif
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
-   	wxCheckBox* m_feral_gamemode;
+	wxCheckBox* m_feral_gamemode;
 #endif
 	wxListBox* m_game_paths;
 	wxTextCtrl* m_mlc_path;
 
 	// Graphics
-	wxChoice* m_graphic_api, * m_graphic_device;
+	wxChoice *m_graphic_api, *m_graphic_device;
 	wxChoice* m_vsync;
 	wxCheckBox* m_overrideGamma;
 	wxSpinCtrlDouble* m_overrideGammaValue;
@@ -84,23 +89,23 @@ private:
 
 	wxCheckBox *m_async_compile, *m_gx2drawdone_sync;
 #ifdef ENABLE_METAL
-	wxCheckBox *m_force_mesh_shaders;
+	wxCheckBox* m_force_mesh_shaders;
 #endif
-	wxRadioBox* m_upscale_filter, *m_downscale_filter, *m_fullscreen_scaling;
-	wxChoice* m_overlay_position, *m_notification_position, *m_overlay_scale, *m_notification_scale;
-	wxCheckBox* m_controller_profile_name, *m_controller_low_battery, *m_shader_compiling, *m_friends_data;
-	wxCheckBox *m_overlay_fps, *m_overlay_drawcalls, *m_overlay_cpu, *m_overlay_cpu_per_core,*m_overlay_ram, *m_overlay_vram, *m_overlay_debug;
+	wxRadioBox *m_upscale_filter, *m_downscale_filter, *m_fullscreen_scaling;
+	wxChoice *m_overlay_position, *m_notification_position, *m_overlay_scale, *m_notification_scale;
+	wxCheckBox *m_controller_profile_name, *m_controller_low_battery, *m_shader_compiling, *m_friends_data;
+	wxCheckBox *m_overlay_fps, *m_overlay_drawcalls, *m_overlay_cpu, *m_overlay_cpu_per_core, *m_overlay_ram, *m_overlay_vram, *m_overlay_debug;
 	wxColourPickerCtrl *m_overlay_font_color, *m_notification_font_color;
 
 	// Audio
 	wxChoice* m_audio_api;
-	wxSlider *m_audio_latency;
+	wxSlider* m_audio_latency;
 	wxSlider *m_tv_volume, *m_pad_volume, *m_input_volume, *m_portal_volume;
 	wxChoice *m_tv_channels, *m_pad_channels, *m_input_channels;
 	wxChoice *m_tv_device, *m_pad_device, *m_input_device, *m_portal_device;
 
 	// Account
-	wxButton* m_create_account, * m_delete_account;
+	wxButton *m_create_account, *m_delete_account;
 	wxChoice* m_active_account;
 	wxRadioBox* m_active_service;
 	wxCollapsiblePane* m_account_information;

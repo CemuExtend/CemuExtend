@@ -22,7 +22,7 @@ void iosuCrypto_readOtpData(void* output, sint32 wordIndex, sint32 size);
 void iosuCrypto_readSeepromData(void* output, sint32 wordIndex, sint32 size);
 
 extern bool hasSeepromMem; // remove later (migrate otp/seeprom loading & parsing to this class)
-extern bool hasOtpMem; // remove later
+extern bool hasOtpMem;	   // remove later
 
 namespace NCrypto
 {
@@ -90,23 +90,22 @@ namespace NCrypto
 	std::vector<uint8> base64Decode(std::string_view inputStr)
 	{
 		static constexpr unsigned char kDecodingTable[] = {
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
-		  52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
-		  64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-		  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
-		  64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-		  41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-		  64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
-		};
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
+			52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
+			64, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+			15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
+			64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+			41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+			64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64};
 
 		size_t in_len = inputStr.size();
 		if (in_len <= 3 || (in_len & 3) != 0)
@@ -115,12 +114,14 @@ namespace NCrypto
 		std::vector<uint8> output;
 
 		size_t out_len = in_len / 4 * 3;
-		if (inputStr[in_len - 1] == '=') out_len--;
-		if (inputStr[in_len - 2] == '=') out_len--;
+		if (inputStr[in_len - 1] == '=')
+			out_len--;
+		if (inputStr[in_len - 2] == '=')
+			out_len--;
 
 		output.resize(out_len);
 
-		for (size_t i = 0, j = 0; i < in_len;) 
+		for (size_t i = 0, j = 0; i < in_len;)
 		{
 			uint32 a = inputStr[i] == '=' ? 0 & i++ : kDecodingTable[static_cast<int>(inputStr[i++])];
 			uint32 b = inputStr[i] == '=' ? 0 & i++ : kDecodingTable[static_cast<int>(inputStr[i++])];
@@ -129,9 +130,12 @@ namespace NCrypto
 
 			uint32 triple = (a << 3 * 6) + (b << 2 * 6) + (c << 1 * 6) + (d << 0 * 6);
 
-			if (j < out_len) output[j++] = (triple >> 2 * 8) & 0xFF;
-			if (j < out_len) output[j++] = (triple >> 1 * 8) & 0xFF;
-			if (j < out_len) output[j++] = (triple >> 0 * 8) & 0xFF;
+			if (j < out_len)
+				output[j++] = (triple >> 2 * 8) & 0xFF;
+			if (j < out_len)
+				output[j++] = (triple >> 1 * 8) & 0xFF;
+			if (j < out_len)
+				output[j++] = (triple >> 0 * 8) & 0xFF;
 		}
 
 		return output;
@@ -157,12 +161,12 @@ namespace NCrypto
 
 	void GenerateHashSHA1(const void* data, size_t len, CHash160& hashOut)
 	{
-		SHA1((const unsigned char*) data, len, hashOut.b);
+		SHA1((const unsigned char*)data, len, hashOut.b);
 	}
 
 	void GenerateHashSHA256(const void* data, size_t len, CHash256& hashOut)
 	{
-		SHA256((const unsigned char*) data, len, hashOut.b);
+		SHA256((const unsigned char*)data, len, hashOut.b);
 	}
 
 	/* Ticket */
@@ -173,7 +177,7 @@ namespace NCrypto
 				SHA1 hash
 			Ticket version 1:
 				SHA256 hash + has item rights
-		
+
 		*/
 
 		/* +0x000 */ uint32be signatureType;
@@ -202,7 +206,7 @@ namespace NCrypto
 
 		/* +0x21C */ uint32be accountId;
 
-		/* V1 extension header starts at +0x2A4 */ 
+		/* V1 extension header starts at +0x2A4 */
 	};
 
 	struct ETicketFileHeaderExtV1
@@ -249,7 +253,7 @@ namespace NCrypto
 			cemu_assert_debug(index < GetRightsCount());
 			if (index >= GetRightsCount())
 				return false;
-			return ((rightBitmask[(index/8)]>>(index & 7)) & 1) != 0;
+			return ((rightBitmask[(index / 8)] >> (index & 7)) & 1) != 0;
 		}
 	};
 
@@ -257,8 +261,7 @@ namespace NCrypto
 
 	bool ETicketParser::parse(const uint8* data, size_t size)
 	{
-		auto readStruct = [&](uint32 offset, uint32 readSize) -> void*
-		{
+		auto readStruct = [&](uint32 offset, uint32 readSize) -> void* {
 			if ((offset + readSize) > size)
 				return nullptr;
 			return (void*)((const uint8*)data + offset);
@@ -339,7 +342,7 @@ namespace NCrypto
 		uint8 iv[16]{};
 		*(uint64be*)iv = m_titleId;
 
-		uint8 commonKey[16] = { 0xD7,0xB0,0x04,0x02,0x65,0x9B,0xA2,0xAB,0xD2,0xCB,0x0D,0xB2,0x7F,0xA2,0xB6,0x56 };
+		uint8 commonKey[16] = {0xD7, 0xB0, 0x04, 0x02, 0x65, 0x9B, 0xA2, 0xAB, 0xD2, 0xCB, 0x0D, 0xB2, 0x7F, 0xA2, 0xB6, 0x56};
 
 		AES128_CBC_decrypt(key.b, m_encryptedTitleKey, 16, commonKey, iv);
 	}
@@ -422,16 +425,16 @@ namespace NCrypto
 		/* +0x1E4 */ uint8 uknHash[32]; // hash of array at 0x204
 
 		/* +0x204 */
-		struct 
+		struct
 		{
 			// pointer to cert data and cert hash?
 			uint16 ukn00; // index?
 			uint16 ukn02;
 			uint8 hash[32];
-		}ContentInfo[64];
+		} ContentInfo[64];
 	};
 
-	static_assert(sizeof(TMDFileHeaderWiiU) == 0x204 + 64*36);
+	static_assert(sizeof(TMDFileHeaderWiiU) == 0x204 + 64 * 36);
 
 	struct TMDFileContentEntryWiiU
 	{
@@ -558,7 +561,7 @@ namespace NCrypto
 		ECCPubKey genPubKey;
 		BN_bn2binpad(bn_x, genPubKey.x, sizeof(genPubKey.x));
 		BN_bn2binpad(bn_y, genPubKey.y, sizeof(genPubKey.y));
-	
+
 		// clean up and return
 		EC_POINT_free(pubkey);
 		BN_free(bn_y);
@@ -585,7 +588,7 @@ namespace NCrypto
 
 	void ECCSig::setSignature(ECDSA_SIG* sig)
 	{
-		const BIGNUM* sig_r = nullptr, * sig_s = nullptr;
+		const BIGNUM *sig_r = nullptr, *sig_s = nullptr;
 		ECDSA_SIG_get0(sig, &sig_r, &sig_s);
 
 		sint32 lenR = BN_num_bytes(sig_r);
@@ -618,7 +621,7 @@ namespace NCrypto
 	bool CertECC::verifySignatureViaPubKey(ECCPubKey& signerPubKey)
 	{
 		uint8 hash[SHA256_DIGEST_LENGTH];
-		SHA256((const unsigned char *) this->issuer, 0x100, hash);
+		SHA256((const unsigned char*)this->issuer, 0x100, hash);
 
 		EC_KEY* ecPubKey = signerPubKey.getPublicKey();
 		ECDSA_SIG* ecSig = this->signature.getSignature();
@@ -634,7 +637,7 @@ namespace NCrypto
 	void CertECC::sign(ECCPrivKey& signerPrivKey)
 	{
 		uint8 hash[SHA256_DIGEST_LENGTH];
-		SHA256((const unsigned char *) this->issuer, 0x100, hash);
+		SHA256((const unsigned char*)this->issuer, 0x100, hash);
 
 		// generate signature
 		EC_KEY* ec_privKey = signerPrivKey.getPrivateKey();
@@ -642,7 +645,7 @@ namespace NCrypto
 		EC_KEY_free(ec_privKey);
 
 		// store signature
-		const BIGNUM* bn_r = nullptr, *bn_s = nullptr;
+		const BIGNUM *bn_r = nullptr, *bn_s = nullptr;
 		ECDSA_SIG_get0(sig, &bn_r, &bn_s);
 		BN_bn2binpad(bn_r, this->signature.r, sizeof(this->signature.r));
 		BN_bn2binpad(bn_s, this->signature.s, sizeof(this->signature.s));
@@ -700,7 +703,7 @@ namespace NCrypto
 		ECCPubKey pubKey;
 		ECCPrivKey signerPrivKey = ECCPrivKey::getDeviceCertPrivateKey();
 		certChainOut = CertECC::generateCertificate(signerTitleIdHigh, signerTitleIdLow, signerPrivKey, privKey, pubKey);
-		
+
 		// generate signature
 		cemu_assert_debug(hashLen == 32);
 		EC_KEY* ec_privKey = privKey.getPrivateKey();
@@ -715,7 +718,7 @@ namespace NCrypto
 
 		// store signature
 		ECCSig eccSig;
-		const BIGNUM* bn_r = nullptr, * bn_s = nullptr;
+		const BIGNUM *bn_r = nullptr, *bn_s = nullptr;
 		ECDSA_SIG_get0(sig, &bn_r, &bn_s);
 		BN_bn2binpad(bn_r, eccSig.r, sizeof(eccSig.r));
 		BN_bn2binpad(bn_s, eccSig.s, sizeof(eccSig.s));
@@ -823,143 +826,142 @@ namespace NCrypto
 	}
 
 	const std::unordered_map<sint32, const char*> g_countryTable = {
-		{1,"JP"},
-		{8,"AI"},
-		{9,"AG"},
-		{10,"AR"},
-		{11,"AW"},
-		{12,"BS"},
-		{13,"BB"},
-		{14,"BZ"},
-		{15,"BO"},
-		{16,"BR"},
-		{17,"VG"},
-		{18,"CA"},
-		{19,"KY"},
-		{20,"CL"},
-		{21,"CO"},
-		{22,"CR"},
-		{23,"DM"},
-		{24,"DO"},
-		{25,"EC"},
-		{26,"SV"},
-		{27,"GF"},
-		{28,"GD"},
-		{29,"GP"},
-		{30,"GT"},
-		{31,"GY"},
-		{32,"HT"},
-		{33,"HN"},
-		{34,"JM"},
-		{35,"MQ"},
-		{36,"MX"},
-		{37,"MS"},
-		{38,"AN"},
-		{39,"NI"},
-		{40,"PA"},
-		{41,"PY"},
-		{42,"PE"},
-		{43,"KN"},
-		{44,"LC"},
-		{45,"VC"},
-		{46,"SR"},
-		{47,"TT"},
-		{48,"TC"},
-		{49,"US"},
-		{50,"UY"},
-		{51,"VI"},
-		{52,"VE"},
-		{64,"AL"},
-		{65,"AU"},
-		{66,"AT"},
-		{67,"BE"},
-		{68,"BA"},
-		{69,"BW"},
-		{70,"BG"},
-		{71,"HR"},
-		{72,"CY"},
-		{73,"CZ"},
-		{74,"DK"},
-		{75,"EE"},
-		{76,"FI"},
-		{77,"FR"},
-		{78,"DE"},
-		{79,"GR"},
-		{80,"HU"},
-		{81,"IS"},
-		{82,"IE"},
-		{83,"IT"},
-		{84,"LV"},
-		{85,"LS"},
-		{86,"LI"},
-		{87,"LT"},
-		{88,"LU"},
-		{89,"MK"},
-		{90,"MT"},
-		{91,"ME"},
-		{92,"MZ"},
-		{93,"NA"},
-		{94,"NL"},
-		{95,"NZ"},
-		{96,"NO"},
-		{97,"PL"},
-		{98,"PT"},
-		{99,"RO"},
-		{100,"RU"},
-		{101,"RS"},
-		{102,"SK"},
-		{103,"SI"},
-		{104,"ZA"},
-		{105,"ES"},
-		{106,"SZ"},
-		{107,"SE"},
-		{108,"CH"},
-		{109,"TR"},
-		{110,"GB"},
-		{111,"ZM"},
-		{112,"ZW"},
-		{113,"AZ"},
-		{114,"MR"},
-		{115,"ML"},
-		{116,"NE"},
-		{117,"TD"},
-		{118,"SD"},
-		{119,"ER"},
-		{120,"DJ"},
-		{121,"SO"},
-		{122,"AD"},
-		{123,"GI"},
-		{124,"GG"},
-		{125,"IM"},
-		{126,"JE"},
-		{127,"MC"},
-		{128,"TW"},
-		{136,"KR"},
-		{144,"HK"},
-		{145,"MO"},
-		{152,"ID"},
-		{153,"SG"},
-		{154,"TH"},
-		{155,"PH"},
-		{156,"MY"},
-		{160,"CN"},
-		{168,"AE"},
-		{170,"EG"},
-		{171,"OM"},
-		{172,"QA"},
-		{173,"KW"},
-		{174,"SA"},
-		{175,"SY"},
-		{176,"BH"},
-		{177,"JO"},
-		{184,"SM"},
-		{185,"VA"},
-		{186,"BM"},
-		{187,"IN"},
-		{192,"NG"},
-		{193,"AO"},
-		{194,"GH"}
-	};
+		{1, "JP"},
+		{8, "AI"},
+		{9, "AG"},
+		{10, "AR"},
+		{11, "AW"},
+		{12, "BS"},
+		{13, "BB"},
+		{14, "BZ"},
+		{15, "BO"},
+		{16, "BR"},
+		{17, "VG"},
+		{18, "CA"},
+		{19, "KY"},
+		{20, "CL"},
+		{21, "CO"},
+		{22, "CR"},
+		{23, "DM"},
+		{24, "DO"},
+		{25, "EC"},
+		{26, "SV"},
+		{27, "GF"},
+		{28, "GD"},
+		{29, "GP"},
+		{30, "GT"},
+		{31, "GY"},
+		{32, "HT"},
+		{33, "HN"},
+		{34, "JM"},
+		{35, "MQ"},
+		{36, "MX"},
+		{37, "MS"},
+		{38, "AN"},
+		{39, "NI"},
+		{40, "PA"},
+		{41, "PY"},
+		{42, "PE"},
+		{43, "KN"},
+		{44, "LC"},
+		{45, "VC"},
+		{46, "SR"},
+		{47, "TT"},
+		{48, "TC"},
+		{49, "US"},
+		{50, "UY"},
+		{51, "VI"},
+		{52, "VE"},
+		{64, "AL"},
+		{65, "AU"},
+		{66, "AT"},
+		{67, "BE"},
+		{68, "BA"},
+		{69, "BW"},
+		{70, "BG"},
+		{71, "HR"},
+		{72, "CY"},
+		{73, "CZ"},
+		{74, "DK"},
+		{75, "EE"},
+		{76, "FI"},
+		{77, "FR"},
+		{78, "DE"},
+		{79, "GR"},
+		{80, "HU"},
+		{81, "IS"},
+		{82, "IE"},
+		{83, "IT"},
+		{84, "LV"},
+		{85, "LS"},
+		{86, "LI"},
+		{87, "LT"},
+		{88, "LU"},
+		{89, "MK"},
+		{90, "MT"},
+		{91, "ME"},
+		{92, "MZ"},
+		{93, "NA"},
+		{94, "NL"},
+		{95, "NZ"},
+		{96, "NO"},
+		{97, "PL"},
+		{98, "PT"},
+		{99, "RO"},
+		{100, "RU"},
+		{101, "RS"},
+		{102, "SK"},
+		{103, "SI"},
+		{104, "ZA"},
+		{105, "ES"},
+		{106, "SZ"},
+		{107, "SE"},
+		{108, "CH"},
+		{109, "TR"},
+		{110, "GB"},
+		{111, "ZM"},
+		{112, "ZW"},
+		{113, "AZ"},
+		{114, "MR"},
+		{115, "ML"},
+		{116, "NE"},
+		{117, "TD"},
+		{118, "SD"},
+		{119, "ER"},
+		{120, "DJ"},
+		{121, "SO"},
+		{122, "AD"},
+		{123, "GI"},
+		{124, "GG"},
+		{125, "IM"},
+		{126, "JE"},
+		{127, "MC"},
+		{128, "TW"},
+		{136, "KR"},
+		{144, "HK"},
+		{145, "MO"},
+		{152, "ID"},
+		{153, "SG"},
+		{154, "TH"},
+		{155, "PH"},
+		{156, "MY"},
+		{160, "CN"},
+		{168, "AE"},
+		{170, "EG"},
+		{171, "OM"},
+		{172, "QA"},
+		{173, "KW"},
+		{174, "SA"},
+		{175, "SY"},
+		{176, "BH"},
+		{177, "JO"},
+		{184, "SM"},
+		{185, "VA"},
+		{186, "BM"},
+		{187, "IN"},
+		{192, "NG"},
+		{193, "AO"},
+		{194, "GH"}};
 
 	const char* GetCountryAsString(sint32 index)
 	{
@@ -979,4 +981,4 @@ namespace NCrypto
 		base64Tests();
 	}
 
-};
+}; // namespace NCrypto

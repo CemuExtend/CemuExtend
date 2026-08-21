@@ -24,7 +24,7 @@ void wxAutosizeColumn(wxListCtrlBase* ctrl, int col)
 	ctrl->SetColumnWidth(col, wxLIST_AUTOSIZE);
 	int wc = ctrl->GetColumnWidth(col);
 	if (wh > wc)
-	ctrl->SetColumnWidth(col, wxLIST_AUTOSIZE_USEHEADER);
+		ctrl->SetColumnWidth(col, wxLIST_AUTOSIZE_USEHEADER);
 }
 
 void wxAutosizeColumns(wxListCtrlBase* ctrl, int col_start, int col_end)
@@ -49,9 +49,9 @@ uint32 fix_raw_keycode(uint32 keycode, uint32 raw_flags)
 {
 #if BOOST_OS_WINDOWS
 	const auto flags = (HIWORD(raw_flags) & 0xFFF);
-	if(keycode == VK_SHIFT)
+	if (keycode == VK_SHIFT)
 	{
-		if(flags == 0x2A)
+		if (flags == 0x2A)
 			return 160;
 		else if (flags == 0x36)
 			return 161;

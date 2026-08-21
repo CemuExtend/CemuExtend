@@ -2,18 +2,25 @@
 
 #include <wx/dialog.h>
 
-namespace Application { class EmulationController; }
+namespace Application
+{
+	class EmulationController;
+}
 
 class SaveImportWindow : public wxDialog
 {
-public:
+  public:
 	SaveImportWindow(wxWindow* parent, Application::EmulationController& emulationController,
-		uint64 title_id);
+					 uint64 title_id);
 
 	void EndModal(int retCode) override;
 
-	uint32 GetTargetPersistentId() const { return m_target_id; }
-private:
+	uint32 GetTargetPersistentId() const
+	{
+		return m_target_id;
+	}
+
+  private:
 	void OnImport(wxCommandEvent& event);
 
 	class wxFilePickerCtrl* m_source_selection;

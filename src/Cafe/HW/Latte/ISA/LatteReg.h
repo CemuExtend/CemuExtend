@@ -25,19 +25,19 @@ namespace Latte
 
 	enum class E_HWTILEMODE
 	{
-		TM_LINEAR_GENERAL = 0,  // linear (pitch must be aligned to 8?)
-		TM_LINEAR_ALIGNED = 1,  // pitch must be multiple of 64 pixels?
+		TM_LINEAR_GENERAL = 0, // linear (pitch must be aligned to 8?)
+		TM_LINEAR_ALIGNED = 1, // pitch must be multiple of 64 pixels?
 
-		TM_1D_TILED_THIN1 = 2,  // no macro tiling, 8x8 micro tiles
-		TM_1D_TILED_THICK = 3,  // no macro tiling, 8x8x4 micro tiles
+		TM_1D_TILED_THIN1 = 2, // no macro tiling, 8x8 micro tiles
+		TM_1D_TILED_THICK = 3, // no macro tiling, 8x8x4 micro tiles
 
-		TM_2D_TILED_THIN1 = 4,  // 4x2
-		TM_2D_TILED_THIN2 = 5,  // 2x4
-		TM_2D_TILED_THIN4 = 6,  // 1x8
-		TM_2D_TILED_THICK = 7,  // 4x2x1
+		TM_2D_TILED_THIN1 = 4, // 4x2
+		TM_2D_TILED_THIN2 = 5, // 2x4
+		TM_2D_TILED_THIN4 = 6, // 1x8
+		TM_2D_TILED_THICK = 7, // 4x2x1
 
-		TM_2B_TILED_THIN1 = 8,  // 4x2
-		TM_2B_TILED_THIN2 = 9,  // 2x4
+		TM_2B_TILED_THIN1 = 8,	// 4x2
+		TM_2B_TILED_THIN2 = 9,	// 2x4
 		TM_2B_TILED_THIN4 = 10, // 1x8
 		TM_2B_TILED_THICK = 11, // 4x2x1
 
@@ -77,7 +77,7 @@ namespace Latte
 
 		// special
 		TM_LINEAR_SPECIAL = 16,
-		TM_32_SPECIAL	  = 32,
+		TM_32_SPECIAL = 32,
 	};
 
 	inline E_HWTILEMODE MakeHWTileMode(const E_GX2TILEMODE gx2Tilemode)
@@ -102,13 +102,12 @@ namespace Latte
 
 	inline bool TM_IsBankSwapped(const E_HWTILEMODE tileMode)
 	{
-		return
-			tileMode == E_HWTILEMODE::TM_2B_TILED_THIN1 ||
-			tileMode == E_HWTILEMODE::TM_2B_TILED_THIN2 ||
-			tileMode == E_HWTILEMODE::TM_2B_TILED_THIN4 ||
-			tileMode == E_HWTILEMODE::TM_2B_TILED_THICK ||
-			tileMode == E_HWTILEMODE::TM_3B_TILED_THIN1 ||
-			tileMode == E_HWTILEMODE::TM_3B_TILED_THICK;
+		return tileMode == E_HWTILEMODE::TM_2B_TILED_THIN1 ||
+			   tileMode == E_HWTILEMODE::TM_2B_TILED_THIN2 ||
+			   tileMode == E_HWTILEMODE::TM_2B_TILED_THIN4 ||
+			   tileMode == E_HWTILEMODE::TM_2B_TILED_THICK ||
+			   tileMode == E_HWTILEMODE::TM_3B_TILED_THIN1 ||
+			   tileMode == E_HWTILEMODE::TM_3B_TILED_THICK;
 	}
 
 	enum class E_HWSURFFMT
@@ -159,7 +158,6 @@ namespace Latte
 		U_HWFMT_BC7 = 0x37,
 		U_HWFMT_32_32_32 = 0x2F,
 		U_HWFMT_32_32_32_FLOAT = 0x30,
-
 
 	};
 
@@ -263,11 +261,10 @@ namespace Latte
 		R16_G16_B16_A16_SINT = (HWFMT_16_16_16_16 | FMT_BIT_INT | FMT_BIT_SIGNED),
 		R16_G16_B16_A16_FLOAT = (HWFMT_16_16_16_16_FLOAT | FMT_BIT_FLOAT),
 
-
 		R24_X8_UNORM = (HWFMT_8_24),
 		R24_X8_FLOAT = (HWFMT_8_24 | FMT_BIT_FLOAT),
 		X24_G8_UINT = (HWFMT_8_24 | FMT_BIT_INT),
-		R32_X8_FLOAT = (HWFMT_X24_8_32_FLOAT | FMT_BIT_FLOAT), // R32_X8_FLOAT
+		R32_X8_FLOAT = (HWFMT_X24_8_32_FLOAT | FMT_BIT_FLOAT),	// R32_X8_FLOAT
 		X32_G8_UINT_X24 = (HWFMT_X24_8_32_FLOAT | FMT_BIT_INT), // X32_G8_UINT
 
 		R11_G11_B10_FLOAT = (HWFMT_10_11_11_FLOAT | FMT_BIT_FLOAT),
@@ -312,15 +309,14 @@ namespace Latte
 	inline uint32 GetFormatBits(const Latte::E_HWSURFFMT hwFmt)
 	{
 		const uint8 sBitsTable[0x40] = {
-		0x00,0x08,0x08,0x00,0x00,0x10,0x10,0x10,
-		0x10,0x10,0x10,0x10,0x10,0x20,0x20,0x20,
-		0x20,0x20,0x00,0x20,0x00,0x00,0x20,0x00,
-		0x00,0x20,0x20,0x20,0x40,0x40,0x40,0x40,
-		0x40,0x00,0x80,0x80,0x00,0x00,0x00,0x10,
-		0x10,0x20,0x20,0x20,0x00,0x00,0x00,0x60,
-		0x60,0x40,0x80,0x80,0x40,0x80,0x00,0x00,
-		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-		};
+			0x00, 0x08, 0x08, 0x00, 0x00, 0x10, 0x10, 0x10,
+			0x10, 0x10, 0x10, 0x10, 0x10, 0x20, 0x20, 0x20,
+			0x20, 0x20, 0x00, 0x20, 0x00, 0x00, 0x20, 0x00,
+			0x00, 0x20, 0x20, 0x20, 0x40, 0x40, 0x40, 0x40,
+			0x40, 0x00, 0x80, 0x80, 0x00, 0x00, 0x00, 0x10,
+			0x10, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x60,
+			0x60, 0x40, 0x80, 0x80, 0x40, 0x80, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 		cemu_assert((uint32)hwFmt < 0x40);
 		return sBitsTable[(uint32)hwFmt];
 	}
@@ -360,141 +356,140 @@ namespace Latte
 
 	enum REGADDR
 	{
-		VGT_PRIMITIVE_TYPE					= 0x2256,
+		VGT_PRIMITIVE_TYPE = 0x2256,
 
 		// each stage has 12 sets of 4 border color registers
-		TD_PS_SAMPLER0_BORDER_RED			= 0x2900,
-		TD_PS_SAMPLER0_BORDER_GREEN			= 0x2901,
-		TD_PS_SAMPLER0_BORDER_BLUE			= 0x2902,
-		TD_PS_SAMPLER0_BORDER_ALPHA			= 0x2903,
+		TD_PS_SAMPLER0_BORDER_RED = 0x2900,
+		TD_PS_SAMPLER0_BORDER_GREEN = 0x2901,
+		TD_PS_SAMPLER0_BORDER_BLUE = 0x2902,
+		TD_PS_SAMPLER0_BORDER_ALPHA = 0x2903,
 
-		TD_VS_SAMPLER0_BORDER_RED			= 0x2980,
-		TD_VS_SAMPLER0_BORDER_GREEN			= 0x2981,
-		TD_VS_SAMPLER0_BORDER_BLUE			= 0x2982,
-		TD_VS_SAMPLER0_BORDER_ALPHA			= 0x2983,
+		TD_VS_SAMPLER0_BORDER_RED = 0x2980,
+		TD_VS_SAMPLER0_BORDER_GREEN = 0x2981,
+		TD_VS_SAMPLER0_BORDER_BLUE = 0x2982,
+		TD_VS_SAMPLER0_BORDER_ALPHA = 0x2983,
 
-		TD_GS_SAMPLER0_BORDER_RED			= 0x2A00,
-		TD_GS_SAMPLER0_BORDER_GREEN			= 0x2A01,
-		TD_GS_SAMPLER0_BORDER_BLUE			= 0x2A02,
-		TD_GS_SAMPLER0_BORDER_ALPHA			= 0x2A03,
+		TD_GS_SAMPLER0_BORDER_RED = 0x2A00,
+		TD_GS_SAMPLER0_BORDER_GREEN = 0x2A01,
+		TD_GS_SAMPLER0_BORDER_BLUE = 0x2A02,
+		TD_GS_SAMPLER0_BORDER_ALPHA = 0x2A03,
 
-		DB_STENCIL_CLEAR					= 0xA00A,
-		DB_DEPTH_CLEAR						= 0xA00B,
+		DB_STENCIL_CLEAR = 0xA00A,
+		DB_DEPTH_CLEAR = 0xA00B,
 
-		CB_TARGET_MASK                      = 0xA08E,
+		CB_TARGET_MASK = 0xA08E,
 
-		PA_SC_GENERIC_SCISSOR_TL			= 0xA090,
-		PA_SC_GENERIC_SCISSOR_BR			= 0xA091,
+		PA_SC_GENERIC_SCISSOR_TL = 0xA090,
+		PA_SC_GENERIC_SCISSOR_BR = 0xA091,
 
-		SQ_VTX_SEMANTIC_0					= 0xA0E0,
-		SQ_VTX_SEMANTIC_31					= 0xA0FF,
+		SQ_VTX_SEMANTIC_0 = 0xA0E0,
+		SQ_VTX_SEMANTIC_31 = 0xA0FF,
 
-		VGT_MULTI_PRIM_IB_RESET_INDX		= 0xA103,
-		SX_ALPHA_TEST_CONTROL				= 0xA104,
-		CB_BLEND_RED						= 0xA105,
-		CB_BLEND_GREEN						= 0xA106,
-		CB_BLEND_BLUE						= 0xA107,
-		CB_BLEND_ALPHA						= 0xA108,
+		VGT_MULTI_PRIM_IB_RESET_INDX = 0xA103,
+		SX_ALPHA_TEST_CONTROL = 0xA104,
+		CB_BLEND_RED = 0xA105,
+		CB_BLEND_GREEN = 0xA106,
+		CB_BLEND_BLUE = 0xA107,
+		CB_BLEND_ALPHA = 0xA108,
 
-		DB_STENCILREFMASK					= 0xA10C,
-		DB_STENCILREFMASK_BF				= 0xA10D,
-		SX_ALPHA_REF						= 0xA10E,
-		PA_CL_VPORT_XSCALE					= 0xA10F,
-		PA_CL_VPORT_XOFFSET					= 0xA110,
-		PA_CL_VPORT_YSCALE					= 0xA111,
-		PA_CL_VPORT_YOFFSET					= 0xA112,
-		PA_CL_VPORT_ZSCALE					= 0xA113,
-		PA_CL_VPORT_ZOFFSET					= 0xA114,
+		DB_STENCILREFMASK = 0xA10C,
+		DB_STENCILREFMASK_BF = 0xA10D,
+		SX_ALPHA_REF = 0xA10E,
+		PA_CL_VPORT_XSCALE = 0xA10F,
+		PA_CL_VPORT_XOFFSET = 0xA110,
+		PA_CL_VPORT_YSCALE = 0xA111,
+		PA_CL_VPORT_YOFFSET = 0xA112,
+		PA_CL_VPORT_ZSCALE = 0xA113,
+		PA_CL_VPORT_ZOFFSET = 0xA114,
 
-		SPI_VS_OUT_ID_0						= 0xA185,
+		SPI_VS_OUT_ID_0 = 0xA185,
 
-		SPI_VS_OUT_CONFIG					= 0xA1B1,
+		SPI_VS_OUT_CONFIG = 0xA1B1,
 
-		CB_BLEND0_CONTROL					= 0xA1E0, // first
-		CB_BLEND7_CONTROL					= 0xA1E7, // last
+		CB_BLEND0_CONTROL = 0xA1E0, // first
+		CB_BLEND7_CONTROL = 0xA1E7, // last
 
-		DB_DEPTH_CONTROL					= 0xA200,
+		DB_DEPTH_CONTROL = 0xA200,
 
-		CB_COLOR_CONTROL					= 0xA202,
+		CB_COLOR_CONTROL = 0xA202,
 
-		PA_CL_CLIP_CNTL						= 0xA204,
-		PA_SU_SC_MODE_CNTL					= 0xA205,
-		PA_CL_VTE_CNTL						= 0xA206,
-		PA_CL_VS_OUT_CNTL					= 0xA207,
+		PA_CL_CLIP_CNTL = 0xA204,
+		PA_SU_SC_MODE_CNTL = 0xA205,
+		PA_CL_VTE_CNTL = 0xA206,
+		PA_CL_VS_OUT_CNTL = 0xA207,
 
 		// shader program descriptors:
-		SQ_PGM_START_PS						= 0xA210,
-		SQ_PGM_RESOURCES_PS					= 0xA214,
-		SQ_PGM_EXPORTS_PS					= 0xA215,
-		SQ_PGM_START_VS						= 0xA216,
-		SQ_PGM_RESOURCES_VS					= 0xA21A,
-		SQ_PGM_START_GS 					= 0xA21B,
-		SQ_PGM_RESOURCES_GS					= 0xA21F,
-		SQ_PGM_START_ES						= 0xA220,
-		SQ_PGM_RESOURCES_ES					= 0xA224,
-		SQ_PGM_START_FS						= 0xA225,
-		SQ_PGM_RESOURCES_FS					= 0xA229,
+		SQ_PGM_START_PS = 0xA210,
+		SQ_PGM_RESOURCES_PS = 0xA214,
+		SQ_PGM_EXPORTS_PS = 0xA215,
+		SQ_PGM_START_VS = 0xA216,
+		SQ_PGM_RESOURCES_VS = 0xA21A,
+		SQ_PGM_START_GS = 0xA21B,
+		SQ_PGM_RESOURCES_GS = 0xA21F,
+		SQ_PGM_START_ES = 0xA220,
+		SQ_PGM_RESOURCES_ES = 0xA224,
+		SQ_PGM_START_FS = 0xA225,
+		SQ_PGM_RESOURCES_FS = 0xA229,
 
-		SQ_VTX_SEMANTIC_CLEAR				= 0xA238,
+		SQ_VTX_SEMANTIC_CLEAR = 0xA238,
 
-		PA_SU_POINT_SIZE					= 0xA280,
-		PA_SU_POINT_MINMAX					= 0xA281,
+		PA_SU_POINT_SIZE = 0xA280,
+		PA_SU_POINT_MINMAX = 0xA281,
 
-		VGT_GS_MODE							= 0xA290,
+		VGT_GS_MODE = 0xA290,
 
-		VGT_DMA_INDEX_TYPE					= 0xA29F, // todo - verify offset
+		VGT_DMA_INDEX_TYPE = 0xA29F, // todo - verify offset
 
-		VGT_PRIMITIVEID_EN					= 0xA2A1,
-		VGT_DMA_NUM_INSTANCES				= 0xA2A2,
+		VGT_PRIMITIVEID_EN = 0xA2A1,
+		VGT_DMA_NUM_INSTANCES = 0xA2A2,
 
-		VGT_MULTI_PRIM_IB_RESET_EN 			= 0xA2A5,
+		VGT_MULTI_PRIM_IB_RESET_EN = 0xA2A5,
 
-		VGT_INSTANCE_STEP_RATE_0			= 0xA2A8,
-		VGT_INSTANCE_STEP_RATE_1			= 0xA2A9,
+		VGT_INSTANCE_STEP_RATE_0 = 0xA2A8,
+		VGT_INSTANCE_STEP_RATE_1 = 0xA2A9,
 
-		VGT_STRMOUT_BUFFER_SIZE_0			= 0xA2B4,
-		VGT_STRMOUT_VTX_STRIDE_0			= 0xA2B5,
-		VGT_STRMOUT_BUFFER_BASE_0			= 0xA2B6,
-		VGT_STRMOUT_BUFFER_OFFSET_0			= 0xA2B7,
-		VGT_STRMOUT_BUFFER_SIZE_1			= 0xA2B8,
-		VGT_STRMOUT_VTX_STRIDE_1			= 0xA2B9,
-		VGT_STRMOUT_BUFFER_BASE_1			= 0xA2BA,
-		VGT_STRMOUT_BUFFER_OFFSET_1			= 0xA2BB,
-		VGT_STRMOUT_BUFFER_SIZE_2			= 0xA2BC,
-		VGT_STRMOUT_VTX_STRIDE_2			= 0xA2BD,
-		VGT_STRMOUT_BUFFER_BASE_2			= 0xA2BE,
-		VGT_STRMOUT_BUFFER_OFFSET_2			= 0xA2BF,
-		VGT_STRMOUT_BUFFER_SIZE_3			= 0xA2C0,
-		VGT_STRMOUT_VTX_STRIDE_3			= 0xA2C1,
-		VGT_STRMOUT_BUFFER_BASE_3			= 0xA2C2,
-		VGT_STRMOUT_BUFFER_OFFSET_3			= 0xA2C3,
-		VGT_STRMOUT_BASE_OFFSET_0			= 0xA2C4,
-		VGT_STRMOUT_BASE_OFFSET_1			= 0xA2C5,
-		VGT_STRMOUT_BASE_OFFSET_2			= 0xA2C6,
-		VGT_STRMOUT_BASE_OFFSET_3			= 0xA2C7,
-		VGT_STRMOUT_BUFFER_EN				= 0xA2C8,
+		VGT_STRMOUT_BUFFER_SIZE_0 = 0xA2B4,
+		VGT_STRMOUT_VTX_STRIDE_0 = 0xA2B5,
+		VGT_STRMOUT_BUFFER_BASE_0 = 0xA2B6,
+		VGT_STRMOUT_BUFFER_OFFSET_0 = 0xA2B7,
+		VGT_STRMOUT_BUFFER_SIZE_1 = 0xA2B8,
+		VGT_STRMOUT_VTX_STRIDE_1 = 0xA2B9,
+		VGT_STRMOUT_BUFFER_BASE_1 = 0xA2BA,
+		VGT_STRMOUT_BUFFER_OFFSET_1 = 0xA2BB,
+		VGT_STRMOUT_BUFFER_SIZE_2 = 0xA2BC,
+		VGT_STRMOUT_VTX_STRIDE_2 = 0xA2BD,
+		VGT_STRMOUT_BUFFER_BASE_2 = 0xA2BE,
+		VGT_STRMOUT_BUFFER_OFFSET_2 = 0xA2BF,
+		VGT_STRMOUT_BUFFER_SIZE_3 = 0xA2C0,
+		VGT_STRMOUT_VTX_STRIDE_3 = 0xA2C1,
+		VGT_STRMOUT_BUFFER_BASE_3 = 0xA2C2,
+		VGT_STRMOUT_BUFFER_OFFSET_3 = 0xA2C3,
+		VGT_STRMOUT_BASE_OFFSET_0 = 0xA2C4,
+		VGT_STRMOUT_BASE_OFFSET_1 = 0xA2C5,
+		VGT_STRMOUT_BASE_OFFSET_2 = 0xA2C6,
+		VGT_STRMOUT_BASE_OFFSET_3 = 0xA2C7,
+		VGT_STRMOUT_BUFFER_EN = 0xA2C8,
 
 		// HiZ early stencil test?
-		DB_SRESULTS_COMPARE_STATE0			= 0xA34A,
-		DB_SRESULTS_COMPARE_STATE1			= 0xA34B,
+		DB_SRESULTS_COMPARE_STATE0 = 0xA34A,
+		DB_SRESULTS_COMPARE_STATE1 = 0xA34B,
 
-		PA_SU_POLY_OFFSET_CLAMP				= 0xA37F,
-		PA_SU_POLY_OFFSET_FRONT_SCALE		= 0xA380,
-		PA_SU_POLY_OFFSET_FRONT_OFFSET		= 0xA381,
-		PA_SU_POLY_OFFSET_BACK_SCALE		= 0xA382,
-		PA_SU_POLY_OFFSET_BACK_OFFSET		= 0xA383,
+		PA_SU_POLY_OFFSET_CLAMP = 0xA37F,
+		PA_SU_POLY_OFFSET_FRONT_SCALE = 0xA380,
+		PA_SU_POLY_OFFSET_FRONT_OFFSET = 0xA381,
+		PA_SU_POLY_OFFSET_BACK_SCALE = 0xA382,
+		PA_SU_POLY_OFFSET_BACK_OFFSET = 0xA383,
 
 		// texture units
-		SQ_TEX_RESOURCE_WORD0_N_PS			= 0xE000,
-		SQ_TEX_RESOURCE_WORD0_N_VS			= 0xE460,
-		SQ_TEX_RESOURCE_WORD0_N_GS			= 0xE930,
-		SQ_TEX_RESOURCE_WORD_FIRST			= SQ_TEX_RESOURCE_WORD0_N_PS,
-		SQ_TEX_RESOURCE_WORD_LAST			= (SQ_TEX_RESOURCE_WORD0_N_GS + GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7 - 1),
+		SQ_TEX_RESOURCE_WORD0_N_PS = 0xE000,
+		SQ_TEX_RESOURCE_WORD0_N_VS = 0xE460,
+		SQ_TEX_RESOURCE_WORD0_N_GS = 0xE930,
+		SQ_TEX_RESOURCE_WORD_FIRST = SQ_TEX_RESOURCE_WORD0_N_PS,
+		SQ_TEX_RESOURCE_WORD_LAST = (SQ_TEX_RESOURCE_WORD0_N_GS + GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7 - 1),
 		// there are 54 samplers with 3 registers each. 18 (actually only 16?) per stage. For stage indices see SAMPLER_BASE_INDEX_*
-		SQ_TEX_SAMPLER_WORD0_0				= 0xF000,
-		SQ_TEX_SAMPLER_WORD1_0				= 0xF001,
-		SQ_TEX_SAMPLER_WORD2_0				= 0xF002,
-
+		SQ_TEX_SAMPLER_WORD0_0 = 0xF000,
+		SQ_TEX_SAMPLER_WORD1_0 = 0xF001,
+		SQ_TEX_SAMPLER_WORD2_0 = 0xF002,
 
 	};
 
@@ -502,88 +497,88 @@ namespace Latte
 	inline constexpr int SAMPLER_BASE_INDEX_VERTEX = 18;
 	inline constexpr int SAMPLER_BASE_INDEX_GEOMETRY = 36;
 
-#define LATTE_BITFIELD(__regname, __bitIndex, __bitWidth) \
-auto& set_##__regname(uint32 newValue) \
-{	\
-	cemu_assert_debug(newValue < (1u << (__bitWidth))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (newValue << (__bitIndex)); \
-    return *this; \
-} \
-uint32 get_##__regname() const \
-{	\
-	return (v >> (__bitIndex))&((1u << (__bitWidth)) - 1u); \
-}
+#define LATTE_BITFIELD(__regname, __bitIndex, __bitWidth)         \
+	auto& set_##__regname(uint32 newValue)                        \
+	{                                                             \
+		cemu_assert_debug(newValue < (1u << (__bitWidth)));       \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));    \
+		v |= (newValue << (__bitIndex));                          \
+		return *this;                                             \
+	}                                                             \
+	uint32 get_##__regname() const                                \
+	{                                                             \
+		return (v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u); \
+	}
 
-#define LATTE_BITFIELD_SIGNED(__regname, __bitIndex, __bitWidth) \
-auto& set_##__regname(sint32 newValue) \
-{	\
-	cemu_assert_debug(newValue < (1 << ((__bitWidth)-1))); \
-	cemu_assert_debug(newValue >= -(1 << ((__bitWidth)-1))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (((uint32)newValue & ((1u << (__bitWidth)) - 1u)) << (__bitIndex)); \
-    return *this; \
-} \
-sint32 get_##__regname() const \
-{	\
-    sint32 r = (v >> (__bitIndex))&((1u << (__bitWidth)) - 1u); \
-    r = (r << (32 - (__bitWidth))); \
-    r = (r >> (32 - (__bitWidth))); \
-	return r; \
-}
+#define LATTE_BITFIELD_SIGNED(__regname, __bitIndex, __bitWidth)                 \
+	auto& set_##__regname(sint32 newValue)                                       \
+	{                                                                            \
+		cemu_assert_debug(newValue < (1 << ((__bitWidth) - 1)));                 \
+		cemu_assert_debug(newValue >= -(1 << ((__bitWidth) - 1)));               \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));                   \
+		v |= (((uint32)newValue & ((1u << (__bitWidth)) - 1u)) << (__bitIndex)); \
+		return *this;                                                            \
+	}                                                                            \
+	sint32 get_##__regname() const                                               \
+	{                                                                            \
+		sint32 r = (v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u);            \
+		r = (r << (32 - (__bitWidth)));                                          \
+		r = (r >> (32 - (__bitWidth)));                                          \
+		return r;                                                                \
+	}
 
 #define LATTE_BITFIELD_BOOL(__regname, __bitIndex) \
-auto& set_##__regname(bool newValue) \
-{	\
-	if(newValue) \
-	v |= (1u << (__bitIndex)); \
-	else \
-	v &= ~(1u << (__bitIndex)); \
-    return *this; \
-} \
-bool get_##__regname() const \
-{	\
-	return (v&(1u << (__bitIndex))) != 0; \
-}
+	auto& set_##__regname(bool newValue)           \
+	{                                              \
+		if (newValue)                              \
+			v |= (1u << (__bitIndex));             \
+		else                                       \
+			v &= ~(1u << (__bitIndex));            \
+		return *this;                              \
+	}                                              \
+	bool get_##__regname() const                   \
+	{                                              \
+		return (v & (1u << (__bitIndex))) != 0;    \
+	}
 
-#define LATTE_BITFIELD_TYPED(__regname, __bitIndex, __bitWidth, __typename) \
-auto& set_##__regname(__typename newValue) \
-{	\
-	cemu_assert_debug(static_cast<uint32>(newValue) < (1u << (__bitWidth))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (static_cast<uint32>(newValue) << (__bitIndex)); \
-    return *this; \
-} \
-__typename get_##__regname() const \
-{	\
-	return static_cast<__typename>((v >> (__bitIndex))&((1u << (__bitWidth)) - 1u)); \
-}
+#define LATTE_BITFIELD_TYPED(__regname, __bitIndex, __bitWidth, __typename)                \
+	auto& set_##__regname(__typename newValue)                                             \
+	{                                                                                      \
+		cemu_assert_debug(static_cast<uint32>(newValue) < (1u << (__bitWidth)));           \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));                             \
+		v |= (static_cast<uint32>(newValue) << (__bitIndex));                              \
+		return *this;                                                                      \
+	}                                                                                      \
+	__typename get_##__regname() const                                                     \
+	{                                                                                      \
+		return static_cast<__typename>((v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u)); \
+	}
 
 #define LATTE_BITFIELD_FULL_TYPED(__regname, __typename) \
-auto& set_##__regname(__typename newValue) \
-{	\
-	v = (static_cast<uint32>(newValue)); \
-    return *this; \
-} \
-__typename get_##__regname() const \
-{	\
-	return static_cast<__typename>(v); \
-}
+	auto& set_##__regname(__typename newValue)           \
+	{                                                    \
+		v = (static_cast<uint32>(newValue));             \
+		return *this;                                    \
+	}                                                    \
+	__typename get_##__regname() const                   \
+	{                                                    \
+		return static_cast<__typename>(v);               \
+	}
 
-#define LATTE_BITFIELD_FLOAT(__regname) \
-auto& set_##__regname(float newValue) \
-{	\
-	*(float*)&v = newValue; \
-    return *this; \
-} \
-float get_##__regname() const \
-{	\
-	return *(float*)&v; \
-}
+#define LATTE_BITFIELD_FLOAT(__regname)   \
+	auto& set_##__regname(float newValue) \
+	{                                     \
+		*(float*)&v = newValue;           \
+		return *this;                     \
+	}                                     \
+	float get_##__regname() const         \
+	{                                     \
+		return *(float*)&v;               \
+	}
 
 	class LATTEREG
 	{
-	public:
+	  public:
 		uint32 getRawValue() const
 		{
 			return v;
@@ -594,7 +589,7 @@ float get_##__regname() const \
 			return _swapEndianU32(v);
 		}
 
-	protected:
+	  protected:
 		uint32 v{};
 	};
 
@@ -762,36 +757,36 @@ float get_##__regname() const \
 	{
 		enum class E_BLENDFACTOR
 		{
-			BLEND_ZERO						= 0x00,
-			BLEND_ONE						= 0x01,
-			BLEND_SRC_COLOR					= 0x02,
-			BLEND_ONE_MINUS_SRC_COLOR		= 0x03,
-			BLEND_SRC_ALPHA					= 0x04,
-			BLEND_ONE_MINUS_SRC_ALPHA		= 0x05,
-			BLEND_DST_ALPHA					= 0x06,
-			BLEND_ONE_MINUS_DST_ALPHA		= 0x07,
-			BLEND_DST_COLOR					= 0x08,
-			BLEND_ONE_MINUS_DST_COLOR		= 0x09,
-			BLEND_SRC_ALPHA_SATURATE		= 0x0A,
-			BLEND_BOTH_SRC_ALPHA			= 0x0B,
-			BLEND_BOTH_INV_SRC_ALPHA		= 0x0C,
-			BLEND_CONST_COLOR				= 0x0D,
-			BLEND_ONE_MINUS_CONST_COLOR		= 0x0E,
-			BLEND_SRC1_COLOR				= 0x0F,
-			BLEND_INV_SRC1_COLOR			= 0x10,
-			BLEND_SRC1_ALPHA				= 0x11,
-			BLEND_INV_SRC1_ALPHA			= 0x12,
-			BLEND_CONST_ALPHA				= 0x13,
-			BLEND_ONE_MINUS_CONST_ALPHA		= 0x14
+			BLEND_ZERO = 0x00,
+			BLEND_ONE = 0x01,
+			BLEND_SRC_COLOR = 0x02,
+			BLEND_ONE_MINUS_SRC_COLOR = 0x03,
+			BLEND_SRC_ALPHA = 0x04,
+			BLEND_ONE_MINUS_SRC_ALPHA = 0x05,
+			BLEND_DST_ALPHA = 0x06,
+			BLEND_ONE_MINUS_DST_ALPHA = 0x07,
+			BLEND_DST_COLOR = 0x08,
+			BLEND_ONE_MINUS_DST_COLOR = 0x09,
+			BLEND_SRC_ALPHA_SATURATE = 0x0A,
+			BLEND_BOTH_SRC_ALPHA = 0x0B,
+			BLEND_BOTH_INV_SRC_ALPHA = 0x0C,
+			BLEND_CONST_COLOR = 0x0D,
+			BLEND_ONE_MINUS_CONST_COLOR = 0x0E,
+			BLEND_SRC1_COLOR = 0x0F,
+			BLEND_INV_SRC1_COLOR = 0x10,
+			BLEND_SRC1_ALPHA = 0x11,
+			BLEND_INV_SRC1_ALPHA = 0x12,
+			BLEND_CONST_ALPHA = 0x13,
+			BLEND_ONE_MINUS_CONST_ALPHA = 0x14
 		};
 
 		enum class E_COMBINEFUNC
 		{
-			DST_PLUS_SRC					= 0,
-			SRC_MINUS_DST					= 1,
-			MIN_DST_SRC						= 2,
-			MAX_DST_SRC						= 3,
-			DST_MINUS_SRC					= 4
+			DST_PLUS_SRC = 0,
+			SRC_MINUS_DST = 1,
+			MIN_DST_SRC = 2,
+			MAX_DST_SRC = 3,
+			DST_MINUS_SRC = 4
 		};
 
 		LATTE_BITFIELD_TYPED(COLOR_SRCBLEND, 0, 5, E_BLENDFACTOR);
@@ -843,7 +838,7 @@ float get_##__regname() const \
 	{
 		enum class E_SPECIALOP
 		{
-			NORMAL = 0, // use state to render
+			NORMAL = 0,	 // use state to render
 			DISABLE = 1, // dont write color results
 		};
 
@@ -874,14 +869,12 @@ float get_##__regname() const \
 
 		LATTE_BITFIELD_BOOL(DX_CLIP_SPACE_DEF, 19); // GX2 calls this flag HalfZ
 
-
 		LATTE_BITFIELD_BOOL(DX_RASTERIZATION_KILL, 22);
 
 		LATTE_BITFIELD_BOOL(DX_LINEAR_ATTR_CLIP_ENA, 24); // what does this do?
 
 		LATTE_BITFIELD_BOOL(ZCLIP_NEAR_DISABLE, 26);
 		LATTE_BITFIELD_BOOL(ZCLIP_FAR_DISABLE, 27);
-
 	};
 
 	struct LATTE_PA_CL_VTE_CNTL : LATTEREG // 0xA206
@@ -1224,7 +1217,6 @@ float get_##__regname() const \
 			ALWAYS = 7
 		};
 
-
 		enum class E_CHROMA_KEY
 		{
 			DISABLE = 0,
@@ -1275,8 +1267,8 @@ float get_##__regname() const \
 
 		LATTE_BITFIELD(ANISO_BIAS, 22, 6); // is size correct?
 
-		//LATTE_BITFIELD_BOOL(FETCH_4, 26); overlaps with ANISO_BIAS
-		//LATTE_BITFIELD_BOOL(SAMPLE_IS_PCF, 27); overlaps with ANISO_BIAS
+		// LATTE_BITFIELD_BOOL(FETCH_4, 26); overlaps with ANISO_BIAS
+		// LATTE_BITFIELD_BOOL(SAMPLE_IS_PCF, 27); overlaps with ANISO_BIAS
 
 		LATTE_BITFIELD_TYPED(TYPE, 31, 1, E_SAMPLER_TYPE);
 	};
@@ -1369,7 +1361,7 @@ float get_##__regname() const \
 		LATTE_BITFIELD_BOOL(OFFSET_FRONT_ENABLED, 11);
 		LATTE_BITFIELD_BOOL(OFFSET_BACK_ENABLED, 12);
 		LATTE_BITFIELD_BOOL(OFFSET_PARA_ENABLED, 13); // offset enable for lines and points?
-		// additional fields?
+													  // additional fields?
 	};
 
 	struct LATTE_SPI_VS_OUT_CONFIG : LATTEREG // 0xA1B1
@@ -1396,7 +1388,7 @@ float get_##__regname() const \
 		}
 	};
 
-};
+}; // namespace Latte
 
 struct _LatteRegisterSetTextureUnit
 {
@@ -1469,11 +1461,11 @@ struct LatteContextRegister
 	/* +0x28430 */ Latte::LATTE_DB_STENCILREFMASK DB_STENCILREFMASK;
 	/* +0x28434 */ Latte::LATTE_DB_STENCILREFMASK_BF DB_STENCILREFMASK_BF;
 	/* +0x28438 */ Latte::LATTE_SX_ALPHA_REF SX_ALPHA_REF;
-	/* +0x2843C */ Latte::LATTE_PA_CL_VPORT_XSCALE	PA_CL_VPORT_XSCALE;
+	/* +0x2843C */ Latte::LATTE_PA_CL_VPORT_XSCALE PA_CL_VPORT_XSCALE;
 	/* +0x28440 */ Latte::LATTE_PA_CL_VPORT_XOFFSET PA_CL_VPORT_XOFFSET;
-	/* +0x28444 */ Latte::LATTE_PA_CL_VPORT_YSCALE	PA_CL_VPORT_YSCALE;
+	/* +0x28444 */ Latte::LATTE_PA_CL_VPORT_YSCALE PA_CL_VPORT_YSCALE;
 	/* +0x28448 */ Latte::LATTE_PA_CL_VPORT_YOFFSET PA_CL_VPORT_YOFFSET;
-	/* +0x2844C */ Latte::LATTE_PA_CL_VPORT_ZSCALE	PA_CL_VPORT_ZSCALE;
+	/* +0x2844C */ Latte::LATTE_PA_CL_VPORT_ZSCALE PA_CL_VPORT_ZSCALE;
 	/* +0x28450 */ Latte::LATTE_PA_CL_VPORT_ZOFFSET PA_CL_VPORT_ZOFFSET;
 
 	uint8 padding_28450[0x28614 - 0x28454];
@@ -1606,22 +1598,22 @@ struct LatteContextRegister
 	}
 
 	bool IsRasterizationEnabled() const
-    {
-        bool rasterizationEnabled = !PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL();
+	{
+		bool rasterizationEnabled = !PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL();
 
-       	// GX2SetSpecialState(0, true) enables DX_RASTERIZATION_KILL, but still expects depth writes to happen? -> Research which stages are disabled by DX_RASTERIZATION_KILL exactly
-        // for now we use a workaround:
-    	if (!PA_CL_VTE_CNTL.get_VPORT_X_OFFSET_ENA())
-    		rasterizationEnabled = true;
+		// GX2SetSpecialState(0, true) enables DX_RASTERIZATION_KILL, but still expects depth writes to happen? -> Research which stages are disabled by DX_RASTERIZATION_KILL exactly
+		// for now we use a workaround:
+		if (!PA_CL_VTE_CNTL.get_VPORT_X_OFFSET_ENA())
+			rasterizationEnabled = true;
 
-        // Culling both front and back faces effectively disables rasterization
-    	uint32 cullFront = PA_SU_SC_MODE_CNTL.get_CULL_FRONT();
-    	uint32 cullBack = PA_SU_SC_MODE_CNTL.get_CULL_BACK();
-    	if (cullFront && cullBack)
-    	    rasterizationEnabled = false;
+		// Culling both front and back faces effectively disables rasterization
+		uint32 cullFront = PA_SU_SC_MODE_CNTL.get_CULL_FRONT();
+		uint32 cullBack = PA_SU_SC_MODE_CNTL.get_CULL_BACK();
+		if (cullFront && cullBack)
+			rasterizationEnabled = false;
 
-        return rasterizationEnabled;
-    }
+		return rasterizationEnabled;
+	}
 };
 
 static_assert(sizeof(LatteContextRegister) == 0x10000 * 4 + 9 * 4);

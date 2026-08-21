@@ -5,7 +5,7 @@ XInputController::XInputController(uint32 index)
 {
 	if (index >= XUSER_MAX_COUNT)
 		throw std::runtime_error(fmt::format("invalid xinput index {} (must be smaller than {})", index,
-		                                     XUSER_MAX_COUNT));
+											 XUSER_MAX_COUNT));
 
 	m_index = index;
 
@@ -21,8 +21,9 @@ bool XInputController::connect()
 
 	XINPUT_CAPABILITIES caps{};
 	m_connected = m_provider->m_XInputGetCapabilities(m_index, XINPUT_FLAG_GAMEPAD, &caps) !=
-		ERROR_DEVICE_NOT_CONNECTED;
-	if (!m_connected) return false;
+				  ERROR_DEVICE_NOT_CONNECTED;
+	if (!m_connected)
+		return false;
 
 	m_has_rumble = (caps.Vibration.wLeftMotorSpeed > 0) || (caps.Vibration.wRightMotorSpeed > 0);
 
@@ -32,10 +33,10 @@ bool XInputController::connect()
 		if (m_provider->m_XInputGetBatteryInformation(m_index, BATTERY_DEVTYPE_GAMEPAD, &battery) == ERROR_SUCCESS)
 		{
 			m_has_battery = (battery.BatteryType == BATTERY_TYPE_ALKALINE || battery.BatteryType ==
-				BATTERY_TYPE_NIMH);
+																				 BATTERY_TYPE_NIMH);
 		}
 	}
-	
+
 	return m_connected;
 }
 
@@ -43,7 +44,6 @@ bool XInputController::is_connected()
 {
 	return m_connected;
 }
-
 
 void XInputController::start_rumble()
 {
@@ -74,7 +74,7 @@ bool XInputController::has_low_battery()
 	if (m_provider->m_XInputGetBatteryInformation(m_index, BATTERY_DEVTYPE_GAMEPAD, &battery) == ERROR_SUCCESS)
 	{
 		return (battery.BatteryType == BATTERY_TYPE_ALKALINE || battery.BatteryType == BATTERY_TYPE_NIMH) && battery
-			.BatteryLevel <= BATTERY_LEVEL_LOW;
+																													 .BatteryLevel <= BATTERY_LEVEL_LOW;
 	}
 
 	return false;
@@ -84,23 +84,37 @@ std::string XInputController::get_button_name(uint64 button) const
 {
 	switch (1ULL << button)
 	{
-	case XINPUT_GAMEPAD_A: return "A";
-	case XINPUT_GAMEPAD_B: return "B";
-	case XINPUT_GAMEPAD_X: return "X";
-	case XINPUT_GAMEPAD_Y: return "Y";
+	case XINPUT_GAMEPAD_A:
+		return "A";
+	case XINPUT_GAMEPAD_B:
+		return "B";
+	case XINPUT_GAMEPAD_X:
+		return "X";
+	case XINPUT_GAMEPAD_Y:
+		return "Y";
 
-	case XINPUT_GAMEPAD_LEFT_SHOULDER: return "L";
-	case XINPUT_GAMEPAD_RIGHT_SHOULDER: return "R";
+	case XINPUT_GAMEPAD_LEFT_SHOULDER:
+		return "L";
+	case XINPUT_GAMEPAD_RIGHT_SHOULDER:
+		return "R";
 
-	case XINPUT_GAMEPAD_START: return "Start";
-	case XINPUT_GAMEPAD_BACK: return "Select";
+	case XINPUT_GAMEPAD_START:
+		return "Start";
+	case XINPUT_GAMEPAD_BACK:
+		return "Select";
 
-	case XINPUT_GAMEPAD_LEFT_THUMB: return "L-Stick";
-	case XINPUT_GAMEPAD_RIGHT_THUMB: return "R-Stick";
-	case XINPUT_GAMEPAD_DPAD_UP: return "DPAD-Up";
-	case XINPUT_GAMEPAD_DPAD_DOWN: return "DPAD-Down";
-	case XINPUT_GAMEPAD_DPAD_LEFT: return "DPAD-Left";
-	case XINPUT_GAMEPAD_DPAD_RIGHT: return "DPAD-Right";
+	case XINPUT_GAMEPAD_LEFT_THUMB:
+		return "L-Stick";
+	case XINPUT_GAMEPAD_RIGHT_THUMB:
+		return "R-Stick";
+	case XINPUT_GAMEPAD_DPAD_UP:
+		return "DPAD-Up";
+	case XINPUT_GAMEPAD_DPAD_DOWN:
+		return "DPAD-Down";
+	case XINPUT_GAMEPAD_DPAD_LEFT:
+		return "DPAD-Left";
+	case XINPUT_GAMEPAD_DPAD_RIGHT:
+		return "DPAD-Right";
 	}
 
 	return Controller::get_button_name(button);
@@ -120,7 +134,7 @@ ControllerState XInputController::raw_state()
 	}
 
 	// Buttons
-	for(int i=0;i<std::numeric_limits<WORD>::digits;i++)
+	for (int i = 0; i < std::numeric_limits<WORD>::digits; i++)
 		result.buttons.SetButtonState(i, (state.Gamepad.wButtons & (1 << i)) != 0);
 
 	if (state.Gamepad.sThumbLX > 0)
@@ -147,6 +161,6 @@ ControllerState XInputController::raw_state()
 	// Trigger
 	result.trigger.x = (float)state.Gamepad.bLeftTrigger / std::numeric_limits<uint8>::max();
 	result.trigger.y = (float)state.Gamepad.bRightTrigger / std::numeric_limits<uint8>::max();
-	
+
 	return result;
 }

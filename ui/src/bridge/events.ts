@@ -11,7 +11,12 @@ export function subscribe(listener: (event: NativeEvent) => void): () => void {
 export function dispatchNativeEvent(value: unknown): void {
   if (!value || typeof value !== "object") return;
   const event = value as NativeEvent;
-  if (typeof event.type !== "string" || typeof event.sequence !== "string" || !/^[0-9]+$/.test(event.sequence)) return;
+  if (
+    typeof event.type !== "string" ||
+    typeof event.sequence !== "string" ||
+    !/^[0-9]+$/.test(event.sequence)
+  )
+    return;
   const sequence = BigInt(event.sequence);
   if (sequence <= lastSequence) return;
   lastSequence = sequence;
@@ -22,6 +27,6 @@ if (typeof window !== "undefined") {
   Object.defineProperty(window, "__cemuDispatchEvent", {
     configurable: false,
     writable: false,
-    value: dispatchNativeEvent
+    value: dispatchNativeEvent,
   });
 }

@@ -93,14 +93,14 @@ namespace Host
 
 	class IWindowMetrics
 	{
-	public:
+	  public:
 		virtual ~IWindowMetrics() = default;
 		[[nodiscard]] virtual WindowMetricsSnapshot GetWindowMetrics() const = 0;
 	};
 
 	class IPathProvider
 	{
-	public:
+	  public:
 		virtual ~IPathProvider() = default;
 		[[nodiscard]] virtual std::filesystem::path GetUserDataPath(
 			std::string_view relativePath) const = 0;
@@ -114,14 +114,14 @@ namespace Host
 
 	class INativeSurfaceProvider
 	{
-	public:
+	  public:
 		virtual ~INativeSurfaceProvider() = default;
 		[[nodiscard]] virtual NativeSurfaceSnapshot GetNativeSurfaces() const = 0;
 	};
 
 	class INativeSurfacePublisher
 	{
-	public:
+	  public:
 		virtual ~INativeSurfacePublisher() = default;
 		[[nodiscard]] virtual NativeSurfacePublication PublishMainWindow(
 			NativeWindowHandle handle) = 0;
@@ -130,14 +130,14 @@ namespace Host
 			NativeWindowHandle handle) = 0;
 		virtual void ClearPadWindow(NativeSurfacePublication publication) = 0;
 		[[nodiscard]] virtual NativeSurfacePublication PublishCanvas(bool mainWindow,
-			NativeWindowHandle handle) = 0;
+																	 NativeWindowHandle handle) = 0;
 		virtual void ClearCanvas(bool mainWindow,
-			NativeSurfacePublication publication) = 0;
+								 NativeSurfacePublication publication) = 0;
 	};
 
 	class IKeyboardState
 	{
-	public:
+	  public:
 		virtual ~IKeyboardState() = default;
 		[[nodiscard]] virtual bool IsKeyDown(Key key) const = 0;
 		[[nodiscard]] virtual std::string GetKeyName(std::uint32_t key) const = 0;
@@ -146,21 +146,21 @@ namespace Host
 
 	class IInputHostEvents
 	{
-	public:
+	  public:
 		virtual ~IInputHostEvents() = default;
 		virtual void UpdateMousePosition(PointerSurface surface,
-			PointerPosition position) = 0;
+										 PointerPosition position) = 0;
 		virtual void UpdateMouseButton(PointerSurface surface, PointerButton button,
-			bool pressed, PointerPosition position) = 0;
+									   bool pressed, PointerPosition position) = 0;
 		virtual void UpdateTouch(PointerSurface surface, PointerPosition position,
-			bool pressed) = 0;
+								 bool pressed) = 0;
 		virtual void UpdateMouseWheel(float value, std::int32_t cumulativeSteps) = 0;
 		virtual void NotifyDeviceChanged() = 0;
 	};
 
 	class IClipboard
 	{
-	public:
+	  public:
 		using GetTextCallback = std::function<void(bool, std::string)>;
 		using SetTextCallback = std::function<void(bool)>;
 		virtual ~IClipboard() = default;
@@ -170,21 +170,21 @@ namespace Host
 
 	class IExternalLauncher
 	{
-	public:
+	  public:
 		virtual ~IExternalLauncher() = default;
 		[[nodiscard]] virtual bool OpenUrl(std::string url) = 0;
 	};
 
 	class IInputFocus
 	{
-	public:
+	  public:
 		virtual ~IInputFocus() = default;
 		[[nodiscard]] virtual bool InputConfigurationHasFocus() const = 0;
 	};
 
 	class ICanvasHost
 	{
-	public:
+	  public:
 		virtual ~ICanvasHost() = default;
 		[[nodiscard]] virtual bool RecreateCanvas() = 0;
 	};
@@ -199,7 +199,7 @@ namespace Host
 
 	class IRenderRegion
 	{
-	public:
+	  public:
 		virtual ~IRenderRegion() = default;
 		[[nodiscard]] virtual NativeWindowHandle GetWindowHandle() const = 0;
 		[[nodiscard]] virtual NativeWindowHandle GetSurfaceHandle() const = 0;
@@ -212,7 +212,7 @@ namespace Host
 
 	class IRenderRegionFactory
 	{
-	public:
+	  public:
 		virtual ~IRenderRegionFactory() = default;
 		[[nodiscard]] virtual std::unique_ptr<IRenderRegion> CreateMainRegion(
 			NativeWindowHandle parent) = 0;
@@ -220,4 +220,4 @@ namespace Host
 			NativeWindowHandle parent) = 0;
 	};
 
-}
+} // namespace Host

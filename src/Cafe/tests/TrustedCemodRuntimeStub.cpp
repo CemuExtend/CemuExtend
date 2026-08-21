@@ -10,7 +10,7 @@ TrustedCemodRuntime::TrustedCemodRuntime() : m_impl(std::make_unique<Impl>()) {}
 TrustedCemodRuntime::~TrustedCemodRuntime() = default;
 
 std::optional<std::uint64_t> TrustedCemodRuntime::Load(CemodPackage,
-	std::uint32_t, const ModServicePermissions&, std::string& error)
+													   std::uint32_t, const ModServicePermissions&, std::string& error)
 {
 	error = "trusted runtime is not linked into isolated runtime unit tests";
 	return std::nullopt;
@@ -27,7 +27,10 @@ bool TrustedCemodRuntime::ReadyForNextTitle(std::string& error) const
 	error = m_impl->lifecycle.ReleasePending() ? "trusted title release is still pending" : "trusted title is still active";
 	return false;
 }
-bool TrustedCemodRuntime::Unload(std::uint64_t) { return false; }
+bool TrustedCemodRuntime::Unload(std::uint64_t)
+{
+	return false;
+}
 void TrustedCemodRuntime::UnloadAll()
 {
 	m_impl->lifecycle.RequestRelease();
@@ -41,7 +44,10 @@ bool TrustedCemodRuntime::ReleaseAfterTitleThreadsStopped(std::string& error)
 	return m_impl->lifecycle.CompleteRelease(error);
 }
 void TrustedCemodRuntime::UpdatePermissions(std::uint32_t, const ModServicePermissions&) {}
-cemuextend_hle::Cex2Owner* TrustedCemodRuntime::Owner() { return nullptr; }
+cemuextend_hle::Cex2Owner* TrustedCemodRuntime::Owner()
+{
+	return nullptr;
+}
 std::size_t TrustedCemodRuntime::Size() const
 {
 	return m_impl->lifecycle.IsReady() ? 0 : 1;

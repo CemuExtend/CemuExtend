@@ -5,9 +5,9 @@
 #include <helpers/wxHelpers.h>
 
 MetalCanvas::MetalCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
-	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-	std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+						 std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+						 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+						 std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 	: IRenderCanvas(is_main_window), wxWindow(parent, wxID_ANY, wxDefaultPosition, size, wxNO_FULL_REPAINT_ON_RESIZE | wxWANTS_CHARS),
 	  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
 {
@@ -27,8 +27,7 @@ MetalCanvas::MetalCanvas(wxWindow* parent, const wxSize& size, bool is_main_wind
 
 		auto metal_renderer = MetalRenderer::GetInstance();
 		metal_renderer->InitializeLayer({size.x, size.y}, is_main_window);
-	}
-	catch(const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "Error when initializing Metal renderer: {}", ex.what());
 		auto msg = formatWxString(_("Error when initializing Metal renderer:\n{}"), ex.what());
@@ -46,7 +45,6 @@ MetalCanvas::~MetalCanvas()
 	Unbind(wxEVT_SIZE, &MetalCanvas::OnResize, this);
 	PrepareForDestroy();
 }
-
 
 void MetalCanvas::PrepareForDestroy()
 {

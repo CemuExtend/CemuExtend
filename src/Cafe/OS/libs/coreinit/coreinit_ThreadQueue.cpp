@@ -15,8 +15,8 @@ namespace coreinit
 		if (reportIndex < 20)
 		{
 			cemuLog_log(LogType::Force,
-				"OSThreadQueue: dropping thread pointer 0x{:08x} which is not mapped guest memory{}",
-				address, reportIndex == 19 ? " (further reports suppressed)" : "");
+						"OSThreadQueue: dropping thread pointer 0x{:08x} which is not mapped guest memory{}",
+						address, reportIndex == 19 ? " (further reports suppressed)" : "");
 		}
 		return false;
 	}
@@ -92,7 +92,7 @@ namespace coreinit
 		size_t linkOffset = getLinkOffset(thread, threadLink);
 		if (!tail.IsNull() &&
 			(!OSThreadQueue_IsThreadPointerValid(tail.GetMPTR()) ||
-				!OSThreadQueue_IsThreadPointerValid(head.GetMPTR())))
+			 !OSThreadQueue_IsThreadPointerValid(head.GetMPTR())))
 		{
 			// corrupted chain, restart the queue with this thread as its only entry
 			head = nullptr;
@@ -188,7 +188,7 @@ namespace coreinit
 		while (OSThread_t* thread = takeFirstFromQueue(offsetof(OSThread_t, waitQueueLink)))
 		{
 			cemu_assert_debug(thread->state == OSThread_t::THREAD_STATE::STATE_WAITING);
-			//cemu_assert_debug(thread->suspendCounter == 0);
+			// cemu_assert_debug(thread->suspendCounter == 0);
 			thread->state = OSThread_t::THREAD_STATE::STATE_READY;
 			thread->currentWaitQueue = nullptr;
 			coreinit::__OSAddReadyThreadToRunQueue(thread);
@@ -219,4 +219,4 @@ namespace coreinit
 			PPCCore_switchToSchedulerWithLock();
 	}
 
-}
+} // namespace coreinit

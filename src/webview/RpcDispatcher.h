@@ -15,7 +15,7 @@ namespace WebFrontend
 {
 	class RpcDispatcher final
 	{
-	public:
+	  public:
 		using Handler = std::function<std::string(const rapidjson::Value& params)>;
 
 		void Register(std::string method, Handler handler);
@@ -24,11 +24,11 @@ namespace WebFrontend
 		void BeginShutdown();
 		[[nodiscard]] bool IsShuttingDown() const;
 
-	private:
+	  private:
 		[[nodiscard]] static std::string Error(std::string_view id,
-			std::string_view code, std::string_view message);
+											   std::string_view code, std::string_view message);
 		[[nodiscard]] static std::string Success(std::string_view id,
-			std::string_view resultJson);
+												 std::string_view resultJson);
 
 		mutable std::mutex m_mutex;
 		std::unordered_map<std::string, Handler> m_handlers;
@@ -36,4 +36,4 @@ namespace WebFrontend
 		std::deque<std::string> m_requestIdOrder;
 		bool m_shuttingDown{};
 	};
-}
+} // namespace WebFrontend

@@ -5,30 +5,29 @@
 #include "Cafe/OS/libs/coreinit/coreinit_IOS.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MCP.h"
 
-
 #include "Cafe/OS/libs/nn_common.h"
 #include "Cafe/OS/libs/nn_act/nn_act.h"
 #include "config/CemuConfig.h"
 
 #include "Cafe/CafeSystem.h"
 
-#define mcpPrepareRequest() \
-StackAllocator<iosuMcpCemuRequest_t> _buf_mcpRequest; \
-StackAllocator<ioBufferVector_t> _buf_bufferVector; \
-iosuMcpCemuRequest_t* mcpRequest = _buf_mcpRequest.GetPointer(); \
-ioBufferVector_t* mcpBufferVector = _buf_bufferVector.GetPointer(); \
-memset(mcpRequest, 0, sizeof(iosuMcpCemuRequest_t)); \
-memset(mcpBufferVector, 0, sizeof(ioBufferVector_t)); \
-mcpBufferVector->buffer = (uint8*)mcpRequest;
+#define mcpPrepareRequest()                                             \
+	StackAllocator<iosuMcpCemuRequest_t> _buf_mcpRequest;               \
+	StackAllocator<ioBufferVector_t> _buf_bufferVector;                 \
+	iosuMcpCemuRequest_t* mcpRequest = _buf_mcpRequest.GetPointer();    \
+	ioBufferVector_t* mcpBufferVector = _buf_bufferVector.GetPointer(); \
+	memset(mcpRequest, 0, sizeof(iosuMcpCemuRequest_t));                \
+	memset(mcpBufferVector, 0, sizeof(ioBufferVector_t));               \
+	mcpBufferVector->buffer = (uint8*)mcpRequest;
 
-#define MCP_FAKE_HANDLE		(0x00000010)
+#define MCP_FAKE_HANDLE (0x00000010)
 
 typedef struct
 {
 	uint32be n0;
 	uint32be n1;
 	uint32be n2;
-}mcpSystemVersion_t;
+} mcpSystemVersion_t;
 
 static_assert(sizeof(MCPTitleInfo) == 0x61, "title entry size is invalid");
 static_assert(offsetof(MCPTitleInfo, appPath) == 0xC, "title entry appPath has invalid offset");
@@ -77,7 +76,7 @@ sint32 MCP_GetSysProdSettings(MCPHANDLE mcpHandle, SysProdSettings* sysProdSetti
 		serial.size() - codeLength, sizeof(sysProdSettings->serialId) - 1);
 	std::memcpy(sysProdSettings->codeId, serial.data(), codeLength);
 	std::memcpy(sysProdSettings->serialId,
-		serial.data() + codeLength, serialLength);
+				serial.data() + codeLength, serialLength);
 	return 0;
 }
 
@@ -108,7 +107,7 @@ void coreinitExport_MCP_TitleListByAppType(PPCInterpreter_t* hCPU)
 	__depr__IOS_Ioctlv(IOS_DEVICE_MCP, IOSU_MCP_REQUEST_CEMU, 1, 1, mcpBufferVector);
 
 	*countOutput = mcpRequest->titleListRequest.titleCount;
-			
+
 	osLib_returnFromFunction(hCPU, 0);
 }
 
@@ -170,7 +169,6 @@ void coreinitExport_MCP_GetTitleInfo(PPCInterpreter_t* hCPU)
 	}
 
 	osLib_returnFromFunction(hCPU, mcpRequest->returnCode);
-
 }
 
 void coreinitExport_MCP_GetTitleInfoByTitleAndDevice(PPCInterpreter_t* hCPU)
@@ -250,10 +248,10 @@ namespace coreinit
 	struct MCPDevice_t
 	{
 		/* +0x000 */ char storageName[0x8]; // the name in the storage path (mlc, slc, usb?) // volumeId at +8
-		/* +0x008 */ char volumeId[16]; //
+		/* +0x008 */ char volumeId[16];		//
 		/* +0x018 */ char ukn[0x90 - 0x18];
 		/* +0x090 */ char storagePath[0x280 - 1]; // /vol/storage_%s%02x
-		/* +0x30F */ uint32be flags; // men.rpx checks for 0x2 and 0x8
+		/* +0x30F */ uint32be flags;			  // men.rpx checks for 0x2 and 0x8
 		uint8 ukn313[4];
 		uint8 ukn317[4];
 	};
@@ -324,10 +322,9 @@ namespace coreinit
 		sprintf(deviceList[1].storagePath, "/vol/storage_%s%02x", deviceList[1].storageName, (sint32)deviceList[1].flags);
 
 		// 2
-		//strcpy(deviceList[2].storageName, "usb");
-		//deviceList[2].storageSubindex = 1;
-		//sprintf(deviceList[2].storagePath, "/vol/storage_%s%02x", deviceList[2].storageName, (sint32)deviceList[2].storageSubindex);
-
+		// strcpy(deviceList[2].storageName, "usb");
+		// deviceList[2].storageSubindex = 1;
+		// sprintf(deviceList[2].storagePath, "/vol/storage_%s%02x", deviceList[2].storageName, (sint32)deviceList[2].storageSubindex);
 
 		*deviceCount = 2;
 
@@ -357,7 +354,6 @@ namespace coreinit
 
 		*unknownParam = 1;
 
-
 		osLib_returnFromFunction(hCPU, 0);
 	}
 
@@ -370,7 +366,7 @@ namespace coreinit
 
 		// this callback is to let the app know when the title list changed?
 
-		//PPCCoreCallback(callbackMPTR); // -> If we trigger the callback then the menu will repeat with a call to MCP_GetTitleList(), MCP_DeviceList() and MCP_TitleListUpdateGetNext
+		// PPCCoreCallback(callbackMPTR); // -> If we trigger the callback then the menu will repeat with a call to MCP_GetTitleList(), MCP_DeviceList() and MCP_TitleListUpdateGetNext
 
 		osLib_returnFromFunction(hCPU, 0);
 	}
@@ -389,7 +385,7 @@ namespace coreinit
 		mcpRequest->requestCode = IOSU_MCP_GET_TITLE_LIST_BY_APP_TYPE;
 		mcpRequest->titleListRequest.titleCount = 1;
 		mcpRequest->titleListRequest.titleList = titleList;
-		mcpRequest->titleListRequest.titleListBufferSize = sizeof(MCPTitleInfo)*1;
+		mcpRequest->titleListRequest.titleListBufferSize = sizeof(MCPTitleInfo) * 1;
 		mcpRequest->titleListRequest.appType = appType;
 		__depr__IOS_Ioctlv(IOS_DEVICE_MCP, IOSU_MCP_REQUEST_CEMU, 1, 1, mcpBufferVector);
 
@@ -474,17 +470,17 @@ namespace coreinit
 		cafeExportRegister("coreinit", MCP_DemoLaunchGetRemainder, LogType::Placeholder);
 	}
 
-}
+} // namespace coreinit
 
-typedef struct  
+typedef struct
 {
 	char settingName[0x40];
 	uint32 ukn1;
 	uint32 ukn2;
 	uint32 ukn3;
 	uint32 ukn4_size; // size guessed
-	MPTR resultPtr; // pointer to output value
-}UCParamStruct_t;
+	MPTR resultPtr;	  // pointer to output value
+} UCParamStruct_t;
 
 static_assert(sizeof(UCParamStruct_t) == 0x54); // unsure
 
@@ -500,10 +496,10 @@ void coreinitExport_UCReadSysConfig(PPCInterpreter_t* hCPU)
 	// r5 = UCParamStruct_t*
 	UCParamStruct_t* ucParamBase = (UCParamStruct_t*)memory_getPointerFromVirtualOffset(hCPU->gpr[5]);
 	uint32 ucParamCount = hCPU->gpr[4];
-	for(uint32 i=0; i<ucParamCount; i++)
+	for (uint32 i = 0; i < ucParamCount; i++)
 	{
-		UCParamStruct_t* ucParam = ucParamBase+i;
-		if(_strcmpi(ucParam->settingName, "cafe.cntry_reg") == 0)
+		UCParamStruct_t* ucParam = ucParamBase + i;
+		if (_strcmpi(ucParam->settingName, "cafe.cntry_reg") == 0)
 		{
 			// country code
 			// get country from simple address
@@ -512,7 +508,7 @@ void coreinitExport_UCReadSysConfig(PPCInterpreter_t* hCPU)
 
 			uint32 countryCode = nn::act::getCountryCodeFromSimpleAddress(simpleAddress);
 
-			if( ucParam->resultPtr != _swapEndianU32(MPTR_NULL) )
+			if (ucParam->resultPtr != _swapEndianU32(MPTR_NULL))
 				memory_writeU32(_swapEndianU32(ucParam->resultPtr), countryCode);
 		}
 		else if (_strcmpi(ucParam->settingName, "cafe.language") == 0)
@@ -602,7 +598,7 @@ void coreinitExport_UCReadSysConfig(PPCInterpreter_t* hCPU)
 				nn::act::GetUuidEx(uuid, 1, 0);
 				char tempStr[64];
 				sprintf(tempStr, "%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X", uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5], uuid[6], uuid[7],
-					uuid[8], uuid[9], uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
+						uuid[8], uuid[9], uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
 				strcpy((char*)memory_getPointerFromVirtualOffset(_swapEndianU32(ucParam->resultPtr)), tempStr);
 			}
 		}

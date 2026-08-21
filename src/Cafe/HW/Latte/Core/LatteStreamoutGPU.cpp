@@ -15,7 +15,7 @@ struct
 {
 	sint32 currentRingbufferOffset;
 	VirtualBufferHeap_t* mainBufferHeap;
-}streamoutManager;
+} streamoutManager;
 
 sint32 LatteStreamout_GetRingBufferSize()
 {
@@ -25,7 +25,7 @@ sint32 LatteStreamout_GetRingBufferSize()
 sint32 LatteStreamout_allocateGPURingbufferMem(sint32 size)
 {
 	// pad size to 256 byte alignment
-	size = (size + 255)&~255;
+	size = (size + 255) & ~255;
 	// get next offset
 	if ((streamoutManager.currentRingbufferOffset + size) > LatteStreamout_GetRingBufferSize())
 	{
@@ -54,8 +54,8 @@ struct
 		sint32 ringBufferOffset;
 		uint32 rangeAddr;
 		uint32 rangeSize; // size of written streamout data, bounded by buffer size
-	}streamoutBufferWrite[LATTE_NUM_STREAMOUT_BUFFER];
-}activeStreamoutOperation;
+	} streamoutBufferWrite[LATTE_NUM_STREAMOUT_BUFFER];
+} activeStreamoutOperation;
 
 uint32 LatteStreamout_getNumberOfWrittenVertices()
 {
@@ -117,7 +117,7 @@ void LatteStreamout_PrepareDrawcall(uint32 count, uint32 instanceCount)
 	// bind streamout buffers
 	for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 	{
-		if ((streamoutWriteMask&(1 << i)) == 0)
+		if ((streamoutWriteMask & (1 << i)) == 0)
 		{
 			activeStreamoutOperation.streamoutBufferWrite[i].isActive = false;
 			continue;
@@ -150,11 +150,11 @@ void LatteStreamout_FinishDrawcall(bool useDirectMemoryMode)
 		_transformFeedbackIsActive = false;
 		for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 		{
-			if ((activeStreamoutOperation.streamoutWriteMask&(1 << i)) == 0)
+			if ((activeStreamoutOperation.streamoutWriteMask & (1 << i)) == 0)
 				continue;
 			if (activeStreamoutOperation.streamoutBufferWrite[i].rangeSize > 0)
 			{
-				if(useDirectMemoryMode)
+				if (useDirectMemoryMode)
 					g_renderer->bufferCache_copyStreamoutToMainBuffer(activeStreamoutOperation.streamoutBufferWrite[i].ringBufferOffset, activeStreamoutOperation.streamoutBufferWrite[i].rangeAddr, activeStreamoutOperation.streamoutBufferWrite[i].rangeSize);
 				else
 					LatteBufferCache_copyStreamoutDataToCache(activeStreamoutOperation.streamoutBufferWrite[i].rangeAddr, activeStreamoutOperation.streamoutBufferWrite[i].rangeSize, activeStreamoutOperation.streamoutBufferWrite[i].ringBufferOffset);

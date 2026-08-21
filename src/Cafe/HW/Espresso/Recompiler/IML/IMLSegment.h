@@ -4,8 +4,8 @@
 #include <boost/container/small_vector.hpp>
 
 // special values to mark the index of ranges that reach across the segment border
-#define RA_INTER_RANGE_START	(-1)
-#define RA_INTER_RANGE_END		(0x70000000)
+#define RA_INTER_RANGE_START (-1)
+#define RA_INTER_RANGE_END (0x70000000)
 
 struct IMLSegmentPoint
 {
@@ -47,20 +47,50 @@ struct IMLSegmentPoint
 	}
 
 	// the segment point can point beyond the first and last instruction which indicates that it is an infinite range reaching up to the previous or next segment
-	bool IsPreviousSegment() const { return index == RA_INTER_RANGE_START; }
-	bool IsNextSegment() const { return index == RA_INTER_RANGE_END; }
+	bool IsPreviousSegment() const
+	{
+		return index == RA_INTER_RANGE_START;
+	}
+	bool IsNextSegment() const
+	{
+		return index == RA_INTER_RANGE_END;
+	}
 
 	// overload operand > and <
-	bool operator>(const IMLSegmentPoint& other) const { return index > other.index; }
-	bool operator<(const IMLSegmentPoint& other) const { return index < other.index; }
-	bool operator==(const IMLSegmentPoint& other) const { return index == other.index; }
-	bool operator!=(const IMLSegmentPoint& other) const { return index != other.index; }
+	bool operator>(const IMLSegmentPoint& other) const
+	{
+		return index > other.index;
+	}
+	bool operator<(const IMLSegmentPoint& other) const
+	{
+		return index < other.index;
+	}
+	bool operator==(const IMLSegmentPoint& other) const
+	{
+		return index == other.index;
+	}
+	bool operator!=(const IMLSegmentPoint& other) const
+	{
+		return index != other.index;
+	}
 
 	// overload comparison operands for sint32
-	bool operator>(const sint32 other) const { return index > other; }
-	bool operator<(const sint32 other) const { return index < other; }
-	bool operator<=(const sint32 other) const { return index <= other; }
-	bool operator>=(const sint32 other) const { return index >= other; }
+	bool operator>(const sint32 other) const
+	{
+		return index > other;
+	}
+	bool operator<(const sint32 other) const
+	{
+		return index < other;
+	}
+	bool operator<=(const sint32 other) const
+	{
+		return index <= other;
+	}
+	bool operator>=(const sint32 other) const
+	{
+		return index >= other;
+	}
 };
 
 struct IMLSegmentInterval
@@ -68,7 +98,10 @@ struct IMLSegmentInterval
 	IMLSegmentPoint start;
 	IMLSegmentPoint end;
 
-	bool ContainsInstructionIndex(sint32 offset) const { return start <= offset && end > offset; }
+	bool ContainsInstructionIndex(sint32 offset) const
+	{
+		return start <= offset && end > offset;
+	}
 
 	bool IsRangeOverlapping(const IMLSegmentInterval& other)
 	{
@@ -98,7 +131,7 @@ struct IMLSegmentInterval
 
 	bool IsNextSegmentOnly() const
 	{
-		if(!start.IsNextSegment())
+		if (!start.IsNextSegment())
 			return false;
 		cemu_assert_debug(end.IsNextSegment());
 		return true;
@@ -123,7 +156,7 @@ struct IMLSegmentInterval
 struct PPCSegmentRegisterAllocatorInfo_t
 {
 	// used during loop detection
-	bool isPartOfProcessedLoop{}; 
+	bool isPartOfProcessedLoop{};
 	sint32 lastIterationIndex{};
 	// linked lists
 	struct raLivenessRange* linkedList_allSubranges{};
@@ -135,7 +168,7 @@ struct IMLSegment
 	sint32 momentaryIndex{}; // index in segment list, generally not kept up to date except if needed (necessary for loop detection)
 	sint32 loopDepth{};
 	uint32 ppcAddress{}; // ppc address (0xFFFFFFFF if not associated with an address)
-	uint32 x64Offset{}; // x64 code offset of segment start
+	uint32 x64Offset{};	 // x64 code offset of segment start
 	// list of intermediate instructions in this segment
 	std::vector<IMLInstruction> imlList;
 	// segment link
@@ -148,7 +181,7 @@ struct IMLSegment
 	IMLSegment* deadCodeEliminationHintSeg{};
 	std::vector<IMLSegment*> list_deadCodeHintBy{};
 	// enterable segments
-	bool isEnterable{}; // this segment can be entered from outside the recompiler (no preloaded registers necessary)
+	bool isEnterable{};		  // this segment can be entered from outside the recompiler (no preloaded registers necessary)
 	uint32 enterPPCAddress{}; // used if isEnterable is true
 	// register allocator info
 	PPCSegmentRegisterAllocatorInfo_t raInfo{};
@@ -185,7 +218,6 @@ struct IMLSegment
 	// segment points
 	IMLSegmentPoint* segmentPointList{};
 };
-
 
 void IMLSegment_SetLinkBranchNotTaken(IMLSegment* imlSegmentSrc, IMLSegment* imlSegmentDst);
 void IMLSegment_SetLinkBranchTaken(IMLSegment* imlSegmentSrc, IMLSegment* imlSegmentDst);

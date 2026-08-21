@@ -7,6 +7,6 @@ export default defineConfig({
   build: {
     assetsInlineLimit: Number.MAX_SAFE_INTEGER,
     cssCodeSplit: false,
-    rollupOptions: { output: { inlineDynamicImports: true } }
-  }
+    rollupOptions: { output: { inlineDynamicImports: true } },
+  },
 });

@@ -6,8 +6,9 @@
 
 #include <numeric>
 
-class GDBServer {
-public:
+class GDBServer
+{
+  public:
 	explicit GDBServer(uint16 port);
 	~GDBServer();
 
@@ -44,8 +45,9 @@ public:
 		BREAKPOINT_REMOVE = 'z',
 	};
 
-	class CommandContext {
-	public:
+	class CommandContext
+	{
+	  public:
 		CommandContext(const GDBServer* server, const std::string& command)
 			: m_server(server), m_command(command)
 		{
@@ -100,12 +102,24 @@ public:
 			{
 				switch (c)
 				{
-				case '<': escaped += "&lt;"; break;
-				case '>': escaped += "&gt;"; break;
-				case '&': escaped += "&amp;"; break;
-				case '"': escaped += "&quot;"; break;
-				case '\'': escaped += "&apos;"; break;
-				default: escaped += c; break;
+				case '<':
+					escaped += "&lt;";
+					break;
+				case '>':
+					escaped += "&gt;";
+					break;
+				case '&':
+					escaped += "&amp;";
+					break;
+				case '"':
+					escaped += "&quot;";
+					break;
+				case '\'':
+					escaped += "&apos;";
+					break;
+				default:
+					escaped += c;
+					break;
 				}
 			}
 			return escaped;
@@ -131,7 +145,7 @@ public:
 			m_response += data;
 		}
 
-	private:
+	  private:
 		const std::regex m_regex{
 			R"((?:)"
 			R"((\?))"
@@ -169,7 +183,7 @@ public:
 	class AccessBreakpoint;
 	std::unique_ptr<AccessBreakpoint> m_watch_point;
 
-private:
+  private:
 	static constexpr int s_maxGDBClients = 1;
 	static constexpr std::string_view s_supportedFeatures = "PacketSize=4096;qXfer:features:read+;qXfer:threads:read+;qXfer:libraries:read+;swbreak+;hwbreak+;vContSupported+";
 	static constexpr size_t s_maxPacketSize = 1024 * 4;

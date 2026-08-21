@@ -8,4 +8,4 @@ namespace coreinit
 	void OSFreeToSystem(void* ptr);
 
 	void InitializeSysHeap();
-}
+} // namespace coreinit

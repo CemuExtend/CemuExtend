@@ -7,7 +7,7 @@ static bool tga_write_rgba(const fs::path& path, sint32 width, sint32 height, ui
 	if (fs == nullptr)
 		return false;
 
-	uint8_t header[18] = {0,0,2,0,0,0,0,0,0,0,0,0, (uint8)(width % 256), (uint8)(width / 256), (uint8)(height % 256), (uint8)(height / 256), 32, 0x20};
+	uint8_t header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, (uint8)(width % 256), (uint8)(width / 256), (uint8)(height % 256), (uint8)(height / 256), 32, 0x20};
 	fs->writeData(&header, sizeof(header));
 
 	std::vector<uint8> tempPixelData;
@@ -17,7 +17,7 @@ static bool tga_write_rgba(const fs::path& path, sint32 width, sint32 height, ui
 	uint8* pOut = tempPixelData.data();
 	for (sint32 y = 0; y < height; y++)
 	{
-		const uint8* rowIn = pixelData + y * width*4;
+		const uint8* rowIn = pixelData + y * width * 4;
 		for (sint32 x = 0; x < width; x++)
 		{
 			pOut[0] = rowIn[2];

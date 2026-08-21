@@ -18,10 +18,9 @@ enum class DEBUG_SYMBOL_TYPE
 	DOUBLE,
 };
 
-
 class DebugSymbolStorage
 {
-public:
+  public:
 	static void StoreDataType(MPTR address, DEBUG_SYMBOL_TYPE type)
 	{
 		s_lock.lock();
@@ -53,7 +52,7 @@ public:
 			auto itr = s_typeStorage.find(address);
 			if (itr != s_typeStorage.end())
 				s_typeStorage.erase(itr);
-			
+
 			if (length <= 4)
 				break;
 			address += 4;
@@ -62,7 +61,7 @@ public:
 		s_lock.unlock();
 	}
 
-private:
+  private:
 	static FSpinlock s_lock;
 	static std::unordered_map<MPTR, DEBUG_SYMBOL_TYPE> s_typeStorage;
 };

@@ -2,7 +2,7 @@
 
 class DiscordPresence
 {
-public:
+  public:
 	enum State
 	{
 		Idling,
@@ -15,6 +15,6 @@ public:
 	void UpdatePresence(State state, const std::string& text = {}) const;
 	void ClearPresence() const;
 
-private:
+  private:
 	class DiscordRPCLite* m_rpcClient = nullptr;
 };

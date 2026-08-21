@@ -88,7 +88,7 @@ struct WumsInspection
 
 class WumsBinaryInspector
 {
-public:
+  public:
 	static constexpr std::uint64_t kMaximumExpandedBytes =
 		64ULL * 1024ULL * 1024ULL;
 	static constexpr std::uint32_t kMaximumSections = 512;

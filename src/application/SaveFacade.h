@@ -79,7 +79,7 @@ namespace Application
 
 	class ISaveService
 	{
-	public:
+	  public:
 		virtual ~ISaveService() = default;
 		[[nodiscard]] virtual std::vector<std::uint32_t> ListSavePersistentIds(
 			std::uint64_t titleId) const = 0;
@@ -104,4 +104,4 @@ namespace Application
 			SaveProgressHandler progress = {},
 			SaveCancellationCheck cancelled = {}) = 0;
 	};
-}
+} // namespace Application

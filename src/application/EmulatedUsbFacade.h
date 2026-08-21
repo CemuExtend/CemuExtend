@@ -49,7 +49,7 @@ namespace Application
 
 	class IEmulatedUsbBackend
 	{
-	public:
+	  public:
 		using Observer = std::function<void(const UsbDeviceChange&)>;
 		virtual ~IEmulatedUsbBackend() = default;
 		[[nodiscard]] virtual std::vector<UsbDeviceDescriptor> Enumerate() = 0;
@@ -61,7 +61,7 @@ namespace Application
 
 	class EmulatedUsbFacade final
 	{
-	public:
+	  public:
 		using Observer = IEmulatedUsbBackend::Observer;
 		explicit EmulatedUsbFacade(std::unique_ptr<IEmulatedUsbBackend> backend);
 		~EmulatedUsbFacade();
@@ -70,11 +70,11 @@ namespace Application
 
 		[[nodiscard]] EmulatedUsbModel GetModel();
 		[[nodiscard]] EmulatedUsbModel SetEnabled(std::string_view deviceId,
-			std::uint16_t vendorId, std::uint16_t productId, bool enabled);
+												  std::uint16_t vendorId, std::uint16_t productId, bool enabled);
 		void SetObserver(Observer observer);
 		void Close();
 
-	private:
+	  private:
 		struct CallbackGate
 		{
 			std::atomic_bool active{true};
@@ -88,4 +88,4 @@ namespace Application
 	};
 
 	[[nodiscard]] std::unique_ptr<IEmulatedUsbBackend> CreateEmulatedUsbBackend();
-}
+} // namespace Application

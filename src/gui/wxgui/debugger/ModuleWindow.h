@@ -6,13 +6,13 @@ class wxListView;
 
 class ModuleWindow : public wxFrame
 {
-public:
+  public:
 	ModuleWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 
 	void OnMainMove(const wxPoint& position, const wxSize& main_size);
 	void OnGameLoaded();
 
-private:
+  private:
 	void OnLeftDClick(wxMouseEvent& event);
 
 	wxListView* m_modules;

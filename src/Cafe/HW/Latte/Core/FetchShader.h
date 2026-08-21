@@ -3,28 +3,28 @@
 
 struct LatteParsedFetchShaderAttribute_t
 {
-	uint8					semanticId;
-	uint8					format;
-	LatteConst::VertexFetchType2	fetchType;
-	uint8					nfa;
-	uint8					isSigned;
-	LatteConst::VertexFetchEndianMode	endianSwap;
-	uint8					ds[4]; // destination component select
-	sint32					aluDivisor;
-	uint32					offset;
-	uint32					attributeBufferIndex;
+	uint8 semanticId;
+	uint8 format;
+	LatteConst::VertexFetchType2 fetchType;
+	uint8 nfa;
+	uint8 isSigned;
+	LatteConst::VertexFetchEndianMode endianSwap;
+	uint8 ds[4]; // destination component select
+	sint32 aluDivisor;
+	uint32 offset;
+	uint32 attributeBufferIndex;
 };
 
 struct LatteParsedFetchShaderBufferGroup_t
 {
-	uint32 attributeBufferIndex{}; // index of buffer (0 to 15 are valid)
+	uint32 attributeBufferIndex{};				 // index of buffer (0 to 15 are valid)
 	LatteParsedFetchShaderAttribute_t* attrib{}; // attributes for this buffer
 	sint32 attribCount{};
 	// offset range of attributes
 	uint32 minOffset{};
 	uint32 maxOffset{};
 	// output
-	uint32  vboStride{};
+	uint32 vboStride{};
 	// calculated info
 	bool hasVtxIndexAccess{};
 	bool hasInstanceIndexAccess{};
@@ -60,9 +60,15 @@ struct LatteFetchShader
 	void CheckIfVerticesNeedManualFetchMtl(uint32* contextRegister);
 #endif
 
-	uint64 getVkPipelineHashFragment() const { return vkPipelineHashFragment; };
+	uint64 getVkPipelineHashFragment() const
+	{
+		return vkPipelineHashFragment;
+	};
 
-	static bool isValidBufferIndex(const uint32 index) { return index < 0x10; };
+	static bool isValidBufferIndex(const uint32 index)
+	{
+		return index < 0x10;
+	};
 
 	// keys in shader state cache
 	std::vector<uint64> m_shaderStateCacheKeys;

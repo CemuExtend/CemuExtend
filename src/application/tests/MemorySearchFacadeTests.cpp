@@ -11,21 +11,34 @@ namespace
 {
 	class FakeBackend final : public Application::IMemoryDiagnosticBackend
 	{
-	public:
-		bool IsEmulationRunning() const override { return running; }
+	  public:
+		bool IsEmulationRunning() const override
+		{
+			return running;
+		}
 		Application::MemoryMapSnapshot SnapshotMemoryMap() const override
 		{
 			return {generation, {{0x10000000, static_cast<std::uint32_t>(memory.size()), "MEM2"}}};
 		}
 		bool ReadCopy(std::uint64_t expected, std::uint32_t address,
-			std::span<std::byte> destination) const override
+					  std::span<std::byte> destination) const override
 		{
-			if (!running || expected != generation || address < 0x10000000) return false;
+			if (!running || expected != generation || address < 0x10000000)
+				return false;
 			activeReads.fetch_add(1);
-			struct ReadGuard { std::atomic_int& active; ~ReadGuard() { active.fetch_sub(1); } } guard{activeReads};
-			if (readDelay) std::this_thread::sleep_for(std::chrono::milliseconds(readDelay));
+			struct ReadGuard
+			{
+				std::atomic_int& active;
+				~ReadGuard()
+				{
+					active.fetch_sub(1);
+				}
+			} guard{activeReads};
+			if (readDelay)
+				std::this_thread::sleep_for(std::chrono::milliseconds(readDelay));
 			const auto offset = address - 0x10000000;
-			if (offset + destination.size() > memory.size()) return false;
+			if (offset + destination.size() > memory.size())
+				return false;
 			std::memcpy(destination.data(), memory.data() + offset, destination.size());
 			return true;
 		}
@@ -38,18 +51,19 @@ namespace
 	};
 
 	Application::MemorySearchStatus Wait(Application::MemorySearchFacade& facade,
-		std::uint64_t owner, const std::string& token)
+										 std::uint64_t owner, const std::string& token)
 	{
 		for (unsigned attempt = 0; attempt < 1000; ++attempt)
 		{
 			auto status = facade.Status(owner, token);
-			if (status.state != Application::MemorySearchState::Scanning) return status;
+			if (status.state != Application::MemorySearchState::Scanning)
+				return status;
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		assert(false && "memory search timed out");
 		return {};
 	}
-}
+} // namespace
 
 int main()
 {
@@ -70,33 +84,53 @@ int main()
 	assert(std::get<std::int32_t>(page.results.front().value.value) == 42);
 
 	bool rejected = false;
-	try { (void)facade.Status(10, started.sessionToken); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.Status(10, started.sessionToken);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	assert(rejected && "session token must be bound to its owner window");
 
 	backendPtr->memory[11] = std::byte{43};
 	const auto filtered = facade.Filter(9, started.sessionToken, started.generation,
-		{MemoryValueType::Int32, std::int32_t{42}});
+										{MemoryValueType::Int32, std::int32_t{42}});
 	const auto filteredStatus = Wait(facade, 9, started.sessionToken);
 	assert(filteredStatus.resultCount == 1);
 	assert(filtered.generation == started.generation + 1);
 	rejected = false;
-	try { (void)facade.Page(9, started.sessionToken, started.generation, 0, 10); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.Page(9, started.sessionToken, started.generation, 0, 10);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	assert(rejected && "stale generations must be rejected");
 
 	facade.CloseOwner(9);
 	rejected = false;
-	try { (void)facade.Status(9, started.sessionToken); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.Status(9, started.sessionToken);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	assert(rejected && "closing a window must revoke its sessions");
 
 	auto stoppedBackend = std::make_unique<FakeBackend>();
 	stoppedBackend->running = false;
 	MemorySearchFacade stopped(std::move(stoppedBackend));
 	rejected = false;
-	try { (void)stopped.Start(3, {{MemoryValueType::Int8, std::int8_t{1}}, 64}); }
-	catch (const std::runtime_error&) { rejected = true; }
+	try
+	{
+		(void)stopped.Start(3, {{MemoryValueType::Int8, std::int8_t{1}}, 64});
+	} catch (const std::runtime_error&)
+	{
+		rejected = true;
+	}
 	assert(rejected && "scans must require active emulation");
 
 	auto delayedBackend = std::make_unique<FakeBackend>();

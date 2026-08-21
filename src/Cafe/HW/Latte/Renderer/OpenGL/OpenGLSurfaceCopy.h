@@ -7,8 +7,8 @@ typedef struct
 	{
 		GLuint uniformLoc_textureSrc;
 		GLuint uniformLoc_vertexOffsets;
-	}copyShaderUniforms;
-}LatteGLDefaultShader_t;
+	} copyShaderUniforms;
+} LatteGLDefaultShader_t;
 
 LatteGLDefaultShader_t* LatteGLDefaultShader_getPixelCopyShader_depthToColor();
 LatteGLDefaultShader_t* LatteGLDefaultShader_getPixelCopyShader_colorToDepth();

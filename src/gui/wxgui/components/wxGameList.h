@@ -13,13 +13,16 @@
 
 class wxTitleIdEvent : public wxCommandEvent
 {
-public:
+  public:
 	wxTitleIdEvent(int type, uint64 title_id)
 		: wxCommandEvent(type), m_title_id(title_id) {}
 
-	[[nodiscard]] uint64 GetTitleId() const { return m_title_id; }
+	[[nodiscard]] uint64 GetTitleId() const
+	{
+		return m_title_id;
+	}
 
-private:
+  private:
 	uint64 m_title_id;
 };
 
@@ -28,12 +31,16 @@ wxDECLARE_EVENT(wxEVT_OPEN_GRAPHIC_PACK, wxTitleIdEvent);
 wxDECLARE_EVENT(wxEVT_GAMELIST_BEGIN_UPDATE, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_GAMELIST_END_UPDATE, wxCommandEvent);
 
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 class wxGameList : public wxListView
 {
 	friend class MainWindow;
-public:
+
+  public:
 	enum class Style
 	{
 		kList,
@@ -42,10 +49,10 @@ public:
 	};
 
 	wxGameList(wxWindow* parent, Application::EmulationController& emulationController,
-		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
-		std::shared_ptr<Host::IPathProvider> pathProvider,
-		std::function<void(fs::path)> requestLaunch,
-		wxWindowID id = wxID_ANY);
+			   std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+			   std::shared_ptr<Host::IPathProvider> pathProvider,
+			   std::function<void(fs::path)> requestLaunch,
+			   wxWindowID id = wxID_ANY);
 	~wxGameList();
 
 	void SetStyle(Style style, bool save = true);
@@ -57,19 +64,19 @@ public:
 	void ReloadGameEntries();
 	void DeleteCachedStrings();
 
-    void CreateShortcut(const Application::GameSummary& gameInfo);
+	void CreateShortcut(const Application::GameSummary& gameInfo);
 
 	long FindListItemByTitleId(uint64 title_id) const;
 
 	void OnClose(wxCloseEvent& event);
 
-private:
+  private:
 	std::atomic_bool m_exit = false;
 	Style m_style;
 	long GetStyleFlags(Style style) const;
 
-	const wxColour kUpdateColor{ wxSystemSettings::SelectLightDark(wxColour(195, 57, 57), wxColour(84, 29, 29)) };
-	const wxColour kFavoriteColor{ wxSystemSettings::SelectLightDark(wxColour(253, 246, 211), wxColour(82, 84, 48)) };
+	const wxColour kUpdateColor{wxSystemSettings::SelectLightDark(wxColour(195, 57, 57), wxColour(84, 29, 29))};
+	const wxColour kFavoriteColor{wxSystemSettings::SelectLightDark(wxColour(253, 246, 211), wxColour(82, 84, 48))};
 	const wxColour kPrimaryColor = GetBackgroundColour();
 	const wxColour kAlternateColor = wxHelper::CalculateAccentColour(kPrimaryColor);
 	void UpdateItemColors(sint32 startIndex = 0);
@@ -84,8 +91,8 @@ private:
 		ColumnGameTime,
 		ColumnGameStarted,
 		ColumnRegion,
-        ColumnTitleID,
-        //ColumnFavorite,
+		ColumnTitleID,
+		// ColumnFavorite,
 		ColumnCounts,
 	};
 
@@ -155,7 +162,7 @@ private:
 	void OnColumnBeginResize(wxListEvent& event);
 	void OnColumnResize(wxListEvent& event);
 	void OnColumnDrag(wxListEvent& event);
-	
+
 	// generic events
 	void OnKeyDown(wxListEvent& event);
 	void OnContextMenu(wxContextMenuEvent& event);

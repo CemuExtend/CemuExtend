@@ -14,19 +14,19 @@ enum
 };
 
 wxBEGIN_EVENT_TABLE(AudioDebuggerWindow, wxFrame)
-EVT_BUTTON(CLOSE_ID, AudioDebuggerWindow::OnCloseButton)
-EVT_BUTTON(REFRESH_ID, AudioDebuggerWindow::OnRefreshButton)
-EVT_TIMER(REFRESH_TIMER_ID, AudioDebuggerWindow::OnRefreshTimer)
+	EVT_BUTTON(CLOSE_ID, AudioDebuggerWindow::OnCloseButton)
+		EVT_BUTTON(REFRESH_ID, AudioDebuggerWindow::OnRefreshButton)
+			EVT_TIMER(REFRESH_TIMER_ID, AudioDebuggerWindow::OnRefreshTimer)
 
-EVT_CLOSE(AudioDebuggerWindow::OnClose)
-wxEND_EVENT_TABLE()
+				EVT_CLOSE(AudioDebuggerWindow::OnClose)
+					wxEND_EVENT_TABLE()
 
-AudioDebuggerWindow::AudioDebuggerWindow(wxFrame& parent)
+						AudioDebuggerWindow::AudioDebuggerWindow(wxFrame& parent)
 	: wxFrame(&parent, wxID_ANY, _("AX voice viewer"), wxDefaultPosition, wxSize(1126, 580), wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER)
 {
 	wxPanel* mainPane = new wxPanel(this);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	
+
 	voiceListbox = new wxListCtrl(mainPane, VOICELIST_ID, wxPoint(0, 0), wxSize(1126, 570), wxLC_REPORT);
 	voiceListbox->SetFont(wxFont(8, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Courier New"));
 	// add columns
@@ -40,8 +40,8 @@ AudioDebuggerWindow::AudioDebuggerWindow(wxFrame& parent)
 	col1.SetText("state");
 	col1.SetWidth(48);
 	voiceListbox->InsertColumn(1, col1);
-	//wxListItem col2;
-	// format
+	// wxListItem col2;
+	//  format
 	col1.SetId(2);
 	col1.SetText("fmt");
 	col1.SetWidth(52);
@@ -133,7 +133,7 @@ AudioDebuggerWindow::AudioDebuggerWindow(wxFrame& parent)
 	{
 		wxListItem item;
 		item.SetId(i);
-		item.SetText(wxString::Format("%d", snd_core::AX_MAX_VOICES-i-1));
+		item.SetText(wxString::Format("%d", snd_core::AX_MAX_VOICES - i - 1));
 		voiceListbox->InsertItem(item);
 	}
 	RefreshVoiceList();
@@ -172,7 +172,7 @@ void AudioDebuggerWindow::RefreshVoiceList_sndgeneric()
 		return;
 
 	snd_core::AXVPB tempVoiceArray[snd_core::AX_MAX_VOICES];
-	memcpy(tempVoiceArray, snd_core::__AXVPBArrayPtr, sizeof(snd_core::AXVPB)*snd_core::AX_MAX_VOICES);
+	memcpy(tempVoiceArray, snd_core::__AXVPBArrayPtr, sizeof(snd_core::AXVPB) * snd_core::AX_MAX_VOICES);
 
 	voiceListbox->Freeze();
 
@@ -266,16 +266,16 @@ void AudioDebuggerWindow::RefreshVoiceList_sndgeneric()
 		}
 		wxString label;
 		// device mix
-		for (uint32 f = 0; f < snd_core::AX_TV_CHANNEL_COUNT*snd_core::AX_MAX_NUM_BUS; f++)
+		for (uint32 f = 0; f < snd_core::AX_TV_CHANNEL_COUNT * snd_core::AX_MAX_NUM_BUS; f++)
 		{
-			sint32 busIndex = f% snd_core::AX_MAX_NUM_BUS;
+			sint32 busIndex = f % snd_core::AX_MAX_NUM_BUS;
 			sint32 channelIndex = f / snd_core::AX_MAX_NUM_BUS;
 
-			//debug_printf("DeviceMix TV Voice %08x b%02d/c%02d vol %04x delta %04x\n", hCPU->gpr[3], busIndex, channelIndex, _swapEndianU16(mixArrayBE[f].vol), _swapEndianU16(mixArrayBE[f].volDelta));
+			// debug_printf("DeviceMix TV Voice %08x b%02d/c%02d vol %04x delta %04x\n", hCPU->gpr[3], busIndex, channelIndex, _swapEndianU16(mixArrayBE[f].vol), _swapEndianU16(mixArrayBE[f].volDelta));
 			uint32 mixVol = internal->deviceMixTV[channelIndex * 4 + busIndex].vol;
 			mixVol = (mixVol + 0x0FFF) >> (12);
 			label += wxString::Format("%x", mixVol);
-			//ax.voiceInternal[voiceIndex].deviceMixTVChannel[channelIndex].bus[busIndex].vol = _swapEndianU16(mixArrayBE[f].vol);
+			// ax.voiceInternal[voiceIndex].deviceMixTVChannel[channelIndex].bus[busIndex].vol = _swapEndianU16(mixArrayBE[f].vol);
 		}
 		voiceListbox->SetItem(i, 17, label);
 	}
@@ -287,14 +287,12 @@ void AudioDebuggerWindow::RefreshVoiceList()
 	RefreshVoiceList_sndgeneric();
 }
 
-void AudioDebuggerWindow::OnVoiceListPopupClick(wxCommandEvent &evt)
+void AudioDebuggerWindow::OnVoiceListPopupClick(wxCommandEvent& evt)
 {
-
 }
 
 void AudioDebuggerWindow::OnVoiceListRightClick(wxMouseEvent& event)
 {
-
 }
 
 void AudioDebuggerWindow::Close()

@@ -37,28 +37,28 @@ namespace
 		}
 #endif
 	}
-}
+} // namespace
 
 bool LaunchSettings::HandleCommandline(const wchar_t* lpCmdLine)
 {
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	const std::vector<std::wstring> args = boost::program_options::split_winmain(lpCmdLine);
 	return HandleCommandline(args);
-	#else
+#else
 	cemu_assert_unimplemented();
 	return false;
-	#endif
+#endif
 }
 
 bool LaunchSettings::HandleCommandline(int argc, wchar_t* argv[])
 {
 	std::vector<std::wstring> args;
 	args.reserve(argc);
-	for(int i = 0; i < argc; ++i)
+	for (int i = 0; i < argc; ++i)
 	{
 		args.emplace_back(argv[i]);
 	}
-	
+
 	return HandleCommandline(args);
 }
 
@@ -66,55 +66,39 @@ bool LaunchSettings::HandleCommandline(int argc, char* argv[])
 {
 	std::vector<std::wstring> args;
 	args.reserve(argc);
-	for(int i = 0; i < argc; ++i)
+	for (int i = 0; i < argc; ++i)
 	{
 		args.emplace_back(boost::nowide::widen(argv[i]));
 	}
-	
+
 	return HandleCommandline(args);
 }
 
 bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 {
 	namespace po = boost::program_options;
-	po::options_description desc{ "Launch options" };
-	desc.add_options()
-		("help,h", "This help screen")
-		("version,v", "Displays the version of Cemu")
+	po::options_description desc{"Launch options"};
+	desc.add_options()("help,h", "This help screen")("version,v", "Displays the version of Cemu")
 #if !BOOST_OS_WINDOWS
 		("verbose", "Log to stdout")
 #endif
 
-		("game,g", po::wvalue<std::wstring>(), "Path of game to launch")
-		("title-id,t", po::value<std::string>(), "Title ID of the title to be launched (overridden by --game)")
-		("mlc,m", po::wvalue<std::wstring>(), "Custom mlc folder location")
+			("game,g", po::wvalue<std::wstring>(), "Path of game to launch")("title-id,t", po::value<std::string>(), "Title ID of the title to be launched (overridden by --game)")("mlc,m", po::wvalue<std::wstring>(), "Custom mlc folder location")
 
-		("fullscreen,f", po::value<bool>()->implicit_value(true), "Launch games in fullscreen mode")
-		("ud,u", po::value<bool>()->implicit_value(true), "Render output upside-down")
+				("fullscreen,f", po::value<bool>()->implicit_value(true), "Launch games in fullscreen mode")("ud,u", po::value<bool>()->implicit_value(true), "Render output upside-down")
 
-		("account,a", po::value<std::string>(), "Persistent id of account")
+					("account,a", po::value<std::string>(), "Persistent id of account")
 
-		("cos-mounts", po::wvalue<std::vector<std::wstring>>()->composing(), "A series of mounts in the form of: (path on host:path within emulated system, e.g. `/tmp:/vol/temporary/`)")
-		("forward-console-logging", "Forward OSReport, OSConsoleWrite, etc. to stdout/stderr.")
-		("cos-argstr", po::value<std::string>(), "A custom argstr used to override to the arguments to the first RPX that is launched, will be unset after the first launch.")
+						("cos-mounts", po::wvalue<std::vector<std::wstring>>()->composing(), "A series of mounts in the form of: (path on host:path within emulated system, e.g. `/tmp:/vol/temporary/`)")("forward-console-logging", "Forward OSReport, OSConsoleWrite, etc. to stdout/stderr.")("cos-argstr", po::value<std::string>(), "A custom argstr used to override to the arguments to the first RPX that is launched, will be unset after the first launch.")
 
-		("force-interpreter", po::value<bool>()->implicit_value(true), "Force interpreter CPU emulation, disables recompiler. Useful for debugging purposes where you want to get accurate memory accesses and stack traces.")
-		("force-multicore-interpreter", po::value<bool>()->implicit_value(true), "Force multi-core interpreter CPU emulation, disables recompiler. Only useful for getting stack traces, but slightly faster than the single-core interpreter mode.")
-		("enable-gdbstub", po::value<bool>()->implicit_value(true), "Enable GDB stub to debug executables inside Cemu using an external debugger");
+							("force-interpreter", po::value<bool>()->implicit_value(true), "Force interpreter CPU emulation, disables recompiler. Useful for debugging purposes where you want to get accurate memory accesses and stack traces.")("force-multicore-interpreter", po::value<bool>()->implicit_value(true), "Force multi-core interpreter CPU emulation, disables recompiler. Only useful for getting stack traces, but slightly faster than the single-core interpreter mode.")("enable-gdbstub", po::value<bool>()->implicit_value(true), "Enable GDB stub to debug executables inside Cemu using an external debugger");
 
-	po::options_description hidden{ "Hidden options" };
-	hidden.add_options()
-		("nsight", po::value<bool>()->implicit_value(true), "NSight debugging options")
-		("legacy", po::value<bool>()->implicit_value(true), "Intel legacy graphic mode")
-		("ppcrec-lower-addr", po::value<std::string>(), "For debugging: Lower address allowed for PPC recompilation")
-		("ppcrec-upper-addr", po::value<std::string>(), "For debugging: Upper address allowed for PPC recompilation");
+	po::options_description hidden{"Hidden options"};
+	hidden.add_options()("nsight", po::value<bool>()->implicit_value(true), "NSight debugging options")("legacy", po::value<bool>()->implicit_value(true), "Intel legacy graphic mode")("ppcrec-lower-addr", po::value<std::string>(), "For debugging: Lower address allowed for PPC recompilation")("ppcrec-upper-addr", po::value<std::string>(), "For debugging: Upper address allowed for PPC recompilation");
 
-	po::options_description extractor{ "Extractor tool" };
-	extractor.add_options()
-		("extract,e", po::wvalue<std::wstring>(), "Path to WUD or WUX file for extraction")
-		("path,p", po::value<std::string>(), "Path of file to extract (for example meta/meta.xml)")
-		("output,o", po::wvalue<std::wstring>(), "Output path for extracted file.");
-	
+	po::options_description extractor{"Extractor tool"};
+	extractor.add_options()("extract,e", po::wvalue<std::wstring>(), "Path to WUD or WUX file for extraction")("path,p", po::value<std::string>(), "Path of file to extract (for example meta/meta.xml)")("output,o", po::wvalue<std::wstring>(), "Output path for extracted file.");
+
 	po::options_description all;
 	all.add(desc).add(hidden).add(extractor);
 
@@ -123,11 +107,11 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 
 	try
 	{
-		po::wcommand_line_parser parser{ args };
+		po::wcommand_line_parser parser{args};
 		parser.allow_unregistered().options(all).style(po::command_line_style::allow_long | po::command_line_style::allow_short | po::command_line_style::allow_dash_for_short | po::command_line_style::case_insensitive |
-			po::command_line_style::long_allow_next |
-			po::command_line_style::short_allow_next |
-			po::command_line_style::allow_long_disguise);
+													   po::command_line_style::long_allow_next |
+													   po::command_line_style::short_allow_next |
+													   po::command_line_style::allow_long_disguise);
 
 		const auto parsed_options = parser.run();
 
@@ -162,26 +146,26 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 			std::wstring tmp = vm["game"].as<std::wstring>();
 			// workaround for boost command_line_parser not trimming token for short name parameters despite short_allow_adjacent
 			if (tmp.size() > 0 && tmp.front() == '=')
-				tmp.erase(tmp.begin()+0);
-			
+				tmp.erase(tmp.begin() + 0);
+
 			s_load_game_file = tmp;
 		}
-        if (vm.count("title-id"))
-        {
-            auto title_param = vm["title-id"].as<std::string>();
-            try {
+		if (vm.count("title-id"))
+		{
+			auto title_param = vm["title-id"].as<std::string>();
+			try
+			{
+				if (title_param.starts_with('='))
+				{
+					title_param.erase(title_param.begin());
+				}
+				s_load_title_id = std::stoull(title_param, nullptr, 16);
+			} catch (std::invalid_argument const& e)
+			{
+				std::cerr << "Expected title_param ID as an unsigned 64-bit hexadecimal string\n";
+			}
+		}
 
-                if (title_param.starts_with('=')){
-                    title_param.erase(title_param.begin());
-                }
-                s_load_title_id = std::stoull(title_param, nullptr, 16);
-            }
-            catch (std::invalid_argument const& e)
-            {
-                std::cerr << "Expected title_param ID as an unsigned 64-bit hexadecimal string\n";
-            }
-        }
-			
 		if (vm.count("mlc"))
 		{
 			std::wstring tmp = vm["mlc"].as<std::wstring>();
@@ -198,21 +182,21 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 			if (id >= CemuConfig::kMinimumAccountPersistentId)
 				s_persistent_id = id;
 		}
-		
+
 		if (vm.count("fullscreen"))
 			s_fullscreen = vm["fullscreen"].as<bool>();
 		if (vm.count("ud"))
 			s_render_upside_down = vm["ud"].as<bool>();
-		
+
 		if (vm.count("nsight"))
 			s_nsight_mode = vm["nsight"].as<bool>();
 
-		if(vm.count("force-interpreter"))
+		if (vm.count("force-interpreter"))
 			s_force_interpreter = vm["force-interpreter"].as<bool>();
 
-		if(vm.count("force-multicore-interpreter"))
+		if (vm.count("force-multicore-interpreter"))
 			s_force_multicore_interpreter = vm["force-multicore-interpreter"].as<bool>();
-		
+
 		if (vm.count("enable-gdbstub"))
 			s_enable_gdbstub = vm["enable-gdbstub"].as<bool>();
 
@@ -260,18 +244,17 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 			uint32 addr = (uint32)StringHelpers::ToInt64(vm["ppcrec-upper-addr"].as<std::string>());
 			ppcRec_limitUpperAddr = addr;
 		}
-		if(ppcRec_limitLowerAddr != 0 && ppcRec_limitUpperAddr != 0)
+		if (ppcRec_limitLowerAddr != 0 && ppcRec_limitUpperAddr != 0)
 			cemuLog_log(LogType::Force, "PPCRec range limited to 0x{:08x}-0x{:08x}", ppcRec_limitLowerAddr, ppcRec_limitUpperAddr);
 
-		if(!extract_path.empty())
+		if (!extract_path.empty())
 		{
 			ExtractorTool(extract_path, output_path, log_path);
 			return false;
 		}
 
 		return true;
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		std::string errorMsg;
 		errorMsg.append("Error while trying to parse command line parameter:\n");
@@ -279,7 +262,6 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 		std::cout << errorMsg << std::endl;
 		return false;
 	}
-	
 }
 
 bool LaunchSettings::ExtractorTool(std::wstring_view wud_path, std::string_view output_path, std::wstring_view log_path)
@@ -314,20 +296,19 @@ bool LaunchSettings::ExtractorTool(std::wstring_view wud_path, std::string_view 
 	{
 		try
 		{
-			fs::path filename(std::wstring{ log_path });
+			fs::path filename(std::wstring{log_path});
 
 			filename /= boost::nowide::widen(std::string(output_path));
-			
+
 			fs::path p = filename;
 			p.remove_filename();
-			
+
 			fs::create_directories(p);
 			std::ofstream file(filename, std::ios::out | std::ios::binary);
 			file.write((const char*)fileData.data(), fileData.size());
 			file.flush();
 			file.close();
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "can't write file: {}", ex.what());
 			puts(fmt::format("can't write file: %s\n", ex.what()).c_str());
@@ -340,6 +321,6 @@ bool LaunchSettings::ExtractorTool(std::wstring_view wud_path, std::string_view 
 		printf("%.*s", (int)fileData.size(), fileData.data());
 		fflush(stdout);
 	}
-	
+
 	return true;
 }

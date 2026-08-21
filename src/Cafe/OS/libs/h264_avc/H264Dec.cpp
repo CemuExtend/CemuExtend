@@ -32,16 +32,16 @@ namespace H264
 	{
 		struct
 		{
-			MEMPTR<void> ptr{ nullptr };
-			uint32be length{ 0 };
+			MEMPTR<void> ptr{nullptr};
+			uint32be length{0};
 			float64be timestamp;
-		}BitStream;
+		} BitStream;
 		struct
 		{
-			MEMPTR<void> outputFunc{ nullptr };
-			uint8be outputPerFrame{ 0 }; // default is 0
-			MEMPTR<void> userMemoryParam{ nullptr };
-		}Param;
+			MEMPTR<void> outputFunc{nullptr};
+			uint8be outputPerFrame{0}; // default is 0
+			MEMPTR<void> userMemoryParam{nullptr};
+		} Param;
 		// misc
 		uint32be sessionHandle;
 
@@ -51,7 +51,7 @@ namespace H264
 			uint32 numFramesInFlight{0};
 			bool isFirstBegin{true};
 			bool isTryingToRecover{false};
-		}decoderState;
+		} decoderState;
 	};
 
 	H264DEC_STATUS H264DECMemoryRequirement(uint32 codecProfile, uint32 codecLevel, uint32 width, uint32 height, uint32be* sizeRequirementOut)
@@ -231,9 +231,9 @@ namespace H264
 			uint32 chromaFormatIdc = stream.readUV_E();
 			if (chromaFormatIdc > 1)
 				return false;
-			stream.readUV_E(); // bit_depth_luma_minus8
-			stream.readUV_E(); // bit_depth_chroma_minus8
-			stream.readBit(); // qpprime_y_zero_transform_bypass_flag
+			stream.readUV_E();	  // bit_depth_luma_minus8
+			stream.readUV_E();	  // bit_depth_chroma_minus8
+			stream.readBit();	  // qpprime_y_zero_transform_bypass_flag
 			if (stream.readBit()) // seq_scaling_matrix_present_flag
 			{
 				for (sint32 i = 0; i < 8; i++)
@@ -257,7 +257,7 @@ namespace H264
 		}
 		else if (picOrderCntType == 1)
 		{
-			stream.readBit(); // delta_pic_order_always_zero_flag
+			stream.readBit();  // delta_pic_order_always_zero_flag
 			stream.readSV_E(); // offset_for_non_ref_pic
 			stream.readSV_E(); // offset_for_top_to_bottom_field
 			uint32 numRefFramesInPicOrderCntCycle = stream.readUV_E();
@@ -283,7 +283,7 @@ namespace H264
 		ps.frame_mbs_only_flag = stream.readBit();
 		if (!ps.frame_mbs_only_flag)
 			stream.readBit(); // mb_adaptive_frame_field_flag
-		stream.readBit(); // direct_8x8_inference_flag
+		stream.readBit();	  // direct_8x8_inference_flag
 		if (stream.readBit()) // frame_cropping_flag
 		{
 			stream.readUV_E(); // frame_crop_left_offset
@@ -300,26 +300,26 @@ namespace H264
 	{
 		if (!stream || streamSize < 4 || offset < 0 || !outputWidth || !outputHeight || offset >= streamSize)
 			return H264DEC_STATUS::INVALID_PARAM;
-		if ( (offset+4) >= streamSize )
+		if ((offset + 4) >= streamSize)
 			return H264DEC_STATUS::INVALID_PARAM;
 		uint8* cur = stream + offset;
 		uint8* end = stream + streamSize;
-		while (cur < end-2)
+		while (cur < end - 2)
 		{
 			// check for start code
-			if(*cur != 1)
+			if (*cur != 1)
 			{
 				cur++;
 				continue;
 			}
 			// check if this is a valid NAL header
-			if(cur[-2] != 0 || cur[-1] != 0 || cur[0] != 1) // if offset is < 2, this will read out of bounds. The console implementation has this behavior too so we have to replicate this bug
+			if (cur[-2] != 0 || cur[-1] != 0 || cur[0] != 1) // if offset is < 2, this will read out of bounds. The console implementation has this behavior too so we have to replicate this bug
 			{
 				cur++;
 				continue;
 			}
 			uint8 nalHeader = cur[1];
-			if((nalHeader & 0x1F) != 7)
+			if ((nalHeader & 0x1F) != 7)
 			{
 				cur++;
 				continue;
@@ -329,7 +329,7 @@ namespace H264
 			H264Dec_SeqParameterSet psp;
 			RBSPInputBitstream rbspStream(spsStart, spsLength, false);
 			bool r = H264Dec_parseSequencePS(rbspStream, psp);
-			if(!r)
+			if (!r)
 			{
 				cemuLog_log(LogType::Force, "H264DECGetImageSize: Invalid SPS data");
 				cemu_assert_suspicious(); // should not happen
@@ -358,7 +358,7 @@ namespace H264
 
 	std::unordered_map<uint32, H264DecoderBackend*> sDecoderSessions;
 	std::mutex sDecoderSessionsMutex;
-	std::atomic_uint32_t sCurrentSessionHandle{ 1 };
+	std::atomic_uint32_t sCurrentSessionHandle{1};
 
 	H264DecoderBackend* CreateAVCDecoder();
 
@@ -389,7 +389,6 @@ namespace H264
 	static void _ReleaseDecoderSession(H264DecoderBackend* session)
 	{
 		std::unique_lock _lock(sDecoderSessionsMutex);
-
 	}
 
 	static void _DestroyDecoderSession(uint32 handle)
@@ -439,7 +438,7 @@ namespace H264
 		}
 		else
 			ctx->decoderState.isTryingToRecover = true;
-		//ctx->decoderState.numFramesInFlight = 0;
+		// ctx->decoderState.numFramesInFlight = 0;
 		_ReleaseDecoderSession(session);
 		return 0;
 	}
@@ -459,10 +458,10 @@ namespace H264
 		coreinit::OSResetEvent(flushEvt);
 		session->QueueFlush();
 		coreinit::OSWaitEvent(flushEvt);
-		while(true)
+		while (true)
 		{
 			H264DecoderBackend::DecodeResult decodeResult;
-			if( !session->GetFrameOutputIfReady(decodeResult) )
+			if (!session->GetFrameOutputIfReady(decodeResult))
 				break;
 			// todo - output all frames in a single callback?
 			H264DoFrameOutputCallback(ctx, decodeResult);
@@ -555,7 +554,7 @@ namespace H264
 		/* +0x44 */ MEMPTR<uint8> imagePtr;
 
 		/* +0x48 */ uint32 vuiEnable;
-		/* +0x4C */ MPTR   vuiPtr;
+		/* +0x4C */ MPTR vuiPtr;
 		/* +0x50 */ sint32 unused[10];
 	};
 
@@ -663,15 +662,15 @@ namespace H264
 		// H264DECExecute is synchronous and will return a frame after either every call (non-buffered) or after 6 calls (buffered)
 		// normally frame decoding happens only during H264DECExecute, but in order to hide the latency of our CPU decoder we will decode asynchronously in buffered mode
 		uint32 numFramesToBuffer = (ctx->Param.outputPerFrame == 0) ? 5 : 0;
-		if(ctx->decoderState.numFramesInFlight > numFramesToBuffer)
+		if (ctx->decoderState.numFramesInFlight > numFramesToBuffer)
 		{
 			ctx->decoderState.numFramesInFlight--;
-			while(true)
+			while (true)
 			{
 				coreinit::OSEvent& evt = session->GetFrameOutputEvent();
 				coreinit::OSWaitEvent(&evt);
 				H264DecoderBackend::DecodeResult decodeResult;
-				if( !session->GetFrameOutputIfReady(decodeResult) )
+				if (!session->GetFrameOutputIfReady(decodeResult))
 					continue;
 				H264DoFrameOutputCallback(ctx, decodeResult);
 				break;
@@ -782,7 +781,7 @@ namespace H264
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "h264";
@@ -812,10 +811,10 @@ namespace H264
 
 			cafeExportRegister("h264", H264DECCheckDecunitLength, LogType::H264);
 		};
-	}s_COSh264Module;
+	} s_COSh264Module;
 
 	COSModule* GetModule()
 	{
 		return &s_COSh264Module;
 	}
-}
+} // namespace H264

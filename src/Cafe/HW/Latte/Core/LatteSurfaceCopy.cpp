@@ -32,16 +32,16 @@ void LatteSurfaceCopy_CopyInRAM(const LatteSurfaceCopyParam& src, const LatteSur
 	uint32 dstBpp = Latte::GetFormatBits(dstHwFormat);
 
 	gx2SurfaceCopySoftware((uint8*)MEMPTR<void>(src.physDataAddr).GetPtr(), src.heightInTexels, src.pitch, 1, src.sliceIndex, src.swizzle, (uint32)src.tilemode,
-		(uint8*)MEMPTR<void>(dst.physDataAddr).GetPtr(), dst.heightInTexels, dst.pitch, 1, dst.sliceIndex, dst.swizzle, (uint32)dst.tilemode,
-		copyWidth, copyHeight, dstBpp);
+						   (uint8*)MEMPTR<void>(dst.physDataAddr).GetPtr(), dst.heightInTexels, dst.pitch, 1, dst.sliceIndex, dst.swizzle, (uint32)dst.tilemode,
+						   copyWidth, copyHeight, dstBpp);
 }
 
 void LatteSurfaceCopy_copySurfaceNew(const LatteSurfaceCopyParam& src, const LatteSurfaceCopyParam& dst, const LatteSurfaceCopyRect& rect)
 {
 	cemu_assert_debug(rect.x == 0 && rect.y == 0); // origin offset not yet supported
 
-	cemu_assert_debug((rect.x + rect.width) <= dst.pitch * (Latte::IsCompressedFormat(dst.surfaceFormat)?4:1));
-	cemu_assert_debug((rect.x + rect.width) <= src.pitch * (Latte::IsCompressedFormat(src.surfaceFormat)?4:1));
+	cemu_assert_debug((rect.x + rect.width) <= dst.pitch * (Latte::IsCompressedFormat(dst.surfaceFormat) ? 4 : 1));
+	cemu_assert_debug((rect.x + rect.width) <= src.pitch * (Latte::IsCompressedFormat(src.surfaceFormat) ? 4 : 1));
 
 	if (src.tilemode == Latte::E_GX2TILEMODE::TM_LINEAR_SPECIAL)
 	{

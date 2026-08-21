@@ -25,4 +25,4 @@ namespace coreinit
 	bool OSUninterruptibleSpinLock_TryAcquire(OSSpinLock* spinlock);
 	bool OSUninterruptibleSpinLock_TryAcquireWithTimeout(OSSpinLock* spinlock, uint64 timeout);
 	bool OSUninterruptibleSpinLock_Release(OSSpinLock* spinlock);
-}
+} // namespace coreinit

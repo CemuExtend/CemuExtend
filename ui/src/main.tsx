@@ -5,4 +5,10 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./bridge/events";
 import "./styles/main.css";
 
-createRoot(document.getElementById("root")!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </StrictMode>,
+);

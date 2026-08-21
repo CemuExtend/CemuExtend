@@ -60,7 +60,7 @@ sint32 nexService_parseResponse(uint8* data, sint32 length, nexServiceResponse_t
 		response->callId = *(uint32*)(data + 0x6);
 		response->methodId = (*(uint32*)(data + 0xA)) & 0x7FFF;
 		response->data = nexPacketBuffer(data + 0xE, responseLength - (0xE - 4), false);
-		return responseLength+4;
+		return responseLength + 4;
 	}
 	return 0;
 }
@@ -78,7 +78,7 @@ sint32 nexService_parseRequest(uint8* data, sint32 length, nexServiceRequest_t* 
 	uint8 protocolId = *(uint8*)(data + 0x4);
 	bool isRequest = (protocolId & 0x80) != 0;
 	protocolId &= 0x7F;
-	if(isRequest == false)
+	if (isRequest == false)
 		assert_dbg();
 	uint32 callId = *(uint32*)(data + 0x5);
 	uint32 methodId = *(uint32*)(data + 0x9);
@@ -125,7 +125,7 @@ nexService::~nexService()
 	// call error handlers for unfinished method calls
 	for (auto& it : list_activeRequests)
 	{
-		nexServiceResponse_t response = { 0 };
+		nexServiceResponse_t response = {0};
 		response.isSuccessful = false;
 		response.errorCode = ERR_TIMEOUT;
 		response.custom = it.custom;
@@ -158,9 +158,9 @@ bool nexService::isMarkedForDestruction()
 	return isDestroyed;
 }
 
-void nexService::callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, void(*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse), void* custom, bool callHandlerIfError)
+void nexService::callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, void (*nexServiceResponse)(nexService* nex, nexServiceResponse_t* serviceResponse), void* custom, bool callHandlerIfError)
 {
-	queuedRequest_t queueRequest = { 0 };
+	queuedRequest_t queueRequest = {0};
 	queueRequest.protocolId = protocolId;
 	queueRequest.methodId = methodId;
 	queueRequest.parameterData.assign(parameter->getDataPtr(), parameter->getDataPtr() + parameter->getWriteIndex());
@@ -174,7 +174,7 @@ void nexService::callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* 
 
 void nexService::callMethod(uint8 protocolId, uint32 methodId, nexPacketBuffer* parameter, std::function<void(nexServiceResponse_t*)> cb, bool callHandlerIfError)
 {
-	queuedRequest_t queueRequest = { 0 };
+	queuedRequest_t queueRequest = {0};
 	queueRequest.protocolId = protocolId;
 	queueRequest.methodId = methodId;
 	queueRequest.parameterData.assign(parameter->getDataPtr(), parameter->getDataPtr() + parameter->getWriteIndex());
@@ -193,7 +193,7 @@ void nexService::processQueuedRequest(queuedRequest_t* queuedRequest)
 	// check state of connection
 	if (conNexService->GetConnectionState() != prudpClient::ConnectionState::Connected)
 	{
-		nexServiceResponse_t response = { 0 };
+		nexServiceResponse_t response = {0};
 		response.isSuccessful = false;
 		response.errorCode = ERR_NO_CONNECTION;
 		response.custom = queuedRequest->custom;
@@ -216,7 +216,7 @@ void nexService::processQueuedRequest(queuedRequest_t* queuedRequest)
 	sint32 length = 0xD + (sint32)queuedRequest->parameterData.size();
 	conNexService->SendDatagram(packetBuffer, length, true);
 	// remember request
-	nexActiveRequestInfo_t requestInfo = { 0 };
+	nexActiveRequestInfo_t requestInfo = {0};
 	requestInfo.callId = callId;
 	requestInfo.methodId = queuedRequest->methodId;
 	requestInfo.protocolId = queuedRequest->protocolId;
@@ -261,7 +261,7 @@ void nexService::update()
 		if ((uint32)(currentTimestamp - it.requestTime) >= 10000)
 		{
 			// time out after 10 seconds
-			nexServiceResponse_t response = { 0 };
+			nexServiceResponse_t response = {0};
 			response.isSuccessful = false;
 			response.errorCode = ERR_TIMEOUT;
 			response.custom = it.custom;
@@ -271,7 +271,7 @@ void nexService::update()
 			{
 				it.cb2(&response);
 			}
-			list_activeRequests.erase(list_activeRequests.cbegin()+idx);
+			list_activeRequests.erase(list_activeRequests.cbegin() + idx);
 			continue;
 		}
 		idx++;
@@ -287,7 +287,7 @@ sint32 nexService::getState()
 {
 	return connectionState;
 }
-	
+
 void nexService::registerForAsyncProcessing()
 {
 	if (isAsync)
@@ -319,7 +319,7 @@ bool nexIsRequest(uint8* data, sint32 length)
 	return isRequest;
 }
 
-void nexService::registerProtocolRequestHandler(uint8 protocol, void(*processRequest)(nexServiceRequest_t* request), void* custom)
+void nexService::registerProtocolRequestHandler(uint8 protocol, void (*processRequest)(nexServiceRequest_t* request), void* custom)
 {
 	protocolHandler_t protocolHandler;
 	protocolHandler.protocol = protocol;
@@ -339,7 +339,7 @@ void nexService::sendRequestResponse(nexServiceRequest_t* request, uint32 errorC
 	// write placeholder for response length
 	response.writeU32(0);
 	// header fields
-	response.writeU8(request->protocolId&0x7F);
+	response.writeU8(request->protocolId & 0x7F);
 	response.writeU8(isSuccess);
 	if (isSuccess)
 	{
@@ -354,8 +354,8 @@ void nexService::sendRequestResponse(nexServiceRequest_t* request, uint32 errorC
 		response.writeU32(request->callId);
 	}
 	// update length field
-	*(uint32*)response.getDataPtr() = response.getWriteIndex()-4;
-	if(request->nex->conNexService)
+	*(uint32*)response.getDataPtr() = response.getWriteIndex() - 4;
+	if (request->nex->conNexService)
 		request->nex->conNexService->SendDatagram(response.getDataPtr(), response.getWriteIndex(), true);
 }
 
@@ -428,7 +428,7 @@ void nexService::updateNexServiceConnection()
 }
 
 bool _extractStationUrlParamValue(const char* urlStr, const char* paramName, char* output, sint32 maxLength)
-{	
+{
 	size_t paramNameLen = strlen(paramName);
 	const char* optionPtr = strstr(urlStr, paramName);
 	while (optionPtr)
@@ -449,7 +449,7 @@ bool _extractStationUrlParamValue(const char* urlStr, const char* paramName, cha
 			return true;
 		}
 		// next
-		optionPtr = strstr(optionPtr+1, paramName);
+		optionPtr = strstr(optionPtr + 1, paramName);
 	}
 	return false;
 }
@@ -492,7 +492,7 @@ void nexServiceAuthentication_parseStationURL(char* urlStr, prudpStationUrl* sta
 	}
 }
 
-typedef struct  
+typedef struct
 {
 	uint32 userPid;
 	uint8 kerberosTicket[1024];
@@ -503,7 +503,7 @@ typedef struct
 	// progress info
 	bool hasError;
 	bool done;
-}authenticationService_t;
+} authenticationService_t;
 
 void nexServiceAuthentication_handleResponse_requestTicket(nexService* nex, nexServiceResponse_t* response)
 {
@@ -549,7 +549,7 @@ void nexServiceAuthentication_handleResponse_login(nexService* nex, nexServiceRe
 	}
 
 	uint32 userPid = response->data.readU32();
-	
+
 	// kerberos ticket
 	authService->kerberosTicketSize = response->data.readBuffer(authService->kerberosTicket, sizeof(authService->kerberosTicket));
 	// RVConnection data
@@ -580,11 +580,11 @@ void nexServiceAuthentication_handleResponse_login(nexService* nex, nexServiceRe
 	nex->callMethod(NEX_PROTOCOL_AUTHENTICATION, 3, &packetBuffer, nexServiceAuthentication_handleResponse_requestTicket, authService);
 }
 
-typedef struct  
+typedef struct
 {
 	bool isComplete;
 	bool isSuccessful;
-}nexServiceSecureRegisterExData_t;
+} nexServiceSecureRegisterExData_t;
 
 void nexServiceSecure_handleResponse_RegisterEx(nexService* nex, nexServiceResponse_t* response)
 {
@@ -636,7 +636,7 @@ nexService* nex_secureLogin(prudpAuthServerInfo* authServerInfo, const char* acc
 	// secureService: RegisterEx
 	uint8 tempNexBufferArray[4096];
 	nexPacketBuffer packetBuffer(tempNexBufferArray, sizeof(tempNexBufferArray), true);
-	
+
 	char clientStationUrl[256];
 	sprintf(clientStationUrl, "prudp:/port=%u;natf=0;natm=0;pmp=0;sid=15;type=2;upnp=0", (uint32)nex->getPRUDPConnection()->GetSourcePort());
 	// station url list
@@ -644,8 +644,8 @@ nexService* nex_secureLogin(prudpAuthServerInfo* authServerInfo, const char* acc
 	packetBuffer.writeString(clientStationUrl);
 	// login data
 	packetBuffer.writeCustomType(nexNintendoLoginData(nexToken));
-	
-	nexServiceSecureRegisterExData_t secureRegisterExData = { 0 };
+
+	nexServiceSecureRegisterExData_t secureRegisterExData = {0};
 	nex->callMethod(NEX_PROTOCOL_SECURE, 4, &packetBuffer, nexServiceSecure_handleResponse_RegisterEx, &secureRegisterExData);
 	while (true)
 	{
@@ -689,7 +689,7 @@ nexService* nex_establishSecureConnection(uint32 authServerIp, uint16 authServer
 	char pidStr[32];
 	sprintf(pidStr, "%u", pid);
 	packetBuffer.writeString(pidStr);
-	authenticationService_t nexAuthService = { 0 };
+	authenticationService_t nexAuthService = {0};
 	nexAuthService.userPid = pid;
 	authConnection->callMethod(NEX_PROTOCOL_AUTHENTICATION, 1, &packetBuffer, nexServiceAuthentication_handleResponse_login, &nexAuthService);
 	while (true)

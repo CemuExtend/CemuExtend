@@ -10,8 +10,7 @@ std::vector<SaveInfo*> sSLList;
 // callback list
 struct SaveListCallbackEntry
 {
-	SaveListCallbackEntry(void(*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx, uint64 uniqueId) :
-		cb(cb), ctx(ctx), uniqueId(uniqueId) {};
+	SaveListCallbackEntry(void (*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx, uint64 uniqueId) : cb(cb), ctx(ctx), uniqueId(uniqueId) {};
 	void (*cb)(CafeSaveListCallbackEvent* evt, void* ctx);
 	void* ctx;
 	uint64 uniqueId;
@@ -21,10 +20,8 @@ std::vector<SaveListCallbackEntry> sSLCallbackList;
 // worker thread
 std::atomic_bool sSLWorkerThreadActive{false};
 
-
 void CafeSaveList::Initialize()
 {
-
 }
 
 void CafeSaveList::SetMLCPath(fs::path mlcPath)
@@ -81,11 +78,11 @@ void CafeSaveList::RefreshThreadWorker()
 	std::error_code ec;
 	for (auto it_titleHigh : fs::directory_iterator(mlcPath / "usr/save", ec))
 	{
-		if(!it_titleHigh.is_directory(ec))
+		if (!it_titleHigh.is_directory(ec))
 			continue;
 		std::string dirName = _pathToUtf8(it_titleHigh.path().filename());
-		if(dirName.empty())
-			continue;		
+		if (dirName.empty())
+			continue;
 		uint32 titleIdHigh;
 		std::from_chars_result r = std::from_chars(dirName.data(), dirName.data() + dirName.size(), titleIdHigh, 16);
 		if (r.ec != std::errc())
@@ -152,7 +149,7 @@ void CafeSaveList::DiscoveredSave(SaveInfo* saveInfo)
 	}
 }
 
-uint64 CafeSaveList::RegisterCallback(void(*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx)
+uint64 CafeSaveList::RegisterCallback(void (*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx)
 {
 	static std::atomic<uint64_t> sCallbackIdGen = 1;
 	uint64 id = sCallbackIdGen.fetch_add(1);

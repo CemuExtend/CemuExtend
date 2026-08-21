@@ -5,7 +5,7 @@
 
 class CachedFBOVk : public LatteCachedFBO
 {
-public:
+  public:
 	CachedFBOVk(uint64 key, VkDevice device)
 		: LatteCachedFBO(key), m_device(device)
 	{
@@ -34,7 +34,6 @@ public:
 		return &m_vkRenderingInfo;
 	}
 
-
 	void TrackDependency(class PipelineInfo* pipelineInfo)
 	{
 		s_spinlockDependency.lock();
@@ -49,7 +48,10 @@ public:
 		s_spinlockDependency.unlock();
 	}
 
-	[[nodiscard]] const VkExtent2D& GetExtend() const { return m_extend;}
+	[[nodiscard]] const VkExtent2D& GetExtend() const
+	{
+		return m_extend;
+	}
 
 	struct RendertargetSelfDependencyMask
 	{
@@ -75,8 +77,7 @@ public:
 	// checks if any of the sampled textures are output by the FBO
 	RendertargetSelfDependencyMask CheckForSelfDependency(VkDescriptorSetInfo* vsDS, VkDescriptorSetInfo* gsDS, VkDescriptorSetInfo* psDS) const;
 
-private:
-
+  private:
 	void CreateRenderPass();
 	void CreateFramebuffer();
 

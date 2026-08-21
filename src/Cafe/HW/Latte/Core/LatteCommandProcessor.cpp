@@ -1,5 +1,5 @@
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
-#include "Cafe/OS/libs/gx2/GX2.h" // for write gatherer and special state. Get rid of dependency
+#include "Cafe/OS/libs/gx2/GX2.h"		// for write gatherer and special state. Get rid of dependency
 #include "Cafe/OS/libs/gx2/GX2_Event.h" // for notification callbacks
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
@@ -20,12 +20,12 @@
 
 void LatteCP_DebugPrintCmdBuffer(uint32be* bufferPtr, uint32 size);
 
-#define CP_TIMER_RECHECK	1024
+#define CP_TIMER_RECHECK 1024
 
-//#define LATTE_CP_LOGGING
+// #define LATTE_CP_LOGGING
 
 typedef uint32be* LatteCMDPtr;
-#define LatteReadCMD() ((uint32)*(cmd++))
+#define LatteReadCMD() ((uint32) * (cmd++))
 #define LatteSkipCMD(_nWords) cmd += (_nWords)
 
 void LatteThread_HandleOSScreen();
@@ -42,7 +42,8 @@ class DrawPassContext
 		LatteCMDPtr start;
 		LatteCMDPtr end;
 	};
-public:
+
+  public:
 	bool isWithinDrawPass() const
 	{
 		return m_drawPassActive;
@@ -99,7 +100,7 @@ public:
 
 	void MarkVertexBufferDirty(uint32 index)
 	{
-		m_drawcallContext.vertexBufferDirtyMask |= (1<<index);
+		m_drawcallContext.vertexBufferDirtyMask |= (1 << index);
 	}
 
 	void MarkVSAluConstantsDirty()
@@ -145,8 +146,8 @@ public:
 		return true;
 	}
 
-private:
-	bool m_drawPassActive{ false };
+  private:
+	bool m_drawPassActive{false};
 	LatteDrawcallContext m_drawcallContext{};
 	boost::container::static_vector<CmdQueuePos, 4> m_queuePosStack;
 };
@@ -162,16 +163,16 @@ void LatteCP_signalEnterWait()
 }
 
 /*
-* Read a U32 from the command buffer
-* If no data is available then wait in a busy loop
-*/
+ * Read a U32 from the command buffer
+ * If no data is available then wait in a busy loop
+ */
 uint32 LatteCP_readU32Deprc()
 {
 	// no display list active
 	while (true)
 	{
 		uint32 cmdWord;
-		if ( TCL::TCLGPUReadRBWord(cmdWord) )
+		if (TCL::TCLGPUReadRBWord(cmdWord))
 			return cmdWord;
 
 		g_renderer->NotifyLatteCommandProcessorIdle(); // let the renderer know in case it wants to flush any commands
@@ -183,7 +184,7 @@ uint32 LatteCP_readU32Deprc()
 		}
 		LatteThread_HandleOSScreen(); // check if new frame was presented via OSScreen API
 
-		if ( TCL::TCLGPUReadRBWord(cmdWord) )
+		if (TCL::TCLGPUReadRBWord(cmdWord))
 			return cmdWord;
 		if (Latte_GetStopSignal())
 			LatteThread_Exit();
@@ -450,7 +451,7 @@ LatteCMDPtr LatteCP_itWaitRegMem(LatteCMDPtr cmd, uint32 nWords)
 
 	uint32 compareOp = (word0) & 7;
 	uint32 physAddr = word1 & ~3;
-	cemu_assert_debug((physAddr&3) == 0);
+	cemu_assert_debug((physAddr & 3) == 0);
 	uint32 fenceValue = word3;
 	uint32 fenceMask = word4;
 
@@ -588,14 +589,15 @@ LatteCMDPtr LatteCP_itEventWriteEOP(LatteCMDPtr cmd, uint32 nWords)
 
 	cemu_assert_debug(word2 == 0x40000000 || word2 == 0x42000000);
 
-	if (word0 == 0x504 && (word2&0x40000000)) // todo - figure out the flags
+	if (word0 == 0x504 && (word2 & 0x40000000)) // todo - figure out the flags
 	{
 		stdx::atomic_ref<uint64be> atomicRef(*(uint64be*)memory_getPointerFromPhysicalOffset(word1));
 		uint64 val = ((uint64)word4 << 32) | word3;
 		atomicRef.store(val);
 	}
 	else
-	{	cemu_assert_unimplemented();
+	{
+		cemu_assert_unimplemented();
 	}
 	bool triggerInterrupt = (word2 & 0x2000000) != 0;
 	if (triggerInterrupt)
@@ -621,7 +623,7 @@ LatteCMDPtr LatteCP_itMemSemaphore(LatteCMDPtr cmd, uint32 nWords)
 		// signal
 		semaphoreData->fetch_add(1);
 	}
-	else if(SEM_SIGNAL == 7)
+	else if (SEM_SIGNAL == 7)
 	{
 		// wait
 		LatteCP_signalEnterWait();
@@ -754,7 +756,7 @@ LatteCMDPtr LatteCP_itDrawImmediate(LatteCMDPtr cmd, uint32 nWords, DrawPassCont
 {
 	uint32 count = LatteReadCMD();
 	uint32 ukn1 = LatteReadCMD();
-	// reserve array for index data	
+	// reserve array for index data
 	if (_tempIndexArrayMPTR == MPTR_NULL)
 		_tempIndexArrayMPTR = coreinit_allocFromSysArea(0x4000 * sizeof(uint32), 0x4);
 
@@ -854,7 +856,7 @@ LatteCMDPtr LatteCP_itHLEBottomOfPipeCB(LatteCMDPtr cmd, uint32 nWords)
 // GPU-side handler for GX2CopySurface/GX2CopySurfaceEx and similar
 LatteCMDPtr LatteCP_itHLECopySurfaceNew(LatteCMDPtr cmd, uint32 nWords)
 {
-	cemu_assert_debug(nWords == 4+9*2);
+	cemu_assert_debug(nWords == 4 + 9 * 2);
 	// copy rect
 	LatteSurfaceCopyRect copyRect;
 	copyRect.x = LatteReadCMD();
@@ -921,7 +923,7 @@ LatteCMDPtr LatteCP_itHLEClearColorDepthStencil(LatteCMDPtr cmd, uint32 nWords)
 	uint32 clearStencil = LatteReadCMD();
 
 	LatteRenderTarget_itHLEClearColorDepthStencil(
-		clearMask, 
+		clearMask,
 		colorBufferMPTR, colorBufferFormat, colorBufferTilemode, colorBufferWidth, colorBufferHeight, colorBufferPitch, colorBufferViewFirstSlice, colorBufferViewNumSlice,
 		depthBufferMPTR, depthBufferFormat, depthBufferTileMode, depthBufferWidth, depthBufferHeight, depthBufferPitch, depthBufferViewFirstSlice, depthBufferViewNumSlice,
 		r, g, b, a,
@@ -994,7 +996,7 @@ void LatteCP_dumpCommandBufferError(LatteCMDPtr cmdStart, LatteCMDPtr cmdEnd, La
 	cemuLog_log(LogType::Force, "Error at 0x{0:08x}", memory_getVirtualOffsetFromPointer(cmdError));
 	for (LatteCMDPtr p = cmdStart; p < cmdEnd; p += 4)
 	{
-		if(cmdError >= p && cmdError < (p+4) )
+		if (cmdError >= p && cmdError < (p + 4))
 			cemuLog_log(LogType::Force, "0x{0:08x}: {1:08x} {2:08x} {3:08x} {4:08x} <<<<<", memory_getVirtualOffsetFromPointer(p), p[0], p[1], p[2], p[3]);
 		else
 			cemuLog_log(LogType::Force, "0x{0:08x}: {1:08x} {2:08x} {3:08x} {4:08x}", memory_getVirtualOffsetFromPointer(p), p[0], p[1], p[2], p[3]);
@@ -1040,37 +1042,36 @@ void LatteCP_processCommandBuffer_continuousDrawPass(DrawPassContext& drawPassCt
 				{
 				case IT_SET_RESOURCE: // attribute buffers, uniform buffers or texture units
 				{
-					LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_RESOURCE>(cmdData, nWords, [&drawPassCtx](uint32 registerStart, uint32 registerEnd, bool regValuesChanged)
+					LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_RESOURCE>(cmdData, nWords, [&drawPassCtx](uint32 registerStart, uint32 registerEnd, bool regValuesChanged) {
+						if (!regValuesChanged)
+							return;
+						if ((registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)) ||
+							(registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)) ||
+							(registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_GS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_GS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)))
 						{
-							if (!regValuesChanged)
-								return;
-							if ((registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)) ||
-								(registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)) ||
-								(registerStart >= Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_GS && registerStart < (Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_GS + Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE * 7)))
-							{
-								drawPassCtx.endDrawPass(); // texture updates end the current draw sequence
-							}
-							else if (registerStart >= mmSQ_VTX_ATTRIBUTE_BLOCK_START && registerEnd <= mmSQ_VTX_ATTRIBUTE_BLOCK_END)
-							{
-								uint32 bufferIndex = (registerStart - mmSQ_VTX_ATTRIBUTE_BLOCK_START) / 7;
-								drawPassCtx.MarkVertexBufferDirty(bufferIndex);
-							}
-							else if (registerStart >= mmSQ_VTX_UNIFORM_BLOCK_START && registerEnd <= mmSQ_VTX_UNIFORM_BLOCK_END)
-							{
-								uint32 bufferIndex = (registerStart - mmSQ_VTX_UNIFORM_BLOCK_START) / 7;
-								drawPassCtx.MarkVSUniformBufferDirty(bufferIndex);
-							}
-							else if (registerStart >= mmSQ_PS_UNIFORM_BLOCK_START && registerEnd <= mmSQ_PS_UNIFORM_BLOCK_END)
-							{
-								uint32 bufferIndex = (registerStart - mmSQ_PS_UNIFORM_BLOCK_START) / 7;
-								drawPassCtx.MarkPSUniformBufferDirty(bufferIndex);
-							}
-							else if (registerStart >= mmSQ_GS_UNIFORM_BLOCK_START && registerEnd <= mmSQ_GS_UNIFORM_BLOCK_END)
-							{
-								uint32 bufferIndex = (registerStart - mmSQ_GS_UNIFORM_BLOCK_START) / 7;
-								drawPassCtx.MarkGSUniformBufferDirty(bufferIndex);
-							}
-						});
+							drawPassCtx.endDrawPass(); // texture updates end the current draw sequence
+						}
+						else if (registerStart >= mmSQ_VTX_ATTRIBUTE_BLOCK_START && registerEnd <= mmSQ_VTX_ATTRIBUTE_BLOCK_END)
+						{
+							uint32 bufferIndex = (registerStart - mmSQ_VTX_ATTRIBUTE_BLOCK_START) / 7;
+							drawPassCtx.MarkVertexBufferDirty(bufferIndex);
+						}
+						else if (registerStart >= mmSQ_VTX_UNIFORM_BLOCK_START && registerEnd <= mmSQ_VTX_UNIFORM_BLOCK_END)
+						{
+							uint32 bufferIndex = (registerStart - mmSQ_VTX_UNIFORM_BLOCK_START) / 7;
+							drawPassCtx.MarkVSUniformBufferDirty(bufferIndex);
+						}
+						else if (registerStart >= mmSQ_PS_UNIFORM_BLOCK_START && registerEnd <= mmSQ_PS_UNIFORM_BLOCK_END)
+						{
+							uint32 bufferIndex = (registerStart - mmSQ_PS_UNIFORM_BLOCK_START) / 7;
+							drawPassCtx.MarkPSUniformBufferDirty(bufferIndex);
+						}
+						else if (registerStart >= mmSQ_GS_UNIFORM_BLOCK_START && registerEnd <= mmSQ_GS_UNIFORM_BLOCK_END)
+						{
+							uint32 bufferIndex = (registerStart - mmSQ_GS_UNIFORM_BLOCK_START) / 7;
+							drawPassCtx.MarkGSUniformBufferDirty(bufferIndex);
+						}
+					});
 					if (!drawPassCtx.isWithinDrawPass())
 					{
 						drawPassCtx.PushCurrentCommandQueuePos(cmd, cmdStart, cmdEnd);
@@ -1083,7 +1084,7 @@ void LatteCP_processCommandBuffer_continuousDrawPass(DrawPassContext& drawPassCt
 					LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_ALU_CONST>(cmdData, nWords, [&drawPassCtx](uint32 registerStart, uint32 registerEnd, bool regValuesChanged) {
 						if (!regValuesChanged)
 							return;
-						if ( registerStart >= (mmSQ_ALU_CONSTANT0_0 + 0x400) )
+						if (registerStart >= (mmSQ_ALU_CONSTANT0_0 + 0x400))
 							drawPassCtx.MarkVSAluConstantsDirty();
 						else
 							drawPassCtx.MarkPSAluConstantsDirty();
@@ -1118,7 +1119,7 @@ void LatteCP_processCommandBuffer_continuousDrawPass(DrawPassContext& drawPassCt
 				}
 				case IT_SET_CONTEXT_REG:
 				{
-					bool hasChanged = LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_CONTEXT>(cmdData, nWords, [](uint32 registerStart, uint32 registerEnd, bool regValuesChanged){});
+					bool hasChanged = LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_CONTEXT>(cmdData, nWords, [](uint32 registerStart, uint32 registerEnd, bool regValuesChanged) {});
 					if (hasChanged)
 					{
 						drawPassCtx.endDrawPass();
@@ -1137,7 +1138,7 @@ void LatteCP_processCommandBuffer_continuousDrawPass(DrawPassContext& drawPassCt
 				}
 				case IT_SET_SAMPLER:
 				{
-					bool hasChanged = LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_SAMPLER>(cmdData, nWords, [](uint32 registerStart, uint32 registerEnd, bool regValuesChanged){});
+					bool hasChanged = LatteCP_itSetRegistersGeneric2<LATTE_REG_BASE_SAMPLER>(cmdData, nWords, [](uint32 registerStart, uint32 registerEnd, bool regValuesChanged) {});
 					if (hasChanged)
 					{
 						drawPassCtx.endDrawPass();
@@ -1268,7 +1269,7 @@ void LatteCP_processCommandBuffer(DrawPassContext& drawPassCtx)
 				case IT_DRAW_INDEX_AUTO:
 				{
 					drawPassCtx.beginDrawPass();
-					//cemuLog_log(LogType::Force, "[CmdBuf] DrawIndexAuto");
+					// cemuLog_log(LogType::Force, "[CmdBuf] DrawIndexAuto");
 					LatteCP_itDrawIndexAuto(cmdData, nWords, drawPassCtx);
 					// enter fast draw mode
 					drawPassCtx.PushCurrentCommandQueuePos(cmd, cmdStart, cmdEnd);
@@ -1282,7 +1283,7 @@ void LatteCP_processCommandBuffer(DrawPassContext& drawPassCtx)
 				{
 					DrawPassContext drawPassCtx;
 					drawPassCtx.beginDrawPass();
-					//cemuLog_log(LogType::Force, "[CmdBuf] DrawIndexImm");
+					// cemuLog_log(LogType::Force, "[CmdBuf] DrawIndexImm");
 					LatteCP_itDrawImmediate(cmdData, nWords, drawPassCtx);
 					drawPassCtx.endDrawPass();
 					break;
@@ -1461,7 +1462,7 @@ void LatteCP_ProcessRingbuffer()
 			uint32 itCode = (itHeader >> 8) & 0xFF;
 			uint32 nWords = ((itHeader >> 16) & 0x3FFF) + 1;
 			cemu_assert(nWords < 128);
-			for (sint32 i=0; i<nWords; i++)
+			for (sint32 i = 0; i < nWords; i++)
 			{
 				uint32 word = LatteCP_readU32Deprc();
 				tmpBuffer[i] = word;
@@ -1707,7 +1708,7 @@ void LatteCP_ProcessRingbuffer()
 			}
 			case IT_HLE_SYNC_ASYNC_OPERATIONS:
 			{
-				//LatteCP_skipWords<LatteCP_readU32Deprc>(nWords);
+				// LatteCP_skipWords<LatteCP_readU32Deprc>(nWords);
 				LatteTextureReadback_UpdateFinishedTransfers(true);
 				LatteQuery_UpdateFinishedQueriesForceFinishAll();
 				break;
@@ -1757,7 +1758,7 @@ void LatteCP_ProcessRingbuffer()
 void LatteCP_DebugPrintCmdBuffer(uint32be* bufferPtr, uint32 size)
 {
 	uint32be* bufferPtrInitial = bufferPtr;
-	uint32be* bufferPtrEnd = bufferPtr + (size/4);
+	uint32be* bufferPtrEnd = bufferPtr + (size / 4);
 	while (bufferPtr < bufferPtrEnd)
 	{
 		std::string strPrefix = fmt::format("[PM4 Buf {:08x} Offs {:04x}]", MEMPTR<void>(bufferPtr).GetMPTR(), (bufferPtr - bufferPtrInitial) * 4);
@@ -1788,7 +1789,7 @@ void LatteCP_DebugPrintCmdBuffer(uint32be* bufferPtr, uint32 size)
 			{
 				std::string regVals;
 				for (uint32 i = 0; i < std::min<uint32>(nWords - 1, 8); i++)
-					regVals.append(fmt::format("{:08x} ", cmdData[1+i].value()));
+					regVals.append(fmt::format("{:08x} ", cmdData[1 + i].value()));
 				cemuLog_log(LogType::Force, "{} IT_SET_RESOURCE Reg {:04x} RegValues {}", strPrefix, cmdData[0].value(), regVals);
 				break;
 			}
@@ -1823,7 +1824,7 @@ void LatteCP_DebugPrintCmdBuffer(uint32be* bufferPtr, uint32 size)
 					uint32 physicalAddress = cmdData[0];
 					uint32 physicalAddressHigh = cmdData[1];
 					uint32 sizeInDWords = cmdData[2];
-					cemuLog_log(LogType::Force, "{} IT_INDIRECT_BUFFER_PRIV Addr {:08x} Size {:08x}", strPrefix, physicalAddress, sizeInDWords*4);
+					cemuLog_log(LogType::Force, "{} IT_INDIRECT_BUFFER_PRIV Addr {:08x} Size {:08x}", strPrefix, physicalAddress, sizeInDWords * 4);
 					LatteCP_DebugPrintCmdBuffer(MEMPTR<uint32be>(physicalAddress), sizeInDWords * 4);
 				}
 				break;

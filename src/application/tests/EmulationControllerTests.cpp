@@ -10,7 +10,7 @@ namespace
 {
 	class FakeBackend final : public Application::IEmulationBackend
 	{
-	public:
+	  public:
 		Application::LaunchError nextError{Application::LaunchError::None};
 		int prepares{};
 		int starts{};
@@ -24,25 +24,44 @@ namespace
 		Application::LaunchResult Prepare(const Application::LaunchRequest& request) override
 		{
 			++prepares;
-			if (throwOnPrepare) throw std::runtime_error("prepare failed");
+			if (throwOnPrepare)
+				throw std::runtime_error("prepare failed");
 			return {nextError, request.path, request.path, "Test title", {}};
 		}
 		void Start() override
 		{
 			++starts;
-			if (throwOnStart) throw std::runtime_error("start failed");
+			if (throwOnStart)
+				throw std::runtime_error("start failed");
 		}
-		bool AbortPrepared() override { ++aborts; return true; }
+		bool AbortPrepared() override
+		{
+			++aborts;
+			return true;
+		}
 		bool Stop() override
 		{
 			++stops;
-			if (throwOnStop) throw std::runtime_error("stop failed");
+			if (throwOnStop)
+				throw std::runtime_error("stop failed");
 			return !failStop;
 		}
-		bool ShutdownApplication() override { return true; }
-		bool IsTitleRunning() const override { return starts > stops; }
-		std::optional<std::uint64_t> RunningTitleId() const override { return {}; }
-		std::optional<std::int32_t> ForegroundProcessExitStatus() const override { return {}; }
+		bool ShutdownApplication() override
+		{
+			return true;
+		}
+		bool IsTitleRunning() const override
+		{
+			return starts > stops;
+		}
+		std::optional<std::uint64_t> RunningTitleId() const override
+		{
+			return {};
+		}
+		std::optional<std::int32_t> ForegroundProcessExitStatus() const override
+		{
+			return {};
+		}
 		std::optional<Application::WindowTitlePresentation> windowTitlePresentation;
 		std::optional<Application::WindowTitlePresentation>
 		CurrentWindowTitlePresentation() const override
@@ -54,7 +73,10 @@ namespace
 		void KeyboardFocusLost() override {}
 		bool softwareKeyboardActive{};
 		std::vector<std::uint32_t> softwareKeyboardKeys;
-		bool SoftwareKeyboardActive() const override { return softwareKeyboardActive; }
+		bool SoftwareKeyboardActive() const override
+		{
+			return softwareKeyboardActive;
+		}
 		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) override
 		{
 			if (!softwareKeyboardActive)
@@ -72,28 +94,48 @@ namespace
 		}
 		void PointerFocusChanged(bool) override {}
 		void SubmitMouse(const Application::MouseInput&) override {}
-		Application::PointerPolicy GetPointerPolicy() override { return {}; }
-		Application::TextInputState GetTextInputState() override { return {}; }
+		Application::PointerPolicy GetPointerPolicy() override
+		{
+			return {};
+		}
+		Application::TextInputState GetTextInputState() override
+		{
+			return {};
+		}
 		void SubmitTextComposition(std::string_view, std::string_view,
-			std::uint32_t, std::uint32_t) override {}
+								   std::uint32_t, std::uint32_t) override {}
 		void SaveCemodPermissionDecisions(std::uint64_t,
-			std::span<const Application::CemodPermissionDecision>) override {}
-		std::vector<Application::CemodPackage> DiscoverCemodCatalog() override { return {}; }
-		std::vector<Application::CemodPackage> DiscoverCemods(std::uint64_t) override { return {}; }
+										  std::span<const Application::CemodPermissionDecision>) override {}
+		std::vector<Application::CemodPackage> DiscoverCemodCatalog() override
+		{
+			return {};
+		}
+		std::vector<Application::CemodPackage> DiscoverCemods(std::uint64_t) override
+		{
+			return {};
+		}
 		Application::CemodGrant ResolveCemodGrant(std::uint64_t, std::string_view,
-			std::string_view, std::uint32_t) override { return {}; }
+												  std::string_view, std::uint32_t) override
+		{
+			return {};
+		}
 		Application::CemuExtendServiceGrantDefaults ServiceGrantDefaults() const override
 		{
 			return {};
 		}
 		bool ImportLegacyCemodData(std::uint64_t, std::string_view,
-			std::string&) override { return false; }
+								   std::string&) override
+		{
+			return false;
+		}
 		Application::CemodManagerSnapshot cemodManagerSnapshot;
 		Application::CemodManagerSnapshot GetCemodManagerSnapshot(
 			std::optional<std::uint64_t> titleId,
 			Application::CemodCancellationCheck = {}) override
 		{
-			auto result = cemodManagerSnapshot; result.selectedTitleId = titleId; return result;
+			auto result = cemodManagerSnapshot;
+			result.selectedTitleId = titleId;
+			return result;
 		}
 		Application::CemodManagerResult SaveCemodApproval(
 			const Application::CemodApprovalUpdate&) override
@@ -127,7 +169,10 @@ namespace
 		int titleSubscriptions{};
 		bool titleSubscriptionStopped{};
 		std::filesystem::path addedTitle;
-		std::vector<Application::TitleSummary> ListTitles() const override { return titles; }
+		std::vector<Application::TitleSummary> ListTitles() const override
+		{
+			return titles;
+		}
 		std::vector<Application::ManagedContentEntry> ListManagedContent() const override
 		{
 			return managedContent;
@@ -136,17 +181,23 @@ namespace
 			std::uint64_t titleId) const override
 		{
 			const auto found = std::ranges::find_if(titles,
-				[titleId](const auto& title) { return title.titleId == titleId; });
+													[titleId](const auto& title) { return title.titleId == titleId; });
 			return found == titles.end() ? std::nullopt : std::optional{*found};
 		}
-		std::vector<Application::GameSummary> ListGames() const override { return games; }
+		std::vector<Application::GameSummary> ListGames() const override
+		{
+			return games;
+		}
 		std::optional<Application::GameSummary> GetGame(std::uint64_t titleId) const override
 		{
 			const auto found = std::ranges::find_if(games,
-				[titleId](const auto& game) { return game.titleId == titleId; });
+													[titleId](const auto& game) { return game.titleId == titleId; });
 			return found == games.end() ? std::nullopt : std::optional{*found};
 		}
-		bool IsTitleScanning() const override { return false; }
+		bool IsTitleScanning() const override
+		{
+			return false;
+		}
 		std::optional<std::vector<std::uint8_t>> LoadTitleIcon(std::uint64_t) const override
 		{
 			return std::vector<std::uint8_t>{1, 2, 3};
@@ -157,7 +208,10 @@ namespace
 			struct State final : Application::Detail::TitleSubscriptionState
 			{
 				explicit State(bool& stopped) : stopped(stopped) {}
-				void Stop() override { stopped = true; }
+				void Stop() override
+				{
+					stopped = true;
+				}
 				bool& stopped;
 			};
 			++titleSubscriptions;
@@ -178,14 +232,20 @@ namespace
 		{
 			scanPaths.assign(paths.begin(), paths.end());
 		}
-		void RefreshTitles() override { ++titleRefreshes; }
-		void AddTitleFromPath(const std::filesystem::path& path) override { addedTitle = path; }
+		void RefreshTitles() override
+		{
+			++titleRefreshes;
+		}
+		void AddTitleFromPath(const std::filesystem::path& path) override
+		{
+			addedTitle = path;
+		}
 		std::optional<Application::WuaConversionPlan> PlanWuaConversion(
 			std::uint64_t titleId, std::uint64_t preferredLocationUid) const override
 		{
 			return Application::WuaConversionPlan{
 				.items = {{preferredLocationUid, titleId, 1, 55,
-					Application::ContentRole::Base, "base-path"}},
+						   Application::ContentRole::Base, "base-path"}},
 				.suggestedFileName = "Test title.wua",
 			};
 		}
@@ -208,9 +268,7 @@ namespace
 				return {Application::ContentOperationError::Cancelled, "cancelled", std::nullopt};
 			if (progress)
 				progress({Application::ContentOperationPhase::Hashing, 1, 1, 4, 4});
-			return {Application::ContentOperationError::None, {}, Application::ContentChecksum{
-				.titleId = 0x1234, .version = 1, .region = 2,
-				.imageSha256 = std::string(64, locationUid == 0 ? '0' : '1')}};
+			return {Application::ContentOperationError::None, {}, Application::ContentChecksum{.titleId = 0x1234, .version = 1, .region = 2, .imageSha256 = std::string(64, locationUid == 0 ? '0' : '1')}};
 		}
 		Application::GameProfileView gameProfile;
 		int gameProfileSaves{};
@@ -219,7 +277,7 @@ namespace
 			return gameProfile;
 		}
 		Application::GameProfileSaveResult SaveGameProfile(std::uint64_t,
-			const Application::GameProfileUpdate& update) override
+														   const Application::GameProfileUpdate& update) override
 		{
 			++gameProfileSaves;
 			gameProfile.settings = update;
@@ -257,8 +315,7 @@ namespace
 			return {Application::TitleInstallError::None, {}, plan.targetPath};
 		}
 		Application::ManagedContentDeletePlan deletePlan{
-			.locationUid = 42, .titleId = 0x1234, .fingerprint = 99,
-			.name = "Test", .displayPath = "managed-title"};
+			.locationUid = 42, .titleId = 0x1234, .fingerprint = 99, .name = "Test", .displayPath = "managed-title"};
 		int managedContentDeletes{};
 		Application::ManagedContentDeletePlanResult PlanManagedContentDelete(
 			std::uint64_t) const override
@@ -284,15 +341,15 @@ namespace
 			std::uint32_t persistentId) const override
 		{
 			const auto found = std::ranges::find_if(accounts,
-				[persistentId](const auto& account) {
-					return account.persistentId == persistentId;
-				});
+													[persistentId](const auto& account) {
+														return account.persistentId == persistentId;
+													});
 			return found == accounts.end() ? std::nullopt : std::optional{*found};
 		}
 		std::uint32_t NextPersistentId() const override
 		{
 			return Application::kMinimumPersistentId +
-				static_cast<std::uint32_t>(accounts.size());
+				   static_cast<std::uint32_t>(accounts.size());
 		}
 		bool HasFreeAccountSlots() const override
 		{
@@ -304,19 +361,11 @@ namespace
 		}
 		Application::OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const override
 		{
-			return {.requiredFilesAvailable = true, .otpPresent = true,
-				.seepromPresent = true, .consoleCertificateAvailable = true};
+			return {.requiredFilesAvailable = true, .otpPresent = true, .seepromPresent = true, .consoleCertificateAvailable = true};
 		}
 		Application::AccountManagerSnapshot GetAccountManagerSnapshot() const override
 		{
-			return {.accounts = accounts, .countries = ListAccountCountries(),
-				.networkSettings = {{accounts.front().persistentId,
-					Application::AccountNetworkService::Offline,
-					ValidateOnlineAccount(accounts.front().persistentId)}},
-				.onlineEnvironment = GetOnlineEnvironmentStatus(),
-				.activePersistentId = accounts.front().persistentId,
-				.nextPersistentId = NextPersistentId(),
-				.hasFreeSlots = HasFreeAccountSlots()};
+			return {.accounts = accounts, .countries = ListAccountCountries(), .networkSettings = {{accounts.front().persistentId, Application::AccountNetworkService::Offline, ValidateOnlineAccount(accounts.front().persistentId)}}, .onlineEnvironment = GetOnlineEnvironmentStatus(), .activePersistentId = accounts.front().persistentId, .nextPersistentId = NextPersistentId(), .hasFreeSlots = HasFreeAccountSlots()};
 		}
 		Application::FrontendSettingsSnapshot frontendSettings{.revision = 1};
 		Application::FrontendSettingsSnapshot GetFrontendSettings() const override
@@ -328,7 +377,7 @@ namespace
 		{
 			if (update.expectedRevision != frontendSettings.revision)
 				return {Application::FrontendSettingsError::Conflict, frontendSettings,
-					"revision conflict"};
+						"revision conflict"};
 			frontendSettings.gamePaths = update.gamePaths;
 			frontendSettings.startFullscreen = update.startFullscreen;
 			frontendSettings.openPad = update.openPad;
@@ -342,8 +391,7 @@ namespace
 			std::uint32_t persistentId) override
 		{
 			const auto account = GetAccount(persistentId);
-			return account ? Application::AccountOperationResult{.account = account} :
-				Application::AccountOperationResult{Application::AccountOperationError::NotFound};
+			return account ? Application::AccountOperationResult{.account = account} : Application::AccountOperationResult{Application::AccountOperationError::NotFound};
 		}
 		Application::AccountOperationResult SetAccountNetworkService(
 			std::uint32_t persistentId, Application::AccountNetworkService) override
@@ -359,23 +407,23 @@ namespace
 			std::uint32_t persistentId) const override
 		{
 			return {.validAccount = GetAccount(persistentId).has_value(),
-				.otp = Application::AccountFileState::Ok,
-				.seeprom = Application::AccountFileState::Ok};
+					.otp = Application::AccountFileState::Ok,
+					.seeprom = Application::AccountFileState::Ok};
 		}
 		Application::AccountOperationResult CreateAccount(
 			std::uint32_t persistentId, std::wstring_view miiName) override
 		{
 			accounts.push_back({.persistentId = persistentId,
-				.miiName = std::wstring(miiName)});
+								.miiName = std::wstring(miiName)});
 			return {.account = accounts.back()};
 		}
 		Application::AccountOperationResult UpdateAccount(
 			std::uint32_t persistentId, const Application::AccountUpdate& update) override
 		{
 			auto found = std::ranges::find_if(accounts,
-				[persistentId](const auto& account) {
-					return account.persistentId == persistentId;
-				});
+											  [persistentId](const auto& account) {
+												  return account.persistentId == persistentId;
+											  });
 			if (found == accounts.end())
 				return {Application::AccountOperationError::NotFound};
 			found->miiName = update.miiName;
@@ -461,20 +509,17 @@ namespace
 		Application::GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled) override
 		{
-			return {.changed = enabled, .info = Application::GraphicPackInfo{
-				.key = std::string(key), .enabled = enabled}};
+			return {.changed = enabled, .info = Application::GraphicPackInfo{.key = std::string(key), .enabled = enabled}};
 		}
 		Application::GraphicPackResult SetGraphicPackPreset(std::string_view key,
-			std::string_view category, std::string_view preset) override
+															std::string_view category, std::string_view preset) override
 		{
-			return {.changed = true, .info = Application::GraphicPackInfo{
-				.key = std::string(key), .presets = {{std::string(category),
-					std::string(preset), true, true}}}};
+			return {.changed = true, .info = Application::GraphicPackInfo{.key = std::string(key), .presets = {{std::string(category), std::string(preset), true, true}}}};
 		}
 		Application::GraphicPackResult ReloadGraphicPack(std::string_view key) override
 		{
 			return {.reloaded = true,
-				.info = Application::GraphicPackInfo{.key = std::string(key)}};
+					.info = Application::GraphicPackInfo{.key = std::string(key)}};
 		}
 		Application::GraphicPackRefreshResult RefreshGraphicPacks() override
 		{
@@ -493,33 +538,72 @@ namespace
 				progress({Application::GraphicPackInstallPhase::Downloading, 5, 10, {}});
 			return {};
 		}
-		void SaveGraphicPackState() override { ++graphicPackSaves; }
-		Application::InputSettingsModel GetInputSettings() const override { return {}; }
+		void SaveGraphicPackState() override
+		{
+			++graphicPackSaves;
+		}
+		Application::InputSettingsModel GetInputSettings() const override
+		{
+			return {};
+		}
 		Application::InputDeviceEnumerationResult EnumerateInputDevices(
-			std::string_view) override { return {}; }
+			std::string_view) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult SetEmulatedController(std::uint32_t,
-			Application::EmulatedControllerType, bool) override { return {}; }
+															   Application::EmulatedControllerType, bool) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult AddInputDevice(std::uint32_t,
-			std::uint64_t) override { return {}; }
+														std::uint64_t) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult RemoveInputDevice(std::uint32_t,
-			std::uint64_t) override { return {}; }
-		Application::InputSettingsResult ConnectInputDevice(std::uint64_t) override { return {}; }
+														   std::uint64_t) override
+		{
+			return {};
+		}
+		Application::InputSettingsResult ConnectInputDevice(std::uint64_t) override
+		{
+			return {};
+		}
 		std::optional<Application::CapturedInputButton> CaptureInputButton(
-			std::uint64_t) override { return {}; }
+			std::uint64_t) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult SetInputMapping(std::uint32_t, std::uint64_t,
-			std::uint64_t, std::uint64_t) override { return {}; }
+														 std::uint64_t, std::uint64_t) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult ClearInputMapping(std::uint32_t,
-			std::optional<std::uint64_t>) override { return {}; }
+														   std::optional<std::uint64_t>) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult SetPhysicalControllerSettings(std::uint64_t,
-			const Application::PhysicalControllerSettings&) override { return {}; }
+																	   const Application::PhysicalControllerSettings&) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult CalibrateInputDevice(std::uint64_t) override
 		{
 			return {};
 		}
 		Application::InputSettingsResult LoadInputProfile(std::uint32_t,
-			std::string_view) override { return {}; }
+														  std::string_view) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult SaveInputProfile(std::uint32_t,
-			std::string_view) override { return {}; }
+														  std::string_view) override
+		{
+			return {};
+		}
 		Application::InputSettingsResult DeleteInputProfile(std::string_view) override
 		{
 			return {};
@@ -557,12 +641,12 @@ namespace
 		update.revision = 1;
 		update.controllerModifier = 1;
 		for (const auto action : {
-			Application::HotkeyAction::ToggleFullscreen,
-			Application::HotkeyAction::ToggleFullscreenAlternative,
-			Application::HotkeyAction::ExitFullscreen,
-			Application::HotkeyAction::TakeScreenshot,
-			Application::HotkeyAction::ToggleFastForward,
-			Application::HotkeyAction::ExitApplication})
+				 Application::HotkeyAction::ToggleFullscreen,
+				 Application::HotkeyAction::ToggleFullscreenAlternative,
+				 Application::HotkeyAction::ExitFullscreen,
+				 Application::HotkeyAction::TakeScreenshot,
+				 Application::HotkeyAction::ToggleFastForward,
+				 Application::HotkeyAction::ExitApplication})
 			update.bindings.push_back({.action = action});
 		if (includeEndEmulation)
 			update.bindings.push_back({.action = Application::HotkeyAction::EndEmulation});
@@ -573,13 +657,16 @@ namespace
 	{
 		namespace fs = std::filesystem;
 		const auto unique = std::to_string(std::chrono::steady_clock::now()
-			.time_since_epoch().count());
+											   .time_since_epoch()
+											   .count());
 		const auto root = fs::temp_directory_path() / ("cemu-managed-content-test-" + unique);
 		const auto managed = root / "games" / "title";
 		const auto outside = root / "outside";
 		std::error_code error;
-		fs::create_directories(managed, error); assert(!error);
-		fs::create_directories(outside, error); assert(!error);
+		fs::create_directories(managed, error);
+		assert(!error);
+		fs::create_directories(outside, error);
+		assert(!error);
 		const std::array<fs::path, 1> roots{root / "games"};
 		static_assert(Application::IsManagedContentDeletionSupported(
 			Application::ManagedContentType::Base));
@@ -594,9 +681,10 @@ namespace
 		fs::create_directory_symlink(outside, linked, error);
 		if (!error)
 			assert(!Application::ValidateManagedContentPath(linked, roots));
-		error.clear(); fs::remove_all(root, error);
+		error.clear();
+		fs::remove_all(root, error);
 	}
-}
+} // namespace
 
 int main()
 {
@@ -605,24 +693,24 @@ int main()
 		std::string diagnostic;
 		auto release = ValidHotkeyUpdate(false);
 		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
-			Application::HotkeySettingsError::None);
+			   Application::HotkeySettingsError::None);
 		auto debug = ValidHotkeyUpdate(true);
 		assert(Application::ValidateHotkeySettingsUpdate(debug, true, diagnostic) ==
-			Application::HotkeySettingsError::None);
+			   Application::HotkeySettingsError::None);
 		release.bindings[0].keyboardUsage = 0x44;
 		release.bindings[1].keyboardUsage = 0x44;
 		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
-			Application::HotkeySettingsError::DuplicateBinding);
+			   Application::HotkeySettingsError::DuplicateBinding);
 		release = ValidHotkeyUpdate(false);
 		release.bindings[0].controllerButton = release.controllerModifier;
 		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
-			Application::HotkeySettingsError::DuplicateBinding);
+			   Application::HotkeySettingsError::DuplicateBinding);
 		release = ValidHotkeyUpdate(false);
 		release.bindings[0].keyboardUsage = 0xe0;
 		assert(Application::ValidateHotkeySettingsUpdate(release, false, diagnostic) ==
-			Application::HotkeySettingsError::InvalidBinding);
+			   Application::HotkeySettingsError::InvalidBinding);
 		assert(Application::ValidateHotkeySettingsUpdate(debug, false, diagnostic) ==
-			Application::HotkeySettingsError::InvalidBinding);
+			   Application::HotkeySettingsError::InvalidBinding);
 	}
 	FakeBackend backend;
 	Application::EmulationController controller(backend);
@@ -630,16 +718,10 @@ int main()
 	backend.cemodManagerSnapshot = {
 		.generation = 77,
 		.packages = {
-			{.packageKey = "digest-a", .titleIds = {0x1234},
-				.modIdentity = "mod-a", .packageDigest = "digest-a",
-				.requestedPermissions = 1ULL << 10, .trustedNative = true, .valid = true},
-			{.packageKey = "approved", .titleIds = {0x1234},
-				.modIdentity = "mod-b", .packageDigest = "digest-b",
-				.approved = true, .valid = true},
-			{.packageKey = "wrong-title", .titleIds = {0x5678},
-				.modIdentity = "mod-c", .packageDigest = "digest-c", .valid = true},
-			{.packageKey = "invalid", .titleIds = {0x1234},
-				.modIdentity = "mod-d", .packageDigest = "digest-d", .valid = false},
+			{.packageKey = "digest-a", .titleIds = {0x1234}, .modIdentity = "mod-a", .packageDigest = "digest-a", .requestedPermissions = 1ULL << 10, .trustedNative = true, .valid = true},
+			{.packageKey = "approved", .titleIds = {0x1234}, .modIdentity = "mod-b", .packageDigest = "digest-b", .approved = true, .valid = true},
+			{.packageKey = "wrong-title", .titleIds = {0x5678}, .modIdentity = "mod-c", .packageDigest = "digest-c", .valid = true},
+			{.packageKey = "invalid", .titleIds = {0x1234}, .modIdentity = "mod-d", .packageDigest = "digest-d", .valid = false},
 		},
 	};
 	const auto preflight = controller.GetCemodLaunchPreflight(0x1234);
@@ -667,10 +749,10 @@ int main()
 	};
 	const auto presentation = controller.CurrentWindowTitlePresentation();
 	assert(presentation && presentation->titleId == 0x0005000012345678 &&
-		presentation->titleName == "Test title" && presentation->version == 17 &&
-		presentation->region == Application::TitleRegion::UnitedStates &&
-		presentation->renderer == Application::PresentationRenderer::Vulkan &&
-		presentation->gpuVendor == Application::PresentationGpuVendor::Amd);
+		   presentation->titleName == "Test title" && presentation->version == 17 &&
+		   presentation->region == Application::TitleRegion::UnitedStates &&
+		   presentation->renderer == Application::PresentationRenderer::Vulkan &&
+		   presentation->gpuVendor == Application::PresentationGpuVendor::Amd);
 	assert(!controller.SoftwareKeyboardActive());
 	assert(!controller.SubmitSoftwareKeyboardKey('x'));
 	backend.softwareKeyboardActive = true;
@@ -678,17 +760,14 @@ int main()
 	assert(controller.SubmitSoftwareKeyboardKey('x'));
 	assert(backend.softwareKeyboardKeys == std::vector<std::uint32_t>{'x'});
 	assert(controller.TouchNfcTagFromFile("missing.nfc") ==
-		Application::NfcTouchResult::Inactive);
+		   Application::NfcTouchResult::Inactive);
 	backend.nfcTouchResult = Application::NfcTouchResult::Success;
 	assert(controller.TouchNfcTagFromFile("tag.nfc") ==
-		Application::NfcTouchResult::Success);
+		   Application::NfcTouchResult::Success);
 	assert(backend.nfcTouchPath == std::filesystem::path{"tag.nfc"});
 	backend.titles.push_back({0x1234, "Test title", "test-title"});
-	backend.managedContent.push_back({.locationUid = 42, .titleId = 0x1234,
-		.path = "test-title", .name = "Test title", .version = 17,
-		.type = Application::ManagedContentType::Base});
-	backend.games.push_back({.titleId = 0x1234, .name = "Test title",
-		.basePath = "test-title", .version = 17});
+	backend.managedContent.push_back({.locationUid = 42, .titleId = 0x1234, .path = "test-title", .name = "Test title", .version = 17, .type = Application::ManagedContentType::Base});
+	backend.games.push_back({.titleId = 0x1234, .name = "Test title", .basePath = "test-title", .version = 17});
 	const auto titles = controller.ListTitles();
 	assert(titles.size() == 1 && titles.front().titleId == 0x1234);
 	assert(controller.ListManagedContent().front().locationUid == 42);
@@ -726,21 +805,19 @@ int main()
 	controller.RefreshTitles();
 	controller.AddTitleFromPath("installed-title");
 	assert(backend.scanPaths.size() == 2 && backend.titleRefreshes == 1 &&
-		backend.addedTitle == "installed-title");
+		   backend.addedTitle == "installed-title");
 	const auto conversionPlan = controller.PlanWuaConversion(0x1234, 17);
 	assert(conversionPlan && conversionPlan->items.front().locationUid == 17);
 	Application::ContentOperationProgress conversionProgress;
-	assert(controller.ConvertToWua(*conversionPlan, "test.wua",
-		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; }));
+	assert(controller.ConvertToWua(*conversionPlan, "test.wua", [&](const auto& progress) { conversionProgress = progress; }, [] { return false; }));
 	assert(conversionProgress.phase == Application::ContentOperationPhase::Finalizing);
-	const auto checksum = controller.ComputeTitleChecksum(17,
-		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; });
+	const auto checksum = controller.ComputeTitleChecksum(17, [&](const auto& progress) { conversionProgress = progress; }, [] { return false; });
 	assert(checksum && checksum.checksum->titleId == 0x1234);
 	assert(conversionProgress.phase == Application::ContentOperationPhase::Hashing);
 	const auto cancelledChecksum = controller.ComputeTitleChecksum(17, {},
-		[] { return true; });
+																   [] { return true; });
 	assert(!cancelledChecksum &&
-		cancelledChecksum.error == Application::ContentOperationError::Cancelled);
+		   cancelledChecksum.error == Application::ContentOperationError::Cancelled);
 	backend.gameProfile = {
 		.settings = {
 			.loadSharedLibraries = false,
@@ -761,25 +838,23 @@ int main()
 	updatedProfile.controllerProfiles[0] = "Controller 1";
 	assert(controller.SaveGameProfile(0x1234, updatedProfile));
 	assert(backend.gameProfileSaves == 1 &&
-		backend.gameProfile.settings.threadQuantum == 80000 &&
-		backend.gameProfile.settings.controllerProfiles[0] == "Controller 1");
+		   backend.gameProfile.settings.threadQuantum == 80000 &&
+		   backend.gameProfile.settings.controllerProfiles[0] == "Controller 1");
 	const auto installPlan = controller.PlanTitleInstall("source-title");
 	assert(installPlan && installPlan.plan->targetPath == "installed-title");
 	Application::TitleInstallProgress installProgress;
-	const auto installed = controller.InstallTitle(*installPlan.plan,
-		Application::TitleInstallDecision::AcceptConflict,
-		[&](const auto& value) { installProgress = value; }, [] { return false; });
+	const auto installed = controller.InstallTitle(*installPlan.plan, Application::TitleInstallDecision::AcceptConflict, [&](const auto& value) { installProgress = value; }, [] { return false; });
 	assert(installed && installed.installedPath == "installed-title");
 	assert(backend.titleInstalls == 1 &&
-		backend.installDecision == Application::TitleInstallDecision::AcceptConflict &&
-		installProgress.bytesCompleted == 10);
+		   backend.installDecision == Application::TitleInstallDecision::AcceptConflict &&
+		   installProgress.bytesCompleted == 10);
 	const auto cancelledInstall = controller.InstallTitle(*installPlan.plan,
-		Application::TitleInstallDecision::Proceed, {}, [] { return true; });
+														  Application::TitleInstallDecision::Proceed, {}, [] { return true; });
 	assert(!cancelledInstall &&
-		cancelledInstall.error == Application::TitleInstallError::Cancelled);
+		   cancelledInstall.error == Application::TitleInstallError::Cancelled);
 	const auto deletePlan = controller.PlanManagedContentDelete(42);
 	assert(deletePlan && deletePlan.plan->locationUid == 42 &&
-		deletePlan.plan->fingerprint == 99);
+		   deletePlan.plan->fingerprint == 99);
 	assert(controller.DeleteManagedContent(*deletePlan.plan));
 	assert(backend.managedContentDeletes == 1);
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
@@ -798,8 +873,8 @@ int main()
 	assert(backend.graphicPackInstalls == 1 && packInstallProgress.completed == 5);
 	const auto accounts = controller.ListAccounts();
 	assert(accounts.size() == 1 &&
-		accounts.front().persistentId == Application::kMinimumPersistentId &&
-		accounts.front().miiName == L"default");
+		   accounts.front().persistentId == Application::kMinimumPersistentId &&
+		   accounts.front().miiName == L"default");
 	assert(controller.GetAccount(Application::kMinimumPersistentId));
 	assert(!controller.GetAccount(0x8fffffff));
 	assert(controller.NextPersistentId() == Application::kMinimumPersistentId + 1);
@@ -807,15 +882,15 @@ int main()
 	assert(controller.ListAccountCountries().front().name == "US");
 	const auto onlineEnvironment = controller.GetOnlineEnvironmentStatus();
 	assert(onlineEnvironment.requiredFilesAvailable && onlineEnvironment.otpPresent &&
-		onlineEnvironment.seepromPresent &&
-		onlineEnvironment.consoleCertificateAvailable);
+		   onlineEnvironment.seepromPresent &&
+		   onlineEnvironment.consoleCertificateAvailable);
 	const auto accountSnapshot = controller.GetAccountManagerSnapshot();
 	assert(accountSnapshot.activePersistentId == Application::kMinimumPersistentId &&
-		accountSnapshot.accounts.size() == 1 &&
-		accountSnapshot.networkSettings.size() == 1);
+		   accountSnapshot.accounts.size() == 1 &&
+		   accountSnapshot.networkSettings.size() == 1);
 	assert(controller.SetActiveAccount(Application::kMinimumPersistentId));
 	assert(controller.SetAccountNetworkService(Application::kMinimumPersistentId,
-		Application::AccountNetworkService::Pretendo));
+											   Application::AccountNetworkService::Pretendo));
 	const auto frontendSettings = controller.GetFrontendSettings();
 	const auto frontendUpdate = controller.ApplyFrontendSettings({
 		.expectedRevision = frontendSettings.revision,
@@ -826,25 +901,24 @@ int main()
 		.saveScreenshots = false,
 		.completeSetup = true,
 	});
-	assert(frontendUpdate && frontendUpdate.snapshot.revision ==
-		frontendSettings.revision + 1 && frontendUpdate.snapshot.setupCompleted &&
-		!frontendUpdate.snapshot.saveScreenshots &&
-		frontendUpdate.snapshot.gamePaths == std::vector<fs::path>{"/games"});
+	assert(frontendUpdate && frontendUpdate.snapshot.revision == frontendSettings.revision + 1 && frontendUpdate.snapshot.setupCompleted &&
+		   !frontendUpdate.snapshot.saveScreenshots &&
+		   frontendUpdate.snapshot.gamePaths == std::vector<fs::path>{"/games"});
 	const auto staleFrontendUpdate = controller.ApplyFrontendSettings({
 		.expectedRevision = frontendSettings.revision,
 	});
 	assert(!staleFrontendUpdate && staleFrontendUpdate.error ==
-		Application::FrontendSettingsError::Conflict);
+									   Application::FrontendSettingsError::Conflict);
 	backend.downloadAccountContext = {.accountName = "test-account", .region = 2};
 	const auto downloadContext = controller.GetDownloadAccountContext(
 		Application::kMinimumPersistentId);
 	assert(downloadContext && downloadContext.accountName == "test-account" &&
-		downloadContext.region == 2);
+		   downloadContext.region == 2);
 	const auto validation = controller.ValidateOnlineAccount(
 		Application::kMinimumPersistentId);
 	assert(validation.validAccount &&
-		validation.otp == Application::AccountFileState::Ok &&
-		validation.seeprom == Application::AccountFileState::Ok);
+		   validation.otp == Application::AccountFileState::Ok &&
+		   validation.seeprom == Application::AccountFileState::Ok);
 	const auto createdAccount = controller.CreateAccount(
 		Application::kMinimumPersistentId + 1, L"second");
 	assert(createdAccount && createdAccount.account->miiName == L"second");
@@ -856,24 +930,22 @@ int main()
 	assert(controller.ListAccounts().size() == 1);
 	assert(controller.ListSavePersistentIds(0x1234) == backend.savePersistentIds);
 	assert(controller.InspectSaveEntry(0x1234, Application::kMinimumPersistentId).path ==
-		"save-directory");
+		   "save-directory");
 	const auto saveInspection = controller.InspectSaveImport("save.zip", 0x1234,
-		Application::kMinimumPersistentId);
+															 Application::kMinimumPersistentId);
 	assert(saveInspection && saveInspection.sourceTitleId == 0x1234);
 	assert(controller.DeleteSave(0x1234, Application::kMinimumPersistentId));
 	assert(controller.TransferSave(0x1234, Application::kMinimumPersistentId,
-		Application::kMinimumPersistentId + 1, true));
+								   Application::kMinimumPersistentId + 1, true));
 	Application::SaveOperationProgress saveProgress;
-	assert(controller.ImportSave("save.zip", 0x1234,
-		Application::kMinimumPersistentId, false,
-		[&](const auto& value) { saveProgress = value; }, [] { return false; }));
+	assert(controller.ImportSave("save.zip", 0x1234, Application::kMinimumPersistentId, false, [&](const auto& value) { saveProgress = value; }, [] { return false; }));
 	assert(saveProgress.bytesCompleted == 4);
 	assert(controller.ExportSave(0x1234, Application::kMinimumPersistentId,
-		"save-export.zip", true, {}, [] { return false; }));
+								 "save-export.zip", true, {}, [] { return false; }));
 	assert(!controller.ImportSave("save.zip", 0x1234,
-		Application::kMinimumPersistentId, false, {}, [] { return true; }));
+								  Application::kMinimumPersistentId, false, {}, [] { return true; }));
 	assert(backend.saveDeletes == 1 && backend.saveTransfers == 1 &&
-		backend.saveImports == 2 && backend.saveExports == 1);
+		   backend.saveImports == 2 && backend.saveExports == 1);
 	backend.diagnosticsSnapshot = {
 		.generation = 9,
 		.available = true,
@@ -881,7 +953,7 @@ int main()
 	};
 	const auto diagnostics = controller.CapturePpcThreads();
 	assert(diagnostics.available && diagnostics.generation == 9 &&
-		diagnostics.threads.front().name == "test-thread");
+		   diagnostics.threads.front().name == "test-thread");
 	const Application::PpcThreadCommandRequest diagnosticCommand{
 		.generation = diagnostics.generation,
 		.threadAddress = diagnostics.threads.front().address,
@@ -907,14 +979,14 @@ int main()
 		throwing.throwOnPrepare = true;
 		Application::EmulationController exceptionController(throwing);
 		assert(exceptionController.Launch({"test.rpx"}).error ==
-			Application::LaunchError::BackendFailure);
+			   Application::LaunchError::BackendFailure);
 		assert(exceptionController.State() == Application::EmulationState::Idle);
 		assert(throwing.aborts == 1);
 		throwing.throwOnPrepare = false;
 		throwing.throwOnStart = true;
 		bool rolledBack{};
 		assert(exceptionController.Launch({"test.rpx"}, {}, [&] { rolledBack = true; }).error ==
-			Application::LaunchError::BackendFailure);
+			   Application::LaunchError::BackendFailure);
 		assert(exceptionController.State() == Application::EmulationState::Idle);
 		assert(throwing.aborts == 2);
 		assert(rolledBack);

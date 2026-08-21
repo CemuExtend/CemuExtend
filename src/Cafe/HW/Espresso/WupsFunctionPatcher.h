@@ -72,7 +72,7 @@ struct WupsPatchModuleEvent
 
 class IWupsPatchPlatform
 {
-public:
+  public:
 	virtual ~IWupsPatchPlatform() = default;
 
 	[[nodiscard]] virtual WupsPatchProcess CurrentProcess() const = 0;
@@ -83,34 +83,34 @@ public:
 	[[nodiscard]] virtual std::optional<std::uint32_t> VirtualForPhysical(
 		std::uint32_t physicalAddress, std::string& error) = 0;
 	[[nodiscard]] virtual bool IsExecutable(std::uint32_t address,
-		std::uint32_t size) const = 0;
+											std::uint32_t size) const = 0;
 	[[nodiscard]] virtual bool IsWritable(std::uint32_t address,
-		std::uint32_t size) const = 0;
+										  std::uint32_t size) const = 0;
 	[[nodiscard]] virtual bool ReadWords(std::uint32_t address,
-		std::span<std::uint32_t> words, std::string& error) = 0;
+										 std::span<std::uint32_t> words, std::string& error) = 0;
 	[[nodiscard]] virtual bool WriteWords(std::uint32_t address,
-		std::span<const std::uint32_t> words, std::string& error) = 0;
+										  std::span<const std::uint32_t> words, std::string& error) = 0;
 	[[nodiscard]] virtual bool AllocateExecutableNear(std::uint32_t target,
-		std::uint32_t size, std::uint32_t alignment,
-		std::uint32_t& address, std::string& error) = 0;
+													  std::uint32_t size, std::uint32_t alignment,
+													  std::uint32_t& address, std::string& error) = 0;
 	virtual void FreeExecutable(std::uint32_t address,
-		std::uint32_t size) = 0;
+								std::uint32_t size) = 0;
 	virtual void InvalidateCode(std::uint32_t address,
-		std::uint32_t size) = 0;
+								std::uint32_t size) = 0;
 };
 
 class PpcFunctionRelocator
 {
-public:
+  public:
 	static constexpr std::size_t kMaximumInputWords = 16;
 
 	// Relocates whole PPC instructions until at least minimumBytes have been
 	// consumed. Relative B/BL and BC/BCL instructions are repaired; far targets
 	// receive local absolute CTR stubs.
 	[[nodiscard]] static bool Relocate(std::span<const std::uint32_t> input,
-		std::uint32_t sourceAddress, std::uint32_t destinationAddress,
-		std::size_t minimumBytes, std::vector<std::uint32_t>& output,
-		std::size_t& consumedBytes, std::string& error);
+									   std::uint32_t sourceAddress, std::uint32_t destinationAddress,
+									   std::size_t minimumBytes, std::vector<std::uint32_t>& output,
+									   std::size_t& consumedBytes, std::string& error);
 };
 
 struct WupsAppliedPatch
@@ -127,25 +127,25 @@ struct WupsAppliedPatch
 
 class WupsFunctionPatchManager
 {
-public:
+  public:
 	explicit WupsFunctionPatchManager(
 		std::shared_ptr<IWupsPatchPlatform> platform);
 	~WupsFunctionPatchManager();
 
 	[[nodiscard]] bool Apply(std::span<const WupsPatchRequest> requests,
-		std::string& error);
+							 std::string& error);
 	// Dynamic FunctionPatcher descriptors share the owner's static .wups.load
 	// transaction. Descriptor indices are stable owner-local identities.
 	[[nodiscard]] bool Add(const WupsPatchRequest& request,
-		std::string& error);
+						   std::string& error);
 	[[nodiscard]] bool Remove(const WupsPatchOwner& owner,
-		std::size_t descriptorIndex, std::string& error);
+							  std::size_t descriptorIndex, std::string& error);
 	[[nodiscard]] bool RemoveOwner(const WupsPatchOwner& owner,
-		std::string& error);
+								   std::string& error);
 	[[nodiscard]] bool OnModuleLoaded(const WupsPatchModuleEvent& event,
-		std::string& error);
+									  std::string& error);
 	[[nodiscard]] bool OnModuleUnloading(const WupsPatchModuleEvent& event,
-		std::string& error);
+										 std::string& error);
 	[[nodiscard]] bool RemoveAll(std::string& error);
 
 	[[nodiscard]] std::vector<WupsAppliedPatch> Applied() const;
@@ -154,7 +154,7 @@ public:
 	[[nodiscard]] static bool ProcessMatches(
 		WupsPatchProcess descriptor, WupsPatchProcess current);
 
-private:
+  private:
 	struct Impl;
 	std::unique_ptr<Impl> m_impl;
 };

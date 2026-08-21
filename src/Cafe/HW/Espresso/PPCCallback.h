@@ -33,7 +33,7 @@ inline uint32 PPCCoreCallback(MPTR function, const PPCCoreCallbackData_t& data)
 	return PPCCore_executeCallbackInternal(function)->gpr[3];
 }
 
-template <typename T, typename... TArgs>
+template<typename T, typename... TArgs>
 uint32 PPCCoreCallback(MPTR function, PPCCoreCallbackData_t& data, T currentArg, TArgs... args)
 {
 	// TODO float arguments on stack
@@ -52,7 +52,7 @@ uint32 PPCCoreCallback(MPTR function, PPCCoreCallbackData_t& data, T currentArg,
 	{
 		_PPCCoreCallback_writeGPRArg(data, hCPU, MEMPTR(&currentArg).GetMPTR());
 	}
-	else if constexpr(std::is_enum_v<T>)
+	else if constexpr (std::is_enum_v<T>)
 	{
 		using TEnum = typename std::underlying_type<T>::type;
 		return PPCCoreCallback<TEnum>(function, data, (TEnum)currentArg, std::forward<TArgs>(args)...);
@@ -65,7 +65,7 @@ uint32 PPCCoreCallback(MPTR function, PPCCoreCallbackData_t& data, T currentArg,
 	else if constexpr (std::is_integral_v<T> && sizeof(T) == sizeof(uint64))
 	{
 		hCPU->gpr[3 + data.gprCount] = (uint32)(currentArg >> 32); // high
-		hCPU->gpr[3 + data.gprCount + 1] = (uint32)currentArg; // low
+		hCPU->gpr[3 + data.gprCount + 1] = (uint32)currentArg;	   // low
 
 		data.gprCount += 2;
 	}
@@ -73,21 +73,21 @@ uint32 PPCCoreCallback(MPTR function, PPCCoreCallbackData_t& data, T currentArg,
 	{
 		_PPCCoreCallback_writeGPRArg(data, hCPU, (uint32)currentArg);
 	}
-	
+
 	return PPCCoreCallback(function, data, args...);
 }
 
-template <typename... TArgs>
+template<typename... TArgs>
 uint32 PPCCoreCallback(MPTR function, TArgs... args)
 {
 	PPCCoreCallbackData_t data{};
 	return PPCCoreCallback(function, data, std::forward<TArgs>(args)...);
 }
 
-template <typename... TArgs>
+template<typename... TArgs>
 uint32 PPCCoreCallback(void* functionPtr, TArgs... args)
 {
-	MEMPTR<void> _tmp{ functionPtr };
+	MEMPTR<void> _tmp{functionPtr};
 	PPCCoreCallbackData_t data{};
 	return PPCCoreCallback(_tmp.GetMPTR(), data, std::forward<TArgs>(args)...);
 }

@@ -14,13 +14,13 @@
 // backings a plugin obtains during its initialisation hooks.
 namespace cafe::wups
 {
-// Installed by the production CemuWupsPlatform for the lifetime of a title; pass
-// nullptr on teardown.
-void SetActiveHeapTracker(std::shared_ptr<WupsOwnerScopedHeapTracker> tracker);
+	// Installed by the production CemuWupsPlatform for the lifetime of a title; pass
+	// nullptr on teardown.
+	void SetActiveHeapTracker(std::shared_ptr<WupsOwnerScopedHeapTracker> tracker);
 
-void NotifyHeapAllocation(WupsHeapAllocatorKind kind, std::uint32_t heapHandle,
-	std::uint32_t address, std::uint32_t requestedSize,
-	std::uint32_t trackedSize, std::uint32_t alignment);
-void NotifyHeapFree(std::uint32_t address);
-void NotifyHeapResize(std::uint32_t address, std::uint32_t newSize);
+	void NotifyHeapAllocation(WupsHeapAllocatorKind kind, std::uint32_t heapHandle,
+							  std::uint32_t address, std::uint32_t requestedSize,
+							  std::uint32_t trackedSize, std::uint32_t alignment);
+	void NotifyHeapFree(std::uint32_t address);
+	void NotifyHeapResize(std::uint32_t address, std::uint32_t newSize);
 } // namespace cafe::wups

@@ -9,7 +9,7 @@
 
 class Stream
 {
-public:
+  public:
 	enum Error
 	{
 		ERROR_OK,
@@ -17,7 +17,7 @@ public:
 		ERROR_WRITE_FAILED,
 	};
 
-public:
+  public:
 	Stream(std::endian endianness = std::endian::native);
 	virtual ~Stream();
 
@@ -91,7 +91,7 @@ public:
 	Stream& operator<<(float val);
 	Stream& operator<<(double val);
 
-protected:
+  protected:
 	void SetError(Error error);
 
 	bool NeedsSwap();
@@ -102,7 +102,7 @@ protected:
 
 class VectorStream : public Stream
 {
-public:
+  public:
 	VectorStream(std::vector<std::byte>& vector, std::endian endianness = std::endian::native);
 	virtual ~VectorStream();
 
@@ -114,14 +114,14 @@ public:
 
 	virtual std::size_t GetRemaining() const override;
 
-private:
+  private:
 	std::reference_wrapper<std::vector<std::byte>> mVector;
 	std::size_t mPosition;
 };
 
 class SpanStream : public Stream
 {
-public:
+  public:
 	SpanStream(std::span<const std::byte> span, std::endian endianness = std::endian::native);
 	virtual ~SpanStream();
 
@@ -133,7 +133,7 @@ public:
 
 	virtual std::size_t GetRemaining() const override;
 
-private:
+  private:
 	std::span<const std::byte> mSpan;
 	std::size_t mPosition;
 };

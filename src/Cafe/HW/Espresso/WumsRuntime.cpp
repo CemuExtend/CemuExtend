@@ -16,8 +16,7 @@ namespace
 		std::array<std::uint16_t, 3> parts{};
 		for (std::size_t index = 0; index < parts.size(); ++index)
 		{
-			const auto separator = index + 1 == parts.size() ?
-				value.size() : value.find('.');
+			const auto separator = index + 1 == parts.size() ? value.size() : value.find('.');
 			if (separator == std::string_view::npos || separator == 0)
 				return std::nullopt;
 			unsigned part{};
@@ -29,7 +28,7 @@ namespace
 				return std::nullopt;
 			parts[index] = static_cast<std::uint16_t>(part);
 			value.remove_prefix(separator +
-				(index + 1 == parts.size() ? 0 : 1));
+								(index + 1 == parts.size() ? 0 : 1));
 		}
 		if (!value.empty())
 			return std::nullopt;
@@ -37,7 +36,7 @@ namespace
 	}
 
 	bool VersionMatches(const WumsDependency& dependency,
-		std::string_view providerVersion, std::string& error)
+						std::string_view providerVersion, std::string& error)
 	{
 		if (dependency.match == WumsDependencyMatch::Any)
 			return true;
@@ -52,9 +51,9 @@ namespace
 			return false;
 		}
 		if ((dependency.match == WumsDependencyMatch::Exact &&
-				*parsed != *dependency.version) ||
+			 *parsed != *dependency.version) ||
 			(dependency.match == WumsDependencyMatch::AtLeast &&
-				*parsed < *dependency.version))
+			 *parsed < *dependency.version))
 		{
 			error = fmt::format(
 				"dependency '{}' version mismatch: provider is {}, constraint is {}{}",
@@ -70,14 +69,22 @@ namespace
 	{
 		switch (type)
 		{
-		case WumsHookType::InitWutMalloc: return WumsHookType::FiniWutMalloc;
-		case WumsHookType::InitWutNewlib: return WumsHookType::FiniWutNewlib;
-		case WumsHookType::InitWutStdcpp: return WumsHookType::FiniWutStdcpp;
-		case WumsHookType::InitWutDevoptab: return WumsHookType::FiniWutDevoptab;
-		case WumsHookType::InitWutSockets: return WumsHookType::FiniWutSockets;
-		case WumsHookType::InitWrapper: return WumsHookType::FiniWrapper;
-		case WumsHookType::Init: return WumsHookType::Deinit;
-		default: return std::nullopt;
+		case WumsHookType::InitWutMalloc:
+			return WumsHookType::FiniWutMalloc;
+		case WumsHookType::InitWutNewlib:
+			return WumsHookType::FiniWutNewlib;
+		case WumsHookType::InitWutStdcpp:
+			return WumsHookType::FiniWutStdcpp;
+		case WumsHookType::InitWutDevoptab:
+			return WumsHookType::FiniWutDevoptab;
+		case WumsHookType::InitWutSockets:
+			return WumsHookType::FiniWutSockets;
+		case WumsHookType::InitWrapper:
+			return WumsHookType::FiniWrapper;
+		case WumsHookType::Init:
+			return WumsHookType::Deinit;
+		default:
+			return std::nullopt;
 		}
 	}
 
@@ -92,7 +99,7 @@ namespace
 		WumsHookType::InitWrapper,
 		WumsHookType::Init,
 	};
-}
+} // namespace
 
 bool WumsDependencyGraph::Build(
 	std::span<const WumsInspection> modules,
@@ -123,7 +130,7 @@ bool WumsDependencyGraph::Build(
 				const auto& provider = modules[internal->second].metadata;
 				std::string versionError;
 				if (!VersionMatches(
-					dependency, provider.version, versionError))
+						dependency, provider.version, versionError))
 				{
 					error = fmt::format(
 						"module '{}' {}", modules[index].metadata.moduleName,
@@ -139,7 +146,7 @@ bool WumsDependencyGraph::Build(
 			{
 				std::string versionError;
 				if (!VersionMatches(
-					dependency, external->version, versionError))
+						dependency, external->version, versionError))
 				{
 					error = fmt::format(
 						"module '{}' {}", modules[index].metadata.moduleName,
@@ -193,8 +200,7 @@ struct WumsModuleRuntime::Impl
 	struct ImportContext
 	{
 		ImportContext(std::shared_ptr<ModuleExportRegistry> registry_,
-			ModuleProviderOwner owner_) :
-			registry(std::move(registry_)), owner(owner_)
+					  ModuleProviderOwner owner_) : registry(std::move(registry_)), owner(owner_)
 		{
 		}
 
@@ -253,7 +259,7 @@ struct WumsModuleRuntime::Impl
 	struct OperationGuard
 	{
 		explicit OperationGuard(Impl& runtime_) : runtime(runtime_),
-			acquired(!runtime.operation.test_and_set()) {}
+												  acquired(!runtime.operation.test_and_set()) {}
 		~OperationGuard()
 		{
 			if (acquired)
@@ -270,15 +276,15 @@ struct WumsModuleRuntime::Impl
 	}
 
 	bool Invoke(const std::shared_ptr<Module>& module,
-		WumsHookType type, bool teardown, std::string& error)
+				WumsHookType type, bool teardown, std::string& error)
 	{
 		const auto found = module->hooks.find(type);
 		if (found == module->hooks.end())
 			return true;
 		if (!teardown &&
 			(module->state == WumsModuleState::Unloading ||
-				module->state == WumsModuleState::Unloaded ||
-				module->state == WumsModuleState::Failed))
+			 module->state == WumsModuleState::Unloaded ||
+			 module->state == WumsModuleState::Failed))
 		{
 			error = fmt::format(
 				"module '{}' rejected hook {} in stale state {}",
@@ -289,14 +295,14 @@ struct WumsModuleRuntime::Impl
 		}
 		WumsHookInvocation invocation;
 		if (!services->PrepareHook(
-			module->inspection, module->owner, type, invocation, error))
+				module->inspection, module->owner, type, invocation, error))
 			return false;
 		if (invocation.skip)
 			return true;
 		std::uint32_t result{};
 		if (!loader->Invoke(
-			module->module, module->lifetime, found->second,
-			invocation.argumentWords, result, error))
+				module->module, module->lifetime, found->second,
+				invocation.argumentWords, result, error))
 			return false;
 		if (invocation.requireZeroResult && result != 0)
 		{
@@ -310,7 +316,7 @@ struct WumsModuleRuntime::Impl
 	}
 
 	bool Initialize(const std::shared_ptr<Module>& module,
-		std::string& error)
+					std::string& error)
 	{
 		for (const auto type : kInitializerOrder)
 		{
@@ -327,10 +333,10 @@ struct WumsModuleRuntime::Impl
 	}
 
 	void Teardown(const std::shared_ptr<Module>& module,
-		std::string& errors)
+				  std::string& errors)
 	{
 		for (const auto initializer :
-			std::ranges::reverse_view(module->initialized))
+			 std::ranges::reverse_view(module->initialized))
 			if (const auto fini = FiniFor(initializer))
 			{
 				if (*fini == WumsHookType::FiniWrapper &&
@@ -343,13 +349,14 @@ struct WumsModuleRuntime::Impl
 		module->initialized.clear();
 		std::string clearError;
 		if (!Invoke(module, WumsHookType::ClearAllocatedRplMemory,
-			true, clearError) && !clearError.empty())
+					true, clearError) &&
+			!clearError.empty())
 			errors.append(errors.empty() ? "" : "; ").append(clearError);
 		services->ReleaseModule(module->inspection, module->owner);
 	}
 
 	bool Rollback(std::vector<std::shared_ptr<Module>>& loaded,
-		std::string& error)
+				  std::string& error)
 	{
 		bool success = true;
 		for (const auto& module : std::ranges::reverse_view(loaded))
@@ -362,7 +369,7 @@ struct WumsModuleRuntime::Impl
 			{
 				std::string registryError;
 				if (!registry->Unpublish(
-					module->provider, module->owner, registryError))
+						module->provider, module->owner, registryError))
 					cleanupError.append(cleanupError.empty() ? "" : "; ")
 						.append(registryError);
 				else
@@ -372,7 +379,7 @@ struct WumsModuleRuntime::Impl
 			{
 				std::string unloadError;
 				if (!loader->Unload(
-					module->module, module->lifetime, unloadError))
+						module->module, module->lifetime, unloadError))
 					cleanupError.append(cleanupError.empty() ? "" : "; ")
 						.append(unloadError);
 				else
@@ -384,9 +391,7 @@ struct WumsModuleRuntime::Impl
 			if (!cleanupError.empty())
 			{
 				success = false;
-				error.append(error.empty() ? "" : "; ").append(
-					module->inspection.metadata.moduleName)
-					.append(": ").append(cleanupError);
+				error.append(error.empty() ? "" : "; ").append(module->inspection.metadata.moduleName).append(": ").append(cleanupError);
 				module->state = WumsModuleState::Failed;
 			}
 			else
@@ -396,7 +401,7 @@ struct WumsModuleRuntime::Impl
 	}
 
 	bool LoadDefinitions(std::vector<WumsModuleDefinition> newDefinitions,
-		std::string& error)
+						 std::string& error)
 	{
 		std::vector<WumsInspection> inspections;
 		inspections.reserve(newDefinitions.size());
@@ -421,7 +426,7 @@ struct WumsModuleRuntime::Impl
 		}
 		std::vector<std::size_t> order;
 		if (!WumsDependencyGraph::Build(
-			inspections, *registry, order, error))
+				inspections, *registry, order, error))
 			return false;
 
 		std::vector<std::shared_ptr<Module>> loaded;
@@ -439,24 +444,24 @@ struct WumsModuleRuntime::Impl
 			const std::weak_ptr<ImportContext> weakImports = module->imports;
 			WumsImportResolver resolver =
 				[weakImports](std::string_view importModule,
-					std::string_view symbol, WupsSymbolKind kind,
-					std::string& resolveError)
-					-> std::optional<std::uint32_t> {
-					const auto imports = weakImports.lock();
-					if (!imports)
-					{
-						resolveError =
-							"WUMS import resolver owner has expired";
-						return std::nullopt;
-					}
-					return imports->Resolve(
-						importModule, symbol, kind, resolveError);
-				};
+							  std::string_view symbol, WupsSymbolKind kind,
+							  std::string& resolveError)
+				-> std::optional<std::uint32_t> {
+				const auto imports = weakImports.lock();
+				if (!imports)
+				{
+					resolveError =
+						"WUMS import resolver owner has expired";
+					return std::nullopt;
+				}
+				return imports->Resolve(
+					importModule, symbol, kind, resolveError);
+			};
 			if (!loader->Map(
-				module->definition.image,
-				module->inspection.metadata.moduleName + ".wms",
-				module->owner, std::move(resolver),
-				module->module, module->lifetime, error))
+					module->definition.image,
+					module->inspection.metadata.moduleName + ".wms",
+					module->owner, std::move(resolver),
+					module->module, module->lifetime, error))
 			{
 				module->state = WumsModuleState::Failed;
 				loaded.push_back(module);
@@ -474,10 +479,10 @@ struct WumsModuleRuntime::Impl
 			{
 				std::uint32_t mapped{};
 				if (!loader->ResolveAddress(
-					module->module, module->lifetime,
-					symbol.address,
-					symbol.kind == WupsSymbolKind::Function ? 4 : 1,
-					symbol.kind, mapped, error))
+						module->module, module->lifetime,
+						symbol.address,
+						symbol.kind == WupsSymbolKind::Function ? 4 : 1,
+						symbol.kind, mapped, error))
 				{
 					loaded.push_back(module);
 					std::string rollbackError;
@@ -494,7 +499,7 @@ struct WumsModuleRuntime::Impl
 				module->inspection.metadata.version,
 				module->owner};
 			if (!registry->Publish(
-				provider, exports, module->provider, error))
+					provider, exports, module->provider, error))
 			{
 				loaded.push_back(module);
 				std::string rollbackError;
@@ -504,7 +509,7 @@ struct WumsModuleRuntime::Impl
 				return false;
 			}
 			if (!loader->Link(
-				module->module, module->lifetime, error))
+					module->module, module->lifetime, error))
 			{
 				loaded.push_back(module);
 				std::string rollbackError;
@@ -529,7 +534,7 @@ struct WumsModuleRuntime::Impl
 			}
 		for (const auto& module : loaded)
 			if (!Invoke(module, WumsHookType::GetCustomRplAllocator,
-				false, error))
+						false, error))
 			{
 				std::string rollbackError;
 				Rollback(loaded, rollbackError);
@@ -539,7 +544,7 @@ struct WumsModuleRuntime::Impl
 			}
 		for (const auto& module : loaded)
 			if (!Invoke(module, WumsHookType::RelocationsDone,
-				false, error))
+						false, error))
 			{
 				std::string rollbackError;
 				Rollback(loaded, rollbackError);
@@ -573,14 +578,11 @@ struct WumsModuleRuntime::Impl
 WumsModuleRuntime::WumsModuleRuntime(
 	std::shared_ptr<ModuleExportRegistry> registry,
 	std::shared_ptr<IWumsModuleLoader> loader,
-	std::shared_ptr<IWumsRuntimeServices> services) :
-	m_impl(std::make_unique<Impl>())
+	std::shared_ptr<IWumsRuntimeServices> services) : m_impl(std::make_unique<Impl>())
 {
-	m_impl->registry = registry ?
-		std::move(registry) : std::make_shared<ModuleExportRegistry>();
+	m_impl->registry = registry ? std::move(registry) : std::make_shared<ModuleExportRegistry>();
 	m_impl->loader = loader ? std::move(loader) : CreateRplWumsModuleLoader();
-	m_impl->services = services ?
-		std::move(services) : CreateRplWumsRuntimeServices();
+	m_impl->services = services ? std::move(services) : CreateRplWumsRuntimeServices();
 }
 
 WumsModuleRuntime::~WumsModuleRuntime()
@@ -588,7 +590,7 @@ WumsModuleRuntime::~WumsModuleRuntime()
 	std::string error;
 	if (!Unload(error))
 		cemuLog_log(LogType::Force,
-			"WUMS: runtime destruction could not unload every module: {}", error);
+					"WUMS: runtime destruction could not unload every module: {}", error);
 }
 
 bool WumsModuleRuntime::Load(
@@ -673,7 +675,7 @@ bool WumsModuleRuntime::AddOrReplace(
 	const auto found = std::ranges::find_if(
 		definitions, [&](const auto& existing) {
 			return existing.inspection &&
-				existing.inspection->metadata.moduleName == name;
+				   existing.inspection->metadata.moduleName == name;
 		});
 	if (found == definitions.end())
 		definitions.push_back(std::move(module));
@@ -700,16 +702,18 @@ bool WumsModuleRuntime::Unload(std::string& error)
 		{
 			std::string hookError;
 			if (!m_impl->Invoke(
-				module, WumsHookType::ApplicationEnds,
-				true, hookError) && !hookError.empty())
+					module, WumsHookType::ApplicationEnds,
+					true, hookError) &&
+				!hookError.empty())
 				error.append(error.empty() ? "" : "; ").append(hookError);
 		}
 		for (const auto& module : modules)
 		{
 			std::string hookError;
 			if (!m_impl->Invoke(
-				module, WumsHookType::AllApplicationEndsDone,
-				true, hookError) && !hookError.empty())
+					module, WumsHookType::AllApplicationEndsDone,
+					true, hookError) &&
+				!hookError.empty())
 				error.append(error.empty() ? "" : "; ").append(hookError);
 		}
 		m_impl->applicationStarted = false;
@@ -740,13 +744,13 @@ bool WumsModuleRuntime::OnApplicationStarts(std::string& error)
 	std::vector<std::shared_ptr<Impl::Module>> started;
 	for (const auto& module : modules)
 		if (!m_impl->Invoke(
-			module, WumsHookType::ApplicationStarts, false, error))
+				module, WumsHookType::ApplicationStarts, false, error))
 		{
 			for (const auto& rollback : std::ranges::reverse_view(started))
 			{
 				std::string ignored;
 				(void)m_impl->Invoke(rollback,
-					WumsHookType::ApplicationEnds, true, ignored);
+									 WumsHookType::ApplicationEnds, true, ignored);
 			}
 			return false;
 		}
@@ -754,13 +758,13 @@ bool WumsModuleRuntime::OnApplicationStarts(std::string& error)
 			started.push_back(module);
 	for (const auto& module : modules)
 		if (!m_impl->Invoke(
-			module, WumsHookType::AllApplicationStartsDone, false, error))
+				module, WumsHookType::AllApplicationStartsDone, false, error))
 		{
 			for (const auto& rollback : std::ranges::reverse_view(started))
 			{
 				std::string ignored;
 				(void)m_impl->Invoke(rollback,
-					WumsHookType::ApplicationEnds, true, ignored);
+									 WumsHookType::ApplicationEnds, true, ignored);
 			}
 			return false;
 		}
@@ -840,6 +844,5 @@ std::optional<WumsModuleState> WumsModuleRuntime::State(
 		m_impl->modules, [&](const auto& module) {
 			return module->inspection.metadata.moduleName == moduleName;
 		});
-	return found == m_impl->modules.end() ?
-		std::nullopt : std::optional{(*found)->state.load()};
+	return found == m_impl->modules.end() ? std::nullopt : std::optional{(*found)->state.load()};
 }

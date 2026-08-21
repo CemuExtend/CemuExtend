@@ -22,7 +22,7 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 		cemu_assert(textureFormat == VK_FORMAT_R8G8B8A8_UNORM);
 		return baseTexture->width * baseTexture->height * 4;
 	}
-	else if (textureView->format == Latte::E_GX2SURFFMT::R8_UNORM )
+	else if (textureView->format == Latte::E_GX2SURFFMT::R8_UNORM)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R8_UNORM);
 		return baseTexture->width * baseTexture->height * 1;
@@ -43,7 +43,7 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 		if (baseTexture->isDepth)
 			return baseTexture->width * baseTexture->height * 4;
 		else
-			return baseTexture->width * baseTexture->height * 4;		
+			return baseTexture->width * baseTexture->height * 4;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_UNORM)
 	{
@@ -79,11 +79,12 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 		// todo - if driver does not support VK_FORMAT_D24_UNORM_S8_UINT this is represented as VK_FORMAT_D32_SFLOAT_S8_UINT which is 8 bytes
 		return baseTexture->width * baseTexture->height * 4;
 	}
-	else if (textureView->format == Latte::E_GX2SURFFMT::R5_G6_B5_UNORM )
+	else if (textureView->format == Latte::E_GX2SURFFMT::R5_G6_B5_UNORM)
 	{
-		if(textureFormat == VK_FORMAT_R5G6B5_UNORM_PACK16){
+		if (textureFormat == VK_FORMAT_R5G6B5_UNORM_PACK16)
+		{
 			return baseTexture->width * baseTexture->height * 2;
-		}	
+		}
 		return 0;
 	}
 	else
@@ -93,7 +94,6 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 		return 0;
 	}
 }
-
 
 void LatteTextureReadbackInfoVk::StartTransfer()
 {
@@ -116,8 +116,8 @@ void LatteTextureReadbackInfoVk::StartTransfer()
 	region.imageSubresource.layerCount = 1;
 	region.imageSubresource.mipLevel = 0;
 
-	region.imageOffset = {0,0,0};
-	region.imageExtent = {(uint32)baseTexture->width,(uint32)baseTexture->height,1};
+	region.imageOffset = {0, 0, 0};
+	region.imageExtent = {(uint32)baseTexture->width, (uint32)baseTexture->height, 1};
 
 	const auto renderer = VulkanRenderer::GetInstance();
 	renderer->draw_endRenderPass();
@@ -131,7 +131,7 @@ void LatteTextureReadbackInfoVk::StartTransfer()
 	renderer->barrier_sequentializeTransfer();
 
 	renderer->barrier_image<VulkanRenderer::TRANSFER_READ, VulkanRenderer::ANY_TRANSFER | VulkanRenderer::IMAGE_WRITE>(baseTexture, region.imageSubresource, baseTexture->GetDefaultLayout()); // make sure transfer is finished before image is modified
-	renderer->barrier_bufferRange<VulkanRenderer::TRANSFER_WRITE, VulkanRenderer::HOST_READ>(m_buffer, m_buffer_offset, m_image_size); // make sure transfer is finished before result is read
+	renderer->barrier_bufferRange<VulkanRenderer::TRANSFER_WRITE, VulkanRenderer::HOST_READ>(m_buffer, m_buffer_offset, m_image_size);														   // make sure transfer is finished before result is read
 
 	m_associatedCommandBufferId = renderer->GetCurrentCommandBufferId();
 	m_textureView = nullptr;
@@ -152,4 +152,3 @@ void LatteTextureReadbackInfoVk::ForceFinish()
 	const auto renderer = VulkanRenderer::GetInstance();
 	renderer->WaitCommandBufferFinished(m_associatedCommandBufferId);
 }
-

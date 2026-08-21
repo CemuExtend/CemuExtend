@@ -38,7 +38,7 @@ namespace GX2
 	{
 		LatteAddrLib::AddrSurfaceInfo_OUT surfOut;
 		GX2::GX2CalculateSurfaceInfo(surface, level, &surfOut);
-		return _GX2CalculateSliceSize(surface, &surfOut);		
+		return _GX2CalculateSliceSize(surface, &surfOut);
 	}
 
 	uint32 GX2GetSurfaceSwizzleOffset(GX2Surface* surface, uint32 level)
@@ -117,7 +117,7 @@ namespace GX2
 		// this workaround catches an issue where the FFL (Mii) library embedded into games tries to use an uninitialized texture
 		// and subsequently crashes. It only happens when FFL files are not present in mlc.
 		// seen in Sonic Lost World and in Super Mario 3D World
-		if ((uint32)surface->dim.value() >= 50 || surface->aa.value() >= 0x100 || (uint32)surface->width.value() >= 0x01000000 || 
+		if ((uint32)surface->dim.value() >= 50 || surface->aa.value() >= 0x100 || (uint32)surface->width.value() >= 0x01000000 ||
 			(uint32)surface->height.value() >= 0x01000000 || (uint32)surface->depth.value() >= 0x01000000 || (uint32)surface->format.value() >= 0x10000)
 		{
 			cemuLog_log(LogType::Force, "GX2CalcSurfaceSizeAndAlignment(): Uninitialized surface encountered\n");
@@ -140,7 +140,7 @@ namespace GX2
 	void GX2CalcSurfaceSizeAndAlignment(GX2Surface* surface)
 	{
 		_GX2CalcSurfaceSizeAndAlignmentWorkaround(surface);
-		LatteAddrLib::AddrSurfaceInfo_OUT surfOut = { 0 };
+		LatteAddrLib::AddrSurfaceInfo_OUT surfOut = {0};
 		uint32 firstMipOffset = 0;
 		bool changeTilemode = false;
 		Latte::E_GX2TILEMODE lastTilemode = surface->tileMode;
@@ -220,8 +220,7 @@ namespace GX2
 							surface->swizzle = surface->swizzle & 0xFF00FFFF;
 						lastTilemode = surface->tileMode;
 					}
-					if (surface->width < (surfOut.pitchAlign << fix32Mode)
-						&& surface->height < (surfOut.heightAlign << fix32Mode))
+					if (surface->width < (surfOut.pitchAlign << fix32Mode) && surface->height < (surfOut.heightAlign << fix32Mode))
 					{
 						if (surface->tileMode == Latte::E_GX2TILEMODE::TM_2D_TILED_THICK)
 							surface->tileMode = Latte::E_GX2TILEMODE::TM_1D_TILED_THICK;
@@ -268,7 +267,7 @@ namespace GX2
 			0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
 			0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 		uint32 fmtHW = (uint32)fmt & 0x3F;
 		return table[fmtHW];
 	}
@@ -301,4 +300,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2CheckSurfaceUseVsFormat, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetSurfaceSwizzle, LogType::GX2);
 	}
-};
+}; // namespace GX2

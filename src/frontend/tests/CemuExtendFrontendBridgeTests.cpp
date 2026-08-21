@@ -9,43 +9,43 @@ int main()
 {
 	static_assert(static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::Default) == 0);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerMode::VisibleAbsolute) == 1);
+					  Frontend::CemuExtendPointerMode::VisibleAbsolute) == 1);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerMode::HiddenAbsolute) == 2);
+					  Frontend::CemuExtendPointerMode::HiddenAbsolute) == 2);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerMode::CapturedRelative) == 3);
+					  Frontend::CemuExtendPointerMode::CapturedRelative) == 3);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::Arrow) == 0);
+					  Frontend::CemuExtendPointerCursor::Arrow) == 0);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::TextInput) == 1);
+					  Frontend::CemuExtendPointerCursor::TextInput) == 1);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::ResizeAll) == 2);
+					  Frontend::CemuExtendPointerCursor::ResizeAll) == 2);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::ResizeNS) == 3);
+					  Frontend::CemuExtendPointerCursor::ResizeNS) == 3);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::ResizeEW) == 4);
+					  Frontend::CemuExtendPointerCursor::ResizeEW) == 4);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::ResizeNESW) == 5);
+					  Frontend::CemuExtendPointerCursor::ResizeNESW) == 5);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::ResizeNWSE) == 6);
+					  Frontend::CemuExtendPointerCursor::ResizeNWSE) == 6);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::Hand) == 7);
+					  Frontend::CemuExtendPointerCursor::Hand) == 7);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerCursor::NotAllowed) == 8);
+					  Frontend::CemuExtendPointerCursor::NotAllowed) == 8);
 	static_assert(static_cast<std::uint32_t>(
-		Frontend::CemuExtendMouseButton::Left) == 1U << 0U);
+					  Frontend::CemuExtendMouseButton::Left) == 1U << 0U);
 	static_assert(static_cast<std::uint32_t>(
-		Frontend::CemuExtendMouseButton::Right) == 1U << 1U);
+					  Frontend::CemuExtendMouseButton::Right) == 1U << 1U);
 	static_assert(static_cast<std::uint32_t>(
-		Frontend::CemuExtendMouseButton::Middle) == 1U << 2U);
+					  Frontend::CemuExtendMouseButton::Middle) == 1U << 2U);
 	static_assert(static_cast<std::uint32_t>(
-		Frontend::CemuExtendMouseButton::X1) == 1U << 3U);
+					  Frontend::CemuExtendMouseButton::X1) == 1U << 3U);
 	static_assert(static_cast<std::uint32_t>(
-		Frontend::CemuExtendMouseButton::X2) == 1U << 4U);
+					  Frontend::CemuExtendMouseButton::X2) == 1U << 4U);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendMouseEventFlag::None) == 0);
+					  Frontend::CemuExtendMouseEventFlag::None) == 0);
 	static_assert(static_cast<std::uint8_t>(
-		Frontend::CemuExtendMouseEventFlag::RawRelative) == 1U << 0U);
+					  Frontend::CemuExtendMouseEventFlag::RawRelative) == 1U << 0U);
 
 	Frontend::CemuExtendFrontendBridge bridge;
 	const auto visible = bridge.ApplyPointerPolicy(1, 7, 1U << 2U, true, true);
@@ -54,7 +54,7 @@ int main()
 	assert(inactive.ownsPointer && !inactive.confine);
 	const auto noCanvas = bridge.ApplyPointerPolicy(3, 0, 0, true, false);
 	assert(!noCanvas.ownsPointer && noCanvas.showCursor &&
-		!noCanvas.enteringCapture && !noCanvas.requestRawMouse);
+		   !noCanvas.enteringCapture && !noCanvas.requestRawMouse);
 	const auto captured = bridge.ApplyPointerPolicy(3, 0, 0, true, true);
 	assert(captured.enteringCapture && captured.requestRawMouse && !captured.showCursor);
 	// The synthetic event that caused capture is suppressed.

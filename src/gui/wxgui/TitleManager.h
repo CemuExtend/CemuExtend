@@ -30,7 +30,10 @@ namespace Application
 {
 	class EmulationController;
 }
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 enum class TitleManagerPage
 {
@@ -42,23 +45,23 @@ enum class DLMGR_STATUS_CODE;
 
 class TitleManager : public wxFrame
 {
-public:
+  public:
 	TitleManager(wxWindow* parent, Application::EmulationController& emulationController,
-		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
-		std::shared_ptr<Host::IPathProvider> pathProvider,
-		std::function<void(fs::path)> requestLaunch,
-		std::function<void()> requestGameListRefresh,
-		TitleManagerPage default_page = TitleManagerPage::TitleManager);
+				 std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+				 std::shared_ptr<Host::IPathProvider> pathProvider,
+				 std::function<void(fs::path)> requestLaunch,
+				 std::function<void()> requestGameListRefresh,
+				 TitleManagerPage default_page = TitleManagerPage::TitleManager);
 	~TitleManager();
 
 	void SetFocusAndTab(TitleManagerPage page);
 
 	void SetDownloadStatusText(const wxString& text);
-	
-private:
+
+  private:
 	wxPanel* CreateTitleManagerPage();
 	wxPanel* CreateDownloadManagerPage();
-	
+
 	// title manager
 	void OnTitleFound(wxCommandEvent& event);
 	void OnTitleSearchComplete(wxCommandEvent& event);
@@ -90,7 +93,7 @@ private:
 	wxChoice* m_save_account_list;
 	wxButton* m_save_import;
 
-	bool m_isScanning{ true }; // set when CafeTitleList is scanning
+	bool m_isScanning{true}; // set when CafeTitleList is scanning
 
 	std::atomic_bool m_running = true;
 

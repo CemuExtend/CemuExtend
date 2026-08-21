@@ -9,12 +9,12 @@ namespace WebFrontend
 		struct NativeSurfaceLease
 		{
 			NativeSurfaceLease(std::shared_ptr<const WebHostState> owner,
-				std::shared_mutex& mutex)
+							   std::shared_mutex& mutex)
 				: owner(std::move(owner)), lock(mutex) {}
 			std::shared_ptr<const WebHostState> owner;
 			std::shared_lock<std::shared_mutex> lock;
 		};
-	}
+	} // namespace
 
 	void WebHostState::UpdateMetrics(Host::WindowMetricsSnapshot metrics)
 	{
@@ -76,7 +76,7 @@ namespace WebFrontend
 	}
 
 	Host::NativeSurfacePublication WebHostState::PublishCanvas(bool mainWindow,
-		Host::NativeWindowHandle handle)
+															   Host::NativeWindowHandle handle)
 	{
 		std::unique_lock lock(m_mutex);
 		auto& surface = mainWindow ? m_mainSurface : m_padSurface;
@@ -86,7 +86,7 @@ namespace WebFrontend
 	}
 
 	void WebHostState::ClearCanvas(bool mainWindow,
-		Host::NativeSurfacePublication publication)
+								   Host::NativeSurfacePublication publication)
 	{
 		std::unique_lock lock(m_mutex);
 		auto& surface = mainWindow ? m_mainSurface : m_padSurface;
@@ -94,4 +94,4 @@ namespace WebFrontend
 		if (current == publication)
 			surface = {};
 	}
-}
+} // namespace WebFrontend

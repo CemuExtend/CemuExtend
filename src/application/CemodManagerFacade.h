@@ -81,7 +81,10 @@ namespace Application
 		CemodManagerError error{CemodManagerError::None};
 		std::string diagnostic;
 		CemodManagerSnapshot snapshot;
-		[[nodiscard]] explicit operator bool() const { return error == CemodManagerError::None; }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == CemodManagerError::None;
+		}
 	};
 
 	struct CemodLaunchApproval
@@ -103,7 +106,7 @@ namespace Application
 
 	class ICemodManagerService
 	{
-	public:
+	  public:
 		virtual ~ICemodManagerService() = default;
 		[[nodiscard]] virtual CemodManagerSnapshot GetCemodManagerSnapshot(
 			std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {}) = 0;
@@ -113,4 +116,4 @@ namespace Application
 			std::uint64_t generation, std::uint64_t titleId,
 			std::string_view packageKey) = 0;
 	};
-}
+} // namespace Application

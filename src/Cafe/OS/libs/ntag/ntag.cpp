@@ -130,7 +130,7 @@ namespace ntag
 	sint32 NTAGAbort(uint32 chan, MPTR callback, void* context)
 	{
 		cemu_assert(chan < 2);
-		
+
 		// TODO is it normal that Rumble U calls this?
 
 		gAbortCallbacks[chan] = callback;
@@ -139,7 +139,7 @@ namespace ntag
 	}
 
 	bool __NTAGRawDataToNfcData(iosu::ccr_nfc::CCRNFCCryptData* raw, iosu::ccr_nfc::CCRNFCCryptData* nfc)
-	{  
+	{
 		memcpy(nfc, raw, sizeof(iosu::ccr_nfc::CCRNFCCryptData));
 
 		if (raw->version == 0)
@@ -492,7 +492,7 @@ namespace ntag
 
 			memcpy(decryptedBuffer + _swapEndianU16(rwHeader->offset) + dataSize, randomBuffer, _swapEndianU16(rwHeader->size) - dataSize);
 		}
-		
+
 		// Make sure the data fits into the rw area
 		if (_swapEndianU16(rwHeader->size) < dataSize)
 		{
@@ -586,7 +586,7 @@ namespace ntag
 
 			// Write data to tag
 			error = nfc::NFCWrite(chan, 200, &gWriteData[chan].uid, &gWriteData[chan].uidMask,
-				_swapEndianU16(rwHeader.size) + 0x28, writeBuffer, RPLLoader_MakePPCCallable(__NTAGWriteCallback), context);
+								  _swapEndianU16(rwHeader.size) + 0x28, writeBuffer, RPLLoader_MakePPCCallable(__NTAGWriteCallback), context);
 			if (error >= 0)
 			{
 				osLib_returnFromFunction(hCPU, 0);
@@ -632,7 +632,7 @@ namespace ntag
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "ntag";
@@ -644,7 +644,7 @@ namespace ntag
 			cafeExportRegister("ntag", NTAGInitEx, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGShutdown, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGIsInit, LogType::Placeholder); // disabled logging, since this gets spammed
-			cafeExportRegister("ntag", NTAGProc, LogType::Placeholder); // disabled logging, since this gets spammed
+			cafeExportRegister("ntag", NTAGProc, LogType::Placeholder);	  // disabled logging, since this gets spammed
 			cafeExportRegister("ntag", NTAGSetFormatSettings, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGSetTagDetectCallback, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGAbort, LogType::NTAG);
@@ -652,10 +652,10 @@ namespace ntag
 			cafeExportRegister("ntag", NTAGWrite, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGFormat, LogType::NTAG);
 		};
-	}s_COSntagModule;
+	} s_COSntagModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSntagModule;
 	}
-}
+} // namespace ntag

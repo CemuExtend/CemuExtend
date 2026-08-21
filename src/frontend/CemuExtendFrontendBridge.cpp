@@ -14,7 +14,7 @@ namespace Frontend
 			static_cast<std::uint8_t>(CemuExtendPointerMode::CapturedRelative);
 		constexpr std::uint32_t kDisableRawMouse = 1U << 1U;
 		constexpr std::uint32_t kConfineToContent = 1U << 2U;
-	}
+	} // namespace
 
 	CemuExtendPointerDecision CemuExtendFrontendBridge::ApplyPointerPolicy(
 		std::uint8_t mode, std::uint8_t cursor, std::uint32_t flags,
@@ -30,13 +30,13 @@ namespace Frontend
 		decision.cursor = cursor;
 		decision.ownsPointer = effectiveMode != kDefaultPointerMode;
 		decision.showCursor = effectiveMode == kDefaultPointerMode ||
-			effectiveMode == kVisibleAbsolutePointerMode;
+							  effectiveMode == kVisibleAbsolutePointerMode;
 		decision.confine = decision.ownsPointer && (flags & kConfineToContent) != 0 &&
-			appActive && hasCanvas;
+						   appActive && hasCanvas;
 		decision.enteringCapture = effectiveMode == kCapturedRelativePointerMode &&
-			previousMode != kCapturedRelativePointerMode;
+								   previousMode != kCapturedRelativePointerMode;
 		decision.leavingPolicy = effectiveMode == kDefaultPointerMode &&
-			previousMode != kDefaultPointerMode;
+								 previousMode != kDefaultPointerMode;
 		decision.requestRawMouse = decision.enteringCapture && m_rawMouseRequested;
 
 		if (decision.leavingPolicy)
@@ -58,12 +58,17 @@ namespace Frontend
 		auto next = m_mouseButtons;
 		switch (transition)
 		{
-		case CemuExtendMouseTransition::Down: next |= changedMask; break;
-		case CemuExtendMouseTransition::Up: next &= ~changedMask; break;
+		case CemuExtendMouseTransition::Down:
+			next |= changedMask;
+			break;
+		case CemuExtendMouseTransition::Up:
+			next &= ~changedMask;
+			break;
 		case CemuExtendMouseTransition::Aggregate:
 			next = (next & ~changedMask) | (aggregateButtons & changedMask);
 			break;
-		case CemuExtendMouseTransition::None: break;
+		case CemuExtendMouseTransition::None:
+			break;
 		}
 		const auto actualChanged = (m_mouseButtons ^ next) & changedMask;
 		m_mouseButtons = next;
@@ -106,7 +111,7 @@ namespace Frontend
 	}
 
 	std::int32_t CemuExtendFrontendBridge::NormalizeWheel(std::int32_t rotation,
-		std::int32_t reportedDelta, bool horizontal)
+														  std::int32_t reportedDelta, bool horizontal)
 	{
 		const auto wheelDelta = reportedDelta > 0 ? reportedDelta : 120;
 		auto& remainder = horizontal ? m_wheelRemainderX : m_wheelRemainderY;
@@ -140,6 +145,6 @@ namespace Frontend
 		std::string committed, std::uint32_t cursor) const
 	{
 		return {std::move(committed), m_preedit, cursor,
-			static_cast<std::uint32_t>(m_preedit.size())};
+				static_cast<std::uint32_t>(m_preedit.size())};
 	}
-}
+} // namespace Frontend

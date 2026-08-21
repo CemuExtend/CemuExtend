@@ -78,10 +78,10 @@ namespace Application
 
 	class IDiagnosticsService
 	{
-	public:
+	  public:
 		virtual ~IDiagnosticsService() = default;
 		[[nodiscard]] virtual PpcThreadsSnapshot CapturePpcThreads() = 0;
 		[[nodiscard]] virtual PpcThreadCommandResult ExecutePpcThreadCommand(
 			const PpcThreadCommandRequest& request) = 0;
 	};
-}
+} // namespace Application

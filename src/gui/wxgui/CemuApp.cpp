@@ -17,7 +17,7 @@
 #include "wxgui/debugger/DebuggerWindowAdapter.h"
 #include <wx/language.h>
 
-#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
+#if (BOOST_OS_LINUX || BOOST_OS_BSD) && HAS_WAYLAND
 #include "wxgui/helpers/wxWayland.h"
 #endif
 #if __WXGTK__
@@ -31,14 +31,13 @@
 #include <wx/timer.h>
 #include "wxHelper.h"
 
-
 wxIMPLEMENT_APP_NO_MAIN(CemuApp);
 
 namespace
 {
 	std::mutex s_frontendContextMutex;
 	std::shared_ptr<WxFrontendContext> s_pendingFrontendContext;
-}
+} // namespace
 
 // Forward declaration for the executable-owned diagnostic suite.
 void UnitTests();
@@ -113,7 +112,7 @@ void CemuApp::DeterminePaths(std::set<fs::path>& failedWriteAccess) // for Windo
 	// on Windows Cemu used to be portable by default prior to 2.0-89
 	// to remain backwards compatible with old installations we check for settings.xml in the Cemu directory
 	// if it exists, we use the exe path as the portable directory
-	if(!isPortable) // lower priority than portable directory
+	if (!isPortable) // lower priority than portable directory
 	{
 		if (fs::exists(exePath.parent_path() / "settings.xml", ec))
 		{
@@ -155,8 +154,7 @@ void CemuApp::DeterminePaths(std::set<fs::path>& failedWriteAccess) // for Linux
 		SetAppName("Cemu");
 		wxString appName = GetAppName();
 		standardPaths.SetFileLayout(wxStandardPaths::FileLayout::FileLayout_XDG);
-		auto getEnvDir = [&](const wxString& varName, const wxString& defaultValue)
-		{
+		auto getEnvDir = [&](const wxString& varName, const wxString& defaultValue) {
 			wxString dir;
 			if (!wxGetEnv(varName, &dir) || dir.empty())
 				return defaultValue;
@@ -181,7 +179,7 @@ void CemuApp::DeterminePaths(std::set<fs::path>& failedWriteAccess) // for MacOS
 	fs::path user_data_path, config_path, cache_path, data_path;
 	auto standardPaths = wxStandardPaths::Get();
 	fs::path exePath(wxHelper::MakeFSPath(standardPaths.GetExecutablePath()));
-    // If run from an app bundle, use its parent directory
+	// If run from an app bundle, use its parent directory
 	fs::path appPath = exePath.parent_path().parent_path().parent_path();
 	fs::path portablePath = appPath.extension() == ".app" ? appPath.parent_path() / "portable" : exePath.parent_path() / "portable";
 #ifdef CEMU_ALLOW_PORTABLE
@@ -208,11 +206,11 @@ void CemuApp::DeterminePaths(std::set<fs::path>& failedWriteAccess) // for MacOS
 // create default MLC files or quit if it fails
 void CemuApp::InitializeNewMLCOrFail(fs::path mlc)
 {
-	if( CemuApp::CreateDefaultMLCFiles(mlc) )
-		return; // all good
+	if (CemuApp::CreateDefaultMLCFiles(mlc))
+		return;											   // all good
 	cemu_assert_debug(!ActiveSettings::IsCustomMlcPath()); // should not be possible?
 
-	if(ActiveSettings::IsCommandLineMlcPath() || ActiveSettings::IsCustomMlcPath())
+	if (ActiveSettings::IsCommandLineMlcPath() || ActiveSettings::IsCustomMlcPath())
 	{
 		// tell user that the custom path is not writable
 		wxMessageBox(formatWxString(_("Cemu failed to write to the custom mlc directory.\nThe path is:\n{}"), wxHelper::FromPath(mlc)), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
@@ -224,14 +222,14 @@ void CemuApp::InitializeNewMLCOrFail(fs::path mlc)
 
 void CemuApp::InitializeExistingMLCOrFail(fs::path mlc)
 {
-	if(CreateDefaultMLCFiles(mlc))
+	if (CreateDefaultMLCFiles(mlc))
 		return; // all good
 	// failed to write mlc files
-	if(ActiveSettings::IsCommandLineMlcPath() || ActiveSettings::IsCustomMlcPath())
+	if (ActiveSettings::IsCommandLineMlcPath() || ActiveSettings::IsCustomMlcPath())
 	{
 		// tell user that the custom path is not writable
 		// if it's a command line path then just quit. Otherwise ask if user wants to reset the path
-		if(ActiveSettings::IsCommandLineMlcPath())
+		if (ActiveSettings::IsCommandLineMlcPath())
 		{
 			wxMessageBox(formatWxString(_("Cemu failed to write to the custom mlc directory.\nThe path is:\n{}"), wxHelper::FromPath(mlc)), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 			exit(0);
@@ -311,7 +309,7 @@ bool CemuApp::OnInit()
 
 	// extend tooltip duration to the maximum possible value
 	wxToolTip::SetDelay(-1);
-	wxToolTip::SetAutoPop(MAKELPARAM(std::numeric_limits<short>::max(),0));
+	wxToolTip::SetAutoPop(MAKELPARAM(std::numeric_limits<short>::max(), 0));
 #endif
 
 	for (auto&& path : failedWriteAccess)
@@ -323,10 +321,7 @@ bool CemuApp::OnInit()
 	if (isFirstStart)
 	{
 		// show the getting started dialog
-		GettingStartedDialog dia(m_emulationController,
-			[keyboardState = m_frontendContext->keyboardState] {
-				return keyboardState->IsKeyDown(Host::Key::Escape);
-			}, m_frontendContext->uiDispatcher, m_frontendContext->pathProvider, nullptr);
+		GettingStartedDialog dia(m_emulationController, [keyboardState = m_frontendContext->keyboardState] { return keyboardState->IsKeyDown(Host::Key::Escape); }, m_frontendContext->uiDispatcher, m_frontendContext->pathProvider, nullptr);
 		dia.ShowModal();
 		// make sure config is created. Gfx pack UI and input UI may create it earlier already, but we still want to update it
 		GetConfigHandle().Save();
@@ -367,7 +362,7 @@ bool CemuApp::OnInit()
 
 #if BOOST_OS_WINDOWS
 	const auto parent_path = GetParentProcess();
-	if(parent_path.has_filename())
+	if (parent_path.has_filename())
 	{
 		const auto filename = parent_path.filename().generic_string();
 		if (boost::icontains(filename, "WiiU_USB_Helper"))
@@ -384,12 +379,12 @@ bool CemuApp::OnInit()
 	m_mainFrame = new MainWindow(m_emulationController, m_frontendContext);
 	auto* createdMainFrame = m_mainFrame;
 	m_mainFrame->Bind(wxEVT_DESTROY,
-		[this, createdMainFrame](wxWindowDestroyEvent& event) {
-			if (event.GetEventObject() == createdMainFrame &&
-				m_mainFrame == createdMainFrame)
-				m_mainFrame = nullptr;
-			event.Skip();
-		});
+					  [this, createdMainFrame](wxWindowDestroyEvent& event) {
+						  if (event.GetEventObject() == createdMainFrame &&
+							  m_mainFrame == createdMainFrame)
+							  m_mainFrame = nullptr;
+						  event.Skip();
+					  });
 
 	m_windowState->app_active = true;
 
@@ -400,7 +395,7 @@ bool CemuApp::OnInit()
 	SetTopWindow(m_mainFrame);
 	m_mainFrame->Show();
 
-#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
+#if (BOOST_OS_LINUX || BOOST_OS_BSD) && HAS_WAYLAND
 	if (wxWlIsWaylandWindow(m_mainFrame))
 		wxWlSetAppId(m_mainFrame, "info.cemu.Cemu");
 #endif
@@ -489,16 +484,26 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 #if BOOST_OS_WINDOWS
 	switch (rawKey)
 	{
-	case 160: return 0xe1; // VK_LSHIFT
-	case 161: return 0xe5; // VK_RSHIFT
-	case 162: return 0xe0; // VK_LCONTROL
-	case 163: return 0xe4; // VK_RCONTROL
-	case 164: return 0xe2; // VK_LMENU
-	case 165: return 0xe6; // VK_RMENU
-	case 91: return 0xe3;  // VK_LWIN
-	case 92: return 0xe7;  // VK_RWIN
-	case 93: return 0x65;  // VK_APPS
-	default: break;
+	case 160:
+		return 0xe1; // VK_LSHIFT
+	case 161:
+		return 0xe5; // VK_RSHIFT
+	case 162:
+		return 0xe0; // VK_LCONTROL
+	case 163:
+		return 0xe4; // VK_RCONTROL
+	case 164:
+		return 0xe2; // VK_LMENU
+	case 165:
+		return 0xe6; // VK_RMENU
+	case 91:
+		return 0xe3; // VK_LWIN
+	case 92:
+		return 0xe7; // VK_RWIN
+	case 93:
+		return 0x65; // VK_APPS
+	default:
+		break;
 	}
 #else
 	(void)rawKey;
@@ -514,137 +519,235 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	// letter through the logical key, Unicode key or native key code. Ctrl+A..
 	// Ctrl+Z can even turn the logical key into control character 1..26, so use
 	// all three non-ambiguous representations before handling special keys.
-	if (const uint16 usage = letterUsage(key)) return usage;
-	if (const uint16 usage = letterUsage(event.GetUnicodeKey())) return usage;
-	if (const uint16 usage = letterUsage(rawKey)) return usage;
+	if (const uint16 usage = letterUsage(key))
+		return usage;
+	if (const uint16 usage = letterUsage(event.GetUnicodeKey()))
+		return usage;
+	if (const uint16 usage = letterUsage(rawKey))
+		return usage;
 	if (key >= '1' && key <= '9')
 		return static_cast<uint16>(0x1e + key - '1');
 	if (key == '0')
 		return 0x27;
 	switch (key)
 	{
-	case WXK_RETURN: return 0x28;
-	case WXK_ESCAPE: return 0x29;
-	case WXK_BACK: return 0x2a;
-	case WXK_TAB: return 0x2b;
-	case WXK_SPACE: return 0x2c;
-	case '-': return 0x2d;
-	case '=': return 0x2e;
-	case '[': return 0x2f;
-	case ']': return 0x30;
-	case '\\': return 0x31;
-	case ';': return 0x33;
-	case '\'': return 0x34;
-	case '`': return 0x35;
-	case ',': return 0x36;
-	case '.': return 0x37;
-	case '/': return 0x38;
-	case WXK_CAPITAL: return 0x39;
-	case WXK_F1: return 0x3a;
-	case WXK_F2: return 0x3b;
-	case WXK_F3: return 0x3c;
-	case WXK_F4: return 0x3d;
-	case WXK_F5: return 0x3e;
-	case WXK_F6: return 0x3f;
-	case WXK_F7: return 0x40;
-	case WXK_F8: return 0x41;
-	case WXK_F9: return 0x42;
-	case WXK_F10: return 0x43;
-	case WXK_F11: return 0x44;
-	case WXK_F12: return 0x45;
-	case WXK_PRINT: return 0x46;
-	case WXK_SNAPSHOT: return 0x46;
-	case WXK_SCROLL: return 0x47;
-	case WXK_PAUSE: return 0x48;
-	case WXK_INSERT: return 0x49;
-	case WXK_HOME: return 0x4a;
-	case WXK_PAGEUP: return 0x4b;
-	case WXK_DELETE: return 0x4c;
-	case WXK_END: return 0x4d;
-	case WXK_PAGEDOWN: return 0x4e;
-	case WXK_RIGHT: return 0x4f;
-	case WXK_LEFT: return 0x50;
-	case WXK_DOWN: return 0x51;
-	case WXK_UP: return 0x52;
-	case WXK_NUMLOCK: return 0x53;
+	case WXK_RETURN:
+		return 0x28;
+	case WXK_ESCAPE:
+		return 0x29;
+	case WXK_BACK:
+		return 0x2a;
+	case WXK_TAB:
+		return 0x2b;
+	case WXK_SPACE:
+		return 0x2c;
+	case '-':
+		return 0x2d;
+	case '=':
+		return 0x2e;
+	case '[':
+		return 0x2f;
+	case ']':
+		return 0x30;
+	case '\\':
+		return 0x31;
+	case ';':
+		return 0x33;
+	case '\'':
+		return 0x34;
+	case '`':
+		return 0x35;
+	case ',':
+		return 0x36;
+	case '.':
+		return 0x37;
+	case '/':
+		return 0x38;
+	case WXK_CAPITAL:
+		return 0x39;
+	case WXK_F1:
+		return 0x3a;
+	case WXK_F2:
+		return 0x3b;
+	case WXK_F3:
+		return 0x3c;
+	case WXK_F4:
+		return 0x3d;
+	case WXK_F5:
+		return 0x3e;
+	case WXK_F6:
+		return 0x3f;
+	case WXK_F7:
+		return 0x40;
+	case WXK_F8:
+		return 0x41;
+	case WXK_F9:
+		return 0x42;
+	case WXK_F10:
+		return 0x43;
+	case WXK_F11:
+		return 0x44;
+	case WXK_F12:
+		return 0x45;
+	case WXK_PRINT:
+		return 0x46;
+	case WXK_SNAPSHOT:
+		return 0x46;
+	case WXK_SCROLL:
+		return 0x47;
+	case WXK_PAUSE:
+		return 0x48;
+	case WXK_INSERT:
+		return 0x49;
+	case WXK_HOME:
+		return 0x4a;
+	case WXK_PAGEUP:
+		return 0x4b;
+	case WXK_DELETE:
+		return 0x4c;
+	case WXK_END:
+		return 0x4d;
+	case WXK_PAGEDOWN:
+		return 0x4e;
+	case WXK_RIGHT:
+		return 0x4f;
+	case WXK_LEFT:
+		return 0x50;
+	case WXK_DOWN:
+		return 0x51;
+	case WXK_UP:
+		return 0x52;
+	case WXK_NUMLOCK:
+		return 0x53;
 	case WXK_DIVIDE:
-	case WXK_NUMPAD_DIVIDE: return 0x54;
+	case WXK_NUMPAD_DIVIDE:
+		return 0x54;
 	case WXK_MULTIPLY:
-	case WXK_NUMPAD_MULTIPLY: return 0x55;
+	case WXK_NUMPAD_MULTIPLY:
+		return 0x55;
 	case WXK_SUBTRACT:
-	case WXK_NUMPAD_SUBTRACT: return 0x56;
+	case WXK_NUMPAD_SUBTRACT:
+		return 0x56;
 	case WXK_ADD:
-	case WXK_NUMPAD_ADD: return 0x57;
-	case WXK_NUMPAD_ENTER: return 0x58;
-	case WXK_NUMPAD_SPACE: return 0x2c;
-	case WXK_NUMPAD_TAB: return 0x2b;
-	case WXK_NUMPAD_F1: return 0x3a;
-	case WXK_NUMPAD_F2: return 0x3b;
-	case WXK_NUMPAD_F3: return 0x3c;
-	case WXK_NUMPAD_F4: return 0x3d;
+	case WXK_NUMPAD_ADD:
+		return 0x57;
+	case WXK_NUMPAD_ENTER:
+		return 0x58;
+	case WXK_NUMPAD_SPACE:
+		return 0x2c;
+	case WXK_NUMPAD_TAB:
+		return 0x2b;
+	case WXK_NUMPAD_F1:
+		return 0x3a;
+	case WXK_NUMPAD_F2:
+		return 0x3b;
+	case WXK_NUMPAD_F3:
+		return 0x3c;
+	case WXK_NUMPAD_F4:
+		return 0x3d;
 	case WXK_NUMPAD1:
-	case WXK_NUMPAD_END: return 0x59;
+	case WXK_NUMPAD_END:
+		return 0x59;
 	case WXK_NUMPAD2:
-	case WXK_NUMPAD_DOWN: return 0x5a;
+	case WXK_NUMPAD_DOWN:
+		return 0x5a;
 	case WXK_NUMPAD3:
-	case WXK_NUMPAD_PAGEDOWN: return 0x5b;
+	case WXK_NUMPAD_PAGEDOWN:
+		return 0x5b;
 	case WXK_NUMPAD4:
-	case WXK_NUMPAD_LEFT: return 0x5c;
+	case WXK_NUMPAD_LEFT:
+		return 0x5c;
 	case WXK_NUMPAD5:
-	case WXK_NUMPAD_BEGIN: return 0x5d;
+	case WXK_NUMPAD_BEGIN:
+		return 0x5d;
 	case WXK_NUMPAD6:
-	case WXK_NUMPAD_RIGHT: return 0x5e;
+	case WXK_NUMPAD_RIGHT:
+		return 0x5e;
 	case WXK_NUMPAD7:
-	case WXK_NUMPAD_HOME: return 0x5f;
+	case WXK_NUMPAD_HOME:
+		return 0x5f;
 	case WXK_NUMPAD8:
-	case WXK_NUMPAD_UP: return 0x60;
+	case WXK_NUMPAD_UP:
+		return 0x60;
 	case WXK_NUMPAD9:
-	case WXK_NUMPAD_PAGEUP: return 0x61;
+	case WXK_NUMPAD_PAGEUP:
+		return 0x61;
 	case WXK_NUMPAD0:
-	case WXK_NUMPAD_INSERT: return 0x62;
+	case WXK_NUMPAD_INSERT:
+		return 0x62;
 	case WXK_DECIMAL:
 	case WXK_NUMPAD_DECIMAL:
-	case WXK_NUMPAD_DELETE: return 0x63;
+	case WXK_NUMPAD_DELETE:
+		return 0x63;
 	case WXK_WINDOWS_MENU:
-	case WXK_MENU: return 0x65;
-	case WXK_NUMPAD_EQUAL: return 0x67;
-	case WXK_F13: return 0x68;
-	case WXK_F14: return 0x69;
-	case WXK_F15: return 0x6a;
-	case WXK_F16: return 0x6b;
-	case WXK_F17: return 0x6c;
-	case WXK_F18: return 0x6d;
-	case WXK_F19: return 0x6e;
-	case WXK_F20: return 0x6f;
-	case WXK_F21: return 0x70;
-	case WXK_F22: return 0x71;
-	case WXK_F23: return 0x72;
-	case WXK_F24: return 0x73;
-	case WXK_EXECUTE: return 0x74;
-	case WXK_HELP: return 0x75;
-	case WXK_SELECT: return 0x77;
-	case WXK_CANCEL: return 0x9b;
-	case WXK_CLEAR: return 0x9c;
+	case WXK_MENU:
+		return 0x65;
+	case WXK_NUMPAD_EQUAL:
+		return 0x67;
+	case WXK_F13:
+		return 0x68;
+	case WXK_F14:
+		return 0x69;
+	case WXK_F15:
+		return 0x6a;
+	case WXK_F16:
+		return 0x6b;
+	case WXK_F17:
+		return 0x6c;
+	case WXK_F18:
+		return 0x6d;
+	case WXK_F19:
+		return 0x6e;
+	case WXK_F20:
+		return 0x6f;
+	case WXK_F21:
+		return 0x70;
+	case WXK_F22:
+		return 0x71;
+	case WXK_F23:
+		return 0x72;
+	case WXK_F24:
+		return 0x73;
+	case WXK_EXECUTE:
+		return 0x74;
+	case WXK_HELP:
+		return 0x75;
+	case WXK_SELECT:
+		return 0x77;
+	case WXK_CANCEL:
+		return 0x9b;
+	case WXK_CLEAR:
+		return 0x9c;
 	case WXK_SEPARATOR:
-	case WXK_NUMPAD_SEPARATOR: return 0x85;
-	case WXK_VOLUME_MUTE: return 0x7f;
-	case WXK_VOLUME_UP: return 0x80;
-	case WXK_VOLUME_DOWN: return 0x81;
-	case WXK_WINDOWS_LEFT: return 0xe3;
-	case WXK_WINDOWS_RIGHT: return 0xe7;
-	case WXK_CONTROL: return 0xe0;
-	case WXK_SHIFT: return 0xe1;
-	case WXK_ALT: return 0xe2;
-	default: return 0;
+	case WXK_NUMPAD_SEPARATOR:
+		return 0x85;
+	case WXK_VOLUME_MUTE:
+		return 0x7f;
+	case WXK_VOLUME_UP:
+		return 0x80;
+	case WXK_VOLUME_DOWN:
+		return 0x81;
+	case WXK_WINDOWS_LEFT:
+		return 0xe3;
+	case WXK_WINDOWS_RIGHT:
+		return 0xe7;
+	case WXK_CONTROL:
+		return 0xe0;
+	case WXK_SHIFT:
+		return 0xe1;
+	case WXK_ALT:
+		return 0xe2;
+	default:
+		return 0;
 	}
 }
 
 static uint8 CemuExtendKeyModifiers(const wxKeyEvent& event)
 {
 	return (event.ControlDown() ? 1U : 0U) |
-		(event.ShiftDown() ? 2U : 0U) |
-		(event.AltDown() ? 4U : 0U) |
-		(event.MetaDown() ? 8U : 0U);
+		   (event.ShiftDown() ? 2U : 0U) |
+		   (event.AltDown() ? 4U : 0U) |
+		   (event.MetaDown() ? 8U : 0U);
 }
 
 int CemuApp::FilterEvent(wxEvent& event)
@@ -656,8 +759,8 @@ int CemuApp::FilterEvent(wxEvent& event)
 	// naturally fall back to the ordinary raw/text path instead of deadlocking
 	// the guest input field.
 	const bool native_text_input_event = m_mainFrame != nullptr &&
-		m_mainFrame->IsCemuExtendTextInputEvent(event);
-	if(event.GetEventType() == wxEVT_KEY_DOWN)
+										 m_mainFrame->IsCemuExtendTextInputEvent(event);
+	if (event.GetEventType() == wxEVT_KEY_DOWN)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto usage = CemuExtendUsbHidUsage(key_event);
@@ -668,26 +771,26 @@ int CemuApp::FilterEvent(wxEvent& event)
 		// preedit has been committed; the first Enter used to accept a Japanese
 		// conversion candidate must remain private to the OS IME.
 		const bool native_submit = native_text_input_event &&
-			(usage == 0x28 || usage == 0x58) &&
-			m_mainFrame->CanSubmitCemuExtendTextInput();
+								   (usage == 0x28 || usage == 0x58) &&
+								   m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
 			m_emulationController.SubmitKeyboard(usage, true,
-				CemuExtendKeyModifiers(key_event));
+												 CemuExtendKeyModifiers(key_event));
 	}
-	else if(event.GetEventType() == wxEVT_KEY_UP)
+	else if (event.GetEventType() == wxEVT_KEY_UP)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto usage = CemuExtendUsbHidUsage(key_event);
 		m_windowState->SetKeyState(
 			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
 		const bool native_submit = native_text_input_event &&
-			(usage == 0x28 || usage == 0x58) &&
-			m_mainFrame->CanSubmitCemuExtendTextInput();
+								   (usage == 0x28 || usage == 0x58) &&
+								   m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
 			m_emulationController.SubmitKeyboard(usage, false,
-				CemuExtendKeyModifiers(key_event));
+												 CemuExtendKeyModifiers(key_event));
 	}
-	else if(event.GetEventType() == wxEVT_CHAR)
+	else if (event.GetEventType() == wxEVT_CHAR)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
 		const auto codepoint = key_event.GetUnicodeKey();
@@ -696,11 +799,11 @@ int CemuApp::FilterEvent(wxEvent& event)
 			m_emulationController.SubmitText(
 				static_cast<uint32>(codepoint), key_event.IsAutoRepeat());
 	}
-	else if(event.GetEventType() == wxEVT_ACTIVATE_APP)
+	else if (event.GetEventType() == wxEVT_ACTIVATE_APP)
 	{
 		const auto& activate_event = (wxActivateEvent&)event;
 		m_emulationController.PointerFocusChanged(activate_event.GetActive());
-		if(!activate_event.GetActive())
+		if (!activate_event.GetActive())
 		{
 			m_windowState->ReleaseKeyStates();
 			m_emulationController.KeyboardFocusLost();
@@ -717,7 +820,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 			target_window = nullptr;
 
 		m_windowState->debugger_focused = target_window &&
-			WxDebuggerAdapters::IsDebuggerWindowOrChild(target_window);
+										  WxDebuggerAdapters::IsDebuggerWindowOrChild(target_window);
 	}
 	else if (!WxDebuggerAdapters::HasDebuggerWindow())
 	{
@@ -727,7 +830,8 @@ int CemuApp::FilterEvent(wxEvent& event)
 	return wxApp::FilterEvent(event);
 }
 
-std::vector<const wxLanguageInfo *> CemuApp::GetLanguages() const {
+std::vector<const wxLanguageInfo*> CemuApp::GetLanguages() const
+{
 	std::vector availableLanguages(m_availableTranslations);
 	availableLanguages.insert(availableLanguages.begin(), wxLocale::GetLanguageInfo(wxLANGUAGE_ENGLISH));
 	return availableLanguages;
@@ -779,8 +883,7 @@ bool CemuApp::CheckMLCPath(const fs::path& mlc)
 
 bool CemuApp::CreateDefaultMLCFiles(const fs::path& mlc)
 {
-	auto CreateDirectoriesIfNotExist = [](const fs::path& path)
-	{
+	auto CreateDirectoriesIfNotExist = [](const fs::path& path) {
 		std::error_code ec;
 		if (!fs::exists(path, ec))
 			return fs::create_directories(path, ec);
@@ -791,17 +894,17 @@ bool CemuApp::CreateDefaultMLCFiles(const fs::path& mlc)
 		mlc,
 		mlc / "sys",
 		mlc / "usr",
-		mlc / "usr/title/00050000", // base
-		mlc / "usr/title/0005000c", // dlc
-		mlc / "usr/title/0005000e", // update
+		mlc / "usr/title/00050000",						   // base
+		mlc / "usr/title/0005000c",						   // dlc
+		mlc / "usr/title/0005000e",						   // update
 		mlc / "usr/save/00050010/1004a000/user/common/db", // Mii Maker save folders {0x500101004A000, 0x500101004A100, 0x500101004A200}
 		mlc / "usr/save/00050010/1004a100/user/common/db",
 		mlc / "usr/save/00050010/1004a200/user/common/db",
 		mlc / "sys/title/0005001b/1005c000/content" // lang files
 	};
-	for(auto& path : directories)
+	for (auto& path : directories)
 	{
-		if(!CreateDirectoriesIfNotExist(path))
+		if (!CreateDirectoriesIfNotExist(path))
 			return false;
 	}
 	// create sys/usr folder in mlc01
@@ -814,7 +917,7 @@ bool CemuApp::CreateDefaultMLCFiles(const fs::path& mlc)
 			std::ofstream file(langFile);
 			if (file.is_open())
 			{
-				const char* langStrings[] = { "ja","en","fr","de","it","es","zh","ko","nl","pt","ru","zh" };
+				const char* langStrings[] = {"ja", "en", "fr", "de", "it", "es", "zh", "ko", "nl", "pt", "ru", "zh"};
 				for (const char* lang : langStrings)
 					file << fmt::format(R"("{}",)", lang) << std::endl;
 
@@ -844,8 +947,7 @@ bool CemuApp::CreateDefaultMLCFiles(const fs::path& mlc)
 			return false;
 		file.close();
 		fs::remove(dummyFile);
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		return false;
 	}
@@ -864,8 +966,7 @@ void CemuApp::CreateDefaultCemuFiles()
 		const auto memorySearcherFolder = ActiveSettings::GetUserDataPath("memorySearcher");
 		if (!fs::exists(memorySearcherFolder))
 			fs::create_directories(memorySearcherFolder);
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		wxString errorMsg = formatWxString(_("Couldn't create a required cemu directory or file!\n\nError: {0}"), ex.what());
 

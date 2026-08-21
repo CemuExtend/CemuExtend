@@ -13,16 +13,19 @@
 
 struct ControllerPage;
 class ControllerBase;
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 class InputSettings2 : public wxDialog
 {
-public:
+  public:
 	InputSettings2(wxWindow* parent, std::function<bool()> escapeDown,
-		std::shared_ptr<Host::IPathProvider> pathProvider);
+				   std::shared_ptr<Host::IPathProvider> pathProvider);
 	~InputSettings2();
 
-private:
+  private:
 	const wxString kDefaultProfileName = _("<profile name>");
 
 	wxNotebook* m_notebook;
@@ -75,5 +78,4 @@ private:
 
 	// void on_controller_dropdown(wxCommandEvent& event);
 	// void on_controllers_refreshed(wxCommandEvent& event);
-
 };

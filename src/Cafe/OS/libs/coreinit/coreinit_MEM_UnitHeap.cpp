@@ -143,4 +143,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", MEMAllocFromUnitHeap, LogType::CoreinitMem);
 		cafeExportRegister("coreinit", MEMFreeToUnitHeap, LogType::CoreinitMem);
 	}
-}
+} // namespace coreinit

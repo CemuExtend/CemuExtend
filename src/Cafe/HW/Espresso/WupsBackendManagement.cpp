@@ -15,7 +15,7 @@ std::optional<std::uint32_t> WupsBackendManagementRuntime::CreatePluginData(
 		return std::nullopt;
 	const auto handle = m_nextDataHandle++;
 	m_pluginData.emplace(handle,
-		std::make_shared<const CemodPackage>(std::move(package)));
+						 std::make_shared<const CemodPackage>(std::move(package)));
 	return handle;
 }
 
@@ -36,7 +36,7 @@ void WupsBackendManagementRuntime::DeletePluginData(
 }
 
 bool WupsBackendManagementRuntime::ScheduleNextLaunch(WupsProcessKey key,
-	std::span<const std::uint32_t> handles)
+													  std::span<const std::uint32_t> handles)
 {
 	if (handles.empty() || handles.size() > kMaximumPlanPlugins)
 		return false;
@@ -94,8 +94,8 @@ std::optional<std::uint32_t> WupsBackendManagementRuntime::PublishContainer(
 	const auto handle = m_nextContainerHandle++;
 	auto package = std::make_shared<const CemodPackage>(runtime->PackageCopy());
 	m_containers.emplace(handle, WupsContainerSnapshot{handle,
-		runtime->OwnerHandle(), runtime->Generation(), m_nextOrder++, runtime,
-		std::move(package)});
+													   runtime->OwnerHandle(), runtime->Generation(), m_nextOrder++, runtime,
+													   std::move(package)});
 	return handle;
 }
 
@@ -105,7 +105,7 @@ void WupsBackendManagementRuntime::UnpublishContainer(
 	std::lock_guard lock(m_mutex);
 	std::erase_if(m_containers, [owner, generation](const auto& item) {
 		return item.second.ownerHandle == owner &&
-			item.second.generation == generation;
+			   item.second.generation == generation;
 	});
 }
 
@@ -123,9 +123,9 @@ WupsBackendManagementRuntime::LoadedContainers() const
 	result.reserve(m_containers.size());
 	for (const auto& [handle, record] : m_containers)
 		if (record.runtime && (record.runtime->State() == WupsPluginState::Mapped ||
-			record.runtime->State() == WupsPluginState::Relocated ||
-			record.runtime->State() == WupsPluginState::Initialized ||
-			record.runtime->State() == WupsPluginState::Active))
+							   record.runtime->State() == WupsPluginState::Relocated ||
+							   record.runtime->State() == WupsPluginState::Initialized ||
+							   record.runtime->State() == WupsPluginState::Active))
 			result.push_back(record);
 	std::ranges::sort(result, {}, &WupsContainerSnapshot::stableOrder);
 	return result;
@@ -146,10 +146,9 @@ WupsBackendManagementRuntime::FindContainer(std::uint32_t handle) const
 }
 
 CemodPackage MakeDynamicWupsPackage(std::vector<std::byte> bytes,
-	WupsInspection inspection, const CemodPackage& caller)
+									WupsInspection inspection, const CemodPackage& caller)
 {
-	auto safeId = inspection.metadata.storageId.empty() ?
-		inspection.metadata.name : inspection.metadata.storageId;
+	auto safeId = inspection.metadata.storageId.empty() ? inspection.metadata.name : inspection.metadata.storageId;
 	for (auto& character : safeId)
 		if (!std::isalnum(static_cast<unsigned char>(character)) &&
 			character != '.' && character != '_' && character != '-')

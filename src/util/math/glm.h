@@ -22,15 +22,14 @@ namespace glm
 		return vec3(
 			2.0f * (q.x * q.y + q.w * q.z),
 			2.0f * (q.w * q.w + q.y * q.y) - 1.0f,
-			2.0f * (q.y * q.z - q.w * q.x)
-		);
+			2.0f * (q.y * q.z - q.w * q.x));
 	}
 
 	inline vec3 GetVectorZ(const quat& q)
 	{
-		return vec3 (
+		return vec3(
 			2.0f * (q.x * q.z - q.w * q.y),
 			2.0f * (q.y * q.z + q.w * q.x),
 			2.0f * (q.w * q.w + q.z * q.z) - 1.0f);
 	}
-}
+} // namespace glm

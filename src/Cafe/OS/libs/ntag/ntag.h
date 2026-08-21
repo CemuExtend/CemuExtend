@@ -2,12 +2,12 @@
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/RPL/COSModule.h"
 
-#define NTAG_RESULT_SUCCESS		(0)
-#define NTAG_RESULT_UNINITIALIZED	(-0x3E7)
-#define NTAG_RESULT_INVALID_STATE	(-0x3E6)
-#define NTAG_RESULT_NO_TAG		(-0x3E5)
-#define NTAG_RESULT_INVALID		(-0x3E1)
-#define NTAG_RESULT_UID_MISMATCH	(-0x3DB)
+#define NTAG_RESULT_SUCCESS (0)
+#define NTAG_RESULT_UNINITIALIZED (-0x3E7)
+#define NTAG_RESULT_INVALID_STATE (-0x3E6)
+#define NTAG_RESULT_NO_TAG (-0x3E5)
+#define NTAG_RESULT_INVALID (-0x3E1)
+#define NTAG_RESULT_UID_MISMATCH (-0x3DB)
 
 namespace ntag
 {
@@ -99,4 +99,4 @@ namespace ntag
 	sint32 NTAGFormat(uint32 chan, uint32 timeout, nfc::NFCUid* uid, uint32 rwSize, void* rwData, MPTR callback, void* context);
 
 	COSModule* GetModule();
-}
+} // namespace ntag

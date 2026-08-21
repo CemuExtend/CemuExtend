@@ -56,8 +56,8 @@ namespace snd_core
 		}
 	};
 
-	SysAllocator<AUXTVBuffer>			__AXAuxTVBuffer;
-	SysAllocator<AUXDRCBuffer, 2>		__AXAuxDRCBuffer;
+	SysAllocator<AUXTVBuffer> __AXAuxTVBuffer;
+	SysAllocator<AUXDRCBuffer, 2> __AXAuxDRCBuffer;
 
 	uint32 __AXCurrentAuxInputFrameIndex = 0;
 
@@ -283,8 +283,8 @@ namespace snd_core
 			return r;
 		if (auxBus >= AX_AUX_BUS_COUNT)
 			return -5;
-		if( device == AX_DEV_TV )
-		{ 
+		if (device == AX_DEV_TV)
+		{
 			__AXTVAuxReturnVolume[auxBus] = volume;
 		}
 		else
@@ -294,4 +294,4 @@ namespace snd_core
 		return 0;
 	}
 
-}
+} // namespace snd_core

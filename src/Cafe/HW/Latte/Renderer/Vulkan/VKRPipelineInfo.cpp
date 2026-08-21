@@ -48,7 +48,6 @@ PipelineInfo::PipelineInfo(uint64 minimalStateHash, uint64 pipelineHash, LatteFe
 	}
 }
 
-
 PipelineInfo::~PipelineInfo()
 {
 	if (rectEmulationGS)

@@ -5,19 +5,19 @@ void _x64Gen_writeMODRMDeprecated(x64GenContext_t* x64GenContext, sint32 dataReg
 void x64Gen_movBEZeroExtend_reg64_mem32Reg64PlusReg64(x64GenContext_t* x64GenContext, sint32 dstRegister, sint32 memRegisterA64, sint32 memRegisterB64, sint32 memImmS32)
 {
 	// MOVBE <dstReg64> (low dword), DWORD [<reg64> + <reg64> + <imm64>]
-	if( dstRegister >= 8 && memRegisterA64 >= 8 && memRegisterB64 >= 8 )
+	if (dstRegister >= 8 && memRegisterA64 >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x47);
-	else if( memRegisterA64 >= 8 && memRegisterB64 >= 8 )
+	else if (memRegisterA64 >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x43);
-	else if( dstRegister >= 8 && memRegisterB64 >= 8 )
+	else if (dstRegister >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x42);
-	else if( dstRegister >= 8 && memRegisterA64 >= 8 )
+	else if (dstRegister >= 8 && memRegisterA64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x45);
-	else if( dstRegister >= 8 )
+	else if (dstRegister >= 8)
 		x64Gen_writeU8(x64GenContext, 0x44);
-	else if( memRegisterA64 >= 8 )
+	else if (memRegisterA64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x41);
-	else if( memRegisterB64 >= 8 )
+	else if (memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x42);
 
 	x64Gen_writeU8(x64GenContext, 0x0F);
@@ -37,19 +37,19 @@ void x64Gen_movBEZeroExtend_reg64Low16_mem16Reg64PlusReg64(x64GenContext_t* x64G
 void x64Gen_movBETruncate_mem32Reg64PlusReg64_reg64(x64GenContext_t* x64GenContext, sint32 memRegisterA64, sint32 memRegisterB64, sint32 memImmS32, sint32 srcRegister)
 {
 	// MOVBE DWORD [<reg64> + <reg64> + <imm64>], <srcReg64> (low dword)
-	if( srcRegister >= 8 && memRegisterA64 >= 8 && memRegisterB64 >= 8 )
+	if (srcRegister >= 8 && memRegisterA64 >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x47);
-	else if( memRegisterA64 >= 8 && memRegisterB64 >= 8 )
+	else if (memRegisterA64 >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x43);
-	else if( srcRegister >= 8 && memRegisterB64 >= 8 )
+	else if (srcRegister >= 8 && memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x42);
-	else if( srcRegister >= 8 && memRegisterA64 >= 8 )
+	else if (srcRegister >= 8 && memRegisterA64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x45);
-	else if( srcRegister >= 8 )
+	else if (srcRegister >= 8)
 		x64Gen_writeU8(x64GenContext, 0x44);
-	else if( memRegisterA64 >= 8 )
+	else if (memRegisterA64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x41);
-	else if( memRegisterB64 >= 8 )
+	else if (memRegisterB64 >= 8)
 		x64Gen_writeU8(x64GenContext, 0x42);
 
 	x64Gen_writeU8(x64GenContext, 0x0F);

@@ -10,7 +10,7 @@ namespace WebFrontend
 {
 	class IToolWindowSupport
 	{
-	public:
+	  public:
 		virtual ~IToolWindowSupport() = default;
 		[[nodiscard]] virtual void* GetWindow() const = 0;
 		virtual void Show() = 0;
@@ -21,4 +21,4 @@ namespace WebFrontend
 
 	std::unique_ptr<IToolWindowSupport> CreateToolWindowSupport(
 		void* parent, bool modal, std::function<void()> closeHandler);
-}
+} // namespace WebFrontend

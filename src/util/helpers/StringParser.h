@@ -2,7 +2,7 @@
 
 class StringTokenParser
 {
-public:
+  public:
 	StringTokenParser() : m_str(nullptr), m_len(0) {};
 
 	StringTokenParser(const char* input, sint32 inputLen) : m_str(input), m_len(inputLen) {};
@@ -225,28 +225,27 @@ public:
 		m_len = bak->m_len;
 	}
 
-	private:
-		const char* _skipWhitespaces(const char* str, sint32& length)
+  private:
+	const char* _skipWhitespaces(const char* str, sint32& length)
+	{
+		while (length > 0)
 		{
-			while (length > 0)
-			{
-				if (*str != ' ' && *str != '\t')
-					break;
-				str++;
-				length--;
-			}
-			return str;
+			if (*str != ' ' && *str != '\t')
+				break;
+			str++;
+			length--;
 		}
+		return str;
+	}
 
-		char _toUpperCase(const char c)
-		{
-			if (c >= 'a' && c <= 'z') 
-				return c + ('A' - 'a');
-			return c;
-		}
+	char _toUpperCase(const char c)
+	{
+		if (c >= 'a' && c <= 'z')
+			return c + ('A' - 'a');
+		return c;
+	}
 
-	private:
-		const char* m_str;
-		sint32 m_len;
+  private:
+	const char* m_str;
+	sint32 m_len;
 };
-

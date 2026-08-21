@@ -11,7 +11,7 @@ namespace nn::ccr
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_ccr";
@@ -22,10 +22,10 @@ namespace nn::ccr
 			cafeExportRegister("nn_ccr", CCRSysCaffeineBootCheck, LogType::Placeholder);
 		};
 
-	}s_COSnnccrModule;
+	} s_COSnnccrModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnccrModule;
 	}
-}
+} // namespace nn::ccr

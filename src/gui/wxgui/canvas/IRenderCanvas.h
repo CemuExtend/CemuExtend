@@ -5,12 +5,12 @@
 // base class for all render interfaces
 class IRenderCanvas
 {
-public:
+  public:
 	IRenderCanvas(bool is_main_window)
 		: m_is_main_window(is_main_window) {}
 	virtual ~IRenderCanvas() = default;
 	virtual void PrepareForDestroy() {}
 
-protected:
+  protected:
 	bool m_is_main_window;
 };

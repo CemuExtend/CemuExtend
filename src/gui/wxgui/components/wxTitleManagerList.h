@@ -17,18 +17,22 @@ namespace Application
 {
 	class EmulationController;
 }
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 class wxTitleManagerList : public wxListView
 {
 	friend class TitleManager;
-public:
+
+  public:
 	wxTitleManagerList(wxWindow* parent,
-		Application::EmulationController& emulationController,
-		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
-		std::shared_ptr<Host::IPathProvider> pathProvider,
-		std::function<void(fs::path)> requestLaunch,
-		wxWindowID id = wxID_ANY);
+					   Application::EmulationController& emulationController,
+					   std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+					   std::shared_ptr<Host::IPathProvider> pathProvider,
+					   std::function<void(fs::path)> requestLaunch,
+					   wxWindowID id = wxID_ANY);
 	~wxTitleManagerList();
 
 	enum ItemColumn
@@ -91,7 +95,7 @@ public:
 	};
 	boost::optional<const TitleEntry&> GetSelectedTitleEntry() const;
 
-private:
+  private:
 	void AddColumns();
 	int Filter(const wxString& filter, const wxString& prefix, ItemColumn column);
 	boost::optional<TitleEntry&> GetSelectedTitleEntry();
@@ -130,12 +134,12 @@ private:
 
 	void RemoveItem(long item);
 	void RemoveItem(const TitleEntry& entry);
-	
+
 	struct ItemData
 	{
 		ItemData(bool visible, const TitleEntry& entry)
 			: visible(visible), entry(entry) {}
-		
+
 		bool visible;
 		TitleEntry entry;
 	};

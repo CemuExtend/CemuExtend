@@ -5,7 +5,7 @@
 
 class SymbolWindow : public wxFrame
 {
-public:
+  public:
 	SymbolWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 
 	void OnMainMove(const wxPoint& position, const wxSize& main_size);
@@ -13,7 +13,7 @@ public:
 
 	void OnLeftDClick(wxListEvent& event);
 
-private:
+  private:
 	wxTextCtrl* m_filter;
 	SymbolListCtrl* m_symbol_ctrl;
 

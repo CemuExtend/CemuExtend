@@ -30,11 +30,11 @@ class InputManager : public Singleton<InputManager>
 	InputManager();
 	~InputManager();
 
-public:
+  public:
 	constexpr static size_t kMaxController = 8;
 	constexpr static size_t kMaxVPADControllers = 2;
 	constexpr static size_t kMaxWPADControllers = 7;
-	
+
 	void load() noexcept;
 	bool load(size_t player_index, std::string_view filename = {});
 
@@ -45,12 +45,12 @@ public:
 
 	bool is_gameprofile_set(size_t player_index) const;
 
-	void Shutdown(); 
+	void Shutdown();
 	void Start();
 	void RunOnInputThread(std::function<void()> action);
 	void ConfigureProfileDirectory(fs::path profileDirectory);
 	void ConfigureHost(Host::IKeyboardState& keyboard, Host::IWindowMetrics& windowMetrics,
-		Host::INativeSurfaceProvider& nativeSurfaces, Input::IControllerStateObserver& observer);
+					   Host::INativeSurfaceProvider& nativeSurfaces, Input::IControllerStateObserver& observer);
 	void ClearHost();
 	void ConfigureEmulationContext(Input::IEmulationInputContext& context);
 	void ClearEmulationContext(Input::IEmulationInputContext& context);
@@ -64,20 +64,23 @@ public:
 	[[nodiscard]] Host::NativeSurfaceSnapshot GetHostNativeSurfaces() const;
 	[[nodiscard]] bool IsTitleRunningForInput() const;
 	[[nodiscard]] Input::ScreenImageArea GetScreenImageArea(bool padView) const;
-	
+
 	EmulatedControllerPtr set_controller(EmulatedControllerPtr controller);
 	EmulatedControllerPtr set_controller(size_t player_index, EmulatedController::Type type);
 	EmulatedControllerPtr set_controller(size_t player_index, EmulatedController::Type type, const std::shared_ptr<ControllerBase>& controller);
 
 	EmulatedControllerPtr delete_controller(size_t player_index, bool delete_profile = false);
-	
+
 	EmulatedControllerPtr get_controller(size_t player_index) const;
 	std::shared_ptr<VPADController> get_vpad_controller(size_t index) const;
 	std::shared_ptr<WPADController> get_wpad_controller(size_t index) const;
 	std::pair<size_t, size_t> get_controller_count() const;
 
-	bool is_api_available(InputAPI::Type api) const { return !m_api_available[api].empty(); }
-	
+	bool is_api_available(InputAPI::Type api) const
+	{
+		return !m_api_available[api].empty();
+	}
+
 	ControllerProviderPtr get_api_provider(std::string_view api_name) const;
 	ControllerProviderPtr get_api_provider(InputAPI::Type api) const;
 	// will create the provider with the given settings if it doesn't exist yet
@@ -92,14 +95,13 @@ public:
 	void apply_game_profile(const ControllerProfileSelection& profiles);
 	void on_device_changed();
 	void UpdateHostMousePosition(Host::PointerSurface surface,
-		Host::PointerPosition position);
+								 Host::PointerPosition position);
 	void UpdateHostMouseButton(Host::PointerSurface surface, Host::PointerButton button,
-		bool pressed, Host::PointerPosition position);
+							   bool pressed, Host::PointerPosition position);
 	void UpdateHostTouch(Host::PointerSurface surface, Host::PointerPosition position,
-		bool pressed);
+						 bool pressed);
 	void UpdateHostMouseWheel(float value, std::int32_t cumulativeSteps);
 	[[nodiscard]] float ConsumeHostMouseWheel();
-
 
 	std::vector<std::string> get_profiles() const;
 	bool delete_profile(std::string_view filename);
@@ -109,7 +111,7 @@ public:
 	std::optional<glm::ivec2> get_left_down_mouse_info(bool* is_pad);
 	std::optional<glm::ivec2> get_right_down_mouse_info(bool* is_pad);
 
-private:
+  private:
 	struct MouseInfo
 	{
 		mutable std::shared_mutex m_mutex;
@@ -143,7 +145,7 @@ private:
 	bool m_input_commands_accepting{};
 	std::deque<InputThreadCommand> m_input_commands;
 
-	std::array<std::vector<ControllerProviderPtr>, InputAPI::MAX> m_api_available{ };
+	std::array<std::vector<ControllerProviderPtr>, InputAPI::MAX> m_api_available{};
 
 	mutable std::shared_mutex m_mutex;
 	std::array<EmulatedControllerPtr, kMaxVPADControllers> m_vpad;

@@ -10,13 +10,13 @@ bool gxShader_checkIfSuccessfullyLinked(GLuint glProgram)
 {
 	int status = -1;
 	glGetProgramiv(glProgram, GL_LINK_STATUS, &status);
-	if( status == GL_TRUE )
+	if (status == GL_TRUE)
 		return true;
 	// in debug mode, get and print shader error log
-	char infoLog[48*1024];
+	char infoLog[48 * 1024];
 	uint32 infoLogLength, tempLength;
-	glGetProgramiv(glProgram, GL_INFO_LOG_LENGTH, (GLint *)&infoLogLength);
-	tempLength = sizeof(infoLog)-1;
+	glGetProgramiv(glProgram, GL_INFO_LOG_LENGTH, (GLint*)&infoLogLength);
+	tempLength = sizeof(infoLog) - 1;
 	glGetProgramInfoLog(glProgram, std::min(tempLength, infoLogLength), (GLsizei*)&tempLength, (GLcharARB*)infoLog);
 	infoLog[tempLength] = '\0';
 	cemuLog_log(LogType::Force, "Link error in raw shader");
@@ -59,7 +59,7 @@ void LatteShader_prepareSeparableUniforms(LatteDecompilerShader* shader)
 		GLint uniformLocation = glGetUniformLocation(shaderGL->GetProgram(), ufName);
 		if (uniformLocation >= 0)
 		{
-			LatteUniformTextureScaleEntry_t entry = { 0 };
+			LatteUniformTextureScaleEntry_t entry = {0};
 			entry.texUnit = t;
 			entry.uniformLocation = uniformLocation;
 			shader->uniform.list_ufTexRescale.push_back(entry);
@@ -71,7 +71,7 @@ GLuint gpu7ShaderGLDepr_compileShader(const std::string& source, uint32_t type)
 	cemu_assert(type == GL_VERTEX_SHADER || type == GL_FRAGMENT_SHADER);
 	const GLuint shader_object = glCreateShader(type);
 
-	const char *c_str = source.c_str();
+	const char* c_str = source.c_str();
 	const GLint size = (GLint)source.size();
 	glShaderSource(shader_object, 1, &c_str, &size);
 	glCompileShader(shader_object);
@@ -107,7 +107,7 @@ GLuint gpu7ShaderGLDepr_compileVertexShader(const char* shaderSource, sint32 sha
 	glShaderSource(shaderObject, 1, &srcPtr, &srcLen);
 	glCompileShader(shaderObject);
 	uint32 shaderLogLengthInfo, shaderLogLen;
-	glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, (GLint *)&shaderLogLengthInfo);
+	glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, (GLint*)&shaderLogLengthInfo);
 	if (shaderLogLengthInfo > 0)
 	{
 		char messageLog[2048]{};
@@ -127,7 +127,7 @@ GLuint gpu7ShaderGLDepr_compileFragmentShader(const char* shaderSource, sint32 s
 	glCompileShader(shaderObject);
 	uint32 shaderLogLengthInfo, shaderLogLen;
 	char messageLog[2048];
-	glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, (GLint *)&shaderLogLengthInfo);
+	glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, (GLint*)&shaderLogLengthInfo);
 	if (shaderLogLengthInfo > 0)
 	{
 		memset(messageLog, 0, sizeof(messageLog));
@@ -146,7 +146,7 @@ GLuint gxShaderDepr_compileRaw(StringBuf* strSourceVS, StringBuf* strSourceFS)
 	GLuint fragmentShader = gpu7ShaderGLDepr_compileFragmentShader(strSourceFS->c_str(), strSourceFS->getLen());
 	glAttachShader(glShaderProgram, fragmentShader);
 	glLinkProgram(glShaderProgram);
-	if( gxShader_checkIfSuccessfullyLinked(glShaderProgram) == false )
+	if (gxShader_checkIfSuccessfullyLinked(glShaderProgram) == false)
 	{
 		return 0;
 	}

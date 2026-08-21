@@ -3,7 +3,8 @@
 
 fs::path findPathCI(const fs::path& path)
 {
-	if (fs::exists(path)) return path;
+	if (fs::exists(path))
+		return path;
 
 	fs::path fName = path.filename();
 	fs::path parentPath = path.parent_path();
@@ -103,7 +104,7 @@ bool FileStream::SetEndOfFile()
 {
 	assert_dbg();
 	return true;
-	//return ::SetEndOfFile(m_hFile) != 0;
+	// return ::SetEndOfFile(m_hFile) != 0;
 }
 
 void FileStream::extract(std::vector<uint8>& data)
@@ -116,7 +117,7 @@ void FileStream::extract(std::vector<uint8>& data)
 
 void FileStream::Flush()
 {
-    m_fileStream.flush();
+	m_fileStream.flush();
 }
 
 uint32 FileStream::readData(void* data, uint32 length)
@@ -223,7 +224,7 @@ FileStream::FileStream(const fs::path& path, bool isOpen, bool isWriteable)
 		m_fileStream.open(CIPath, std::ios_base::in | std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
 		m_isValid = m_fileStream.is_open();
 	}
-	if(m_isValid && fs::is_directory(path))
+	if (m_isValid && fs::is_directory(path))
 	{
 		m_isValid = false;
 		m_fileStream.close();

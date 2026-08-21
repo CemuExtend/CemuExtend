@@ -38,11 +38,14 @@ namespace Application
 		std::string diagnostic;
 	};
 
-	namespace Detail { struct EventState; }
+	namespace Detail
+	{
+		struct EventState;
+	}
 
 	class EventSubscription final
 	{
-	public:
+	  public:
 		EventSubscription() = default;
 		EventSubscription(EventSubscription&& other) noexcept;
 		EventSubscription& operator=(EventSubscription&& other) noexcept;
@@ -52,7 +55,7 @@ namespace Application
 		EventSubscription& operator=(const EventSubscription&) = delete;
 		void Reset();
 
-	private:
+	  private:
 		friend class ApplicationEvents;
 		EventSubscription(std::weak_ptr<Detail::EventState> state, std::uint64_t id);
 		std::weak_ptr<Detail::EventState> m_state;
@@ -61,13 +64,13 @@ namespace Application
 
 	class ApplicationEvents final
 	{
-	public:
+	  public:
 		using Handler = std::function<void(const Event&)>;
 		ApplicationEvents();
 		[[nodiscard]] EventSubscription Subscribe(Handler handler);
 		void Publish(const Event& event) const;
 
-	private:
+	  private:
 		std::shared_ptr<Detail::EventState> m_state;
 	};
-}
+} // namespace Application

@@ -3,19 +3,19 @@
 #pragma pack(push, 1)
 struct SysProdSettings
 {
-	uint32be platformRegion;		// 0x00 (product_area)
-	uint16be eepromVersion;		// 0x04
+	uint32be platformRegion; // 0x00 (product_area)
+	uint16be eepromVersion;	 // 0x04
 	uint8 padding06[2];
-	uint32be gameRegion;		// 0x08
+	uint32be gameRegion; // 0x08
 	uint8 unknown0C[4];
-	char ntscPal[5];			// 0x10
-	char wifi5GhzCountryCode[4];	// 0x15
+	char ntscPal[5];			 // 0x10
+	char wifi5GhzCountryCode[4]; // 0x15
 	uint8 wifi5GhzCountryCodeRevision;
-	char codeId[8];				// 0x1A
-	char serialId[12];			// 0x22
+	char codeId[8];	   // 0x1A
+	char serialId[12]; // 0x22
 	uint8 unknown2E[4];
-	char modelNumber[16];		// 0x32
-	uint32be version;			// 0x42
+	char modelNumber[16]; // 0x32
+	uint32be version;	  // 0x42
 };
 #pragma pack(pop)
 

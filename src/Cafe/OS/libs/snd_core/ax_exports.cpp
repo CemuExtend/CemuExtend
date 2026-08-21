@@ -13,8 +13,8 @@ namespace snd_core
 	{
 		sndGeneric = {};
 		resetNumProcessedFrames();
-        AXVBP_Reset();
-    }
+		AXVBP_Reset();
+	}
 
 	bool AXIsInit()
 	{
@@ -79,12 +79,12 @@ namespace snd_core
 
 	void AXQuit()
 	{
-        AXResetCallbacks();
-        // todo - should we wait to make sure any active callbacks are finished with execution before we exit AXQuit?
-        // request worker thread stop and wait until complete
-        AXIst_StopThread();
-        // clean up subsystems
-        AXVBP_Reset();
+		AXResetCallbacks();
+		// todo - should we wait to make sure any active callbacks are finished with execution before we exit AXQuit?
+		// request worker thread stop and wait until complete
+		AXIst_StopThread();
+		// clean up subsystems
+		AXVBP_Reset();
 		sndGeneric.isInitialized = false;
 	}
 
@@ -241,7 +241,7 @@ namespace snd_core
 	void export_AXUserIsProtected(PPCInterpreter_t* hCPU)
 	{
 		sint32 r = AXUserIsProtected();
-		cemuLog_log(LogType::SoundAPI, "AXUserIsProtected() -> {}", r!=0?"true":"false");
+		cemuLog_log(LogType::SoundAPI, "AXUserIsProtected() -> {}", r != 0 ? "true" : "false");
 		osLib_returnFromFunction(hCPU, r);
 	}
 
@@ -279,7 +279,7 @@ namespace snd_core
 	{
 		ppcDefineParamStructPtr(vpb, AXVPB, 0);
 		cemuLog_log(LogType::SoundAPI, "AXVoiceIsProtected(0x{:08x})", hCPU->gpr[3]);
-		sint32 r = AXVoiceProtection_IsProtectedByCurrentThread(vpb)?1:0;
+		sint32 r = AXVoiceProtection_IsProtectedByCurrentThread(vpb) ? 1 : 0;
 		osLib_returnFromFunction(hCPU, r);
 	}
 
@@ -322,7 +322,7 @@ namespace snd_core
 
 		osLib_returnFromFunction(hCPU, isSameRange ? 1 : 0);
 	}
-		
+
 	void export_AXSetDeviceRemixMatrix(PPCInterpreter_t* hCPU)
 	{
 		ppcDefineParamS32(device, 0);
@@ -333,7 +333,7 @@ namespace snd_core
 		const auto result = AXSetDeviceRemixMatrix(device, chanIn, chanOut, matrix);
 		osLib_returnFromFunction(hCPU, result);
 	}
-	
+
 	void export_AXGetDeviceRemixMatrix(PPCInterpreter_t* hCPU)
 	{
 		ppcDefineParamS32(device, 0);
@@ -345,7 +345,7 @@ namespace snd_core
 		osLib_returnFromFunction(hCPU, result);
 	}
 
-	struct AXGetDeviceFinalOutput_t 
+	struct AXGetDeviceFinalOutput_t
 	{
 		/* +0x00 */ uint32be channelCount;
 		/* +0x04 */ uint32be uknValue;
@@ -392,9 +392,9 @@ namespace snd_core
 
 	void reset()
 	{
-        AXOut_reset();
-        AXResetToDefaultState();
-        sndGeneric.isInitialized = false;
+		AXOut_reset();
+		AXResetToDefaultState();
+		sndGeneric.isInitialized = false;
 		sndGeneric.isSoundCore2 = false;
 	}
 
@@ -467,7 +467,7 @@ namespace snd_core
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "snd_core";
@@ -538,11 +538,11 @@ namespace snd_core
 				AXResetToDefaultState();
 			}
 		}
-	}s_COSsndcore1Module;
+	} s_COSsndcore1Module;
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "sndcore2";
@@ -630,7 +630,7 @@ namespace snd_core
 				AXResetToDefaultState();
 			}
 		}
-	}s_COSsndcore2Module;
+	} s_COSsndcore2Module;
 
 	COSModule* GetModuleSndCore1()
 	{
@@ -642,4 +642,4 @@ namespace snd_core
 		return &s_COSsndcore2Module;
 	}
 
-}
+} // namespace snd_core

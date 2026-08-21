@@ -8,13 +8,16 @@ namespace
 {
 	class FakeBackend final : public Application::IEmulatedUsbBackend
 	{
-	public:
+	  public:
 		std::vector<Application::UsbDeviceDescriptor> devices;
 		std::unordered_map<std::uint32_t, bool> enabled;
 		Observer observer;
 		bool saveSucceeds{true};
 
-		std::vector<Application::UsbDeviceDescriptor> Enumerate() override { return devices; }
+		std::vector<Application::UsbDeviceDescriptor> Enumerate() override
+		{
+			return devices;
+		}
 		bool IsEnabled(std::uint16_t vendorId, std::uint16_t productId) const override
 		{
 			const auto found = enabled.find((std::uint32_t(vendorId) << 16) | productId);
@@ -22,14 +25,23 @@ namespace
 		}
 		bool SetEnabled(std::uint16_t vendorId, std::uint16_t productId, bool value) override
 		{
-			if (!saveSucceeds) return false;
+			if (!saveSucceeds)
+				return false;
 			enabled[(std::uint32_t(vendorId) << 16) | productId] = value;
 			return true;
 		}
-		std::uint64_t Subscribe(Observer value) override { observer = std::move(value); return 7; }
-		void Unsubscribe(std::uint64_t token) override { assert(token == 7); observer = {}; }
+		std::uint64_t Subscribe(Observer value) override
+		{
+			observer = std::move(value);
+			return 7;
+		}
+		void Unsubscribe(std::uint64_t token) override
+		{
+			assert(token == 7);
+			observer = {};
+		}
 	};
-}
+} // namespace
 
 int main()
 {
@@ -46,8 +58,13 @@ int main()
 	model = facade.SetEnabled("skylanders", 0x1430, 0x0150, true);
 	assert(model.generation == 2 && model.emulatedDevices[0].enabled);
 	bool rejected{};
-	try { (void)facade.SetEnabled("skylanders", 0x0e6f, 0x0129, true); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.SetEnabled("skylanders", 0x0e6f, 0x0129, true);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	assert(rejected);
 
 	std::uint64_t observedGeneration{};

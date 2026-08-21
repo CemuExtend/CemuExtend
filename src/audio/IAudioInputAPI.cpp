@@ -9,7 +9,7 @@ AudioInputAPIPtr g_inputAudio;
 std::array<bool, IAudioInputAPI::AudioInputAPIEnd> IAudioInputAPI::s_availableApis{};
 
 IAudioInputAPI::IAudioInputAPI(uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample)
-	: m_samplerate(samplerate), m_channels(channels), m_samplesPerBlock(samples_per_block), m_bitsPerSample(bits_per_sample) 
+	: m_samplerate(samplerate), m_channels(channels), m_samplesPerBlock(samples_per_block), m_bitsPerSample(bits_per_sample)
 {
 	m_bytesPerBlock = samples_per_block * channels * (bits_per_sample / 8);
 }
@@ -41,7 +41,7 @@ AudioInputAPIPtr IAudioInputAPI::CreateDevice(AudioInputAPI api, const DeviceDes
 	if (!IsAudioInputAPIAvailable(api))
 		return {};
 
-	switch(api)
+	switch (api)
 	{
 #if HAS_CUBEB
 	case Cubeb:
@@ -59,8 +59,8 @@ std::vector<IAudioInputAPI::DeviceDescriptionPtr> IAudioInputAPI::GetDevices(Aud
 {
 	if (!IsAudioInputAPIAvailable(api))
 		return {};
-	
-	switch(api)
+
+	switch (api)
 	{
 #if HAS_CUBEB
 	case Cubeb:

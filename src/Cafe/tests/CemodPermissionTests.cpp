@@ -11,14 +11,20 @@ namespace
 		std::abort();
 	}
 
-#define CHECK(condition) do { if (!(condition)) CheckFailed(#condition, __LINE__); } while (false)
-}
+#define CHECK(condition)                       \
+	do                                         \
+	{                                          \
+		if (!(condition))                      \
+			CheckFailed(#condition, __LINE__); \
+	}                                          \
+	while (false)
+} // namespace
 
 int main()
 {
-	using cemuextend_hle::NeedsCemodPermissionPrompt;
 	using cemuextend_hle::CemodTrustAnchorCoversRequest;
 	using cemuextend_hle::ExactRuntimeServicePermissions;
+	using cemuextend_hle::NeedsCemodPermissionPrompt;
 
 	CHECK(!NeedsCemodPermissionPrompt(0x1fU, 0, 0, false));
 	CHECK(!NeedsCemodPermissionPrompt(0, 0, 0, true));

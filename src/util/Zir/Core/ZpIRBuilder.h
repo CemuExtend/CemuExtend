@@ -7,7 +7,7 @@ namespace ZpIR
 	// helper class for building a single basic block
 	class BasicBlockBuilder
 	{
-	public:
+	  public:
 		BasicBlockBuilder(ZpIRBasicBlock* basicBlock) : m_basicBlock(basicBlock) {};
 
 		IRReg createReg(DataType type, uint8 elementCount = 1)
@@ -74,7 +74,7 @@ namespace ZpIR
 		{
 			m_basicBlock->appendInstruction(ins);
 		}
-		
+
 		// constant var creation
 
 		IRReg createConstU32(uint32 v)
@@ -114,24 +114,23 @@ namespace ZpIR
 			m_basicBlock->addImport(reg, importSymbolName);
 		}
 
-
-	private:
+	  private:
 		ZpIRBasicBlock* m_basicBlock;
 	};
 
 	// helper class for constructing multiple basic blocks with control flow
 	class ZpIRBuilder
 	{
-	public:
+	  public:
 		typedef uint64 BlockBranchTarget;
 
 		static const inline BlockBranchTarget INVALID_BLOCK_NAME = 0xFFFFFFFFFFFFFFFFull;
 
 		struct BasicBlockWorkbuffer
 		{
-			BlockBranchTarget name{ INVALID_BLOCK_NAME };
-			BlockBranchTarget targetBranchNotTaken{ INVALID_BLOCK_NAME };
-			BlockBranchTarget targetBranchTaken{ INVALID_BLOCK_NAME };
+			BlockBranchTarget name{INVALID_BLOCK_NAME};
+			BlockBranchTarget targetBranchNotTaken{INVALID_BLOCK_NAME};
+			BlockBranchTarget targetBranchTaken{INVALID_BLOCK_NAME};
 		};
 
 		void beginBlock(BlockBranchTarget name)
@@ -237,14 +236,13 @@ namespace ZpIR
 			m_targetBranchNotTaken = target;
 		}
 
-	private:
+	  private:
 		ZpIRBasicBlock* m_currentBasicBlock{};
 		std::vector<ZpIRBasicBlock*> m_blocks;
 		std::unordered_map<BlockBranchTarget, ZpIRBasicBlock*> m_blocksByName;
 
-		BlockBranchTarget m_targetBranchNotTaken{ INVALID_BLOCK_NAME };
-		BlockBranchTarget m_targetBranchTaken{ INVALID_BLOCK_NAME };
-
+		BlockBranchTarget m_targetBranchNotTaken{INVALID_BLOCK_NAME};
+		BlockBranchTarget m_targetBranchTaken{INVALID_BLOCK_NAME};
 	};
 
-}
+} // namespace ZpIR

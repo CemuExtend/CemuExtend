@@ -30,88 +30,93 @@ namespace WebFrontend
 
 		class EglOpenGLHost final : public INativeOpenGLHost
 		{
-		public:
+		  public:
 			EglOpenGLHost(Host::NativeWindowHandle handle,
-				std::shared_ptr<Host::IWindowMetrics> windowMetrics)
+						  std::shared_ptr<Host::IWindowMetrics> windowMetrics)
 				: m_handle(handle), m_windowMetrics(std::move(windowMetrics))
 			{
 				try
 				{
-				m_eglLibrary = dlopen("libEGL.so.1", RTLD_NOW | RTLD_LOCAL);
-				if (!m_eglLibrary)
-					m_eglLibrary = dlopen("libEGL.so", RTLD_NOW | RTLD_LOCAL);
-				if (!m_eglLibrary)
-					throw std::runtime_error("failed to load libEGL");
+					m_eglLibrary = dlopen("libEGL.so.1", RTLD_NOW | RTLD_LOCAL);
+					if (!m_eglLibrary)
+						m_eglLibrary = dlopen("libEGL.so", RTLD_NOW | RTLD_LOCAL);
+					if (!m_eglLibrary)
+						throw std::runtime_error("failed to load libEGL");
 
-				m_getDisplay = Load<PFNEGLGETDISPLAYPROC>(m_eglLibrary, "eglGetDisplay");
-				m_initialize = Load<PFNEGLINITIALIZEPROC>(m_eglLibrary, "eglInitialize");
-				m_bindApi = Load<PFNEGLBINDAPIPROC>(m_eglLibrary, "eglBindAPI");
-				m_getConfigs = Load<PFNEGLGETCONFIGSPROC>(m_eglLibrary, "eglGetConfigs");
-				m_getConfigAttrib = Load<PFNEGLGETCONFIGATTRIBPROC>(m_eglLibrary, "eglGetConfigAttrib");
-				m_createWindowSurface = Load<PFNEGLCREATEWINDOWSURFACEPROC>(
-					m_eglLibrary, "eglCreateWindowSurface");
-				m_createContext = Load<PFNEGLCREATECONTEXTPROC>(m_eglLibrary, "eglCreateContext");
-				m_makeCurrent = Load<PFNEGLMAKECURRENTPROC>(m_eglLibrary, "eglMakeCurrent");
-				m_swapBuffers = Load<PFNEGLSWAPBUFFERSPROC>(m_eglLibrary, "eglSwapBuffers");
-				m_swapInterval = Load<PFNEGLSWAPINTERVALPROC>(m_eglLibrary, "eglSwapInterval");
-				m_destroyContext = Load<PFNEGLDESTROYCONTEXTPROC>(m_eglLibrary, "eglDestroyContext");
-				m_destroySurface = Load<PFNEGLDESTROYSURFACEPROC>(m_eglLibrary, "eglDestroySurface");
-				m_terminate = Load<PFNEGLTERMINATEPROC>(m_eglLibrary, "eglTerminate");
+					m_getDisplay = Load<PFNEGLGETDISPLAYPROC>(m_eglLibrary, "eglGetDisplay");
+					m_initialize = Load<PFNEGLINITIALIZEPROC>(m_eglLibrary, "eglInitialize");
+					m_bindApi = Load<PFNEGLBINDAPIPROC>(m_eglLibrary, "eglBindAPI");
+					m_getConfigs = Load<PFNEGLGETCONFIGSPROC>(m_eglLibrary, "eglGetConfigs");
+					m_getConfigAttrib = Load<PFNEGLGETCONFIGATTRIBPROC>(m_eglLibrary, "eglGetConfigAttrib");
+					m_createWindowSurface = Load<PFNEGLCREATEWINDOWSURFACEPROC>(
+						m_eglLibrary, "eglCreateWindowSurface");
+					m_createContext = Load<PFNEGLCREATECONTEXTPROC>(m_eglLibrary, "eglCreateContext");
+					m_makeCurrent = Load<PFNEGLMAKECURRENTPROC>(m_eglLibrary, "eglMakeCurrent");
+					m_swapBuffers = Load<PFNEGLSWAPBUFFERSPROC>(m_eglLibrary, "eglSwapBuffers");
+					m_swapInterval = Load<PFNEGLSWAPINTERVALPROC>(m_eglLibrary, "eglSwapInterval");
+					m_destroyContext = Load<PFNEGLDESTROYCONTEXTPROC>(m_eglLibrary, "eglDestroyContext");
+					m_destroySurface = Load<PFNEGLDESTROYSURFACEPROC>(m_eglLibrary, "eglDestroySurface");
+					m_terminate = Load<PFNEGLTERMINATEPROC>(m_eglLibrary, "eglTerminate");
 
-				m_display = m_getDisplay(static_cast<EGLNativeDisplayType>(handle.display));
-				if (m_display == EGL_NO_DISPLAY || !m_initialize(m_display, nullptr, nullptr))
-					throw std::runtime_error("failed to initialize EGL for the native display");
-				if (!m_bindApi(EGL_OPENGL_API))
-					throw std::runtime_error("the EGL implementation does not support desktop OpenGL");
+					m_display = m_getDisplay(static_cast<EGLNativeDisplayType>(handle.display));
+					if (m_display == EGL_NO_DISPLAY || !m_initialize(m_display, nullptr, nullptr))
+						throw std::runtime_error("failed to initialize EGL for the native display");
+					if (!m_bindApi(EGL_OPENGL_API))
+						throw std::runtime_error("the EGL implementation does not support desktop OpenGL");
 
-				m_config = SelectConfig();
-				EGLNativeWindowType nativeWindow{};
-				if (handle.backend == Host::NativeWindowBackend::X11)
-					nativeWindow = static_cast<EGLNativeWindowType>(
-						reinterpret_cast<std::uintptr_t>(handle.surface));
+					m_config = SelectConfig();
+					EGLNativeWindowType nativeWindow{};
+					if (handle.backend == Host::NativeWindowBackend::X11)
+						nativeWindow = static_cast<EGLNativeWindowType>(
+							reinterpret_cast<std::uintptr_t>(handle.surface));
 #ifdef HAS_WAYLAND
-				else if (handle.backend == Host::NativeWindowBackend::Wayland)
-				{
-					m_waylandEglLibrary = dlopen("libwayland-egl.so.1", RTLD_NOW | RTLD_LOCAL);
-					if (!m_waylandEglLibrary)
-						throw std::runtime_error("failed to load libwayland-egl");
-					m_waylandCreate = Load<WaylandCreate>(m_waylandEglLibrary, "wl_egl_window_create");
-					m_waylandDestroy = Load<WaylandDestroy>(m_waylandEglLibrary, "wl_egl_window_destroy");
-					m_waylandResize = Load<WaylandResize>(m_waylandEglLibrary, "wl_egl_window_resize");
-					const auto metrics = m_windowMetrics->GetWindowMetrics();
-					m_waylandWindow = m_waylandCreate(static_cast<wl_surface*>(handle.surface),
-						std::max(1, metrics.physicalWidth), std::max(1, metrics.physicalHeight));
-					if (!m_waylandWindow)
-						throw std::runtime_error("failed to create the Wayland EGL window");
-					nativeWindow = reinterpret_cast<EGLNativeWindowType>(m_waylandWindow);
-				}
+					else if (handle.backend == Host::NativeWindowBackend::Wayland)
+					{
+						m_waylandEglLibrary = dlopen("libwayland-egl.so.1", RTLD_NOW | RTLD_LOCAL);
+						if (!m_waylandEglLibrary)
+							throw std::runtime_error("failed to load libwayland-egl");
+						m_waylandCreate = Load<WaylandCreate>(m_waylandEglLibrary, "wl_egl_window_create");
+						m_waylandDestroy = Load<WaylandDestroy>(m_waylandEglLibrary, "wl_egl_window_destroy");
+						m_waylandResize = Load<WaylandResize>(m_waylandEglLibrary, "wl_egl_window_resize");
+						const auto metrics = m_windowMetrics->GetWindowMetrics();
+						m_waylandWindow = m_waylandCreate(static_cast<wl_surface*>(handle.surface),
+														  std::max(1, metrics.physicalWidth), std::max(1, metrics.physicalHeight));
+						if (!m_waylandWindow)
+							throw std::runtime_error("failed to create the Wayland EGL window");
+						nativeWindow = reinterpret_cast<EGLNativeWindowType>(m_waylandWindow);
+					}
 #endif
-				else
-					throw std::runtime_error("EGL received an unsupported native window backend");
+					else
+						throw std::runtime_error("EGL received an unsupported native window backend");
 
-				m_surface = m_createWindowSurface(m_display, m_config, nativeWindow, nullptr);
-				if (m_surface == EGL_NO_SURFACE)
-					throw std::runtime_error("failed to create the EGL window surface");
-				const EGLint contextAttributes[] = {
-					EGL_CONTEXT_MAJOR_VERSION, 4,
-					EGL_CONTEXT_MINOR_VERSION, 1,
-					EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-					EGL_NONE,
-				};
-				m_context = m_createContext(m_display, m_config, EGL_NO_CONTEXT, contextAttributes);
-				if (m_context == EGL_NO_CONTEXT)
-					throw std::runtime_error("failed to create the EGL OpenGL context");
-				SetOpenGLCanvasCallbacks(this);
-				m_callbacksInstalled = true;
-				}
-				catch (...)
+					m_surface = m_createWindowSurface(m_display, m_config, nativeWindow, nullptr);
+					if (m_surface == EGL_NO_SURFACE)
+						throw std::runtime_error("failed to create the EGL window surface");
+					const EGLint contextAttributes[] = {
+						EGL_CONTEXT_MAJOR_VERSION,
+						4,
+						EGL_CONTEXT_MINOR_VERSION,
+						1,
+						EGL_CONTEXT_OPENGL_PROFILE_MASK,
+						EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+						EGL_NONE,
+					};
+					m_context = m_createContext(m_display, m_config, EGL_NO_CONTEXT, contextAttributes);
+					if (m_context == EGL_NO_CONTEXT)
+						throw std::runtime_error("failed to create the EGL OpenGL context");
+					SetOpenGLCanvasCallbacks(this);
+					m_callbacksInstalled = true;
+				} catch (...)
 				{
 					Cleanup();
 					throw;
 				}
 			}
 
-			~EglOpenGLHost() override { Cleanup(); }
+			~EglOpenGLHost() override
+			{
+				Cleanup();
+			}
 
 			bool HasPadViewOpen() const override
 			{
@@ -133,8 +138,8 @@ namespace WebFrontend
 				{
 					const auto metrics = m_windowMetrics->GetWindowMetrics();
 					m_padWaylandWindow = m_waylandCreate(static_cast<wl_surface*>(handle.surface),
-						std::max(1, metrics.physicalPadWidth),
-						std::max(1, metrics.physicalPadHeight));
+														 std::max(1, metrics.physicalPadWidth),
+														 std::max(1, metrics.physicalPadHeight));
 					if (!m_padWaylandWindow)
 						throw std::runtime_error("failed to create the GamePad Wayland EGL window");
 					nativeWindow = reinterpret_cast<EGLNativeWindowType>(m_padWaylandWindow);
@@ -192,7 +197,7 @@ namespace WebFrontend
 					return false;
 				const auto surface = padView ? m_padSurface : m_surface;
 				return surface != EGL_NO_SURFACE &&
-					m_makeCurrent(m_display, surface, surface, m_context) == EGL_TRUE;
+					   m_makeCurrent(m_display, surface, surface, m_context) == EGL_TRUE;
 			}
 
 			void SwapBuffers(bool swapTV, bool swapDRC) override
@@ -204,7 +209,7 @@ namespace WebFrontend
 				(void)MakeCurrent(false);
 			}
 
-		private:
+		  private:
 			void Swap(bool padView)
 			{
 				if (!MakeCurrent(padView))
@@ -215,9 +220,9 @@ namespace WebFrontend
 				{
 					const auto metrics = m_windowMetrics->GetWindowMetrics();
 					const auto width = std::max(1,
-						padView ? metrics.physicalPadWidth : metrics.physicalWidth);
+												padView ? metrics.physicalPadWidth : metrics.physicalWidth);
 					const auto height = std::max(1,
-						padView ? metrics.physicalPadHeight : metrics.physicalHeight);
+												 padView ? metrics.physicalPadHeight : metrics.physicalHeight);
 					auto& previousWidth = padView ? m_padWaylandWidth : m_waylandWidth;
 					auto& previousHeight = padView ? m_padWaylandHeight : m_waylandHeight;
 					if (width != previousWidth || height != previousHeight)
@@ -277,8 +282,8 @@ namespace WebFrontend
 				{
 					XWindowAttributes attributes{};
 					if (!XGetWindowAttributes(static_cast<Display*>(m_handle.display),
-						static_cast<Window>(reinterpret_cast<std::uintptr_t>(m_handle.surface)),
-						&attributes))
+											  static_cast<Window>(reinterpret_cast<std::uintptr_t>(m_handle.surface)),
+											  &attributes))
 						throw std::runtime_error("failed to inspect the X11 render window visual");
 					x11Visual = XVisualIDFromVisual(attributes.visual);
 				}
@@ -303,9 +308,9 @@ namespace WebFrontend
 			}
 
 #ifdef HAS_WAYLAND
-			using WaylandCreate = wl_egl_window*(*)(wl_surface*, int, int);
-			using WaylandDestroy = void(*)(wl_egl_window*);
-			using WaylandResize = void(*)(wl_egl_window*, int, int, int, int);
+			using WaylandCreate = wl_egl_window* (*)(wl_surface*, int, int);
+			using WaylandDestroy = void (*)(wl_egl_window*);
+			using WaylandResize = void (*)(wl_egl_window*, int, int, int, int);
 #endif
 			Host::NativeWindowHandle m_handle;
 			std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
@@ -345,7 +350,7 @@ namespace WebFrontend
 			int m_padWaylandHeight{};
 #endif
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<INativeOpenGLHost> CreateNativeOpenGLHost(
 		Host::NativeWindowHandle surface,
@@ -353,4 +358,4 @@ namespace WebFrontend
 	{
 		return std::make_unique<EglOpenGLHost>(surface, std::move(windowMetrics));
 	}
-}
+} // namespace WebFrontend

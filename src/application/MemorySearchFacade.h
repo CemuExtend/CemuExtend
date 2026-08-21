@@ -27,7 +27,7 @@ namespace Application
 	};
 
 	using MemoryScalar = std::variant<std::int8_t, std::int16_t, std::int32_t,
-		std::int64_t, float, double>;
+									  std::int64_t, float, double>;
 
 	struct MemorySearchValue
 	{
@@ -50,14 +50,14 @@ namespace Application
 
 	class IMemoryDiagnosticBackend
 	{
-	public:
+	  public:
 		virtual ~IMemoryDiagnosticBackend() = default;
 		[[nodiscard]] virtual bool IsEmulationRunning() const = 0;
 		[[nodiscard]] virtual MemoryMapSnapshot SnapshotMemoryMap() const = 0;
 		// Implementations must validate both the current map generation and the
 		// complete guest range before copying into destination.
 		[[nodiscard]] virtual bool ReadCopy(std::uint64_t mapGeneration,
-			std::uint32_t address, std::span<std::byte> destination) const = 0;
+											std::uint32_t address, std::span<std::byte> destination) const = 0;
 	};
 
 	struct MemorySearchRequest
@@ -115,7 +115,7 @@ namespace Application
 
 	class MemorySearchFacade final
 	{
-	public:
+	  public:
 		static constexpr std::uint64_t MaximumScanBytes = 512ULL * 1024 * 1024;
 		static constexpr std::uint32_t MaximumResults = 50000;
 		static constexpr std::uint32_t MaximumPageSize = 200;
@@ -127,21 +127,21 @@ namespace Application
 		MemorySearchFacade& operator=(const MemorySearchFacade&) = delete;
 
 		[[nodiscard]] MemorySearchSessionInfo Start(std::uint64_t ownerWindow,
-			const MemorySearchRequest& request);
+													const MemorySearchRequest& request);
 		[[nodiscard]] MemorySearchSessionInfo Filter(std::uint64_t ownerWindow,
-			std::string_view token, std::uint64_t expectedGeneration,
-			const MemorySearchValue& value);
+													 std::string_view token, std::uint64_t expectedGeneration,
+													 const MemorySearchValue& value);
 		[[nodiscard]] MemorySearchStatus Status(std::uint64_t ownerWindow,
-			std::string_view token) const;
+												std::string_view token) const;
 		[[nodiscard]] MemorySearchPage Page(std::uint64_t ownerWindow,
-			std::string_view token, std::uint64_t expectedGeneration,
-			std::uint32_t offset, std::uint32_t limit) const;
+											std::string_view token, std::uint64_t expectedGeneration,
+											std::uint32_t offset, std::uint32_t limit) const;
 		void Cancel(std::uint64_t ownerWindow, std::string_view token,
-			std::uint64_t expectedGeneration);
+					std::uint64_t expectedGeneration);
 		void CloseOwner(std::uint64_t ownerWindow) noexcept;
 		void BeginShutdown() noexcept;
 
-	private:
+	  private:
 		struct StoredResult
 		{
 			std::uint32_t address{};
@@ -155,12 +155,12 @@ namespace Application
 		static std::size_t ValueWidth(MemoryValueType type);
 		static std::vector<std::byte> Encode(const MemorySearchValue& value);
 		static MemorySearchValue Decode(MemoryValueType type,
-			std::span<const std::byte> bytes);
+										std::span<const std::byte> bytes);
 		void RunInitial(const std::shared_ptr<Session>& session, std::stop_token stopToken,
-			MemoryMapSnapshot map, std::vector<std::byte> needle);
+						MemoryMapSnapshot map, std::vector<std::byte> needle);
 		void RunFilter(const std::shared_ptr<Session>& session,
-			std::stop_token stopToken, std::vector<StoredResult> candidates,
-			std::vector<std::byte> needle);
+					   std::stop_token stopToken, std::vector<StoredResult> candidates,
+					   std::vector<std::byte> needle);
 
 		std::unique_ptr<IMemoryDiagnosticBackend> m_backend;
 		mutable std::mutex m_mutex;
@@ -169,5 +169,5 @@ namespace Application
 	};
 
 	[[nodiscard]] std::unique_ptr<IMemoryDiagnosticBackend>
-		CreateCafeMemoryDiagnosticBackend();
-}
+	CreateCafeMemoryDiagnosticBackend();
+} // namespace Application

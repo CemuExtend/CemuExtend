@@ -32,168 +32,211 @@ namespace WebFrontend
 		constexpr wchar_t MainWindowClass[] = L"CemuExtendWebMainWindow";
 		constexpr wchar_t RenderWindowClass[] = L"CemuExtendRenderRegion";
 		constexpr wchar_t PadWindowClass[] = L"CemuExtendPadRenderRegion";
-			constexpr UINT FirstCommandId = 0x2000;
+		constexpr UINT FirstCommandId = 0x2000;
 
-			std::string Utf8(std::wstring_view text)
-			{
-				if (text.empty()) return {};
-				const auto length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-					text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-				if (length <= 0) return {};
-				std::string result(length, '\0');
-				WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(),
-					static_cast<int>(text.size()), result.data(), length, nullptr, nullptr);
-				return result;
-			}
+		std::string Utf8(std::wstring_view text)
+		{
+			if (text.empty())
+				return {};
+			const auto length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+													text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+			if (length <= 0)
+				return {};
+			std::string result(length, '\0');
+			WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(),
+								static_cast<int>(text.size()), result.data(), length, nullptr, nullptr);
+			return result;
+		}
 
-			std::wstring Wide(std::string_view text)
-			{
-				if (text.empty()) return {};
-				const auto length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-					text.data(), static_cast<int>(text.size()), nullptr, 0);
-				if (length <= 0) return {};
-				std::wstring result(length, L'\0');
-				MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
-					static_cast<int>(text.size()), result.data(), length);
-				return result;
-			}
+		std::wstring Wide(std::string_view text)
+		{
+			if (text.empty())
+				return {};
+			const auto length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+													text.data(), static_cast<int>(text.size()), nullptr, 0);
+			if (length <= 0)
+				return {};
+			std::wstring result(length, L'\0');
+			MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+								static_cast<int>(text.size()), result.data(), length);
+			return result;
+		}
 
-			struct WinInputBinding
-			{
-				INativeWindowHost::InputHandler* handler{};
-				Host::PointerSurface surface{Host::PointerSurface::Main};
-				HCURSOR cursor{LoadCursorW(nullptr, IDC_ARROW)};
-				bool hideCursor{};
-				bool captured{};
-				bool rawRegistered{};
-				wchar_t highSurrogate{};
+		struct WinInputBinding
+		{
+			INativeWindowHost::InputHandler* handler{};
+			Host::PointerSurface surface{Host::PointerSurface::Main};
+			HCURSOR cursor{LoadCursorW(nullptr, IDC_ARROW)};
+			bool hideCursor{};
+			bool captured{};
+			bool rawRegistered{};
+			wchar_t highSurrogate{};
+		};
+
+		std::uint8_t KeyModifiers()
+		{
+			return static_cast<std::uint8_t>(
+				((GetKeyState(VK_CONTROL) & 0x8000) ? 1U : 0U) |
+				((GetKeyState(VK_SHIFT) & 0x8000) ? 2U : 0U) |
+				((GetKeyState(VK_MENU) & 0x8000) ? 4U : 0U) |
+				(((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) ? 8U : 0U));
+		}
+
+		LRESULT DispatchInput(HWND window, UINT message, WPARAM wparam, LPARAM lparam,
+							  WinInputBinding* binding)
+		{
+			if (!binding || !binding->handler || !*binding->handler)
+				return DefWindowProcW(window, message, wparam, lparam);
+			RECT client{};
+			GetClientRect(window, &client);
+			auto emit = [&](NativeInputEvent event) {
+				event.surface = binding->surface;
+				event.contentWidth = client.right;
+				event.contentHeight = client.bottom;
+				(*binding->handler)(event);
 			};
-
-			std::uint8_t KeyModifiers()
+			auto pointer = [&](NativeInputKind kind, std::uint32_t button, bool pressed) {
+				const auto x = static_cast<std::int16_t>(LOWORD(lparam));
+				const auto y = static_cast<std::int16_t>(HIWORD(lparam));
+				emit({.kind = kind, .x = x, .y = y, .button = button, .pressed = pressed, .insideContent = x >= 0 && y >= 0 && x < client.right && y < client.bottom});
+			};
+			switch (message)
 			{
-				return static_cast<std::uint8_t>(
-					((GetKeyState(VK_CONTROL) & 0x8000) ? 1U : 0U) |
-					((GetKeyState(VK_SHIFT) & 0x8000) ? 2U : 0U) |
-					((GetKeyState(VK_MENU) & 0x8000) ? 4U : 0U) |
-					(((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) ? 8U : 0U));
-			}
-
-			LRESULT DispatchInput(HWND window, UINT message, WPARAM wparam, LPARAM lparam,
-				WinInputBinding* binding)
-			{
-				if (!binding || !binding->handler || !*binding->handler)
-					return DefWindowProcW(window, message, wparam, lparam);
-				RECT client{};
-				GetClientRect(window, &client);
-				auto emit = [&](NativeInputEvent event) {
-					event.surface = binding->surface;
-					event.contentWidth = client.right;
-					event.contentHeight = client.bottom;
-					(*binding->handler)(event);
-				};
-				auto pointer = [&](NativeInputKind kind, std::uint32_t button, bool pressed) {
-					const auto x = static_cast<std::int16_t>(LOWORD(lparam));
-					const auto y = static_cast<std::int16_t>(HIWORD(lparam));
-					emit({.kind = kind, .x = x, .y = y, .button = button,
-						.pressed = pressed, .insideContent = x >= 0 && y >= 0 &&
-							x < client.right && y < client.bottom});
-				};
-				switch (message)
+			case WM_MOUSEMOVE:
+				if (binding->captured)
 				{
-				case WM_MOUSEMOVE:
-					if (binding->captured)
+					if (!binding->rawRegistered)
 					{
-						if (!binding->rawRegistered)
+						const auto x = static_cast<std::int16_t>(LOWORD(lparam));
+						const auto y = static_cast<std::int16_t>(HIWORD(lparam));
+						const auto centerX = client.right / 2, centerY = client.bottom / 2;
+						if (x != centerX || y != centerY)
 						{
-							const auto x = static_cast<std::int16_t>(LOWORD(lparam));
-							const auto y = static_cast<std::int16_t>(HIWORD(lparam));
-							const auto centerX = client.right / 2, centerY = client.bottom / 2;
-							if (x != centerX || y != centerY)
-							{
-								emit({.kind = NativeInputKind::RawMouse,
-									.deltaX = x - centerX, .deltaY = y - centerY});
-								POINT center{centerX, centerY}; ClientToScreen(window, &center);
-								SetCursorPos(center.x, center.y);
-							}
+							emit({.kind = NativeInputKind::RawMouse,
+								  .deltaX = x - centerX,
+								  .deltaY = y - centerY});
+							POINT center{centerX, centerY};
+							ClientToScreen(window, &center);
+							SetCursorPos(center.x, center.y);
 						}
-						return 0;
 					}
-					pointer(NativeInputKind::PointerMove, 0, false); return 0;
-				case WM_LBUTTONDOWN: SetFocus(window); pointer(NativeInputKind::PointerButton, 1, true); return 0;
-				case WM_LBUTTONUP: pointer(NativeInputKind::PointerButton, 1, false); return 0;
-				case WM_RBUTTONDOWN: SetFocus(window); pointer(NativeInputKind::PointerButton, 3, true); return 0;
-				case WM_RBUTTONUP: pointer(NativeInputKind::PointerButton, 3, false); return 0;
-				case WM_MBUTTONDOWN: SetFocus(window); pointer(NativeInputKind::PointerButton, 2, true); return 0;
-				case WM_MBUTTONUP: pointer(NativeInputKind::PointerButton, 2, false); return 0;
-				case WM_XBUTTONDOWN: pointer(NativeInputKind::PointerButton,
-					GET_XBUTTON_WPARAM(wparam) == XBUTTON1 ? 8 : 9, true); return TRUE;
-				case WM_XBUTTONUP: pointer(NativeInputKind::PointerButton,
-					GET_XBUTTON_WPARAM(wparam) == XBUTTON1 ? 8 : 9, false); return TRUE;
-				case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL:
-					emit({.kind = NativeInputKind::PointerWheel,
-						.wheelX = message == WM_MOUSEHWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0,
-						.wheelY = message == WM_MOUSEWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0});
-					return 0;
-				case WM_KEYDOWN: case WM_SYSKEYDOWN: case WM_KEYUP: case WM_SYSKEYUP:
-					emit({.kind = NativeInputKind::Key, .key = static_cast<std::uint32_t>(wparam),
-						.modifiers = KeyModifiers(),
-						.pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN,
-						.repeat = (lparam & (1LL << 30)) != 0});
-					return 0;
-				case WM_CHAR:
-				{
-					const auto character = static_cast<wchar_t>(wparam);
-					if (IS_HIGH_SURROGATE(character)) { binding->highSurrogate = character; return 0; }
-					std::wstring text;
-					if (binding->highSurrogate && IS_LOW_SURROGATE(character)) text = {binding->highSurrogate, character};
-					else text = {character};
-					binding->highSurrogate = 0;
-					emit({.kind = NativeInputKind::Character,
-						.repeat = (lparam & (1LL << 30)) != 0, .text = Utf8(text)});
 					return 0;
 				}
-				case WM_KILLFOCUS: emit({.kind = NativeInputKind::FocusLost}); return 0;
-				case WM_INPUT:
-				{
-					UINT size{};
-					if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, nullptr,
-						&size, sizeof(RAWINPUTHEADER)) != 0 || size < sizeof(RAWINPUTHEADER)) return 0;
-					std::vector<std::byte> storage(size);
-					if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, storage.data(),
-						&size, sizeof(RAWINPUTHEADER)) != size) return 0;
-					const auto& raw = *reinterpret_cast<const RAWINPUT*>(storage.data());
-					if (raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
-						emit({.kind = NativeInputKind::RawMouse,
-							.deltaX = raw.data.mouse.lLastX, .deltaY = raw.data.mouse.lLastY});
-					return 0;
-				}
-				case WM_POINTERDOWN: case WM_POINTERUPDATE: case WM_POINTERUP:
-				{
-					POINTER_INFO info{};
-					if (!GetPointerInfo(GET_POINTERID_WPARAM(wparam), &info)) return 0;
-					POINT point = info.ptPixelLocation;
-					ScreenToClient(window, &point);
-					emit({.kind = NativeInputKind::Touch, .x = point.x, .y = point.y,
-						.touchId = GET_POINTERID_WPARAM(wparam), .pressed = message != WM_POINTERUP,
-						.insideContent = true});
-					return 0;
-				}
-				case WM_SETCURSOR: SetCursor(binding->hideCursor ? nullptr : binding->cursor); return TRUE;
-				default: return DefWindowProcW(window, message, wparam, lparam);
-				}
-			}
-
-			LRESULT CALLBACK RenderWindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+				pointer(NativeInputKind::PointerMove, 0, false);
+				return 0;
+			case WM_LBUTTONDOWN:
+				SetFocus(window);
+				pointer(NativeInputKind::PointerButton, 1, true);
+				return 0;
+			case WM_LBUTTONUP:
+				pointer(NativeInputKind::PointerButton, 1, false);
+				return 0;
+			case WM_RBUTTONDOWN:
+				SetFocus(window);
+				pointer(NativeInputKind::PointerButton, 3, true);
+				return 0;
+			case WM_RBUTTONUP:
+				pointer(NativeInputKind::PointerButton, 3, false);
+				return 0;
+			case WM_MBUTTONDOWN:
+				SetFocus(window);
+				pointer(NativeInputKind::PointerButton, 2, true);
+				return 0;
+			case WM_MBUTTONUP:
+				pointer(NativeInputKind::PointerButton, 2, false);
+				return 0;
+			case WM_XBUTTONDOWN:
+				pointer(NativeInputKind::PointerButton,
+						GET_XBUTTON_WPARAM(wparam) == XBUTTON1 ? 8 : 9, true);
+				return TRUE;
+			case WM_XBUTTONUP:
+				pointer(NativeInputKind::PointerButton,
+						GET_XBUTTON_WPARAM(wparam) == XBUTTON1 ? 8 : 9, false);
+				return TRUE;
+			case WM_MOUSEWHEEL:
+			case WM_MOUSEHWHEEL:
+				emit({.kind = NativeInputKind::PointerWheel,
+					  .wheelX = message == WM_MOUSEHWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0,
+					  .wheelY = message == WM_MOUSEWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0});
+				return 0;
+			case WM_KEYDOWN:
+			case WM_SYSKEYDOWN:
+			case WM_KEYUP:
+			case WM_SYSKEYUP:
+				emit({.kind = NativeInputKind::Key, .key = static_cast<std::uint32_t>(wparam), .modifiers = KeyModifiers(), .pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN, .repeat = (lparam & (1LL << 30)) != 0});
+				return 0;
+			case WM_CHAR:
 			{
-				auto* binding = reinterpret_cast<WinInputBinding*>(GetWindowLongPtrW(window, GWLP_USERDATA));
-				if (message == WM_NCCREATE)
+				const auto character = static_cast<wchar_t>(wparam);
+				if (IS_HIGH_SURROGATE(character))
 				{
-					binding = static_cast<WinInputBinding*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
-					SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(binding));
+					binding->highSurrogate = character;
+					return 0;
 				}
-				if (message == WM_NCDESTROY) SetWindowLongPtrW(window, GWLP_USERDATA, 0);
-				return DispatchInput(window, message, wparam, lparam, binding);
+				std::wstring text;
+				if (binding->highSurrogate && IS_LOW_SURROGATE(character))
+					text = {binding->highSurrogate, character};
+				else
+					text = {character};
+				binding->highSurrogate = 0;
+				emit({.kind = NativeInputKind::Character,
+					  .repeat = (lparam & (1LL << 30)) != 0,
+					  .text = Utf8(text)});
+				return 0;
 			}
+			case WM_KILLFOCUS:
+				emit({.kind = NativeInputKind::FocusLost});
+				return 0;
+			case WM_INPUT:
+			{
+				UINT size{};
+				if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, nullptr,
+									&size, sizeof(RAWINPUTHEADER)) != 0 ||
+					size < sizeof(RAWINPUTHEADER))
+					return 0;
+				std::vector<std::byte> storage(size);
+				if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, storage.data(),
+									&size, sizeof(RAWINPUTHEADER)) != size)
+					return 0;
+				const auto& raw = *reinterpret_cast<const RAWINPUT*>(storage.data());
+				if (raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
+					emit({.kind = NativeInputKind::RawMouse,
+						  .deltaX = raw.data.mouse.lLastX,
+						  .deltaY = raw.data.mouse.lLastY});
+				return 0;
+			}
+			case WM_POINTERDOWN:
+			case WM_POINTERUPDATE:
+			case WM_POINTERUP:
+			{
+				POINTER_INFO info{};
+				if (!GetPointerInfo(GET_POINTERID_WPARAM(wparam), &info))
+					return 0;
+				POINT point = info.ptPixelLocation;
+				ScreenToClient(window, &point);
+				emit({.kind = NativeInputKind::Touch, .x = point.x, .y = point.y, .touchId = GET_POINTERID_WPARAM(wparam), .pressed = message != WM_POINTERUP, .insideContent = true});
+				return 0;
+			}
+			case WM_SETCURSOR:
+				SetCursor(binding->hideCursor ? nullptr : binding->cursor);
+				return TRUE;
+			default:
+				return DefWindowProcW(window, message, wparam, lparam);
+			}
+		}
+
+		LRESULT CALLBACK RenderWindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+		{
+			auto* binding = reinterpret_cast<WinInputBinding*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+			if (message == WM_NCCREATE)
+			{
+				binding = static_cast<WinInputBinding*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
+				SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(binding));
+			}
+			if (message == WM_NCDESTROY)
+				SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+			return DispatchInput(window, message, wparam, lparam, binding);
+		}
 
 		void RegisterWindowClasses()
 		{
@@ -215,20 +258,22 @@ namespace WebFrontend
 
 		class WinRenderRegion final : public Host::IRenderRegion
 		{
-		public:
+		  public:
 			explicit WinRenderRegion(HWND parent, INativeWindowHost::InputHandler* handler)
 			{
 				m_binding.handler = handler;
 				m_binding.surface = Host::PointerSurface::Main;
 				RegisterWindowClasses();
-				m_window = CreateWindowExW(0, RenderWindowClass, L"", WS_CHILD | WS_CLIPSIBLINGS |
-					WS_CLIPCHILDREN | WS_TABSTOP, 0, 0, 1, 1, parent, nullptr,
-					GetModuleHandleW(nullptr), &m_binding);
+				m_window = CreateWindowExW(0, RenderWindowClass, L"", WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_TABSTOP, 0, 0, 1, 1, parent, nullptr,
+										   GetModuleHandleW(nullptr), &m_binding);
 				if (!m_window)
 					throw std::runtime_error("failed to create native render region");
 			}
 
-			~WinRenderRegion() override { PrepareForDestroy(); }
+			~WinRenderRegion() override
+			{
+				PrepareForDestroy();
+			}
 			Host::NativeWindowHandle GetWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Windows, nullptr, GetParent(m_window)};
@@ -249,13 +294,16 @@ namespace WebFrontend
 			void SetBounds(Host::RenderRegionBounds bounds) override
 			{
 				MoveWindow(m_window, bounds.x, bounds.y, std::max(1, bounds.width),
-					std::max(1, bounds.height), TRUE);
+						   std::max(1, bounds.height), TRUE);
 			}
 			void SetVisible(bool visible) override
 			{
 				ShowWindow(m_window, visible ? SW_SHOW : SW_HIDE);
 			}
-			void RequestFocus() override { SetFocus(m_window); }
+			void RequestFocus() override
+			{
+				SetFocus(m_window);
+			}
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_window)
@@ -263,10 +311,16 @@ namespace WebFrontend
 				DestroyWindow(m_window);
 				m_window = nullptr;
 			}
-			HWND Window() const { return m_window; }
-			WinInputBinding& InputBinding() { return m_binding; }
+			HWND Window() const
+			{
+				return m_window;
+			}
+			WinInputBinding& InputBinding()
+			{
+				return m_binding;
+			}
 
-		private:
+		  private:
 			HWND m_window{};
 			WinInputBinding m_binding;
 			bool m_prepared{};
@@ -274,9 +328,9 @@ namespace WebFrontend
 
 		class WinPadRenderRegion final : public Host::IRenderRegion
 		{
-		public:
+		  public:
 			WinPadRenderRegion(std::function<void()> closeHandler,
-				std::function<void()> metricsHandler, INativeWindowHost::InputHandler* handler)
+							   std::function<void()> metricsHandler, INativeWindowHost::InputHandler* handler)
 				: m_closeHandler(std::move(closeHandler)),
 				  m_metricsHandler(std::move(metricsHandler))
 			{
@@ -291,20 +345,26 @@ namespace WebFrontend
 				if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
 					throw std::runtime_error("failed to register the GamePad render window class");
 				m_window = CreateWindowExW(0, PadWindowClass, L"CemuExtend GamePad",
-					WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-					870, 520, nullptr, nullptr, GetModuleHandleW(nullptr), this);
+										   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
+										   870, 520, nullptr, nullptr, GetModuleHandleW(nullptr), this);
 				if (!m_window)
 					throw std::runtime_error("failed to create the native GamePad render window");
 				ShowWindow(m_window, SW_SHOW);
 				UpdateWindow(m_window);
 			}
 
-			~WinPadRenderRegion() override { PrepareForDestroy(); }
+			~WinPadRenderRegion() override
+			{
+				PrepareForDestroy();
+			}
 			Host::NativeWindowHandle GetWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Windows, nullptr, m_window};
 			}
-			Host::NativeWindowHandle GetSurfaceHandle() const override { return GetWindowHandle(); }
+			Host::NativeWindowHandle GetSurfaceHandle() const override
+			{
+				return GetWindowHandle();
+			}
 			Host::RenderRegionBounds GetBounds() const override
 			{
 				RECT area{};
@@ -315,11 +375,14 @@ namespace WebFrontend
 			{
 				RECT frame{0, 0, std::max(1, bounds.width), std::max(1, bounds.height)};
 				AdjustWindowRectEx(&frame, static_cast<DWORD>(GetWindowLongW(m_window, GWL_STYLE)),
-					FALSE, static_cast<DWORD>(GetWindowLongW(m_window, GWL_EXSTYLE)));
+								   FALSE, static_cast<DWORD>(GetWindowLongW(m_window, GWL_EXSTYLE)));
 				SetWindowPos(m_window, nullptr, 0, 0, frame.right - frame.left,
-					frame.bottom - frame.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+							 frame.bottom - frame.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 			}
-			void SetVisible(bool visible) override { ShowWindow(m_window, visible ? SW_SHOW : SW_HIDE); }
+			void SetVisible(bool visible) override
+			{
+				ShowWindow(m_window, visible ? SW_SHOW : SW_HIDE);
+			}
 			void RequestFocus() override
 			{
 				SetForegroundWindow(m_window);
@@ -334,9 +397,12 @@ namespace WebFrontend
 				DestroyWindow(m_window);
 				m_window = nullptr;
 			}
-			WinInputBinding& InputBinding() { return m_binding; }
+			WinInputBinding& InputBinding()
+			{
+				return m_binding;
+			}
 
-			private:
+		  private:
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 			{
 				auto* self = reinterpret_cast<WinPadRenderRegion*>(
@@ -364,8 +430,8 @@ namespace WebFrontend
 				{
 					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
 					SetWindowPos(window, nullptr, suggested->left, suggested->top,
-						suggested->right - suggested->left, suggested->bottom - suggested->top,
-						SWP_NOACTIVATE | SWP_NOZORDER);
+								 suggested->right - suggested->left, suggested->bottom - suggested->top,
+								 SWP_NOACTIVATE | SWP_NOZORDER);
 					if (self->m_metricsHandler)
 						self->m_metricsHandler();
 					return 0;
@@ -387,7 +453,7 @@ namespace WebFrontend
 
 		class WinWindowHost final : public INativeWindowHost
 		{
-		public:
+		  public:
 			WinWindowHost()
 			{
 				RegisterWindowClasses();
@@ -402,8 +468,8 @@ namespace WebFrontend
 					throw std::runtime_error("failed to register native main window class");
 				m_menu = BuildMenu();
 				m_window = CreateWindowExW(0, MainWindowClass, L"CemuExtend",
-					WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-					1120, 760, nullptr, m_menu, GetModuleHandleW(nullptr), this);
+										   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
+										   1120, 760, nullptr, m_menu, GetModuleHandleW(nullptr), this);
 				if (!m_window)
 					throw std::runtime_error("failed to create native main window");
 			}
@@ -418,7 +484,10 @@ namespace WebFrontend
 					DestroyMenu(m_menu);
 			}
 
-			void* GetNativeWindow() const override { return m_window; }
+			void* GetNativeWindow() const override
+			{
+				return m_window;
+			}
 			Host::NativeWindowHandle GetMainWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Windows, nullptr, m_window};
@@ -491,7 +560,10 @@ namespace WebFrontend
 				}
 				return *m_renderRegion;
 			}
-			void DestroyMainRenderRegion() override { m_renderRegion.reset(); }
+			void DestroyMainRenderRegion() override
+			{
+				m_renderRegion.reset();
+			}
 			void ShowRenderRegion() override
 			{
 				auto& region = CreateMainRenderRegion();
@@ -506,9 +578,9 @@ namespace WebFrontend
 			Host::IRenderRegion& CreatePadRenderRegion() override
 			{
 				if (!m_padRenderRegion)
-						m_padRenderRegion = std::make_unique<WinPadRenderRegion>(
-							[this] { if (m_padCloseHandler) m_padCloseHandler(); },
-							[this] { if (m_padMetricsEnabled) NotifyMetrics(); }, &m_inputHandler);
+					m_padRenderRegion = std::make_unique<WinPadRenderRegion>(
+						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
+						[this] { if (m_padMetricsEnabled) NotifyMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
 			}
 			void DestroyPadRenderRegion() override
@@ -517,7 +589,10 @@ namespace WebFrontend
 				m_padRenderRegion.reset();
 				NotifyMetrics();
 			}
-			bool IsPadRenderRegionOpen() const override { return m_padRenderRegion != nullptr; }
+			bool IsPadRenderRegionOpen() const override
+			{
+				return m_padRenderRegion != nullptr;
+			}
 			void SetFullscreen(bool fullscreen) override
 			{
 				if (fullscreen == m_fullscreen)
@@ -533,9 +608,9 @@ namespace WebFrontend
 					SetMenu(m_window, nullptr);
 					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle & ~WS_OVERLAPPEDWINDOW);
 					SetWindowPos(m_window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
-						monitor.rcMonitor.right - monitor.rcMonitor.left,
-						monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-						SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+								 monitor.rcMonitor.right - monitor.rcMonitor.left,
+								 monitor.rcMonitor.bottom - monitor.rcMonitor.top,
+								 SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 				}
 				else
 				{
@@ -543,11 +618,17 @@ namespace WebFrontend
 					SetMenu(m_window, m_menu);
 					SetWindowPlacement(m_window, &m_windowPlacement);
 					SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
-						SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+								 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
 				}
 			}
-			void SetCloseHandler(CloseHandler handler) override { m_closeHandler = std::move(handler); }
-			void SetMenuHandler(MenuHandler handler) override { m_menuHandler = std::move(handler); }
+			void SetCloseHandler(CloseHandler handler) override
+			{
+				m_closeHandler = std::move(handler);
+			}
+			void SetMenuHandler(MenuHandler handler) override
+			{
+				m_menuHandler = std::move(handler);
+			}
 			void SetMetricsHandler(MetricsHandler handler) override
 			{
 				m_metricsHandler = std::move(handler);
@@ -561,7 +642,10 @@ namespace WebFrontend
 			{
 				m_padMetricsEnabled = enabled;
 			}
-			void SetInputHandler(InputHandler handler) override { m_inputHandler = std::move(handler); }
+			void SetInputHandler(InputHandler handler) override
+			{
+				m_inputHandler = std::move(handler);
+			}
 			void ApplyPointerPresentation(const NativePointerPresentation& presentation) override
 			{
 				WinInputBinding* binding{};
@@ -576,7 +660,8 @@ namespace WebFrontend
 					binding = &m_padRenderRegion->InputBinding();
 					target = static_cast<HWND>(m_padRenderRegion->GetSurfaceHandle().surface);
 				}
-				if (!binding || !target) return;
+				if (!binding || !target)
+					return;
 				const bool wasCaptured = binding->captured;
 				const bool captured = presentation.ownsPointer && !presentation.showCursor;
 				binding->hideCursor = !presentation.showCursor;
@@ -584,14 +669,30 @@ namespace WebFrontend
 				const wchar_t* cursor = IDC_ARROW;
 				switch (presentation.cursor)
 				{
-				case 1: cursor = IDC_IBEAM; break;
-				case 2: cursor = IDC_SIZEALL; break;
-				case 3: cursor = IDC_SIZENS; break;
-				case 4: cursor = IDC_SIZEWE; break;
-				case 5: cursor = IDC_SIZENESW; break;
-				case 6: cursor = IDC_SIZENWSE; break;
-				case 7: cursor = IDC_HAND; break;
-				case 8: cursor = IDC_NO; break;
+				case 1:
+					cursor = IDC_IBEAM;
+					break;
+				case 2:
+					cursor = IDC_SIZEALL;
+					break;
+				case 3:
+					cursor = IDC_SIZENS;
+					break;
+				case 4:
+					cursor = IDC_SIZEWE;
+					break;
+				case 5:
+					cursor = IDC_SIZENESW;
+					break;
+				case 6:
+					cursor = IDC_SIZENWSE;
+					break;
+				case 7:
+					cursor = IDC_HAND;
+					break;
+				case 8:
+					cursor = IDC_NO;
+					break;
 				}
 				binding->cursor = LoadCursorW(nullptr, cursor);
 				if (presentation.rawMouseEnabled && captured && m_rawInputBinding != binding)
@@ -599,7 +700,8 @@ namespace WebFrontend
 					RAWINPUTDEVICE device{0x01, 0x02, RIDEV_INPUTSINK, target};
 					if (RegisterRawInputDevices(&device, 1, sizeof(device)) != FALSE)
 					{
-						if (m_rawInputBinding) m_rawInputBinding->rawRegistered = false;
+						if (m_rawInputBinding)
+							m_rawInputBinding->rawRegistered = false;
 						m_rawInputBinding = binding;
 						binding->rawRegistered = true;
 					}
@@ -625,7 +727,8 @@ namespace WebFrontend
 					RECT area{};
 					GetClientRect(target, &area);
 					POINT upper{area.left, area.top}, lower{area.right, area.bottom};
-					ClientToScreen(target, &upper); ClientToScreen(target, &lower);
+					ClientToScreen(target, &upper);
+					ClientToScreen(target, &lower);
 					RECT screen{upper.x, upper.y, lower.x, lower.y};
 					ClipCursor(&screen);
 				}
@@ -642,19 +745,23 @@ namespace WebFrontend
 				if (!request.active)
 				{
 					m_textInputSequence = 0;
-					if (m_textInput) ShowWindow(m_textInput, SW_HIDE);
-					if (m_renderRegion) m_renderRegion->RequestFocus();
+					if (m_textInput)
+						ShowWindow(m_textInput, SW_HIDE);
+					if (m_renderRegion)
+						m_renderRegion->RequestFocus();
 					return;
 				}
-				if (!m_renderRegion) return;
+				if (!m_renderRegion)
+					return;
 				if (!m_textInput)
 				{
 					m_textInput = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | ES_AUTOHSCROLL,
-						0, 0, 1, 1, m_window, nullptr, GetModuleHandleW(nullptr), nullptr);
-					if (!m_textInput) return;
+												  0, 0, 1, 1, m_window, nullptr, GetModuleHandleW(nullptr), nullptr);
+					if (!m_textInput)
+						return;
 					SetWindowLongPtrW(m_textInput, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 					m_textInputProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(m_textInput,
-						GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WinWindowHost::TextInputProc)));
+																				  GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WinWindowHost::TextInputProc)));
 				}
 				const auto bounds = m_renderRegion->GetBounds();
 				const auto x = std::clamp(request.caretX * bounds.width / 1280, 0, std::max(0, bounds.width - 1));
@@ -688,51 +795,61 @@ namespace WebFrontend
 			}
 			std::pair<bool, std::string> GetClipboardText() override
 			{
-				if (!OpenClipboard(m_window)) return {false, {}};
+				if (!OpenClipboard(m_window))
+					return {false, {}};
 				const auto handle = GetClipboardData(CF_UNICODETEXT);
 				const auto* text = handle ? static_cast<const wchar_t*>(GlobalLock(handle)) : nullptr;
 				const auto result = text ? std::pair{true, Utf8(text)} : std::pair{false, std::string{}};
-				if (text) GlobalUnlock(handle);
+				if (text)
+					GlobalUnlock(handle);
 				CloseClipboard();
 				return result;
 			}
 			bool SetClipboardText(std::string text) override
 			{
 				const auto wide = Wide(text);
-				if (!OpenClipboard(m_window)) return false;
+				if (!OpenClipboard(m_window))
+					return false;
 				EmptyClipboard();
 				const auto bytes = (wide.size() + 1) * sizeof(wchar_t);
 				auto handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
-				if (!handle) { CloseClipboard(); return false; }
+				if (!handle)
+				{
+					CloseClipboard();
+					return false;
+				}
 				auto* target = static_cast<wchar_t*>(GlobalLock(handle));
 				std::memcpy(target, wide.c_str(), bytes);
 				GlobalUnlock(handle);
 				const bool success = SetClipboardData(CF_UNICODETEXT, handle) != nullptr;
-				if (!success) GlobalFree(handle);
+				if (!success)
+					GlobalFree(handle);
 				CloseClipboard();
 				return success;
 			}
 			bool SetClipboardImage(std::span<const std::uint8_t> rgb,
-				std::int32_t width, std::int32_t height) override
+								   std::int32_t width, std::int32_t height) override
 			{
-				if (width <= 0 || height <= 0 || rgb.size() !=
-					static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3 ||
-					!OpenClipboard(m_window)) return false;
+				if (width <= 0 || height <= 0 || rgb.size() != static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3 ||
+					!OpenClipboard(m_window))
+					return false;
 				const auto stride = (static_cast<std::size_t>(width) * 3 + 3) & ~std::size_t(3);
 				const auto pixelBytes = stride * static_cast<std::size_t>(height);
 				auto handle = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + pixelBytes);
-				if (!handle) { CloseClipboard(); return false; }
+				if (!handle)
+				{
+					CloseClipboard();
+					return false;
+				}
 				auto* memory = static_cast<std::uint8_t*>(GlobalLock(handle));
 				auto* header = reinterpret_cast<BITMAPINFOHEADER*>(memory);
-				*header = {.biSize = sizeof(BITMAPINFOHEADER), .biWidth = width,
-					.biHeight = height, .biPlanes = 1, .biBitCount = 24,
-					.biCompression = BI_RGB, .biSizeImage = static_cast<DWORD>(pixelBytes)};
+				*header = {.biSize = sizeof(BITMAPINFOHEADER), .biWidth = width, .biHeight = height, .biPlanes = 1, .biBitCount = 24, .biCompression = BI_RGB, .biSizeImage = static_cast<DWORD>(pixelBytes)};
 				auto* pixels = memory + sizeof(BITMAPINFOHEADER);
 				for (std::int32_t row = 0; row < height; ++row)
 				{
 					auto* destination = pixels + static_cast<std::size_t>(height - 1 - row) * stride;
 					const auto* source = rgb.data() + static_cast<std::size_t>(row) *
-						static_cast<std::size_t>(width) * 3;
+														  static_cast<std::size_t>(width) * 3;
 					for (std::int32_t column = 0; column < width; ++column)
 					{
 						destination[column * 3] = source[column * 3 + 2];
@@ -743,7 +860,8 @@ namespace WebFrontend
 				GlobalUnlock(handle);
 				EmptyClipboard();
 				const bool success = SetClipboardData(CF_DIB, handle) != nullptr;
-				if (!success) GlobalFree(handle);
+				if (!success)
+					GlobalFree(handle);
 				CloseClipboard();
 				return success;
 			}
@@ -751,18 +869,21 @@ namespace WebFrontend
 			{
 				const auto wide = Wide(url);
 				return reinterpret_cast<std::intptr_t>(ShellExecuteW(m_window, L"open", wide.c_str(),
-					nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+																	 nullptr, nullptr, SW_SHOWNORMAL)) > 32;
 			}
 			std::optional<std::string> PickTitleInstallSource() override
 			{
 				std::array<wchar_t, 32768> path{};
-				OPENFILENAMEW dialog{}; dialog.lStructSize = sizeof(dialog);
+				OPENFILENAMEW dialog{};
+				dialog.lStructSize = sizeof(dialog);
 				dialog.hwndOwner = m_window;
 				dialog.lpstrFilter = L"Wii U title metadata (meta.xml)\0meta.xml\0\0";
-				dialog.lpstrFile = path.data(); dialog.nMaxFile = static_cast<DWORD>(path.size());
+				dialog.lpstrFile = path.data();
+				dialog.nMaxFile = static_cast<DWORD>(path.size());
 				dialog.lpstrTitle = L"Select title to install";
 				dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-				if (!GetOpenFileNameW(&dialog)) return std::nullopt;
+				if (!GetOpenFileNameW(&dialog))
+					return std::nullopt;
 				return Utf8(path.data());
 			}
 			std::optional<std::string> PickWuaDestination(
@@ -771,17 +892,21 @@ namespace WebFrontend
 				std::array<wchar_t, 32768> path{};
 				const auto suggested = Wide(suggestedFileName);
 				std::copy_n(suggested.data(), std::min(suggested.size(), path.size() - 1), path.data());
-				OPENFILENAMEW dialog{}; dialog.lStructSize = sizeof(dialog);
+				OPENFILENAMEW dialog{};
+				dialog.lStructSize = sizeof(dialog);
 				dialog.hwndOwner = m_window;
 				dialog.lpstrFilter = L"Wii U archives (*.wua)\0*.wua\0\0";
-				dialog.lpstrFile = path.data(); dialog.nMaxFile = static_cast<DWORD>(path.size());
-				dialog.lpstrDefExt = L"wua"; dialog.lpstrTitle = L"Save Wii U game archive";
+				dialog.lpstrFile = path.data();
+				dialog.nMaxFile = static_cast<DWORD>(path.size());
+				dialog.lpstrDefExt = L"wua";
+				dialog.lpstrTitle = L"Save Wii U game archive";
 				dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-				if (!GetSaveFileNameW(&dialog)) return std::nullopt;
+				if (!GetSaveFileNameW(&dialog))
+					return std::nullopt;
 				return Utf8(path.data());
 			}
 
-			private:
+		  private:
 			static LRESULT CALLBACK TextInputProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 			{
 				auto* self = reinterpret_cast<WinWindowHost*>(GetWindowLongPtrW(window, GWLP_USERDATA));
@@ -793,8 +918,7 @@ namespace WebFrontend
 					self->DispatchTextComposition();
 				if ((message == WM_KEYDOWN || message == WM_KEYUP) && wparam == VK_RETURN &&
 					self->m_textPreedit.empty() && self->m_inputHandler)
-					self->m_inputHandler({.kind = NativeInputKind::Key, .key = VK_RETURN,
-						.usage = 0x28, .modifiers = KeyModifiers(), .pressed = message == WM_KEYDOWN});
+					self->m_inputHandler({.kind = NativeInputKind::Key, .key = VK_RETURN, .usage = 0x28, .modifiers = KeyModifiers(), .pressed = message == WM_KEYDOWN});
 				return result;
 			}
 
@@ -804,7 +928,8 @@ namespace WebFrontend
 					return;
 				const auto length = GetWindowTextLengthW(m_textInput);
 				std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
-				if (length > 0) GetWindowTextW(m_textInput, text.data(), length + 1);
+				if (length > 0)
+					GetWindowTextW(m_textInput, text.data(), length + 1);
 				text.resize(static_cast<std::size_t>(length));
 				m_textPreedit.clear();
 				if (auto context = ImmGetContext(m_textInput))
@@ -820,14 +945,15 @@ namespace WebFrontend
 				}
 				DWORD selectionStart{}, selectionEnd{};
 				SendMessageW(m_textInput, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart),
-					reinterpret_cast<LPARAM>(&selectionEnd));
+							 reinterpret_cast<LPARAM>(&selectionEnd));
 				selectionStart = std::min<DWORD>(selectionStart, static_cast<DWORD>(text.size()));
 				const auto cursor = Utf8(std::wstring_view(text).substr(0, selectionStart)).size();
 				m_inputHandler({.kind = NativeInputKind::TextComposition,
-					.text = Utf8(text), .preedit = m_textPreedit,
-					.textCursor = static_cast<std::uint32_t>(cursor),
-					.selectionLength = static_cast<std::uint32_t>(m_textPreedit.size()),
-					.textSequence = m_textInputSequence});
+								.text = Utf8(text),
+								.preedit = m_textPreedit,
+								.textCursor = static_cast<std::uint32_t>(cursor),
+								.selectionLength = static_cast<std::uint32_t>(m_textPreedit.size()),
+								.textSequence = m_textInputSequence});
 			}
 
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -856,8 +982,8 @@ namespace WebFrontend
 				{
 					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
 					SetWindowPos(window, nullptr, suggested->left, suggested->top,
-						suggested->right - suggested->left, suggested->bottom - suggested->top,
-						SWP_NOACTIVATE | SWP_NOZORDER);
+								 suggested->right - suggested->left, suggested->bottom - suggested->top,
+								 SWP_NOACTIVATE | SWP_NOZORDER);
 					self->ResizeChildren();
 					self->NotifyMetrics();
 					return 0;
@@ -866,11 +992,11 @@ namespace WebFrontend
 					if (HIWORD(wparam) == 0 && LOWORD(wparam) >= FirstCommandId &&
 						LOWORD(wparam) < FirstCommandId + 12 && self->m_menuHandler)
 						self->m_menuHandler(static_cast<MenuCommand>(LOWORD(wparam) - FirstCommandId));
-						return 0;
-					case WM_DEVICECHANGE:
-						if (wparam == DBT_DEVNODES_CHANGED && self->m_inputHandler)
-							self->m_inputHandler({.kind = NativeInputKind::DeviceChanged});
-						return 0;
+					return 0;
+				case WM_DEVICECHANGE:
+					if (wparam == DBT_DEVNODES_CHANGED && self->m_inputHandler)
+						self->m_inputHandler({.kind = NativeInputKind::DeviceChanged});
+					return 0;
 				case WM_NCDESTROY:
 					SetWindowLongPtrW(window, GWLP_USERDATA, 0);
 					self->m_window = nullptr;
@@ -950,12 +1076,12 @@ namespace WebFrontend
 			LONG m_windowStyle{};
 			bool m_fullscreen{};
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<INativeWindowHost> CreateNativeWindowHost()
 	{
 		return std::make_unique<WinWindowHost>();
 	}
-}
+} // namespace WebFrontend
 
 #endif

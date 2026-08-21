@@ -12,7 +12,7 @@ struct VulkanPipelineHash
 
 class VulkanPipelineStableCache
 {
-	struct PipelineHash 
+	struct PipelineHash
 	{
 		PipelineHash(uint64 h0, uint64 h1) : h0(h0), h1(h1) {};
 
@@ -24,7 +24,7 @@ class VulkanPipelineStableCache
 			return h0 == r.h0 && h1 == r.h1;
 		}
 
-		struct HashFunc 
+		struct HashFunc
 		{
 			size_t operator()(const PipelineHash& v) const
 			{
@@ -34,14 +34,14 @@ class VulkanPipelineStableCache
 		};
 	};
 
-public:
+  public:
 	static VulkanPipelineStableCache& GetInstance();
 
 	uint32 BeginLoading(uint64 cacheTitleId); // returns count of pipelines stored in cache
 	bool UpdateLoading(uint32& pipelinesLoadedTotal, uint32& pipelinesMissingShaders);
 	void EndLoading();
 	void LoadPipelineFromCache(std::span<uint8> fileData);
-    void Close(); // called on title exit
+	void Close(); // called on title exit
 
 	bool HasPipelineCached(uint64 baseHash, uint64 pipelineStateHash);
 	void AddCurrentStateToCache(uint64 baseHash, uint64 pipelineStateHash);
@@ -50,7 +50,7 @@ public:
 	bool SerializePipeline(class MemStreamWriter& memWriter, struct CachedPipeline& cachedPipeline);
 	bool DeserializePipeline(class MemStreamReader& memReader, struct CachedPipeline& cachedPipeline);
 
-private:
+  private:
 	int CompilerThread();
 	void WorkerThread();
 
@@ -60,7 +60,7 @@ private:
 	FSpinlock m_pipelineIsCachedLock;
 	class FileCache* s_cache;
 
-	std::atomic_uint32_t m_numCompilationThreads{ 0 };
+	std::atomic_uint32_t m_numCompilationThreads{0};
 	ConcurrentQueue<std::vector<uint8>> m_compilationQueue;
 	std::atomic_uint32_t m_compilationCount;
 };

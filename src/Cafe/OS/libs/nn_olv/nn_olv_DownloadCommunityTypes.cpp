@@ -9,11 +9,9 @@ namespace nn
 			CurlRequestHelper& req, const char* reqUrl,
 			DownloadedCommunityData* pOutList, uint32* pOutNum, uint32 numMaxList, const DownloadCommunityDataListParam* pParam);
 
-
 		sint32 DownloadCommunityDataList_AsyncRequest(
 			CurlRequestHelper& req, const char* reqUrl, coreinit::OSEvent* requestDoneEvent,
-			DownloadedCommunityData* pOutList, uint32* pOutNum, uint32 numMaxList, const DownloadCommunityDataListParam* pParam
-		)
+			DownloadedCommunityData* pOutList, uint32* pOutNum, uint32 numMaxList, const DownloadCommunityDataListParam* pParam)
 		{
 			sint32 res = DownloadCommunityDataList_AsyncRequestImpl(req, reqUrl, pOutList, pOutNum, numMaxList, pParam);
 			coreinit::OSSignalEvent(requestDoneEvent);
@@ -49,22 +47,19 @@ namespace nn
 			StackAllocator<coreinit::OSEvent> requestDoneEvent;
 			coreinit::OSInitEvent(&requestDoneEvent, coreinit::OSEvent::EVENT_STATE::STATE_NOT_SIGNALED, coreinit::OSEvent::EVENT_MODE::MODE_MANUAL);
 			std::future<sint32> requestRes = std::async(std::launch::async, DownloadCommunityDataList_AsyncRequest,
-				std::ref(req), reqUrl, requestDoneEvent.GetPointer(), pOutList, pOutNum, numMaxList, pParam);
+														std::ref(req), reqUrl, requestDoneEvent.GetPointer(), pOutList, pOutNum, numMaxList, pParam);
 			coreinit::OSWaitEvent(&requestDoneEvent);
 
-			return requestRes.get();	
+			return requestRes.get();
 		}
 
 		sint32 DownloadCommunityDataList_AsyncRequestImpl(
 			CurlRequestHelper& req, const char* reqUrl,
-			DownloadedCommunityData* pOutList, uint32* pOutNum, uint32 numMaxList, const DownloadCommunityDataListParam* pParam
-		)
+			DownloadedCommunityData* pOutList, uint32* pOutNum, uint32 numMaxList, const DownloadCommunityDataListParam* pParam)
 		{
-
 			bool reqResult = req.submitRequest();
 			long httpCode = 0;
 			curl_easy_getinfo(req.getCURL(), CURLINFO_RESPONSE_CODE, &httpCode);
-
 
 			if (!reqResult)
 			{
@@ -220,7 +215,6 @@ namespace nn
 				}
 
 				idx++;
-
 			}
 
 			*pOutNum = _swapEndianU32(idx);
@@ -230,5 +224,5 @@ namespace nn
 
 			return res;
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

@@ -13,7 +13,7 @@ class MainWindow;
 
 class WxWindowState final : public std::enable_shared_from_this<WxWindowState>
 {
-public:
+  public:
 	std::atomic_bool app_active{};
 	std::atomic_int32_t width{}, height{};
 	std::atomic_int32_t phys_width{}, phys_height{};
@@ -42,10 +42,10 @@ public:
 		Host::NativeWindowHandle handle);
 	void ClearPadWindow(Host::NativeSurfacePublication publication);
 	[[nodiscard]] Host::NativeSurfacePublication PublishCanvas(bool mainWindow,
-		Host::NativeWindowHandle handle);
+															   Host::NativeWindowHandle handle);
 	void ClearCanvas(bool mainWindow, Host::NativeSurfacePublication publication);
 
-private:
+  private:
 	mutable std::mutex m_keyMutex;
 	std::unordered_map<std::uint32_t, bool> m_keyDown;
 	mutable std::shared_mutex m_nativeMutex;
@@ -62,12 +62,12 @@ private:
 
 class WxMainWindowRegistry final
 {
-public:
+  public:
 	void Register(MainWindow& window, std::weak_ptr<std::atomic_bool> lifetime);
 	void Unregister(MainWindow& window);
 	[[nodiscard]] bool InvokeForUi(const std::function<void(MainWindow&)>& callback) const;
 
-private:
+  private:
 	mutable std::mutex m_mutex;
 	MainWindow* m_window{};
 	std::weak_ptr<std::atomic_bool> m_lifetime;

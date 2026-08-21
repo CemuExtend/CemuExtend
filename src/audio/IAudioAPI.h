@@ -11,23 +11,26 @@ class IAudioAPI
 {
 	friend class GeneralSettings2;
 
-public:
+  public:
 	class DeviceDescription
 	{
-	public:
+	  public:
 		explicit DeviceDescription(std::wstring name)
-			: m_name(std::move(name)) { }
+			: m_name(std::move(name)) {}
 
 		virtual ~DeviceDescription() = default;
 		virtual std::wstring GetIdentifier() const = 0;
-		const std::wstring& GetName() const { return m_name; }
+		const std::wstring& GetName() const
+		{
+			return m_name;
+		}
 
 		bool operator==(const DeviceDescription& o) const
 		{
 			return GetIdentifier() == o.GetIdentifier();
 		}
 
-	private:
+	  private:
 		std::wstring m_name;
 	};
 
@@ -50,16 +53,28 @@ public:
 		AudioAPIEnd,
 	};
 	static constexpr uint32 kBlockCount = 24;
-	
+
 	IAudioAPI(uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample);
 	virtual ~IAudioAPI() = default;
 	virtual AudioAPI GetType() const = 0;
 
-	sint32 GetChannels() const { return m_channels; }
+	sint32 GetChannels() const
+	{
+		return m_channels;
+	}
 
-	virtual sint32 GetVolume() const { return m_volume; }
-	virtual void SetVolume(sint32 volume) { m_volume = volume; }
-	virtual void SetInputVolume(sint32 volume) { m_inputVolume = volume; }
+	virtual sint32 GetVolume() const
+	{
+		return m_volume;
+	}
+	virtual void SetVolume(sint32 volume)
+	{
+		m_volume = volume;
+	}
+	virtual void SetInputVolume(sint32 volume)
+	{
+		m_inputVolume = volume;
+	}
 
 	virtual bool NeedAdditionalBlocks() const = 0;
 	virtual bool FeedBlock(sint16* data) = 0;
@@ -78,11 +93,11 @@ public:
 	static std::unique_ptr<IAudioAPI> CreateDevice(AudioAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample);
 	static std::vector<DeviceDescriptionPtr> GetDevices(AudioAPI api);
 
-protected:
+  protected:
 #if BOOST_OS_WINDOWS
 	WAVEFORMATEXTENSIBLE m_wfx{};
 #endif
-	
+
 	uint32 m_samplerate, m_channels, m_samplesPerBlock, m_bitsPerSample;
 	uint32 m_bytesPerBlock;
 
@@ -92,7 +107,7 @@ protected:
 	static std::array<bool, AudioAPIEnd> s_availableApis;
 	uint32 m_audioDelayOverride = 0;
 
-private:
+  private:
 	static Host::INativeSurfaceProvider* s_nativeSurfaceProvider;
 	static std::mutex s_nativeSurfaceMutex;
 	[[nodiscard]] static std::optional<Host::NativeSurfaceSnapshot> GetNativeSurfaces();
@@ -101,7 +116,6 @@ private:
 	static AudioChannels AudioTypeToChannels(AudioType type);
 	static std::wstring GetDeviceFromType(AudioType type);
 	static sint32 GetVolumeFromType(AudioType type);
-	
 };
 
 using AudioAPIPtr = std::unique_ptr<IAudioAPI>;

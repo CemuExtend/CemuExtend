@@ -197,4 +197,4 @@ namespace coreinit
 		osLib_addFunction("coreinit", "IPCBufPoolAllocate", coreinitExport_IPCBufPoolAllocate);
 		osLib_addFunction("coreinit", "IPCBufPoolFree", coreinitExport_IPCBufPoolFree);
 	}
-}
+} // namespace coreinit

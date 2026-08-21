@@ -8,10 +8,10 @@
 
 class TagV0
 {
-public:
+  public:
 	using Block = std::array<std::byte, 0x8>;
 
-public:
+  public:
 	TagV0();
 	virtual ~TagV0();
 
@@ -24,7 +24,7 @@ public:
 
 	void SetNDEFData(const std::span<const std::byte>& data);
 
-private:
+  private:
 	bool ParseLockedArea(const std::span<const std::byte>& data);
 	bool IsBlockLocked(uint8 blockIdx) const;
 	bool ParseDataArea(const std::span<const std::byte>& data, std::vector<std::byte>& dataArea);

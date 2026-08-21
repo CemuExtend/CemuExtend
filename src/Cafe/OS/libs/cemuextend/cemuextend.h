@@ -89,15 +89,15 @@ namespace cemuextend_hle
 	void ConfigureCex2HleAccess(ModExecutionContext& context);
 	CemodRuntime& GetCemodRuntime();
 	::CemuExtendModGrant ResolveCemodGrant(std::uint64_t titleId, const std::string& modId,
-		const std::string& principal, std::uint32_t requestedPermissions);
+										   const std::string& principal, std::uint32_t requestedPermissions);
 	std::vector<CemodPackageInfo> DiscoverCemodCatalog();
 	std::vector<CemodPackageInfo> DiscoverCemods(std::uint64_t titleId);
 	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,
-		const std::optional<CemodInspectionApproval>& approval = std::nullopt);
+											const std::optional<CemodInspectionApproval>& approval = std::nullopt);
 	std::optional<CemodInspectionInfo> InspectConfiguredCemodPackage(
 		std::uint64_t titleId, const CemodPackageInfo& package);
 	std::string MakeCemodApprovalKey(std::string_view modIdentity,
-		std::string_view packageDigest);
+									 std::string_view packageDigest);
 	std::vector<CemodPermissionRequest> PendingCemodPermissionRequests(std::uint64_t titleId);
 	void ConfigureMemoryForTitle(std::uint64_t titleId);
 	void LoadCemodsForTitle(std::uint64_t titleId);
@@ -108,4 +108,4 @@ namespace cemuextend_hle
 	void ReloadCemodPermissions(std::uint64_t titleId, std::string_view principal);
 	void ReloadCemodTitlePermissions(std::uint64_t titleId);
 	bool ImportLegacyData(std::uint64_t titleId, std::string_view principal, std::string& error);
-}
+} // namespace cemuextend_hle

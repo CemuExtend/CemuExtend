@@ -96,6 +96,5 @@ namespace WebFrontend::Generated
 		"titles.list",
 		"titles.refresh",
 		"titles.launch",
-		"emulation.stop"
-	};
+		"emulation.stop"};
 }

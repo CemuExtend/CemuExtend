@@ -24,24 +24,25 @@
 #endif
 #endif
 
-namespace {
-
-void enableFlushDenormalsToZero()
+namespace
 {
+
+	void enableFlushDenormalsToZero()
+	{
 #if defined(ARCH_X86_64)
-	_mm_setcsr(_mm_getcsr() | 0x8000);
+		_mm_setcsr(_mm_getcsr() | 0x8000);
 #elif defined(__arm64__)
 #if defined(__clang__)
-	__arm_wsr64("fpcr", __arm_rsr64("fpcr") | (1 << 24));
+		__arm_wsr64("fpcr", __arm_rsr64("fpcr") | (1 << 24));
 #elif defined(__GNUC__)
-	__builtin_aarch64_set_fpcr(__builtin_aarch64_get_fpcr() | (1 << 24));
+		__builtin_aarch64_set_fpcr(__builtin_aarch64_get_fpcr() | (1 << 24));
 #elif defined(_MSC_VER)
-	_WriteStatusReg(ARM64_FPCR, _ReadStatusReg(ARM64_FPCR) | (1 << 24));
+		_WriteStatusReg(ARM64_FPCR, _ReadStatusReg(ARM64_FPCR) | (1 << 24));
 #endif
 #endif
-}
+	}
 
-}
+} // namespace
 
 SlimRWLock srwlock_activeThreadList;
 
@@ -60,7 +61,7 @@ namespace coreinit
 #endif
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread);
 	void __OSRemoveThreadFromRunQueues(OSThread_t* thread);
-};
+}; // namespace coreinit
 
 namespace coreinit
 {
@@ -105,18 +106,16 @@ namespace coreinit
 		try
 		{
 			task->callback();
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			succeeded = false;
 			cemuLog_log(LogType::Force,
-				"Emulated CPU host task threw an exception: {}", exception.what());
-		}
-		catch (...)
+						"Emulated CPU host task threw an exception: {}", exception.what());
+		} catch (...)
 		{
 			succeeded = false;
 			cemuLog_log(LogType::Force,
-				"Emulated CPU host task threw a non-standard exception");
+						"Emulated CPU host task threw a non-standard exception");
 		}
 		{
 			std::lock_guard lock(sHostCpuTaskMutex);
@@ -149,8 +148,8 @@ namespace coreinit
 
 	struct OSHostThread
 	{
-		OSHostThread(OSThread_t* thread) : m_thread(thread), m_fiber((void(*)(void*))__OSFiberThreadEntry, this, this),
-			ppcInstance{}, wupsOwner(WupsGuestOwnerScope::Current())
+		OSHostThread(OSThread_t* thread) : m_thread(thread), m_fiber((void (*)(void*))__OSFiberThreadEntry, this, this),
+										   ppcInstance{}, wupsOwner(WupsGuestOwnerScope::Current())
 		{
 		}
 
@@ -159,7 +158,7 @@ namespace coreinit
 		OSThread_t* m_thread;
 		Fiber m_fiber;
 		// padding (used as stack memory in recompiler)
-		uint8  padding[1024 * 128];
+		uint8 padding[1024 * 128];
 		PPCInterpreter_t ppcInstance;
 		uint32 selectedCore;
 		std::optional<WupsOwnerToken> wupsOwner;
@@ -202,7 +201,6 @@ namespace coreinit
 		s_threadToFiber.erase(thread);
 		_deleteQueue = hostThread;
 	}
-
 
 	// add thread to active queue
 	void __OSActivateThread(OSThread_t* thread)
@@ -255,9 +253,9 @@ namespace coreinit
 		}
 		cemu_assert_debug(noHit == false);
 		srwlock_activeThreadList.UnlockWrite();
-		
+
 		g_activeThreadQueue->removeThread(thread, &thread->activeThreadChain); // todo - check if thread in queue
-		
+
 		cemu_assert_debug(thread->state == OSThread_t::THREAD_STATE::STATE_NONE);
 		thread->id = 0x8000;
 
@@ -307,13 +305,13 @@ namespace coreinit
 		uint32 lr = hCPU->spr.LR;
 
 		// cpp exception init callback
-		//const uint32 im = OSDisableInterrupts(); -> on an actual Wii U interrupts are disabled for this callback, but there are games that yield the thread in the callback (see Angry Birds Star Wars)
+		// const uint32 im = OSDisableInterrupts(); -> on an actual Wii U interrupts are disabled for this callback, but there are games that yield the thread in the callback (see Angry Birds Star Wars)
 		if (gCoreinitData->__cpp_exception_init_ptr != MPTR_NULL)
 		{
 			PPCCoreCallback(_swapEndianU32(gCoreinitData->__cpp_exception_init_ptr), &currentThread->crt.eh_globals);
 		}
-		//OSRestoreInterrupts(im);
-		// forward to thread entrypoint
+		// OSRestoreInterrupts(im);
+		//  forward to thread entrypoint
 		hCPU->spr.LR = lr;
 		hCPU->gpr[3] = r3;
 		hCPU->gpr[4] = r4;
@@ -326,7 +324,7 @@ namespace coreinit
 	{
 		ctx->SetContextMagic();
 		ctx->gpr[0] = 0; // r0 is left uninitialized on console?
-		for(auto& it : ctx->gpr)
+		for (auto& it : ctx->gpr)
 			it = 0;
 		ctx->gpr[1] = _swapEndianU32(initialStackPointer.GetMPTR());
 		ctx->gpr[2] = _swapEndianU32(RPLLoader_GetSDA2Base());
@@ -350,7 +348,7 @@ namespace coreinit
 		ctx->upir = 0;
 		ctx->boostCount = 0;
 		ctx->state = 0;
-		for(auto& it : ctx->coretime)
+		for (auto& it : ctx->coretime)
 			it = 0;
 		ctx->starttime = 0;
 		ctx->ghs_errno = 0;
@@ -372,7 +370,7 @@ namespace coreinit
 		thread->waitAlarm = nullptr;
 		thread->entrypoint = entrypoint;
 		thread->quantumTicks = 0;
-		if(entrypoint)
+		if (entrypoint)
 		{
 			thread->state = OSThread_t::THREAD_STATE::STATE_READY;
 			thread->suspendCounter = 1;
@@ -423,10 +421,10 @@ namespace coreinit
 
 		*(uint32be*)((uint8*)stackTop.GetPtr() - stackSize) = 0xDEADBABE;
 		thread->alarmRelatedUkn = 0;
-		for(auto& it : thread->specificArray)
+		for (auto& it : thread->specificArray)
 			it = nullptr;
 		thread->context.fpscr.fpscr = 4;
-		for(sint32 i=0; i<32; i++)
+		for (sint32 i = 0; i < 32; i++)
 		{
 			thread->context.fp_ps0[i] = 0.0;
 			thread->context.fp_ps1[i] = 0.0;
@@ -436,12 +434,12 @@ namespace coreinit
 		thread->context.gqr[4] = 0x60006;
 		thread->context.gqr[5] = 0x70007;
 
-		for(sint32 i=0; i<Espresso::CORE_COUNT; i++)
+		for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
 			thread->context.coretime[i] = 0;
 
 		// currentRunQueue and waitQueueLink is not initialized by COS and instead overwritten without validation
 		// since we already have integrity checks in other functions, lets initialize it here
-		for(sint32 i=0; i<Espresso::CORE_COUNT; i++)
+		for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
 			thread->currentRunQueue[i] = nullptr;
 		thread->waitQueueLink.prev = nullptr;
 		thread->waitQueueLink.next = nullptr;
@@ -454,7 +452,7 @@ namespace coreinit
 		thread->coretimeSumQuantumStart = 0;
 		thread->totalCycles = 0;
 
-		for(auto& it : thread->padding68C)
+		for (auto& it : thread->padding68C)
 			it = 0;
 	}
 
@@ -466,17 +464,17 @@ namespace coreinit
 		if (coreIndex == 0)
 		{
 			thread->attr |= OSThread_t::ATTR_BIT::ATTR_AFFINITY_CORE0;
-			thread->context.affinity |= (1<<0);
+			thread->context.affinity |= (1 << 0);
 		}
 		else if (coreIndex == 1)
 		{
 			thread->attr |= OSThread_t::ATTR_BIT::ATTR_AFFINITY_CORE1;
-			thread->context.affinity |= (1<<1);
+			thread->context.affinity |= (1 << 1);
 		}
 		else // if (coreIndex == 2)
 		{
 			thread->attr |= OSThread_t::ATTR_BIT::ATTR_AFFINITY_CORE2;
-			thread->context.affinity |= (1<<2);
+			thread->context.affinity |= (1 << 2);
 		}
 	}
 
@@ -503,7 +501,6 @@ namespace coreinit
 				OSDetachThread(thread);
 				__OSLockScheduler();
 			}
-
 		}
 		cemu_assert_debug(__OSIsThreadActive(thread) == false);
 		__OSUnlockScheduler();
@@ -526,7 +523,7 @@ namespace coreinit
 		{
 			priority = priority + 0x40;
 		}
-		if(attrBits >= 0x20 || stackBase == nullptr || stackSize == 0)
+		if (attrBits >= 0x20 || stackBase == nullptr || stackSize == 0)
 		{
 			cemuLog_logDebug(LogType::APIErrors, "OSCreateThreadInternal: Invalid attributes, stack base or size");
 			return false;
@@ -541,9 +538,9 @@ namespace coreinit
 		thread->attr = attrBits;
 		if ((attrBits & 7) == 0) // if no explicit affinity is given, use the current core
 			SetThreadAffinityToCore(thread, OSGetCoreId());
-		if(currentThread)
+		if (currentThread)
 		{
-			for(sint32 i=0; i<Espresso::CORE_COUNT; i++)
+			for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
 			{
 				thread->dsiCallback[i] = currentThread->dsiCallback[i];
 				thread->isiCallback[i] = currentThread->isiCallback[i];
@@ -556,7 +553,7 @@ namespace coreinit
 		}
 		else
 		{
-			for(sint32 i=0; i<Espresso::CORE_COUNT; i++)
+			for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
 			{
 				thread->dsiCallback[i] = 0;
 				thread->isiCallback[i] = 0;
@@ -580,7 +577,7 @@ namespace coreinit
 
 	bool OSCreateThreadType(OSThread_t* thread, MPTR entryPoint, sint32 numParam, void* ptrParam, void* stackTop, sint32 stackSize, sint32 priority, uint32 attr, OSThread_t::THREAD_TYPE threadType)
 	{
-		if(threadType != OSThread_t::THREAD_TYPE::TYPE_APP && threadType != OSThread_t::THREAD_TYPE::TYPE_IO)
+		if (threadType != OSThread_t::THREAD_TYPE::TYPE_APP && threadType != OSThread_t::THREAD_TYPE::TYPE_IO)
 		{
 			cemuLog_logDebug(LogType::APIErrors, "OSCreateThreadType: Invalid thread type");
 			cemu_assert_suspicious();
@@ -629,7 +626,7 @@ namespace coreinit
 		thread->context.lr = _swapEndianU32(PPCInterpreter_makeCallableExportDepr(coreinitExport_OSExitThreadDepr));
 		thread->context.gpr[3] = _swapEndianU32(numParam);
 		thread->context.gpr[4] = _swapEndianU32(memory_getVirtualOffsetFromPointer(ptrParam));
-		thread->suspendCounter = 0;	// verify
+		thread->suspendCounter = 0; // verify
 
 		MPTR threadMPTR = memory_getVirtualOffsetFromPointer(thread);
 
@@ -689,7 +686,7 @@ namespace coreinit
 		// handle join queue
 		if (!currentThread->joinQueue.isEmpty())
 			currentThread->joinQueue.wakeupEntireWaitQueue(false);
-	
+
 		if ((currentThread->attr & 8) != 0)
 		{
 			// deactivate thread since it is detached
@@ -828,8 +825,8 @@ namespace coreinit
 	// adds the thread to each core's run queue if in runable state
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread)
 	{
-        cemu_assert_debug(MMU_IsInPPCMemorySpace(thread));
-        cemu_assert_debug(thread->IsValidMagic());
+		cemu_assert_debug(MMU_IsInPPCMemorySpace(thread));
+		cemu_assert_debug(thread->IsValidMagic());
 		cemu_assert_debug(__OSHasSchedulerLock());
 
 		if (thread->state != OSThread_t::THREAD_STATE::STATE_READY)
@@ -841,7 +838,7 @@ namespace coreinit
 			if (thread->currentRunQueue[i] != nullptr)
 				continue; // already on the queue
 			// check affinity
-			if(!thread->context.hasCoreAffinitySet(i))
+			if (!thread->context.hasCoreAffinitySet(i))
 				continue;
 			g_coreRunQueue.GetPtr()[i].addThread(thread, thread->linkRun + i);
 			thread->currentRunQueue[i] = (g_coreRunQueue.GetPtr() + i);
@@ -854,7 +851,7 @@ namespace coreinit
 		cemu_assert_debug(__OSHasSchedulerLock());
 		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
 		{
-			if(thread->currentRunQueue[i] == nullptr)
+			if (thread->currentRunQueue[i] == nullptr)
 				continue;
 			g_coreRunQueue.GetPtr()[i].removeThread(thread, thread->linkRun + i);
 			thread->currentRunQueue[i] = nullptr;
@@ -870,7 +867,7 @@ namespace coreinit
 			return false;
 		// special case: if current and new thread are running only on the same core then reschedule even if priority is equal
 		// this resolves a deadlock in Just Dance 2019 where one thread would always reacquire the same mutex within it's timeslice, blocking another thread on the same core from acquiring it
-		if (sharedPriorityAndAffinityWorkaround && (1<<coreIndex) == newThread->context.affinity && currentThread->context.affinity == newThread->context.affinity && currentThread->effectivePriority == newThread->effectivePriority)
+		if (sharedPriorityAndAffinityWorkaround && (1 << coreIndex) == newThread->context.affinity && currentThread->context.affinity == newThread->context.affinity && currentThread->effectivePriority == newThread->effectivePriority)
 			return true;
 		// otherwise reschedule if new thread has higher priority
 		return newThread->effectivePriority < currentThread->effectivePriority;
@@ -947,10 +944,10 @@ namespace coreinit
 		__OSUnlockScheduler();
 	}
 
-    void __OSSuspendThreadNolock(OSThread_t* thread)
-    {
-        __OSSuspendThreadInternal(thread);
-    }
+	void __OSSuspendThreadNolock(OSThread_t* thread)
+	{
+		__OSSuspendThreadInternal(thread);
+	}
 
 	void OSSleepThread(OSThreadQueue* threadQueue)
 	{
@@ -979,18 +976,18 @@ namespace coreinit
 		}
 		else if (prevAffinityMask != affinityMask)
 		{
-            if(thread->state != OSThread_t::THREAD_STATE::STATE_NONE)
-            {
-                __OSRemoveThreadFromRunQueues(thread);
-                thread->attr = (thread->attr & ~7) | (affinityMask & 7);
-                thread->context.setAffinity(affinityMask);
-                __OSAddReadyThreadToRunQueue(thread);
-            }
-            else
-            {
-                thread->attr = (thread->attr & ~7) | (affinityMask & 7);
-                thread->context.setAffinity(affinityMask);
-            }
+			if (thread->state != OSThread_t::THREAD_STATE::STATE_NONE)
+			{
+				__OSRemoveThreadFromRunQueues(thread);
+				thread->attr = (thread->attr & ~7) | (affinityMask & 7);
+				thread->context.setAffinity(affinityMask);
+				__OSAddReadyThreadToRunQueue(thread);
+			}
+			else
+			{
+				thread->attr = (thread->attr & ~7) | (affinityMask & 7);
+				thread->context.setAffinity(affinityMask);
+			}
 		}
 		__OSUnlockScheduler();
 		return true;
@@ -1069,24 +1066,30 @@ namespace coreinit
 	}
 
 	MPTR* GetThreadExceptionCallbackSlot(OSThread_t* thread,
-		uint32 exceptionType, uint32 coreIndex)
+										 uint32 exceptionType, uint32 coreIndex)
 	{
 		if (!thread || coreIndex >= Espresso::CORE_COUNT)
 			return nullptr;
 		switch (exceptionType)
 		{
-		case 2: return &thread->dsiCallback[coreIndex];
-		case 3: return &thread->isiCallback[coreIndex];
-		case 5: return reinterpret_cast<MPTR*>(
-			&thread->alignmentExceptionCallback[coreIndex]);
-		case 6: return &thread->programCallback[coreIndex];
-		case 11: return &thread->perfMonCallback[coreIndex];
-		default: return nullptr;
+		case 2:
+			return &thread->dsiCallback[coreIndex];
+		case 3:
+			return &thread->isiCallback[coreIndex];
+		case 5:
+			return reinterpret_cast<MPTR*>(
+				&thread->alignmentExceptionCallback[coreIndex]);
+		case 6:
+			return &thread->programCallback[coreIndex];
+		case 11:
+			return &thread->perfMonCallback[coreIndex];
+		default:
+			return nullptr;
 		}
 	}
 
 	MPTR OSSetExceptionCallbackEx(uint32 mode, uint32 exceptionType,
-		MPTR callback)
+								  MPTR callback)
 	{
 		OSThread_t* currentThread = OSGetCurrentThread();
 		const uint32 currentCore = OSGetCoreId();
@@ -1103,7 +1106,7 @@ namespace coreinit
 			const uint32 endCore = allCores ? Espresso::CORE_COUNT : currentCore + 1;
 			for (uint32 core = firstCore; core < endCore; ++core)
 				if (MPTR* slot = GetThreadExceptionCallbackSlot(
-					thread, exceptionType, core))
+						thread, exceptionType, core))
 					*slot = callback;
 		};
 
@@ -1157,22 +1160,22 @@ namespace coreinit
 		return suspendCounter > 0;
 	}
 
-    bool OSIsThreadRunningNoLock(OSThread_t* thread)
-    {
-        cemu_assert_debug(__OSHasSchedulerLock());
-        return thread->state == OSThread_t::THREAD_STATE::STATE_RUNNING;
-    }
+	bool OSIsThreadRunningNoLock(OSThread_t* thread)
+	{
+		cemu_assert_debug(__OSHasSchedulerLock());
+		return thread->state == OSThread_t::THREAD_STATE::STATE_RUNNING;
+	}
 
-    bool OSIsThreadRunning(OSThread_t* thread)
-    {
-        bool isRunning = false;
-        __OSLockScheduler();
-        isRunning = OSIsThreadRunningNoLock(thread);
-        __OSUnlockScheduler();
-        return isRunning;
-    }
+	bool OSIsThreadRunning(OSThread_t* thread)
+	{
+		bool isRunning = false;
+		__OSLockScheduler();
+		isRunning = OSIsThreadRunningNoLock(thread);
+		__OSUnlockScheduler();
+		return isRunning;
+	}
 
-    void OSCancelThread(OSThread_t* thread)
+	void OSCancelThread(OSThread_t* thread)
 	{
 		__OSLockScheduler();
 		cemu_assert_debug(thread->requestFlags == 0 || thread->requestFlags == OSThread_t::REQUEST_FLAG_CANCEL); // todo - how to handle cases where other flags are already set?
@@ -1303,7 +1306,7 @@ namespace coreinit
 	}
 
 	void __OSLoadThread(OSThread_t* thread, PPCInterpreter_t* hCPU,
-		uint32 coreIndex, std::optional<WupsOwnerToken> wupsOwner)
+						uint32 coreIndex, std::optional<WupsOwnerToken> wupsOwner)
 	{
 		// Cafe OS title threads always use the normal title address space. The
 		// separately allocated .cemod CPUs are never scheduled through this path.
@@ -1326,7 +1329,7 @@ namespace coreinit
 		thread->wakeUpCount = thread->wakeUpCount + 1;
 	}
 
-	uint32 s_lehmer_lcg[PPC_CORE_COUNT] = { 0 };
+	uint32 s_lehmer_lcg[PPC_CORE_COUNT] = {0};
 
 	void __OSThreadStartTimeslice(OSThread_t* thread, PPCInterpreter_t* hCPU)
 	{
@@ -1370,17 +1373,17 @@ namespace coreinit
 		return selectedThread;
 	}
 
-    void __OSDeleteAllActivePPCThreads()
-    {
-        __OSLockScheduler();
-        while(activeThreadCount > 0)
-        {
-            MEMPTR<OSThread_t> t{activeThread[0]};
-            t->state = OSThread_t::THREAD_STATE::STATE_NONE;
-            __OSDeactivateThread(t.GetPtr());
-        }
-        __OSUnlockScheduler();
-    }
+	void __OSDeleteAllActivePPCThreads()
+	{
+		__OSLockScheduler();
+		while (activeThreadCount > 0)
+		{
+			MEMPTR<OSThread_t> t{activeThread[0]};
+			t->state = OSThread_t::THREAD_STATE::STATE_NONE;
+			__OSDeactivateThread(t.GetPtr());
+		}
+		__OSUnlockScheduler();
+	}
 
 	void __OSCheckSystemEvents()
 	{
@@ -1417,7 +1420,7 @@ namespace coreinit
 			if (isMainCore)
 			{
 				__OSCheckSystemEvents();
-				if(g_isMulticoreMode == false)
+				if (g_isMulticoreMode == false)
 					coreIndex = (coreIndex + 1) % 3;
 			}
 			else
@@ -1435,9 +1438,9 @@ namespace coreinit
 		cemu_assert_debug(__OSHasSchedulerLock());
 
 		OSHostThread* hostThread = (OSHostThread*)Fiber::GetFiberPrivateData();
-        cemu_assert_debug(hostThread);
+		cemu_assert_debug(hostThread);
 
-		//if (ppcInterpreterCurrentInstance)
+		// if (ppcInterpreterCurrentInstance)
 		//	debug_printf("Core %d store thread %08x (t = %d)\n", hostThread->ppcInstance.sprNew.UPIR, memory_getVirtualOffsetFromPointer(hostThread->thread), t_assignedCoreIndex);
 
 		// store context of current thread
@@ -1466,7 +1469,7 @@ namespace coreinit
 
 		// find next thread to run
 		// for main thread we force switching to the idle loop since it calls __OSCheckSystemEvents()
-		if(isMainThread)
+		if (isMainThread)
 			Fiber::Switch(*g_idleLoopFiber[t_assignedCoreIndex]);
 		else if (OSThread_t* nextThread = __OSGetNextRunableThread(coreIndex))
 		{
@@ -1478,19 +1481,19 @@ namespace coreinit
 			Fiber::Switch(*g_idleLoopFiber[t_assignedCoreIndex]);
 		}
 
-		cemu_assert_debug(__OSHasSchedulerLock());	
+		cemu_assert_debug(__OSHasSchedulerLock());
 		cemu_assert_debug(g_isMulticoreMode == false || hostThread->selectedCore == t_assignedCoreIndex);
 
 		// received next time slice, load self again
 		__OSLoadThread(hostThread->m_thread, &hostThread->ppcInstance,
-			hostThread->selectedCore, hostThread->wupsOwner);
+					   hostThread->selectedCore, hostThread->wupsOwner);
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 	}
 
 #ifdef __arm64__
 	void __OSFiberThreadEntry(uint32 _high, uint32 _low)
 	{
-		uint64 _thread = (uint64) _high << 32 | _low;
+		uint64 _thread = (uint64)_high << 32 | _low;
 #else
 	void __OSFiberThreadEntry(void* _thread)
 	{
@@ -1501,7 +1504,7 @@ namespace coreinit
 
 		PPCInterpreter_t* hCPU = &hostThread->ppcInstance;
 		__OSLoadThread(hostThread->m_thread, hCPU, hostThread->selectedCore,
-			hostThread->wupsOwner);
+					   hostThread->wupsOwner);
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 		__OSUnlockScheduler(); // lock is always held when switching to a fiber, so we need to unlock it here
 		while (true)
@@ -1532,8 +1535,8 @@ namespace coreinit
 	}
 
 #if BOOST_OS_LINUX
-	#include <unistd.h>
-	#include <sys/prctl.h>
+#include <unistd.h>
+#include <sys/prctl.h>
 
 	std::vector<pid_t> g_schedulerThreadIds;
 	std::mutex g_schedulerThreadIdsLock;
@@ -1607,7 +1610,7 @@ namespace coreinit
 			g_schedulerThreadHandles.emplace_back(it.native_handle());
 	}
 
-    // shuts down all scheduler host threads and deletes all fibers and ppc threads
+	// shuts down all scheduler host threads and deletes all fibers and ppc threads
 	void OSSchedulerEnd()
 	{
 		std::unique_lock _lock(sSchedulerStateMtx);
@@ -1646,7 +1649,7 @@ namespace coreinit
 	}
 
 	bool OSRunOnEmulatedCpuThread(std::function<void()> callback,
-		uint32 timeoutMilliseconds)
+								  uint32 timeoutMilliseconds)
 	{
 		if (!callback)
 			return false;
@@ -1667,9 +1670,9 @@ namespace coreinit
 
 		std::unique_lock lock(sHostCpuTaskMutex);
 		const bool accepted = sHostCpuTaskCondition.wait_for(lock,
-			std::chrono::milliseconds(timeoutMilliseconds), [&task] {
-				return task->state != HostCpuTaskState::Queued;
-			});
+															 std::chrono::milliseconds(timeoutMilliseconds), [&task] {
+																 return task->state != HostCpuTaskState::Queued;
+															 });
 		if (!accepted)
 		{
 			const auto found = std::ranges::find(sHostCpuTasks, task);
@@ -1686,7 +1689,7 @@ namespace coreinit
 		// the bounded wait above only covers acceptance by a live title thread.
 		sHostCpuTaskCondition.wait(lock, [&task] {
 			return task->state == HostCpuTaskState::Completed ||
-				task->state == HostCpuTaskState::Cancelled;
+				   task->state == HostCpuTaskState::Cancelled;
 		});
 		return task->state == HostCpuTaskState::Completed && task->succeeded;
 	}
@@ -1716,7 +1719,7 @@ namespace coreinit
 		threadQueue->userData = nullptr;
 		threadQueue->ukn0C = 0;
 	}
-	
+
 	void OSInitThreadQueueEx(OSThreadQueue* threadQueue, void* userData)
 	{
 		threadQueue->head = nullptr;
@@ -1724,9 +1727,9 @@ namespace coreinit
 		threadQueue->userData = userData;
 		threadQueue->ukn0C = 0;
 	}
-	
+
 	/* Thread terminator threads (for calling thread deallocators) */
-	struct TerminatorThread 
+	struct TerminatorThread
 	{
 		struct DeallocatorQueueEntry
 		{
@@ -1844,7 +1847,7 @@ namespace coreinit
 		// OSThreadQueue
 		cafeExportRegister("coreinit", OSInitThreadQueue, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSInitThreadQueueEx, LogType::CoreinitThread);
-    }
+	}
 
 	void InitializeThread()
 	{
@@ -1856,4 +1859,4 @@ namespace coreinit
 		__OSInitDefaultThreads();
 		__OSInitTerminatorThreads();
 	}
-}
+} // namespace coreinit

@@ -19,14 +19,14 @@ enum class WxFrontendErrorCategory
 
 class IWxUiDispatcher
 {
-public:
+  public:
 	virtual ~IWxUiDispatcher() = default;
 	[[nodiscard]] virtual bool IsShuttingDown() const = 0;
 	virtual void BeginShutdown() = 0;
 	virtual void ResumeAfterFailedShutdown() = 0;
 	[[nodiscard]] virtual bool Queue(std::function<void()> callback) = 0;
 	[[nodiscard]] virtual bool Queue(std::function<void()> callback,
-		std::function<void()> cancelled) = 0;
+									 std::function<void()> cancelled) = 0;
 };
 
 struct WxFrontendContext
@@ -41,8 +41,10 @@ struct WxFrontendContext
 	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry;
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher;
 	std::function<void(std::string_view, std::string_view,
-		std::optional<WxFrontendErrorCategory>)> showErrorDialog;
+					   std::optional<WxFrontendErrorCategory>)>
+		showErrorDialog;
 	std::function<void(bool, bool, double,
-		std::optional<Application::WindowTitlePresentation>)> updateWindowTitles;
+					   std::optional<Application::WindowTitlePresentation>)>
+		updateWindowTitles;
 	std::function<void()> releaseHostServices;
 };

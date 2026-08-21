@@ -9,7 +9,7 @@
 
 #define GPU7_ENDIAN_8IN32 2
 
-typedef struct  
+typedef struct
 {
 	union
 	{
@@ -17,25 +17,25 @@ typedef struct
 		uint32 u32[4];
 		sint32 s32[4];
 	};
-}LatteReg_t;
+} LatteReg_t;
 
-#define REG_AR	(128)
+#define REG_AR (128)
 
-typedef struct  
+typedef struct
 {
-	LatteReg_t reg[128+1];
+	LatteReg_t reg[128 + 1];
 	union
 	{
 		uint32 u32[5];
 		sint32 s32[5];
 		float f[5];
-	}pvps;
+	} pvps;
 	union
 	{
 		uint32 u32[5];
 		sint32 s32[5];
 		float f[5];
-	}pvpsUpdate;
+	} pvpsUpdate;
 	void* cfilePtr;
 	LatteReg_t* literalPtr;
 	// cbank
@@ -48,7 +48,7 @@ typedef struct
 	sint32 shaderSize;
 	// shaders
 	LatteFetchShader* fetchShader;
-}LatteSoftwareExecContext_t;
+} LatteSoftwareExecContext_t;
 
 LatteSoftwareExecContext_t LatteSWCtx;
 
@@ -229,11 +229,29 @@ float _getSrc_f(uint32 srcSel, uint32 srcChan, uint32 srcNeg, uint32 srcAbs, uin
 	return v;
 }
 
-#define _updateGPR_S32(__gprIdx,__channel,__v) {gprUpdate[updateQueueLength].gprIndex = __gprIdx; gprUpdate[updateQueueLength].channel = __channel; gprUpdate[updateQueueLength].s32 = __v; updateQueueLength++;}
-#define _updateGPR_F(__gprIdx,__channel,__v) {gprUpdate[updateQueueLength].gprIndex = __gprIdx; gprUpdate[updateQueueLength].channel = __channel; gprUpdate[updateQueueLength].f = __v; updateQueueLength++;}
+#define _updateGPR_S32(__gprIdx, __channel, __v)          \
+	{                                                     \
+		gprUpdate[updateQueueLength].gprIndex = __gprIdx; \
+		gprUpdate[updateQueueLength].channel = __channel; \
+		gprUpdate[updateQueueLength].s32 = __v;           \
+		updateQueueLength++;                              \
+	}
+#define _updateGPR_F(__gprIdx, __channel, __v)            \
+	{                                                     \
+		gprUpdate[updateQueueLength].gprIndex = __gprIdx; \
+		gprUpdate[updateQueueLength].channel = __channel; \
+		gprUpdate[updateQueueLength].f = __v;             \
+		updateQueueLength++;                              \
+	}
 
-#define _updatePVPS_S32(__pvIndex, __v) {LatteSWCtx.pvpsUpdate.s32[__pvIndex] = __v;}
-#define _updatePVPS_F(__pvIndex, __v) {LatteSWCtx.pvpsUpdate.f[__pvIndex] = __v;}
+#define _updatePVPS_S32(__pvIndex, __v)             \
+	{                                               \
+		LatteSWCtx.pvpsUpdate.s32[__pvIndex] = __v; \
+	}
+#define _updatePVPS_F(__pvIndex, __v)             \
+	{                                             \
+		LatteSWCtx.pvpsUpdate.f[__pvIndex] = __v; \
+	}
 
 float LatteSoftware_omod(uint32 omod, float f)
 {
@@ -253,7 +271,9 @@ float LatteSoftware_omod(uint32 omod, float f)
 }
 
 #ifdef CEMU_DEBUG_ASSERT
-#define _clamp(__v) if(destClamp != 0) cemu_assert_unimplemented()
+#define _clamp(__v)     \
+	if (destClamp != 0) \
+	cemu_assert_unimplemented()
 #else
 #define _clamp(__v) // todo
 #endif
@@ -278,7 +298,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 
 	LatteSoftware_setupCBankPointers(cBank0Index, cBank1Index, cBank0AddrBase, cBank1AddrBase);
 
-	struct  
+	struct
 	{
 		sint16 gprIndex;
 		sint16 channel;
@@ -288,7 +308,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 			uint32 u32;
 			sint32 s32;
 		};
-	}gprUpdate[16];
+	} gprUpdate[16];
 
 	sint32 updateQueueLength = 0;
 	uint32 aluUnitWriteMask = 0;
@@ -306,7 +326,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 			}
 			cemu_assert_debug(i < 5);
 		}
-		LatteSWCtx.literalPtr = (LatteReg_t*)(aluWordPtr + groupInstructionCount*2);
+		LatteSWCtx.literalPtr = (LatteReg_t*)(aluWordPtr + groupInstructionCount * 2);
 		// process group
 		bool hasReductionInstruction = false;
 		float reductionResult = 0.0f;
@@ -337,9 +357,9 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 				// op3
 				// parameters from ALU word 1
 				uint32 src2Sel = (aluWord1 >> 0) & 0x1FF; // source selection
-				uint32 src2Rel = (aluWord1 >> 9) & 0x1; // relative addressing mode
+				uint32 src2Rel = (aluWord1 >> 9) & 0x1;	  // relative addressing mode
 				uint32 src2Chan = (aluWord1 >> 10) & 0x3; // component selection x/y/z/w
-				uint32 src2Neg = (aluWord1 >> 12) & 0x1; // negate input
+				uint32 src2Neg = (aluWord1 >> 12) & 0x1;  // negate input
 				if (GPU7_ALU_SRC_IS_LITERAL(src2Sel))
 					literalAccessMask |= (1 << src2Chan);
 
@@ -349,7 +369,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 				uint32 destClamp = (aluWord1 >> 31) & 1;
 
 				uint32 aluUnit = destElem;
-				if (aluUnitWriteMask&(1 << destElem))
+				if (aluUnitWriteMask & (1 << destElem))
 				{
 					aluUnit = 4; // PV
 				}
@@ -389,7 +409,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 					float f0 = _getSrc_f(src0Sel, src0Chan, src0Neg, 0, src0Rel, indexMode);
 					float f1 = _getSrc_f(src1Sel, src1Chan, src1Neg, 0, src1Rel, indexMode);
 					float f2 = _getSrc_f(src2Sel, src2Chan, src2Neg, 0, src2Rel, indexMode);
-					float f = f0*f1+f2;
+					float f = f0 * f1 + f2;
 					_updateGPR_F(destGpr, destElem, f);
 					_updatePVPS_F(aluUnit, f);
 					break;
@@ -418,7 +438,7 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 				if (LatteDecompiler_IsALUTransInstruction(false, alu_inst7_11))
 					aluUnit = 4;
 
-				if (aluUnitWriteMask&(1 << destElem))
+				if (aluUnitWriteMask & (1 << destElem))
 				{
 					aluUnit = 4; // PV
 				}
@@ -604,11 +624,11 @@ void LatteSoftware_executeALUClause(uint32 cfType, uint32 addr, uint32 count, ui
 		}
 		updateQueueLength = 0;
 		// skip literals
-		if (literalAccessMask&(3 << 0))
+		if (literalAccessMask & (3 << 0))
 			aluWordPtr += 2;
-		if (literalAccessMask&(3 << 2))
+		if (literalAccessMask & (3 << 2))
 		{
-			cemu_assert_debug((literalAccessMask &3) != 0);
+			cemu_assert_debug((literalAccessMask & 3) != 0);
 			aluWordPtr += 2;
 		}
 		// reset group state tracking variables
@@ -646,7 +666,6 @@ void LatteSoftware_singleRun()
 			count++;
 			if (cf_inst23_7 == GPU7_CF_INST_CALL_FS)
 			{
-				
 			}
 			else if (cf_inst23_7 == GPU7_CF_INST_NOP)
 			{
@@ -671,7 +690,7 @@ void LatteSoftware_singleRun()
 				uint32 exportArrayBase = (cfWord0 >> 0) & 0x1FFF;
 				uint32 exportBurstCount = (cfWord1 >> 17) & 0xF;
 				uint32 exportSourceGPR = (cfWord0 >> 15) & 0x7F;
-				uint32 memWriteElemSize = (cfWord0>>29)&3; // unused
+				uint32 memWriteElemSize = (cfWord0 >> 29) & 3; // unused
 
 				cemu_assert_debug(exportBurstCount == 0);
 				if (edType == 1 && exportArrayBase == GPU7_DECOMPILER_CF_EXPORT_BASE_POSITION)
@@ -692,7 +711,7 @@ void LatteSoftware_singleRun()
 				cemu_assert_unimplemented();
 			}
 			else if (cf_inst23_7 == GPU7_CF_INST_ELSE ||
-				cf_inst23_7 == GPU7_CF_INST_POP)
+					 cf_inst23_7 == GPU7_CF_INST_POP)
 			{
 				cemu_assert_unimplemented();
 			}
@@ -709,7 +728,7 @@ void LatteSoftware_singleRun()
 				cemu_assert_unimplemented();
 			}
 			else if (cf_inst23_7 == GPU7_CF_INST_MEM_STREAM0_WRITE ||
-				cf_inst23_7 == GPU7_CF_INST_MEM_STREAM1_WRITE)
+					 cf_inst23_7 == GPU7_CF_INST_MEM_STREAM1_WRITE)
 			{
 				cemu_assert_unimplemented();
 			}
@@ -789,7 +808,7 @@ void _readAttr_FLOAT_32_32_32_32(void* ptr, LatteReg_t& output)
 	output.s32[3] = _readVtxU32<endianMode>((uint32*)ptr + 3);
 }
 
-#define _fmtKey(__fmt, __endianSwap, __nfa, __isSigned) ((__endianSwap)|((__nfa)<<2)|((__isSigned)<<4)|((__fmt)<<5))
+#define _fmtKey(__fmt, __endianSwap, __nfa, __isSigned) ((__endianSwap) | ((__nfa) << 2) | ((__isSigned) << 4) | ((__fmt) << 5))
 
 void LatteSoftware_loadVertexAttributes(sint32 index)
 {
@@ -802,7 +821,7 @@ void LatteSoftware_loadVertexAttributes(sint32 index)
 			// calculate element index
 			sint32 elementIndex = index;
 			// todo - handle instance index and attr divisor
-			
+
 			// get buffer
 			uint32 bufferIndex = attrib->attributeBufferIndex;
 			if (bufferIndex >= 0x10)
@@ -854,7 +873,7 @@ void LatteSoftware_loadVertexAttributes(sint32 index)
 				cemu_assert_debug(false);
 			}
 
-			LatteReg_t* gprOutput = LatteSWCtx.reg+gprIndex;
+			LatteReg_t* gprOutput = LatteSWCtx.reg + gprIndex;
 			for (uint32 f = 0; f < 4; f++)
 			{
 				if (attrib->ds[f] < 4)

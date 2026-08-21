@@ -183,7 +183,7 @@ namespace GX2
 	}
 
 	bool GX2RInvalidateSurface(GX2Surface* surface, sint32 mipLevel,
-		uint32 resFlags)
+							   uint32 resFlags)
 	{
 		(void)resFlags;
 		if (!GX2RSurfaceExists(surface) || mipLevel < 0 ||
@@ -201,9 +201,7 @@ namespace GX2
 		{
 			const uint32 offset = surface->mipOffset[mipLevel - 1];
 			const uint32 nextOffset =
-				static_cast<uint32>(mipLevel + 1) < static_cast<uint32>(surface->numLevels) ?
-				static_cast<uint32>(surface->mipOffset[mipLevel]) :
-				static_cast<uint32>(surface->mipSize);
+				static_cast<uint32>(mipLevel + 1) < static_cast<uint32>(surface->numLevels) ? static_cast<uint32>(surface->mipOffset[mipLevel]) : static_cast<uint32>(surface->mipSize);
 			address = static_cast<uint32>(surface->mipPtr) + offset;
 			size = nextOffset > offset ? nextOffset - offset : 0;
 		}
@@ -287,4 +285,4 @@ namespace GX2
 		GX2RAllocateFunc = MPTR_NULL;
 		GX2RFreeFunc = MPTR_NULL;
 	}
-};
+}; // namespace GX2

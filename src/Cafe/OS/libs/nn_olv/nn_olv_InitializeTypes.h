@@ -6,7 +6,6 @@
 #include "Cafe/OS/libs/nn_olv/nn_olv_Common.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MCP.h"
 
-
 namespace nn
 {
 	namespace olv
@@ -14,7 +13,7 @@ namespace nn
 
 		class InitializeParam
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_OFFLINE_MODE = (1 << 0);
 
 			InitializeParam()
@@ -103,7 +102,7 @@ namespace nn
 
 		class PortalAppParam
 		{
-		public:
+		  public:
 			PortalAppParam()
 			{
 				m_ParamPack[0] = 0;
@@ -148,17 +147,17 @@ namespace nn
 				return _this->GetStartUrl();
 			}
 
-		public:
+		  public:
 			/* +0x1A5C3C */ uint8be m_ParamPack[0x200];
 			/* +0x1A663B */ uint8be m_ServiceToken[0x201]; // IndependentServiceToken for Miiverse title
-			/* +0x1A5E3C */ uint8be m_StartUrl[0x7ff]; // https://portal-us.olv.nintendo.net/titles/show?src=menu
+			/* +0x1A5E3C */ uint8be m_StartUrl[0x7ff];	   // https://portal-us.olv.nintendo.net/titles/show?src=menu
 		};
 
 		namespace Report
 		{
 			uint32 GetReportTypes();
 			void SetReportTypes(uint32 reportTypes);
-		}
+		} // namespace Report
 
 		bool IsInitialized();
 		sint32 Initialize(nn::olv::InitializeParam* pParam);
@@ -183,5 +182,5 @@ namespace nn
 			cafeExportRegisterFunc(PortalAppParam::__GetServiceToken, "nn_olv", "GetServiceToken__Q4_2nn3olv6hidden14PortalAppParamCFv", LogType::NN_OLV);
 			cafeExportRegisterFunc(PortalAppParam::__GetStartUrl, "nn_olv", "GetStartUrl__Q4_2nn3olv6hidden14PortalAppParamCFv", LogType::NN_OLV);
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

@@ -10,12 +10,16 @@
 
 int main()
 {
-	auto check = [](bool condition) { if (!condition) std::abort(); };
+	auto check = [](bool condition) {
+		if (!condition)
+			std::abort();
+	};
 	Application::LoggingFacade facade;
 	std::atomic_uint64_t callbacks{};
 	auto subscription = facade.Subscribe(
 		[&](const Application::LoggingEntry& entry) {
-			if (entry.message.empty()) std::abort();
+			if (entry.message.empty())
+				std::abort();
 			callbacks.fetch_add(1, std::memory_order_relaxed);
 		});
 
@@ -29,7 +33,8 @@ int main()
 				cemuLog_log(LogType::Force, "worker {} entry {}", thread, entry);
 		});
 	}
-	for (auto& worker : workers) worker.join();
+	for (auto& worker : workers)
+		worker.join();
 
 	const auto snapshot = facade.Snapshot();
 	check(callbacks.load(std::memory_order_relaxed) == threadCount * entriesPerThread);

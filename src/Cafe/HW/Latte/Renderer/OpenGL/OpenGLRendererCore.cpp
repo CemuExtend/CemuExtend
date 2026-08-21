@@ -20,14 +20,13 @@
 #include "HW/Latte/Renderer/RendererCore.h"
 #include "config/ActiveSettings.h"
 
-
 using _INDEX_TYPE = Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE;
 
 GLenum sGLActiveDrawMode = 0;
 
 extern bool hasValidFramebufferAttached;
 
-#define INDEX_CACHE_ENTRIES		(8)
+#define INDEX_CACHE_ENTRIES (8)
 
 typedef struct
 {
@@ -38,12 +37,12 @@ typedef struct
 	uint8* indexData;
 	uint8* indexData2;
 	uint32 indexBufferOffset;
-	sint32 indexDataSize; // current size
+	sint32 indexDataSize;  // current size
 	sint32 indexDataLimit; // maximum size
 	// info
 	uint32 maxIndex;
 	uint32 minIndex;
-}indexDataCacheEntry_t;
+} indexDataCacheEntry_t;
 
 struct
 {
@@ -62,7 +61,7 @@ struct
 	// misc
 	bool initialized;
 	GLuint glActiveElementArrayBuffer;
-}indexState = { 0 };
+} indexState = {0};
 
 struct
 {
@@ -71,7 +70,7 @@ struct
 	uint8 dataFormat;
 	uint8 nfa;
 	bool isSigned;
-}activeAttributePointer[LATTE_VS_ATTRIBUTE_LIMIT] = { 0 };
+} activeAttributePointer[LATTE_VS_ATTRIBUTE_LIMIT] = {0};
 
 void LatteDraw_resetAttributePointerCache()
 {
@@ -157,8 +156,8 @@ void _setAttributeBufferPointerRaw(uint32 attributeShaderLoc, uint8* buffer, uin
 	}
 }
 
-bool glAttributeArrayIsEnabled[GPU_GL_MAX_NUM_ATTRIBUTE] = { 0 };
-sint32 glAttributeArrayAluDivisor[GPU_GL_MAX_NUM_ATTRIBUTE] = { 0 };
+bool glAttributeArrayIsEnabled[GPU_GL_MAX_NUM_ATTRIBUTE] = {0};
+sint32 glAttributeArrayAluDivisor[GPU_GL_MAX_NUM_ATTRIBUTE] = {0};
 
 void OpenGLRenderer::SetAttributeArrayState(uint32 index, bool isEnabled, sint32 aluDivisor)
 {
@@ -207,7 +206,7 @@ typedef struct
 	sint32 count;
 	uint32 primitiveRestartIndex;
 	uint32 primitiveMode;
-}indexDataCacheKey_t;
+} indexDataCacheKey_t;
 
 typedef struct _indexDataCacheEntry_t
 {
@@ -216,20 +215,20 @@ typedef struct _indexDataCacheEntry_t
 	uint32 physSize;
 	uint32 hash;
 	_INDEX_TYPE indexType;
-	//sint32 indexType;
+	// sint32 indexType;
 	uint32 minIndex;
 	uint32 maxIndex;
 	uint32 lastAccessFrameCount;
 	VirtualBufferHeapEntry_t* heapEntry;
 	_indexDataCacheEntry_t* nextInMostRecentUsage; // points to element which was used more recently
 	_indexDataCacheEntry_t* prevInMostRecentUsage; // points to element which was used less recently
-}indexDataCacheEntry2_t;
+} indexDataCacheEntry2_t;
 
-#define INDEX_DATA_CACHE_BUCKETS		(1783)
+#define INDEX_DATA_CACHE_BUCKETS (1783)
 
-indexDataCacheEntry2_t* indexDataCacheBucket[INDEX_DATA_CACHE_BUCKETS] = { 0 };
+indexDataCacheEntry2_t* indexDataCacheBucket[INDEX_DATA_CACHE_BUCKETS] = {0};
 indexDataCacheEntry2_t* indexDataCacheFirst = nullptr; // points to least recently used item
-indexDataCacheEntry2_t* indexDataCacheLast = nullptr; // points to most recently used item
+indexDataCacheEntry2_t* indexDataCacheLast = nullptr;  // points to most recently used item
 sint32 indexDataCacheEntryCount = 0;
 
 void _appendToUsageLinkedList(indexDataCacheEntry2_t* entry)
@@ -338,7 +337,7 @@ void _decodeAndUploadIndexData(indexDataCacheEntry2_t* cacheEntry)
 		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, cacheEntry->heapEntry->startOffset, count * sizeof(uint16), indexState.tempIndexStorage);
 		performanceMonitor.cycle[performanceMonitor.cycleIndex].indexDataUploaded += (count * sizeof(uint16));
 	}
-	else if(cacheEntry->indexType == _INDEX_TYPE::U32_BE)
+	else if (cacheEntry->indexType == _INDEX_TYPE::U32_BE)
 	{
 		// 32bit indices
 		uint32* indexInputU32 = (uint32*)memory_getPointerFromPhysicalOffset(cacheEntry->key.physAddr);
@@ -368,7 +367,6 @@ void _decodeAndUploadIndexData(indexDataCacheEntry2_t* cacheEntry)
 		cemu_assert_debug(false);
 	}
 }
-
 
 void LatteDraw_cleanupAfterFrame()
 {
@@ -423,7 +421,7 @@ uint32 LatteDrawGL_calculateIndexDataHash(uint8* data, uint32 size)
 	h += *(uint32*)(data + 8);
 	h += *(uint32*)(data + 12);
 	// last 16 bytes
-	data = data + ((size - 16)&~3);
+	data = data + ((size - 16) & ~3);
 	h += *(uint32*)(data + 0);
 	h += *(uint32*)(data + 4);
 	h += *(uint32*)(data + 8);
@@ -549,7 +547,7 @@ void LatteDrawGL_doDraw(_INDEX_TYPE indexType, uint32 baseVertex, uint32 baseIns
 		// 32bit index, big endian
 		if (instanceCount > 1 || baseInstance != 0)
 		{
-			//debug_printf("Render instanced\n");
+			// debug_printf("Render instanced\n");
 			glDrawElementsInstancedBaseVertexBaseInstance(sGLActiveDrawMode, count, GL_UNSIGNED_INT, indexState.indexData, instanceCount, baseVertex, baseInstance);
 		}
 		else
@@ -574,7 +572,7 @@ void LatteDrawGL_doDraw(_INDEX_TYPE indexType, uint32 baseVertex, uint32 baseIns
 	}
 }
 
-uint32 _glVertexBufferOffset[32] = { 0 };
+uint32 _glVertexBufferOffset[32] = {0};
 
 void OpenGLRenderer::buffer_bindVertexBuffer(uint32 bufferIndex, uint32 offset, uint32 size)
 {
@@ -629,14 +627,14 @@ void OpenGLRenderer::_setupVertexAttributes()
 
 	catchOpenGLError();
 	LatteFetchShader* parsedFetchShader = LatteSHRC_GetActiveFetchShader();
-	bool attributeArrayUsed[32] = { 0 }; // used to keep track of enabled vertex attributes for this shader
+	bool attributeArrayUsed[32] = {0}; // used to keep track of enabled vertex attributes for this shader
 	sint32 attributeDataIndex = 0;
 	uint32 vboDataOffset = 0;
 
 	bool tfBufferIsBound = false;
 	sint32 maxReallocAttemptLimit = 1;
 
-	for(auto& bufferGroup : parsedFetchShader->bufferGroups)
+	for (auto& bufferGroup : parsedFetchShader->bufferGroups)
 	{
 		uint32 bufferIndex = bufferGroup.attributeBufferIndex;
 		uint32 bufferBaseRegisterIndex = mmSQ_VTX_ATTRIBUTE_BLOCK_START + bufferIndex * 7;
@@ -958,7 +956,6 @@ void OpenGLRenderer::draw_genericDrawHandler(uint32 baseVertex, uint32 baseInsta
 		{
 			glTextureBarrier();
 		}
-
 	}
 
 	catchOpenGLError();
@@ -1116,7 +1113,7 @@ void OpenGLRenderer::draw_genericDrawHandler(uint32 baseVertex, uint32 baseInsta
 	LatteDrawGL_doDraw(indexType, baseVertex, baseInstance, instanceCount, count);
 	endPerfMonProfiling(performanceMonitor.gpuTime_dcStageDrawcallAPI);
 	// post-drawcall logic
-	if(pixelShader)
+	if (pixelShader)
 		LatteRenderTarget_trackUpdates();
 	LatteStreamout_FinishDrawcall(false);
 	catchOpenGLError();
@@ -1140,7 +1137,7 @@ void OpenGLRenderer::draw_genericDrawHandler(uint32 baseVertex, uint32 baseInsta
 	{
 		LatteTextureReadback_UpdateFinishedTransfers(false);
 		sPrevTextureReadbackDrawcallUpdate = LatteGPUState.drawCallCounter;
-	}	
+	}
 	catchOpenGLError();
 }
 
@@ -1152,10 +1149,10 @@ void OpenGLRenderer::draw_beginSequence()
 void OpenGLRenderer::draw_execute(uint32 baseVertex, uint32 baseInstance, uint32 instanceCount, uint32 count, MPTR indexDataMPTR, Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE indexType, const LatteDrawcallContext& drawcallContext)
 {
 	bool isMinimal = !drawcallContext.isFirst;
-    if (isMinimal)
-        draw_genericDrawHandler<true, false>(baseVertex, baseInstance, instanceCount, count, indexDataMPTR, indexType);
-    else
-        draw_genericDrawHandler<false, false>(baseVertex, baseInstance, instanceCount, count, indexDataMPTR, indexType);
+	if (isMinimal)
+		draw_genericDrawHandler<true, false>(baseVertex, baseInstance, instanceCount, count, indexDataMPTR, indexType);
+	else
+		draw_genericDrawHandler<false, false>(baseVertex, baseInstance, instanceCount, count, indexDataMPTR, indexType);
 }
 
 void OpenGLRenderer::draw_endSequence()
@@ -1163,7 +1160,7 @@ void OpenGLRenderer::draw_endSequence()
 	// no-op
 }
 
-#define GPU7_INDEX_BUFFER_CACHE_SIZE_DEPR		(18*1024*1024) // 18MB
+#define GPU7_INDEX_BUFFER_CACHE_SIZE_DEPR (18 * 1024 * 1024) // 18MB
 
 void OpenGLRenderer::draw_init()
 {
@@ -1198,30 +1195,27 @@ void OpenGLRenderer::bufferCache_copy(uint32 srcOffset, uint32 dstOffset, uint32
 	glCopyBufferSubData(GL_ARRAY_BUFFER, GL_ARRAY_BUFFER, srcOffset, dstOffset, size);
 }
 
-
 GLint glClampTable[] =
-{
-	GL_REPEAT,
-	GL_MIRRORED_REPEAT,
-	GL_CLAMP_TO_EDGE,
-	GL_MIRROR_CLAMP_TO_EDGE,
-	GL_CLAMP_TO_EDGE,
-	GL_MIRROR_CLAMP_TO_BORDER_EXT,
-	GL_CLAMP_TO_BORDER,
-	GL_MIRROR_CLAMP_TO_BORDER_EXT
-};
+	{
+		GL_REPEAT,
+		GL_MIRRORED_REPEAT,
+		GL_CLAMP_TO_EDGE,
+		GL_MIRROR_CLAMP_TO_EDGE,
+		GL_CLAMP_TO_EDGE,
+		GL_MIRROR_CLAMP_TO_BORDER_EXT,
+		GL_CLAMP_TO_BORDER,
+		GL_MIRROR_CLAMP_TO_BORDER_EXT};
 
 GLint glCompSelTable[8] =
-{
-	GL_RED,
-	GL_GREEN,
-	GL_BLUE,
-	GL_ALPHA,
-	GL_ZERO,
-	GL_ONE,
-	0,
-	0
-};
+	{
+		GL_RED,
+		GL_GREEN,
+		GL_BLUE,
+		GL_ALPHA,
+		GL_ZERO,
+		GL_ONE,
+		0,
+		0};
 
 GLint glDepthCompareTable[8] = {
 	GL_NEVER,
@@ -1231,8 +1225,7 @@ GLint glDepthCompareTable[8] = {
 	GL_GREATER,
 	GL_NOTEQUAL,
 	GL_GEQUAL,
-	GL_ALWAYS
-};
+	GL_ALWAYS};
 
 // Remaps component selection if the underlying OpenGL texture format would behave differently than it's GPU7 counterpart
 uint32 _correctTextureCompSelGL(Latte::E_GX2SURFFMT format, uint32 compSel)
@@ -1278,7 +1271,12 @@ uint32 _correctTextureCompSelGL(Latte::E_GX2SURFFMT format, uint32 compSel)
 	return compSel;
 }
 
-#define quickBindTexture() 		if( textureIsActive == false ) { texture_bindAndActivate(hostTextureView, hostTextureUnit); textureIsActive = true; }
+#define quickBindTexture()                                         \
+	if (textureIsActive == false)                                  \
+	{                                                              \
+		texture_bindAndActivate(hostTextureView, hostTextureUnit); \
+		textureIsActive = true;                                    \
+	}
 
 uint32 _getGLMinFilter(Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER filterMin, Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_Z_FILTER filterMip)
 {
@@ -1299,9 +1297,9 @@ uint32 _getGLMinFilter(Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER filterMi
 }
 
 /*
-* Update channel swizzling and other texture settings for a texture unit
-* hostTextureView is the texture unit view used on the host side
-*/
+ * Update channel swizzling and other texture settings for a texture unit
+ * hostTextureView is the texture unit view used on the host side
+ */
 void OpenGLRenderer::renderstate_updateTextureSettingsGL(LatteDecompilerShader* shaderContext, LatteTextureView* _hostTextureView, uint32 hostTextureUnit, const Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N texUnitWord4, uint32 texUnitIndex, bool isDepthSampler)
 {
 	auto hostTextureView = (LatteTextureViewGL*)_hostTextureView;
@@ -1357,7 +1355,7 @@ void OpenGLRenderer::renderstate_updateTextureSettingsGL(LatteDecompilerShader* 
 
 		auto filterMag = samplerWords->WORD0.get_XY_MAG_FILTER();
 		auto filterMin = samplerWords->WORD0.get_XY_MAG_FILTER();
-		//auto filterZ = samplerWords->WORD0.get_Z_FILTER();
+		// auto filterZ = samplerWords->WORD0.get_Z_FILTER();
 		auto filterMip = samplerWords->WORD0.get_MIP_FILTER();
 
 		// get OpenGL constant for min filter

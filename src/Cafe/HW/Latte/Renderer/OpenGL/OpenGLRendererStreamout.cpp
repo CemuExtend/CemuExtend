@@ -20,7 +20,7 @@ void OpenGLRenderer::streamout_begin()
 	auto primitiveMode = LatteGPUState.contextNew.VGT_PRIMITIVE_TYPE.get_PRIMITIVE_MODE();
 	if (primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::POINTS)
 		glTransformFeedbackPrimitiveMode = GL_POINTS;
-	else if(primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::TRIANGLES)
+	else if (primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::TRIANGLES)
 		glTransformFeedbackPrimitiveMode = GL_POINTS;
 	else if (primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::QUADS)
 		glTransformFeedbackPrimitiveMode = GL_POINTS;
@@ -54,5 +54,4 @@ void OpenGLRenderer::streamout_rendererFinishDrawcall()
 
 		m_isXfbActive = false;
 	}
-
 }

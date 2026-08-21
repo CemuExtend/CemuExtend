@@ -3,34 +3,34 @@
 void iosuAct_init_depr();
 bool iosuAct_isInitialized();
 
-#define ACT_ACCOUNTID_LENGTH 	(17) // includes '\0'
+#define ACT_ACCOUNTID_LENGTH (17) // includes '\0'
 
 // Mii
 
-#define MII_FFL_STORAGE_SIZE	(96)
+#define MII_FFL_STORAGE_SIZE (96)
 
-#define MII_FFL_NAME_LENGTH		(10) // counted in wchar_t elements (16-bit unicode)
+#define MII_FFL_NAME_LENGTH (10) // counted in wchar_t elements (16-bit unicode)
 
-#define ACT_NICKNAME_LENGTH	(10) // aka Mii nickname
-#define ACT_NICKNAME_SIZE	(11)
+#define ACT_NICKNAME_LENGTH (10) // aka Mii nickname
+#define ACT_NICKNAME_SIZE (11)
 
-typedef struct  
+typedef struct
 {
 	uint32be high;
 	uint32be low;
-}FFLDataID_t;
+} FFLDataID_t;
 
-typedef struct  
+typedef struct
 {
-	/* +0x00 */ uint32		uknFlags;
+	/* +0x00 */ uint32 uknFlags;
 	/* +0x04 */ FFLDataID_t miiId; // bytes 8 and 9 are part of the CRC? (miiId is based on account transferable id?)
-	/* +0x0C */ uint8		ukn0C[0xA];
-	/* +0x16 */ uint8		ukn16[2];
-	/* +0x18 */ uint16		ukn18;
-	/* +0x1A */ uint16le	miiName[MII_FFL_NAME_LENGTH];
-	/* +0x2E */ uint16		ukn2E;
-	/* +0x30 */ uint8		ukn30[MII_FFL_STORAGE_SIZE-0x30];
-}FFLData_t;
+	/* +0x0C */ uint8 ukn0C[0xA];
+	/* +0x16 */ uint8 ukn16[2];
+	/* +0x18 */ uint16 ukn18;
+	/* +0x1A */ uint16le miiName[MII_FFL_NAME_LENGTH];
+	/* +0x2E */ uint16 ukn2E;
+	/* +0x30 */ uint8 ukn30[MII_FFL_STORAGE_SIZE - 0x30];
+} FFLData_t;
 
 static_assert(sizeof(FFLData_t) == MII_FFL_STORAGE_SIZE, "FFLData_t size invalid");
 static_assert(offsetof(FFLData_t, miiId) == 0x04, "FFLData->miiId offset invalid");
@@ -57,8 +57,8 @@ namespace iosu
 
 		void Initialize();
 		void Stop();
-	}
-}
+	} // namespace act
+} // namespace iosu
 
 // custom dev/act/ protocol (Cemu only)
 #define IOSU_ACT_REQUEST_CEMU (0xEE)
@@ -82,19 +82,19 @@ struct iosuActCemuRequest_t
 		struct
 		{
 			uint64 u64;
-		}resultU64;
+		} resultU64;
 		struct
 		{
 			uint32 u32;
-		}resultU32;
+		} resultU32;
 		struct
 		{
 			char strBuffer[1024];
-		}resultString;
-		struct  
+		} resultString;
+		struct
 		{
 			uint8 binBuffer[1024];
-		}resultBinary;
+		} resultBinary;
 	};
 
 	void setACTReturnCode(uint32 code)
@@ -104,20 +104,20 @@ struct iosuActCemuRequest_t
 };
 
 // Act Request Cemu subcodes
-#define IOSU_ARC_INIT					0x00
-#define IOSU_ARC_ACCOUNT_ID				0x01
-#define IOSU_ARC_TRANSFERABLEID			0x02
-#define IOSU_ARC_PERSISTENTID			0x03
-#define IOSU_ARC_UUID					0x04
-#define IOSU_ARC_SIMPLEADDRESS			0x05
-#define IOSU_ARC_PRINCIPALID			0x06
-#define IOSU_ARC_COUNTRY				0x07
-#define IOSU_ARC_ISNETWORKACCOUNT		0x08
-#define IOSU_ARC_ACQUIRENEXTOKEN		0x09
-#define IOSU_ARC_MIIDATA				0x0A
+#define IOSU_ARC_INIT 0x00
+#define IOSU_ARC_ACCOUNT_ID 0x01
+#define IOSU_ARC_TRANSFERABLEID 0x02
+#define IOSU_ARC_PERSISTENTID 0x03
+#define IOSU_ARC_UUID 0x04
+#define IOSU_ARC_SIMPLEADDRESS 0x05
+#define IOSU_ARC_PRINCIPALID 0x06
+#define IOSU_ARC_COUNTRY 0x07
+#define IOSU_ARC_ISNETWORKACCOUNT 0x08
+#define IOSU_ARC_ACQUIRENEXTOKEN 0x09
+#define IOSU_ARC_MIIDATA 0x0A
 #define IOSU_ARC_ACQUIREINDEPENDENTTOKEN 0x0B
-#define IOSU_ARC_ACQUIREPIDBYNNID		0x0C
-#define IOSU_ARC_TIMEZONEID				0x0D
+#define IOSU_ARC_ACQUIREPIDBYNNID 0x0C
+#define IOSU_ARC_TIMEZONEID 0x0D
 
 uint32 iosuAct_getAccountIdOfCurrentAccount();
 

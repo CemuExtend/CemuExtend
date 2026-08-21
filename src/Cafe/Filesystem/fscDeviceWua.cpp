@@ -5,7 +5,7 @@ class FSCDeviceWuaFileCtx : public FSCVirtualFile
 {
 	friend class fscDeviceWUAC;
 
-protected:
+  protected:
 	FSCDeviceWuaFileCtx(ZArchiveReader* archive, ZArchiveNodeHandle fstFileHandle, uint32 fscType)
 	{
 		this->m_archive = archive;
@@ -14,7 +14,7 @@ protected:
 		this->m_seek = 0;
 	};
 
-public:
+  public:
 	sint32 fscGetType() override
 	{
 		return m_fscType;
@@ -92,7 +92,7 @@ public:
 			dirEntry->isFile = false;
 			dirEntry->fileSize = 0;
 		}
-		else if(zarDirEntry.isFile)
+		else if (zarDirEntry.isFile)
 		{
 			dirEntry->isDirectory = false;
 			dirEntry->isFile = true;
@@ -107,7 +107,7 @@ public:
 		return true;
 	}
 
-private:
+  private:
 	ZArchiveReader* m_archive{nullptr};
 	sint32 m_fscType;
 	ZArchiveNodeHandle m_nodeHandle;
@@ -159,7 +159,7 @@ class fscDeviceWUAC : public fscDeviceC
 	}
 
 	// singleton
-public:
+  public:
 	static fscDeviceWUAC& instance()
 	{
 		static fscDeviceWUAC _instance;

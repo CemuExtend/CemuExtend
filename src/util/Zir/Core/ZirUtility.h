@@ -73,4 +73,4 @@ namespace ZpIR
 			cemu_assert_unimplemented();
 		}
 	};
-}
+} // namespace ZpIR

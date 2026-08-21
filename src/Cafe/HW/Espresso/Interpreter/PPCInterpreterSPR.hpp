@@ -1,59 +1,59 @@
-#define SPR_TBL_WRITE	(284)
-#define SPR_TBU_WRITE	(285)
+#define SPR_TBL_WRITE (284)
+#define SPR_TBU_WRITE (285)
 
-#define SPR_DBATU_0		(536)
-#define SPR_DBATU_1		(538)
-#define SPR_DBATU_2		(540)
-#define SPR_DBATU_3		(542)
-#define SPR_DBATU_4		(568)
-#define SPR_DBATU_5		(570)
-#define SPR_DBATU_6		(572)
-#define SPR_DBATU_7		(574)
+#define SPR_DBATU_0 (536)
+#define SPR_DBATU_1 (538)
+#define SPR_DBATU_2 (540)
+#define SPR_DBATU_3 (542)
+#define SPR_DBATU_4 (568)
+#define SPR_DBATU_5 (570)
+#define SPR_DBATU_6 (572)
+#define SPR_DBATU_7 (574)
 
-#define SPR_DBATL_0		(537)
-#define SPR_DBATL_1		(539)
-#define SPR_DBATL_2		(541)
-#define SPR_DBATL_3		(543)
-#define SPR_DBATL_4		(569)
-#define SPR_DBATL_5		(571)
-#define SPR_DBATL_6		(573)
-#define SPR_DBATL_7		(575)
+#define SPR_DBATL_0 (537)
+#define SPR_DBATL_1 (539)
+#define SPR_DBATL_2 (541)
+#define SPR_DBATL_3 (543)
+#define SPR_DBATL_4 (569)
+#define SPR_DBATL_5 (571)
+#define SPR_DBATL_6 (573)
+#define SPR_DBATL_7 (575)
 
-#define SPR_IBATU_0		(528)
-#define SPR_IBATU_1		(530)
-#define SPR_IBATU_2		(532)
-#define SPR_IBATU_3		(534)
-#define SPR_IBATU_4		(560)
-#define SPR_IBATU_5		(562)
-#define SPR_IBATU_6		(564)
-#define SPR_IBATU_7		(566)
+#define SPR_IBATU_0 (528)
+#define SPR_IBATU_1 (530)
+#define SPR_IBATU_2 (532)
+#define SPR_IBATU_3 (534)
+#define SPR_IBATU_4 (560)
+#define SPR_IBATU_5 (562)
+#define SPR_IBATU_6 (564)
+#define SPR_IBATU_7 (566)
 
-#define SPR_IBATL_0		(529)
-#define SPR_IBATL_1		(531)
-#define SPR_IBATL_2		(533)
-#define SPR_IBATL_3		(535)
-#define SPR_IBATL_4		(561)
-#define SPR_IBATL_5		(563)
-#define SPR_IBATL_6		(565)
-#define SPR_IBATL_7		(567)
+#define SPR_IBATL_0 (529)
+#define SPR_IBATL_1 (531)
+#define SPR_IBATL_2 (533)
+#define SPR_IBATL_3 (535)
+#define SPR_IBATL_4 (561)
+#define SPR_IBATL_5 (563)
+#define SPR_IBATL_6 (565)
+#define SPR_IBATL_7 (567)
 
-#define SPR_DSISR		(18)
-#define SPR_DAR			(19)
+#define SPR_DSISR (18)
+#define SPR_DAR (19)
 
-#define SPR_SPRG0		(272)
-#define SPR_SPRG1		(273)
-#define SPR_SPRG2		(274)
-#define SPR_SPRG3		(275)
+#define SPR_SPRG0 (272)
+#define SPR_SPRG1 (273)
+#define SPR_SPRG2 (274)
+#define SPR_SPRG3 (275)
 
-//#define SPR_HID0		(1008)
-//#define SPR_HID2		(920)
-#define SPR_HID4		(1011)
-#define SPR_HID5		(944)
+// #define SPR_HID0		(1008)
+// #define SPR_HID2		(920)
+#define SPR_HID4 (1011)
+#define SPR_HID5 (944)
 
-#define SPR_L2CR		(1017) // L2 cache control
+#define SPR_L2CR (1017) // L2 cache control
 
-#define SPR_CAR			(948) // global
-#define SPR_BCR			(949) // global
+#define SPR_CAR (948) // global
+#define SPR_BCR (949) // global
 
 static uint32 getPVR(PPCInterpreter_t* hCPU)
 {
@@ -73,7 +73,7 @@ static void setFPECR(PPCInterpreter_t* hCPU, uint32 newValue)
 static void setDEC(PPCInterpreter_t* hCPU, uint32 newValue)
 {
 	debug_printf("Set DEC to 0x%08x\n", newValue);
-	//hCPU->sprExtended.fpecr = newValue;
+	// hCPU->sprExtended.fpecr = newValue;
 }
 
 static uint32 getSPRG(PPCInterpreter_t* hCPU, uint32 sprgIndex)
@@ -160,17 +160,17 @@ static uint32 getSCR(PPCInterpreter_t* hCPU)
 static void setSCR(PPCInterpreter_t* hCPU, uint32 newValue)
 {
 	uint32 previousSCR = hCPU->global->sprGlobal.scr;
-	newValue |= (previousSCR&0x80000000); // this bit always sticks?
-	if ((previousSCR&0x80000000) == 0 && (newValue & 0x80000000) != 0)
+	newValue |= (previousSCR & 0x80000000); // this bit always sticks?
+	if ((previousSCR & 0x80000000) == 0 && (newValue & 0x80000000) != 0)
 	{
 		// this bit is used to disable bootrom mapping, but we use it to know when to copy the decrypted ancast image into kernel memory
 		debug_printf("SCR MSB set. Unmap bootrom?\n");
 
-		//memcpy(memory_base + 0xFFE00000, memory_base + 0x08000000, 0x180000);
-		// hack - clear low memory (where bootrom was mapped/loaded)
+		// memcpy(memory_base + 0xFFE00000, memory_base + 0x08000000, 0x180000);
+		//  hack - clear low memory (where bootrom was mapped/loaded)
 		memset(memory_base, 0, 0x4000);
 		//// todo - normally IOSU sets up some stuff here (probably)
-		
+
 		// for debugging purposes make lowest page read-only
 #ifdef _WIN32
 		DWORD oldProtect;
@@ -214,7 +214,6 @@ static void setBCR(PPCInterpreter_t* hCPU, uint32 newValue)
 	debug_printf("Set BCR to 0x%08x\n", newValue);
 }
 
-
 static uint32 getL2CR(PPCInterpreter_t* hCPU)
 {
 	return 0; // todo
@@ -244,16 +243,16 @@ static void setDMAL(PPCInterpreter_t* hCPU, uint32 newValue)
 {
 	hCPU->sprExtended.dmaL = newValue;
 	// LC DMA
-	if(newValue &0x2 )
+	if (newValue & 0x2)
 	{
-		uint32 transferLength = (((hCPU->sprExtended.dmaU>>0)&0x1F)<<2)|((newValue>>2)&3);
-		uint32 memAddr = (hCPU->sprExtended.dmaU)&0xFFFFFFE0;
-		uint32 cacheAddr = (newValue)&0xFFFFFFE0;
-		if( transferLength == 0 )
+		uint32 transferLength = (((hCPU->sprExtended.dmaU >> 0) & 0x1F) << 2) | ((newValue >> 2) & 3);
+		uint32 memAddr = (hCPU->sprExtended.dmaU) & 0xFFFFFFE0;
+		uint32 cacheAddr = (newValue) & 0xFFFFFFE0;
+		if (transferLength == 0)
 			transferLength = 128;
 		transferLength *= 32;
-		bool isLoad = ((newValue>>4)&1)!=0;
-		if( (cacheAddr>>28) != 0xE )
+		bool isLoad = ((newValue >> 4) & 1) != 0;
+		if ((cacheAddr >> 28) != 0xE)
 		{
 			debug_printf("LCTransfer: Not a cache address\n");
 			cacheAddr = 0;
@@ -262,11 +261,11 @@ static void setDMAL(PPCInterpreter_t* hCPU, uint32 newValue)
 		{
 			cacheAddr -= 0xE0000000;
 		}
-		if( isLoad == 0 )
+		if (isLoad == 0)
 		{
 			// locked cache -> memory
 			debug_printf("L2->MEM %08x -> %08x size: 0x%x\n", memAddr, 0xE0000000 + cacheAddr, transferLength);
-			memcpy(memory_getPointerFromVirtualOffset(memAddr), memory_base+0xE0000000+cacheAddr, transferLength);
+			memcpy(memory_getPointerFromVirtualOffset(memAddr), memory_base + 0xE0000000 + cacheAddr, transferLength);
 		}
 		else
 		{
@@ -568,7 +567,7 @@ static void PPCSprSupervisor_set(PPCInterpreter_t* hCPU, uint32 spr, uint32 newV
 
 static void PPCSpr_set(PPCInterpreter_t* hCPU, uint32 spr, uint32 newValue)
 {
-	if constexpr(ppcItpCtrl::allowSupervisorMode)
+	if constexpr (ppcItpCtrl::allowSupervisorMode)
 	{
 		// todo - check if in supervisor mode or user mode
 		PPCSprSupervisor_set(hCPU, spr, newValue);
@@ -792,7 +791,7 @@ static uint32 PPCSprSupervisor_get(PPCInterpreter_t* hCPU, uint32 spr)
 
 static uint32 PPCSpr_get(PPCInterpreter_t* hCPU, uint32 spr)
 {
-	if constexpr(ppcItpCtrl::allowSupervisorMode)
+	if constexpr (ppcItpCtrl::allowSupervisorMode)
 	{
 		// todo - check if in supervisor mode or user mode
 		return PPCSprSupervisor_get(hCPU, spr);
@@ -812,21 +811,21 @@ static uint32 PPCSpr_get(PPCInterpreter_t* hCPU, uint32 spr)
 		break;
 	case SPR_DEC:
 		// special handling for DEC register
-	{
-		assert_dbg();
-		uint64 passedCycled = PPCInterpreter_getMainCoreCycleCounter() - ppcMainThreadDECCycleStart;
-		if (passedCycled >= (uint64)ppcMainThreadDECCycleValue)
-			v = 0;
-		else
-			v = (uint32)(ppcMainThreadDECCycleValue - passedCycled);
-	}
-	break;
+		{
+			assert_dbg();
+			uint64 passedCycled = PPCInterpreter_getMainCoreCycleCounter() - ppcMainThreadDECCycleStart;
+			if (passedCycled >= (uint64)ppcMainThreadDECCycleValue)
+				v = 0;
+			else
+				v = (uint32)(ppcMainThreadDECCycleValue - passedCycled);
+		}
+		break;
 	case SPR_UPIR:
 		v = hCPU->spr.UPIR;
 		break;
 	case SPR_PVR:
 		assert_dbg();
-		//v = hCPU->sprNew.PVR;
+		// v = hCPU->sprNew.PVR;
 		break;
 	case SPR_UGQR0:
 	case SPR_UGQR1:
@@ -846,14 +845,12 @@ static uint32 PPCSpr_get(PPCInterpreter_t* hCPU, uint32 spr)
 		break;
 	}
 
-
-
-	//if( spr == SPR_LR || spr == SPR_PVR || spr == SPR_UPIR || spr == SPR_SCR || (spr >= SPR_UGQR0 && spr <= SPR_UGQR7) )
+	// if( spr == SPR_LR || spr == SPR_PVR || spr == SPR_UPIR || spr == SPR_SCR || (spr >= SPR_UGQR0 && spr <= SPR_UGQR7) )
 	//{
 	//	// readable registers
 	//	v = hCPU->spr[spr];
-	//}
-	//else if( spr == SPR_DEC )
+	// }
+	// else if( spr == SPR_DEC )
 	//{
 	//	// special handling for DEC register
 	//	uint64 passedCycled = PPCInterpreter_getMainCoreCycleCounter() - ppcMainThreadDECCycleStart;
@@ -861,15 +858,15 @@ static uint32 PPCSpr_get(PPCInterpreter_t* hCPU, uint32 spr)
 	//		v = 0;
 	//	else
 	//		v = ppcMainThreadDECCycleValue - passedCycled;
-	//}
-	//else if( spr == SPR_XER )
+	// }
+	// else if( spr == SPR_XER )
 	//{
 	//	v = PPCInterpreter_getXER(hCPU);
-	//}
-	//else
+	// }
+	// else
 	//{
 	//	debug_printf("[C%d] Get unhandled SPR %d value: %08x\n", hCPU->spr[SPR_UPIR], spr, hCPU->spr[spr]);
 	//	v = hCPU->spr[spr];
-	//}
+	// }
 	return v;
 }

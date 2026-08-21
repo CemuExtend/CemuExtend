@@ -102,15 +102,15 @@ namespace Application
 	{
 		class TitleSubscriptionState
 		{
-		public:
+		  public:
 			virtual ~TitleSubscriptionState() = default;
 			virtual void Stop() = 0;
 		};
-	}
+	} // namespace Detail
 
 	class TitleCatalogSubscription final
 	{
-	public:
+	  public:
 		TitleCatalogSubscription() = default;
 		explicit TitleCatalogSubscription(
 			std::shared_ptr<Detail::TitleSubscriptionState> state)
@@ -125,7 +125,10 @@ namespace Application
 			}
 			return *this;
 		}
-		~TitleCatalogSubscription() { Reset(); }
+		~TitleCatalogSubscription()
+		{
+			Reset();
+		}
 
 		TitleCatalogSubscription(const TitleCatalogSubscription&) = delete;
 		TitleCatalogSubscription& operator=(const TitleCatalogSubscription&) = delete;
@@ -138,7 +141,7 @@ namespace Application
 			state->Stop();
 		}
 
-	private:
+	  private:
 		std::shared_ptr<Detail::TitleSubscriptionState> m_state;
 	};
 
@@ -146,7 +149,7 @@ namespace Application
 	// values and never retain Cafe TitleInfo objects or callback payloads.
 	class ITitleCatalog
 	{
-	public:
+	  public:
 		virtual ~ITitleCatalog() = default;
 
 		[[nodiscard]] virtual std::vector<TitleSummary> ListTitles() const = 0;
@@ -166,4 +169,4 @@ namespace Application
 		virtual void RefreshTitles() = 0;
 		virtual void AddTitleFromPath(const std::filesystem::path& path) = 0;
 	};
-}
+} // namespace Application

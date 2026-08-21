@@ -110,7 +110,7 @@ namespace coreinit
 		uint32 ukn1608;
 		uint32 ukn160C;
 		uint32 ukn1610;
-		MEMPTR<FSClientBody_t> fsClientBodyNext;	 // next FSClientBody_t* in list of registered clients (list is circular, the last element points to the first element)
+		MEMPTR<FSClientBody_t> fsClientBodyNext; // next FSClientBody_t* in list of registered clients (list is circular, the last element points to the first element)
 		uint32 ukn1618;
 		/* +0x161C */ MEMPTR<FSClient_t> selfClient; // pointer to FSClient struct which holds this FSClientBody
 		uint32 ukn1620;

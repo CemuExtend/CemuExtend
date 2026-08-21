@@ -8,7 +8,7 @@ struct x64RelocEntry_t
 	x64RelocEntry_t(uint32 offset, void* extraInfo) : offset(offset), extraInfo(extraInfo) {};
 
 	uint32 offset;
-	void*  extraInfo;
+	void* extraInfo;
 };
 
 struct x64GenContext_t
@@ -30,7 +30,7 @@ struct x64GenContext_t
 	IMLInstruction* GetNextInstruction(sint32 relativeIndex = 1)
 	{
 		sint32 index = m_currentInstructionEmitIndex + relativeIndex;
-		if(index < 0 || index >= (sint32)currentSegment->imlList.size())
+		if (index < 0 || index >= (sint32)currentSegment->imlList.size())
 			return nullptr;
 		return currentSegment->imlList.data() + index;
 	}
@@ -40,35 +40,35 @@ struct x64GenContext_t
 };
 
 // reserved registers
-#define REG_RESV_TEMP		(X86_REG_R14)
-#define REG_RESV_HCPU		(X86_REG_RSP)
-#define REG_RESV_MEMBASE	(X86_REG_R13)
-#define REG_RESV_RECDATA	(X86_REG_R15)
+#define REG_RESV_TEMP (X86_REG_R14)
+#define REG_RESV_HCPU (X86_REG_RSP)
+#define REG_RESV_MEMBASE (X86_REG_R13)
+#define REG_RESV_RECDATA (X86_REG_R15)
 
 // reserved floating-point registers
-#define REG_RESV_FPR_TEMP	(15)
+#define REG_RESV_FPR_TEMP (15)
 
-#define reg32ToReg16(__x)	(__x) // deprecated
+#define reg32ToReg16(__x) (__x) // deprecated
 
 // deprecated condition flags
 enum
 {
-	X86_CONDITION_EQUAL, // or zero
-	X86_CONDITION_NOT_EQUAL, // or not zero
-	X86_CONDITION_SIGNED_LESS, // or not greater/equal
-	X86_CONDITION_SIGNED_GREATER, // or not less/equal
-	X86_CONDITION_SIGNED_LESS_EQUAL, // or not greater
+	X86_CONDITION_EQUAL,				// or zero
+	X86_CONDITION_NOT_EQUAL,			// or not zero
+	X86_CONDITION_SIGNED_LESS,			// or not greater/equal
+	X86_CONDITION_SIGNED_GREATER,		// or not less/equal
+	X86_CONDITION_SIGNED_LESS_EQUAL,	// or not greater
 	X86_CONDITION_SIGNED_GREATER_EQUAL, // or not less
-	X86_CONDITION_UNSIGNED_BELOW, // or not above/equal
-	X86_CONDITION_UNSIGNED_ABOVE, // or not below/equal
+	X86_CONDITION_UNSIGNED_BELOW,		// or not above/equal
+	X86_CONDITION_UNSIGNED_ABOVE,		// or not below/equal
 	X86_CONDITION_UNSIGNED_BELOW_EQUAL, // or not above
 	X86_CONDITION_UNSIGNED_ABOVE_EQUAL, // or not below
-	X86_CONDITION_CARRY, // carry flag must be set
-	X86_CONDITION_NOT_CARRY, // carry flag must not be set
-	X86_CONDITION_SIGN, // sign flag must be set
-	X86_CONDITION_NOT_SIGN, // sign flag must not be set
-	X86_CONDITION_PARITY, // parity flag must be set
-	X86_CONDITION_NONE, // no condition, jump always
+	X86_CONDITION_CARRY,				// carry flag must be set
+	X86_CONDITION_NOT_CARRY,			// carry flag must not be set
+	X86_CONDITION_SIGN,					// sign flag must be set
+	X86_CONDITION_NOT_SIGN,				// sign flag must not be set
+	X86_CONDITION_PARITY,				// parity flag must be set
+	X86_CONDITION_NONE,					// no condition, jump always
 };
 
 bool PPCRecompiler_generateX64Code(struct PPCRecFunction_t* PPCRecFunction, ppcImlGenContext_t* ppcImlGenContext);

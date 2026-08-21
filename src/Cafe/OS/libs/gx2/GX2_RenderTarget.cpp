@@ -41,7 +41,7 @@ void gx2Export_GX2InitColorBufferRegs(PPCInterpreter_t* hCPU)
 	uint32 formatHighBits = (uint32)format & 0xF00;
 	uint32 regInfo = 0;
 	regInfo = (uint32)GX2::GetSurfaceFormatSwapMode(colorBuffer->surface.format);
-	regInfo |= ((uint32)hwFormat<<2);
+	regInfo |= ((uint32)hwFormat << 2);
 	cemu_assert_debug(LatteAddrLib::IsValidHWTileMode(surfaceInfo.hwTileMode));
 	regInfo |= ((uint32)surfaceInfo.hwTileMode << 8);
 	bool clampBlend = false;
@@ -74,28 +74,25 @@ void gx2Export_GX2InitColorBufferRegs(PPCInterpreter_t* hCPU)
 	}
 	else
 		cemu_assert_debug(false);
-	if (hwFormat == Latte::E_HWSURFFMT::HWFMT_5_5_5_1 || hwFormat == Latte::E_HWSURFFMT::HWFMT_10_10_10_2 )
+	if (hwFormat == Latte::E_HWSURFFMT::HWFMT_5_5_5_1 || hwFormat == Latte::E_HWSURFFMT::HWFMT_10_10_10_2)
 		regInfo |= (2 << 16);
 	else
 		regInfo &= ~(3 << 16); // COMP_SWAP_mask
-	if(colorBuffer->surface.aa != 0)
+	if (colorBuffer->surface.aa != 0)
 		regInfo |= (2 << 18); // TILE_MODE
 	bool isIntegerFormat = (uint32)(format & Latte::E_GX2SURFFMT::FMT_BIT_INT) != 0;
 	if (isIntegerFormat == false)
 		regInfo |= (GX2::GetSurfaceColorBufferExportFormat(colorBuffer->surface.format) << 27); // 0 -> full, 1 -> normalized
-	if (isIntegerFormat
-		|| format ==Latte::E_GX2SURFFMT::R24_X8_UNORM
-		|| format ==Latte::E_GX2SURFFMT::R24_X8_FLOAT
-		|| format ==Latte::E_GX2SURFFMT::R32_X8_FLOAT)
+	if (isIntegerFormat || format == Latte::E_GX2SURFFMT::R24_X8_UNORM || format == Latte::E_GX2SURFFMT::R24_X8_FLOAT || format == Latte::E_GX2SURFFMT::R32_X8_FLOAT)
 	{
 		// set the blend bypass bit for formats which dont support blending
-		regInfo |= (1<<22);
+		regInfo |= (1 << 22);
 		clampBlend = false;
 	}
 	if (clampBlend)
-		regInfo |= (1<<20); // BLEND_CLAMP_bit
+		regInfo |= (1 << 20); // BLEND_CLAMP_bit
 	if ((uint32)(format & Latte::E_GX2SURFFMT::FMT_BIT_FLOAT) != 0)
-		regInfo |= (1<<25); // ROUND_MODE_bit
+		regInfo |= (1 << 25); // ROUND_MODE_bit
 	colorBuffer->reg_info = regInfo;
 	// reg color_view
 	uint32 regView = 0;
@@ -131,7 +128,6 @@ void gx2Export_GX2InitDepthBufferRegs(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 0);
 }
 
-
 void gx2Export_GX2SetColorBuffer(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::GX2, "GX2SetColorBuffer(0x{:08x}, {})", hCPU->gpr[3], hCPU->gpr[4]);
@@ -148,14 +144,13 @@ void gx2Export_GX2SetColorBuffer(PPCInterpreter_t* hCPU)
 	uint32 viewMip = colorBufferBE->viewMip;
 	uint32 colorBufferBase = memory_virtualToPhysical(colorBufferBE->surface.imagePtr);
 
-	if( viewMip != 0 )
+	if (viewMip != 0)
 	{
 		uint32 baseImagePtr = colorBufferBE->surface.mipPtr;
-		if( viewMip == 1 )
+		if (viewMip == 1)
 			colorBufferBase = memory_virtualToPhysical(baseImagePtr);
 		else
-			colorBufferBase = memory_virtualToPhysical(baseImagePtr+colorBufferBE->surface.mipOffset[viewMip-1]);
-
+			colorBufferBase = memory_virtualToPhysical(baseImagePtr + colorBufferBE->surface.mipOffset[viewMip - 1]);
 	}
 
 	Latte::E_GX2TILEMODE tileMode = colorBufferBE->surface.tileMode;
@@ -208,9 +203,9 @@ void gx2Export_GX2SetDepthBuffer(PPCInterpreter_t* hCPU)
 
 	// todo: current code for the PM4 packets is a hack, replace with proper implementation
 
-	uint32 regHTileDataBase = memory_virtualToPhysical(depthBufferBE->surface.imagePtr)>>8;
+	uint32 regHTileDataBase = memory_virtualToPhysical(depthBufferBE->surface.imagePtr) >> 8;
 
-	if( viewMip > 0 )
+	if (viewMip > 0)
 	{
 		cemuLog_logDebug(LogType::Force, "GX2SetDepthBuffer: Unsupported non-zero mip ({}) Pointer: {:08x} Base: {:08x}", viewMip, regHTileDataBase, 0);
 	}
@@ -220,7 +215,7 @@ void gx2Export_GX2SetDepthBuffer(PPCInterpreter_t* hCPU)
 	uint32 depthBufferTileMode = (uint32)depthBufferBE->surface.tileMode.value();
 	Latte::E_GX2SURFFMT depthBufferFormat = depthBufferBE->surface.format;
 
-	regDepthBufferInfo |= ((depthBufferTileMode&0xF)<<15);
+	regDepthBufferInfo |= ((depthBufferTileMode & 0xF) << 15);
 	if (depthBufferFormat == Latte::E_GX2SURFFMT::D16_UNORM)
 		regDepthBufferInfo |= (1 << 0);
 	else if (depthBufferFormat == Latte::E_GX2SURFFMT::D24_S8_UNORM)
@@ -237,21 +232,21 @@ void gx2Export_GX2SetDepthBuffer(PPCInterpreter_t* hCPU)
 	}
 
 	// set color buffer pointer for render target
-	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1+1));
+	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1));
 	gx2WriteGather_submitU32AsBE(mmDB_DEPTH_SIZE - 0xA000);
 	gx2WriteGather_submitU32AsBE((uint32)depthBufferBE->reg_size); // hack
 	// set color buffer size
-	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1+3));
+	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 3));
 	gx2WriteGather_submitU32AsBE(mmDB_DEPTH_BASE - 0xA000);
 
-	gx2WriteGather_submitU32AsBE(0); // DB_DEPTH_BASE
+	gx2WriteGather_submitU32AsBE(0);				  // DB_DEPTH_BASE
 	gx2WriteGather_submitU32AsBE(regDepthBufferInfo); // DB_DEPTH_INFO
-	gx2WriteGather_submitU32AsBE(regHTileDataBase); // DB_HTILE_DATA_BASE
+	gx2WriteGather_submitU32AsBE(regHTileDataBase);	  // DB_HTILE_DATA_BASE
 
 	// set DB_DEPTH_VIEW
 	uint32 db_view = 0;
-	db_view |= ((uint32)depthBufferBE->viewFirstSlice&0x7FF);
-	db_view |= ((((uint32)depthBufferBE->viewNumSlices+(uint32)depthBufferBE->viewFirstSlice-1)&0x7FF)<<13);
+	db_view |= ((uint32)depthBufferBE->viewFirstSlice & 0x7FF);
+	db_view |= ((((uint32)depthBufferBE->viewNumSlices + (uint32)depthBufferBE->viewFirstSlice - 1) & 0x7FF) << 13);
 	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 2));
 	gx2WriteGather_submitU32AsBE(mmDB_DEPTH_VIEW - 0xA000);
 	gx2WriteGather_submitU32AsBE(db_view);
@@ -269,11 +264,11 @@ void gx2Export_GX2SetDRCBuffer(PPCInterpreter_t* hCPU)
 void gx2Export_GX2MarkScanBufferCopied(PPCInterpreter_t* hCPU)
 {
 	uint32 scanTarget = hCPU->gpr[3];
-	if( scanTarget == GX2_SCAN_TARGET_TV )
+	if (scanTarget == GX2_SCAN_TARGET_TV)
 	{
 		GX2::GX2ReserveCmdSpace(10);
 
-		uint32 physAddr = (MEMORY_TILINGAPERTURE_AREA_ADDR+0x200000);
+		uint32 physAddr = (MEMORY_TILINGAPERTURE_AREA_ADDR + 0x200000);
 
 		gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER, 9));
 		gx2WriteGather_submitU32AsBE(physAddr);
@@ -281,8 +276,8 @@ void gx2Export_GX2MarkScanBufferCopied(PPCInterpreter_t* hCPU)
 		gx2WriteGather_submitU32AsBE(1080);
 
 		gx2WriteGather_submitU32AsBE(1920); // pitch
-		gx2WriteGather_submitU32AsBE(4); // tileMode
-		gx2WriteGather_submitU32AsBE(0); // swizzle
+		gx2WriteGather_submitU32AsBE(4);	// tileMode
+		gx2WriteGather_submitU32AsBE(0);	// swizzle
 
 		gx2WriteGather_submitU32AsBE(0);
 		gx2WriteGather_submitU32AsBE((uint32)Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM);

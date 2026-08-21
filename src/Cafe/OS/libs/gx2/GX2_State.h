@@ -48,7 +48,7 @@ namespace GX2
 		betype<Latte::LATTE_DB_STENCILREFMASK> stencilRefMaskFrontReg;
 		betype<Latte::LATTE_DB_STENCILREFMASK_BF> stencilRefMaskBackReg;
 	};
-	
+
 	static_assert(sizeof(GX2StencilMaskReg) == 8);
 
 	struct GX2TargetChannelMaskReg
@@ -63,8 +63,8 @@ namespace GX2
 		/* +0x00 */ uint32be ukn00;
 		/* +0x04 */ uint8be ukn04;
 		/* +0x05 */ uint8be ukn05;
-		/* +0x06 */ uint8be ukn06; // probably padding?
-		/* +0x07 */ uint8be ukn07; // probably padding?
+		/* +0x06 */ uint8be ukn06;	   // probably padding?
+		/* +0x07 */ uint8be ukn07;	   // probably padding?
 		/* +0x08 */ uint32be isEnable; // 0 or 1
 	};
 
@@ -153,17 +153,17 @@ namespace GX2
 	void GX2SetColorControlReg(GX2ColorControlReg* reg);
 
 	void GX2InitPolygonControlReg(GX2PolygonControlReg* reg,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace, uint32 cullFront,	uint32 cullBack,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
-		uint32 polygonOffsetFrontEnable, uint32 polygonOffsetBackEnable, uint32 paraOffsetEnable);
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace, uint32 cullFront, uint32 cullBack,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
+								  uint32 polygonOffsetFrontEnable, uint32 polygonOffsetBackEnable, uint32 paraOffsetEnable);
 	void GX2SetPolygonControlReg(GX2PolygonControlReg* reg);
 	void GX2SetPolygonControl(Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace, uint32 cullFront, uint32 cullBack,
-			Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
-			Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
-			Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
-			uint32 polygonOffsetFrontEnable, uint32 polygonOffsetBackEnable, uint32 paraOffsetEnable);
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
+							  uint32 polygonOffsetFrontEnable, uint32 polygonOffsetBackEnable, uint32 paraOffsetEnable);
 	void GX2SetCullOnlyControl(Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace, uint32 cullFront, uint32 cullBack);
 
 	void GX2InitPolygonOffsetReg(GX2PolygonOffsetReg* reg, float frontOffset, float frontScale, float backOffset, float backScale, float clampOffset);
@@ -186,7 +186,7 @@ namespace GX2
 	void GX2InitTargetChannelMasksReg(GX2TargetChannelMaskReg* reg, GX2_CHANNELMASK t0, GX2_CHANNELMASK t1, GX2_CHANNELMASK t2, GX2_CHANNELMASK t3, GX2_CHANNELMASK t4, GX2_CHANNELMASK t5, GX2_CHANNELMASK t6, GX2_CHANNELMASK t7);
 	void GX2SetTargetChannelMasksReg(GX2TargetChannelMaskReg* reg);
 	void GX2SetTargetChannelMasks(GX2_CHANNELMASK t0, GX2_CHANNELMASK t1, GX2_CHANNELMASK t2, GX2_CHANNELMASK t3, GX2_CHANNELMASK t4, GX2_CHANNELMASK t5, GX2_CHANNELMASK t6, GX2_CHANNELMASK t7);
-	
+
 	void GX2InitBlendControlReg(GX2BlendControlReg* reg, uint32 renderTargetIndex, GX2_BLENDFACTOR colorSrcFactor, GX2_BLENDFACTOR colorDstFactor, GX2_BLENDFUNC colorCombineFunc, uint32 separateAlphaBlend, GX2_BLENDFACTOR alphaSrcFactor, GX2_BLENDFACTOR alphaDstFactor, GX2_BLENDFUNC alphaCombineFunc);
 	void GX2SetBlendControlReg(GX2BlendControlReg* reg);
 	void GX2SetBlendControl(uint32 renderTargetIndex, GX2_BLENDFACTOR colorSrcFactor, GX2_BLENDFACTOR colorDstFactor, GX2_BLENDFUNC colorCombineFunc, uint32 separateAlphaBlend, GX2_BLENDFACTOR alphaSrcFactor, GX2_BLENDFACTOR alphaDstFactor, GX2_BLENDFUNC alphaCombineFunc);
@@ -196,4 +196,4 @@ namespace GX2
 	void GX2SetBlendConstantColor(float red, float green, float blue, float alpha);
 
 	void GX2StateInit();
-}
+} // namespace GX2

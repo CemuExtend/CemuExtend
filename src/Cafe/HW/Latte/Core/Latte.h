@@ -11,7 +11,7 @@ struct gx2GPUSharedArea_t
 {
 	volatile uint32 flipRequestCountBE; // counts how many buffer swaps were requested
 	volatile uint32 flipExecuteCountBE; // counts how many buffer swaps were executed
-	volatile uint32 swapInterval; // vsync swap interval (0 means vsync is deactivated)
+	volatile uint32 swapInterval;		// vsync swap interval (0 means vsync is deactivated)
 };
 
 struct LatteGPUState_t
@@ -29,14 +29,14 @@ struct LatteGPUState_t
 	bool allowFramebufferSizeOptimization{false}; // allow using scissor box as size hint to determine non-padded rendertarget size
 	// stats
 	uint32 frameCounter;
-	uint32 flipCounter; // increased by one everytime a vsync + flip happens
+	uint32 flipCounter;			// increased by one everytime a vsync + flip happens
 	uint32 currentDrawCallTick; // set to current time at the beginning of a drawcall
-	uint32 drawCallCounter; // increased after every drawcall
-	uint32 textureBindCounter; // increased at the beginning of _updateTextures()
+	uint32 drawCallCounter;		// increased after every drawcall
+	uint32 textureBindCounter;	// increased at the beginning of _updateTextures()
 	std::atomic<uint64> flipRequestCount;
 	// timer & vsync
 	uint64 timer_frequency; // contains frequency of HPC
-	uint64 timer_bootUp; // contains the timestamp of when the GPU thread timer was initialized
+	uint64 timer_bootUp;	// contains the timestamp of when the GPU thread timer was initialized
 	uint64 timer_nextVSync;
 	// shared
 	gx2GPUSharedArea_t* sharedArea; // quick reference to shared area
@@ -52,20 +52,20 @@ struct LatteGPUState_t
 	float tvGamma = 0.0f;
 	float drcGamma = 0.0f;
 	// draw state
-	bool activeShaderHasError; // if try, at least one currently bound shader stage has an error and cannot be used for drawing
+	bool activeShaderHasError;		  // if try, at least one currently bound shader stage has an error and cannot be used for drawing
 	bool repeatTextureInitialization; // if set during rendertarget or texture initialization, repeat the process (textures likely have been invalidated)
-	bool requiresTextureBarrier; // set if glTextureBarrier should be called
+	bool requiresTextureBarrier;	  // set if glTextureBarrier should be called
 	// OSScreen
-	struct  
+	struct
 	{
-		struct  
+		struct
 		{
 			bool isEnabled;
 			MPTR physPtr;
 			std::atomic<uint32> flipRequestCount;
 			std::atomic<uint32> flipExecuteCount;
-		}screen[2];
-	}osScreen;
+		} screen[2];
+	} osScreen;
 };
 
 extern LatteGPUState_t LatteGPUState;
@@ -77,7 +77,7 @@ struct LatteDrawcallContext
 	bool isFirst{}; // first _execute() in current sequence
 	// these are only valid if isFirst is false:
 	mutable uint32 vertexBufferDirtyMask{}; // mask of vertex buffer indices which have been modified since last draw execute
-	uint32 vsUniformBufferDirtyMask{}; // mask of uniform buffer indices which have been modified (changed address or size) since last draw execute
+	uint32 vsUniformBufferDirtyMask{};		// mask of uniform buffer indices which have been modified (changed address or size) since last draw execute
 	uint32 psUniformBufferDirtyMask{};
 	uint32 gsUniformBufferDirtyMask{};
 	bool aluConstVSDirty{};
@@ -173,10 +173,10 @@ bool LatteBufferCache_LoadRemappedUniforms(struct LatteDecompilerShader* shader,
 
 void LatteRenderTarget_updateViewport();
 
-#define LATTE_GLSL_DYNAMIC_UNIFORM_BLOCK_SIZE	(4096) // maximum size for uniform blocks (in vec4s). On Nvidia hardware 4096 is the maximum (64K / 16 = 4096) all other vendors have much higher limits
+#define LATTE_GLSL_DYNAMIC_UNIFORM_BLOCK_SIZE (4096) // maximum size for uniform blocks (in vec4s). On Nvidia hardware 4096 is the maximum (64K / 16 = 4096) all other vendors have much higher limits
 
-//static uint32 glTempError;
-//#define catchOpenGLError() glFinish(); if( (glTempError = glGetError()) != 0 ) { printf("OpenGL error 0x%x: %s : %d timestamp %08x\n", glTempError, __FILE__, __LINE__, GetTickCount()); __debugbreak(); }
+// static uint32 glTempError;
+// #define catchOpenGLError() glFinish(); if( (glTempError = glGetError()) != 0 ) { printf("OpenGL error 0x%x: %s : %d timestamp %08x\n", glTempError, __FILE__, __LINE__, GetTickCount()); __debugbreak(); }
 
 #define catchOpenGLError()
 

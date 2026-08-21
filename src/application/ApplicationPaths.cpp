@@ -30,7 +30,7 @@ namespace Application
 #if BOOST_OS_WINDOWS
 			std::wstring buffer(32768, L'\0');
 			const DWORD length = GetModuleFileNameW(nullptr, buffer.data(),
-				static_cast<DWORD>(buffer.size()));
+													static_cast<DWORD>(buffer.size()));
 			if (length != 0 && length < buffer.size())
 			{
 				buffer.resize(length);
@@ -90,7 +90,7 @@ namespace Application
 			return result;
 		}
 #endif
-	}
+	} // namespace
 
 	static void InitializePathsOnce()
 	{
@@ -150,7 +150,7 @@ namespace Application
 
 		std::set<fs::path> failedWriteAccess;
 		ActiveSettings::SetPaths(isPortable, executable, userData, config, cache, data,
-			failedWriteAccess);
+								 failedWriteAccess);
 		if (!failedWriteAccess.empty())
 		{
 			std::string paths;
@@ -171,4 +171,4 @@ namespace Application
 		static std::once_flag initialized;
 		std::call_once(initialized, InitializePathsOnce);
 	}
-}
+} // namespace Application

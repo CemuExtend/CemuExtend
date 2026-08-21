@@ -26,8 +26,8 @@
 #include <mutex>
 #include <unordered_map>
 
-#define PPCREC_FORCE_SYNCHRONOUS_COMPILATION	0 // if 1, then function recompilation will block and execute on the thread that called PPCRecompiler_visitAddressNoBlock
-#define PPCREC_LOG_RECOMPILATION_RESULTS		0
+#define PPCREC_FORCE_SYNCHRONOUS_COMPILATION 0 // if 1, then function recompilation will block and execute on the thread that called PPCRecompiler_visitAddressNoBlock
+#define PPCREC_LOG_RECOMPILATION_RESULTS 0
 
 struct ppcInvalidationRange
 {
@@ -39,10 +39,10 @@ struct ppcInvalidationRange
 
 struct ppcRecompilerFuncRange
 {
-	MPTR	ppcStart;
-	uint32  ppcSize;
-	void*   x86Start;
-	size_t  x86Size;
+	MPTR ppcStart;
+	uint32 ppcSize;
+	void* x86Start;
+	size_t x86Size;
 };
 
 struct
@@ -57,7 +57,7 @@ struct
 	std::atomic_bool workerThreadStopSignal{false};
 	// function storage
 	RangeStore<PPCRecFunction_t*, uint32, 7703, 0x2000> functionStorage;
-}s_ppcRecompilerState;
+} s_ppcRecompilerState;
 
 void ATTR_MS_ABI (*PPCRecompiler_enterRecompilerCode)(uint64 codeMem, uint64 ppcInterpreterInstance);
 void ATTR_MS_ABI (*PPCRecompiler_leaveRecompilerCode_visited)();
@@ -121,7 +121,7 @@ namespace
 			context.Generation() != block->key.generation || hCPU->instructionPointer != block->key.address)
 		{
 			context.Stop(ModFaultReason::InvalidMapping, hCPU->instructionPointer,
-				ModMemoryPermission::Execute);
+						 ModMemoryPermission::Execute);
 			hCPU->remainingCycles = 0;
 			return;
 		}
@@ -153,7 +153,7 @@ namespace
 		for (uint32 shift = 0; shift < 64; shift += 16)
 		{
 			const auto instruction = A64MoveWide(shift == 0 ? 0xD2800000U : 0xF2800000U,
-				reg, static_cast<uint16>(value >> shift), shift);
+												 reg, static_cast<uint16>(value >> shift), shift);
 			AppendImmediate(code, instruction);
 		}
 	}
@@ -184,22 +184,22 @@ namespace
 #endif
 		block.allocationSize = MemMapper::GetPageSize();
 		block.code = MemMapper::AllocateMemory(nullptr, block.allocationSize,
-			MemMapper::PAGE_PERMISSION::P_RW);
+											   MemMapper::PAGE_PERMISSION::P_RW);
 		if (!block.code || code.size() > block.allocationSize)
 			return false;
 		std::memcpy(block.code, code.data(), code.size());
 		if (!MemMapper::SetMemoryPermission(block.code, block.allocationSize,
-			MemMapper::PAGE_PERMISSION::P_READ | MemMapper::PAGE_PERMISSION::P_EXECUTE))
+											MemMapper::PAGE_PERMISSION::P_READ | MemMapper::PAGE_PERMISSION::P_EXECUTE))
 			return false;
 #if defined(__GNUC__) || defined(__clang__)
 		__builtin___clear_cache(reinterpret_cast<char*>(block.code),
-			reinterpret_cast<char*>(block.code) + code.size());
+								reinterpret_cast<char*>(block.code) + code.size());
 #elif BOOST_OS_WINDOWS
 		FlushInstructionCache(GetCurrentProcess(), block.code, code.size());
 #endif
 		return true;
 	}
-}
+} // namespace
 
 bool PPCRecompiler_executeSandboxInstruction(PPCInterpreter_t* hCPU)
 {
@@ -207,7 +207,7 @@ bool PPCRecompiler_executeSandboxInstruction(PPCInterpreter_t* hCPU)
 		hCPU->remainingCycles <= 0)
 		return false;
 	const SandboxJitKey key{hCPU->modExecutionContext->AddressSpaceId(),
-		hCPU->modExecutionContext->Generation(), hCPU->instructionPointer};
+							hCPU->modExecutionContext->Generation(), hCPU->instructionPointer};
 	std::shared_ptr<SandboxJitBlock> block;
 	{
 		std::lock_guard lock(s_sandboxJitMutex);
@@ -291,15 +291,15 @@ void PPCRecompiler_enter(PPCInterpreter_t* hCPU, PPCREC_JUMP_ENTRY funcPtr)
 	_controlfp(_RC_NEAR, _MCW_RC);
 	PPCRecompiler_enterRecompilerCode((uint64)funcPtr, (uint64)hCPU);
 	_controlfp(prevState, _MCW_RC);
-	// debug recompiler exit - useful to find frequently executed functions which couldn't be recompiled
-	#ifdef CEMU_DEBUG_ASSERT
+// debug recompiler exit - useful to find frequently executed functions which couldn't be recompiled
+#ifdef CEMU_DEBUG_ASSERT
 	if (hCPU->remainingCycles > 0 && GetAsyncKeyState(VK_F4))
 	{
 		auto t = std::chrono::high_resolution_clock::now();
 		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(t.time_since_epoch()).count();
 		cemuLog_log(LogType::Force, "Recompiler exit: 0x{:08x} LR: 0x{:08x} Timestamp {}.{:04}", hCPU->instructionPointer, hCPU->spr.LR, dur / 1000LL, (dur % 1000LL));
 	}
-	#endif
+#endif
 #else
 	PPCRecompiler_enterRecompilerCode((uint64)funcPtr, (uint64)hCPU);
 #endif
@@ -381,7 +381,7 @@ PPCRecFunction_t* PPCRecompiler_recompileFunction(PPCFunctionBoundaryTracker::PP
 #endif
 
 	// generate intermediate code
-	ppcImlGenContext_t ppcImlGenContext = { 0 };
+	ppcImlGenContext_t ppcImlGenContext = {0};
 	ppcImlGenContext.debug_entryPPCAddress = range.startAddress;
 	bool compiledSuccessfully = PPCRecompiler_generateIntermediateCode(ppcImlGenContext, ppcRecFunc, entryAddresses, boundaryTracker);
 	if (compiledSuccessfully == false)
@@ -435,7 +435,7 @@ PPCRecFunction_t* PPCRecompiler_recompileFunction(PPCFunctionBoundaryTracker::PP
 
 	// collect list of PPC-->x64 entry points
 	entryPointsOut.clear();
-	for(IMLSegment* imlSegment : ppcImlGenContext.segmentList2)
+	for (IMLSegment* imlSegment : ppcImlGenContext.segmentList2)
 	{
 		if (imlSegment->isEnterable == false)
 			continue;
@@ -670,8 +670,8 @@ void PPCRecompiler_thread()
 
 	while (true)
 	{
-        if(s_ppcRecompilerState.workerThreadStopSignal)
-            return;
+		if (s_ppcRecompilerState.workerThreadStopSignal)
+			return;
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		// asynchronous recompilation:
 		// 1) take address from queue
@@ -698,17 +698,17 @@ void PPCRecompiler_thread()
 			s_ppcRecompilerState.recompilerSpinlock.unlock();
 
 			PPCRecompiler_recompileAtAddress(enterAddress);
-			if(s_ppcRecompilerState.workerThreadStopSignal)
+			if (s_ppcRecompilerState.workerThreadStopSignal)
 				return;
 		}
 	}
 }
 
-#define PPC_REC_ALLOC_BLOCK_SIZE	(4*1024*1024) // 4MB
+#define PPC_REC_ALLOC_BLOCK_SIZE (4 * 1024 * 1024) // 4MB
 
 constexpr uint32 PPCRecompiler_GetNumAddressSpaceBlocks()
 {
-    return (MEMORY_CODEAREA_ADDR + MEMORY_CODEAREA_SIZE + PPC_REC_ALLOC_BLOCK_SIZE - 1) / PPC_REC_ALLOC_BLOCK_SIZE;
+	return (MEMORY_CODEAREA_ADDR + MEMORY_CODEAREA_SIZE + PPC_REC_ALLOC_BLOCK_SIZE - 1) / PPC_REC_ALLOC_BLOCK_SIZE;
 }
 
 static std::bitset<PPCRecompiler_GetNumAddressSpaceBlocks()> ppcRecompiler_reservedBlockMask;
@@ -727,15 +727,15 @@ static bool PPCRecompiler_reserveLookupTableBlock(uint32 offset, bool& didReserv
 	if (ppcRecompiler_reservedBlockMask[blockIndex])
 		return true;
 
-	void* p = MemMapper::AllocateMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), MemMapper::PAGE_PERMISSION::P_RW, true);
-	if( !p )
+	void* p = MemMapper::AllocateMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset / 4]), (PPC_REC_ALLOC_BLOCK_SIZE / 4) * sizeof(void*), MemMapper::PAGE_PERMISSION::P_RW, true);
+	if (!p)
 	{
 		cemuLog_log(LogType::Force, "Failed to allocate memory for recompiler (0x{:08x})", offset);
 		return false;
 	}
-	for(uint32 i=0; i<PPC_REC_ALLOC_BLOCK_SIZE/4; i++)
+	for (uint32 i = 0; i < PPC_REC_ALLOC_BLOCK_SIZE / 4; i++)
 	{
-		ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4+i] = PPCRecompiler_leaveRecompilerCode_unvisited;
+		ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset / 4 + i] = PPCRecompiler_leaveRecompilerCode_unvisited;
 	}
 	ppcRecompiler_reservedBlockMask[blockIndex] = true;
 	didReserveBlock = true;
@@ -781,18 +781,16 @@ bool PPCRecompiler_findFuncRanges(uint32 addr, ppcRecompilerFuncRange* rangesOut
 	size_t countIn = *countInOut;
 	size_t countOut = 0;
 
-	s_ppcRecompilerState.functionStorage.findRanges(addr, addr + 4, [rangesOut, countIn, &countOut](uint32 start, uint32 end, PPCRecFunction_t* func)
-	{
+	s_ppcRecompilerState.functionStorage.findRanges(addr, addr + 4, [rangesOut, countIn, &countOut](uint32 start, uint32 end, PPCRecFunction_t* func) {
 		if (countOut < countIn)
 		{
 			rangesOut[countOut].ppcStart = start;
-			rangesOut[countOut].ppcSize = (end-start);
+			rangesOut[countOut].ppcSize = (end - start);
 			rangesOut[countOut].x86Start = func->x86Code;
 			rangesOut[countOut].x86Size = func->x86Size;
 		}
 		countOut++;
-	}
-	);
+	});
 	s_ppcRecompilerState.recompilerSpinlock.unlock();
 	*countInOut = countOut;
 	if (countOut > countIn)
@@ -819,7 +817,7 @@ void PPCRecompiler_deleteFunction(PPCRecFunction_t* func)
 	// delete from storage
 	for (auto& r : func->list_ranges)
 	{
-		if(r.storedRange)
+		if (r.storedRange)
 			s_ppcRecompilerState.functionStorage.deleteRange(r.storedRange);
 		r.storedRange = nullptr;
 	}
@@ -843,7 +841,7 @@ void PPCRecompiler_invalidateRange(uint32 startAddr, uint32 endAddr)
 	while (s_ppcRecompilerState.functionStorage.findFirstRange(startAddr, endAddr, rStart, rEnd, rFunc))
 		PPCRecompiler_deleteFunction(rFunc);
 	// add entry to invalidation queue, this is used to invalidate functions for which recompilation has already started
-	s_ppcRecompilerState.invalidationRanges.emplace_back(startAddr, endAddr-startAddr);
+	s_ppcRecompilerState.invalidationRanges.emplace_back(startAddr, endAddr - startAddr);
 
 	s_ppcRecompilerState.recompilerSpinlock.unlock();
 }
@@ -893,7 +891,6 @@ void PPCRecompiler_initPlatform()
 #else
 void PPCRecompiler_initPlatform()
 {
-
 }
 #endif
 
@@ -923,12 +920,12 @@ void PPCRecompiler_init()
 #elif defined(__aarch64__)
 	PPCRecompilerAArch64Gen_generateRecompilerInterfaceFunctions();
 #endif
-    PPCRecompiler_allocateRange(0, 0x1000); // the first entry is used for fallback to interpreter
-    PPCRecompiler_allocateRange(mmuRange_TRAMPOLINE_AREA.getBase(), mmuRange_TRAMPOLINE_AREA.getSize());
-    PPCRecompiler_allocateRange(mmuRange_LEGACY_OS.getBase(), mmuRange_LEGACY_OS.getSize());
-    PPCRecompiler_allocateRange(mmuRange_CODECAVE.getBase(), mmuRange_CODECAVE.getSize());
+	PPCRecompiler_allocateRange(0, 0x1000); // the first entry is used for fallback to interpreter
+	PPCRecompiler_allocateRange(mmuRange_TRAMPOLINE_AREA.getBase(), mmuRange_TRAMPOLINE_AREA.getSize());
+	PPCRecompiler_allocateRange(mmuRange_LEGACY_OS.getBase(), mmuRange_LEGACY_OS.getSize());
+	PPCRecompiler_allocateRange(mmuRange_CODECAVE.getBase(), mmuRange_CODECAVE.getSize());
 
-    PPCRecompiler_initPlatform();
+	PPCRecompiler_initPlatform();
 
 	cemuLog_log(LogType::Force, "Recompiler initialized");
 
@@ -936,33 +933,33 @@ void PPCRecompiler_init()
 	s_ppcRecompilerState.recompilerEnableCount = 1; // enabled
 
 	// launch recompilation thread
-    s_ppcRecompilerState.workerThreadStopSignal = false;
-    s_ppcRecompilerState.workerThread = std::thread(PPCRecompiler_thread);
+	s_ppcRecompilerState.workerThreadStopSignal = false;
+	s_ppcRecompilerState.workerThread = std::thread(PPCRecompiler_thread);
 }
 
 void PPCRecompiler_Shutdown()
 {
-    // shut down recompiler thread
-    s_ppcRecompilerState.workerThreadStopSignal = true;
-    if(s_ppcRecompilerState.workerThread.joinable())
-        s_ppcRecompilerState.workerThread.join();
-    // clean up queues
-    while(!s_ppcRecompilerState.targetQueue.empty())
-        s_ppcRecompilerState.targetQueue.pop();
-    s_ppcRecompilerState.invalidationRanges.clear();
-    // clean range store
-    s_ppcRecompilerState.functionStorage.clear();
-    // clean up memory
+	// shut down recompiler thread
+	s_ppcRecompilerState.workerThreadStopSignal = true;
+	if (s_ppcRecompilerState.workerThread.joinable())
+		s_ppcRecompilerState.workerThread.join();
+	// clean up queues
+	while (!s_ppcRecompilerState.targetQueue.empty())
+		s_ppcRecompilerState.targetQueue.pop();
+	s_ppcRecompilerState.invalidationRanges.clear();
+	// clean range store
+	s_ppcRecompilerState.functionStorage.clear();
+	// clean up memory
 	{
 		std::lock_guard<std::mutex> lock(s_lookupTableAllocationMutex);
 		uint32 numBlocks = PPCRecompiler_GetNumAddressSpaceBlocks();
-		for(uint32 i=0; i<numBlocks; i++)
+		for (uint32 i = 0; i < numBlocks; i++)
 		{
-			if(!ppcRecompiler_reservedBlockMask[i])
+			if (!ppcRecompiler_reservedBlockMask[i])
 				continue;
 			// deallocate
 			uint64 offset = i * PPC_REC_ALLOC_BLOCK_SIZE;
-			(void)MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset/4]), (PPC_REC_ALLOC_BLOCK_SIZE/4)*sizeof(void*), true);
+			(void)MemMapper::FreeMemory(&(ppcRecompilerInstanceData->ppcRecompilerDirectJumpTable[offset / 4]), (PPC_REC_ALLOC_BLOCK_SIZE / 4) * sizeof(void*), true);
 			// mark as unmapped
 			ppcRecompiler_reservedBlockMask[i] = false;
 		}

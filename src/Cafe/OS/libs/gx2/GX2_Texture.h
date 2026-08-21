@@ -34,4 +34,4 @@ namespace GX2
 	void GX2InitTextureRegs(GX2Texture* texture);
 
 	void GX2TextureInit();
-};
+}; // namespace GX2

@@ -11,7 +11,7 @@ namespace ZirPass
 	   Algorithm description:
 
 	   Prepare phase:
-	    Assign every basic block an index
+		Assign every basic block an index
 		Create internal arrays to match index count
 
 	   First phase:
@@ -20,10 +20,10 @@ namespace ZirPass
 		Constrained instructions split affected ranges into their own single instruction liveness range
 
 	   Second phase:
- 		Assign registers. Start with constrained ranges first, then process from beginning to end
+		Assign registers. Start with constrained ranges first, then process from beginning to end
 		Whenever we assign a register to a range, we also try to propagate it to all the connected/coalesced ranges
 
-	
+
 		A liveness range is described by:
 		- Source (Can be any of: List of previous basic blocks, liveness range in same basic block)
 		- Destination (list of liveness ranges)
@@ -68,7 +68,6 @@ namespace ZirPass
 		assert_dbg();
 	}
 
-
 	void RALivenessRange_t::setStart(sint32 startIndex)
 	{
 		m_startIndex = startIndex;
@@ -83,9 +82,9 @@ namespace ZirPass
 			for (auto& itr : m_block->livenessRanges)
 			{
 				RALivenessRange_t* itrRange = itr.second;
-				if(itrRange->isOverlapping(this))
+				if (itrRange->isOverlapping(this))
 					continue; // was overlapping before
-				if(itrRange == this)
+				if (itrRange == this)
 					continue;
 				if (itrRange->isOverlapping(m_startIndex, endIndex))
 				{
@@ -118,7 +117,6 @@ namespace ZirPass
 		m_block->unassignedRanges.erase(itr);
 	}
 
-
 	void RARegular::prepareRABlocks()
 	{
 		auto& irBasicBlocks = m_irFunction->m_basicBlocks;
@@ -129,7 +127,7 @@ namespace ZirPass
 	void RARegular::generateLivenessRanges()
 	{
 		auto& irBasicBlocks = m_irFunction->m_basicBlocks;
-		//for (auto& itr : irBasicBlocks)
+		// for (auto& itr : irBasicBlocks)
 		for (uint32 basicBlockIndex = 0; basicBlockIndex < (uint32)irBasicBlocks.size(); basicBlockIndex++)
 		{
 			auto& blockItr = irBasicBlocks[basicBlockIndex];
@@ -144,29 +142,23 @@ namespace ZirPass
 			// parse instructions and create/update ranges
 			IR::__InsBase* ins = blockItr->m_instructionFirst;
 			size_t i = 0;
-			while(ins)
+			while (ins)
 			{
-				ZpIRCmdUtil::forEachAccessedReg(*blockItr, ins,
-					[&blockRanges, i, raBlock](IRReg readReg)
-					{
+				ZpIRCmdUtil::forEachAccessedReg(*blockItr, ins, [&blockRanges, i, raBlock](IRReg readReg) {
 						if (readReg >= 0x8000)
 							cemu_assert_suspicious();
 						// read access
 						auto livenessRange = blockRanges.find(readReg);
 						if (livenessRange == blockRanges.end())
 							cemu_assert_suspicious();
-						livenessRange->second->setEnd((sint32)i);
-					},
-					[&blockRanges, i, raBlock, blockItr](IRReg writtenReg)
-					{
+						livenessRange->second->setEnd((sint32)i); }, [&blockRanges, i, raBlock, blockItr](IRReg writtenReg) {
 						if (writtenReg >= 0x8000)
 							cemu_assert_suspicious();
 						// write access
 						auto livenessRange = blockRanges.find(writtenReg);
 						if (livenessRange != blockRanges.end())
 							cemu_assert_suspicious();
-						new RALivenessRange_t(raBlock, writtenReg, (sint32)i, (sint32)i, blockItr->m_regs[(uint16)writtenReg].type);
-					});
+						new RALivenessRange_t(raBlock, writtenReg, (sint32)i, (sint32)i, blockItr->m_regs[(uint16)writtenReg].type); });
 				i++;
 				ins = ins->next;
 			}
@@ -177,7 +169,7 @@ namespace ZirPass
 				if (livenessRange == blockRanges.end())
 					cemu_assert_suspicious();
 				cemu_assert_unimplemented();
-				//livenessRange->second->setEnd((sint32)blockItr->m_cmdsDepr.size());
+				// livenessRange->second->setEnd((sint32)blockItr->m_cmdsDepr.size());
 			}
 		}
 		// connect liveness ranges across basic blocks based on their import/export names
@@ -253,9 +245,7 @@ namespace ZirPass
 			// spill is necessary
 			assert_dbg();
 
-
 			assert_dbg();
-
 		}
 
 		printf("Assigned:\n");
@@ -279,25 +269,25 @@ namespace ZirPass
 	void RARegular::rewriteBlock(ZpIRBasicBlock& basicBlock, RABlock_t& raBlock)
 	{
 		assert_dbg();
-		//std::vector<ZpIRCmd> cmdOut;
+		// std::vector<ZpIRCmd> cmdOut;
 
-		//std::unordered_map<ZpIRReg, ZpIRReg> translationTable;
-		//for (auto& itr : raBlock.livenessRanges)
+		// std::unordered_map<ZpIRReg, ZpIRReg> translationTable;
+		// for (auto& itr : raBlock.livenessRanges)
 		//	translationTable.emplace(itr.second->m_irReg, itr.second->m_physicalRegister);
 		//// todo - since ir var registers are created in incremental order we could instead use a std::vector for fast look-up instead of a map?
 
-		//for (uint32 i = 0; i < (uint32)basicBlock.m_cmdsDepr.size(); i++)
+		// for (uint32 i = 0; i < (uint32)basicBlock.m_cmdsDepr.size(); i++)
 		//{
 		//	// todo - insert spill and load instructions
 		//	// todo - insert register moves for range-to-range copies
-		//	
+		//
 		//	ZpIRCmd* currentCmd = basicBlock.m_cmdsDepr.data() + i;
 		//	// replace registers and then insert into output command list
 		//	ZpIRCmdUtil::replaceRegisters(*currentCmd, translationTable);
 		//	cmdOut.emplace_back(*currentCmd);
-		//}
+		// }
 
-		//basicBlock.m_cmdsDepr = std::move(cmdOut);
+		// basicBlock.m_cmdsDepr = std::move(cmdOut);
 
 		// todo - should we keep imports/exports but update them to use physical register indices?
 		//        the code emitter needs to know which physical registers are exported in order to determine which optimizations are allowed
@@ -310,4 +300,4 @@ namespace ZirPass
 		basicBlock.m_regs.shrink_to_fit();
 	}
 
-}
+} // namespace ZirPass

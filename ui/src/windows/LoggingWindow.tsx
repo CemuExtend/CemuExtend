@@ -22,52 +22,175 @@ export function LoggingWindow() {
     let active = true;
     const unsubscribe = subscribe((event) => {
       if (event.type === "logging.cleared") {
-        const watermark = event.payload && typeof event.payload === "object" &&
-          typeof (event.payload as { clearedThroughSequence?: unknown }).clearedThroughSequence === "string" &&
-          /^(0|[1-9][0-9]*)$/.test((event.payload as { clearedThroughSequence: string }).clearedThroughSequence)
-          ? BigInt((event.payload as { clearedThroughSequence: string }).clearedThroughSequence) : 0n;
-        if (watermark > clearedThrough.current) clearedThrough.current = watermark;
-        setEntries((current) => current.filter((entry) => BigInt(entry.sequence) > clearedThrough.current));
+        const watermark =
+          event.payload &&
+          typeof event.payload === "object" &&
+          typeof (event.payload as { clearedThroughSequence?: unknown })
+            .clearedThroughSequence === "string" &&
+          /^(0|[1-9][0-9]*)$/.test(
+            (event.payload as { clearedThroughSequence: string })
+              .clearedThroughSequence,
+          )
+            ? BigInt(
+                (event.payload as { clearedThroughSequence: string })
+                  .clearedThroughSequence,
+              )
+            : 0n;
+        if (watermark > clearedThrough.current)
+          clearedThrough.current = watermark;
+        setEntries((current) =>
+          current.filter(
+            (entry) => BigInt(entry.sequence) > clearedThrough.current,
+          ),
+        );
         return;
       }
       const snapshot = loggingSnapshotFromEvent(event);
       if (!snapshot) return;
-      setEntries((current) => mergeLoggingEntries(current,
-        snapshot.entries.filter((entry) => BigInt(entry.sequence) > clearedThrough.current)));
+      setEntries((current) =>
+        mergeLoggingEntries(
+          current,
+          snapshot.entries.filter(
+            (entry) => BigInt(entry.sequence) > clearedThrough.current,
+          ),
+        ),
+      );
       setDropped(snapshot.droppedEntries);
     });
-    void invoke("logging.getSnapshot").then((snapshot) => {
-      if (!active) return;
-      setEntries((current) => mergeLoggingEntries(current,
-        snapshot.entries.filter((entry) => BigInt(entry.sequence) > clearedThrough.current)));
-      setDropped(snapshot.droppedEntries);
-    }).catch((reason: unknown) => active && setError(String(reason)));
-    return () => { active = false; unsubscribe(); };
+    void invoke("logging.getSnapshot")
+      .then((snapshot) => {
+        if (!active) return;
+        setEntries((current) =>
+          mergeLoggingEntries(
+            current,
+            snapshot.entries.filter(
+              (entry) => BigInt(entry.sequence) > clearedThrough.current,
+            ),
+          ),
+        );
+        setDropped(snapshot.droppedEntries);
+      })
+      .catch((reason: unknown) => active && setError(String(reason)));
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
-  const categories = useMemo(() => [...new Set(entries.map((entry) => entry.category).filter(Boolean))].sort(), [entries]);
+  const categories = useMemo(
+    () =>
+      [
+        ...new Set(entries.map((entry) => entry.category).filter(Boolean)),
+      ].sort(),
+    [entries],
+  );
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    return entries.filter((entry) => (category === "all" || entry.category === category) &&
-      (level === "all" || entry.level === level) &&
-      (!needle || `${entry.category} ${entry.message}`.toLocaleLowerCase().includes(needle)));
+    return entries.filter(
+      (entry) =>
+        (category === "all" || entry.category === category) &&
+        (level === "all" || entry.level === level) &&
+        (!needle ||
+          `${entry.category} ${entry.message}`
+            .toLocaleLowerCase()
+            .includes(needle)),
+    );
   }, [category, entries, level, query]);
 
-  useEffect(() => { if (autoscroll) end.current?.scrollIntoView({ block: "end" }); }, [autoscroll, visible]);
+  useEffect(() => {
+    if (autoscroll) end.current?.scrollIntoView({ block: "end" });
+  }, [autoscroll, visible]);
   const clear = async () => {
     setError("");
     try {
       const result = await invoke("logging.clear");
       const watermark = BigInt(result.clearedThroughSequence);
-      if (watermark > clearedThrough.current) clearedThrough.current = watermark;
-      setEntries((current) => current.filter((entry) => BigInt(entry.sequence) > clearedThrough.current));
-    } catch (reason) { setError(String(reason)); }
+      if (watermark > clearedThrough.current)
+        clearedThrough.current = watermark;
+      setEntries((current) =>
+        current.filter(
+          (entry) => BigInt(entry.sequence) > clearedThrough.current,
+        ),
+      );
+    } catch (reason) {
+      setError(String(reason));
+    }
   };
 
-  return <main className="role-window logging-window"><header><div><span className="eyebrow">Diagnostics</span><h1>Logging</h1></div><div className="button-row"><button onClick={() => void clear()}>Clear</button><button onClick={() => void invoke("window.close")}>Close</button></div></header>
-    {error && <div className="notice error" role="alert">{error}</div>}
-    <div className="toolbar embedded logging-toolbar"><input aria-label="Filter log messages" type="search" placeholder="Filter categories or messages" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((value) => <option key={value} value={value}>{value}</option>)}</select><select aria-label="Level" value={level} onChange={(event) => setLevel(event.target.value as typeof level)}><option value="all">All levels</option><option value="info">Info</option><option value="warning">Warnings</option><option value="error">Errors</option></select><label className="check-row"><input type="checkbox" checked={autoscroll} onChange={(event) => setAutoscroll(event.target.checked)} />Auto-scroll</label></div>
-    <div className="logging-status">{visible.length} shown / {entries.length} retained{BigInt(dropped) > 0n ? ` · ${dropped} older entries discarded` : ""}</div>
-    <section className="log-list" aria-live="polite" aria-label="Log messages">{visible.map((entry) => <article key={entry.sequence} className={`log-entry ${entry.level}`}><span className="log-level">{entry.level}</span><span className="log-category">{entry.category || "General"}</span><pre>{entry.message}</pre></article>)}<div ref={end} /></section>
-  </main>;
+  return (
+    <main className="role-window logging-window">
+      <header>
+        <div>
+          <span className="eyebrow">Diagnostics</span>
+          <h1>Logging</h1>
+        </div>
+        <div className="button-row">
+          <button onClick={() => void clear()}>Clear</button>
+          <button onClick={() => void invoke("window.close")}>Close</button>
+        </div>
+      </header>
+      {error && (
+        <div className="notice error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="toolbar embedded logging-toolbar">
+        <input
+          aria-label="Filter log messages"
+          type="search"
+          placeholder="Filter categories or messages"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          aria-label="Category"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+        >
+          <option value="all">All categories</option>
+          {categories.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Level"
+          value={level}
+          onChange={(event) => setLevel(event.target.value as typeof level)}
+        >
+          <option value="all">All levels</option>
+          <option value="info">Info</option>
+          <option value="warning">Warnings</option>
+          <option value="error">Errors</option>
+        </select>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={autoscroll}
+            onChange={(event) => setAutoscroll(event.target.checked)}
+          />
+          Auto-scroll
+        </label>
+      </div>
+      <div className="logging-status">
+        {visible.length} shown / {entries.length} retained
+        {BigInt(dropped) > 0n ? ` · ${dropped} older entries discarded` : ""}
+      </div>
+      <section
+        className="log-list"
+        aria-live="polite"
+        aria-label="Log messages"
+      >
+        {visible.map((entry) => (
+          <article key={entry.sequence} className={`log-entry ${entry.level}`}>
+            <span className="log-level">{entry.level}</span>
+            <span className="log-category">{entry.category || "General"}</span>
+            <pre>{entry.message}</pre>
+          </article>
+        ))}
+        <div ref={end} />
+      </section>
+    </main>
+  );
 }

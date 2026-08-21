@@ -8,17 +8,23 @@
 
 class CubebAPI : public IAudioAPI
 {
-public:
+  public:
 	class CubebDeviceDescription : public DeviceDescription
 	{
-	public:
+	  public:
 		CubebDeviceDescription(cubeb_devid devid, std::string device_id, const std::wstring& name)
-			: DeviceDescription(name), m_devid(devid), m_device_id(std::move(device_id)) { }
+			: DeviceDescription(name), m_devid(devid), m_device_id(std::move(device_id)) {}
 
-		std::wstring GetIdentifier() const override { return  boost::nowide::widen(m_device_id); }
-		cubeb_devid GetDeviceId() const { return m_devid; }
+		std::wstring GetIdentifier() const override
+		{
+			return boost::nowide::widen(m_device_id);
+		}
+		cubeb_devid GetDeviceId() const
+		{
+			return m_devid;
+		}
 
-	private:
+	  private:
 		cubeb_devid m_devid;
 		std::string m_device_id;
 	};
@@ -28,7 +34,10 @@ public:
 	CubebAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample);
 	~CubebAPI();
 
-	AudioAPI GetType() const override { return Cubeb; }
+	AudioAPI GetType() const override
+	{
+		return Cubeb;
+	}
 	bool NeedAdditionalBlocks() const override;
 	bool FeedBlock(sint16* data) override;
 	bool Play() override;
@@ -40,7 +49,7 @@ public:
 	static bool InitializeStatic();
 	static void Destroy();
 
-private:
+  private:
 	inline static cubeb* s_context = nullptr;
 
 	cubeb_stream* m_stream = nullptr;

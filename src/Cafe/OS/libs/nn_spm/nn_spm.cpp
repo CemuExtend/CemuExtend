@@ -9,10 +9,21 @@ namespace nn
 
 		struct StorageIndex
 		{
-			void SetInvalid() { idHigh = 0; idLow = 0; }
-			void Set(uint64 id) { idHigh = id >> 32; idLow = id & 0xFFFFFFFF; }
+			void SetInvalid()
+			{
+				idHigh = 0;
+				idLow = 0;
+			}
+			void Set(uint64 id)
+			{
+				idHigh = id >> 32;
+				idLow = id & 0xFFFFFFFF;
+			}
 
-			uint64 Get() const { return ((uint64)idHigh << 32) | (uint64)idLow; }
+			uint64 Get() const
+			{
+				return ((uint64)idHigh << 32) | (uint64)idLow;
+			}
 
 			uint32be idHigh;
 			uint32be idLow;
@@ -42,9 +53,9 @@ namespace nn
 
 		struct StorageInfo
 		{
-			char mountPath[640]; // For example: /vol/storage_usb01
+			char mountPath[640];	// For example: /vol/storage_usb01
 			char connectionType[8]; // usb
-			char formatStr[8]; // raw / wfs
+			char formatStr[8];		// raw / wfs
 			uint8 ukn[4];
 			betype<StorageType> type;
 			VolumeId volumeId;
@@ -72,7 +83,7 @@ namespace nn
 		{
 			cemuLog_logDebug(LogType::Force, "GetExtendedStorageIndex() - stub");
 			storageIndex->SetInvalid(); // we dont emulate USB storage yet
-			return -1; // this fails if there is none?
+			return -1;					// this fails if there is none?
 		}
 
 		// nn::spm::GetStorageList((nn::spm::StorageListItem *, unsigned int))
@@ -85,15 +96,15 @@ namespace nn
 			// This should only return USB storages?
 			// If we return two entries (for SLC and MLC supposedly) then the Wii U menu will complain about two usb storages
 
-//			// mlc
-//			storageList[numItems].index.Set((uint32)CemuStorageIndex::MLC);
-//			storageList[numItems].ukn04 = 0;
-//			storageList[numItems].type = StorageType::WFS;
-//			numItems++;
-//			// slc
-//			storageList[numItems].index.Set((uint32)CemuStorageIndex::SLC);
-//			storageList[numItems].ukn04 = 0;
-//			storageList[numItems].type = StorageType::WFS;
+			//			// mlc
+			//			storageList[numItems].index.Set((uint32)CemuStorageIndex::MLC);
+			//			storageList[numItems].ukn04 = 0;
+			//			storageList[numItems].type = StorageType::WFS;
+			//			numItems++;
+			//			// slc
+			//			storageList[numItems].index.Set((uint32)CemuStorageIndex::SLC);
+			//			storageList[numItems].ukn04 = 0;
+			//			storageList[numItems].type = StorageType::WFS;
 			numItems++;
 			return numItems;
 		}
@@ -101,11 +112,11 @@ namespace nn
 		sint32 GetStorageInfo(StorageInfo* storageInfo, StorageIndex* storageIndex)
 		{
 			cemuLog_logDebug(LogType::Force, "GetStorageInfo() - stub");
-			if(storageIndex->Get() == (uint64)CemuStorageIndex::MLC)
+			if (storageIndex->Get() == (uint64)CemuStorageIndex::MLC)
 			{
 				cemu_assert_unimplemented();
 			}
-			else if(storageIndex->Get() == (uint64)CemuStorageIndex::SLC)
+			else if (storageIndex->Get() == (uint64)CemuStorageIndex::SLC)
 			{
 				cemu_assert_unimplemented();
 			}
@@ -134,7 +145,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_spm";
@@ -153,11 +164,11 @@ namespace nn
 				cafeExportRegisterFunc(WaitStateUpdated, "nn_spm", "WaitStateUpdated__Q2_2nn3spmFPUL", LogType::Placeholder);
 			};
 
-		}s_COSnnSpmModule;
+		} s_COSnnSpmModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnSpmModule;
 		}
-	}
-}
+	} // namespace spm
+} // namespace nn

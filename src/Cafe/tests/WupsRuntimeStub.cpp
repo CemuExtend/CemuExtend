@@ -4,25 +4,26 @@
 
 namespace wups_runtime_stub
 {
-std::size_t g_pluginCount = 0;
-std::function<void()> g_onApplicationStarts;
-std::size_t g_applicationStartCount = 0;
+	std::size_t g_pluginCount = 0;
+	std::function<void()> g_onApplicationStarts;
+	std::size_t g_applicationStartCount = 0;
 
-void Reset()
-{
-	g_pluginCount = 0;
-	g_onApplicationStarts = {};
-	g_applicationStartCount = 0;
-}
+	void Reset()
+	{
+		g_pluginCount = 0;
+		g_onApplicationStarts = {};
+		g_applicationStartCount = 0;
+	}
 } // namespace wups_runtime_stub
 
-struct WupsPayloadRuntime::Impl {};
+struct WupsPayloadRuntime::Impl
+{
+};
 
 WupsPayloadRuntime::WupsPayloadRuntime(
 	std::shared_ptr<IWupsRuntimeServices>,
 	std::shared_ptr<IWupsModuleLoader>,
-	std::shared_ptr<WupsBackendManagementRuntime>) :
-	m_impl(std::make_unique<Impl>())
+	std::shared_ptr<WupsBackendManagementRuntime>) : m_impl(std::make_unique<Impl>())
 {
 }
 
@@ -42,7 +43,10 @@ bool WupsPayloadRuntime::Reload(
 	return false;
 }
 
-bool WupsPayloadRuntime::Unload(std::uint64_t) { return false; }
+bool WupsPayloadRuntime::Unload(std::uint64_t)
+{
+	return false;
+}
 
 bool WupsPayloadRuntime::Unload(std::uint64_t, std::string& error)
 {
@@ -100,7 +104,10 @@ std::size_t WupsPayloadRuntime::Size() const
 	return wups_runtime_stub::g_pluginCount;
 }
 
-std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader() { return {}; }
+std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader()
+{
+	return {};
+}
 
 std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 {

@@ -17,7 +17,7 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 {
 	const auto& state = controller->update_state();
 
-	if(m_focused_element == wxID_NONE)
+	if (m_focused_element == wxID_NONE)
 	{
 		return;
 	}
@@ -28,13 +28,13 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 	const auto mapping = reinterpret_cast<uint64>(element->GetClientData());
 
 	// reset mapping
-	if(std::exchange(m_right_down, false) || m_escapeDown())
+	if (std::exchange(m_right_down, false) || m_escapeDown())
 	{
 		element->SetBackgroundColour(kKeyColourNormalMode);
 		m_color_backup[element->GetId()] = kKeyColourNormalMode;
 
 		emulated_controller->delete_mapping(mapping);
-		if(element->IsEmpty())
+		if (element->IsEmpty())
 			reset_focused_element();
 		else
 			element->SetValue(wxEmptyString);
@@ -43,18 +43,18 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 	}
 
 	static bool s_was_idle = true;
-	if (state.buttons.IsIdle()) 
+	if (state.buttons.IsIdle())
 	{
 		s_was_idle = true;
 		return;
 	}
 
-	if (!s_was_idle) 
+	if (!s_was_idle)
 	{
 		return;
 	}
 	s_was_idle = false;
-	for(const auto& id : state.buttons.GetButtonList())
+	for (const auto& id : state.buttons.GetButtonList())
 	{
 		if (controller->has_axis())
 		{
@@ -93,7 +93,8 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 			// ignore too low button values on configuration
 			if (id >= kButtonAxisStart)
 			{
-				if (controller->get_axis_value(id) < 0.33f) {
+				if (controller->get_axis_value(id) < 0.33f)
+				{
 					cemuLog_logDebug(LogType::Force, "skipping since value too low {}", controller->get_axis_value(id));
 					s_was_idle = true;
 					return;
@@ -110,7 +111,7 @@ void InputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, cons
 
 	if (const auto sibling = get_next_sibling(element))
 		sibling->SetFocus();
-	else // last element reached 
+	else // last element reached
 	{
 		reset_focused_element();
 		this->SetFocusIgnoringChildren();
@@ -148,16 +149,15 @@ void InputPanel::reset_colours()
 	}
 }
 
-
 void InputPanel::load_controller(const EmulatedControllerPtr& controller)
 {
 	reset_configuration();
-	if(!controller)
+	if (!controller)
 	{
 		return;
 	}
 
-	if(controller->get_controllers().empty())
+	if (controller->get_controllers().empty())
 	{
 		return;
 	}
@@ -168,7 +168,6 @@ void InputPanel::load_controller(const EmulatedControllerPtr& controller)
 		const auto text = dynamic_cast<wxTextCtrl*>(child);
 		if (text == nullptr)
 			continue;
-
 
 		const auto mapping = reinterpret_cast<sint64>(text->GetClientData());
 		if (mapping <= 0)
@@ -211,7 +210,7 @@ void InputPanel::bind_hotkey_events(wxTextCtrl* text_ctrl)
 	text_ctrl->Bind(wxEVT_RIGHT_DOWN, &InputPanel::on_right_click, this);
 #if BOOST_OS_LINUX
 	// Bind to a no-op lambda to disable arrow keys navigation
-	text_ctrl->Bind(wxEVT_KEY_DOWN, [](wxKeyEvent &) {});
+	text_ctrl->Bind(wxEVT_KEY_DOWN, [](wxKeyEvent&) {});
 #endif
 }
 
@@ -238,9 +237,9 @@ void InputPanel::on_edit_key_focus(wxFocusEvent& event)
 	m_color_backup[text->GetId()] = text->GetBackgroundColour();
 
 	text->SetBackgroundColour(kKeyColourEditMode);
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	text->HideNativeCaret();
-	#endif
+#endif
 	text->Refresh();
 
 	m_focused_element = text->GetId();
@@ -256,7 +255,7 @@ void InputPanel::on_edit_key_kill_focus(wxFocusEvent& event)
 void InputPanel::on_right_click(wxMouseEvent& event)
 {
 	m_right_down = true;
-	if(m_focused_element == wxID_NONE)
+	if (m_focused_element == wxID_NONE)
 	{
 		auto* text = dynamic_cast<wxTextCtrl*>(event.GetEventObject());
 		wxASSERT(text);
@@ -272,7 +271,7 @@ bool InputPanel::reset_focused_element()
 	auto* prev_element = dynamic_cast<wxTextCtrl*>(FindWindow(m_focused_element));
 	wxASSERT(prev_element);
 
-	if(m_color_backup.find(prev_element->GetId()) != m_color_backup.cend())
+	if (m_color_backup.find(prev_element->GetId()) != m_color_backup.cend())
 		prev_element->SetBackgroundColour(m_color_backup[prev_element->GetId()]);
 	else
 		prev_element->SetBackgroundColour(kKeyColourNormalMode);
@@ -281,7 +280,7 @@ bool InputPanel::reset_focused_element()
 	prev_element->HideNativeCaret();
 #endif
 	prev_element->Refresh();
-	
+
 	m_focused_element = wxID_NONE;
 	return true;
 }

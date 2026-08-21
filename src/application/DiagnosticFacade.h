@@ -75,16 +75,16 @@ namespace Application
 
 	class DiagnosticFacade final
 	{
-	public:
+	  public:
 		static constexpr std::size_t MaximumPageSize = 200;
 		static constexpr std::size_t MaximumTextureRows = 16384;
 
 		[[nodiscard]] TextureDiagnosticPage GetTexturePage(std::uint64_t generation,
-			std::size_t offset, std::size_t limit, bool activeOnly, bool includeViews);
+														   std::size_t offset, std::size_t limit, bool activeOnly, bool includeViews);
 		[[nodiscard]] AudioVoiceDiagnosticPage GetAudioVoicePage(std::uint64_t generation,
-			std::size_t offset, std::size_t limit, bool activeOnly);
+																 std::size_t offset, std::size_t limit, bool activeOnly);
 
-	private:
+	  private:
 		void RefreshTextures(bool activeOnly, bool includeViews);
 		void RefreshAudioVoices(bool activeOnly);
 
@@ -99,4 +99,4 @@ namespace Application
 		std::string m_textureDiagnostic;
 		std::string m_audioDiagnostic;
 	};
-}
+} // namespace Application

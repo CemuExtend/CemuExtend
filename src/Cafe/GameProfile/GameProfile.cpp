@@ -18,10 +18,10 @@ struct gameProfileBooleanOption_t
 };
 
 /*
-* Attempts to load a boolean option
-* If the option exists, true is returned.
-* The boolean is stored in *optionValue
-*/
+ * Attempts to load a boolean option
+ * If the option exists, true is returned.
+ * The boolean is stored in *optionValue
+ */
 bool gameProfile_loadBooleanOption(IniParser* iniParser, char* optionName, gameProfileBooleanOption_t* option)
 {
 	auto option_value = iniParser->FindOption(optionName);
@@ -47,7 +47,6 @@ bool gameProfile_loadBooleanOption(IniParser* iniParser, char* optionName, gameP
 	return false;
 }
 
-
 bool gameProfile_loadBooleanOption2(IniParser& iniParser, const char* optionName, bool& option)
 {
 	auto option_value = iniParser.FindOption(optionName);
@@ -72,15 +71,15 @@ bool gameProfile_loadBooleanOption2(IniParser& iniParser, const char* optionName
 {
 	bool tmp;
 	const auto result = gameProfile_loadBooleanOption2(iniParser, optionName, tmp);
-	if(result)
+	if (result)
 		option = tmp;
 	return result;
 }
 
 /*
-* Attempts to load a integer option
-* Allows to specify min and max value (error is logged if out of range and default value is picked)
-*/
+ * Attempts to load a integer option
+ * Allows to specify min and max value (error is logged if out of range and default value is picked)
+ */
 bool gameProfile_loadIntegerOption(IniParser* iniParser, const char* optionName, gameProfileIntegerOption_t* option, sint32 defaultValue, sint32 minVal, sint32 maxVal)
 {
 	auto option_value = iniParser->FindOption(optionName);
@@ -103,7 +102,7 @@ bool gameProfile_loadIntegerOption(IniParser* iniParser, const char* optionName,
 	return true;
 }
 
-template <typename T>
+template<typename T>
 bool gameProfile_loadIntegerOption(IniParser& iniParser, const char* optionName, T& option, T minVal, T maxVal)
 {
 	static_assert(std::is_integral_v<T>);
@@ -122,8 +121,7 @@ bool gameProfile_loadIntegerOption(IniParser& iniParser, const char* optionName,
 
 		option = val;
 		return true;
-	}
-	catch(std::exception&)
+	} catch (std::exception&)
 	{
 		cemuLog_log(LogType::Force, "Value '{}' is out of range for option '{}' in game profile", *option_value, optionName);
 		return false;
@@ -137,7 +135,7 @@ bool gameProfile_loadEnumOption(IniParser& iniParser, const char* optionName, T&
 	auto option_value = iniParser.FindOption(optionName);
 	if (!option_value)
 		return false;
-	for(const T& v : T())
+	for (const T& v : T())
 	{
 		// test integer option
 		if (boost::iequals(fmt::format("{}", fmt::underlying(v)), *option_value))
@@ -147,7 +145,7 @@ bool gameProfile_loadEnumOption(IniParser& iniParser, const char* optionName, T&
 		}
 
 		// test enum name
-		if(boost::iequals(fmt::format("{}", v), *option_value))
+		if (boost::iequals(fmt::format("{}", v), *option_value))
 		{
 			option = v;
 			return true;
@@ -161,7 +159,7 @@ bool gameProfile_loadEnumOption(IniParser& iniParser, const char* optionName, st
 {
 	T tmp;
 	const auto result = gameProfile_loadEnumOption(iniParser, optionName, tmp);
-	if(result)
+	if (result)
 		option = tmp;
 	return result;
 }
@@ -273,7 +271,6 @@ bool GameProfile::Load(uint64_t title_id)
 				if (option_value)
 					m_controllerProfile[i] = std::string(*option_value);
 			}
-
 		}
 	}
 	return true;
@@ -295,7 +292,9 @@ bool GameProfile::Save(uint64_t title_id)
 	if (m_gameName)
 		fs->writeLine(fmt::format("# {}\n", m_gameName.value()).c_str());
 
-#define WRITE_OPTIONAL_ENTRY(__NAME) if (m_##__NAME) fs->writeLine(fmt::format("{} = {}", #__NAME, m_##__NAME.value()).c_str());
+#define WRITE_OPTIONAL_ENTRY(__NAME) \
+	if (m_##__NAME)                  \
+		fs->writeLine(fmt::format("{} = {}", #__NAME, m_##__NAME.value()).c_str());
 #define WRITE_ENTRY(__NAME) fs->writeLine(fmt::format("{} = {}", #__NAME, m_##__NAME).c_str());
 #define WRITE_ENTRY_NUMBERED(__NAME, __NUM) fs->writeLine(fmt::format("{} = {}", #__NAME #__NUM, m_##__NAME).c_str());
 

@@ -12,4 +12,4 @@ namespace WebFrontend
 		void* ownerWindow, std::string_view title);
 	[[nodiscard]] std::optional<std::filesystem::path> SelectArchiveToSave(
 		void* ownerWindow, std::string_view title, std::string_view suggestedName);
-}
+} // namespace WebFrontend

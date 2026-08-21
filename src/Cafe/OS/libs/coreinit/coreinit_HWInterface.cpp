@@ -9,7 +9,6 @@ namespace coreinit
 
 		INTERFACE_VI2_UKN = 3, // might also be some other interface?
 
-
 	};
 
 	enum class SysRegisterInterfaceId : uint32 // for __OSRead/__OSWriteRegister (register access via kernel systemcall)
@@ -18,7 +17,7 @@ namespace coreinit
 
 		INTERFACE_3_ACR_VI = 3, // 0x0D00021C
 
-		INTERFACE_6_SI = 6, // 0x0D006400
+		INTERFACE_6_SI = 6,			 // 0x0D006400
 		INTERFACE_7_AI_PROBABLY = 7, // 0x0D046C00 // AI or some secondary AI interface?
 
 	};
@@ -37,7 +36,6 @@ namespace coreinit
 		}
 		return base + offset;
 	}
-
 
 	PAddr _GetSysRegisterPhysicalAddress(SysRegisterInterfaceId interfaceId, uint32 offset)
 	{
@@ -131,8 +129,7 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSWriteRegister32, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSModifyRegister16, LogType::Placeholder);
 
-
 		cafeExportRegister("coreinit", __OSReadRegister32Ex, LogType::Placeholder);
 		cafeExportRegister("coreinit", __OSWriteRegister32Ex, LogType::Placeholder);
 	};
-};
+}; // namespace coreinit

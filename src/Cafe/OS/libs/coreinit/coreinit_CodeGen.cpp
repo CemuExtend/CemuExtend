@@ -12,7 +12,7 @@ namespace coreinit
 		MPTR rangeStart;
 		uint32 rangeSize;
 		uint8* cacheStateCopy; // holds a copy of the entire range, simulates icache state (updated via ICBI)
-	}coreinitCodeGen = {0};
+	} coreinitCodeGen = {0};
 
 	void codeGenArea_memoryWriteCallback(void* pageStart, size_t size)
 	{
@@ -28,9 +28,9 @@ namespace coreinit
 	void OSGetCodegenVirtAddrRange(betype<uint32>* rangeStart, betype<uint32>* rangeSize)
 	{
 		uint32 codegenSize = 0x01000000; // todo: Read from cos.xml
-		//debug_printf("OSGetCodegenVirtAddrRange(0x%08x,0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4]);
-		// on first call, allocate range
-		if( coreinitCodeGen.rangeIsAllocated == false )
+		// debug_printf("OSGetCodegenVirtAddrRange(0x%08x,0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4]);
+		//  on first call, allocate range
+		if (coreinitCodeGen.rangeIsAllocated == false)
 		{
 			coreinitCodeGen.rangeStart = RPLLoader_AllocateCodeSpace(codegenSize, 0x1000);
 			coreinitCodeGen.rangeSize = codegenSize;
@@ -57,7 +57,7 @@ namespace coreinit
 	void ICInvalidateRange(uint32 startAddress, uint32 size)
 	{
 		uint32 ea = startAddress & ~0x1F;
-		uint32 eaEnd = (startAddress + size + 0x1F)&~0x1F;
+		uint32 eaEnd = (startAddress + size + 0x1F) & ~0x1F;
 		// I-cache invalidation applies to executable title/RPL code as well as the
 		// OS codegen arena. Guest patchers rely on this to discard already compiled
 		// blocks after changing an instruction in the main executable.
@@ -67,28 +67,27 @@ namespace coreinit
 			codeGenHandleICBI(ea);
 			ea += 0x20;
 		}
-
 	}
 
 	void coreinitExport_OSCodegenCopy(PPCInterpreter_t* hCPU)
 	{
-		if( coreinitCodeGen.rangeIsAllocated == false )
+		if (coreinitCodeGen.rangeIsAllocated == false)
 			assert_dbg();
 
 		uint32 codeAddrDest = hCPU->gpr[3];
 		uint32 memAddrSrc = hCPU->gpr[4];
 		uint32 size = hCPU->gpr[5];
 
-		if( codeAddrDest < coreinitCodeGen.rangeStart || codeAddrDest >= (coreinitCodeGen.rangeStart+coreinitCodeGen.rangeSize) )
+		if (codeAddrDest < coreinitCodeGen.rangeStart || codeAddrDest >= (coreinitCodeGen.rangeStart + coreinitCodeGen.rangeSize))
 			assert_dbg();
-		if( (codeAddrDest+size) < coreinitCodeGen.rangeStart || (codeAddrDest+size) > (coreinitCodeGen.rangeStart+coreinitCodeGen.rangeSize) )
+		if ((codeAddrDest + size) < coreinitCodeGen.rangeStart || (codeAddrDest + size) > (coreinitCodeGen.rangeStart + coreinitCodeGen.rangeSize))
 			assert_dbg();
 
 		memcpy(memory_getPointerFromVirtualOffset(codeAddrDest), memory_getPointerFromVirtualOffset(memAddrSrc), size);
 
 		// invalidate recompiler range
 		uint32 ea = codeAddrDest & ~0x1F;
-		uint32 eaEnd = (codeAddrDest + size + 0x1F)&~0x1F;
+		uint32 eaEnd = (codeAddrDest + size + 0x1F) & ~0x1F;
 		while (ea <= eaEnd)
 		{
 			codeGenHandleICBI(ea);
@@ -113,7 +112,7 @@ namespace coreinit
 			{
 				// instructions changed
 				// flush cache
-				PPCRecompiler_invalidateRange(ea, ea+0x20);
+				PPCRecompiler_invalidateRange(ea, ea + 0x20);
 				// update icache copy
 				memcpy(cacheCopy, currentState, 32);
 			}
@@ -135,7 +134,7 @@ namespace coreinit
 		{
 			cemuLog_log(LogType::Force, "Disable JIT on dynamic code area");
 		}
-		_avoidCodeGenJIT = true; // this function getting called is usually a sign that 
+		_avoidCodeGenJIT = true; // this function getting called is usually a sign that
 		// does this have a return value?
 		return true;
 	}
@@ -149,4 +148,4 @@ namespace coreinit
 
 		cafeExportRegister("coreinit", OSSwitchSecCodeGenMode, LogType::Placeholder);
 	}
-}
+} // namespace coreinit

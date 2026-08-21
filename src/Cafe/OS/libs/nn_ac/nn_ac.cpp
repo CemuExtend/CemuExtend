@@ -35,7 +35,7 @@ void _GetLocalIPAndSubnetMask(uint32& localIp, uint32& subnetMask)
 	DWORD buf_size;
 	DWORD r;
 
-	for (uint32 i = 0; i < 6; i++) 
+	for (uint32 i = 0; i < 6; i++)
 	{
 		buf_size = (uint32)(buf_adapter_addresses.size() * sizeof(IP_ADAPTER_ADDRESSES));
 		r = GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_INCLUDE_GATEWAYS, nullptr, buf_adapter_addresses.data(), &buf_size);
@@ -87,13 +87,13 @@ void _GetLocalIPAndSubnetMask(uint32& localIp, uint32& subnetMask)
 #elif BOOST_OS_LINUX
 void _GetLocalIPAndSubnetMask(uint32& localIp, uint32& subnetMask)
 {
-	struct ifaddrs *ifaddr;
+	struct ifaddrs* ifaddr;
 	if (getifaddrs(&ifaddr) == -1)
 	{
 		cemuLog_log(LogType::Force, "Failed to acquire local IP and subnet mask");
 		_GetLocalIPAndSubnetMaskFallback(localIp, subnetMask);
 	}
-	stdx::scope_exit _ifa([&]{ freeifaddrs(ifaddr); });
+	stdx::scope_exit _ifa([&] { freeifaddrs(ifaddr); });
 
 	for (const struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next)
 	{
@@ -188,7 +188,7 @@ void nnAcExport_IsConfigExisting(PPCInterpreter_t* hCPU)
 
 	ppcDefineParamU32(configId, 0);
 	ppcDefineParamTypePtr(isConfigExisting, uint8, 1);
-	
+
 	*isConfigExisting = 0;
 
 	osLib_returnFromFunction(hCPU, 0);
@@ -218,7 +218,7 @@ namespace nn_ac
 		// Terraria expects this (or GetLastErrorCode) to return 0 on success
 		// investigate on the actual console
 		// maybe all success codes are always 0 and dont have any of the other fields set?
-		uint32 nnResultCode = 0;// BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_AC, 0); // Splatoon freezes if this function fails?
+		uint32 nnResultCode = 0; // BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_AC, 0); // Splatoon freezes if this function fails?
 		return nnResultCode;
 	}
 
@@ -313,18 +313,17 @@ namespace nn_ac
 		cafeExportRegister("nn_ac", ACIsApplicationConnected, LogType::Placeholder);
 	}
 
-}
+} // namespace nn_ac
 
 void nnAc_load()
 {
-
 }
 
 namespace nn::ac
 {
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_ac";
@@ -343,10 +342,10 @@ namespace nn::ac
 
 			nn_ac::load();
 		};
-	}s_COSnnAcModule;
+	} s_COSnnAcModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnAcModule;
 	}
-}
+} // namespace nn::ac

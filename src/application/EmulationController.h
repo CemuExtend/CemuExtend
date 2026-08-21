@@ -119,7 +119,10 @@ namespace Application
 		std::uint64_t titleId{};
 		std::vector<CemodPermissionRequest> permissionRequests;
 
-		[[nodiscard]] explicit operator bool() const { return error == LaunchError::None; }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == LaunchError::None;
+		}
 	};
 
 	struct StopResult
@@ -171,15 +174,9 @@ namespace Application
 		std::uint8_t flags{};
 	};
 
-	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
-		public IContentOperations, public IGameProfileService,
-		public ITitleInstallService, public IManagedContentService,
-		public IAccountService, public ISaveService,
-		public IFrontendSettingsService, public IInputSettingsService,
-		public IHotkeySettingsService, public ICemodManagerService,
-		public IDiagnosticsService
+	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService, public IContentOperations, public IGameProfileService, public ITitleInstallService, public IManagedContentService, public IAccountService, public ISaveService, public IFrontendSettingsService, public IInputSettingsService, public IHotkeySettingsService, public ICemodManagerService, public IDiagnosticsService
 	{
-	public:
+	  public:
 		virtual ~IEmulationBackend() = default;
 		[[nodiscard]] virtual LaunchResult Prepare(const LaunchRequest& request) = 0;
 		virtual void Start() = 0;
@@ -190,9 +187,9 @@ namespace Application
 		[[nodiscard]] virtual std::optional<std::uint64_t> RunningTitleId() const = 0;
 		[[nodiscard]] virtual std::optional<std::int32_t> ForegroundProcessExitStatus() const = 0;
 		[[nodiscard]] virtual std::optional<WindowTitlePresentation>
-			CurrentWindowTitlePresentation() const = 0;
+		CurrentWindowTitlePresentation() const = 0;
 		virtual void SubmitKeyboard(std::uint16_t usage, bool pressed,
-			std::uint8_t modifiers) = 0;
+									std::uint8_t modifiers) = 0;
 		virtual void SubmitText(std::uint32_t codepoint, bool repeat) = 0;
 		virtual void KeyboardFocusLost() = 0;
 		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
@@ -204,24 +201,24 @@ namespace Application
 		[[nodiscard]] virtual PointerPolicy GetPointerPolicy() = 0;
 		[[nodiscard]] virtual TextInputState GetTextInputState() = 0;
 		virtual void SubmitTextComposition(std::string_view text,
-			std::string_view preedit, std::uint32_t cursor,
-			std::uint32_t selectionLength) = 0;
+										   std::string_view preedit, std::uint32_t cursor,
+										   std::uint32_t selectionLength) = 0;
 		virtual void SaveCemodPermissionDecisions(std::uint64_t titleId,
-			std::span<const CemodPermissionDecision> decisions) = 0;
+												  std::span<const CemodPermissionDecision> decisions) = 0;
 		[[nodiscard]] virtual std::vector<CemodPackage> DiscoverCemodCatalog() = 0;
 		[[nodiscard]] virtual std::vector<CemodPackage> DiscoverCemods(
 			std::uint64_t titleId) = 0;
 		[[nodiscard]] virtual CemodGrant ResolveCemodGrant(std::uint64_t titleId,
-			std::string_view modId, std::string_view principal,
-			std::uint32_t requestedPermissions) = 0;
+														   std::string_view modId, std::string_view principal,
+														   std::uint32_t requestedPermissions) = 0;
 		[[nodiscard]] virtual CemuExtendServiceGrantDefaults ServiceGrantDefaults() const = 0;
 		[[nodiscard]] virtual bool ImportLegacyCemodData(std::uint64_t titleId,
-			std::string_view principal, std::string& error) = 0;
+														 std::string_view principal, std::string& error) = 0;
 	};
 
 	class EmulationController final
 	{
-	public:
+	  public:
 		using BeforeStart = std::function<void(const LaunchResult&)>;
 		using StartFailure = std::function<void()>;
 
@@ -233,7 +230,7 @@ namespace Application
 		EmulationController& operator=(const EmulationController&) = delete;
 
 		[[nodiscard]] LaunchResult Launch(const LaunchRequest& request,
-			BeforeStart beforeStart = {}, StartFailure startFailure = {});
+										  BeforeStart beforeStart = {}, StartFailure startFailure = {});
 		[[nodiscard]] StopResult Stop();
 		[[nodiscard]] StopResult ShutdownApplication();
 		[[nodiscard]] EmulationState State() const;
@@ -241,7 +238,7 @@ namespace Application
 		[[nodiscard]] std::optional<std::uint64_t> RunningTitleId() const;
 		[[nodiscard]] std::optional<std::int32_t> ForegroundProcessExitStatus() const;
 		[[nodiscard]] std::optional<WindowTitlePresentation>
-			CurrentWindowTitlePresentation() const;
+		CurrentWindowTitlePresentation() const;
 		void SubmitKeyboard(std::uint16_t usage, bool pressed, std::uint8_t modifiers);
 		void SubmitText(std::uint32_t codepoint, bool repeat);
 		void KeyboardFocusLost();
@@ -253,17 +250,17 @@ namespace Application
 		[[nodiscard]] PointerPolicy GetPointerPolicy();
 		[[nodiscard]] TextInputState GetTextInputState();
 		void SubmitTextComposition(std::string_view text, std::string_view preedit,
-			std::uint32_t cursor, std::uint32_t selectionLength);
+								   std::uint32_t cursor, std::uint32_t selectionLength);
 		void SaveCemodPermissionDecisions(std::uint64_t titleId,
-			std::span<const CemodPermissionDecision> decisions);
+										  std::span<const CemodPermissionDecision> decisions);
 		[[nodiscard]] std::vector<CemodPackage> DiscoverCemodCatalog();
 		[[nodiscard]] std::vector<CemodPackage> DiscoverCemods(std::uint64_t titleId);
 		[[nodiscard]] CemodGrant ResolveCemodGrant(std::uint64_t titleId,
-			std::string_view modId, std::string_view principal,
-			std::uint32_t requestedPermissions);
+												   std::string_view modId, std::string_view principal,
+												   std::uint32_t requestedPermissions);
 		[[nodiscard]] CemuExtendServiceGrantDefaults ServiceGrantDefaults() const;
 		[[nodiscard]] bool ImportLegacyCemodData(std::uint64_t titleId,
-			std::string_view principal, std::string& error);
+												 std::string_view principal, std::string& error);
 		[[nodiscard]] CemodManagerSnapshot GetCemodManagerSnapshot(
 			std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {});
 		[[nodiscard]] CemodLaunchPreflight GetCemodLaunchPreflight(
@@ -291,9 +288,9 @@ namespace Application
 		[[nodiscard]] InputSettingsResult ConnectInputDevice(std::uint64_t token);
 		[[nodiscard]] std::optional<CapturedInputButton> CaptureInputButton(std::uint64_t token);
 		[[nodiscard]] InputSettingsResult SetInputMapping(std::uint32_t player,
-			std::uint64_t mappingId, std::uint64_t controllerToken, std::uint64_t buttonId);
+														  std::uint64_t mappingId, std::uint64_t controllerToken, std::uint64_t buttonId);
 		[[nodiscard]] InputSettingsResult ClearInputMapping(std::uint32_t player,
-			std::optional<std::uint64_t> mappingId);
+															std::optional<std::uint64_t> mappingId);
 		[[nodiscard]] InputSettingsResult SetPhysicalControllerSettings(
 			std::uint64_t token, const PhysicalControllerSettings& settings);
 		[[nodiscard]] InputSettingsResult CalibrateInputDevice(std::uint64_t token);
@@ -335,8 +332,8 @@ namespace Application
 		[[nodiscard]] TitleInstallPlanResult PlanTitleInstall(
 			const std::filesystem::path& sourcePath) const;
 		[[nodiscard]] TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
-			TitleInstallDecision decision, TitleInstallProgressHandler progress,
-			TitleInstallCancellationCheck cancelled);
+													  TitleInstallDecision decision, TitleInstallProgressHandler progress,
+													  TitleInstallCancellationCheck cancelled);
 		[[nodiscard]] ManagedContentDeletePlanResult PlanManagedContentDelete(
 			std::uint64_t locationUid) const;
 		[[nodiscard]] ManagedContentDeleteResult DeleteManagedContent(
@@ -395,10 +392,16 @@ namespace Application
 			std::uint64_t titleId, std::uint32_t persistentId,
 			const std::filesystem::path& archivePath, bool overwrite,
 			SaveProgressHandler progress = {}, SaveCancellationCheck cancelled = {});
-		[[nodiscard]] ApplicationEvents& Events() { return m_events; }
-		[[nodiscard]] const ApplicationEvents& Events() const { return m_events; }
+		[[nodiscard]] ApplicationEvents& Events()
+		{
+			return m_events;
+		}
+		[[nodiscard]] const ApplicationEvents& Events() const
+		{
+			return m_events;
+		}
 
-	private:
+	  private:
 		mutable std::recursive_mutex m_operationMutex;
 		mutable std::mutex m_mutex;
 		ApplicationEvents m_events;
@@ -406,4 +409,4 @@ namespace Application
 		IEmulationBackend* m_backend{};
 		EmulationState m_state{EmulationState::Idle};
 	};
-}
+} // namespace Application

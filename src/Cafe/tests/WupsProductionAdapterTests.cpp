@@ -24,24 +24,48 @@ namespace
 	std::set<std::uint32_t> s_allocations;
 	std::map<std::uint32_t, GuestMappedMemoryAllocation> s_mappedAllocations;
 	OSThread_t s_thread{};
-}
+} // namespace
 
 uint64 s_loggingFlagMask = 1ULL << static_cast<uint64>(LogType::Force);
-bool cemuLog_log(LogType, std::string_view) { return true; }
-bool cemuLog_log(LogType, std::u8string_view) { return true; }
+bool cemuLog_log(LogType, std::string_view)
+{
+	return true;
+}
+bool cemuLog_log(LogType, std::u8string_view)
+{
+	return true;
+}
 
 namespace coreinit
 {
-	void* MEMAllocFromExpHeapEx(MEMHeapHandle, uint32, sint32) { return nullptr; }
+	void* MEMAllocFromExpHeapEx(MEMHeapHandle, uint32, sint32)
+	{
+		return nullptr;
+	}
 	void MEMFreeToExpHeap(MEMHeapHandle, void*) {}
 	// Referenced by WupsPluginHeap::CreateBackingLocked. Reserving a backing
 	// must fail here so the plugin heap stays in its fail-closed state.
-	MEMHeapHandle MEMCreateExpHeapEx(void*, uint32, uint32) { return nullptr; }
-	void* _weak_MEMAllocFromDefaultHeapEx(uint32, sint32) { return nullptr; }
-}
+	MEMHeapHandle MEMCreateExpHeapEx(void*, uint32, uint32)
+	{
+		return nullptr;
+	}
+	void* _weak_MEMAllocFromDefaultHeapEx(uint32, sint32)
+	{
+		return nullptr;
+	}
+} // namespace coreinit
 
-PPCInterpreter_t* PPCInterpreter_getCurrentInstance() { return s_cpu; }
-namespace coreinit { OSThread_t* OSGetCurrentThread() { return &s_thread; } }
+PPCInterpreter_t* PPCInterpreter_getCurrentInstance()
+{
+	return s_cpu;
+}
+namespace coreinit
+{
+	OSThread_t* OSGetCurrentThread()
+	{
+		return &s_thread;
+	}
+} // namespace coreinit
 HLEIDX PPCInterpreter_registerHLECall(HLECALL callback, std::string)
 {
 	s_hle = callback;
@@ -50,7 +74,7 @@ HLEIDX PPCInterpreter_registerHLECall(HLECALL callback, std::string)
 bool memory_isAddressRangeAccessible(MPTR address, uint32 size)
 {
 	return size != 0 && address < s_memory.size() &&
-		size <= s_memory.size() - address;
+		   size <= s_memory.size() - address;
 }
 std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 	uint32 size, uint32 alignment, bool, std::string& error)
@@ -79,7 +103,7 @@ std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 	return allocation;
 }
 bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
-	std::string& error)
+							 std::string& error)
 {
 	std::lock_guard lock(s_fakeMutex);
 	const auto found = s_mappedAllocations.find(allocation.address);
@@ -96,8 +120,7 @@ bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
 }
 uint8* memory_getPointerFromVirtualOffset(uint32 address)
 {
-	return memory_isAddressRangeAccessible(address, 1) ?
-		s_memory.data() + address : nullptr;
+	return memory_isAddressRangeAccessible(address, 1) ? s_memory.data() + address : nullptr;
 }
 uint32 memory_getVirtualOffsetFromPointer(void* pointer)
 {
@@ -106,9 +129,9 @@ uint32 memory_getVirtualOffsetFromPointer(void* pointer)
 uint32 memory_readU32(uint32 address)
 {
 	return (static_cast<uint32>(s_memory[address]) << 24) |
-		(static_cast<uint32>(s_memory[address + 1]) << 16) |
-		(static_cast<uint32>(s_memory[address + 2]) << 8) |
-		static_cast<uint32>(s_memory[address + 3]);
+		   (static_cast<uint32>(s_memory[address + 1]) << 16) |
+		   (static_cast<uint32>(s_memory[address + 2]) << 8) |
+		   static_cast<uint32>(s_memory[address + 3]);
 }
 void memory_writeU32(uint32 address, uint32 value)
 {
@@ -127,7 +150,8 @@ MEMPTR<void> RPLLoader_AllocateCodeCaveMem(uint32, uint32 size)
 	std::lock_guard lock(s_fakeMutex);
 	const auto result = s_nextCodeCave;
 	s_nextCodeCave += (size + 0xffU) & ~0xffU;
-	if (s_nextCodeCave >= s_memory.size()) return {};
+	if (s_nextCodeCave >= s_memory.size())
+		return {};
 	s_allocations.insert(result);
 	return MEMPTR<void>{result};
 }
@@ -147,11 +171,17 @@ namespace
 	[[noreturn]] void Failed(const char* expression, int line)
 	{
 		std::cerr << "CHECK failed at line " << line << ": "
-			<< expression << '\n';
+				  << expression << '\n';
 		std::abort();
 	}
-#define CHECK(value) do { if (!(value)) Failed(#value, __LINE__); } while (false)
-}
+#define CHECK(value)                  \
+	do                                \
+	{                                 \
+		if (!(value))                 \
+			Failed(#value, __LINE__); \
+	}                                 \
+	while (false)
+} // namespace
 
 int main()
 {
@@ -195,15 +225,12 @@ int main()
 	CHECK(!platform->ValidateGuestRange(*data, 4, WupsGuestAccess::Execute));
 
 	std::size_t calls{};
-	const auto callable = platform->RegisterFunction({72, 1},
-		"homebrew_test", "Export",
-		[&](std::span<const std::uint32_t> arguments, std::string&) {
+	const auto callable = platform->RegisterFunction({72, 1}, "homebrew_test", "Export", [&](std::span<const std::uint32_t> arguments, std::string&) {
 			++calls;
 			CHECK(arguments.size() == 32);
 			CHECK(arguments[0] == 0x10 && arguments[7] == 0x17);
 			CHECK(arguments[8] == 0x80 && arguments[31] == 0x97);
-			return 0x1234;
-		}, error);
+			return 0x1234; }, error);
 	CHECK(callable && s_hle);
 	cpu.instructionPointer = *callable;
 	{
@@ -216,7 +243,7 @@ int main()
 	s_hle(&cpu);
 	CHECK(calls == 1);
 	CHECK(static_cast<std::int32_t>(cpu.gpr[3]) ==
-		static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
+		  static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
 
 	ModExecutionContext wrongOwner(99, 1, "wrong", 0x10000000, 4096);
 	cpu.modExecutionContext = &wrongOwner;
@@ -226,7 +253,7 @@ int main()
 		s_hle(&cpu);
 	}
 	CHECK(static_cast<std::int32_t>(cpu.gpr[3]) ==
-		static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
+		  static_cast<std::int32_t>(WupsServiceStatus::OwnerMismatch));
 	cpu.modExecutionContext = nullptr;
 
 	platform->ReleaseOwnerExports({72, 1});
@@ -234,7 +261,7 @@ int main()
 	s_hle(&cpu);
 	CHECK(calls == 1);
 	CHECK(static_cast<std::int32_t>(cpu.gpr[3]) ==
-		static_cast<std::int32_t>(WupsServiceStatus::StaleGeneration));
+		  static_cast<std::int32_t>(WupsServiceStatus::StaleGeneration));
 	platform->FreeGuestData({72, 1}, *data);
 	CHECK(s_allocations.empty());
 
@@ -243,13 +270,10 @@ int main()
 	std::promise<void> entered;
 	std::promise<void> resume;
 	auto resumeFuture = resume.get_future().share();
-	const auto pinned = platform->RegisterFunction({72, 2},
-		"homebrew_test", "Pinned",
-		[&](std::span<const std::uint32_t>, std::string&) {
+	const auto pinned = platform->RegisterFunction({72, 2}, "homebrew_test", "Pinned", [&](std::span<const std::uint32_t>, std::string&) {
 			entered.set_value();
 			resumeFuture.wait();
-			return 7;
-		}, error);
+			return 7; }, error);
 	CHECK(pinned);
 	PPCInterpreter_t workerCpu = cpu;
 	workerCpu.instructionPointer = *pinned;
@@ -262,7 +286,7 @@ int main()
 		platform->ReleaseOwnerExports({72, 2});
 	});
 	CHECK(releasing.wait_for(std::chrono::milliseconds(20)) ==
-		std::future_status::timeout);
+		  std::future_status::timeout);
 	resume.set_value();
 	executing.get();
 	releasing.get();
@@ -270,34 +294,33 @@ int main()
 	CHECK(s_allocations.empty());
 	s_cpu = nullptr;
 	error.clear();
-	CHECK(!platform->RegisterFunction({72, 1}, "homebrew_test", "Export",
-		[](std::span<const std::uint32_t>, std::string&) { return 0; }, error));
+	CHECK(!platform->RegisterFunction({72, 1}, "homebrew_test", "Export", [](std::span<const std::uint32_t>, std::string&) { return 0; }, error));
 	CHECK(error.find("CPU thread") != std::string::npos);
 
 	WupsMappedMemoryInfo allocation;
 	error.clear();
 	const auto mapped = platform->AllocateMappedMemory({73, 1}, 0x1800, 0x1000,
-		true, WupsMappedMemoryPurpose::Gx2, error);
+													   true, WupsMappedMemoryPurpose::Gx2, error);
 	CHECK(mapped);
 	CHECK((mapped->address & 0xfffU) == 0);
 	CHECK(mapped->physicalAddress == mapped->address);
 	CHECK(mapped->size == 0x1800 && mapped->alignment == 0x1000);
 	CHECK(mapped->writable && mapped->purpose == WupsMappedMemoryPurpose::Gx2);
 	CHECK(platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
-		mapped->size, WupsGuestAccess::Read));
+											   mapped->size, WupsGuestAccess::Read));
 	CHECK(platform->ValidateGuestRangeForOwner({73, 1}, mapped->address + 4,
-		16, WupsGuestAccess::Write));
+											   16, WupsGuestAccess::Write));
 	CHECK(!platform->ValidateGuestRangeForOwner({74, 1}, mapped->address,
-		4, WupsGuestAccess::Read));
+												4, WupsGuestAccess::Read));
 	CHECK(!platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
-		4, WupsGuestAccess::Execute));
+												4, WupsGuestAccess::Execute));
 	error.clear();
 	CHECK(!platform->FreeMappedMemory({74, 1}, *mapped, error));
 	CHECK(error.find("owner") != std::string::npos);
 	CHECK(platform->FreeMappedMemory({73, 1}, *mapped, error));
 	CHECK(s_mappedAllocations.empty());
 	CHECK(!platform->ValidateGuestRangeForOwner({73, 1}, mapped->address,
-		4, WupsGuestAccess::Read));
+												4, WupsGuestAccess::Read));
 	error.clear();
 	CHECK(!platform->FreeMappedMemory({73, 1}, *mapped, error));
 	CHECK(error.find("owner") != std::string::npos);

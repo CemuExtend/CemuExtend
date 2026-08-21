@@ -54,22 +54,22 @@ namespace cemuextend_hle
 	}
 
 	inline void TextCompositionEvent(std::string_view text,
-		std::string_view preedit = {}, uint32 preeditStart = 0,
-		uint32 preeditCursor = 0)
+									 std::string_view preedit = {}, uint32 preeditStart = 0,
+									 uint32 preeditCursor = 0)
 	{
 		Cex2Host::Instance().TextCompositionEvent(
 			text, preedit, preeditStart, preeditCursor);
 	}
 
 	inline void MouseEvent(cemuextend::wire::PointerSurface surface,
-		sint32 x, sint32 y, sint32 deltaX, sint32 deltaY,
-		sint32 wheelX, sint32 wheelY, uint32 buttons, uint32 changedButtons,
-		sint32 contentWidth, sint32 contentHeight, bool insideContent, bool focused,
-		uint8 flags = 0)
+						   sint32 x, sint32 y, sint32 deltaX, sint32 deltaY,
+						   sint32 wheelX, sint32 wheelY, uint32 buttons, uint32 changedButtons,
+						   sint32 contentWidth, sint32 contentHeight, bool insideContent, bool focused,
+						   uint8 flags = 0)
 	{
 		Cex2Host::Instance().MouseEvent(surface, x, y, deltaX, deltaY,
-			wheelX, wheelY, buttons, changedButtons, contentWidth, contentHeight,
-			insideContent, focused, flags);
+										wheelX, wheelY, buttons, changedButtons, contentWidth, contentHeight,
+										insideContent, focused, flags);
 	}
 
 	inline void PointerFocusChanged(bool focused)
@@ -82,4 +82,4 @@ namespace cemuextend_hle
 		return Cex2Host::Instance().EffectivePointerPolicy();
 	}
 
-}
+} // namespace cemuextend_hle

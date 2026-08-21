@@ -18,10 +18,10 @@ std::vector<KeyCacheEntry> g_keyCache;
 
 bool strishex(std::string_view str)
 {
-	for(size_t i=0; i<str.size(); i++)
+	for (size_t i = 0; i < str.size(); i++)
 	{
 		char c = str[i];
-		if( (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') )
+		if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))
 			continue;
 		return false;
 	}
@@ -34,7 +34,7 @@ bool strishex(std::string_view str)
  */
 uint8* KeyCache_GetAES128(sint32 index)
 {
-	if( index < 0 || index >= (sint32)g_keyCache.size())
+	if (index < 0 || index >= (sint32)g_keyCache.size())
 		return nullptr;
 	KeyCacheEntry* keyCacheEntry = &g_keyCache[index];
 	return keyCacheEntry->aes128key;
@@ -62,10 +62,10 @@ void KeyCache_Prepare()
 	// load keys
 	auto keysPath = ActiveSettings::GetUserDataPath("keys.txt");
 	FileStream* fs_keys = FileStream::openFile2(keysPath);
-	if( !fs_keys )
+	if (!fs_keys)
 	{
 		fs_keys = FileStream::createFile2(keysPath);
-		if(fs_keys)
+		if (fs_keys)
 		{
 			fs_keys->writeString("# this file contains keys needed for decryption of disc file system data (WUD/WUX)\r\n");
 			fs_keys->writeString("# 1 key per line, any text after a '#' character is considered a comment\r\n");
@@ -76,21 +76,21 @@ void KeyCache_Prepare()
 		else
 		{
 			CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
-				.diagnosticCode = CafeSystem::DiagnosticCode::KeyFileCreateFailed,
-				.diagnostic = "Unable to create keys.txt"});
+								   .diagnosticCode = CafeSystem::DiagnosticCode::KeyFileCreateFailed,
+								   .diagnostic = "Unable to create keys.txt"});
 		}
 		mtxKeyCache.unlock();
 		return;
 	}
 	sint32 lineNumber = 0;
 	std::string line;
-	while( fs_keys->readLine(line) )
+	while (fs_keys->readLine(line))
 	{
 		lineNumber++;
 		// truncate anything after '#' or ';'
-		for(size_t i=0; i<line.size(); i++)
+		for (size_t i = 0; i < line.size(); i++)
 		{
-			if(line[i] == '#' || line[i] == ';' )
+			if (line[i] == '#' || line[i] == ';')
 			{
 				line.resize(i);
 				break;
@@ -108,15 +108,15 @@ void KeyCache_Prepare()
 		}
 		if (line.empty())
 			continue;
-		if( strishex(line) == false )
+		if (strishex(line) == false)
 		{
 			auto errorMsg = _tr("Error in keys.txt at line {}", lineNumber);
 			CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
-				.diagnosticCode = CafeSystem::DiagnosticCode::KeyFileInvalidLine,
-				.diagnostic = errorMsg});
+								   .diagnosticCode = CafeSystem::DiagnosticCode::KeyFileInvalidLine,
+								   .diagnostic = errorMsg});
 			continue;
 		}
-		if(line.size() == 32 )
+		if (line.size() == 32)
 		{
 			// 128-bit key
 			uint8 keyData128[16];

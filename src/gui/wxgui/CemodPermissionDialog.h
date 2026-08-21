@@ -45,18 +45,18 @@ struct CemodPermissionDialogEntry
 
 class CemodPermissionDialog final : public wxDialog
 {
-public:
+  public:
 	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
-		std::vector<Application::CemodPermissionRequest> requests);
+						  std::vector<Application::CemodPermissionRequest> requests);
 	CemodPermissionDialog(wxWindow* parent, const wxString& gameName,
-		std::vector<CemodPermissionDialogEntry> entries);
+						  std::vector<CemodPermissionDialogEntry> entries);
 
 	[[nodiscard]] const std::vector<CemodPermissionSelection>& GetSelections() const
 	{
 		return m_selections;
 	}
 
-private:
+  private:
 	struct ModRow
 	{
 		CemodPermissionDialogEntry entry;

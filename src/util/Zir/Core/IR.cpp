@@ -96,7 +96,7 @@ namespace ZpIR
 				return fmt::format("ptr:{}", reg.value_ptr);
 			case DataType::U64:
 			{
-				if(reg.value_u64 >= 0x1000)
+				if (reg.value_u64 >= 0x1000)
 					return fmt::format("u64:0x{0:x}", reg.value_u64);
 				return fmt::format("u64:{}", reg.value_u64);
 			}
@@ -114,7 +114,7 @@ namespace ZpIR
 		else
 		{
 			auto& reg = block->m_regs[(uint16)r];
-			
+
 			const char* regLetter = "r";
 			switch (reg.type)
 			{
@@ -206,7 +206,7 @@ namespace ZpIR
 		printf("IRBasicBlock %" PRIxPTR "\n", (uintptr_t)block);
 		// print imports
 		printf("Imports:\n");
-		for(auto itr : block->m_imports)
+		for (auto itr : block->m_imports)
 			printf("   reg: %s sym:0x%llx\n", getRegisterName(block, itr.reg).c_str(), itr.name);
 		// print exports
 		printf("Exports:\n");
@@ -216,7 +216,7 @@ namespace ZpIR
 		printf("Assembly:\n");
 		IR::__InsBase* instruction = block->m_instructionFirst;
 		size_t i = 0;
-		while(instruction)
+		while (instruction)
 		{
 			std::string s = getInstructionHRF(block, instruction);
 			printf("%04x %s\n", (unsigned int)i, s.c_str());
@@ -235,4 +235,4 @@ namespace ZpIR
 		}
 	}
 
-}
+} // namespace ZpIR

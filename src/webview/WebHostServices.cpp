@@ -12,7 +12,7 @@
 namespace WebFrontend
 {
 	WebHostServices::WebHostServices(std::shared_ptr<WebHostState> state,
-		INativeWindowHost& nativeWindow, UiDispatch dispatch, CanvasRecreator recreateCanvas)
+									 INativeWindowHost& nativeWindow, UiDispatch dispatch, CanvasRecreator recreateCanvas)
 		: m_state(std::move(state)), m_nativeWindow(nativeWindow),
 		  m_dispatch(std::move(dispatch)), m_recreateCanvas(std::move(recreateCanvas)),
 		  m_uiThread(std::this_thread::get_id()) {}
@@ -67,23 +67,47 @@ namespace WebFrontend
 		return m_state->GetWindowMetrics();
 	}
 
-	std::filesystem::path WebHostServices::GetUserDataPath(std::string_view path) const { return ActiveSettings::GetUserDataPath(path); }
-	std::filesystem::path WebHostServices::GetMlcPath() const { return ActiveSettings::GetMlcPath(); }
-	std::filesystem::path WebHostServices::GetExecutablePath() const { return ActiveSettings::GetExecutablePath(); }
-	std::filesystem::path WebHostServices::GetCachePath(std::string_view path) const { return ActiveSettings::GetCachePath(path); }
-	std::filesystem::path WebHostServices::GetConfigPath(std::string_view path) const { return ActiveSettings::GetConfigPath(path); }
-	Host::NativeSurfaceSnapshot WebHostServices::GetNativeSurfaces() const { return m_state->GetNativeSurfaces(); }
+	std::filesystem::path WebHostServices::GetUserDataPath(std::string_view path) const
+	{
+		return ActiveSettings::GetUserDataPath(path);
+	}
+	std::filesystem::path WebHostServices::GetMlcPath() const
+	{
+		return ActiveSettings::GetMlcPath();
+	}
+	std::filesystem::path WebHostServices::GetExecutablePath() const
+	{
+		return ActiveSettings::GetExecutablePath();
+	}
+	std::filesystem::path WebHostServices::GetCachePath(std::string_view path) const
+	{
+		return ActiveSettings::GetCachePath(path);
+	}
+	std::filesystem::path WebHostServices::GetConfigPath(std::string_view path) const
+	{
+		return ActiveSettings::GetConfigPath(path);
+	}
+	Host::NativeSurfaceSnapshot WebHostServices::GetNativeSurfaces() const
+	{
+		return m_state->GetNativeSurfaces();
+	}
 
 	Host::NativeSurfacePublication WebHostServices::PublishMainWindow(Host::NativeWindowHandle handle)
 	{
 		return m_state->PublishMainWindow(handle);
 	}
-	void WebHostServices::ClearMainWindow(Host::NativeSurfacePublication publication) { m_state->ClearMainWindow(publication); }
+	void WebHostServices::ClearMainWindow(Host::NativeSurfacePublication publication)
+	{
+		m_state->ClearMainWindow(publication);
+	}
 	Host::NativeSurfacePublication WebHostServices::PublishPadWindow(Host::NativeWindowHandle handle)
 	{
 		return m_state->PublishPadWindow(handle);
 	}
-	void WebHostServices::ClearPadWindow(Host::NativeSurfacePublication publication) { m_state->ClearPadWindow(publication); }
+	void WebHostServices::ClearPadWindow(Host::NativeSurfacePublication publication)
+	{
+		m_state->ClearPadWindow(publication);
+	}
 	Host::NativeSurfacePublication WebHostServices::PublishCanvas(bool mainWindow, Host::NativeWindowHandle handle)
 	{
 		return m_state->PublishCanvas(mainWindow, handle);
@@ -98,26 +122,38 @@ namespace WebFrontend
 #if BOOST_OS_WINDOWS
 		switch (key)
 		{
-		case Host::Key::LeftControl: return VK_LCONTROL;
-		case Host::Key::RightControl: return VK_RCONTROL;
-		case Host::Key::Tab: return VK_TAB;
-		case Host::Key::Escape: return VK_ESCAPE;
+		case Host::Key::LeftControl:
+			return VK_LCONTROL;
+		case Host::Key::RightControl:
+			return VK_RCONTROL;
+		case Host::Key::Tab:
+			return VK_TAB;
+		case Host::Key::Escape:
+			return VK_ESCAPE;
 		}
 #elif BOOST_OS_MACOS
 		switch (key)
 		{
-		case Host::Key::LeftControl: return 0x3b;
-		case Host::Key::RightControl: return 0x3e;
-		case Host::Key::Tab: return 0x30;
-		case Host::Key::Escape: return 0x35;
+		case Host::Key::LeftControl:
+			return 0x3b;
+		case Host::Key::RightControl:
+			return 0x3e;
+		case Host::Key::Tab:
+			return 0x30;
+		case Host::Key::Escape:
+			return 0x35;
 		}
 #else
 		switch (key)
 		{
-		case Host::Key::LeftControl: return 0xffe3;
-		case Host::Key::RightControl: return 0xffe4;
-		case Host::Key::Tab: return 0xff09;
-		case Host::Key::Escape: return 0xff1b;
+		case Host::Key::LeftControl:
+			return 0xffe3;
+		case Host::Key::RightControl:
+			return 0xffe4;
+		case Host::Key::Tab:
+			return 0xff09;
+		case Host::Key::Escape:
+			return 0xff1b;
 		}
 #endif
 		return 0;
@@ -151,7 +187,7 @@ namespace WebFrontend
 			InputManager::instance().UpdateHostMousePosition(surface, position);
 	}
 	void WebHostServices::UpdateMouseButton(Host::PointerSurface surface, Host::PointerButton button,
-		bool pressed, Host::PointerPosition position)
+											bool pressed, Host::PointerPosition position)
 	{
 		if (m_active.load(std::memory_order_acquire))
 			InputManager::instance().UpdateHostMouseButton(surface, button, pressed, position);
@@ -217,12 +253,12 @@ namespace WebFrontend
 			return;
 		}
 		if (!Queue([this, pending, shared] {
-			if (CompletePending(pending))
-			{
-				auto [success, text] = m_nativeWindow.GetClipboardText();
-				(*shared)(success, std::move(text));
-			}
-		}))
+				if (CompletePending(pending))
+				{
+					auto [success, text] = m_nativeWindow.GetClipboardText();
+					(*shared)(success, std::move(text));
+				}
+			}))
 			CancelPending(pending);
 	}
 
@@ -236,9 +272,9 @@ namespace WebFrontend
 			return;
 		}
 		if (!Queue([this, text = std::move(text), pending, shared]() mutable {
-			if (CompletePending(pending))
-				(*shared)(m_nativeWindow.SetClipboardText(std::move(text)));
-		}))
+				if (CompletePending(pending))
+					(*shared)(m_nativeWindow.SetClipboardText(std::move(text)));
+			}))
 			CancelPending(pending);
 	}
 
@@ -269,11 +305,16 @@ namespace WebFrontend
 		if (pending->completed.load(std::memory_order_acquire))
 			return false;
 		if (!Queue([this, result, pending] {
-			if (!CompletePending(pending))
-				return;
-			try { result->set_value(m_recreateCanvas()); }
-			catch (...) { result->set_value(false); }
-		}))
+				if (!CompletePending(pending))
+					return;
+				try
+				{
+					result->set_value(m_recreateCanvas());
+				} catch (...)
+				{
+					result->set_value(false);
+				}
+			}))
 		{
 			CancelPending(pending);
 			return false;
@@ -282,10 +323,10 @@ namespace WebFrontend
 	}
 
 	void WebHostServices::OnControllerState(const ControllerState& current,
-		const ControllerState& previous)
+											const ControllerState& previous)
 	{
 		std::scoped_lock lock(m_observerMutex);
 		if (m_active.load(std::memory_order_acquire) && m_controllerObserver)
 			m_controllerObserver(current, previous);
 	}
-}
+} // namespace WebFrontend

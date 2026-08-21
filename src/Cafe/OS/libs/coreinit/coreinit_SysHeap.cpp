@@ -37,4 +37,4 @@ namespace coreinit
 		cafeExportRegister("h264", OSFreeToSystem, LogType::CoreinitMem);
 	}
 
-}
+} // namespace coreinit

@@ -59,15 +59,15 @@ namespace
 	std::uint16_t U16(std::span<const std::byte> bytes, std::size_t offset)
 	{
 		return (std::to_integer<std::uint16_t>(bytes[offset]) << 8) |
-			std::to_integer<std::uint16_t>(bytes[offset + 1]);
+			   std::to_integer<std::uint16_t>(bytes[offset + 1]);
 	}
 
 	std::uint32_t U32(std::span<const std::byte> bytes, std::size_t offset)
 	{
 		return (std::to_integer<std::uint32_t>(bytes[offset]) << 24) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
-			std::to_integer<std::uint32_t>(bytes[offset + 3]);
+			   (std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
+			   (std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
+			   std::to_integer<std::uint32_t>(bytes[offset + 3]);
 	}
 
 	bool Range(std::uint64_t offset, std::uint64_t size, std::uint64_t limit)
@@ -76,11 +76,11 @@ namespace
 	}
 
 	bool Overlap(std::uint64_t leftOffset, std::uint64_t leftSize,
-		std::uint64_t rightOffset, std::uint64_t rightSize)
+				 std::uint64_t rightOffset, std::uint64_t rightSize)
 	{
 		return leftSize != 0 && rightSize != 0 &&
-			leftOffset < rightOffset + rightSize &&
-			rightOffset < leftOffset + leftSize;
+			   leftOffset < rightOffset + rightSize &&
+			   rightOffset < leftOffset + leftSize;
 	}
 
 	bool IsPowerOfTwo(std::uint32_t value)
@@ -91,23 +91,23 @@ namespace
 	bool SafeIdentifier(std::string_view value, std::size_t maximum)
 	{
 		return !value.empty() && value.size() <= maximum &&
-			std::ranges::all_of(value, [](unsigned char character) {
-				return std::isalnum(character) || character == '_' ||
-					character == '.' || character == '-';
-			});
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return std::isalnum(character) || character == '_' ||
+						  character == '.' || character == '-';
+			   });
 	}
 
 	bool SafeText(std::string_view value, std::size_t maximum)
 	{
 		return !value.empty() && value.size() <= maximum &&
-			std::ranges::all_of(value, [](unsigned char character) {
-				return character >= 0x20 || character == '\t' ||
-					character == '\n' || character == '\r';
-			});
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return character >= 0x20 || character == '\t' ||
+						  character == '\n' || character == '\r';
+			   });
 	}
 
 	std::optional<std::string> StringAt(std::span<const std::byte> bytes,
-		std::uint32_t offset, std::size_t maximum)
+										std::uint32_t offset, std::size_t maximum)
 	{
 		if (offset >= bytes.size())
 			return std::nullopt;
@@ -121,7 +121,7 @@ namespace
 	}
 
 	bool Inflate(std::span<const std::byte> input, std::uint32_t expected,
-		std::vector<std::byte>& output)
+				 std::vector<std::byte>& output)
 	{
 		if (input.empty() || expected == 0)
 			return false;
@@ -136,7 +136,7 @@ namespace
 			return false;
 		const auto status = inflate(&stream, Z_FINISH);
 		const bool valid = status == Z_STREAM_END && stream.avail_in == 0 &&
-			stream.avail_out == 0 && stream.total_out == expected;
+						   stream.avail_out == 0 && stream.total_out == expected;
 		inflateEnd(&stream);
 		return valid;
 	}
@@ -146,8 +146,7 @@ namespace
 		std::array<std::uint16_t, 3> parts{};
 		for (std::size_t index = 0; index < parts.size(); ++index)
 		{
-			const auto separator = index + 1 == parts.size() ?
-				value.size() : value.find('.');
+			const auto separator = index + 1 == parts.size() ? value.size() : value.find('.');
 			if (separator == std::string_view::npos || separator == 0)
 				return std::nullopt;
 			unsigned parsed{};
@@ -159,7 +158,7 @@ namespace
 				return std::nullopt;
 			parts[index] = static_cast<std::uint16_t>(parsed);
 			value.remove_prefix(separator +
-				(index + 1 == parts.size() ? 0 : 1));
+								(index + 1 == parts.size() ? 0 : 1));
 		}
 		if (!value.empty())
 			return std::nullopt;
@@ -167,7 +166,7 @@ namespace
 	}
 
 	bool GuestRange(const std::vector<Section>& sections, std::uint32_t address,
-		std::uint32_t size, std::uint32_t flags)
+					std::uint32_t size, std::uint32_t flags)
 	{
 		for (const auto& section : sections)
 		{
@@ -200,19 +199,23 @@ namespace
 	{
 		switch (type)
 		{
-		case 0: return 0;
+		case 0:
+			return 0;
 		case 4:
 		case 5:
 		case 6:
 		case 11:
 		case 251:
 		case 252:
-		case 253: return 2;
+		case 253:
+			return 2;
 		case 1:
 		case 10:
 		case 68:
-		case 78: return 4;
-		default: return std::numeric_limits<std::uint32_t>::max();
+		case 78:
+			return 4;
+		default:
+			return std::numeric_limits<std::uint32_t>::max();
 		}
 	}
 
@@ -261,7 +264,7 @@ namespace
 		}
 		return dependency;
 	}
-}
+} // namespace
 
 std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	std::span<const std::byte> image, std::string& error)
@@ -294,8 +297,8 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 		sectionEntrySize != 40 || sectionCount < 5 ||
 		sectionCount > kMaximumSections || nameSectionIndex >= sectionCount ||
 		!Range(sectionOffset,
-			static_cast<std::uint64_t>(sectionEntrySize) * sectionCount,
-			image.size()))
+			   static_cast<std::uint64_t>(sectionEntrySize) * sectionCount,
+			   image.size()))
 	{
 		error = "WMS RPL section table is invalid";
 		return std::nullopt;
@@ -322,7 +325,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 		}
 		if (section.alignment != 0 &&
 			(!IsPowerOfTwo(section.alignment) ||
-				section.alignment > 0x10000U))
+			 section.alignment > 0x10000U))
 		{
 			error = fmt::format(
 				"WMS RPL section {} has invalid alignment", index);
@@ -356,7 +359,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			if (!Range(section.fileOffset, section.storedSize, image.size()) ||
 				Overlap(section.fileOffset, section.storedSize, 0, 52) ||
 				Overlap(section.fileOffset, section.storedSize, sectionOffset,
-					static_cast<std::uint64_t>(sectionEntrySize) * sectionCount))
+						static_cast<std::uint64_t>(sectionEntrySize) * sectionCount))
 			{
 				error = fmt::format(
 					"WMS RPL section {} data is out of bounds", index);
@@ -364,7 +367,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			}
 			for (const auto& [existingOffset, existingSize] : fileRanges)
 				if (Overlap(section.fileOffset, section.storedSize,
-					existingOffset, existingSize))
+							existingOffset, existingSize))
 				{
 					error = "WMS RPL section file ranges overlap";
 					return std::nullopt;
@@ -383,7 +386,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 				if (section.expandedSize == 0 ||
 					section.expandedSize > kMaximumExpandedBytes ||
 					!Inflate(stored.subspan(4),
-						section.expandedSize, section.data))
+							 section.expandedSize, section.data))
 				{
 					error = "WMS RPL compressed section is invalid";
 					return std::nullopt;
@@ -459,11 +462,11 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			}
 		}
 		else if (section.address < 0x10000000U ||
-			(section.address >= 0xc0000000U &&
-				section.type != kShtSymtab &&
-				section.type != kShtDynsym &&
-				section.type != kShtStrtab &&
-				section.name != ".wut_load_bounds"))
+				 (section.address >= 0xc0000000U &&
+				  section.type != kShtSymtab &&
+				  section.type != kShtDynsym &&
+				  section.type != kShtStrtab &&
+				  section.name != ".wut_load_bounds"))
 		{
 			error = fmt::format(
 				"WMS RPL data section '{}' is outside an allowed region",
@@ -515,10 +518,9 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	}
 	std::vector<RPLLoaderInternal::ExternalSectionMapping> mappings;
 	for (const auto& section : sections)
-		mappings.push_back({
-			section.type, section.flags, section.address, section.expandedSize});
+		mappings.push_back({section.type, section.flags, section.address, section.expandedSize});
 	if (RPLLoaderInternal::FindExternalMappingViolation(
-		mappings, fileInfoMapping))
+			mappings, fileInfoMapping))
 	{
 		error = "WMS RPL section exceeds its FILEINFO mapping region";
 		return std::nullopt;
@@ -529,8 +531,8 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			sections[index].type == kShtRplCrcs)
 			continue;
 		const auto actual = static_cast<std::uint32_t>(crc32(0,
-			reinterpret_cast<const Bytef*>(sections[index].data.data()),
-			sections[index].data.size()));
+															 reinterpret_cast<const Bytef*>(sections[index].data.data()),
+															 sections[index].data.size()));
 		if (U32(crcSection.data, index * 4) != actual)
 		{
 			error = fmt::format(
@@ -543,11 +545,10 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	WumsInspection inspection;
 	for (const auto& section : sections)
 	{
-		inspection.sections.push_back({
-			section.name, section.type, section.flags, section.address,
-			section.storedSize, section.expandedSize, section.alignment,
-			(section.flags & kShfRplCompressed) != 0,
-			(section.flags & kShfTls) != 0});
+		inspection.sections.push_back({section.name, section.type, section.flags, section.address,
+									   section.storedSize, section.expandedSize, section.alignment,
+									   (section.flags & kShfRplCompressed) != 0,
+									   (section.flags & kShfTls) != 0});
 		inspection.usesTls =
 			inspection.usesTls || (section.flags & kShfTls) != 0;
 	}
@@ -584,7 +585,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	std::vector<Symbol> symbols;
 	std::set<std::tuple<std::string, std::string, WupsSymbolKind>> imports;
 	for (std::size_t offset = 0;
-		offset < symbolSection.data.size(); offset += 16)
+		 offset < symbolSection.data.size(); offset += 16)
 	{
 		const auto name = StringAt(
 			strings, U32(symbolSection.data, offset), 1024);
@@ -605,9 +606,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			const bool function =
 				importSection.name.starts_with(".fimport_");
 			const bool data = importSection.name.starts_with(".dimport_");
-			const auto module = importSection.name.size() > 9 ?
-				std::string_view(importSection.name).substr(9) :
-				std::string_view{};
+			const auto module = importSection.name.size() > 9 ? std::string_view(importSection.name).substr(9) : std::string_view{};
 			if ((!function && !data) || !SafeIdentifier(module, 128) ||
 				symbol.name.empty() ||
 				(function && (symbol.info & 0xf) != 2) ||
@@ -622,17 +621,16 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 				return std::nullopt;
 			}
 			symbol.importModule = std::string(module);
-			symbol.kind = function ?
-				WupsSymbolKind::Function : WupsSymbolKind::Data;
+			symbol.kind = function ? WupsSymbolKind::Function : WupsSymbolKind::Data;
 			if (!imports.emplace(
-				*symbol.importModule, symbol.name, symbol.kind).second)
+							*symbol.importModule, symbol.name, symbol.kind)
+					 .second)
 			{
 				error = "WMS RPL contains duplicate imports";
 				return std::nullopt;
 			}
-			inspection.imports.push_back({
-				*symbol.importModule, symbol.name, symbol.kind,
-				symbol.value, true});
+			inspection.imports.push_back({*symbol.importModule, symbol.name, symbol.kind,
+										  symbol.value, true});
 		}
 		symbols.push_back(std::move(symbol));
 	}
@@ -656,7 +654,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 		}
 		const auto& target = sections[relocationSection.info];
 		for (std::size_t offset = 0;
-			offset < relocationSection.data.size(); offset += entrySize)
+			 offset < relocationSection.data.size(); offset += entrySize)
 		{
 			const auto targetAddress =
 				U32(relocationSection.data, offset);
@@ -669,7 +667,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 				targetAddress < target.address ||
 				targetAddress - target.address > target.expandedSize ||
 				width > target.expandedSize -
-					(targetAddress - target.address))
+							(targetAddress - target.address))
 			{
 				error = fmt::format(
 					"WMS relocation in '{}' is invalid or unsupported",
@@ -677,9 +675,8 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 				return std::nullopt;
 			}
 			const auto& symbol = symbols[symbolIndex];
-			inspection.relocations.push_back({
-				target.name, targetAddress, type, symbol.name,
-				symbol.importModule, symbol.kind});
+			inspection.relocations.push_back({target.name, targetAddress, type, symbol.name,
+											  symbol.importModule, symbol.kind});
 		}
 	}
 
@@ -722,8 +719,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			return std::nullopt;
 		}
 	}
-	const auto versionEntry = metadata.contains("wums") ?
-		metadata.find("wums") : metadata.find("wum");
+	const auto versionEntry = metadata.contains("wums") ? metadata.find("wums") : metadata.find("wum");
 	if (!metadata.contains("export_name") ||
 		versionEntry == metadata.end() ||
 		!SafeIdentifier(metadata["export_name"], 128))
@@ -754,9 +750,9 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	take("description", inspection.metadata.description);
 	take("buildtimestamp", inspection.metadata.buildTimestamp);
 	for (const auto* text : {
-		&inspection.metadata.version, &inspection.metadata.author,
-		&inspection.metadata.license, &inspection.metadata.description,
-		&inspection.metadata.buildTimestamp})
+			 &inspection.metadata.version, &inspection.metadata.author,
+			 &inspection.metadata.license, &inspection.metadata.description,
+			 &inspection.metadata.buildTimestamp})
 		if (!text->empty() && !SafeText(*text, 4096))
 		{
 			error = ".wums.meta contains invalid text";
@@ -773,7 +769,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	};
 	if (!flag("skipInitFini", inspection.metadata.skipInitFini) ||
 		!flag("initBeforeRelocationDoneHook",
-			inspection.metadata.initBeforeRelocationsDone))
+			  inspection.metadata.initBeforeRelocationsDone))
 	{
 		error = ".wums.meta contains an invalid boolean flag";
 		return std::nullopt;
@@ -802,10 +798,10 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 			return std::nullopt;
 		}
 		for (std::size_t offset = 0;
-			offset < dependencySection->data.size();)
+			 offset < dependencySection->data.size();)
 		{
 			const auto raw = StringAt(dependencySection->data,
-				static_cast<std::uint32_t>(offset), 256);
+									  static_cast<std::uint32_t>(offset), 256);
 			if (!raw)
 			{
 				error = ".wums.dependencies contains an unterminated entry";
@@ -844,43 +840,42 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 	}
 	std::set<std::uint32_t> hookTypes;
 	for (std::size_t offset = 0;
-		offset < hooksSection->data.size(); offset += 8)
+		 offset < hooksSection->data.size(); offset += 8)
 	{
 		const auto type = U32(hooksSection->data, offset);
 		const auto target = U32(hooksSection->data, offset + 4);
 		if (type > static_cast<std::uint32_t>(
-				WumsHookType::InitReentFunctions) ||
+					   WumsHookType::InitReentFunctions) ||
 			!hookTypes.insert(type).second || (target & 3U) != 0 ||
 			!GuestRange(sections, target, 4,
-				kShfAlloc | kShfExecute))
+						kShfAlloc | kShfExecute))
 		{
 			error = ".wums.hooks contains an invalid descriptor";
 			return std::nullopt;
 		}
 		if ((type == static_cast<std::uint32_t>(WumsHookType::Deinit) &&
-				*abiVersion < WupsVersion{0, 3, 2}) ||
+			 *abiVersion < WupsVersion{0, 3, 2}) ||
 			(type >= static_cast<std::uint32_t>(
-				WumsHookType::AllApplicationStartsDone) &&
-				type <= static_cast<std::uint32_t>(
-					WumsHookType::AllApplicationRequestsExitDone) &&
-				*abiVersion < WupsVersion{0, 3, 3}) ||
+						 WumsHookType::AllApplicationStartsDone) &&
+			 type <= static_cast<std::uint32_t>(
+						 WumsHookType::AllApplicationRequestsExitDone) &&
+			 *abiVersion < WupsVersion{0, 3, 3}) ||
 			(type >= static_cast<std::uint32_t>(
-				WumsHookType::GetCustomRplAllocator) &&
-				type <= static_cast<std::uint32_t>(
-					WumsHookType::ClearAllocatedRplMemory) &&
-				*abiVersion < WupsVersion{0, 3, 4}) ||
+						 WumsHookType::GetCustomRplAllocator) &&
+			 type <= static_cast<std::uint32_t>(
+						 WumsHookType::ClearAllocatedRplMemory) &&
+			 *abiVersion < WupsVersion{0, 3, 4}) ||
 			(type == static_cast<std::uint32_t>(
-				WumsHookType::InitWutThread) &&
-				*abiVersion < WupsVersion{0, 3, 5}) ||
+						 WumsHookType::InitWutThread) &&
+			 *abiVersion < WupsVersion{0, 3, 5}) ||
 			(type == static_cast<std::uint32_t>(
-				WumsHookType::InitReentFunctions) &&
-				*abiVersion < WupsVersion{0, 3, 6}))
+						 WumsHookType::InitReentFunctions) &&
+			 *abiVersion < WupsVersion{0, 3, 6}))
 		{
 			error = ".wums.hooks uses a hook newer than the declared WUMS ABI";
 			return std::nullopt;
 		}
-		inspection.hooks.push_back({
-			static_cast<WumsHookType>(type), target});
+		inspection.hooks.push_back({static_cast<WumsHookType>(type), target});
 	}
 
 	const auto exportsSection = std::ranges::find_if(
@@ -900,7 +895,7 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 		}
 		std::set<std::pair<std::string, WupsSymbolKind>> exportNames;
 		for (std::size_t offset = 0;
-			offset < exportsSection->data.size(); offset += 12)
+			 offset < exportsSection->data.size(); offset += 12)
 		{
 			const auto rawKind = U32(exportsSection->data, offset);
 			const auto name =
@@ -911,22 +906,19 @@ std::optional<WumsInspection> WumsBinaryInspector::Inspect(
 				error = ".wums.exports contains an invalid type or name";
 				return std::nullopt;
 			}
-			const auto kind = rawKind == 0 ?
-				WupsSymbolKind::Function : WupsSymbolKind::Data;
-			const auto requiredFlags = kind == WupsSymbolKind::Function ?
-				kShfAlloc | kShfExecute : kShfAlloc;
+			const auto kind = rawKind == 0 ? WupsSymbolKind::Function : WupsSymbolKind::Data;
+			const auto requiredFlags = kind == WupsSymbolKind::Function ? kShfAlloc | kShfExecute : kShfAlloc;
 			if (!exportNames.emplace(*name, kind).second ||
 				(kind == WupsSymbolKind::Function &&
-					(address & 3U) != 0) ||
+				 (address & 3U) != 0) ||
 				!GuestRange(sections, address,
-					kind == WupsSymbolKind::Function ? 4 : 1,
-					requiredFlags))
+							kind == WupsSymbolKind::Function ? 4 : 1,
+							requiredFlags))
 			{
 				error = ".wums.exports contains a duplicate or out-of-range export";
 				return std::nullopt;
 			}
-			inspection.exports.push_back({
-				inspection.metadata.moduleName, *name, kind, address, true});
+			inspection.exports.push_back({inspection.metadata.moduleName, *name, kind, address, true});
 		}
 	}
 	return inspection;

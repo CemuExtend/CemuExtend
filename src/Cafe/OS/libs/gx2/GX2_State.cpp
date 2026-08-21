@@ -69,17 +69,16 @@ namespace GX2
 		GX2SetColorControlReg(&colorControlReg);
 	}
 
-
 	void GX2InitPolygonControlReg(GX2PolygonControlReg* reg,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace,
-		uint32 cullFront,
-		uint32 cullBack,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
-		uint32 polygonOffsetFrontEnable,
-		uint32 polygonOffsetBackEnable,
-		uint32 paraOffsetEnable)
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace,
+								  uint32 cullFront,
+								  uint32 cullBack,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
+								  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
+								  uint32 polygonOffsetFrontEnable,
+								  uint32 polygonOffsetBackEnable,
+								  uint32 paraOffsetEnable)
 	{
 		Latte::LATTE_PA_SU_SC_MODE_CNTL v;
 		v.set_FRONT_FACE(frontFace);
@@ -104,14 +103,14 @@ namespace GX2
 	}
 
 	void GX2SetPolygonControl(Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE frontFace,
-		uint32 cullFront,
-		uint32 cullBack,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
-		Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
-		uint32 polygonOffsetFrontEnable,
-		uint32 polygonOffsetBackEnable,
-		uint32 paraOffsetEnable)
+							  uint32 cullFront,
+							  uint32 cullBack,
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_POLYGONMODE usePolygonMode,
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeFront,
+							  Latte::LATTE_PA_SU_SC_MODE_CNTL::E_PTYPE polyModeBack,
+							  uint32 polygonOffsetFrontEnable,
+							  uint32 polygonOffsetBackEnable,
+							  uint32 paraOffsetEnable)
 	{
 		GX2PolygonControlReg reg{};
 		GX2InitPolygonControlReg(&reg, frontFace, cullFront, cullBack, usePolygonMode, polyModeFront, polyModeBack, polygonOffsetFrontEnable, polygonOffsetBackEnable, paraOffsetEnable);
@@ -164,7 +163,7 @@ namespace GX2
 	{
 		GX2ReserveCmdSpace(3);
 
-		//if (enableHalfZ)
+		// if (enableHalfZ)
 		//{
 		//	// Smash has a bug where it enables half space clipping during streamout drawcalls and shadowing and then doesn't turn it off until the next GX2SetRasterizerClipControl call
 		//	// this leads to some stuff being rendered at the wrong z-plane (e.g. shields behind characters) if the game's default depth range -1 to 1 isn't supported (on OpenGL only Nvidia's glDepthRangedNV allows unclamped values)
@@ -177,7 +176,7 @@ namespace GX2
 		//		if (g_renderer && g_renderer->GetType() == RendererAPI::OpenGL && LatteGPUState.glVendor != GLVENDOR_NVIDIA)
 		//			enableHalfZ = false;
 		//	}
-		//}
+		// }
 
 		Latte::LATTE_PA_CL_CLIP_CNTL reg{};
 		reg.set_ZCLIP_NEAR_DISABLE(!enableZClip).set_ZCLIP_FAR_DISABLE(!enableZClip);
@@ -186,8 +185,8 @@ namespace GX2
 		reg.set_DX_LINEAR_ATTR_CLIP_ENA(true);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::PA_CL_CLIP_CNTL - 0xA000,
-			reg);
+							  Latte::REGADDR::PA_CL_CLIP_CNTL - 0xA000,
+							  reg);
 	}
 
 	void GX2SetRasterizerClipControl(bool enableRasterizer, bool enableZClip)
@@ -216,10 +215,10 @@ namespace GX2
 		GX2ReserveCmdSpace(2 + 6);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 6),
-			Latte::REGADDR::PA_CL_VPORT_XSCALE - 0xA000,
-			viewportReg->xScale, viewportReg->xOffset,
-			viewportReg->yScale, viewportReg->yOffset,
-			viewportReg->zScale, viewportReg->zOffset);
+							  Latte::REGADDR::PA_CL_VPORT_XSCALE - 0xA000,
+							  viewportReg->xScale, viewportReg->xOffset,
+							  viewportReg->yScale, viewportReg->yOffset,
+							  viewportReg->zScale, viewportReg->zOffset);
 	}
 
 	void GX2SetViewport(float x, float y, float width, float height, float nearZ, float farZ)
@@ -250,8 +249,8 @@ namespace GX2
 		GX2ReserveCmdSpace(4);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 2),
-			Latte::REGADDR::PA_SC_GENERIC_SCISSOR_TL - 0xA000,
-			scissorReg->scissorTL, scissorReg->scissorBR);
+							  Latte::REGADDR::PA_SC_GENERIC_SCISSOR_TL - 0xA000,
+							  scissorReg->scissorTL, scissorReg->scissorBR);
 	}
 
 	void GX2GetScissorReg(GX2ScissorReg* scissorReg, uint32be* x, uint32be* y, uint32be* width, uint32be* height)
@@ -280,18 +279,17 @@ namespace GX2
 		reg.set_Z_FUNC(depthFunction);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
-			reg);
+							  Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
+							  reg);
 	}
 
 	void GX2SetDepthStencilControl(
 		bool depthTestEnable, bool depthWriteEnable, LATTE_DB_DEPTH_CONTROL::E_ZFUNC depthFunction,
-		bool stencilTestEnable, bool backStencilTestEnable, 
-		LATTE_DB_DEPTH_CONTROL::E_STENCILFUNC frontStencilFunction, 
+		bool stencilTestEnable, bool backStencilTestEnable,
+		LATTE_DB_DEPTH_CONTROL::E_STENCILFUNC frontStencilFunction,
 		LATTE_DB_DEPTH_CONTROL::E_STENCILACTION frontStencilZPass, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION frontStencilZFail, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION frontStencilFail,
-		LATTE_DB_DEPTH_CONTROL::E_STENCILFUNC backStencilFunction, 
-		LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilZPass, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilZFail, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilFail
-	)
+		LATTE_DB_DEPTH_CONTROL::E_STENCILFUNC backStencilFunction,
+		LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilZPass, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilZFail, LATTE_DB_DEPTH_CONTROL::E_STENCILACTION backStencilFail)
 	{
 		GX2ReserveCmdSpace(3);
 
@@ -303,8 +301,8 @@ namespace GX2
 		reg.set_STENCIL_ZPASS_B(backStencilZPass).set_STENCIL_ZFAIL_B(backStencilZFail).set_STENCIL_FAIL_B(backStencilFail);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
-			reg);
+							  Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
+							  reg);
 	}
 
 	void GX2InitDepthStencilControlReg(
@@ -330,8 +328,8 @@ namespace GX2
 		GX2ReserveCmdSpace(3);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
-			depthStencilControlReg->reg);
+							  Latte::REGADDR::DB_DEPTH_CONTROL - 0xA000,
+							  depthStencilControlReg->reg);
 	}
 
 	void GX2GetDepthStencilControlReg(
@@ -352,7 +350,7 @@ namespace GX2
 
 		*stencilTestEnable = depthStencilControlReg->reg.value().get_STENCIL_ENABLE();
 		*backStencilTestEnable = depthStencilControlReg->reg.value().get_BACK_STENCIL_ENABLE();
-	
+
 		*frontStencilFunction = (uint32)depthStencilControlReg->reg.value().get_STENCIL_FUNC_F();
 		*backStencilFunction = (uint32)depthStencilControlReg->reg.value().get_STENCIL_FUNC_B();
 
@@ -381,11 +379,11 @@ namespace GX2
 		backReg.set_STENCILREF_B(refBack).set_STENCILMASK_B(compareMaskBack).set_STENCILWRITEMASK_B(writeMaskBack);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-							REGADDR::DB_STENCILREFMASK - 0xA000,
-							frontReg,
-							pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-							REGADDR::DB_STENCILREFMASK_BF - 0xA000,
-							backReg);
+							  REGADDR::DB_STENCILREFMASK - 0xA000,
+							  frontReg,
+							  pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
+							  REGADDR::DB_STENCILREFMASK_BF - 0xA000,
+							  backReg);
 	}
 
 	void GX2SetStencilMaskReg(GX2StencilMaskReg* stencilMaskReg)
@@ -393,11 +391,11 @@ namespace GX2
 		GX2ReserveCmdSpace(3 + 3);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			REGADDR::DB_STENCILREFMASK - 0xA000,
-			stencilMaskReg->stencilRefMaskFrontReg,
-			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			REGADDR::DB_STENCILREFMASK_BF - 0xA000,
-			stencilMaskReg->stencilRefMaskBackReg);
+							  REGADDR::DB_STENCILREFMASK - 0xA000,
+							  stencilMaskReg->stencilRefMaskFrontReg,
+							  pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
+							  REGADDR::DB_STENCILREFMASK_BF - 0xA000,
+							  stencilMaskReg->stencilRefMaskBackReg);
 	}
 
 	void GX2SetPrimitiveRestartIndex(uint32 restartIndex)
@@ -406,8 +404,8 @@ namespace GX2
 		Latte::LATTE_VGT_MULTI_PRIM_IB_RESET_INDX reg{};
 		reg.set_RESTART_INDEX(restartIndex);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::VGT_MULTI_PRIM_IB_RESET_INDX - 0xA000,
-			reg);
+							  Latte::REGADDR::VGT_MULTI_PRIM_IB_RESET_INDX - 0xA000,
+							  reg);
 	}
 
 	void GX2InitTargetChannelMasksReg(GX2TargetChannelMaskReg* reg, GX2_CHANNELMASK t0, GX2_CHANNELMASK t1, GX2_CHANNELMASK t2, GX2_CHANNELMASK t3, GX2_CHANNELMASK t4, GX2_CHANNELMASK t5, GX2_CHANNELMASK t6, GX2_CHANNELMASK t7)
@@ -431,8 +429,8 @@ namespace GX2
 		GX2ReserveCmdSpace(3);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::CB_TARGET_MASK - 0xA000,
-			reg->reg);
+							  Latte::REGADDR::CB_TARGET_MASK - 0xA000,
+							  reg->reg);
 	}
 
 	void GX2SetTargetChannelMasks(GX2_CHANNELMASK t0, GX2_CHANNELMASK t1, GX2_CHANNELMASK t2, GX2_CHANNELMASK t3, GX2_CHANNELMASK t4, GX2_CHANNELMASK t5, GX2_CHANNELMASK t6, GX2_CHANNELMASK t7)
@@ -445,7 +443,7 @@ namespace GX2
 	static_assert(sizeof(GX2_CHANNELMASK) == 4);
 
 	void GX2GetTargetChannelMasksReg(GX2TargetChannelMaskReg* reg, betype<GX2_CHANNELMASK>* t0, betype<GX2_CHANNELMASK>* t1, betype<GX2_CHANNELMASK>* t2, betype<GX2_CHANNELMASK>* t3,
-									betype<GX2_CHANNELMASK>* t4, betype<GX2_CHANNELMASK>* t5, betype<GX2_CHANNELMASK>* t6, betype<GX2_CHANNELMASK>* t7)
+									 betype<GX2_CHANNELMASK>* t4, betype<GX2_CHANNELMASK>* t5, betype<GX2_CHANNELMASK>* t6, betype<GX2_CHANNELMASK>* t7)
 	{
 		uint32 maskValue = reg->reg.value().get_MASK();
 		*t0 = (maskValue >> 0) & 0xF;
@@ -479,8 +477,7 @@ namespace GX2
 		gx2WriteGather_submit(
 			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
 			(Latte::REGADDR::CB_BLEND0_CONTROL + (uint32)reg->index) - 0xA000,
-			reg->reg
-		);
+			reg->reg);
 	}
 
 	void GX2SetBlendControl(uint32 renderTargetIndex, GX2_BLENDFACTOR colorSrcFactor, GX2_BLENDFACTOR colorDstFactor, GX2_BLENDFUNC colorCombineFunc, uint32 separateAlphaBlend, GX2_BLENDFACTOR alphaSrcFactor, GX2_BLENDFACTOR alphaDstFactor, GX2_BLENDFUNC alphaCombineFunc)
@@ -507,8 +504,7 @@ namespace GX2
 			reg->regRed,
 			reg->regGreen,
 			reg->regBlue,
-			reg->regAlpha
-		);
+			reg->regAlpha);
 	}
 
 	void GX2SetBlendConstantColor(float red, float green, float blue, float alpha)
@@ -579,8 +575,7 @@ namespace GX2
 		gx2WriteGather_submit(
 			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
 			Latte::REGADDR::PA_SU_POINT_SIZE - 0xA000,
-			reg->reg
-		);
+			reg->reg);
 	}
 
 	void GX2SetPointSize(float width, float height)
@@ -612,8 +607,7 @@ namespace GX2
 		gx2WriteGather_submit(
 			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
 			Latte::REGADDR::PA_SU_POINT_MINMAX - 0xA000,
-			reg->reg
-		);
+			reg->reg);
 	}
 
 	void GX2SetPointLimits(float minSize, float maxSize)
@@ -639,17 +633,17 @@ namespace GX2
 			regVTE.set_VTX_XY_FMT(true);
 			regVTE.set_VTX_Z_FMT(true);
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-				Latte::REGADDR::PA_CL_VTE_CNTL - 0xA000,
-				regVTE);
+								  Latte::REGADDR::PA_CL_VTE_CNTL - 0xA000,
+								  regVTE);
 			// set PA_CL_CLIP_CNTL to 0x490000
 			Latte::LATTE_PA_CL_CLIP_CNTL regClip{};
-			regClip.set_CLIP_DISABLE(true); // 0x10000
-			regClip.set_DX_CLIP_SPACE_DEF(true); // 0x80000
+			regClip.set_CLIP_DISABLE(true);			 // 0x10000
+			regClip.set_DX_CLIP_SPACE_DEF(true);	 // 0x80000
 			regClip.set_DX_RASTERIZATION_KILL(true); // 0x400000
-			
+
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-				Latte::REGADDR::PA_CL_CLIP_CNTL - 0xA000,
-				regClip);
+								  Latte::REGADDR::PA_CL_CLIP_CNTL - 0xA000,
+								  regClip);
 		}
 		else
 		{
@@ -660,8 +654,8 @@ namespace GX2
 			reg.set_VPORT_Z_OFFSET_ENA(true).set_VPORT_Z_SCALE_ENA(true);
 			reg.set_VTX_W0_FMT(true);
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-				Latte::REGADDR::PA_CL_VTE_CNTL - 0xA000,
-				reg);
+								  Latte::REGADDR::PA_CL_VTE_CNTL - 0xA000,
+								  reg);
 			// reset PA_CL_CLIP_CNTL
 			GX2SetRasterizerClipControl(true, true);
 		}
@@ -684,7 +678,7 @@ namespace GX2
 			GX2ReserveCmdSpace(3);
 			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_HLE_SPECIAL_STATE, 2));
 			gx2WriteGather_submitU32AsBE((uint32)stateId); // state id
-			gx2WriteGather_submitU32AsBE(isEnabled); // enable/disable bool
+			gx2WriteGather_submitU32AsBE(isEnabled);	   // enable/disable bool
 		}
 	}
 
@@ -760,4 +754,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2SetSpecialState, LogType::GX2);
 	}
 
-}
+} // namespace GX2

@@ -45,7 +45,6 @@ InputManager::InputManager()
 #if HAS_WIIMOTE
 	create_provider<WiimoteControllerProvider>();
 #endif
-
 }
 
 InputManager::~InputManager()
@@ -73,8 +72,8 @@ void InputManager::ConfigureProfileDirectory(fs::path profileDirectory)
 }
 
 void InputManager::ConfigureHost(Host::IKeyboardState& keyboard,
-	Host::IWindowMetrics& windowMetrics, Host::INativeSurfaceProvider& nativeSurfaces,
-	Input::IControllerStateObserver& observer)
+								 Host::IWindowMetrics& windowMetrics, Host::INativeSurfaceProvider& nativeSurfaces,
+								 Input::IControllerStateObserver& observer)
 {
 	std::unique_lock lock(m_host_mutex);
 	m_keyboard_host = &keyboard;
@@ -106,7 +105,7 @@ void InputManager::ClearEmulationContext(Input::IEmulationInputContext& context)
 }
 
 void InputManager::NotifyControllerState(const ControllerState& current,
-	const ControllerState& previous)
+										 const ControllerState& previous)
 {
 	Input::IControllerStateObserver* observer{};
 	{
@@ -155,15 +154,13 @@ bool InputManager::IsHostKeyDown(Host::Key key) const
 Host::WindowMetricsSnapshot InputManager::GetHostWindowMetrics() const
 {
 	std::shared_lock lock(m_host_mutex);
-	return m_window_metrics_host ? m_window_metrics_host->GetWindowMetrics() :
-		Host::WindowMetricsSnapshot{};
+	return m_window_metrics_host ? m_window_metrics_host->GetWindowMetrics() : Host::WindowMetricsSnapshot{};
 }
 
 Host::NativeSurfaceSnapshot InputManager::GetHostNativeSurfaces() const
 {
 	std::shared_lock lock(m_host_mutex);
-	return m_native_surfaces_host ? m_native_surfaces_host->GetNativeSurfaces() :
-		Host::NativeSurfaceSnapshot{};
+	return m_native_surfaces_host ? m_native_surfaces_host->GetNativeSurfaces() : Host::NativeSurfaceSnapshot{};
 }
 
 bool InputManager::IsTitleRunningForInput() const
@@ -175,8 +172,7 @@ bool InputManager::IsTitleRunningForInput() const
 Input::ScreenImageArea InputManager::GetScreenImageArea(bool padView) const
 {
 	std::shared_lock lock(m_host_mutex);
-	return m_emulation_context ? m_emulation_context->GetScreenImageArea(padView) :
-		Input::ScreenImageArea{};
+	return m_emulation_context ? m_emulation_context->GetScreenImageArea(padView) : Input::ScreenImageArea{};
 }
 
 void InputManager::load() noexcept
@@ -186,8 +182,7 @@ void InputManager::load() noexcept
 		try
 		{
 			load(i);
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "can't load controller profile: {}", ex.what());
 		}
@@ -205,7 +200,7 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 		file_path = m_profileDirectory / _utf8ToPath(filename);
 
 	auto old_file = file_path;
-	old_file.replace_extension(".txt"); // test .txt extension
+	old_file.replace_extension(".txt");	 // test .txt extension
 	file_path.replace_extension(".xml"); // force .xml extension
 
 	if (fs::exists(old_file) && !fs::exists(file_path))
@@ -219,7 +214,7 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 		auto xmlData = FileStream::LoadIntoMemory(file_path);
 		if (!xmlData || xmlData->empty())
 			return false;
-	
+
 		pugi::xml_document doc;
 		if (!doc.load_buffer(xmlData->data(), xmlData->size()))
 			return false;
@@ -232,7 +227,6 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 
 		const auto emulate = EmulatedController::type_from_string(type_node.child_value());
 		auto emulated_controller = ControllerFactory::CreateEmulatedController(player_index, emulate);
-
 
 		if (const auto profile_name_node = root.child("profile"))
 			emulated_controller->m_profile_name = profile_name_node.child_value();
@@ -296,7 +290,6 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 
 				// custom settings
 				controller->load(cnode);
-				
 
 				// mappings
 				if (const auto mappings_node = cnode.child("mappings"))
@@ -319,8 +312,7 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 						emulated_controller->set_mapping(mapping, controller, button);
 					}
 				}
-			}
-			catch (const std::exception& ex)
+			} catch (const std::exception& ex)
 			{
 				cemuLog_log(LogType::Force, "can't load controller: {}", ex.what());
 			}
@@ -328,8 +320,7 @@ bool InputManager::load(size_t player_index, std::string_view filename)
 
 		set_controller(emulated_controller);
 		return true;
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "can't load config file: {}", ex.what());
 		return false;
@@ -388,24 +379,17 @@ bool InputManager::migrate_config(const fs::path& file_path)
 			controller.append_child("api").append_child(pugi::node_pcdata).set_value(api_string.c_str());
 			controller.append_child("uuid").append_child(pugi::node_pcdata).set_value(uuid.c_str());
 			if (display_name.has_value() && !display_name->empty())
-				controller.append_child("display_name").append_child(pugi::node_pcdata).set_value(
-					display_name.value().c_str());
+				controller.append_child("display_name").append_child(pugi::node_pcdata).set_value(display_name.value().c_str());
 
-
-			controller.append_child("rumble").append_child(pugi::node_pcdata).set_value(
-				m_data.get<std::string>("Controller.rumble").c_str());
+			controller.append_child("rumble").append_child(pugi::node_pcdata).set_value(m_data.get<std::string>("Controller.rumble").c_str());
 
 			auto axis_node = controller.append_child("axis");
-			axis_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(
-				m_data.get<std::string>("Controller.leftDeadzone").c_str());
-			axis_node.append_child("range").append_child(pugi::node_pcdata).set_value(
-				m_data.get<std::string>("Controller.leftRange").c_str());
+			axis_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(m_data.get<std::string>("Controller.leftDeadzone").c_str());
+			axis_node.append_child("range").append_child(pugi::node_pcdata).set_value(m_data.get<std::string>("Controller.leftRange").c_str());
 
 			auto rotation_node = controller.append_child("rotation");
-			rotation_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(
-				m_data.get<std::string>("Controller.rightDeadzone").c_str());
-			rotation_node.append_child("range").append_child(pugi::node_pcdata).set_value(
-				m_data.get<std::string>("Controller.rightRange").c_str());
+			rotation_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(m_data.get<std::string>("Controller.rightDeadzone").c_str());
+			rotation_node.append_child("range").append_child(pugi::node_pcdata).set_value(m_data.get<std::string>("Controller.rightRange").c_str());
 
 			auto mappings_node = controller.append_child("mappings");
 			for (int i = 1; i < 28; ++i) // test all possible mappings (max is 27 for vpad controller)
@@ -437,41 +421,51 @@ bool InputManager::migrate_config(const fs::path& file_path)
 				// fix old flag layout to new one for all kind of axis stuff
 				if (flag_bit >= 24 && flag_bit <= 31)
 					flag_bit += 8;
-				else if (flag_bit == 32) flag_bit = kTriggerXP;
-				else if (flag_bit == 33) flag_bit = kRotationXP;
-				else if (flag_bit == 34) flag_bit = kRotationYP;
-				else if (flag_bit == 35) flag_bit = kTriggerYP;
-				else if (flag_bit == 36) flag_bit = kAxisXN;
-				else if (flag_bit == 37) flag_bit = kAxisYN;
-				else if (flag_bit == 38) flag_bit = kTriggerXN;
-				else if (flag_bit == 39) flag_bit = kRotationXN;
-				else if (flag_bit == 40) flag_bit = kRotationYN;
-				else if (flag_bit == 41) flag_bit = kTriggerYN;
+				else if (flag_bit == 32)
+					flag_bit = kTriggerXP;
+				else if (flag_bit == 33)
+					flag_bit = kRotationXP;
+				else if (flag_bit == 34)
+					flag_bit = kRotationYP;
+				else if (flag_bit == 35)
+					flag_bit = kTriggerYP;
+				else if (flag_bit == 36)
+					flag_bit = kAxisXN;
+				else if (flag_bit == 37)
+					flag_bit = kAxisYN;
+				else if (flag_bit == 38)
+					flag_bit = kTriggerXN;
+				else if (flag_bit == 39)
+					flag_bit = kRotationXN;
+				else if (flag_bit == 40)
+					flag_bit = kRotationYN;
+				else if (flag_bit == 41)
+					flag_bit = kTriggerYN;
 
 				// fix old api mappings
 				if (api_string == to_string(InputAPI::XInput))
 				{
 					const std::unordered_map<uint64, uint64> xinput =
-					{
-						{kButton0, 12}, // XINPUT_GAMEPAD_A
-						{kButton1, 13}, // XINPUT_GAMEPAD_B
-						{kButton2, 14}, // XINPUT_GAMEPAD_X
-						{kButton3, 15}, // XINPUT_GAMEPAD_Y
+						{
+							{kButton0, 12}, // XINPUT_GAMEPAD_A
+							{kButton1, 13}, // XINPUT_GAMEPAD_B
+							{kButton2, 14}, // XINPUT_GAMEPAD_X
+							{kButton3, 15}, // XINPUT_GAMEPAD_Y
 
-						{kButton4, 8}, // XINPUT_GAMEPAD_LEFT_SHOULDER
-						{kButton5, 9}, // XINPUT_GAMEPAD_LEFT_SHOULDER
+							{kButton4, 8}, // XINPUT_GAMEPAD_LEFT_SHOULDER
+							{kButton5, 9}, // XINPUT_GAMEPAD_LEFT_SHOULDER
 
-						{kButton6, 4}, // XINPUT_GAMEPAD_START
-						{kButton7, 5}, // XINPUT_GAMEPAD_BACK
+							{kButton6, 4}, // XINPUT_GAMEPAD_START
+							{kButton7, 5}, // XINPUT_GAMEPAD_BACK
 
-						{kButton8, 6}, // XINPUT_GAMEPAD_LEFT_THUMB
-						{kButton9, 7}, // XINPUT_GAMEPAD_RIGHT_THUMB
+							{kButton8, 6}, // XINPUT_GAMEPAD_LEFT_THUMB
+							{kButton9, 7}, // XINPUT_GAMEPAD_RIGHT_THUMB
 
-						{kButton10, 0}, // XINPUT_GAMEPAD_DPAD_UP
-						{kButton11, 1}, // XINPUT_GAMEPAD_DPAD_DOWN
-						{kButton12, 2}, // XINPUT_GAMEPAD_DPAD_LEFT
-						{kButton13, 3}, // XINPUT_GAMEPAD_DPAD_RIGHT
-					};
+							{kButton10, 0}, // XINPUT_GAMEPAD_DPAD_UP
+							{kButton11, 1}, // XINPUT_GAMEPAD_DPAD_DOWN
+							{kButton12, 2}, // XINPUT_GAMEPAD_DPAD_LEFT
+							{kButton13, 3}, // XINPUT_GAMEPAD_DPAD_RIGHT
+						};
 
 					const auto it = xinput.find(flag_bit);
 					if (it != xinput.cend())
@@ -480,32 +474,29 @@ bool InputManager::migrate_config(const fs::path& file_path)
 				else if (api_string == "DSU")
 				{
 					const std::unordered_map<uint64, uint64> dsu =
-					{
-						{7, kButton0}, // ButtonSelect
-						{8, kButton1}, // ButtonLStick
-						{9, kButton2}, // ButtonRStick
-						{6, kButton3}, // ButtonStart
+						{
+							{7, kButton0}, // ButtonSelect
+							{8, kButton1}, // ButtonLStick
+							{9, kButton2}, // ButtonRStick
+							{6, kButton3}, // ButtonStart
 
-						{4, kButton10}, // ButtonL
-						{5, kButton11}, // ButtonR
+							{4, kButton10}, // ButtonL
+							{5, kButton11}, // ButtonR
 
-						{0, kButton14}, // ButtonA
-						{1, kButton13}, // ButtonB
-						{2, kButton15}, // ButtonX
-						{3, kButton12}, // ButtonY
-					};
+							{0, kButton14}, // ButtonA
+							{1, kButton13}, // ButtonB
+							{2, kButton15}, // ButtonX
+							{3, kButton12}, // ButtonY
+						};
 
 					const auto it = dsu.find(flag_bit);
 					if (it != dsu.cend())
 						flag_bit = it->second;
 				}
 
-
 				auto entry_node = mappings_node.append_child("entry");
-				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", i).c_str());
-				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", flag_bit).c_str());
+				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(fmt::format("{}", i).c_str());
+				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(fmt::format("{}", flag_bit).c_str());
 			}
 		}
 
@@ -528,10 +519,8 @@ bool InputManager::migrate_config(const fs::path& file_path)
 				const auto button = ConvertString<uint64>(mapping.value().substr(4));
 
 				auto entry_node = mappings_node.append_child("entry");
-				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", i).c_str());
-				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", button).c_str());
+				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(fmt::format("{}", i).c_str());
+				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(fmt::format("{}", button).c_str());
 			}
 		}
 
@@ -541,8 +530,7 @@ bool InputManager::migrate_config(const fs::path& file_path)
 			doc.save(write_file);
 			return true;
 		}
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "can't migrate config file {}: {}", file_path.string(), ex.what());
 	}
@@ -557,8 +545,7 @@ void InputManager::save() noexcept
 		try
 		{
 			save(i);
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "can't save controller profile: {}", ex.what());
 		}
@@ -594,16 +581,13 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 	declaration_node.append_attribute("encoding") = "UTF-8";
 
 	auto emulated_controller_node = doc.append_child("emulated_controller");
-	emulated_controller_node.append_child("type").append_child(pugi::node_pcdata).set_value(std::string{
-		emulated_controller->type_string()
-	}.c_str());
+	emulated_controller_node.append_child("type").append_child(pugi::node_pcdata).set_value(std::string{emulated_controller->type_string()}.c_str());
 
-	if(!is_default_file)
+	if (!is_default_file)
 		emulated_controller->m_profile_name = std::string{filename};
 
 	if (emulated_controller->has_profile_name())
-		emulated_controller_node.append_child("profile").append_child(pugi::node_pcdata).set_value(
-			emulated_controller->get_profile_name().c_str());
+		emulated_controller_node.append_child("profile").append_child(pugi::node_pcdata).set_value(emulated_controller->get_profile_name().c_str());
 
 	// custom settings
 	emulated_controller->save(emulated_controller_node);
@@ -613,41 +597,30 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 		auto controller_node = emulated_controller_node.append_child("controller");
 
 		// general
-		controller_node.append_child("api").append_child(pugi::node_pcdata).set_value(std::string{
-			controller->api_name()
-		}.c_str());
+		controller_node.append_child("api").append_child(pugi::node_pcdata).set_value(std::string{controller->api_name()}.c_str());
 		controller_node.append_child("uuid").append_child(pugi::node_pcdata).set_value(controller->uuid().c_str());
-		controller_node.append_child("display_name").append_child(pugi::node_pcdata).set_value(
-			controller->display_name().c_str());
+		controller_node.append_child("display_name").append_child(pugi::node_pcdata).set_value(controller->display_name().c_str());
 
 		// settings
 		const auto& settings = controller->get_settings();
 
 		if (controller->has_motion())
-			controller_node.append_child("motion").append_child(pugi::node_pcdata).set_value(
-				fmt::format("{}", settings.motion).c_str());
+			controller_node.append_child("motion").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.motion).c_str());
 
 		if (controller->has_rumble())
-			controller_node.append_child("rumble").append_child(pugi::node_pcdata).set_value(
-				fmt::format("{}", settings.rumble).c_str());
+			controller_node.append_child("rumble").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.rumble).c_str());
 
 		auto axis_node = controller_node.append_child("axis");
-		axis_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.axis.deadzone).c_str());
-		axis_node.append_child("range").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.axis.range).c_str());
+		axis_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.axis.deadzone).c_str());
+		axis_node.append_child("range").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.axis.range).c_str());
 
 		auto rotation_node = controller_node.append_child("rotation");
-		rotation_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.rotation.deadzone).c_str());
-		rotation_node.append_child("range").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.rotation.range).c_str());
+		rotation_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.rotation.deadzone).c_str());
+		rotation_node.append_child("range").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.rotation.range).c_str());
 
 		auto trigger_node = controller_node.append_child("trigger");
-		trigger_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.trigger.deadzone).c_str());
-		trigger_node.append_child("range").append_child(pugi::node_pcdata).set_value(
-			fmt::format("{}", settings.trigger.range).c_str());
+		trigger_node.append_child("deadzone").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.trigger.deadzone).c_str());
+		trigger_node.append_child("range").append_child(pugi::node_pcdata).set_value(fmt::format("{}", settings.trigger.range).c_str());
 
 		// custom settings
 		controller->save(controller_node);
@@ -659,10 +632,8 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 			if (!mapping.second.controller.expired() && *controller == *mapping.second.controller.lock())
 			{
 				auto entry_node = mappings_node.append_child("entry");
-				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", mapping.first).c_str());
-				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(
-					fmt::format("{}", mapping.second.button).c_str());
+				entry_node.append_child("mapping").append_child(pugi::node_pcdata).set_value(fmt::format("{}", mapping.first).c_str());
+				entry_node.append_child("button").append_child(pugi::node_pcdata).set_value(fmt::format("{}", mapping.second.button).c_str());
 			}
 		}
 	}
@@ -671,7 +642,7 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 	std::string xmlStr = xmlData.str();
 	auto temporary = file_path;
 	temporary += fmt::format(".{}.tmp",
-		std::chrono::steady_clock::now().time_since_epoch().count());
+							 std::chrono::steady_clock::now().time_since_epoch().count());
 	{
 		std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
 		output.write(xmlStr.data(), static_cast<std::streamsize>(xmlStr.size()));
@@ -694,7 +665,11 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 	if (fs::exists(file_path, ec) && !ec)
 	{
 		fs::rename(file_path, backup, ec);
-		if (ec) { fs::remove(temporary, ec); return false; }
+		if (ec)
+		{
+			fs::remove(temporary, ec);
+			return false;
+		}
 	}
 	fs::rename(temporary, file_path, ec);
 	if (ec)
@@ -707,7 +682,11 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 	fs::remove(backup, ec);
 #else
 	fs::rename(temporary, file_path, ec);
-	if (ec) { fs::remove(temporary, ec); return false; }
+	if (ec)
+	{
+		fs::remove(temporary, ec);
+		return false;
+	}
 #endif
 	return true;
 }
@@ -763,7 +742,7 @@ EmulatedControllerPtr InputManager::set_controller(EmulatedControllerPtr control
 
 		break;
 	}
-	
+
 	cemu_assert_debug(false);
 	return prev_controller;
 }
@@ -775,8 +754,7 @@ EmulatedControllerPtr InputManager::set_controller(size_t player_index, Emulated
 		auto emulated_controller = ControllerFactory::CreateEmulatedController(player_index, type);
 		set_controller(emulated_controller);
 		return emulated_controller;
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "Unable to set controller type {} on player index {}: {}", type, player_index, ex.what());
 	}
@@ -785,7 +763,7 @@ EmulatedControllerPtr InputManager::set_controller(size_t player_index, Emulated
 }
 
 EmulatedControllerPtr InputManager::set_controller(size_t player_index, EmulatedController::Type type,
-                                                   const std::shared_ptr<ControllerBase>& controller)
+												   const std::shared_ptr<ControllerBase>& controller)
 {
 	auto result = set_controller(player_index, type);
 	if (result)
@@ -822,7 +800,7 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 		{
 			controller = {};
 
-			if(delete_profile)
+			if (delete_profile)
 			{
 				std::error_code ec{};
 				fs::remove(m_profileDirectory / fmt::format("controller{}.xml", player_index), ec);
@@ -850,7 +828,6 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 
 	return {};
 }
-
 
 std::shared_ptr<VPADController> InputManager::get_vpad_controller(size_t index) const
 {
@@ -899,18 +876,18 @@ void InputManager::on_device_changed()
 
 ControllerProviderPtr InputManager::get_api_provider(InputAPI::Type api) const
 {
-	if(!m_api_available[api].empty())
+	if (!m_api_available[api].empty())
 		return *(m_api_available[api].begin());
-	
+
 	cemu_assert_debug(false);
 	return {};
 }
 
 ControllerProviderPtr InputManager::get_api_provider(InputAPI::Type api, const ControllerProviderSettings& settings)
 {
-	for(const auto& p : m_api_available[api])
+	for (const auto& p : m_api_available[api])
 	{
-		if(*p == settings)
+		if (*p == settings)
 		{
 			return p;
 		}
@@ -996,13 +973,14 @@ bool InputManager::delete_profile(std::string_view filename)
 		candidate.replace_extension(extension);
 		std::error_code ec;
 		removed = fs::remove(candidate, ec) || removed;
-		if (ec) return false;
+		if (ec)
+			return false;
 	}
 	return removed;
 }
 
 void InputManager::UpdateHostMousePosition(Host::PointerSurface surface,
-	Host::PointerPosition position)
+										   Host::PointerPosition position)
 {
 	auto& state = surface == Host::PointerSurface::Pad ? m_pad_mouse : m_main_mouse;
 	std::scoped_lock lock(state.m_mutex);
@@ -1010,7 +988,7 @@ void InputManager::UpdateHostMousePosition(Host::PointerSurface surface,
 }
 
 void InputManager::UpdateHostMouseButton(Host::PointerSurface surface,
-	Host::PointerButton button, bool pressed, Host::PointerPosition position)
+										 Host::PointerButton button, bool pressed, Host::PointerPosition position)
 {
 	auto& state = surface == Host::PointerSurface::Pad ? m_pad_mouse : m_main_mouse;
 	std::scoped_lock lock(state.m_mutex);
@@ -1030,7 +1008,7 @@ void InputManager::UpdateHostMouseButton(Host::PointerSurface surface,
 }
 
 void InputManager::UpdateHostTouch(Host::PointerSurface surface,
-	Host::PointerPosition position, bool pressed)
+								   Host::PointerPosition position, bool pressed)
 {
 	auto& state = surface == Host::PointerSurface::Pad ? m_pad_touch : m_main_touch;
 	std::scoped_lock lock(state.m_mutex);
@@ -1182,8 +1160,7 @@ void InputManager::update_thread()
 			{
 				command.action();
 				command.completion->set_value();
-			}
-			catch (...)
+			} catch (...)
 			{
 				command.completion->set_exception(std::current_exception());
 			}
@@ -1217,7 +1194,8 @@ void InputManager::update_thread()
 
 void InputManager::RunOnInputThread(std::function<void()> action)
 {
-	if (!action) return;
+	if (!action)
+		return;
 	bool runInline = false;
 	{
 		std::scoped_lock commandLock(m_input_command_mutex);
@@ -1253,8 +1231,10 @@ void InputManager::Shutdown()
 	if (m_update_thread.joinable())
 		m_update_thread.join();
 
-    for (auto& pad : m_vpad) pad.reset();
-	for (auto& pad : m_wpad) pad.reset();
+	for (auto& pad : m_vpad)
+		pad.reset();
+	for (auto& pad : m_wpad)
+		pad.reset();
 
 	for (auto& providers : m_api_available)
 	{

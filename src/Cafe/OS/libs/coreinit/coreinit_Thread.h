@@ -34,13 +34,13 @@ struct OSContext_t
 	/* +0x0B0 */ OSContextRegFPSCR_t fpscr;
 	/* +0x0B8 */ uint64be fp_ps0[32];
 	/* +0x1B8 */ uint16be boostCount;
-	/* +0x1BA */ uint16 state;			// OS_CONTEXT_STATE_*
-	/* +0x1BC */ uint32 gqr[8];			// GQR/UGQR
-	/* +0x1DC */ uint32be upir;			// set to current core index
+	/* +0x1BA */ uint16 state;	// OS_CONTEXT_STATE_*
+	/* +0x1BC */ uint32 gqr[8]; // GQR/UGQR
+	/* +0x1DC */ uint32be upir; // set to current core index
 	/* +0x1E0 */ uint64be fp_ps1[32];
 	/* +0x2E0 */ uint64be coretime[3];
 	/* +0x2F8 */ uint64be starttime;
-	/* +0x300 */ sint32be ghs_errno;         // returned by __gh_errno_ptr() (used by socketlasterr)
+	/* +0x300 */ sint32be ghs_errno; // returned by __gh_errno_ptr() (used by socketlasterr)
 	/* +0x304 */ uint32be affinity;
 	/* +0x308 */ uint32be upmc1;
 	/* +0x30C */ uint32be upmc2;
@@ -59,7 +59,6 @@ struct OSContext_t
 		magic0 = OS_CONTEXT_MAGIC_0;
 		magic1 = OS_CONTEXT_MAGIC_1;
 	}
-
 
 	bool hasCoreAffinitySet(uint32 coreIndex) const
 	{
@@ -86,7 +85,7 @@ typedef struct
 	/* +0x06C | +0x40C */ uint32 eh_mem_manage[9]; // struct
 	/* +0x090 | +0x430 */ MPTR eh_store_globals[6];
 	/* +0x0A8 | +0x448 */ MPTR eh_store_globals_tdeh[76];
-}crt_t; // size: 0x1D8
+} crt_t; // size: 0x1D8
 
 static_assert(sizeof(crt_t) == 0x1D8, "");
 
@@ -138,7 +137,7 @@ namespace coreinit
 		void wakeupEntireWaitQueue(bool reschedule, bool sharedPriorityAndAffinityWorkaround = false);
 		void wakeupSingleThreadWaitQueue(bool reschedule, bool sharedPriorityAndAffinityWorkaround = false);
 
-	private:
+	  private:
 		OSThread_t* takeFirstFromQueue(size_t linkOffset)
 		{
 			cemu_assert_debug(__OSHasSchedulerLock());
@@ -213,14 +212,14 @@ namespace coreinit
 
 	struct OSMutex
 	{
-		/* +0x00 */ uint32				magic;
-		/* +0x04 */ MEMPTR<void>		userData;
-		/* +0x08 */ uint32be			ukn08;
-		/* +0x0C */ OSThreadQueue		threadQueue;
-		/* +0x1C */ MEMPTR<OSThread_t>	owner;
-		/* +0x20 */ sint32be			lockCount;
-		/* +0x24 */ MEMPTR<OSMutex>		next;
-		/* +0x28 */ MEMPTR<OSMutex>		prev;
+		/* +0x00 */ uint32 magic;
+		/* +0x04 */ MEMPTR<void> userData;
+		/* +0x08 */ uint32be ukn08;
+		/* +0x0C */ OSThreadQueue threadQueue;
+		/* +0x1C */ MEMPTR<OSThread_t> owner;
+		/* +0x20 */ sint32be lockCount;
+		/* +0x24 */ MEMPTR<OSMutex> next;
+		/* +0x28 */ MEMPTR<OSMutex> prev;
 
 	}; // size: 0x2C
 
@@ -378,7 +377,7 @@ namespace coreinit
 
 	static_assert(sizeof(OSFastCond) == 0x1C);
 
-};
+}; // namespace coreinit
 
 struct OSThread_t
 {
@@ -405,8 +404,8 @@ struct OSThread_t
 		ATTR_AFFINITY_CORE0 = 0x1,
 		ATTR_AFFINITY_CORE1 = 0x2,
 		ATTR_AFFINITY_CORE2 = 0x4,
-		ATTR_DETACHED		= 0x8,
-		ATTR_UKN_010		= 0x10,
+		ATTR_DETACHED = 0x8,
+		ATTR_UKN_010 = 0x10,
 	};
 
 	enum REQUEST_FLAG_BIT : uint32
@@ -427,93 +426,93 @@ struct OSThread_t
 		return 0;
 	}
 
-    void SetThreadMagic()
-    {
-        magic = MAGIC_THREAD;
-    }
+	void SetThreadMagic()
+	{
+		magic = MAGIC_THREAD;
+	}
 
-    bool IsValidMagic() const
-    {
-        return magic == MAGIC_THREAD && context.magic0 == OSContext_t::OS_CONTEXT_MAGIC_0 && context.magic1 == OSContext_t::OS_CONTEXT_MAGIC_1;
-    }
+	bool IsValidMagic() const
+	{
+		return magic == MAGIC_THREAD && context.magic0 == OSContext_t::OS_CONTEXT_MAGIC_0 && context.magic1 == OSContext_t::OS_CONTEXT_MAGIC_1;
+	}
 
-	/* +0x000 */ OSContext_t						context;
-	/* +0x320 */ uint32be							magic;								// "tHrD" (0x74487244)
-	/* +0x324 */ betype<THREAD_STATE>				state;
-	/* +0x325 */ uint8								attr;
-	/* +0x326 */ uint16be							id;									// Warriors Orochi 3 uses this to identify threads
-	/* +0x328 */ betype<sint32>						suspendCounter;
-	/* +0x32C */ sint32be							effectivePriority;					// effective priority (lower is higher)
-	/* +0x330 */ sint32be							basePriority;						// base priority (lower is higher)
-	/* +0x334 */ uint32be							exitValue;							// set by OSExitThread() or by returning from the thread entrypoint
+	/* +0x000 */ OSContext_t context;
+	/* +0x320 */ uint32be magic; // "tHrD" (0x74487244)
+	/* +0x324 */ betype<THREAD_STATE> state;
+	/* +0x325 */ uint8 attr;
+	/* +0x326 */ uint16be id; // Warriors Orochi 3 uses this to identify threads
+	/* +0x328 */ betype<sint32> suspendCounter;
+	/* +0x32C */ sint32be effectivePriority; // effective priority (lower is higher)
+	/* +0x330 */ sint32be basePriority;		 // base priority (lower is higher)
+	/* +0x334 */ uint32be exitValue;		 // set by OSExitThread() or by returning from the thread entrypoint
 
-	/* +0x338 */ MEMPTR<coreinit::OSThreadQueue>	currentRunQueue[Espresso::CORE_COUNT];	// points to the OSThreadQueue on which this thread is (null if not in queue)
-	/* +0x344 */ coreinit::OSThreadLink				linkRun[Espresso::CORE_COUNT];
+	/* +0x338 */ MEMPTR<coreinit::OSThreadQueue> currentRunQueue[Espresso::CORE_COUNT]; // points to the OSThreadQueue on which this thread is (null if not in queue)
+	/* +0x344 */ coreinit::OSThreadLink linkRun[Espresso::CORE_COUNT];
 
 	// general wait queue / thread dependency queue
-	/* +0x35C */ MEMPTR<coreinit::OSThreadQueueInternal> currentWaitQueue;				// shared between OSThreadQueue and OSThreadQueueSmall
-	/* +0x360 */ coreinit::OSThreadLink				waitQueueLink;
+	/* +0x35C */ MEMPTR<coreinit::OSThreadQueueInternal> currentWaitQueue; // shared between OSThreadQueue and OSThreadQueueSmall
+	/* +0x360 */ coreinit::OSThreadLink waitQueueLink;
 
-	/* +0x368 */ coreinit::OSThreadQueue			joinQueue;
+	/* +0x368 */ coreinit::OSThreadQueue joinQueue;
 
-	/* +0x378 */ MEMPTR<coreinit::OSMutex>			waitingForMutex;					// set when thread is waiting for OSMutex to unlock
-	/* +0x37C */ coreinit::OSMutexQueue				mutexQueue;
+	/* +0x378 */ MEMPTR<coreinit::OSMutex> waitingForMutex; // set when thread is waiting for OSMutex to unlock
+	/* +0x37C */ coreinit::OSMutexQueue mutexQueue;
 
-	/* +0x38C */ coreinit::OSThreadLink				activeThreadChain;					// queue of active threads (g_activeThreadQueue)
+	/* +0x38C */ coreinit::OSThreadLink activeThreadChain; // queue of active threads (g_activeThreadQueue)
 
-	/* +0x394 */ MEMPTR<void>						stackBase;							// upper limit of stack
-	/* +0x398 */ MEMPTR<void>						stackEnd;							// lower limit of stack
+	/* +0x394 */ MEMPTR<void> stackBase; // upper limit of stack
+	/* +0x398 */ MEMPTR<void> stackEnd;	 // lower limit of stack
 
-	/* +0x39C */ MEMPTR<void>						entrypoint;
-	/* +0x3A0 */ crt_t								crt;
+	/* +0x39C */ MEMPTR<void> entrypoint;
+	/* +0x3A0 */ crt_t crt;
 
-	/* +0x578 */ sint32								alarmRelatedUkn;
-	/* +0x57C */ std::array<MEMPTR<void>, 16>		specificArray;
-	/* +0x5BC */ betype<THREAD_TYPE>				type;
-	/* +0x5C0 */ MEMPTR<const char>					threadName;
-	/* +0x5C4 */ MEMPTR<void>						waitAlarm;							// used only by OSWaitEventWithTimeout/OSSignalEvent ?
+	/* +0x578 */ sint32 alarmRelatedUkn;
+	/* +0x57C */ std::array<MEMPTR<void>, 16> specificArray;
+	/* +0x5BC */ betype<THREAD_TYPE> type;
+	/* +0x5C0 */ MEMPTR<const char> threadName;
+	/* +0x5C4 */ MEMPTR<void> waitAlarm; // used only by OSWaitEventWithTimeout/OSSignalEvent ?
 
-	/* +0x5C8 */ uint32								userStackPointer;
+	/* +0x5C8 */ uint32 userStackPointer;
 
-	/* +0x5CC */ MEMPTR<void>						cleanupCallback;
-	/* +0x5D0 */ MEMPTR<void>						deallocatorFunc;
+	/* +0x5CC */ MEMPTR<void> cleanupCallback;
+	/* +0x5D0 */ MEMPTR<void> deallocatorFunc;
 
-	/* +0x5D4 */ uint32								stateFlags;						// 0x5D4 | various flags? Controls if canceling/suspension is allowed (at cancel points) or not? If 1 -> Cancel/Suspension not allowed, if 0 -> Cancel/Suspension allowed
-	/* +0x5D8 */ betype<REQUEST_FLAG_BIT>			requestFlags;
-	/* +0x5DC */ sint32								pendingSuspend;
-	/* +0x5E0 */ sint32								suspendResult;
-	/* +0x5E4 */ coreinit::OSThreadQueue			suspendQueue;
-	/* +0x5F4 */ uint32								_padding5F4;
-	/* +0x5F8 */ uint64be							quantumTicks;
-	/* +0x600 */ uint64								coretimeSumQuantumStart;
+	/* +0x5D4 */ uint32 stateFlags; // 0x5D4 | various flags? Controls if canceling/suspension is allowed (at cancel points) or not? If 1 -> Cancel/Suspension not allowed, if 0 -> Cancel/Suspension allowed
+	/* +0x5D8 */ betype<REQUEST_FLAG_BIT> requestFlags;
+	/* +0x5DC */ sint32 pendingSuspend;
+	/* +0x5E0 */ sint32 suspendResult;
+	/* +0x5E4 */ coreinit::OSThreadQueue suspendQueue;
+	/* +0x5F4 */ uint32 _padding5F4;
+	/* +0x5F8 */ uint64be quantumTicks;
+	/* +0x600 */ uint64 coretimeSumQuantumStart;
 
-	/* +0x608 */ uint64be							wakeUpCount;						// number of times the thread entered running state
-	/* +0x610 */ uint64be							totalCycles;						// sum of cycles this thread was active since it was created
-	/* +0x618 */ uint64be							wakeUpTime;							// time when thread first became active (Should only be set once(?) but we currently set this on every timeslice since thats more useful for debugging)
-	/* +0x620 */ uint64								wakeTimeRelatedUkn1;
-	/* +0x628 */ uint64								wakeTimeRelatedUkn2;
+	/* +0x608 */ uint64be wakeUpCount; // number of times the thread entered running state
+	/* +0x610 */ uint64be totalCycles; // sum of cycles this thread was active since it was created
+	/* +0x618 */ uint64be wakeUpTime;  // time when thread first became active (Should only be set once(?) but we currently set this on every timeslice since thats more useful for debugging)
+	/* +0x620 */ uint64 wakeTimeRelatedUkn1;
+	/* +0x628 */ uint64 wakeTimeRelatedUkn2;
 
 	// set via OSSetExceptionCallback
-	/* +0x630 */ MPTR								dsiCallback[Espresso::CORE_COUNT];
-	/* +0x63C */ MPTR								isiCallback[Espresso::CORE_COUNT];
-	/* +0x648 */ MPTR								programCallback[Espresso::CORE_COUNT];
-	/* +0x654 */ MPTR								perfMonCallback[Espresso::CORE_COUNT];
+	/* +0x630 */ MPTR dsiCallback[Espresso::CORE_COUNT];
+	/* +0x63C */ MPTR isiCallback[Espresso::CORE_COUNT];
+	/* +0x648 */ MPTR programCallback[Espresso::CORE_COUNT];
+	/* +0x654 */ MPTR perfMonCallback[Espresso::CORE_COUNT];
 
-	/* +0x660 */ uint32								ukn660;
+	/* +0x660 */ uint32 ukn660;
 
 	// todo - some of the members towards the end of the struct were only added in later COS versions. Figure out the mapping between version and members
 
 	// TLS
-	/* +0x664 */ uint16								numAllocatedTLSBlocks;
-	/* +0x666 */ sint16								tlsStatus;
-	/* +0x668 */ MPTR								tlsBlocksMPTR;
-	
-	/* +0x66C */ MEMPTR<coreinit::OSFastMutex>		waitingForFastMutex;
-	/* +0x670 */ coreinit::OSFastMutexLink			contendedFastMutex;
-	/* +0x678 */ coreinit::OSFastMutexLink			ownedFastMutex;
-	/* +0x680 */ MEMPTR<void>						alignmentExceptionCallback[Espresso::CORE_COUNT];
+	/* +0x664 */ uint16 numAllocatedTLSBlocks;
+	/* +0x666 */ sint16 tlsStatus;
+	/* +0x668 */ MPTR tlsBlocksMPTR;
 
-	/* +0x68C */ uint32								padding68C[20 / 4];
+	/* +0x66C */ MEMPTR<coreinit::OSFastMutex> waitingForFastMutex;
+	/* +0x670 */ coreinit::OSFastMutexLink contendedFastMutex;
+	/* +0x678 */ coreinit::OSFastMutexLink ownedFastMutex;
+	/* +0x680 */ MEMPTR<void> alignmentExceptionCallback[Espresso::CORE_COUNT];
+
+	/* +0x68C */ uint32 padding68C[20 / 4];
 };
 static_assert(sizeof(OSThread_t) == 0x6A0);
 
@@ -565,7 +564,7 @@ namespace coreinit
 
 	bool OSIsThreadTerminated(OSThread_t* thread);
 	bool OSIsThreadSuspended(OSThread_t* thread);
-    bool OSIsThreadRunningNoLock(OSThread_t* thread);
+	bool OSIsThreadRunningNoLock(OSThread_t* thread);
 	bool OSIsThreadRunning(OSThread_t* thread);
 
 	// OSThreadQueue
@@ -632,16 +631,16 @@ namespace coreinit
 	// Calls made by an emulated CPU thread execute inline. Host callers wait up
 	// to timeoutMilliseconds for a title thread to accept the task.
 	bool OSRunOnEmulatedCpuThread(std::function<void()> task,
-		uint32 timeoutMilliseconds = 2000);
+								  uint32 timeoutMilliseconds = 2000);
 
 	// internal
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread);
 	bool __OSCoreShouldSwitchToThread(OSThread_t* currentThread, OSThread_t* newThread, bool sharedPriorityAndAffinityWorkaround);
 	void __OSQueueThreadDeallocation(OSThread_t* thread);
 
-    bool __OSIsThreadActive(OSThread_t* thread);
+	bool __OSIsThreadActive(OSThread_t* thread);
 	void __OSDeleteAllActivePPCThreads();
-}
+} // namespace coreinit
 
 #pragma pack()
 

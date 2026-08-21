@@ -11,15 +11,19 @@ static bool operator==(const SDL_GUID& g1, const SDL_GUID& g2)
 class SDLControllerProvider : public ControllerProviderBase
 {
 	friend class SDLController;
-public:
+
+  public:
 	SDLControllerProvider();
 	~SDLControllerProvider();
 
 	inline static InputAPI::Type kAPIType = InputAPI::SDLController;
-	InputAPI::Type api() const override { return kAPIType; }
+	InputAPI::Type api() const override
+	{
+		return kAPIType;
+	}
 
 	std::vector<std::shared_ptr<ControllerBase>> get_controllers() override;
-	
+
 	int get_index(size_t guid_index, const SDL_GUID& guid) const;
 
 	MotionSample motion_sample(SDL_JoystickID diid);
@@ -31,7 +35,7 @@ public:
 	static void PumpSDLEvents();
 #endif
 
-private:
+  private:
 	void event_thread();
 	static void HandleSDLEvent(union SDL_Event& event);
 #if !BOOST_OS_MACOS

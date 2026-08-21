@@ -73,7 +73,7 @@ XAudio27API::XAudio27API(uint32 device_id, uint32 samplerate, uint32 channels, u
 
 XAudio27API::~XAudio27API()
 {
-	if(m_xaudio)
+	if (m_xaudio)
 		m_xaudio->StopEngine();
 
 	XAudio27API::Stop();
@@ -116,7 +116,7 @@ bool XAudio27API::InitializeStatic()
 
 #ifdef _DEBUG
 	s_xaudio_dll = LoadLibraryExW(L"XAudioD2_7.DLL", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-	if(!s_xaudio_dll)
+	if (!s_xaudio_dll)
 		s_xaudio_dll = LoadLibraryExW(L"XAudio2_7.DLL", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
 #else
 	s_xaudio_dll = LoadLibraryExW(L"XAudio2_7.DLL", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -133,8 +133,7 @@ bool XAudio27API::InitializeStatic()
 
 		s_xaudio = decltype(s_xaudio)(xaudio);
 		return true;
-	}
-	catch (const std::exception&)
+	} catch (const std::exception&)
 	{
 		if (s_xaudio_dll)
 			FreeLibrary(s_xaudio_dll);
@@ -184,20 +183,20 @@ std::vector<XAudio27API::DeviceDescriptionPtr> XAudio27API::GetDevices()
 
 void XAudio27API::XAudioDeleter::operator()(IXAudio2* ptr) const
 {
-	if (ptr) 
+	if (ptr)
 		ptr->Release();
 }
 
 void XAudio27API::VoiceDeleter::operator()(IXAudio2Voice* ptr) const
 {
-	if (ptr) 
+	if (ptr)
 		ptr->DestroyVoice();
 }
 
 bool XAudio27API::FeedBlock(sint16* data)
 {
 	// check if we queued too many blocks
-	if(m_blocks_queued >= kBlockCount)
+	if (m_blocks_queued >= kBlockCount)
 	{
 		m_blocks_queued = GetQueuedBuffers();
 

@@ -37,7 +37,7 @@ uint64 VulkanRenderer::draw_calculateMinimalGraphicsPipelineHash(const LatteFetc
 	stateHash += lcr.GetRawView()[mmVGT_STRMOUT_EN];
 	stateHash = std::rotl<uint64>(stateHash, 7);
 
-	if(lcr.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL())
+	if (lcr.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL())
 		stateHash += 0x333333;
 
 	return stateHash;
@@ -110,7 +110,7 @@ uint64 VulkanRenderer::draw_calculateGraphicsPipelineHash(const LatteFetchShader
 	{
 		stateHash += ctxRegister[mmDB_STENCILREFMASK];
 		stateHash = std::rotl<uint64>(stateHash, 17);
-		if(depthControl & (1<<7)) // back stencil enable
+		if (depthControl & (1 << 7)) // back stencil enable
 		{
 			stateHash += ctxRegister[mmDB_STENCILREFMASK_BF];
 			stateHash = std::rotl<uint64>(stateHash, 13);
@@ -203,7 +203,6 @@ bool VulkanRenderer::IsAsyncPipelineAllowed(uint32 numIndices)
 	// small index count (3,4,5,6) is often associated with full-viewport quads (which are considered essential due to often being used to generate persistent textures)
 	if (numIndices <= 6)
 	{
-
 		return false;
 	}
 
@@ -272,7 +271,6 @@ PipelineInfo* VulkanRenderer::draw_getOrCreateGraphicsPipeline(uint32 indexCount
 	auto cache_object = draw_getCachedPipeline();
 	if (cache_object != nullptr)
 	{
-
 #ifdef CEMU_DEBUG_ASSERT
 		cemu_assert_debug(cache_object->vertexShader == LatteSHRC_GetActiveVertexShader());
 		cemu_assert_debug(cache_object->geometryShader == LatteSHRC_GetActiveGeometryShader());
@@ -290,7 +288,7 @@ PipelineInfo* VulkanRenderer::draw_getOrCreateGraphicsPipeline(uint32 indexCount
 #endif
 		return cache_object;
 	}
-	//draw_debugPipelineHashState();
+	// draw_debugPipelineHashState();
 
 	return draw_createGraphicsPipeline(indexCount);
 }
@@ -298,7 +296,7 @@ PipelineInfo* VulkanRenderer::draw_getOrCreateGraphicsPipeline(uint32 indexCount
 Renderer::IndexAllocation VulkanRenderer::indexData_reserveIndexMemory(uint32 size)
 {
 	VKRSynchronizedHeapAllocator::AllocatorReservation* resv = memoryManager->GetIndexAllocator().AllocateBufferMemory(size, 32);
-	return { resv->memPtr, resv };
+	return {resv->memPtr, resv};
 }
 
 void VulkanRenderer::indexData_releaseIndexMemory(IndexAllocation& allocation)
@@ -374,7 +372,9 @@ uint32 VulkanRenderer::uniformData_uploadUniformDataBufferGetOffset(std::span<ui
 
 void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, LatteDecompilerShader* shader, float* __restrict uniformBuf)
 {
-	auto GET_UNIFORM_DATA_PTR = [&uniformBuf](size_t index) { return uniformBuf + (index / 4); };
+	auto GET_UNIFORM_DATA_PTR = [&uniformBuf](size_t index) {
+		return uniformBuf + (index / 4);
+	};
 	if (shader->resourceMapping.uniformVarsBufferBindingPoint < 0)
 		return;
 	if (shader->uniform.list_ufTexRescale.empty() == false)
@@ -400,7 +400,7 @@ void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, Latt
 	}
 	if (shader->uniform.loc_remapped >= 0)
 	{
-		LatteBufferCache_LoadRemappedUniforms(shader, GET_UNIFORM_DATA_PTR(shader->uniform.loc_remapped), true, (1<<LATTE_NUM_MAX_UNIFORM_BUFFERS)-1);
+		LatteBufferCache_LoadRemappedUniforms(shader, GET_UNIFORM_DATA_PTR(shader->uniform.loc_remapped), true, (1 << LATTE_NUM_MAX_UNIFORM_BUFFERS) - 1);
 	}
 	if (shader->uniform.loc_uniformRegister >= 0)
 	{
@@ -452,7 +452,9 @@ void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, Latt
 void VulkanRenderer::uniformData_updateUniformVarsIncremental(uint32 shaderStageIndex, LatteDecompilerShader* shader, uint8& stageUniformModifiedMask, float* __restrict uniformBuf, bool aluConstDirty, uint32 uniformBufferDirtyMask)
 {
 	// similar to uniformData_updateUniformVars, but checks only the fields that can change during a fast draw sequence
-	auto GET_UNIFORM_DATA_PTR = [&uniformBuf](size_t index) { return uniformBuf + (index / 4); };
+	auto GET_UNIFORM_DATA_PTR = [&uniformBuf](size_t index) {
+		return uniformBuf + (index / 4);
+	};
 	if (shader->resourceMapping.uniformVarsBufferBindingPoint < 0)
 		return;
 	// list_ufTexRescale -> Skipped because textures do not change
@@ -546,7 +548,6 @@ uint64 VulkanRenderer::GetDescriptorSetStateHash(LatteDecompilerShader* shader)
 		UNREACHABLE;
 	}
 
-
 	for (int i = 0; i < textureCount; ++i)
 	{
 		const auto relative_textureUnit = shader->resourceMapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
@@ -626,11 +627,11 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 	if (vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &result) != VK_SUCCESS)
 	{
 		UnrecoverableError(fmt::format("Failed to allocate descriptor sets. Currently allocated: Descriptors={} TextureSamplers={} DynUniformBuffers={} StorageBuffers={}",
-			performanceMonitor.vk.numDescriptorSets.get(),
-			performanceMonitor.vk.numDescriptorSamplerTextures.get(),
-			performanceMonitor.vk.numDescriptorDynUniformBuffers.get(),
-			performanceMonitor.vk.numDescriptorStorageBuffers.get()
-		).c_str());
+									   performanceMonitor.vk.numDescriptorSets.get(),
+									   performanceMonitor.vk.numDescriptorSamplerTextures.get(),
+									   performanceMonitor.vk.numDescriptorDynUniformBuffers.get(),
+									   performanceMonitor.vk.numDescriptorStorageBuffers.get())
+							   .c_str());
 	}
 	vkObjDS->descriptorSet = result;
 
@@ -783,14 +784,14 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 			// todo: z-filter for texture array samplers is customizable for GPU7 but OpenGL/Vulkan doesn't expose this functionality?
 
 			static const VkSamplerAddressMode s_vkClampTable[] = {
-				VK_SAMPLER_ADDRESS_MODE_REPEAT, // WRAP
-				VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT, // MIRROR
-				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, // CLAMP_LAST_TEXEL
+				VK_SAMPLER_ADDRESS_MODE_REPEAT,				  // WRAP
+				VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,	  // MIRROR
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,		  // CLAMP_LAST_TEXEL
 				VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE, // MIRROR_ONCE_LAST_TEXEL
-				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, // unsupported HALF_BORDER
-				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // unsupported MIRROR_ONCE_HALF_BORDER
-				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // CLAMP_BORDER
-				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER // MIRROR_ONCE_BORDER
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,		  // unsupported HALF_BORDER
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,	  // unsupported MIRROR_ONCE_HALF_BORDER
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,	  // CLAMP_BORDER
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER		  // MIRROR_ONCE_BORDER
 			};
 
 			auto clampX = samplerWords->WORD0.get_CLAMP_X();
@@ -821,8 +822,7 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 
 			// depth compare
 			uint8 depthCompareMode = shader->textureUsesDepthCompare[relative_textureUnit] ? 1 : 0;
-			static const VkCompareOp s_vkCompareOps[]
-			{
+			static const VkCompareOp s_vkCompareOps[]{
 				VK_COMPARE_OP_NEVER,
 				VK_COMPARE_OP_LESS,
 				VK_COMPARE_OP_EQUAL,
@@ -965,7 +965,6 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 		}
 	}
 
-
 	VkDescriptorBufferInfo tfStorageBufferInfo{};
 
 	if (shader->resourceMapping.tfStorageBindingPoint >= 0)
@@ -1082,7 +1081,6 @@ void VulkanRenderer::sync_RenderPassLoadTextures(CachedFBOVk* fboVk)
 		// write-before-write
 		if (texVk->m_vkFlushIndex_write == m_state.currentFlushIndex)
 			readFlushRequired = true;
-
 
 		texVk->m_vkFlushIndex_write = m_state.currentFlushIndex;
 		// todo - also check for write-before-write ?
@@ -1238,7 +1236,7 @@ void VulkanRenderer::draw_setRenderPass()
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = renderPass;
 		renderPassInfo.framebuffer = framebuffer;
-		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.offset = {0, 0};
 		renderPassInfo.renderArea.extent = extend;
 		renderPassInfo.clearValueCount = 0;
 		vkCmdBeginRenderPass(m_state.currentCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1632,7 +1630,7 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
 	if (vkObjPipeline->GetPipeline() == VK_NULL_HANDLE)
 	{
 		// invalid/uninitialized pipeline
-		//m_state.activeVertexDS = nullptr;
+		// m_state.activeVertexDS = nullptr;
 		return;
 	}
 
@@ -1675,7 +1673,7 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
 	sint32 dsArraySize = 0;
 	sint32 dsArrayBase = 0;
 	sint32 numDynOffsets = 0;
-	if (vertexDS && (stageUniformModifiedMask&(1<<VulkanRendererConst::SHADER_STAGE_INDEX_VERTEX)))
+	if (vertexDS && (stageUniformModifiedMask & (1 << VulkanRendererConst::SHADER_STAGE_INDEX_VERTEX)))
 	{
 		sint32 tmpNumDynOffsets = 0;
 		dsArray[0] = vertexDS->m_vkObjDescriptorSet->descriptorSet;
@@ -1683,7 +1681,7 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
 		dsArraySize = 1;
 		numDynOffsets += tmpNumDynOffsets;
 	}
-	if (pixelDS && (stageUniformModifiedMask&(1<<VulkanRendererConst::SHADER_STAGE_INDEX_FRAGMENT)))
+	if (pixelDS && (stageUniformModifiedMask & (1 << VulkanRendererConst::SHADER_STAGE_INDEX_FRAGMENT)))
 	{
 		sint32 tmpNumDynOffsets = 0;
 		dsArrayBase = 1 - dsArraySize;
@@ -1779,7 +1777,7 @@ void VulkanRenderer::draw_updateUniformBuffersDirectAccess(LatteDecompilerShader
 {
 	if (shader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK)
 	{
-		for(const auto& buf : shader->list_quickBufferList)
+		for (const auto& buf : shader->list_quickBufferList)
 		{
 			sint32 i = buf.index;
 			MPTR physicalAddr = LatteGPUState.contextRegister[uniformBufferRegOffset + i * 7 + 0];
@@ -1836,40 +1834,40 @@ void VulkanRenderer::debug_genericBarrier()
 	VkMemoryBarrier memoryBarrier{};
 	memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 	memoryBarrier.srcAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-		VK_ACCESS_INDEX_READ_BIT |
-		VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-		VK_ACCESS_UNIFORM_READ_BIT |
-		VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
-		VK_ACCESS_SHADER_READ_BIT |
-		VK_ACCESS_SHADER_WRITE_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-		VK_ACCESS_TRANSFER_READ_BIT |
-		VK_ACCESS_TRANSFER_WRITE_BIT |
-		VK_ACCESS_HOST_READ_BIT |
-		VK_ACCESS_HOST_WRITE_BIT |
-		VK_ACCESS_MEMORY_READ_BIT |
-		VK_ACCESS_MEMORY_WRITE_BIT;
+								  VK_ACCESS_INDEX_READ_BIT |
+								  VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+								  VK_ACCESS_UNIFORM_READ_BIT |
+								  VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_SHADER_READ_BIT |
+								  VK_ACCESS_SHADER_WRITE_BIT |
+								  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+								  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+								  VK_ACCESS_TRANSFER_READ_BIT |
+								  VK_ACCESS_TRANSFER_WRITE_BIT |
+								  VK_ACCESS_HOST_READ_BIT |
+								  VK_ACCESS_HOST_WRITE_BIT |
+								  VK_ACCESS_MEMORY_READ_BIT |
+								  VK_ACCESS_MEMORY_WRITE_BIT;
 
 	memoryBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-		VK_ACCESS_INDEX_READ_BIT |
-		VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-		VK_ACCESS_UNIFORM_READ_BIT |
-		VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
-		VK_ACCESS_SHADER_READ_BIT |
-		VK_ACCESS_SHADER_WRITE_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-		VK_ACCESS_TRANSFER_READ_BIT |
-		VK_ACCESS_TRANSFER_WRITE_BIT |
-		VK_ACCESS_HOST_READ_BIT |
-		VK_ACCESS_HOST_WRITE_BIT |
-		VK_ACCESS_MEMORY_READ_BIT |
-		VK_ACCESS_MEMORY_WRITE_BIT;
+								  VK_ACCESS_INDEX_READ_BIT |
+								  VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+								  VK_ACCESS_UNIFORM_READ_BIT |
+								  VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_SHADER_READ_BIT |
+								  VK_ACCESS_SHADER_WRITE_BIT |
+								  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+								  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+								  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+								  VK_ACCESS_TRANSFER_READ_BIT |
+								  VK_ACCESS_TRANSFER_WRITE_BIT |
+								  VK_ACCESS_HOST_READ_BIT |
+								  VK_ACCESS_HOST_WRITE_BIT |
+								  VK_ACCESS_MEMORY_READ_BIT |
+								  VK_ACCESS_MEMORY_WRITE_BIT;
 
 	vkCmdPipelineBarrier(m_state.currentCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
 }

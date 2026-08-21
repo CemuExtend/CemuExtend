@@ -14,10 +14,10 @@ namespace
 	bool SafeIdentifier(std::string_view value, std::size_t maximum)
 	{
 		return !value.empty() && value.size() <= maximum &&
-			std::ranges::all_of(value, [](unsigned char character) {
-				return std::isalnum(character) || character == '_' ||
-					character == '.' || character == '-';
-			});
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return std::isalnum(character) || character == '_' ||
+						  character == '.' || character == '-';
+			   });
 	}
 
 	std::string SymbolKindName(WupsSymbolKind kind)
@@ -42,14 +42,15 @@ namespace
 		std::atomic_size_t pins{};
 		bool active{true};
 	};
-}
+} // namespace
 
 struct ModuleExportRegistry::Impl
 {
 	mutable std::mutex mutex;
 	std::map<std::uint64_t, std::shared_ptr<RegistryProviderRecord>> providers;
 	std::map<std::string, std::vector<std::shared_ptr<RegistryProviderRecord>>,
-		std::less<>> modules;
+			 std::less<>>
+		modules;
 	std::map<ExportKey, std::shared_ptr<RegistryProviderRecord>> exports;
 	std::vector<ModuleRegistryDiagnostic> diagnostics;
 	std::uint64_t nextHandle{1};
@@ -58,8 +59,7 @@ struct ModuleExportRegistry::Impl
 struct ModuleExportLease::Impl
 {
 	Impl(std::shared_ptr<RegistryProviderRecord> provider_,
-		std::uint32_t address_, WupsSymbolKind kind_) :
-		provider(std::move(provider_)), address(address_), kind(kind_)
+		 std::uint32_t address_, WupsSymbolKind kind_) : provider(std::move(provider_)), address(address_), kind(kind_)
 	{
 		++provider->pins;
 	}
@@ -79,8 +79,7 @@ ModuleExportLease::~ModuleExportLease() = default;
 ModuleExportLease::ModuleExportLease(ModuleExportLease&&) noexcept = default;
 ModuleExportLease& ModuleExportLease::operator=(ModuleExportLease&&) noexcept = default;
 
-ModuleExportLease::ModuleExportLease(std::unique_ptr<Impl> impl) :
-	m_impl(std::move(impl))
+ModuleExportLease::ModuleExportLease(std::unique_ptr<Impl> impl) : m_impl(std::move(impl))
 {
 }
 
@@ -104,8 +103,7 @@ ModuleProviderDescriptor ModuleExportLease::Provider() const
 	return m_impl ? m_impl->provider->descriptor : ModuleProviderDescriptor{};
 }
 
-ModuleExportRegistry::ModuleExportRegistry() :
-	m_impl(std::make_unique<Impl>())
+ModuleExportRegistry::ModuleExportRegistry() : m_impl(std::make_unique<Impl>())
 {
 }
 
@@ -115,17 +113,21 @@ unsigned ModuleExportRegistry::Priority(ModuleProviderKind kind)
 {
 	switch (kind)
 	{
-	case ModuleProviderKind::WupsBackend: return 0;
-	case ModuleProviderKind::WumsModule: return 1;
-	case ModuleProviderKind::AromaStandard: return 2;
-	case ModuleProviderKind::CustomModule: return 3;
+	case ModuleProviderKind::WupsBackend:
+		return 0;
+	case ModuleProviderKind::WumsModule:
+		return 1;
+	case ModuleProviderKind::AromaStandard:
+		return 2;
+	case ModuleProviderKind::CustomModule:
+		return 3;
 	}
 	return std::numeric_limits<unsigned>::max();
 }
 
 bool ModuleExportRegistry::Publish(const ModuleProviderDescriptor& provider,
-	std::span<const ModuleExportDescriptor> exports,
-	ModuleProviderHandle& handle, std::string& error)
+								   std::span<const ModuleExportDescriptor> exports,
+								   ModuleProviderHandle& handle, std::string& error)
 {
 	error.clear();
 	handle = {};
@@ -143,14 +145,15 @@ bool ModuleExportRegistry::Publish(const ModuleProviderDescriptor& provider,
 			(symbol.kind == WupsSymbolKind::Function && (symbol.address & 3U) != 0))
 		{
 			error = fmt::format("provider '{}' has invalid {} export '{}'",
-				provider.moduleName, SymbolKindName(symbol.kind), symbol.name);
+								provider.moduleName, SymbolKindName(symbol.kind), symbol.name);
 			return false;
 		}
 		if (!checkedExports.emplace(
-			std::pair{symbol.name, symbol.kind}, symbol.address).second)
+							   std::pair{symbol.name, symbol.kind}, symbol.address)
+				 .second)
 		{
 			error = fmt::format("provider '{}' contains duplicate {} export '{}'",
-				provider.moduleName, SymbolKindName(symbol.kind), symbol.name);
+								provider.moduleName, SymbolKindName(symbol.kind), symbol.name);
 			return false;
 		}
 	}
@@ -168,15 +171,14 @@ bool ModuleExportRegistry::Publish(const ModuleProviderDescriptor& provider,
 		{
 			if (existing->active &&
 				(existing->descriptor.kind == provider.kind ||
-					existing->descriptor.owner == provider.owner))
+				 existing->descriptor.owner == provider.owner))
 			{
 				error = fmt::format(
 					"duplicate provider '{}' (existing owner {} generation {} lifetime {})",
 					provider.moduleName, existing->descriptor.owner.owner,
 					existing->descriptor.owner.generation,
 					existing->descriptor.owner.lifetime);
-				m_impl->diagnostics.push_back({
-					ModuleRegistryDiagnostic::Code::DuplicateProvider, error});
+				m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::DuplicateProvider, error});
 				return false;
 			}
 		}
@@ -191,8 +193,7 @@ bool ModuleExportRegistry::Publish(const ModuleProviderDescriptor& provider,
 				"ambiguous {} export '{}.{}' from providers owned by {} and {}",
 				SymbolKindName(key.second), provider.moduleName, key.first,
 				existing->second->descriptor.owner.owner, provider.owner.owner);
-			m_impl->diagnostics.push_back({
-				ModuleRegistryDiagnostic::Code::DuplicateExport, error});
+			m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::DuplicateExport, error});
 			return false;
 		}
 	}
@@ -219,7 +220,7 @@ bool ModuleExportRegistry::Publish(const ModuleProviderDescriptor& provider,
 }
 
 bool ModuleExportRegistry::Unpublish(ModuleProviderHandle handle,
-	const ModuleProviderOwner& owner, std::string& error)
+									 const ModuleProviderOwner& owner, std::string& error)
 {
 	error.clear();
 	std::lock_guard lock(m_impl->mutex);
@@ -228,8 +229,7 @@ bool ModuleExportRegistry::Unpublish(ModuleProviderHandle handle,
 		found->second->descriptor.owner != owner || !found->second->active)
 	{
 		error = "module provider removal rejected a stale handle or owner generation";
-		m_impl->diagnostics.push_back({
-			ModuleRegistryDiagnostic::Code::StaleProvider, error});
+		m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::StaleProvider, error});
 		return false;
 	}
 	const auto& record = found->second;
@@ -240,8 +240,7 @@ bool ModuleExportRegistry::Unpublish(ModuleProviderHandle handle,
 			"provider '{}' owner {} generation {} lifetime {} is pinned by {} import(s)",
 			record->descriptor.moduleName, owner.owner, owner.generation,
 			owner.lifetime, pinCount);
-		m_impl->diagnostics.push_back({
-			ModuleRegistryDiagnostic::Code::ProviderPinned, error});
+		m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::ProviderPinned, error});
 		return false;
 	}
 	record->active = false;
@@ -260,7 +259,7 @@ bool ModuleExportRegistry::Unpublish(ModuleProviderHandle handle,
 }
 
 bool ModuleExportRegistry::UnpublishOwner(const ModuleProviderOwner& owner,
-	std::string& error)
+										  std::string& error)
 {
 	std::vector<ModuleProviderHandle> handles;
 	{
@@ -305,26 +304,23 @@ std::optional<ModuleExportLease> ModuleExportRegistry::Resolve(
 		return ModuleExportLease(std::make_unique<ModuleExportLease::Impl>(
 			found->second, address, kind));
 	}
-	const auto otherKind = kind == WupsSymbolKind::Function ?
-		WupsSymbolKind::Data : WupsSymbolKind::Function;
+	const auto otherKind = kind == WupsSymbolKind::Function ? WupsSymbolKind::Data : WupsSymbolKind::Function;
 	if (const auto wrong = m_impl->exports.find(
-		ExportKey{std::string(moduleName), std::string(symbolName), otherKind});
+			ExportKey{std::string(moduleName), std::string(symbolName), otherKind});
 		wrong != m_impl->exports.end() && wrong->second->active)
 	{
 		error = fmt::format(
 			"registry symbol '{}.{}' is {}, not the requested {} (importer owner {} generation {})",
 			moduleName, symbolName, SymbolKindName(otherKind), SymbolKindName(kind),
 			requester.owner, requester.generation);
-		m_impl->diagnostics.push_back({
-			ModuleRegistryDiagnostic::Code::WrongSymbolKind, error});
+		m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::WrongSymbolKind, error});
 		return std::nullopt;
 	}
 	error = fmt::format(
 		"registry has no {} export '{}.{}' for importer owner {} generation {}",
 		SymbolKindName(kind), moduleName, symbolName,
 		requester.owner, requester.generation);
-	m_impl->diagnostics.push_back({
-		ModuleRegistryDiagnostic::Code::Unresolved, error});
+	m_impl->diagnostics.push_back({ModuleRegistryDiagnostic::Code::Unresolved, error});
 	return std::nullopt;
 }
 

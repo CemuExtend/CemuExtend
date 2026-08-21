@@ -30,7 +30,7 @@ namespace coreinit
 	bool OSReceiveMessage(OSMessageQueue* msgQueue, OSMessage* msg, uint32 flags)
 	{
 		bool isSystemMessageQueue = (msgQueue == g_systemMessageQueue);
-		if(isSystemMessageQueue)
+		if (isSystemMessageQueue)
 			UpdateSystemMessageQueue();
 		__OSLockScheduler(msgQueue);
 		while (msgQueue->usedCount == (uint32be)0)
@@ -55,7 +55,7 @@ namespace coreinit
 		if (!msgQueue->threadQueueSend.isEmpty())
 			msgQueue->threadQueueSend.wakeupSingleThreadWaitQueue(true);
 		__OSUnlockScheduler(msgQueue);
-		if(isSystemMessageQueue)
+		if (isSystemMessageQueue)
 			HandleReceivedSystemMessage(msg);
 		return true;
 	}
@@ -86,7 +86,7 @@ namespace coreinit
 		{
 			if ((flags & OS_MESSAGE_BLOCK))
 			{
-				msgQueue->threadQueueSend.queueAndWait(OSGetCurrentThread());																  
+				msgQueue->threadQueueSend.queueAndWait(OSGetCurrentThread());
 			}
 			else
 			{
@@ -135,5 +135,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSSendMessage, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSGetSystemMessageQueue, LogType::CoreinitThread);
 	}
-};
-
+}; // namespace coreinit

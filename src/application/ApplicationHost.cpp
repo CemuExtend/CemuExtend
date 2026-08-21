@@ -24,4 +24,4 @@ namespace Application
 		sysapp::ConfigureExternalLauncher({});
 		cemuextend_hle::Cex2Host::Instance().ConfigureHost({}, {});
 	}
-}
+} // namespace Application

@@ -183,62 +183,63 @@ inline sint16 _swapEndianS16(sint16 v)
 inline uint64 _swapEndianU64(uint64 v)
 {
 #if BOOST_OS_MACOS
-    return OSSwapInt64(v);
+	return OSSwapInt64(v);
 #elif BOOST_OS_BSD
 #ifdef __OpenBSD__
-    return swap64(v);
+	return swap64(v);
 #else // FreeBSD and NetBSD
-    return bswap64(v);
+	return bswap64(v);
 #endif
 #else
-    return bswap_64(v);
+	return bswap_64(v);
 #endif
 }
 
 inline uint32 _swapEndianU32(uint32 v)
 {
 #if BOOST_OS_MACOS
-    return OSSwapInt32(v);
+	return OSSwapInt32(v);
 #elif BOOST_OS_BSD
 #ifdef __OpenBSD__
-    return swap32(v);
+	return swap32(v);
 #else // FreeBSD and NetBSD
-    return bswap32(v);
+	return bswap32(v);
 #endif
 #else
-    return bswap_32(v);
+	return bswap_32(v);
 #endif
 }
 
 inline sint32 _swapEndianS32(sint32 v)
 {
 #if BOOST_OS_MACOS
-    return (sint32)OSSwapInt32((uint32)v);
+	return (sint32)OSSwapInt32((uint32)v);
 #elif BOOST_OS_BSD
 #ifdef __OpenBSD__
-    return (sint32)swap32((uint32)v);
+	return (sint32)swap32((uint32)v);
 #else // FreeBSD and NetBSD
-    return (sint32)bswap32((uint32)v);
+	return (sint32)bswap32((uint32)v);
 #endif
 #else
-    return (sint32)bswap_32((uint32)v);
+	return (sint32)bswap_32((uint32)v);
 #endif
 }
 
 inline uint16 _swapEndianU16(uint16 v)
 {
-    return (v >> 8) | (v << 8);
+	return (v >> 8) | (v << 8);
 }
 
 inline sint16 _swapEndianS16(sint16 v)
 {
-    return (sint16)(((uint16)v >> 8) | ((uint16)v << 8));
+	return (sint16)(((uint16)v >> 8) | ((uint16)v << 8));
 }
 
-inline uint64 _umul128(uint64 multiplier, uint64 multiplicand, uint64 *highProduct) {
-    unsigned __int128 x = (unsigned __int128)multiplier * (unsigned __int128)multiplicand;
-    *highProduct = (x >> 64);
-    return x & 0xFFFFFFFFFFFFFFFF;
+inline uint64 _umul128(uint64 multiplier, uint64 multiplicand, uint64* highProduct)
+{
+	unsigned __int128 x = (unsigned __int128)multiplier * (unsigned __int128)multiplicand;
+	*highProduct = (x >> 64);
+	return x & 0xFFFFFFFFFFFFFFFF;
 }
 
 typedef uint8_t BYTE;
@@ -246,91 +247,115 @@ typedef uint32_t DWORD;
 typedef int32_t LONG;
 typedef int64_t LONGLONG;
 
-typedef union _LARGE_INTEGER {
-    struct {
-        DWORD LowPart;
-        LONG  HighPart;
-    };
-    struct {
-        DWORD LowPart;
-        LONG  HighPart;
-    } u;
-    LONGLONG QuadPart;
+typedef union _LARGE_INTEGER
+{
+	struct
+	{
+		DWORD LowPart;
+		LONG HighPart;
+	};
+	struct
+	{
+		DWORD LowPart;
+		LONG HighPart;
+	} u;
+	LONGLONG QuadPart;
 } LARGE_INTEGER, *PLARGE_INTEGER;
 
-#define DEFINE_ENUM_FLAG_OPERATORS(T)                                                                                                                                            \
-    inline T operator~ (T a) { return static_cast<T>( ~static_cast<std::underlying_type<T>::type>(a) ); }                                                                       \
-    inline T operator| (T a, T b) { return static_cast<T>( static_cast<std::underlying_type<T>::type>(a) | static_cast<std::underlying_type<T>::type>(b) ); }                   \
-    inline T operator& (T a, T b) { return static_cast<T>( static_cast<std::underlying_type<T>::type>(a) & static_cast<std::underlying_type<T>::type>(b) ); }                   \
-    inline T operator^ (T a, T b) { return static_cast<T>( static_cast<std::underlying_type<T>::type>(a) ^ static_cast<std::underlying_type<T>::type>(b) ); }                   \
-    inline T& operator|= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) |= static_cast<std::underlying_type<T>::type>(b) ); }   \
-    inline T& operator&= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) &= static_cast<std::underlying_type<T>::type>(b) ); }   \
-    inline T& operator^= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) ^= static_cast<std::underlying_type<T>::type>(b) ); }
+#define DEFINE_ENUM_FLAG_OPERATORS(T)                                                                                                      \
+	inline T operator~(T a)                                                                                                                \
+	{                                                                                                                                      \
+		return static_cast<T>(~static_cast<std::underlying_type<T>::type>(a));                                                             \
+	}                                                                                                                                      \
+	inline T operator|(T a, T b)                                                                                                           \
+	{                                                                                                                                      \
+		return static_cast<T>(static_cast<std::underlying_type<T>::type>(a) | static_cast<std::underlying_type<T>::type>(b));              \
+	}                                                                                                                                      \
+	inline T operator&(T a, T b)                                                                                                           \
+	{                                                                                                                                      \
+		return static_cast<T>(static_cast<std::underlying_type<T>::type>(a) & static_cast<std::underlying_type<T>::type>(b));              \
+	}                                                                                                                                      \
+	inline T operator^(T a, T b)                                                                                                           \
+	{                                                                                                                                      \
+		return static_cast<T>(static_cast<std::underlying_type<T>::type>(a) ^ static_cast<std::underlying_type<T>::type>(b));              \
+	}                                                                                                                                      \
+	inline T& operator|=(T& a, T b)                                                                                                        \
+	{                                                                                                                                      \
+		return reinterpret_cast<T&>(reinterpret_cast<std::underlying_type<T>::type&>(a) |= static_cast<std::underlying_type<T>::type>(b)); \
+	}                                                                                                                                      \
+	inline T& operator&=(T& a, T b)                                                                                                        \
+	{                                                                                                                                      \
+		return reinterpret_cast<T&>(reinterpret_cast<std::underlying_type<T>::type&>(a) &= static_cast<std::underlying_type<T>::type>(b)); \
+	}                                                                                                                                      \
+	inline T& operator^=(T& a, T b)                                                                                                        \
+	{                                                                                                                                      \
+		return reinterpret_cast<T&>(reinterpret_cast<std::underlying_type<T>::type&>(a) ^= static_cast<std::underlying_type<T>::type>(b)); \
+	}
 #endif
 
 template<typename T>
 inline T GetBits(T value, uint32 index, uint32 numBits)
 {
-	T mask = (1<<numBits)-1;
-	return (value>>index) & mask;
+	T mask = (1 << numBits) - 1;
+	return (value >> index) & mask;
 }
 
 template<typename T>
 inline void SetBits(T& value, uint32 index, uint32 numBits, uint32 bitValue)
 {
-	T mask = (1<<numBits)-1;
+	T mask = (1 << numBits) - 1;
 	value &= ~(mask << index);
 	value |= (bitValue << index);
 }
 
 #if !defined(_MSC_VER) || defined(__clang__) // clang-cl does not have built-in _udiv128
-inline uint64 _udiv128(uint64 highDividend, uint64 lowDividend, uint64 divisor, uint64 *remainder)
+inline uint64 _udiv128(uint64 highDividend, uint64 lowDividend, uint64 divisor, uint64* remainder)
 {
-    unsigned __int128 dividend = (((unsigned __int128)highDividend) << 64) | ((unsigned __int128)lowDividend);
-    *remainder = (uint64)((dividend % divisor) & 0xFFFFFFFFFFFFFFFF);
-    return       (uint64)((dividend / divisor) & 0xFFFFFFFFFFFFFFFF);
+	unsigned __int128 dividend = (((unsigned __int128)highDividend) << 64) | ((unsigned __int128)lowDividend);
+	*remainder = (uint64)((dividend % divisor) & 0xFFFFFFFFFFFFFFFF);
+	return (uint64)((dividend / divisor) & 0xFFFFFFFFFFFFFFFF);
 }
 #endif
 
 #if defined(_MSC_VER)
-    #define UNREACHABLE __assume(false)
-	#define ASSUME(__cond) __assume(__cond)
-	#define TLS_WORKAROUND_NOINLINE // no-op for MSVC as it has a flag for fiber-safe TLS optimizations
+#define UNREACHABLE __assume(false)
+#define ASSUME(__cond) __assume(__cond)
+#define TLS_WORKAROUND_NOINLINE // no-op for MSVC as it has a flag for fiber-safe TLS optimizations
 #elif defined(__GNUC__) && !defined(__llvm__)
-    #define UNREACHABLE __builtin_unreachable()
-	#define ASSUME(__cond) __attribute__((assume(__cond)))
-	#define TLS_WORKAROUND_NOINLINE __attribute__((noinline))
+#define UNREACHABLE __builtin_unreachable()
+#define ASSUME(__cond) __attribute__((assume(__cond)))
+#define TLS_WORKAROUND_NOINLINE __attribute__((noinline))
 #elif defined(__clang__)
-	#define UNREACHABLE __builtin_unreachable()
-	#define ASSUME(__cond) __builtin_assume(__cond)
-	#define TLS_WORKAROUND_NOINLINE __attribute__((noinline))
+#define UNREACHABLE __builtin_unreachable()
+#define ASSUME(__cond) __builtin_assume(__cond)
+#define TLS_WORKAROUND_NOINLINE __attribute__((noinline))
 #else
-    #error Unknown compiler
+#error Unknown compiler
 #endif
 
 #if defined(_MSC_VER)
-    #define DEBUG_BREAK __debugbreak()
+#define DEBUG_BREAK __debugbreak()
 #else
-    #include <csignal>
-    #define DEBUG_BREAK raise(SIGTRAP) 
+#include <csignal>
+#define DEBUG_BREAK raise(SIGTRAP)
 #endif
 
 #if defined(_MSC_VER)
-    #define DLLEXPORT __declspec(dllexport)
+#define DLLEXPORT __declspec(dllexport)
 #elif defined(__GNUC__)
-    #if BOOST_OS_WINDOWS
-        #define DLLEXPORT __attribute__((dllexport))
-    #else
-        #define DLLEXPORT
-    #endif
+#if BOOST_OS_WINDOWS
+#define DLLEXPORT __attribute__((dllexport))
 #else
-    #error No definition for DLLEXPORT
+#define DLLEXPORT
+#endif
+#else
+#error No definition for DLLEXPORT
 #endif
 
 #if BOOST_OS_WINDOWS
-	#define NOEXPORT
+#define NOEXPORT
 #elif defined(__GNUC__)
-	#define NOEXPORT __attribute__ ((visibility ("hidden")))
+#define NOEXPORT __attribute__((visibility("hidden")))
 #endif
 
 #if defined(_MSC_VER)
@@ -357,14 +382,14 @@ FORCE_INLINE int BSF(uint32 v) // returns index of first bit set, counting from 
 
 inline void _mm_pause()
 {
-    asm volatile("yield");
+	asm volatile("yield");
 }
 
 inline uint64 __rdtsc()
 {
-    uint64 t;
-    asm volatile("mrs %0, cntvct_el0" : "=r" (t));
-    return t;
+	uint64 t;
+	asm volatile("mrs %0, cntvct_el0" : "=r"(t));
+	return t;
 }
 
 inline void _mm_mfence()
@@ -373,29 +398,28 @@ inline void _mm_mfence()
 	std::atomic_thread_fence(std::memory_order_seq_cst);
 }
 
-inline unsigned char _addcarry_u64(unsigned char carry, unsigned long long a, unsigned long long b, unsigned long long *result)
+inline unsigned char _addcarry_u64(unsigned char carry, unsigned long long a, unsigned long long b, unsigned long long* result)
 {
-    *result = a + b + (unsigned long long)carry;
-    if (*result < a)
-        return 1;
-    return 0;
+	*result = a + b + (unsigned long long)carry;
+	if (*result < a)
+		return 1;
+	return 0;
 }
 
 #endif
 
 // asserts
 
-
 inline void cemu_assert(bool _condition)
 {
-    if ((_condition) == false)
-    {
-        DEBUG_BREAK;
-    }
+	if ((_condition) == false)
+	{
+		DEBUG_BREAK;
+	}
 }
 
 #ifndef CEMU_DEBUG_ASSERT
-//#define cemu_assert_debug(__cond) -> Forcing __cond not to be evaluated currently has unexpected side-effects
+// #define cemu_assert_debug(__cond) -> Forcing __cond not to be evaluated currently has unexpected side-effects
 
 inline void cemu_assert_debug(bool _condition)
 {
@@ -416,23 +440,23 @@ inline void cemu_assert_error()
 #else
 inline void cemu_assert_debug(bool _condition)
 {
-    if ((_condition) == false)
-        DEBUG_BREAK;
+	if ((_condition) == false)
+		DEBUG_BREAK;
 }
 
 inline void cemu_assert_unimplemented()
 {
-    DEBUG_BREAK;
+	DEBUG_BREAK;
 }
 
 inline void cemu_assert_suspicious()
 {
-    DEBUG_BREAK;
+	DEBUG_BREAK;
 }
 
 inline void cemu_assert_error()
 {
-    DEBUG_BREAK;
+	DEBUG_BREAK;
 }
 #endif
 
@@ -441,63 +465,72 @@ inline void cemu_assert_error()
 // MEMPTR
 #include "Common/MemPtr.h"
 
-template <typename T1, typename T2>
-constexpr bool HAS_FLAG(T1 flags, T2 test_flag) { return (flags & (T1)test_flag) == (T1)test_flag; }
-template <typename T1, typename T2>
-constexpr bool HAS_BIT(T1 value, T2 index) { return (value & ((T1)1 << index)) != 0; }
+template<typename T1, typename T2>
+constexpr bool HAS_FLAG(T1 flags, T2 test_flag)
+{
+	return (flags & (T1)test_flag) == (T1)test_flag;
+}
+template<typename T1, typename T2>
+constexpr bool HAS_BIT(T1 value, T2 index)
+{
+	return (value & ((T1)1 << index)) != 0;
+}
 
-template <typename T>
-constexpr uint32_t ppcsizeof() { return (uint32_t) sizeof(T); }
+template<typename T>
+constexpr uint32_t ppcsizeof()
+{
+	return (uint32_t)sizeof(T);
+}
 
 // common utility functions
 
-template <typename T>
+template<typename T>
 void vectorAppendUnique(std::vector<T>& vec, const T& val) // for cases where a small vector is more efficient than a set
 {
-    if (std::find(vec.begin(), vec.end(), val) != vec.end())
-        return;
-    vec.emplace_back(val);
+	if (std::find(vec.begin(), vec.end(), val) != vec.end())
+		return;
+	vec.emplace_back(val);
 }
 
-template <typename T>
+template<typename T>
 void vectorRemoveByValue(std::vector<T>& vec, const T& val)
 {
-    vec.erase(std::remove(vec.begin(), vec.end(), val), vec.end());
+	vec.erase(std::remove(vec.begin(), vec.end(), val), vec.end());
 }
 
-template <typename T>
+template<typename T>
 void vectorRemoveByIndex(std::vector<T>& vec, const size_t index)
 {
-    vec.erase(vec.begin() + index);
+	vec.erase(vec.begin() + index);
 }
 
 template<typename T1, typename... Types>
 bool match_any_of(T1&& value, Types&&... others)
 {
-    return ((value == others) || ...);
+	return ((value == others) || ...);
 }
 
 // we cache the frequency in a static variable
 [[nodiscard]] static std::chrono::high_resolution_clock::time_point now_cached() noexcept
 {
 #ifdef _WIN32
-    // get current time
-	static const long long _Freq = _Query_perf_frequency();	// doesn't change after system boot
+	// get current time
+	static const long long _Freq = _Query_perf_frequency(); // doesn't change after system boot
 	const long long _Ctr = _Query_perf_counter();
 	static_assert(std::nano::num == 1, "This assumes period::num == 1.");
 	const long long _Whole = (_Ctr / _Freq) * std::nano::den;
 	const long long _Part = (_Ctr % _Freq) * std::nano::den / _Freq;
 	return (std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(_Whole + _Part)));
 #else
-    return std::chrono::high_resolution_clock::now();
+	return std::chrono::high_resolution_clock::now();
 #endif
 }
 
 [[nodiscard]] static std::chrono::steady_clock::time_point tick_cached() noexcept
 {
 #if BOOST_OS_WINDOWS
-    // get current time
-	static const long long _Freq = _Query_perf_frequency();	// doesn't change after system boot
+	// get current time
+	static const long long _Freq = _Query_perf_frequency(); // doesn't change after system boot
 	const long long _Ctr = _Query_perf_counter();
 	static_assert(std::nano::num == 1, "This assumes period::num == 1.");
 	const long long _Whole = (_Ctr / _Freq) * std::nano::den;
@@ -524,29 +557,29 @@ bool match_any_of(T1&& value, Types&&... others)
 
 inline const char* _utf8WrapperPtr(const char8_t* input)
 {
-    // use with care
-    return (const char*)input;
+	// use with care
+	return (const char*)input;
 }
 
 inline std::string_view _utf8Wrapper(std::u8string_view input)
 {
-    std::basic_string_view<char> v((char*)input.data(), input.size());
-    return v;
+	std::basic_string_view<char> v((char*)input.data(), input.size());
+	return v;
 }
 
 // convert fs::path to utf8 encoded string
 inline std::string _pathToUtf8(const fs::path& path)
 {
-    std::u8string strU8 = path.generic_u8string();
-    std::string v((const char*)strU8.data(), strU8.size());
-    return v;
+	std::u8string strU8 = path.generic_u8string();
+	std::string v((const char*)strU8.data(), strU8.size());
+	return v;
 }
 
 // convert utf8 encoded string to fs::path
 inline fs::path _utf8ToPath(std::string_view input)
 {
-    std::basic_string_view<char8_t> v((char8_t*)input.data(), input.size());
-    return fs::path(v);
+	std::basic_string_view<char8_t> v((char8_t*)input.data(), input.size());
+	return fs::path(v);
 }
 
 // locale-independent variant of tolower() which also matches Wii U behavior
@@ -559,11 +592,11 @@ inline char _ansiToLower(char c)
 
 class RunAtCemuBoot // -> replaces this with direct function calls. Linkers other than MSVC may optimize way object files entirely if they are not referenced from outside. So a source file self-registering using this would be causing issues
 {
-public:
-    RunAtCemuBoot(void(*f)())
-    {
-        f();
-    }
+  public:
+	RunAtCemuBoot(void (*f)())
+	{
+		f();
+	}
 };
 
 // temporary wrapper until Concurrency TS gives us std::future .is_ready()
@@ -571,12 +604,11 @@ template<typename T>
 bool future_is_ready(std::future<T>& f)
 {
 #if defined(__GNUC__)
-    return f.wait_for(std::chrono::nanoseconds(0)) == std::future_status::ready;
+	return f.wait_for(std::chrono::nanoseconds(0)) == std::future_status::ready;
 #else
 	return f._Is_ready();
 #endif
 }
-
 
 // helper function to cast raw pointers to std::atomic
 // this is technically not legal but works on most platforms as long as alignment restrictions are met and the implementation of atomic doesnt come with additional members
@@ -586,7 +618,7 @@ std::atomic<T>* _rawPtrToAtomic(T* ptr)
 {
 	static_assert(sizeof(T) == sizeof(std::atomic<T>));
 	cemu_assert_debug((reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::atomic<T>)) == 0);
-    return reinterpret_cast<std::atomic<T>*>(ptr);
+	return reinterpret_cast<std::atomic<T>*>(ptr);
 }
 
 #if defined(__GNUC__)
@@ -627,20 +659,20 @@ inline uint32 GetTitleIdLow(uint64 titleId)
 void DebugLogStackTrace(struct OSThread_t* thread, MPTR sp);
 
 // generic formatter for enums (to underlying)
-template <typename Enum>
+template<typename Enum>
 	requires std::is_enum_v<Enum>
 struct fmt::formatter<Enum> : fmt::formatter<underlying_t<Enum>>
 {
 	auto format(const Enum& e, format_context& ctx) const
 	{
-		//return fmt::format_to(ctx.out(), "{}", fmt::underlying(e));
+		// return fmt::format_to(ctx.out(), "{}", fmt::underlying(e));
 
 		return formatter<underlying_t<Enum>>::format(fmt::underlying(e), ctx);
 	}
 };
 
 // formatter for betype<T>
-template <typename T>
+template<typename T>
 struct fmt::formatter<betype<T>> : fmt::formatter<T>
 {
 	auto format(const betype<T>& e, format_context& ctx) const
@@ -653,37 +685,43 @@ struct fmt::formatter<betype<T>> : fmt::formatter<T>
 namespace stdx
 {
 	// std::to_underlying
-    template <typename EnumT>
-		requires (std::is_enum_v<EnumT>)
-        constexpr std::underlying_type_t<EnumT> to_underlying(EnumT e) noexcept {
-        return static_cast<std::underlying_type_t<EnumT>>(e);
-    };
+	template<typename EnumT>
+		requires(std::is_enum_v<EnumT>)
+	constexpr std::underlying_type_t<EnumT> to_underlying(EnumT e) noexcept
+	{
+		return static_cast<std::underlying_type_t<EnumT>>(e);
+	};
 
 	// std::scope_exit
-	template <typename Fn>
+	template<typename Fn>
 	class scope_exit
 	{
 		Fn m_func;
 		bool m_released = false;
-	public:
+
+	  public:
 		explicit scope_exit(Fn&& f) noexcept
 			: m_func(std::forward<Fn>(f))
 		{}
 		~scope_exit()
 		{
-			if (!m_released) m_func();
+			if (!m_released)
+				m_func();
 		}
 		scope_exit(scope_exit&& other) noexcept
 			: m_func(std::move(other.m_func)), m_released(std::exchange(other.m_released, true))
 		{}
 		scope_exit(const scope_exit&) = delete;
 		scope_exit& operator=(scope_exit) = delete;
-		void release() { m_released = true;}
+		void release()
+		{
+			m_released = true;
+		}
 	};
 
 	// Xcode 16 doesn't have std::atomic_ref support and we provide a minimalist reimplementation as fallback
 #ifdef __cpp_lib_atomic_ref
-	#include <atomic>
+#include <atomic>
 	template<typename T>
 	using atomic_ref = std::atomic_ref<T>;
 #else
@@ -691,7 +729,8 @@ namespace stdx
 	class atomic_ref
 	{
 		static_assert(std::is_trivially_copyable_v<T>, "atomic_ref requires trivially copyable types");
-	public:
+
+	  public:
 		using value_type = T;
 
 		explicit atomic_ref(T& obj) noexcept : ptr_(std::addressof(obj)) {}
@@ -708,8 +747,8 @@ namespace stdx
 			aptr->store(desired, order);
 		}
 
-	private:
+	  private:
 		T* ptr_;
 	};
 #endif
-}
+} // namespace stdx

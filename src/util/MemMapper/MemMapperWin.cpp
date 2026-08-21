@@ -4,13 +4,11 @@
 
 namespace MemMapper
 {
-	const size_t sPageSize{ []()
-		{
+	const size_t sPageSize{[]() {
 		SYSTEM_INFO si;
 		GetSystemInfo(&si);
 		return (size_t)si.dwPageSize;
-	}()
-	};
+	}()};
 
 	size_t GetPageSize()
 	{
@@ -47,7 +45,7 @@ namespace MemMapper
 	void* AllocateMemory(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags, bool fromReservation)
 	{
 		void* r;
-		if(fromReservation)
+		if (fromReservation)
 			r = VirtualAlloc(baseAddr, size, MEM_COMMIT, GetPageProtection(permissionFlags));
 		else
 			r = VirtualAlloc(baseAddr, size, MEM_RESERVE | MEM_COMMIT, GetPageProtection(permissionFlags));
@@ -56,7 +54,7 @@ namespace MemMapper
 
 	bool FreeMemory(void* baseAddr, size_t size, bool fromReservation)
 	{
-		if(fromReservation)
+		if (fromReservation)
 			return VirtualFree(baseAddr, size, MEM_DECOMMIT) != FALSE;
 		return VirtualFree(baseAddr, 0, MEM_RELEASE) != FALSE;
 	}
@@ -69,4 +67,4 @@ namespace MemMapper
 		return VirtualProtect(baseAddr, size, GetPageProtection(permissionFlags), &previous) != FALSE;
 	}
 
-};
+}; // namespace MemMapper

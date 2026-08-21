@@ -22,7 +22,7 @@ namespace iosu
 
 		/* message queue */
 
-		struct IOSMessageQueue 
+		struct IOSMessageQueue
 		{
 			// placeholder
 			/* +0x00 */ uint32be ukn00;
@@ -56,7 +56,7 @@ namespace iosu
 			if (index >= sMsgQueuePool.size())
 				return IOS_ERROR_INVALID;
 			IOSMessageQueue& q = sMsgQueuePool.at(index);
-			if(q.queueHandle != queueHandle)
+			if (q.queueHandle != queueHandle)
 				return IOS_ERROR_INVALID;
 			queueOut = &q;
 			return IOS_ERROR_OK;
@@ -76,7 +76,7 @@ namespace iosu
 			IOSMessageQueue& msgQueue = sMsgQueuePool.at(index);
 			// create queue handle
 			static uint32 sQueueHandleCounter = 0;
-			uint32 queueHandle = (uint32)index | ((sQueueHandleCounter<<12)&0x7FFFFFFF);
+			uint32 queueHandle = (uint32)index | ((sQueueHandleCounter << 12) & 0x7FFFFFFF);
 			sQueueHandleCounter++;
 
 			msgQueue.queueHandle = queueHandle;
@@ -182,8 +182,7 @@ namespace iosu
 		std::vector<IOSTimer> sTimers;
 		std::vector<IOSTimerId> sTimersFreeHandles;
 
-		auto sTimerSortComparator = [](const IOSTimerId& idA, const IOSTimerId& idB)
-		{
+		auto sTimerSortComparator = [](const IOSTimerId& idA, const IOSTimerId& idB) {
 			// order by nextFire, then by timerId to avoid duplicate keys
 			IOSTimer& timerA = sTimers[idA];
 			IOSTimer& timerB = sTimers[idB];
@@ -208,10 +207,10 @@ namespace iosu
 			cemu_assert_debug(!sTimerMutex.try_lock()); // lock must be held by current thread
 			IOSTimerId timerId = &timer - sTimers.data();
 			auto it = sTimerByFireTime.find(timerId);
-			if(it != sTimerByFireTime.end())
+			if (it != sTimerByFireTime.end())
 				sTimerByFireTime.erase(it);
 			timer.nextFire = nextFire;
-			if(nextFire != 0)
+			if (nextFire != 0)
 				sTimerByFireTime.insert(timerId);
 		}
 
@@ -271,7 +270,7 @@ namespace iosu
 				HRTick now = HighResolutionTimer::now().getTick();
 				if (now >= timer.nextFire)
 				{
-					if(timer.repeat == 0)
+					if (timer.repeat == 0)
 						IOS_TimerSetNextFireTime(timer, 0);
 					else
 						IOS_TimerSetNextFireTime(timer, timer.nextFire + timer.repeat);
@@ -301,11 +300,11 @@ namespace iosu
 		};
 
 		std::array<IOSResourceManager, 512> sDeviceResources;
-		
+
 		IOSResourceManager* _IOS_FindResourceManager(const char* devicePath)
 		{
 			_assume_lock();
-			std::string_view devicePathSV{ devicePath };
+			std::string_view devicePathSV{devicePath};
 			for (auto& it : sDeviceResources)
 			{
 				if (it.isSet && it.path == devicePathSV)
@@ -317,7 +316,7 @@ namespace iosu
 		IOSResourceManager* _IOS_CreateNewResourceManager(const char* devicePath, IOSMsgQueueId msgQueueId)
 		{
 			_assume_lock();
-			std::string_view devicePathSV{ devicePath };
+			std::string_view devicePathSV{devicePath};
 			for (auto& it : sDeviceResources)
 			{
 				if (!it.isSet)
@@ -378,12 +377,12 @@ namespace iosu
 		}
 
 		/* IPC */
-		
+
 		struct IOSDispatchableCommand
 		{
 			// stores a copy of incoming IPC requests with some extra information required for replies
-			IPCCommandBody body; // our dispatchable copy
-			IPCIoctlVector vecCopy[8]; // our copy of the Ioctlv vector array
+			IPCCommandBody body;		  // our dispatchable copy
+			IPCIoctlVector vecCopy[8];	  // our copy of the Ioctlv vector array
 			IPCCommandBody* originalBody; // the original command that was sent to us
 			uint32 ppcCoreIndex;
 			IOSDevHandle replyHandle; // handle for outgoing replies
@@ -400,7 +399,7 @@ namespace iosu
 			while (!sIPCFreeDispatchableCommands.empty())
 				sIPCFreeDispatchableCommands.pop();
 			for (size_t i = 0; i < sIPCDispatchableCommandPool.GetCount(); i++)
-				sIPCFreeDispatchableCommands.push(sIPCDispatchableCommandPool.GetPtr()+i);
+				sIPCFreeDispatchableCommands.push(sIPCDispatchableCommandPool.GetPtr() + i);
 			sIPCDispatchableCommandPoolLock.unlock();
 		}
 
@@ -479,7 +478,7 @@ namespace iosu
 			sActiveDeviceHandles[deviceHandleIndex].handleCheckValue = devHandle;
 			sActiveDeviceHandles[deviceHandleIndex].path = devicePath;
 			sActiveDeviceHandles[deviceHandleIndex].msgQueueId = msgQueueId;
-			sActiveDeviceHandles[deviceHandleIndex].hasDispatchTargetHandle = false;			
+			sActiveDeviceHandles[deviceHandleIndex].hasDispatchTargetHandle = false;
 			handleOut = devHandle;
 			return IOS_ERROR_OK;
 		}
@@ -571,9 +570,9 @@ namespace iosu
 				dispatchCmd->body.devHandle = sActiveDeviceHandles[index].dispatchTargetHandle;
 			}
 			_lock.unlock();
-			MEMPTR<IOSDispatchableCommand> msgVal{ dispatchCmd };
+			MEMPTR<IOSDispatchableCommand> msgVal{dispatchCmd};
 			IOS_ERROR r = IOS_SendMessage(msgQueueId, msgVal.GetMPTR(), 1);
-			if(r != IOS_ERROR_OK)
+			if (r != IOS_ERROR_OK)
 				cemuLog_log(LogType::Force, "_IPCDispatchToResourceManager(): SendMessage returned {}", (sint32)r);
 			return r;
 		}
@@ -584,7 +583,7 @@ namespace iosu
 		{
 			cemu_assert(dispatchCmd->ppcCoreIndex < 3);
 			std::unique_lock _l(sMtxReply[(uint32)dispatchCmd->ppcCoreIndex]);
-			cemu_assert(dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() && dispatchCmd < sIPCDispatchableCommandPool.GetPtr() + sIPCDispatchableCommandPool.GetCount());	
+			cemu_assert(dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() && dispatchCmd < sIPCDispatchableCommandPool.GetPtr() + sIPCDispatchableCommandPool.GetCount());
 			dispatchCmd->originalBody->result = result;
 			// submit to COS
 			IPCCommandBody* responseArray[1];
@@ -602,7 +601,7 @@ namespace iosu
 			uint32 flags = cmd.args[2];
 			cemu_assert_debug(flags == 0);
 
-			std::string devicePath{ name, nameLenPlusOne - 1 };
+			std::string devicePath{name, nameLenPlusOne - 1};
 
 			IOSDevHandle handle;
 			IOS_ERROR r = _IPCCreateResourceHandle(devicePath.c_str(), handle);
@@ -694,7 +693,7 @@ namespace iosu
 				break;
 			case IPCCommandId::IOS_IOCTLV:
 				r = _IPCHandlerIn_TranslateVectorAddresses(dispatchCmd);
-				if(r < 0)
+				if (r < 0)
 					cemuLog_log(LogType::Force, "Ioctlv error");
 				else
 					r = _IPCHandlerIn_IOS_Ioctlv(dispatchCmd);
@@ -705,7 +704,7 @@ namespace iosu
 			}
 			if (r < 0)
 			{
-				cemuLog_log(LogType::Force, "Error occurred while trying to dispatch IPC");			
+				cemuLog_log(LogType::Force, "Error occurred while trying to dispatch IPC");
 				_IPCReplyAndRelease(dispatchCmd, r);
 				// in non-error case the device handler will send the result asynchronously via IOS_ResourceReply
 			}
@@ -771,13 +770,12 @@ namespace iosu
 			}
 
 			std::thread m_timerThread;
-		}sIOSUModuleKernel;
+		} sIOSUModuleKernel;
 
 		IOSUModule* GetModule()
 		{
 			return static_cast<IOSUModule*>(&sIOSUModuleKernel);
 		}
 
-
-	}
-}
+	} // namespace kernel
+} // namespace iosu

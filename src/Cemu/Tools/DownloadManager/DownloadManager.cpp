@@ -25,7 +25,7 @@ namespace
 {
 	std::mutex s_gameListRefreshCallbackMutex;
 	DownloadManager::GameListRefreshCallback s_gameListRefreshCallback;
-}
+} // namespace
 
 void DownloadManager::SetGameListRefreshCallback(GameListRefreshCallback callback)
 {
@@ -66,7 +66,7 @@ bool DownloadManager::getTitleLatestVersion(TitleId titleId, uint16& version)
 
 DownloadManager::TitleInstallState::TitleInstallState(DownloadManager* dlMgr, uint64 titleId) : titleId(titleId)
 {
-	uint16 vers;	
+	uint16 vers;
 	if (CafeTitleList::HasTitle(titleId, vers))
 	{
 		isInstalled = true;
@@ -189,7 +189,7 @@ struct StoredTokenInfo : public SerializerHelper
 		return !streamReader.hasError();
 	}
 
-public:
+  public:
 	std::string accountId;
 	std::string deviceToken;
 };
@@ -213,7 +213,7 @@ bool DownloadManager::_connect_refreshIASAccountIdAndDeviceToken()
 	std::vector<uint8> serializedData;
 	if (!storedTokenInfo.serialize(serializedData))
 		return false;
-	s_nupFileCache->AddFileAsync({ fmt::format("{}/token_info", m_authInfo.cachefileName) }, serializedData.data(), serializedData.size());
+	s_nupFileCache->AddFileAsync({fmt::format("{}/token_info", m_authInfo.cachefileName)}, serializedData.data(), serializedData.size());
 	return true;
 }
 
@@ -237,8 +237,8 @@ bool DownloadManager::_connect_queryAccountStatusAndServiceURLs()
 
 // constructor for ticket cache entry
 DownloadManager::ETicketInfo::ETicketInfo(SOURCE source, uint64 ticketId, uint32 ticketVersion, std::vector<uint8>& eTicket)
-	: source(source), ticketId(ticketId), ticketVersion(ticketVersion), 
-	eTicket(eTicket)
+	: source(source), ticketId(ticketId), ticketVersion(ticketVersion),
+	  eTicket(eTicket)
 {
 	NCrypto::ETicketParser eTicketParser;
 	if (!eTicketParser.parse(eTicket.data(), eTicket.size()))
@@ -271,8 +271,8 @@ void DownloadManager::loadTicketCache()
 {
 	m_ticketCache.clear();
 	cemu_assert_debug(m_ticketCache.empty());
-	std::vector<uint8> ticketCacheBlob;	
-	if (!s_nupFileCache->GetFile({ fmt::format("{}/eticket_cache", m_authInfo.cachefileName) }, ticketCacheBlob))
+	std::vector<uint8> ticketCacheBlob;
+	if (!s_nupFileCache->GetFile({fmt::format("{}/eticket_cache", m_authInfo.cachefileName)}, ticketCacheBlob))
 		return;
 	MemStreamReader memReader(ticketCacheBlob.data(), ticketCacheBlob.size());
 	uint8 version = memReader.readBE<uint8>();
@@ -310,7 +310,7 @@ void DownloadManager::loadTicketCache()
 
 void DownloadManager::storeTicketCache()
 {
-	MemStreamWriter memWriter(1024*32);
+	MemStreamWriter memWriter(1024 * 32);
 	memWriter.writeBE<uint8>(1); // version
 	memWriter.writeBE<uint32>((uint32)m_ticketCache.size());
 	for (auto& eTicket : m_ticketCache)
@@ -324,7 +324,7 @@ void DownloadManager::storeTicketCache()
 			memWriter.writePODVector(cert);
 	}
 	auto serializedBlob = memWriter.getResult();
-	s_nupFileCache->AddFileAsync({ fmt::format("{}/eticket_cache", m_authInfo.cachefileName) }, serializedBlob.data(), serializedBlob.size());
+	s_nupFileCache->AddFileAsync({fmt::format("{}/eticket_cache", m_authInfo.cachefileName)}, serializedBlob.data(), serializedBlob.size());
 }
 
 bool DownloadManager::syncAccountTickets()
@@ -348,7 +348,7 @@ bool DownloadManager::syncAccountTickets()
 		ETicketInfo* cachedTicket = findTicketByTicketId(tiv.ticketId);
 		if (cachedTicket)
 		{
-			if(cachedTicket->ticketVersion == tiv.ticketVersion)
+			if (cachedTicket->ticketVersion == tiv.ticketVersion)
 				continue;
 			// ticket version mismatch, redownload
 			deleteTicketByTicketId(tiv.ticketId);
@@ -396,8 +396,7 @@ bool DownloadManager::syncSystemTitleTickets()
 {
 	setStatusMessage(_tr("Downloading system tickets..."), DLMGR_STATUS_CODE::CONNECTING);
 	NAPI::AuthInfo authInfo = GetAuthInfo(true);
-	auto querySystemTitleTicket = [&](uint64 titleId) -> void
-	{
+	auto querySystemTitleTicket = [&](uint64 titleId) -> void {
 		// check if cached already
 		// todo - how do we know which version to query? System titles seem to use hashes?
 		if (findFirstTicketByTitleId(titleId))
@@ -532,13 +531,13 @@ void DownloadManager::searchForIncompleteDownloads()
 	const fs::path packagePath = ActiveSettings::GetMlcPath("usr/packages/title/");
 	if (!fs::exists(packagePath))
 		return;
-	
+
 	for (auto& p : fs::directory_iterator(packagePath))
 	{
 		uint64 titleId;
 		uint32 version;
 		std::string name = p.path().filename().generic_string();
-		if( sscanf(name.c_str(), "cemu_%" PRIx64 "_v%u", &titleId, &version) != 2)
+		if (sscanf(name.c_str(), "cemu_%" PRIx64 "_v%u", &titleId, &version) != 2)
 			continue;
 		std::unique_lock<std::recursive_mutex> _l(m_mutex);
 		for (auto& itr : m_ticketCache)
@@ -605,7 +604,7 @@ void DownloadManager::reportAvailableTitles()
 void DownloadManager::_handle_connect()
 {
 	m_connectState.store(CONNECT_STATE::PROCESSING);
-	
+
 	// reset login state
 	m_iasToken.serviceAccountId.clear();
 	m_iasToken.deviceToken.clear();
@@ -614,7 +613,7 @@ void DownloadManager::_handle_connect()
 	if (s_nupFileCache)
 	{
 		std::vector<uint8> serializationBlob;
-		if (s_nupFileCache->GetFile({ fmt::format("{}/token_info", m_authInfo.cachefileName) }, serializationBlob))
+		if (s_nupFileCache->GetFile({fmt::format("{}/token_info", m_authInfo.cachefileName)}, serializationBlob))
 		{
 			StoredTokenInfo storedTokenInfo;
 			if (storedTokenInfo.deserialize(serializationBlob))
@@ -681,7 +680,7 @@ void DownloadManager::connect(
 	m_authInfo.serial = serial;
 	m_connectState.store(CONNECT_STATE::REQUESTED);
 	notifyManager();
-	queueManagerJob([this]() {_handle_connect(); });
+	queueManagerJob([this]() { _handle_connect(); });
 }
 
 bool DownloadManager::IsConnected() const
@@ -705,7 +704,7 @@ NAPI::AuthInfo DownloadManager::GetAuthInfo(bool withIasToken)
 	authInfo.country = m_authInfo.country;
 	authInfo.region = m_authInfo.region;
 	authInfo.deviceCertBase64 = m_authInfo.deviceCertBase64;
-	if(withIasToken)
+	if (withIasToken)
 	{
 		cemu_assert_debug(!m_iasToken.serviceAccountId.empty());
 		authInfo.IASToken.accountId = m_iasToken.serviceAccountId;
@@ -738,7 +737,7 @@ void DownloadManager::initiateDownload(uint64 titleId, uint16 version)
 	std::vector<uint8>* ticketData = nullptr;
 	for (auto& ticket : m_ticketCache)
 	{
-		if (ticket.titleId == titleId )//&& ticket.version == version)
+		if (ticket.titleId == titleId) //&& ticket.version == version)
 		{
 			ticketData = &ticket.eTicket;
 			break;
@@ -784,9 +783,9 @@ fs::path DownloadManager::getPackageInstallPath(Package* package)
 	TitleIdParser tParser(package->titleId);
 
 	const char* titleBasePath = "usr/title/";
-	if(tParser.IsSystemTitle())
+	if (tParser.IsSystemTitle())
 		titleBasePath = "sys/title/";
-	return ActiveSettings::GetMlcPath(fmt::format("{}{:08x}/{:08x}/", titleBasePath, (uint32)(package->titleId>>32), (uint32)package->titleId));
+	return ActiveSettings::GetMlcPath(fmt::format("{}{:08x}/{:08x}/", titleBasePath, (uint32)(package->titleId >> 32), (uint32)package->titleId));
 }
 
 // called when a package becomes active (queued to downloading) or when any of it's async download operations finishes
@@ -819,14 +818,13 @@ void DownloadManager::updatePackage(Package* package)
 	{
 		auto state = itr.second.currentState;
 		contentCountTable[state].total++;
-		if(itr.second.isBeingProcessed)
+		if (itr.second.isBeingProcessed)
 			contentCountTable[state].processing++;
 	}
 
 	// utility method to grab next inactive content entry with a specific state
-	auto getFirstInactiveContentByState = [&](ContentState state) -> Package::ContentFile*
-	{
-		auto itr = std::find_if(package->state.contentFiles.begin(), package->state.contentFiles.end(), [state](const auto& contentFile) {return contentFile.second.currentState == state && !contentFile.second.isBeingProcessed; });
+	auto getFirstInactiveContentByState = [&](ContentState state) -> Package::ContentFile* {
+		auto itr = std::find_if(package->state.contentFiles.begin(), package->state.contentFiles.end(), [state](const auto& contentFile) { return contentFile.second.currentState == state && !contentFile.second.isBeingProcessed; });
 		if (itr == package->state.contentFiles.end())
 			return nullptr;
 		return &(itr->second);
@@ -915,12 +913,12 @@ void DownloadManager::checkPackagesState()
 	std::unique_lock<std::recursive_mutex> _l(m_mutex);
 	bool hasActive = false;
 	hasActive = std::find_if(m_packageList.begin(), m_packageList.end(),
-		[](const Package* p) { return p->state.isActive; }) != m_packageList.end();
+							 [](const Package* p) { return p->state.isActive; }) != m_packageList.end();
 	if (!hasActive)
 	{
 		// start new download
 		auto it = std::find_if(m_packageList.begin(), m_packageList.end(),
-			[](const Package* p) { return !p->state.isActive && !p->state.hasError && !p->state.isPaused && p->state.currentState != Package::STATE::INSTALLED; });
+							   [](const Package* p) { return !p->state.isActive && !p->state.hasError && !p->state.isPaused && p->state.currentState != Package::STATE::INSTALLED; });
 		if (it != m_packageList.end())
 		{
 			Package* startedPackage = *it;
@@ -1004,7 +1002,7 @@ void DownloadManager::asyncPackageDownloadTMD(Package* package)
 	else
 	{
 		tmdResult = NAPI::CCS_GetTMD(authInfo, package->titleId, package->version);
-	}	
+	}
 	if (!tmdResult.isValid)
 	{
 		// failed, try to get latest TMD instead
@@ -1089,31 +1087,31 @@ void DownloadManager::asyncPackageDownloadContentFile(Package* package, uint16 i
 	_l.unlock();
 
 	// download h3 hash file (.h3) if flag 0x0002 is set (-> we are using the TMD to verify the hash of the content files)
-	//auto h3Result = NAPI::CCS_GetContentH3File(titleId, contentId);
-	//auto h3Result = NAPI::CCS_GetContentH3File(titleId, contentId);
-	
-	//if (!h3Result.isValid)
+	// auto h3Result = NAPI::CCS_GetContentH3File(titleId, contentId);
+	// auto h3Result = NAPI::CCS_GetContentH3File(titleId, contentId);
+
+	// if (!h3Result.isValid)
 	//{
 	//	setPackageError(package, "Download failed (h3)");
 	//	return;
-	//}
-	//filePathStr = (packageDownloadPath / fmt::format("{:08x}.h3", index)).generic_u8string();
-	//auto h3File = FileStream::createFile(filePathStr);
-	//if (!h3File)
+	// }
+	// filePathStr = (packageDownloadPath / fmt::format("{:08x}.h3", index)).generic_u8string();
+	// auto h3File = FileStream::createFile(filePathStr);
+	// if (!h3File)
 	//{
 	//	setPackageError(package, "Cannot create file");
 	//	return;
-	//}
-	//if (h3File->writeData(h3Result.tmdData.data(), h3Result.tmdData.size()) != h3Result.tmdData.size())
+	// }
+	// if (h3File->writeData(h3Result.tmdData.data(), h3Result.tmdData.size()) != h3Result.tmdData.size())
 	//{
 	//	setPackageError(package, "Cannot write file (h3). Disk full?");
 	//	return;
-	//}
-	//delete h3File;
+	// }
+	// delete h3File;
 
 	// streamed download of content file (.app)
 	// prepare callback parameter struct
-	struct CallbackInfo 
+	struct CallbackInfo
 	{
 		DownloadManager* downloadMgr;
 		Package* package;
@@ -1146,7 +1144,7 @@ void DownloadManager::asyncPackageDownloadContentFile(Package* package, uint16 i
 			}
 			return true;
 		}
-	}callbackInfoData{};
+	} callbackInfoData{};
 	callbackInfoData.downloadMgr = this;
 	callbackInfoData.package = package;
 	callbackInfoData.contentFile = &contentFileItr->second;
@@ -1255,7 +1253,7 @@ bool DownloadManager::asyncPackageInstallRecursiveExtractFiles(Package* package,
 	while (fstVolume->Next(dirItr, itr))
 	{
 		std::string_view nodeName = fstVolume->GetName(itr);
-		if(nodeName.empty() || boost::equals(nodeName, ".") || boost::equals(nodeName, "..") || boost::contains(nodeName, "/") || boost::contains(nodeName, "\\"))
+		if (nodeName.empty() || boost::equals(nodeName, ".") || boost::equals(nodeName, "..") || boost::contains(nodeName, "/") || boost::contains(nodeName, "\\"))
 			continue;
 		std::string sourceFilePath = sourcePath;
 		sourceFilePath.append(nodeName);
@@ -1432,16 +1430,14 @@ std::mutex s_idbeCacheMutex;
 // stalls while reading disk/downloading
 void DownloadManager::prepareIDBE(uint64 titleId)
 {
-	auto hasInCache = [](uint64 titleId) -> bool
-	{
+	auto hasInCache = [](uint64 titleId) -> bool {
 		s_idbeCacheMutex.lock();
 		bool hasCached = s_idbeCache.find(titleId) != s_idbeCache.end();
 		s_idbeCacheMutex.unlock();
 		return hasCached;
 	};
 
-	auto addToCache = [](uint64 titleId, NAPI::IDBEIconDataV0* iconData) -> void
-	{
+	auto addToCache = [](uint64 titleId, NAPI::IDBEIconDataV0* iconData) -> void {
 		NAPI::IDBEIconDataV0* iconInstance = new NAPI::IDBEIconDataV0();
 		*iconInstance = *iconData;
 		s_idbeCacheMutex.lock();
@@ -1453,13 +1449,13 @@ void DownloadManager::prepareIDBE(uint64 titleId)
 		return;
 	// try to load from disk cache
 	std::vector<uint8> idbeFile;
-	if (s_nupFileCache->GetFile({ fmt::format("idbe/{0:016x}", titleId) }, idbeFile) && idbeFile.size() == sizeof(NAPI::IDBEIconDataV0))
+	if (s_nupFileCache->GetFile({fmt::format("idbe/{0:016x}", titleId)}, idbeFile) && idbeFile.size() == sizeof(NAPI::IDBEIconDataV0))
 		return addToCache(titleId, (NAPI::IDBEIconDataV0*)(idbeFile.data()));
 	// not cached, query from server
 	std::optional<NAPI::IDBEIconDataV0> iconData = NAPI::IDBE_Request(GetDownloadMgrNetworkService(), titleId);
 	if (!iconData)
 		return;
-	s_nupFileCache->AddFileAsync({ fmt::format("idbe/{0:016x}", titleId) }, (uint8*)&(*iconData), sizeof(NAPI::IDBEIconDataV0));
+	s_nupFileCache->AddFileAsync({fmt::format("idbe/{0:016x}", titleId)}, (uint8*)&(*iconData), sizeof(NAPI::IDBEIconDataV0));
 	addToCache(titleId, &*iconData);
 }
 

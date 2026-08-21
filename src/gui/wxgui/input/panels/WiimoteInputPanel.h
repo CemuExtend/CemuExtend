@@ -10,14 +10,14 @@ class wxInputDraw;
 
 class WiimoteInputPanel : public InputPanel
 {
-public:
+  public:
 	WiimoteInputPanel(wxWindow* parent, std::function<bool()> escapeDown);
 
 	void on_timer(const EmulatedControllerPtr& emulated_controller, const ControllerPtr& controller) override;
 
 	void load_controller(const EmulatedControllerPtr& emulated_controller) override;
 
-private:
+  private:
 	wxInputDraw* m_draw;
 
 	WPADDeviceType m_device_type = kWAPDevCore;
@@ -25,19 +25,16 @@ private:
 
 	void on_volume_change(wxCommandEvent& event);
 	void on_extension_change(wxCommandEvent& event);
-    void on_pair_button(wxCommandEvent& event);
+	void on_pair_button(wxCommandEvent& event);
 
 	wxGridBagSizer* m_item_sizer;
 
-	wxCheckBox* m_nunchuck, * m_classic;
+	wxCheckBox *m_nunchuck, *m_classic;
 	wxCheckBox* m_motion_plus;
 
 	wxSlider* m_volume;
 
 	std::vector<wxWindow*> m_nunchuck_items;
 
-	void add_button_row(sint32 row, sint32 column, const WiimoteController::ButtonId &button_id);
+	void add_button_row(sint32 row, sint32 column, const WiimoteController::ButtonId& button_id);
 };
-
-
-

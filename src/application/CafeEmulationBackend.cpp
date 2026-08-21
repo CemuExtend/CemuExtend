@@ -78,21 +78,45 @@ namespace Application
 			translated.diagnostic = event.diagnostic;
 			switch (event.type)
 			{
-			case CafeSystem::EventType::LoadingStarted: translated.type = EventType::LoadingStarted; break;
-			case CafeSystem::EventType::GameLoaded: translated.type = EventType::GameLoaded; break;
-			case CafeSystem::EventType::GameExited: translated.type = EventType::GameExited; break;
-			case CafeSystem::EventType::PpcProcessExited: translated.type = EventType::PpcProcessExited; break;
-			case CafeSystem::EventType::PerformanceUpdated: translated.type = EventType::PerformanceUpdated; break;
-			case CafeSystem::EventType::Diagnostic: translated.type = EventType::Diagnostic; break;
+			case CafeSystem::EventType::LoadingStarted:
+				translated.type = EventType::LoadingStarted;
+				break;
+			case CafeSystem::EventType::GameLoaded:
+				translated.type = EventType::GameLoaded;
+				break;
+			case CafeSystem::EventType::GameExited:
+				translated.type = EventType::GameExited;
+				break;
+			case CafeSystem::EventType::PpcProcessExited:
+				translated.type = EventType::PpcProcessExited;
+				break;
+			case CafeSystem::EventType::PerformanceUpdated:
+				translated.type = EventType::PerformanceUpdated;
+				break;
+			case CafeSystem::EventType::Diagnostic:
+				translated.type = EventType::Diagnostic;
+				break;
 			}
 			switch (event.diagnosticCode)
 			{
-			case CafeSystem::DiagnosticCode::DamagedExecutable: translated.diagnosticCode = DiagnosticCode::DamagedExecutable; break;
-			case CafeSystem::DiagnosticCode::KeyFileCreateFailed: translated.diagnosticCode = DiagnosticCode::KeyFileCreateFailed; break;
-			case CafeSystem::DiagnosticCode::KeyFileInvalidLine: translated.diagnosticCode = DiagnosticCode::KeyFileInvalidLine; break;
-			case CafeSystem::DiagnosticCode::GraphicPackInvalid: translated.diagnosticCode = DiagnosticCode::GraphicPackInvalid; break;
-			case CafeSystem::DiagnosticCode::MemoryAllocationFailed: translated.diagnosticCode = DiagnosticCode::MemoryAllocationFailed; break;
-			case CafeSystem::DiagnosticCode::MemoryReservationFailed: translated.diagnosticCode = DiagnosticCode::MemoryReservationFailed; break;
+			case CafeSystem::DiagnosticCode::DamagedExecutable:
+				translated.diagnosticCode = DiagnosticCode::DamagedExecutable;
+				break;
+			case CafeSystem::DiagnosticCode::KeyFileCreateFailed:
+				translated.diagnosticCode = DiagnosticCode::KeyFileCreateFailed;
+				break;
+			case CafeSystem::DiagnosticCode::KeyFileInvalidLine:
+				translated.diagnosticCode = DiagnosticCode::KeyFileInvalidLine;
+				break;
+			case CafeSystem::DiagnosticCode::GraphicPackInvalid:
+				translated.diagnosticCode = DiagnosticCode::GraphicPackInvalid;
+				break;
+			case CafeSystem::DiagnosticCode::MemoryAllocationFailed:
+				translated.diagnosticCode = DiagnosticCode::MemoryAllocationFailed;
+				break;
+			case CafeSystem::DiagnosticCode::MemoryReservationFailed:
+				translated.diagnosticCode = DiagnosticCode::MemoryReservationFailed;
+				break;
 			}
 			return translated;
 		}
@@ -107,8 +131,7 @@ namespace Application
 					.principal = std::move(request.principal),
 					.requestedPermissions = request.requestedPermissions,
 					.grantedPermissions = request.grantedPermissions,
-					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ?
-						CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
+					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ? CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 					.signedPackage = request.signedPackage,
 					.headless = request.headless,
 				});
@@ -123,8 +146,7 @@ namespace Application
 				.modId = std::move(package.modId),
 				.principal = std::move(package.principal),
 				.requestedPermissions = package.requestedPermissions,
-				.executionMode = package.executionMode == ::CemodExecutionMode::TrustedNative ?
-					CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
+				.executionMode = package.executionMode == ::CemodExecutionMode::TrustedNative ? CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 				.signedPackage = package.signedPackage,
 				.titleIds = std::move(package.titleIds),
 				.error = std::move(package.error),
@@ -135,11 +157,17 @@ namespace Application
 		{
 			std::uint64_t value = 1469598103934665603ULL;
 			auto append = [&value](std::string_view text) {
-				for (const auto byte : text) { value ^= static_cast<unsigned char>(byte); value *= 1099511628211ULL; }
+				for (const auto byte : text)
+				{
+					value ^= static_cast<unsigned char>(byte);
+					value *= 1099511628211ULL;
+				}
 			};
 			for (const auto& package : packages)
 			{
-				append(package.packageKey); append(package.modIdentity); append(package.status);
+				append(package.packageKey);
+				append(package.modIdentity);
+				append(package.status);
 				auto appendInteger = [&value](std::uint64_t integer) {
 					for (unsigned shift = 0; shift < 64; shift += 8)
 					{
@@ -209,11 +237,16 @@ namespace Application
 		{
 			switch (service)
 			{
-			case NetworkService::Nintendo: return AccountNetworkService::Nintendo;
-			case NetworkService::Pretendo: return AccountNetworkService::Pretendo;
-			case NetworkService::Custom: return AccountNetworkService::Custom;
-			case NetworkService::Plasma: return AccountNetworkService::Plasma;
-			default: return AccountNetworkService::Offline;
+			case NetworkService::Nintendo:
+				return AccountNetworkService::Nintendo;
+			case NetworkService::Pretendo:
+				return AccountNetworkService::Pretendo;
+			case NetworkService::Custom:
+				return AccountNetworkService::Custom;
+			case NetworkService::Plasma:
+				return AccountNetworkService::Plasma;
+			default:
+				return AccountNetworkService::Offline;
 			}
 		}
 
@@ -221,11 +254,16 @@ namespace Application
 		{
 			switch (service)
 			{
-			case AccountNetworkService::Nintendo: return NetworkService::Nintendo;
-			case AccountNetworkService::Pretendo: return NetworkService::Pretendo;
-			case AccountNetworkService::Custom: return NetworkService::Custom;
-			case AccountNetworkService::Plasma: return NetworkService::Plasma;
-			default: return NetworkService::Offline;
+			case AccountNetworkService::Nintendo:
+				return NetworkService::Nintendo;
+			case AccountNetworkService::Pretendo:
+				return NetworkService::Pretendo;
+			case AccountNetworkService::Custom:
+				return NetworkService::Custom;
+			case AccountNetworkService::Plasma:
+				return NetworkService::Plasma;
+			default:
+				return NetworkService::Offline;
 			}
 		}
 
@@ -233,9 +271,9 @@ namespace Application
 		{
 			const auto& accounts = ::Account::GetAccounts();
 			const auto found = std::ranges::find_if(accounts,
-				[persistentId](const auto& account) {
-					return account.GetPersistentId() == persistentId;
-				});
+													[persistentId](const auto& account) {
+														return account.GetPersistentId() == persistentId;
+													});
 			return found == accounts.end() ? nullptr : &*found;
 		}
 
@@ -268,8 +306,8 @@ namespace Application
 		fs::path SaveUserRoot(std::uint64_t titleId)
 		{
 			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/user",
-				static_cast<std::uint32_t>(titleId >> 32),
-				static_cast<std::uint32_t>(titleId));
+											  static_cast<std::uint32_t>(titleId >> 32),
+											  static_cast<std::uint32_t>(titleId));
 		}
 
 		fs::path SaveAccountPath(std::uint64_t titleId, std::uint32_t persistentId)
@@ -280,8 +318,8 @@ namespace Application
 		fs::path SaveInfoPath(std::uint64_t titleId)
 		{
 			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/meta/saveinfo.xml",
-				static_cast<std::uint32_t>(titleId >> 32),
-				static_cast<std::uint32_t>(titleId));
+											  static_cast<std::uint32_t>(titleId >> 32),
+											  static_cast<std::uint32_t>(titleId));
 		}
 
 		SaveEntryLocation InspectSaveEntryPath(const fs::path& path)
@@ -293,8 +331,7 @@ namespace Application
 				return {SaveEntryState::Missing, path};
 			if (ec)
 				return {SaveEntryState::NonDirectory, path};
-			return {status.type() == fs::file_type::directory ?
-				SaveEntryState::Directory : SaveEntryState::NonDirectory, path};
+			return {status.type() == fs::file_type::directory ? SaveEntryState::Directory : SaveEntryState::NonDirectory, path};
 		}
 
 		std::optional<fs::path> NormalizeSaveArchivePath(std::string_view rawName)
@@ -335,7 +372,7 @@ namespace Application
 			zip_uint8_t operatingSystem{};
 			zip_uint32_t attributes{};
 			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
-				&attributes) != 0)
+												 &attributes) != 0)
 				return false;
 			if (operatingSystem != ZIP_OPSYS_UNIX)
 				return false;
@@ -348,7 +385,7 @@ namespace Application
 			zip_uint8_t operatingSystem{};
 			zip_uint32_t attributes{};
 			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
-				&attributes) != 0)
+												 &attributes) != 0)
 				return false;
 			if (operatingSystem != ZIP_OPSYS_UNIX)
 				return true;
@@ -361,7 +398,7 @@ namespace Application
 			SaveArchivePlan plan;
 			int zipError{};
 			zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
-				&zipError);
+									  &zipError);
 			if (!archive)
 			{
 				plan.error = SaveOperationError::ArchiveInvalid;
@@ -373,7 +410,7 @@ namespace Application
 
 			const auto entryCount = zip_get_num_entries(archive, 0);
 			if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) >
-				kMaximumSaveArchiveEntries)
+									  kMaximumSaveArchiveEntries)
 			{
 				plan.error = SaveOperationError::ArchiveInvalid;
 				plan.diagnostic = "save archive contains too many entries";
@@ -411,18 +448,18 @@ namespace Application
 						return plan;
 					}
 					zip_file_t* file = zip_fopen_index(archive,
-						static_cast<zip_uint64_t>(index), 0);
+													   static_cast<zip_uint64_t>(index), 0);
 					if (!file)
 					{
 						plan.error = SaveOperationError::ArchiveInvalid;
 						plan.diagnostic = "unable to read save archive metadata";
 						return plan;
 					}
-					const std::unique_ptr<zip_file_t, void(*)(zip_file_t*)> closeFile(
+					const std::unique_ptr<zip_file_t, void (*)(zip_file_t*)> closeFile(
 						file, [](zip_file_t* value) { (void)zip_fclose(value); });
 					std::string metadata(static_cast<std::size_t>(stat.size), '\0');
 					if (stat.size && zip_fread(file, metadata.data(), stat.size) !=
-						static_cast<zip_int64_t>(stat.size))
+										 static_cast<zip_int64_t>(stat.size))
 					{
 						plan.error = SaveOperationError::ArchiveInvalid;
 						plan.diagnostic = "save archive metadata is truncated";
@@ -437,7 +474,7 @@ namespace Application
 							value.remove_prefix(2);
 						std::uint64_t titleId{};
 						const auto parsed = std::from_chars(value.data(),
-							value.data() + value.size(), titleId, 16);
+															value.data() + value.size(), titleId, 16);
 						if (parsed.ec == std::errc())
 							plan.sourceTitleId = titleId;
 					}
@@ -478,7 +515,7 @@ namespace Application
 					plan.bytesTotal += stat.size;
 				}
 				plan.entries.push_back({static_cast<zip_uint64_t>(index),
-					*relativePath, stat.size, directory});
+										*relativePath, stat.size, directory});
 			}
 			return plan;
 		}
@@ -491,8 +528,8 @@ namespace Application
 			for (std::uint64_t attempt = 0; attempt != 1024; ++attempt)
 			{
 				const auto candidate = target.parent_path() /
-					fmt::format("{}.{}.{}", _pathToUtf8(target.filename()), purpose,
-						nonce + sequence.fetch_add(1) + attempt);
+									   fmt::format("{}.{}.{}", _pathToUtf8(target.filename()), purpose,
+												   nonce + sequence.fetch_add(1) + attempt);
 				std::error_code ec;
 				if (!fs::exists(candidate, ec) && !ec)
 					return candidate;
@@ -509,11 +546,15 @@ namespace Application
 		}
 
 		FrontendSettingsResult EnsureDefaultMlcFiles(const fs::path& mlc,
-			std::span<const AccountCountry> countries, FrontendSettingsSnapshot snapshot)
+													 std::span<const AccountCountry> countries, FrontendSettingsSnapshot snapshot)
 		{
 			const std::array directories{
-				mlc, mlc / "sys", mlc / "usr", mlc / "usr/title/00050000",
-				mlc / "usr/title/0005000c", mlc / "usr/title/0005000e",
+				mlc,
+				mlc / "sys",
+				mlc / "usr",
+				mlc / "usr/title/00050000",
+				mlc / "usr/title/0005000c",
+				mlc / "usr/title/0005000e",
 				mlc / "usr/save/00050010/1004a000/user/common/db",
 				mlc / "usr/save/00050010/1004a100/user/common/db",
 				mlc / "usr/save/00050010/1004a200/user/common/db",
@@ -525,24 +566,34 @@ namespace Application
 				fs::create_directories(directory, ec);
 				if (ec || !fs::is_directory(directory, ec) || ec)
 					return {FrontendSettingsError::StorageFailed, std::move(snapshot),
-						fmt::format("unable to create MLC directory {}: {}", _pathToUtf8(directory),
-							ec ? ec.message() : "path is not a directory")};
+							fmt::format("unable to create MLC directory {}: {}", _pathToUtf8(directory),
+										ec ? ec.message() : "path is not a directory")};
 			}
 			const auto content = mlc / "sys/title/0005001b/1005c000/content";
 			auto writeIfMissing = [&](const fs::path& path, std::string_view data) -> bool {
-				if (fs::exists(path, ec)) return !ec && fs::is_regular_file(path, ec) && !ec;
-				if (ec) return false;
+				if (fs::exists(path, ec))
+					return !ec && fs::is_regular_file(path, ec) && !ec;
+				if (ec)
+					return false;
 				auto temporary = path;
 				temporary += fmt::format(".{}.tmp",
-					std::chrono::steady_clock::now().time_since_epoch().count());
+										 std::chrono::steady_clock::now().time_since_epoch().count());
 				{
 					std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
 					output.write(data.data(), static_cast<std::streamsize>(data.size()));
 					output.flush();
-					if (!output) { RemovePathQuietly(temporary); return false; }
+					if (!output)
+					{
+						RemovePathQuietly(temporary);
+						return false;
+					}
 				}
 				fs::rename(temporary, path, ec);
-				if (ec) { RemovePathQuietly(temporary); return false; }
+				if (ec)
+				{
+					RemovePathQuietly(temporary);
+					return false;
+				}
 				return true;
 			};
 			constexpr std::string_view languages =
@@ -561,27 +612,30 @@ namespace Application
 )";
 			if (!writeIfMissing(content / "language.txt", languages))
 				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
-					"unable to initialize the MLC language table"};
+						"unable to initialize the MLC language table"};
 			std::string countryTable;
 			for (const auto& country : countries)
-				countryTable += boost::iequals(country.name, "NN") ? "NULL,\n" :
-					fmt::format("\"{}\",\n", country.name);
+				countryTable += boost::iequals(country.name, "NN") ? "NULL,\n" : fmt::format("\"{}\",\n", country.name);
 			if (!writeIfMissing(content / "country.txt", countryTable))
 				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
-					"unable to initialize the MLC country table"};
+						"unable to initialize the MLC country table"};
 			const auto writeTest = mlc / fmt::format(".cemu-write-test-{}",
-				std::chrono::steady_clock::now().time_since_epoch().count());
+													 std::chrono::steady_clock::now().time_since_epoch().count());
 			{
 				std::ofstream output(writeTest, std::ios::binary | std::ios::trunc);
 				output << "ok";
-				if (!output) { RemovePathQuietly(writeTest); return {
-					FrontendSettingsError::StorageFailed, std::move(snapshot),
-					"the MLC directory is not writable"}; }
+				if (!output)
+				{
+					RemovePathQuietly(writeTest);
+					return {
+						FrontendSettingsError::StorageFailed, std::move(snapshot),
+						"the MLC directory is not writable"};
+				}
 			}
 			fs::remove(writeTest, ec);
 			if (ec)
 				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
-					"unable to remove the MLC write test"};
+						"unable to remove the MLC write test"};
 			return {FrontendSettingsError::None, std::move(snapshot), {}};
 		}
 
@@ -589,11 +643,16 @@ namespace Application
 		{
 			switch (type)
 			{
-			case EmulatedController::VPAD: return EmulatedControllerType::GamePad;
-			case EmulatedController::Pro: return EmulatedControllerType::ProController;
-			case EmulatedController::Classic: return EmulatedControllerType::ClassicController;
-			case EmulatedController::Wiimote: return EmulatedControllerType::Wiimote;
-			default: return EmulatedControllerType::Disabled;
+			case EmulatedController::VPAD:
+				return EmulatedControllerType::GamePad;
+			case EmulatedController::Pro:
+				return EmulatedControllerType::ProController;
+			case EmulatedController::Classic:
+				return EmulatedControllerType::ClassicController;
+			case EmulatedController::Wiimote:
+				return EmulatedControllerType::Wiimote;
+			default:
+				return EmulatedControllerType::Disabled;
 			}
 		}
 
@@ -602,22 +661,29 @@ namespace Application
 		{
 			switch (type)
 			{
-			case EmulatedControllerType::GamePad: return EmulatedController::VPAD;
-			case EmulatedControllerType::ProController: return EmulatedController::Pro;
-			case EmulatedControllerType::ClassicController: return EmulatedController::Classic;
-			case EmulatedControllerType::Wiimote: return EmulatedController::Wiimote;
-			default: return std::nullopt;
+			case EmulatedControllerType::GamePad:
+				return EmulatedController::VPAD;
+			case EmulatedControllerType::ProController:
+				return EmulatedController::Pro;
+			case EmulatedControllerType::ClassicController:
+				return EmulatedController::Classic;
+			case EmulatedControllerType::Wiimote:
+				return EmulatedController::Wiimote;
+			default:
+				return std::nullopt;
 			}
 		}
 
 		std::string InputMappingLabel(const EmulatedController& controller,
-			std::uint64_t mapping)
+									  std::uint64_t mapping)
 		{
 			switch (controller.type())
 			{
 			case EmulatedController::VPAD:
-				if (mapping == VPADController::kButtonId_Mic) return "Blow microphone";
-				if (mapping == VPADController::kButtonId_Screen) return "Show screen";
+				if (mapping == VPADController::kButtonId_Mic)
+					return "Blow microphone";
+				if (mapping == VPADController::kButtonId_Screen)
+					return "Show screen";
 				return std::string(VPADController::get_button_name(
 					static_cast<VPADController::ButtonId>(mapping)));
 			case EmulatedController::Pro:
@@ -629,7 +695,8 @@ namespace Application
 			case EmulatedController::Wiimote:
 				return std::string(WiimoteController::get_button_name(
 					static_cast<WiimoteController::ButtonId>(mapping)));
-			default: return fmt::format("Mapping {}", mapping);
+			default:
+				return fmt::format("Mapping {}", mapping);
 			}
 		}
 
@@ -645,7 +712,10 @@ namespace Application
 			fs::path backup;
 			bool replacedExisting{};
 
-			void Commit() const { RemovePathQuietly(backup); }
+			void Commit() const
+			{
+				RemovePathQuietly(backup);
+			}
 
 			GraphicPackInstallResult Rollback() const
 			{
@@ -655,8 +725,8 @@ namespace Application
 				std::error_code ec;
 				fs::rename(backup, target, ec);
 				return ec ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
-					fmt::format("graphic-pack rollback failed: {}", ec.message())} :
-					GraphicPackInstallResult{};
+													 fmt::format("graphic-pack rollback failed: {}", ec.message())}
+						  : GraphicPackInstallResult{};
 			}
 		};
 
@@ -700,12 +770,12 @@ namespace Application
 				const auto& ipv6 = reinterpret_cast<const sockaddr_in6&>(address);
 				const auto* bytes = ipv6.sin6_addr.s6_addr;
 				const bool allZeroPrefix = std::all_of(bytes, bytes + 12,
-					[](std::uint8_t byte) { return byte == 0; });
+													   [](std::uint8_t byte) { return byte == 0; });
 				if (allZeroPrefix)
 					return false;
 				const bool mappedIpv4 = std::all_of(bytes, bytes + 10,
-					[](std::uint8_t byte) { return byte == 0; }) &&
-					bytes[10] == 0xff && bytes[11] == 0xff;
+													[](std::uint8_t byte) { return byte == 0; }) &&
+										bytes[10] == 0xff && bytes[11] == 0xff;
 				if (mappedIpv4)
 				{
 					sockaddr_in mapped{};
@@ -715,7 +785,8 @@ namespace Application
 				}
 				if ((bytes[0] & 0xfe) == 0xfc ||
 					(bytes[0] == 0xfe && ((bytes[1] & 0xc0) == 0x80 ||
-						(bytes[1] & 0xc0) == 0xc0)) || bytes[0] == 0xff)
+										  (bytes[1] & 0xc0) == 0xc0)) ||
+					bytes[0] == 0xff)
 					return false;
 				if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8)
 					return false;
@@ -731,7 +802,7 @@ namespace Application
 		}
 
 		curl_socket_t OpenPublicGraphicPackSocket(void*, curlsocktype purpose,
-			curl_sockaddr* address)
+												  curl_sockaddr* address)
 		{
 			if (purpose != CURLSOCKTYPE_IPCXN || !address ||
 				!IsPublicGraphicPackAddress(address->addr))
@@ -771,7 +842,7 @@ namespace Application
 			if (buffer.cancelled && buffer.cancelled())
 				return 0;
 			if (byteCount > kMaximumGraphicPackDownloadSize -
-				std::min(buffer.bytes.size(), kMaximumGraphicPackDownloadSize))
+								std::min(buffer.bytes.size(), kMaximumGraphicPackDownloadSize))
 				return 0;
 			const auto* source = static_cast<const std::uint8_t*>(data);
 			buffer.bytes.insert(buffer.bytes.end(), source, source + byteCount);
@@ -779,26 +850,25 @@ namespace Application
 		}
 
 		int ReportGraphicPackDownload(void* context, curl_off_t total, curl_off_t current,
-			curl_off_t, curl_off_t)
+									  curl_off_t, curl_off_t)
 		{
 			auto& buffer = *static_cast<GraphicPackDownloadBuffer*>(context);
 			if (buffer.cancelled && buffer.cancelled())
 				return 1;
 			if (buffer.progress)
-				buffer.progress({buffer.phase, static_cast<std::uint64_t>(std::max<curl_off_t>(0, current)),
-					static_cast<std::uint64_t>(std::max<curl_off_t>(0, total)), {}});
+				buffer.progress({buffer.phase, static_cast<std::uint64_t>(std::max<curl_off_t>(0, current)), static_cast<std::uint64_t>(std::max<curl_off_t>(0, total)), {}});
 			return 0;
 		}
 
 		GraphicPackInstallResult DownloadGraphicPackUrl(std::string_view url,
-			GraphicPackDownloadBuffer& buffer, GraphicPackInstallPhase phase)
+														GraphicPackDownloadBuffer& buffer, GraphicPackInstallPhase phase)
 		{
 			if (!IsValidGraphicPackHttpsUrl(url))
 				return {GraphicPackInstallError::InvalidUrl, "graphic-pack URL must use HTTPS"};
 			if (buffer.cancelled && buffer.cancelled())
 				return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
 			std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(),
-				&curl_easy_cleanup);
+																	 &curl_easy_cleanup);
 			if (!curl)
 				return {GraphicPackInstallError::ConnectionFailed, "unable to initialize HTTPS client"};
 			buffer.bytes.clear();
@@ -835,7 +905,7 @@ namespace Application
 			curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
 			if (status < 200 || status >= 300)
 				return {GraphicPackInstallError::ConnectionFailed,
-					fmt::format("graphic-pack server returned HTTP {}", status)};
+						fmt::format("graphic-pack server returned HTTP {}", status)};
 			return {};
 		}
 
@@ -868,10 +938,16 @@ namespace Application
 				zip_stat_t rules{};
 				if (zip_stat(archive.get(), "rules.txt", 0, &rules) != 0)
 					return {GraphicPackInstallError::InvalidArchive,
-						"custom graphic-pack archive must contain rules.txt at its root"};
+							"custom graphic-pack archive must contain rules.txt at its root"};
 			}
 
-			struct Entry { zip_uint64_t index; fs::path path; zip_uint64_t size; bool directory; };
+			struct Entry
+			{
+				zip_uint64_t index;
+				fs::path path;
+				zip_uint64_t size;
+				bool directory;
+			};
 			std::vector<Entry> entries;
 			std::set<std::string> names;
 			zip_uint64_t totalBytes{};
@@ -902,18 +978,21 @@ namespace Application
 
 			std::error_code ec;
 			const bool targetExists = fs::exists(target, ec);
-			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
 			if (targetExists && !replaceExisting)
 				return {GraphicPackInstallError::ConfirmationRequired,
-					"existing graphic packs must be replaced to continue"};
+						"existing graphic packs must be replaced to continue"};
 			fs::create_directories(target.parent_path(), ec);
-			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
 			const auto staging = UniqueSiblingPath(target, "graphic-pack-staging");
 			const auto backup = targetExists ? UniqueSiblingPath(target, "graphic-pack-backup") : fs::path{};
 			if (staging.empty() || (targetExists && backup.empty()))
 				return {GraphicPackInstallError::IoFailure, "unable to reserve graphic-pack transaction paths"};
 			fs::create_directories(staging, ec);
-			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
 
 			std::array<char, 1024 * 1024> copyBuffer{};
 			std::uint64_t completed{};
@@ -928,40 +1007,73 @@ namespace Application
 				if (entry.directory)
 				{
 					fs::create_directories(destination, ec);
-					if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+					if (ec)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::IoFailure, ec.message()};
+					}
 					continue;
 				}
 				fs::create_directories(destination.parent_path(), ec);
-				if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+				if (ec)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, ec.message()};
+				}
 				std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
 					zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
 				std::ofstream output(destination, std::ios::binary | std::ios::trunc);
-				if (!file || !output) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to create extracted graphic-pack file"}; }
+				if (!file || !output)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, "unable to create extracted graphic-pack file"};
+				}
 				zip_uint64_t remaining = entry.size;
 				while (remaining > 0)
 				{
-					if (cancelled && cancelled()) { RemovePathQuietly(staging); return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"}; }
+					if (cancelled && cancelled())
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+					}
 					const auto request = std::min<zip_uint64_t>(copyBuffer.size(), remaining);
 					const auto read = zip_fread(file.get(), copyBuffer.data(), request);
-					if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining) { RemovePathQuietly(staging); return {GraphicPackInstallError::InvalidArchive, "unable to extract graphic-pack archive"}; }
+					if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::InvalidArchive, "unable to extract graphic-pack archive"};
+					}
 					output.write(copyBuffer.data(), static_cast<std::streamsize>(read));
-					if (!output) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to write extracted graphic-pack file"}; }
+					if (!output)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::IoFailure, "unable to write extracted graphic-pack file"};
+					}
 					remaining -= static_cast<zip_uint64_t>(read);
 					completed += static_cast<std::uint64_t>(read);
-					if (progress) progress({GraphicPackInstallPhase::Extracting, completed,
-						totalBytes, _pathToUtf8(entry.path)});
+					if (progress)
+						progress({GraphicPackInstallPhase::Extracting, completed,
+								  totalBytes, _pathToUtf8(entry.path)});
 				}
 			}
 			if (!version.empty())
 			{
 				std::ofstream versionFile(staging / "version.txt", std::ios::binary | std::ios::trunc);
 				versionFile << version;
-				if (!versionFile) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to write graphic-pack version"}; }
+				if (!versionFile)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, "unable to write graphic-pack version"};
+				}
 			}
 			if (targetExists)
 			{
 				fs::rename(target, backup, ec);
-				if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+				if (ec)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, ec.message()};
+				}
 			}
 			fs::rename(staging, target, ec);
 			if (ec)
@@ -970,8 +1082,9 @@ namespace Application
 				{
 					std::error_code restoreError;
 					fs::rename(backup, target, restoreError);
-					if (restoreError) return {GraphicPackInstallError::IoFailure,
-						fmt::format("{}; rollback failed: {}", ec.message(), restoreError.message())};
+					if (restoreError)
+						return {GraphicPackInstallError::IoFailure,
+								fmt::format("{}; rollback failed: {}", ec.message(), restoreError.message())};
 				}
 				RemovePathQuietly(staging);
 				return {GraphicPackInstallError::IoFailure, ec.message()};
@@ -990,7 +1103,8 @@ namespace Application
 			GraphicPackInstallTransaction* transaction)
 		{
 			GraphicPackDownloadBuffer download{{}, progress, cancelled};
-			if (progress) progress({GraphicPackInstallPhase::Checking, 0, 0, {}});
+			if (progress)
+				progress({GraphicPackInstallPhase::Checking, 0, 0, {}});
 			std::string archiveUrl = request.url;
 			std::string releaseName;
 			fs::path target;
@@ -1000,7 +1114,8 @@ namespace Application
 				auto result = DownloadGraphicPackUrl(
 					"https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest",
 					download, GraphicPackInstallPhase::Checking);
-				if (!result) return result;
+				if (!result)
+					return result;
 				rapidjson::Document document;
 				document.Parse(reinterpret_cast<const char*>(download.bytes.data()), download.bytes.size());
 				if (document.HasParseError() || !document.IsObject() ||
@@ -1014,7 +1129,8 @@ namespace Application
 						asset["browser_download_url"].IsString())
 					{
 						archiveUrl = asset["browser_download_url"].GetString();
-						if (archiveUrl.starts_with("https://")) break;
+						if (archiveUrl.starts_with("https://"))
+							break;
 						archiveUrl.clear();
 					}
 				}
@@ -1028,7 +1144,7 @@ namespace Application
 					return {GraphicPackInstallError::None, {}, true};
 				if (!installedVersion.empty() && !request.replaceExisting)
 					return {GraphicPackInstallError::ConfirmationRequired,
-						fmt::format("replace installed community packs {} with {}?", installedVersion, releaseName)};
+							fmt::format("replace installed community packs {} with {}?", installedVersion, releaseName)};
 			}
 			else
 			{
@@ -1039,7 +1155,8 @@ namespace Application
 					fileName.resize(query);
 				if (const auto extension = fileName.find_last_of('.'); extension != std::string::npos)
 					fileName.resize(extension);
-				if (fileName.empty()) fileName = "NewCustomPack";
+				if (fileName.empty())
+					fileName = "NewCustomPack";
 				auto folder = NormalizeSaveArchivePath(fileName);
 				if (!folder || folder->has_parent_path())
 					return {GraphicPackInstallError::InvalidUrl, "custom graphic-pack URL has an unsafe file name"};
@@ -1048,10 +1165,11 @@ namespace Application
 			}
 
 			auto result = DownloadGraphicPackUrl(archiveUrl, download,
-				GraphicPackInstallPhase::Downloading);
-			if (!result) return result;
+												 GraphicPackInstallPhase::Downloading);
+			if (!result)
+				return result;
 			return ExtractGraphicPackArchive(download.bytes, target, request.replaceExisting,
-				rootRules, releaseName, std::move(progress), std::move(cancelled), transaction);
+											 rootRules, releaseName, std::move(progress), std::move(cancelled), transaction);
 		}
 
 		struct SaveMetadataStage
@@ -1063,25 +1181,26 @@ namespace Application
 
 		template<typename Modifier>
 		SaveOperationResult StageSaveMetadata(std::uint64_t titleId,
-			Modifier&& modifier, SaveMetadataStage& stage)
+											  Modifier&& modifier, SaveMetadataStage& stage)
 		{
 			stage.original = SaveInfoPath(titleId);
 			std::error_code ec;
 			if (!fs::exists(stage.original, ec))
 				return ec ? SaveOperationResult{SaveOperationError::MetadataFailure,
-					ec.message()} : SaveOperationResult{};
+												ec.message()}
+						  : SaveOperationResult{};
 			if (ec || !fs::is_regular_file(stage.original, ec) || ec)
 				return {SaveOperationError::MetadataFailure,
-					"saveinfo.xml is not a regular file"};
+						"saveinfo.xml is not a regular file"};
 
 			pugi::xml_document document;
 			if (!document.load_file(stage.original.c_str()))
 				return {SaveOperationError::MetadataFailure,
-					"unable to parse saveinfo.xml"};
+						"unable to parse saveinfo.xml"};
 			auto info = document.child("info");
 			if (!info)
 				return {SaveOperationError::MetadataFailure,
-					"saveinfo.xml is missing its info node"};
+						"saveinfo.xml is missing its info node"};
 			stage.changed = std::forward<Modifier>(modifier)(info);
 			if (!stage.changed)
 				return {};
@@ -1091,7 +1210,7 @@ namespace Application
 			{
 				RemovePathQuietly(stage.temporary);
 				return {SaveOperationError::MetadataFailure,
-					"unable to stage saveinfo.xml"};
+						"unable to stage saveinfo.xml"};
 			}
 			return {};
 		}
@@ -1103,7 +1222,7 @@ namespace Application
 			const auto backup = UniqueSiblingPath(stage.original, "backup");
 			if (backup.empty())
 				return {SaveOperationError::MetadataFailure,
-					"unable to reserve saveinfo.xml backup path"};
+						"unable to reserve saveinfo.xml backup path"};
 
 			std::error_code ec;
 			fs::rename(stage.original, backup, ec);
@@ -1115,8 +1234,9 @@ namespace Application
 				std::error_code restoreError;
 				fs::rename(backup, stage.original, restoreError);
 				return {SaveOperationError::MetadataFailure,
-					restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
-						restoreError.message()) : ec.message()};
+						restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+												   restoreError.message())
+									 : ec.message()};
 			}
 			RemovePathQuietly(backup);
 			stage.temporary.clear();
@@ -1124,7 +1244,7 @@ namespace Application
 		}
 
 		pugi::xml_node FindSaveAccountNode(pugi::xml_node info,
-			std::uint32_t persistentId)
+										   std::uint32_t persistentId)
 		{
 			const auto id = fmt::format("{:08x}", persistentId);
 			return info.find_child([&id](const pugi::xml_node& node) {
@@ -1137,10 +1257,10 @@ namespace Application
 			lock = CafeSaveList::AcquireOperationLock();
 			if (CafeSaveList::IsScanning())
 				return {SaveOperationError::Scanning,
-					"save catalog scan is still running"};
+						"save catalog scan is still running"};
 			if (CafeSystem::IsTitleRunning())
 				return {SaveOperationError::TitleRunning,
-					"save data cannot be changed while a title is running"};
+						"save data cannot be changed while a title is running"};
 			return {};
 		}
 
@@ -1169,7 +1289,7 @@ namespace Application
 				.hasPatches = pack->HasPatches(),
 				.hasCustomVsync = pack->HasCustomVSyncFrequency(),
 				.supportedVersion = pack->GetVersion() >= 3 &&
-					pack->GetVersion() <= GraphicPack2::GFXPACK_VERSION_8,
+									pack->GetVersion() <= GraphicPack2::GFXPACK_VERSION_8,
 				.titleIds = pack->GetTitleIds(),
 			};
 			auto categorized = pack->GetCategorizedPresets(result.presetOrder);
@@ -1180,7 +1300,7 @@ namespace Application
 					continue;
 				for (const auto& preset : found->second)
 					result.presets.push_back({preset->category, preset->name,
-						preset->active, preset->visible});
+											  preset->active, preset->visible});
 			}
 			return result;
 		}
@@ -1295,7 +1415,7 @@ namespace Application
 		}
 
 		std::uint64_t ManagedContentFingerprint(const ManagedContentEntry& entry,
-			const fs::path* identityPath = nullptr)
+												const fs::path* identityPath = nullptr)
 		{
 			auto mix = [](std::uint64_t seed, std::uint64_t value) {
 				return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
@@ -1327,22 +1447,27 @@ namespace Application
 			{
 				std::vector<std::string> identities;
 				fs::recursive_directory_iterator iterator(entry.path,
-					fs::directory_options::skip_permission_denied, error), end;
+														  fs::directory_options::skip_permission_denied, error),
+					end;
 				while (!error && iterator != end)
 				{
 					const auto relative = fs::relative(iterator->path(), entry.path, error);
-					if (error) break;
+					if (error)
+						break;
 					const auto status = iterator->symlink_status(error);
-					if (error) break;
+					if (error)
+						break;
 					std::string identity = _pathToUtf8(relative);
 					identity.append("|").append(std::to_string(static_cast<unsigned>(status.type())));
 					const auto modified = fs::last_write_time(iterator->path(), error);
-					if (error) break;
+					if (error)
+						break;
 					identity.append("|").append(std::to_string(modified.time_since_epoch().count()));
 					if (status.type() == fs::file_type::regular)
 					{
 						const auto size = fs::file_size(iterator->path(), error);
-						if (error) break;
+						if (error)
+							break;
 						identity.append("|").append(std::to_string(size));
 					}
 					identities.push_back(std::move(identity));
@@ -1393,9 +1518,12 @@ namespace Application
 
 		class TitleListLease final
 		{
-		public:
+		  public:
 			TitleListLease() : titles(CafeTitleList::AcquireInternalList()) {}
-			~TitleListLease() { CafeTitleList::ReleaseInternalList(); }
+			~TitleListLease()
+			{
+				CafeTitleList::ReleaseInternalList();
+			}
 			std::span<TitleInfo*> titles;
 		};
 
@@ -1407,8 +1535,7 @@ namespace Application
 			const bool hasBase = parser.GetType() != TitleIdParser::TITLE_TYPE::AOC;
 			const bool hasUpdate = parser.CanHaveSeparateUpdateTitleId();
 			const std::uint64_t updateId = hasUpdate ? parser.GetSeparateUpdateTitleId() : 0;
-			const std::uint64_t aocId = hasBase ?
-				(titleId & ~0xff00000000ULL) | 0x0c00000000ULL : titleId;
+			const std::uint64_t aocId = hasBase ? (titleId & ~0xff00000000ULL) | 0x0c00000000ULL : titleId;
 
 			TitleInfo* base{};
 			TitleInfo* update{};
@@ -1421,10 +1548,10 @@ namespace Application
 				if (hasBase && candidateId == titleId && (!base || preferred))
 					base = candidate;
 				else if (hasUpdate && candidateId == updateId &&
-					(!update || candidate->GetAppTitleVersion() > update->GetAppTitleVersion() || preferred))
+						 (!update || candidate->GetAppTitleVersion() > update->GetAppTitleVersion() || preferred))
 					update = candidate;
 				else if (candidateId == aocId &&
-					(!aoc || candidate->GetAppTitleVersion() > aoc->GetAppTitleVersion() || preferred))
+						 (!aoc || candidate->GetAppTitleVersion() > aoc->GetAppTitleVersion() || preferred))
 					aoc = candidate;
 			}
 
@@ -1467,9 +1594,9 @@ namespace Application
 
 		class WuaWriterContext final
 		{
-		public:
+		  public:
 			WuaWriterContext(std::filesystem::path outputPath,
-				ContentProgressHandler progress, ContentCancellationCheck cancelled)
+							 ContentProgressHandler progress, ContentCancellationCheck cancelled)
 				: outputPath(std::move(outputPath)), progress(std::move(progress)),
 				  cancelled(std::move(cancelled)) {}
 
@@ -1502,13 +1629,16 @@ namespace Application
 					self.valid = false;
 			}
 
-			bool IsCancelled() const { return cancelled && cancelled(); }
+			bool IsCancelled() const
+			{
+				return cancelled && cancelled();
+			}
 
 			void Publish(ContentOperationPhase phase) const
 			{
 				if (progress)
 					progress({phase, filesCompleted, filesTotal,
-						bytesCompleted, bytesTotal});
+							  bytesCompleted, bytesTotal});
 			}
 
 			bool CountFiles(const std::string& path)
@@ -1529,7 +1659,7 @@ namespace Application
 						Publish(ContentOperationPhase::Collecting);
 					}
 					else if (entry.isDirectory &&
-						!CountFiles(fmt::format("{}{}/", path, entry.path)))
+							 !CountFiles(fmt::format("{}{}/", path, entry.path)))
 						return false;
 				}
 				return true;
@@ -1551,7 +1681,7 @@ namespace Application
 					if (entry.isDirectory)
 					{
 						if (!AddFiles(fmt::format("{}{}/", archivePath, entry.path),
-							fmt::format("{}{}/", path, entry.path)))
+									  fmt::format("{}{}/", path, entry.path)))
 							return false;
 						continue;
 					}
@@ -1560,8 +1690,7 @@ namespace Application
 					if (!writer->StartNewFile((archivePath + entry.path).c_str()))
 						return false;
 					std::unique_ptr<FSCVirtualFile> file(fsc_open(
-						(path + entry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE |
-						FSC_ACCESS_FLAG::READ_PERMISSION, &status));
+						(path + entry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &status));
 					if (!file)
 						return false;
 					buffer.resize(32 * 1024);
@@ -1588,13 +1717,10 @@ namespace Application
 					return false;
 				try
 				{
-					const bool result = count ? CountFiles(mountPath) :
-						AddFiles(fmt::format("{:016x}_v{}/", title.GetAppTitleId(),
-							title.GetAppTitleVersion()), mountPath);
+					const bool result = count ? CountFiles(mountPath) : AddFiles(fmt::format("{:016x}_v{}/", title.GetAppTitleId(), title.GetAppTitleVersion()), mountPath);
 					title.Unmount(mountPath);
 					return result;
-				}
-				catch (...)
+				} catch (...)
 				{
 					title.Unmount(mountPath);
 					throw;
@@ -1614,11 +1740,10 @@ namespace Application
 			bool valid{};
 		};
 
-		class CafeTitleEventSubscription final :
-			public Detail::TitleSubscriptionState,
-			public std::enable_shared_from_this<CafeTitleEventSubscription>
+		class CafeTitleEventSubscription final : public Detail::TitleSubscriptionState,
+												 public std::enable_shared_from_this<CafeTitleEventSubscription>
 		{
-		public:
+		  public:
 			explicit CafeTitleEventSubscription(TitleCatalogHandler handler)
 				: m_handler(std::move(handler)) {}
 
@@ -1629,8 +1754,7 @@ namespace Application
 				try
 				{
 					state->Connect();
-				}
-				catch (...)
+				} catch (...)
 				{
 					state->Stop();
 					throw;
@@ -1667,7 +1791,7 @@ namespace Application
 					m_thread.join();
 			}
 
-		private:
+		  private:
 			void Connect()
 			{
 				auto self = shared_from_this();
@@ -1691,7 +1815,7 @@ namespace Application
 								break;
 							default:
 								cemuLog_log(LogType::Force,
-									"Ignoring unknown title catalog event");
+											"Ignoring unknown title catalog event");
 								return;
 							}
 							if (event->titleInfo)
@@ -1699,22 +1823,22 @@ namespace Application
 								translated.titleId = ToBaseTitleId(
 									event->titleInfo->GetAppTitleId());
 								const bool discovered = event->eventType ==
-									CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED;
+														CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED;
 								if (!discovered || (!event->titleInfo->IsCached() &&
-									!event->titleInfo->IsSystemDataTitle()))
+													!event->titleInfo->IsSystemDataTitle()))
 								{
 									translated.managedEntry = TranslateManagedTitle(
 										*event->titleInfo, discovered);
 								}
 							}
 							self.Enqueue(std::move(translated));
-						}
-						catch (const std::exception& exception)
+						} catch (const std::exception& exception)
 						{
 							cemuLog_log(LogType::Force,
-								"Unable to queue title catalog event: {}", exception.what());
+										"Unable to queue title catalog event: {}", exception.what());
 						}
-					}, this);
+					},
+					this);
 
 				m_saveCallbackId = CafeSaveList::RegisterCallback(
 					[](CafeSaveListCallbackEvent* event, void* context) {
@@ -1735,7 +1859,7 @@ namespace Application
 								break;
 							default:
 								cemuLog_log(LogType::Force,
-									"Ignoring unknown save catalog event");
+											"Ignoring unknown save catalog event");
 								return;
 							}
 							if (event->saveInfo)
@@ -1744,13 +1868,13 @@ namespace Application
 								translated.managedEntry = TranslateManagedSave(*event->saveInfo);
 							}
 							self.Enqueue(std::move(translated));
-						}
-						catch (const std::exception& exception)
+						} catch (const std::exception& exception)
 						{
 							cemuLog_log(LogType::Force,
-								"Unable to queue save catalog event: {}", exception.what());
+										"Unable to queue save catalog event: {}", exception.what());
 						}
-					}, this);
+					},
+					this);
 			}
 
 			void Enqueue(TitleCatalogEvent event)
@@ -1783,11 +1907,10 @@ namespace Application
 					try
 					{
 						m_handler(event);
-					}
-					catch (const std::exception& exception)
+					} catch (const std::exception& exception)
 					{
 						cemuLog_log(LogType::Force,
-							"Title catalog subscriber failed: {}", exception.what());
+									"Title catalog subscriber failed: {}", exception.what());
 					}
 				}
 			}
@@ -1821,7 +1944,7 @@ namespace Application
 				}
 				if (shaderType)
 					LatteAsyncCommands_queueDeleteShader(shader.shader_base_hash,
-						shader.shader_aux_hash, *shaderType);
+														 shader.shader_aux_hash, *shaderType);
 			}
 		}
 
@@ -1840,11 +1963,16 @@ namespace Application
 		{
 			switch (status)
 			{
-			case CafeSystem::PREPARE_STATUS_CODE::SUCCESS: return LaunchError::None;
-			case CafeSystem::PREPARE_STATUS_CODE::CANCELLED: return LaunchError::PermissionDenied;
-			case CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX: return LaunchError::InvalidExecutable;
-			case CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT: return LaunchError::UnableToMount;
-			case CafeSystem::PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY: return LaunchError::CemodRuntimeBusy;
+			case CafeSystem::PREPARE_STATUS_CODE::SUCCESS:
+				return LaunchError::None;
+			case CafeSystem::PREPARE_STATUS_CODE::CANCELLED:
+				return LaunchError::PermissionDenied;
+			case CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX:
+				return LaunchError::InvalidExecutable;
+			case CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT:
+				return LaunchError::UnableToMount;
+			case CafeSystem::PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY:
+				return LaunchError::CemodRuntimeBusy;
 			}
 			return LaunchError::InvalidExecutable;
 		}
@@ -1853,15 +1981,21 @@ namespace Application
 		{
 			switch (type)
 			{
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE: return TitleInstallKind::Base;
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO: return TitleInstallKind::Demo;
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE: return TitleInstallKind::Update;
-			case TitleIdParser::TITLE_TYPE::AOC: return TitleInstallKind::Dlc;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE:
+				return TitleInstallKind::Base;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO:
+				return TitleInstallKind::Demo;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE:
+				return TitleInstallKind::Update;
+			case TitleIdParser::TITLE_TYPE::AOC:
+				return TitleInstallKind::Dlc;
 			case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
 			case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
 				return TitleInstallKind::SystemTitle;
-			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA: return TitleInstallKind::SystemData;
-			default: return TitleInstallKind::Unknown;
+			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA:
+				return TitleInstallKind::SystemData;
+			default:
+				return TitleInstallKind::Unknown;
 			}
 		}
 
@@ -1879,8 +2013,7 @@ namespace Application
 			{
 				std::error_code ec;
 				const auto status = fs::symlink_status(path, ec);
-				mix(ec ? std::numeric_limits<std::uint64_t>::max() :
-					static_cast<std::uint64_t>(status.type()));
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() : static_cast<std::uint64_t>(status.type()));
 				if (!ec && fs::is_regular_file(status))
 				{
 					mix(fs::file_size(path, ec));
@@ -1889,14 +2022,13 @@ namespace Application
 				}
 				ec.clear();
 				const auto modified = fs::last_write_time(path, ec);
-				mix(ec ? std::numeric_limits<std::uint64_t>::max() - 2 :
-					static_cast<std::uint64_t>(modified.time_since_epoch().count()));
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() - 2 : static_cast<std::uint64_t>(modified.time_since_epoch().count()));
 			}
 			return result;
 		}
 
 		TitleInstallPlanResult BuildTitleInstallPlan(const fs::path& requestedSource,
-			bool checkAvailableSpace = true)
+													 bool checkAvailableSpace = true)
 		{
 			std::error_code ec;
 			auto source = fs::weakly_canonical(requestedSource, ec);
@@ -1905,7 +2037,7 @@ namespace Application
 			TitleInfo title(source);
 			if (!title.IsValid())
 				return {TitleInstallError::InvalidSource,
-					"The selected folder is not a valid installable title", std::nullopt};
+						"The selected folder is not a valid installable title", std::nullopt};
 
 			const std::array<const char*, 3> requiredFolders{"content", "code", "meta"};
 			std::uint64_t requiredBytes{};
@@ -1920,12 +2052,11 @@ namespace Application
 				const auto rootStatus = fs::symlink_status(root, ec);
 				if (ec || fs::is_symlink(rootStatus))
 					return {TitleInstallError::InvalidSource,
-						fs::is_symlink(rootStatus) ?
-							"Symbolic links are not supported in title installs" : ec.message(),
-						std::nullopt};
+							fs::is_symlink(rootStatus) ? "Symbolic links are not supported in title installs" : ec.message(),
+							std::nullopt};
 				if (!fs::is_directory(rootStatus))
 					return {TitleInstallError::MissingContent,
-						fmt::format("Required '{}' folder is missing", folder), std::nullopt};
+							fmt::format("Required '{}' folder is missing", folder), std::nullopt};
 				fs::recursive_directory_iterator iterator(root, ec), end;
 				if (ec)
 					return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
@@ -1933,7 +2064,7 @@ namespace Application
 				{
 					if (iterator->is_symlink(ec))
 						return {TitleInstallError::InvalidSource,
-							"Symbolic links are not supported in title installs", std::nullopt};
+								"Symbolic links are not supported in title installs", std::nullopt};
 					if (ec)
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
 					if (iterator->is_regular_file(ec))
@@ -1941,7 +2072,7 @@ namespace Application
 						const auto size = iterator->file_size(ec);
 						if (ec || size > std::numeric_limits<std::uint64_t>::max() - requiredBytes)
 							return {TitleInstallError::InvalidSource,
-								"Unable to measure title files", std::nullopt};
+									"Unable to measure title files", std::nullopt};
 						requiredBytes += size;
 						mixSource(std::hash<std::string>{}(
 							_pathToUtf8(fs::relative(iterator->path(), source, ec))));
@@ -1958,7 +2089,7 @@ namespace Application
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
 					else if (!iterator->is_directory(ec) || ec)
 						return {TitleInstallError::InvalidSource,
-							"Unsupported entry in title install source", std::nullopt};
+								"Unsupported entry in title install source", std::nullopt};
 					iterator.increment(ec);
 					if (ec)
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
@@ -1978,9 +2109,9 @@ namespace Application
 			const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
 			if ((!ec && canonicalTarget == source) ||
 				(fs::exists(plan.targetPath, ec) && !ec &&
-					fs::equivalent(source, plan.targetPath, ec) && !ec))
+				 fs::equivalent(source, plan.targetPath, ec) && !ec))
 				return {TitleInstallError::InvalidSource,
-					"A title cannot be installed from its destination folder", std::nullopt};
+						"A title cannot be installed from its destination folder", std::nullopt};
 			ec.clear();
 
 			plan.installed.exists = fs::exists(plan.targetPath, ec) && !ec;
@@ -2011,43 +2142,42 @@ namespace Application
 			plan.availableBytes = space.available;
 			if (checkAvailableSpace && plan.availableBytes <= plan.requiredBytes)
 				return {TitleInstallError::NotEnoughSpace,
-					fmt::format("Not enough space available. Required: {} MB, available: {} MB",
-						plan.requiredBytes / 1024 / 1024,
-						plan.availableBytes / 1024 / 1024), std::nullopt};
+						fmt::format("Not enough space available. Required: {} MB, available: {} MB",
+									plan.requiredBytes / 1024 / 1024,
+									plan.availableBytes / 1024 / 1024),
+						std::nullopt};
 			return {TitleInstallError::None, {}, std::move(plan)};
 		}
 
 		TitleInstallPlanResult SafeBuildTitleInstallPlan(const fs::path& source,
-			bool checkAvailableSpace = true)
+														 bool checkAvailableSpace = true)
 		{
 			try
 			{
 				return BuildTitleInstallPlan(source, checkAvailableSpace);
-			}
-			catch (const std::exception& exception)
+			} catch (const std::exception& exception)
 			{
 				return {TitleInstallError::InvalidSource, exception.what(), std::nullopt};
-			}
-			catch (...)
+			} catch (...)
 			{
 				return {TitleInstallError::InvalidSource,
-					"Unknown title install planning failure", std::nullopt};
+						"Unknown title install planning failure", std::nullopt};
 			}
 		}
 
 		bool SameInstallSnapshot(const TitleInstallPlan& left, const TitleInstallPlan& right)
 		{
 			return left.sourcePath == right.sourcePath && left.targetPath == right.targetPath &&
-				left.titleId == right.titleId && left.version == right.version &&
-				left.kind == right.kind && left.requiredBytes == right.requiredBytes &&
-				left.sourceFingerprint == right.sourceFingerprint &&
-				left.conflict == right.conflict &&
-				left.installed.exists == right.installed.exists &&
-				left.installed.valid == right.installed.valid &&
-				left.installed.titleId == right.installed.titleId &&
-				left.installed.version == right.installed.version &&
-				left.installed.kind == right.installed.kind &&
-				left.installed.fingerprint == right.installed.fingerprint;
+				   left.titleId == right.titleId && left.version == right.version &&
+				   left.kind == right.kind && left.requiredBytes == right.requiredBytes &&
+				   left.sourceFingerprint == right.sourceFingerprint &&
+				   left.conflict == right.conflict &&
+				   left.installed.exists == right.installed.exists &&
+				   left.installed.valid == right.installed.valid &&
+				   left.installed.titleId == right.installed.titleId &&
+				   left.installed.version == right.installed.version &&
+				   left.installed.kind == right.installed.kind &&
+				   left.installed.fingerprint == right.installed.fingerprint;
 		}
 
 		fs::path UniqueInstallSibling(const fs::path& target, std::string_view suffix)
@@ -2059,7 +2189,7 @@ namespace Application
 			{
 				auto candidate = target;
 				candidate += _utf8ToPath(fmt::format(".{}.{}.{}", suffix, seed,
-					sequence.fetch_add(1, std::memory_order_relaxed)));
+													 sequence.fetch_add(1, std::memory_order_relaxed)));
 				std::error_code ec;
 				if (!fs::exists(candidate, ec) && !ec)
 					return candidate;
@@ -2068,10 +2198,10 @@ namespace Application
 		}
 
 		class CafeEmulationBackend final : public IEmulationBackend,
-			public CafeSystem::IEventSink,
-			public Input::IEmulationInputContext
+										   public CafeSystem::IEventSink,
+										   public Input::IEmulationInputContext
 		{
-		public:
+		  public:
 			explicit CafeEmulationBackend(ApplicationEvents& events) : m_events(events)
 			{
 				CafeSystem::SetEventSink(this);
@@ -2114,13 +2244,25 @@ namespace Application
 			{
 				struct SchedulerLock
 				{
-					SchedulerLock() { __OSLockScheduler(); }
-					~SchedulerLock() { __OSUnlockScheduler(); }
+					SchedulerLock()
+					{
+						__OSLockScheduler();
+					}
+					~SchedulerLock()
+					{
+						__OSUnlockScheduler();
+					}
 				} schedulerLock;
 				struct ActiveListLock
 				{
-					ActiveListLock() { srwlock_activeThreadList.LockWrite(); }
-					~ActiveListLock() { srwlock_activeThreadList.UnlockWrite(); }
+					ActiveListLock()
+					{
+						srwlock_activeThreadList.LockWrite();
+					}
+					~ActiveListLock()
+					{
+						srwlock_activeThreadList.UnlockWrite();
+					}
 				} activeListLock;
 
 				PpcThreadsSnapshot result;
@@ -2131,9 +2273,11 @@ namespace Application
 				for (sint32 index = 0; index < activeThreadCount; ++index)
 				{
 					const auto address = activeThread[index];
-					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address)) continue;
+					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address))
+						continue;
 					const auto* thread = MEMPTR<OSThread_t>{address}.GetPtr();
-					if (thread) currentThreads.emplace_back(address, PpcThreadIdentity(*thread));
+					if (thread)
+						currentThreads.emplace_back(address, PpcThreadIdentity(*thread));
 				}
 				if (currentThreads != m_diagnosticsThreads)
 				{
@@ -2171,12 +2315,24 @@ namespace Application
 					{
 						switch (thread->state)
 						{
-						case OSThread_t::THREAD_STATE::STATE_NONE: item.state = PpcThreadState::None; break;
-						case OSThread_t::THREAD_STATE::STATE_READY: item.state = PpcThreadState::Ready; break;
-						case OSThread_t::THREAD_STATE::STATE_RUNNING: item.state = PpcThreadState::Running; break;
-						case OSThread_t::THREAD_STATE::STATE_WAITING: item.state = PpcThreadState::Waiting; break;
-						case OSThread_t::THREAD_STATE::STATE_MORIBUND: item.state = PpcThreadState::Moribund; break;
-						default: item.state = PpcThreadState::Unknown; break;
+						case OSThread_t::THREAD_STATE::STATE_NONE:
+							item.state = PpcThreadState::None;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_READY:
+							item.state = PpcThreadState::Ready;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_RUNNING:
+							item.state = PpcThreadState::Running;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_WAITING:
+							item.state = PpcThreadState::Waiting;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_MORIBUND:
+							item.state = PpcThreadState::Moribund;
+							break;
+						default:
+							item.state = PpcThreadState::Unknown;
+							break;
 						}
 					}
 					item.requestedAffinity = thread->attr & 7;
@@ -2191,7 +2347,8 @@ namespace Application
 						if (name)
 						{
 							std::size_t length{};
-							while (length < 128 && name[length] != '\0') ++length;
+							while (length < 128 && name[length] != '\0')
+								++length;
 							item.name.assign(name, length);
 						}
 					}
@@ -2223,8 +2380,8 @@ namespace Application
 					request.generation != m_diagnosticsGeneration.load(std::memory_order_acquire))
 					return {false, "the PPC thread snapshot is stale; refresh before retrying"};
 				if (std::ranges::none_of(m_diagnosticsThreads, [&request](const auto& active) {
-					return active.first == request.threadAddress && active.second == request.threadIdentity;
-				}))
+						return active.first == request.threadAddress && active.second == request.threadIdentity;
+					}))
 					return {false, "the selected PPC thread was not part of this diagnostic snapshot"};
 				if (request.command == PpcThreadCommand::AdjustPriority &&
 					(request.priorityDelta < -5 || request.priorityDelta > 5 ||
@@ -2233,8 +2390,14 @@ namespace Application
 
 				struct SchedulerLock
 				{
-					SchedulerLock() { __OSLockScheduler(); }
-					~SchedulerLock() { __OSUnlockScheduler(); }
+					SchedulerLock()
+					{
+						__OSLockScheduler();
+					}
+					~SchedulerLock()
+					{
+						__OSUnlockScheduler();
+					}
 				} schedulerLock;
 				if (!coreinit::OSThreadQueue_IsThreadPointerValid(request.threadAddress))
 					return {false, "the selected PPC thread address is no longer valid"};
@@ -2288,7 +2451,8 @@ namespace Application
 					if (!pathError && fs::exists(displayPath, pathError) && !pathError)
 					{
 						auto canonical = fs::canonical(displayPath, pathError);
-						if (!pathError) displayPath = std::move(canonical);
+						if (!pathError)
+							displayPath = std::move(canonical);
 					}
 					snapshot.gamePaths.emplace_back(std::move(displayPath));
 					fingerprint.append(path).push_back('\0');
@@ -2332,19 +2496,19 @@ namespace Application
 				auto current = GetFrontendSettings();
 				if (current.titleRunning)
 					return {FrontendSettingsError::TitleRunning, std::move(current),
-						"frontend settings cannot be changed while a title is running"};
+							"frontend settings cannot be changed while a title is running"};
 				if (update.expectedRevision != current.revision)
 					return {FrontendSettingsError::Conflict, std::move(current),
-						"frontend settings changed in another window"};
+							"frontend settings changed in another window"};
 				if (current.fullscreenOverride && update.startFullscreen != current.startFullscreen)
 					return {FrontendSettingsError::FullscreenOverride, std::move(current),
-						"fullscreen startup is controlled by the command line"};
+							"fullscreen startup is controlled by the command line"};
 				if (!current.updateChecksSupported && update.checkUpdates != current.checkUpdates)
 					return {FrontendSettingsError::UpdateUnsupported, std::move(current),
-						"automatic update checks are unavailable in this package"};
+							"automatic update checks are unavailable in this package"};
 				if (update.gamePaths.size() > 64)
 					return {FrontendSettingsError::InvalidPath, std::move(current),
-						"at most 64 game paths are supported"};
+							"at most 64 game paths are supported"};
 
 				std::vector<fs::path> normalizedPaths;
 				std::set<std::string> normalizedKeys;
@@ -2361,7 +2525,7 @@ namespace Application
 				{
 					if (!path.is_absolute() || _pathToUtf8(path).find('\0') != std::string::npos)
 						return {FrontendSettingsError::InvalidPath, std::move(current),
-							"game paths must be absolute paths"};
+								"game paths must be absolute paths"};
 					std::error_code ec;
 					auto requestedKey = _pathToUtf8(path.lexically_normal());
 #if BOOST_OS_WINDOWS
@@ -2377,12 +2541,12 @@ namespace Application
 							continue;
 						}
 						return {FrontendSettingsError::InvalidPath, std::move(current),
-							fmt::format("game path is not an accessible directory: {}", _pathToUtf8(path))};
+								fmt::format("game path is not an accessible directory: {}", _pathToUtf8(path))};
 					}
 					fs::directory_iterator readable(normalized, ec);
 					if (ec)
 						return {FrontendSettingsError::InvalidPath, std::move(current),
-							fmt::format("game path cannot be read: {}", _pathToUtf8(path))};
+								fmt::format("game path cannot be read: {}", _pathToUtf8(path))};
 					auto key = _pathToUtf8(normalized.lexically_normal());
 #if BOOST_OS_WINDOWS
 					boost::to_lower(key);
@@ -2393,8 +2557,9 @@ namespace Application
 				if (update.completeSetup && !current.setupCompleted)
 				{
 					auto storage = EnsureDefaultMlcFiles(ActiveSettings::GetMlcPath(),
-						ListAccountCountries(), current);
-					if (!storage) return storage;
+														 ListAccountCountries(), current);
+					if (!storage)
+						return storage;
 				}
 
 				auto& config = GetConfig();
@@ -2435,20 +2600,18 @@ namespace Application
 					{
 						restore();
 						return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
-							"unable to save frontend settings"};
+								"unable to save frontend settings"};
 					}
 					CafeTitleList::Refresh();
-				}
-				catch (const std::exception& error)
+				} catch (const std::exception& error)
 				{
 					restore();
 					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(), error.what()};
-				}
-				catch (...)
+				} catch (...)
 				{
 					restore();
 					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
-						"unknown error while applying frontend settings"};
+							"unknown error while applying frontend settings"};
 				}
 				return {FrontendSettingsError::None, GetFrontendSettings(), {}};
 			}
@@ -2463,18 +2626,17 @@ namespace Application
 					model.controllerModifier = static_cast<std::uint32_t>(
 						settings.controller_modifier);
 				auto append = [&model](HotkeyAction action,
-					const FrontendHotkeyBindingConfig& binding) {
+									   const FrontendHotkeyBindingConfig& binding) {
 					model.bindings.push_back({
 						.action = action,
 						.keyboardUsage = binding.keyboard_usage,
 						.keyboardModifiers = binding.keyboard_modifiers,
-						.controllerButton = binding.controller_button >= 0 ?
-							std::optional<std::uint32_t>(binding.controller_button) : std::nullopt,
+						.controllerButton = binding.controller_button >= 0 ? std::optional<std::uint32_t>(binding.controller_button) : std::nullopt,
 					});
 				};
 				append(HotkeyAction::ToggleFullscreen, settings.toggle_fullscreen);
 				append(HotkeyAction::ToggleFullscreenAlternative,
-					settings.toggle_fullscreen_alternative);
+					   settings.toggle_fullscreen_alternative);
 				append(HotkeyAction::ExitFullscreen, settings.exit_fullscreen);
 				append(HotkeyAction::TakeScreenshot, settings.take_screenshot);
 				append(HotkeyAction::ToggleFastForward, settings.toggle_fast_forward);
@@ -2485,9 +2647,11 @@ namespace Application
 				std::scoped_lock inputLock(m_inputSettingsMutex);
 				InputManager::instance().RunOnInputThread([this, &model] {
 					const auto emulated = InputManager::instance().get_controller(0);
-					if (!emulated) return;
+					if (!emulated)
+						return;
 					const auto controllers = emulated->copy_controllers();
-					if (controllers.empty()) return;
+					if (controllers.empty())
+						return;
 					model.controller = HotkeyController{
 						.token = TokenForInputController(controllers.front()),
 						.displayName = controllers.front()->display_name(),
@@ -2510,7 +2674,7 @@ namespace Application
 				std::scoped_lock hotkeyLock(m_hotkeySettingsMutex);
 				if (update.revision != m_hotkeySettingsRevision)
 					return {HotkeySettingsError::Conflict, GetHotkeySettings(),
-						"hotkey settings changed in another window"};
+							"hotkey settings changed in another window"};
 #ifdef CEMU_DEBUG_ASSERT
 				constexpr bool endEmulationAvailable = true;
 #else
@@ -2518,37 +2682,52 @@ namespace Application
 #endif
 				std::string validationDiagnostic;
 				if (const auto validation = ValidateHotkeySettingsUpdate(update,
-					endEmulationAvailable, validationDiagnostic);
+																		 endEmulationAvailable, validationDiagnostic);
 					validation != HotkeySettingsError::None)
 					return {validation, GetHotkeySettings(), std::move(validationDiagnostic)};
 
 				auto configLock = GetConfigHandle().Lock();
 				auto& config = GetConfig().frontend.hotkeys;
 				const auto previous = config;
-				config.controller_modifier = update.controllerModifier ?
-					static_cast<std::int16_t>(*update.controllerModifier) : -1;
+				config.controller_modifier = update.controllerModifier ? static_cast<std::int16_t>(*update.controllerModifier) : -1;
 				auto assign = [&config](const HotkeyBinding& binding) {
 					FrontendHotkeyBindingConfig* target{};
 					switch (binding.action)
 					{
-					case HotkeyAction::ToggleFullscreen: target = &config.toggle_fullscreen; break;
-					case HotkeyAction::ToggleFullscreenAlternative: target = &config.toggle_fullscreen_alternative; break;
-					case HotkeyAction::ExitFullscreen: target = &config.exit_fullscreen; break;
-					case HotkeyAction::TakeScreenshot: target = &config.take_screenshot; break;
-					case HotkeyAction::ToggleFastForward: target = &config.toggle_fast_forward; break;
-					case HotkeyAction::EndEmulation: target = &config.end_emulation; break;
-					case HotkeyAction::ExitApplication: target = &config.exit_application; break;
+					case HotkeyAction::ToggleFullscreen:
+						target = &config.toggle_fullscreen;
+						break;
+					case HotkeyAction::ToggleFullscreenAlternative:
+						target = &config.toggle_fullscreen_alternative;
+						break;
+					case HotkeyAction::ExitFullscreen:
+						target = &config.exit_fullscreen;
+						break;
+					case HotkeyAction::TakeScreenshot:
+						target = &config.take_screenshot;
+						break;
+					case HotkeyAction::ToggleFastForward:
+						target = &config.toggle_fast_forward;
+						break;
+					case HotkeyAction::EndEmulation:
+						target = &config.end_emulation;
+						break;
+					case HotkeyAction::ExitApplication:
+						target = &config.exit_application;
+						break;
 					}
 					*target = {binding.keyboardUsage, binding.keyboardModifiers,
-						binding.controllerButton ? static_cast<std::int16_t>(
-							*binding.controllerButton) : static_cast<std::int16_t>(-1)};
+							   binding.controllerButton ? static_cast<std::int16_t>(
+															  *binding.controllerButton)
+														: static_cast<std::int16_t>(-1)};
 				};
-				for (const auto& binding : update.bindings) assign(binding);
+				for (const auto& binding : update.bindings)
+					assign(binding);
 				if (!GetConfigHandle().Save())
 				{
 					config = previous;
 					return {HotkeySettingsError::SaveFailed, GetHotkeySettings(),
-						"hotkey settings could not be saved"};
+							"hotkey settings could not be saved"};
 				}
 				++m_hotkeySettingsRevision;
 				return {HotkeySettingsError::None, GetHotkeySettings(), {}};
@@ -2560,15 +2739,19 @@ namespace Application
 				InputSettingsModel model;
 				InputManager::instance().RunOnInputThread([this, &model] {
 					model.profiles = InputManager::instance().get_profiles();
-					for (const auto api : {InputAPI::Keyboard, InputAPI::SDLController,
+					for (const auto api : {
+							 InputAPI::Keyboard,
+							 InputAPI::SDLController,
 #if BOOST_OS_WINDOWS
-						InputAPI::XInput, InputAPI::DirectInput,
+							 InputAPI::XInput,
+							 InputAPI::DirectInput,
 #endif
-						InputAPI::DSUClient, InputAPI::GameCube,
+							 InputAPI::DSUClient,
+							 InputAPI::GameCube,
 #ifdef SUPPORTS_WIIMOTE
-						InputAPI::Wiimote,
+							 InputAPI::Wiimote,
 #endif
-					})
+						 })
 						if (InputManager::instance().is_api_available(api))
 							model.availableApis.emplace_back(InputAPI::to_string(api));
 					for (std::uint32_t player = 0; player < InputManager::kMaxController; ++player)
@@ -2601,7 +2784,8 @@ namespace Application
 									.axis = {settings.axis.deadzone, settings.axis.range},
 									.rotation = {settings.rotation.deadzone, settings.rotation.range},
 									.trigger = {settings.trigger.deadzone, settings.trigger.range},
-									.rumble = settings.rumble, .motion = settings.motion,
+									.rumble = settings.rumble,
+									.motion = settings.motion,
 								},
 							};
 #ifdef SUPPORTS_WIIMOTE
@@ -2610,26 +2794,32 @@ namespace Application
 								physical.settings.packetDelay = wiimote->get_packet_delay();
 								switch (wiimote->get_extension())
 								{
-								case NativeWiimoteController::Nunchuck: physical.wiimoteExtension = "nunchuck"; break;
-								case NativeWiimoteController::Classic: physical.wiimoteExtension = "classic"; break;
-								case NativeWiimoteController::MotionPlus: physical.wiimoteExtension = "motionPlus"; break;
-								default: physical.wiimoteExtension = "none"; break;
+								case NativeWiimoteController::Nunchuck:
+									physical.wiimoteExtension = "nunchuck";
+									break;
+								case NativeWiimoteController::Classic:
+									physical.wiimoteExtension = "classic";
+									break;
+								case NativeWiimoteController::MotionPlus:
+									physical.wiimoteExtension = "motionPlus";
+									break;
+								default:
+									physical.wiimoteExtension = "none";
+									break;
 								}
 							}
 #endif
 							info.controllers.emplace_back(std::move(physical));
 						}
 						for (std::uint64_t mapping = 1;
-							mapping < emulated->get_highest_mapping_id(); ++mapping)
+							 mapping < emulated->get_highest_mapping_id(); ++mapping)
 						{
 							auto controller = emulated->get_mapping_controller(mapping);
 							info.mappings.push_back({
 								.mappingId = mapping,
 								.label = InputMappingLabel(*emulated, mapping),
 								.binding = emulated->get_mapping_name(mapping),
-								.controllerToken = controller ?
-									std::optional<std::uint64_t>(TokenForInputController(controller)) :
-									std::nullopt,
+								.controllerToken = controller ? std::optional<std::uint64_t>(TokenForInputController(controller)) : std::nullopt,
 							});
 						}
 						model.players.emplace_back(std::move(info));
@@ -2639,18 +2829,19 @@ namespace Application
 				for (const auto& player : model.players)
 				{
 					fingerprint += fmt::format("{}:{}:{}:{}|", player.player,
-						static_cast<unsigned>(player.type), player.gameProfileLocked,
-						player.profileName);
+											   static_cast<unsigned>(player.type), player.gameProfileLocked,
+											   player.profileName);
 					for (const auto& controller : player.controllers)
 						fingerprint += fmt::format("{}:{}:{}:{}:{}:{}|", controller.token,
-							controller.connected, controller.settings.axis.deadzone,
-							controller.settings.axis.range, controller.settings.rumble,
-							controller.settings.motion);
+												   controller.connected, controller.settings.axis.deadzone,
+												   controller.settings.axis.range, controller.settings.rumble,
+												   controller.settings.motion);
 					for (const auto& mapping : player.mappings)
 						fingerprint += fmt::format("{}:{}:{}|", mapping.mappingId,
-							mapping.controllerToken.value_or(0), mapping.binding);
+												   mapping.controllerToken.value_or(0), mapping.binding);
 				}
-				for (const auto& profile : model.profiles) fingerprint += "p:" + profile + "|";
+				for (const auto& profile : model.profiles)
+					fingerprint += "p:" + profile + "|";
 				if (m_inputSettingsFingerprint.empty())
 				{
 					m_inputSettingsFingerprint = fingerprint;
@@ -2675,8 +2866,10 @@ namespace Application
 				InputManager::instance().RunOnInputThread([this, &result, apiName = std::string(apiName)] {
 					PruneUnassignedInputTokens();
 					InputAPI::Type api;
-					try { api = InputAPI::from_string(apiName); }
-					catch (...)
+					try
+					{
+						api = InputAPI::from_string(apiName);
+					} catch (...)
 					{
 						result.error = InputSettingsError::UnsupportedApi;
 						result.diagnostic = "input API is unknown";
@@ -2699,14 +2892,14 @@ namespace Application
 					for (auto& controller : provider->get_controllers())
 						if (controller)
 							result.devices.push_back({TokenForInputController(controller),
-								std::string(controller->api_name()), controller->display_name(),
-								controller->is_connected()});
+													  std::string(controller->api_name()), controller->display_name(),
+													  controller->is_connected()});
 				});
 				return result;
 			}
 
 			InputSettingsResult SetEmulatedController(std::uint32_t player,
-				EmulatedControllerType type, bool preserveDevices) override
+													  EmulatedControllerType type, bool preserveDevices) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -2716,7 +2909,7 @@ namespace Application
 					if (InputManager::instance().is_gameprofile_set(player))
 					{
 						result = {InputSettingsError::ProfileLocked,
-							"this player is controlled by the running game's profile"};
+								  "this player is controlled by the running game's profile"};
 						return;
 					}
 					if (type == EmulatedControllerType::Disabled)
@@ -2729,33 +2922,35 @@ namespace Application
 					if (!nativeType)
 					{
 						result = {InputSettingsError::UnsupportedType,
-							"emulated controller type is unsupported"};
+								  "emulated controller type is unsupported"};
 						return;
 					}
 					const auto existing = InputManager::instance().get_controller(player);
 					const auto [vpadCount, wpadCount] = InputManager::instance().get_controller_count();
 					if ((*nativeType == EmulatedController::VPAD &&
-						(!existing || existing->type() != EmulatedController::VPAD) &&
-						vpadCount >= InputManager::kMaxVPADControllers) ||
+						 (!existing || existing->type() != EmulatedController::VPAD) &&
+						 vpadCount >= InputManager::kMaxVPADControllers) ||
 						(*nativeType != EmulatedController::VPAD &&
-						(!existing || existing->type() == EmulatedController::VPAD) &&
-						wpadCount >= InputManager::kMaxWPADControllers))
+						 (!existing || existing->type() == EmulatedController::VPAD) &&
+						 wpadCount >= InputManager::kMaxWPADControllers))
 					{
 						result = {InputSettingsError::UnsupportedType,
-							"all slots for this emulated controller type are already in use"};
+								  "all slots for this emulated controller type are already in use"};
 						return;
 					}
-					if (!preserveDevices) InputManager::instance().delete_controller(player, false);
+					if (!preserveDevices)
+						InputManager::instance().delete_controller(player, false);
 					if (!InputManager::instance().set_controller(player, *nativeType))
 						result = {InputSettingsError::UnsupportedType,
-							"the requested emulated controller slot is unavailable"};
-					else ++m_inputSettingsGeneration;
+								  "the requested emulated controller slot is unavailable"};
+					else
+						++m_inputSettingsGeneration;
 				});
 				return result;
 			}
 
 			InputSettingsResult AddInputDevice(std::uint32_t player,
-				std::uint64_t token) override
+											   std::uint64_t token) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -2767,7 +2962,7 @@ namespace Application
 					if (!emulated || !controller)
 					{
 						result = {InputSettingsError::DeviceNotFound,
-							"emulated controller or physical device was not found"};
+								  "emulated controller or physical device was not found"};
 						return;
 					}
 					const auto controllers = emulated->copy_controllers();
@@ -2782,7 +2977,7 @@ namespace Application
 			}
 
 			InputSettingsResult RemoveInputDevice(std::uint32_t player,
-				std::uint64_t token) override
+												  std::uint64_t token) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -2791,13 +2986,12 @@ namespace Application
 				InputManager::instance().RunOnInputThread([&] {
 					auto emulated = InputManager::instance().get_controller(player);
 					auto controller = InputControllerForToken(token);
-					const auto controllers = emulated ? emulated->copy_controllers() :
-						std::vector<std::shared_ptr<ControllerBase>>{};
+					const auto controllers = emulated ? emulated->copy_controllers() : std::vector<std::shared_ptr<ControllerBase>>{};
 					if (!emulated || !controller ||
 						std::ranges::find(controllers, controller) == controllers.end())
 					{
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device is not assigned to this player"};
+								  "physical device is not assigned to this player"};
 						return;
 					}
 					emulated->remove_controller(controller);
@@ -2814,11 +3008,12 @@ namespace Application
 					auto controller = InputControllerForToken(token);
 					if (!controller)
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device was not found"};
+								  "physical device was not found"};
 					else if (!controller->connect())
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device could not be connected"};
-					else ++m_inputSettingsGeneration;
+								  "physical device could not be connected"};
+					else
+						++m_inputSettingsGeneration;
 				});
 				return result;
 			}
@@ -2829,53 +3024,68 @@ namespace Application
 				std::optional<CapturedInputButton> captured;
 				InputManager::instance().RunOnInputThread([&] {
 					auto controller = InputControllerForToken(token);
-					if (!controller) return;
+					if (!controller)
+						return;
 					const auto state = controller->raw_state();
 					const auto buttons = state.buttons.GetButtonList();
 					std::optional<CapturedInputButton> active;
 					if (!buttons.empty())
 					{
 						active = CapturedInputButton{buttons.front(),
-							controller->get_button_name(buttons.front())};
+													 controller->get_button_name(buttons.front())};
 					}
 					auto axisValue = [&state](std::uint64_t button) {
 						switch (button)
 						{
-						case kAxisXP: return state.axis.x;
-						case kAxisXN: return -state.axis.x;
-						case kAxisYP: return state.axis.y;
-						case kAxisYN: return -state.axis.y;
-						case kRotationXP: return state.rotation.x;
-						case kRotationXN: return -state.rotation.x;
-						case kRotationYP: return state.rotation.y;
-						case kRotationYN: return -state.rotation.y;
-						case kTriggerXP: return state.trigger.x;
-						case kTriggerXN: return -state.trigger.x;
-						case kTriggerYP: return state.trigger.y;
-						case kTriggerYN: return -state.trigger.y;
-						default: return 0.0F;
+						case kAxisXP:
+							return state.axis.x;
+						case kAxisXN:
+							return -state.axis.x;
+						case kAxisYP:
+							return state.axis.y;
+						case kAxisYN:
+							return -state.axis.y;
+						case kRotationXP:
+							return state.rotation.x;
+						case kRotationXN:
+							return -state.rotation.x;
+						case kRotationYP:
+							return state.rotation.y;
+						case kRotationYN:
+							return -state.rotation.y;
+						case kTriggerXP:
+							return state.trigger.x;
+						case kTriggerXN:
+							return -state.trigger.x;
+						case kTriggerYP:
+							return state.trigger.y;
+						case kTriggerYN:
+							return -state.trigger.y;
+						default:
+							return 0.0F;
 						}
 					};
 					for (std::uint64_t button = kButtonAxisStart;
-						!active && button < kButtonMAX; ++button)
+						 !active && button < kButtonMAX; ++button)
 						if (axisValue(button) >= 0.33F)
 						{
 							active = CapturedInputButton{button,
-								controller->get_button_name(button)};
+														 controller->get_button_name(button)};
 						}
 					if (!active)
 					{
 						m_armedInputCaptures.emplace(token);
 						return;
 					}
-					if (m_armedInputCaptures.erase(token)) captured = std::move(active);
+					if (m_armedInputCaptures.erase(token))
+						captured = std::move(active);
 				});
 				return captured;
 			}
 
 			InputSettingsResult SetInputMapping(std::uint32_t player,
-				std::uint64_t mappingId, std::uint64_t controllerToken,
-				std::uint64_t buttonId) override
+												std::uint64_t mappingId, std::uint64_t controllerToken,
+												std::uint64_t buttonId) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -2886,19 +3096,18 @@ namespace Application
 				InputManager::instance().RunOnInputThread([&] {
 					auto emulated = InputManager::instance().get_controller(player);
 					auto controller = InputControllerForToken(controllerToken);
-					const auto controllers = emulated ? emulated->copy_controllers() :
-						std::vector<std::shared_ptr<ControllerBase>>{};
+					const auto controllers = emulated ? emulated->copy_controllers() : std::vector<std::shared_ptr<ControllerBase>>{};
 					if (!emulated || !controller ||
 						std::ranges::find(controllers, controller) == controllers.end())
 					{
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device is not assigned to this player"};
+								  "physical device is not assigned to this player"};
 						return;
 					}
 					if (mappingId == 0 || mappingId >= emulated->get_highest_mapping_id())
 					{
 						result = {InputSettingsError::InvalidMapping,
-							"emulated mapping is out of range"};
+								  "emulated mapping is out of range"};
 						return;
 					}
 					emulated->set_mapping(mappingId, controller, buttonId);
@@ -2908,7 +3117,7 @@ namespace Application
 			}
 
 			InputSettingsResult ClearInputMapping(std::uint32_t player,
-				std::optional<std::uint64_t> mappingId) override
+												  std::optional<std::uint64_t> mappingId) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -2919,7 +3128,7 @@ namespace Application
 					if (!emulated)
 					{
 						result = {InputSettingsError::InvalidPlayer,
-							"player has no emulated controller"};
+								  "player has no emulated controller"};
 						return;
 					}
 					if (mappingId)
@@ -2927,31 +3136,32 @@ namespace Application
 						if (*mappingId == 0 || *mappingId >= emulated->get_highest_mapping_id())
 						{
 							result = {InputSettingsError::InvalidMapping,
-								"emulated mapping is out of range"};
+									  "emulated mapping is out of range"};
 							return;
 						}
 						emulated->delete_mapping(*mappingId);
 					}
-					else emulated->clear_mappings();
+					else
+						emulated->clear_mappings();
 					++m_inputSettingsGeneration;
 				});
 				return result;
 			}
 
 			InputSettingsResult SetPhysicalControllerSettings(std::uint64_t token,
-				const PhysicalControllerSettings& requested) override
+															  const PhysicalControllerSettings& requested) override
 			{
 				auto validAxis = [](const ControllerAxisSettings& value) {
 					return std::isfinite(value.deadzone) && std::isfinite(value.range) &&
-						value.deadzone >= 0.0F && value.deadzone <= 1.0F &&
-						value.range >= 0.5F && value.range <= 2.0F;
+						   value.deadzone >= 0.0F && value.deadzone <= 1.0F &&
+						   value.range >= 0.5F && value.range <= 2.0F;
 				};
 				if (!validAxis(requested.axis) || !validAxis(requested.rotation) ||
 					!validAxis(requested.trigger) || !std::isfinite(requested.rumble) ||
 					requested.rumble < 0.0F || requested.rumble > 1.0F ||
 					(requested.packetDelay && (*requested.packetDelay < 1 || *requested.packetDelay > 100)))
 					return {InputSettingsError::InvalidSettings,
-						"controller settings are outside their supported range"};
+							"controller settings are outside their supported range"};
 				std::scoped_lock settingsLock(m_inputSettingsMutex);
 				InputSettingsResult result;
 				InputManager::instance().RunOnInputThread([&] {
@@ -2959,14 +3169,14 @@ namespace Application
 					if (!controller)
 					{
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device was not found"};
+								  "physical device was not found"};
 						return;
 					}
 					if ((requested.motion && !controller->has_motion()) ||
 						(requested.rumble > 0.0F && !controller->has_rumble()))
 					{
 						result = {InputSettingsError::InvalidSettings,
-							"the physical device does not support the requested feature"};
+								  "the physical device does not support the requested feature"};
 						return;
 					}
 #ifdef SUPPORTS_WIIMOTE
@@ -2974,14 +3184,14 @@ namespace Application
 					if (requested.packetDelay && !wiimote)
 					{
 						result = {InputSettingsError::InvalidSettings,
-							"packet delay is only supported by native Wiimotes"};
+								  "packet delay is only supported by native Wiimotes"};
 						return;
 					}
 #else
 					if (requested.packetDelay)
 					{
 						result = {InputSettingsError::InvalidSettings,
-							"native Wiimotes are unavailable in this build"};
+								  "native Wiimotes are unavailable in this build"};
 						return;
 					}
 #endif
@@ -3012,14 +3222,15 @@ namespace Application
 					auto controller = InputControllerForToken(token);
 					if (!controller)
 						result = {InputSettingsError::DeviceNotFound,
-							"physical device was not found"};
-					else controller->calibrate();
+								  "physical device was not found"};
+					else
+						controller->calibrate();
 				});
 				return result;
 			}
 
 			InputSettingsResult LoadInputProfile(std::uint32_t player,
-				std::string_view profile) override
+												 std::string_view profile) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -3031,17 +3242,18 @@ namespace Application
 				InputManager::instance().RunOnInputThread([&] {
 					if (InputManager::instance().is_gameprofile_set(player))
 						result = {InputSettingsError::ProfileLocked,
-							"this player is controlled by the running game's profile"};
+								  "this player is controlled by the running game's profile"};
 					else if (!InputManager::instance().load(player, name))
 						result = {InputSettingsError::PersistenceFailed,
-							"input profile could not be loaded"};
-					else ++m_inputSettingsGeneration;
+								  "input profile could not be loaded"};
+					else
+						++m_inputSettingsGeneration;
 				});
 				return result;
 			}
 
 			InputSettingsResult SaveInputProfile(std::uint32_t player,
-				std::string_view profile) override
+												 std::string_view profile) override
 			{
 				if (player >= InputManager::kMaxController)
 					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
@@ -3053,11 +3265,12 @@ namespace Application
 				InputManager::instance().RunOnInputThread([&] {
 					if (InputManager::instance().is_gameprofile_set(player))
 						result = {InputSettingsError::ProfileLocked,
-							"this player is controlled by the running game's profile"};
+								  "this player is controlled by the running game's profile"};
 					else if (!InputManager::instance().save(player, name))
 						result = {InputSettingsError::PersistenceFailed,
-							"input profile could not be saved"};
-					else ++m_inputSettingsGeneration;
+								  "input profile could not be saved"};
+					else
+						++m_inputSettingsGeneration;
 				});
 				return result;
 			}
@@ -3072,8 +3285,9 @@ namespace Application
 				InputManager::instance().RunOnInputThread([&] {
 					if (!InputManager::instance().delete_profile(name))
 						result = {InputSettingsError::PersistenceFailed,
-							"input profile could not be deleted"};
-					else ++m_inputSettingsGeneration;
+								  "input profile could not be deleted"};
+					else
+						++m_inputSettingsGeneration;
 				});
 				return result;
 			}
@@ -3106,12 +3320,17 @@ namespace Application
 				};
 				switch (CafeSystem::GetForegroundTitleRegion())
 				{
-				case CafeConsoleRegion::JPN: presentation.region = TitleRegion::Japan; break;
+				case CafeConsoleRegion::JPN:
+					presentation.region = TitleRegion::Japan;
+					break;
 				case CafeConsoleRegion::USA:
 					presentation.region = TitleRegion::UnitedStates;
 					break;
-				case CafeConsoleRegion::EUR: presentation.region = TitleRegion::Europe; break;
-				default: break;
+				case CafeConsoleRegion::EUR:
+					presentation.region = TitleRegion::Europe;
+					break;
+				default:
+					break;
 				}
 
 				if (g_renderer)
@@ -3127,13 +3346,16 @@ namespace Application
 					case RendererAPI::Metal:
 						presentation.renderer = PresentationRenderer::Metal;
 						break;
-					default: break;
+					default:
+						break;
 					}
 				}
 
 				switch (LatteGPUState.glVendor)
 				{
-				case GLVENDOR_AMD: presentation.gpuVendor = PresentationGpuVendor::Amd; break;
+				case GLVENDOR_AMD:
+					presentation.gpuVendor = PresentationGpuVendor::Amd;
+					break;
 				case GLVENDOR_INTEL:
 					presentation.gpuVendor = PresentationGpuVendor::Intel;
 					break;
@@ -3143,7 +3365,8 @@ namespace Application
 				case GLVENDOR_APPLE:
 					presentation.gpuVendor = PresentationGpuVendor::Apple;
 					break;
-				default: break;
+				default:
+					break;
 				}
 				return presentation;
 			}
@@ -3155,7 +3378,7 @@ namespace Application
 					return {};
 				Input::ScreenImageArea area;
 				LatteRenderTarget_getScreenImageArea(&area.x, &area.y, &area.width, &area.height,
-					nullptr, nullptr, padView);
+													 nullptr, nullptr, padView);
 				return area;
 			}
 
@@ -3276,7 +3499,7 @@ namespace Application
 			}
 
 			void SubmitKeyboard(std::uint16_t usage, bool pressed,
-				std::uint8_t modifiers) override
+								std::uint8_t modifiers) override
 			{
 				cemuextend_hle::Cex2Host::Instance().KeyboardEvent(usage, pressed, modifiers);
 			}
@@ -3316,10 +3539,12 @@ namespace Application
 					return NfcTouchResult::Success;
 				switch (error)
 				{
-				case NFC_TOUCH_TAG_ERROR_NO_ACCESS: return NfcTouchResult::NoAccess;
+				case NFC_TOUCH_TAG_ERROR_NO_ACCESS:
+					return NfcTouchResult::NoAccess;
 				case NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT:
 					return NfcTouchResult::InvalidFileFormat;
-				default: return NfcTouchResult::UnknownError;
+				default:
+					return NfcTouchResult::UnknownError;
 				}
 			}
 
@@ -3359,19 +3584,19 @@ namespace Application
 			}
 
 			void SubmitTextComposition(std::string_view text, std::string_view preedit,
-				std::uint32_t cursor, std::uint32_t selectionLength) override
+									   std::uint32_t cursor, std::uint32_t selectionLength) override
 			{
 				cemuextend_hle::Cex2Host::Instance().TextCompositionEvent(
 					text, preedit, cursor, selectionLength);
 			}
 
 			void SaveCemodPermissionDecisions(std::uint64_t titleId,
-				std::span<const CemodPermissionDecision> decisions) override
+											  std::span<const CemodPermissionDecision> decisions) override
 			{
 				for (const auto& decision : decisions)
 				{
 					GetConfig().SetCemuExtendModGrant(titleId, decision.principal,
-						{decision.grantedPermissions, decision.requestedPermissions, true});
+													  {decision.grantedPermissions, decision.requestedPermissions, true});
 					// Bind the old launch dialog's decision to every currently installed
 					// isolated package for this principal.  Native packages use a different
 					// permission namespace and must be approved in the package manager.
@@ -3388,10 +3613,10 @@ namespace Application
 						const auto key = cemuextend_hle::MakeCemodApprovalKey(
 							inspected.modIdentity, inspected.packageDigest);
 						GetConfig().SetCemuExtendPermissionApproval(titleId, key,
-							{inspected.packageDigest, inspected.modIdentity,
-								inspected.requestedPermissions,
-								decision.grantedPermissions & inspected.requestedPermissions,
-								true, false});
+																	{inspected.packageDigest, inspected.modIdentity,
+																	 inspected.requestedPermissions,
+																	 decision.grantedPermissions & inspected.requestedPermissions,
+																	 true, false});
 					}
 				}
 				GetConfigHandle().Save();
@@ -3414,21 +3639,21 @@ namespace Application
 			}
 
 			CemodGrant ResolveCemodGrant(std::uint64_t titleId, std::string_view modId,
-				std::string_view principal, std::uint32_t requestedPermissions) override
+										 std::string_view principal, std::uint32_t requestedPermissions) override
 			{
 				const auto grant = cemuextend_hle::ResolveCemodGrant(titleId,
-					std::string(modId), std::string(principal), requestedPermissions);
+																	 std::string(modId), std::string(principal), requestedPermissions);
 				return {grant.permissions, grant.approved_request_mask, grant.approved};
 			}
 
 			CemuExtendServiceGrantDefaults ServiceGrantDefaults() const override
 			{
 				return {cemuextend_hle::kDefaultReadMask,
-					cemuextend_hle::kDefaultWriteMask, cemuextend_hle::kDefaultInjectMask};
+						cemuextend_hle::kDefaultWriteMask, cemuextend_hle::kDefaultInjectMask};
 			}
 
 			bool ImportLegacyCemodData(std::uint64_t titleId,
-				std::string_view principal, std::string& error) override
+									   std::string_view principal, std::string& error) override
 			{
 				return cemuextend_hle::ImportLegacyData(titleId, principal, error);
 			}
@@ -3438,8 +3663,7 @@ namespace Application
 			{
 				CemodManagerSnapshot snapshot;
 				snapshot.selectedTitleId = titleId;
-				auto discovered = titleId ? cemuextend_hle::DiscoverCemods(*titleId) :
-					cemuextend_hle::DiscoverCemodCatalog();
+				auto discovered = titleId ? cemuextend_hle::DiscoverCemods(*titleId) : cemuextend_hle::DiscoverCemodCatalog();
 				snapshot.packages.reserve(discovered.size());
 				for (const auto& package : discovered)
 				{
@@ -3450,23 +3674,30 @@ namespace Application
 						snapshot.cancelled = true;
 						return snapshot;
 					}
-					auto inspection = titleId ?
-						cemuextend_hle::InspectConfiguredCemodPackage(*titleId, package)
-							.value_or(cemuextend_hle::InspectCemodPackage(package)) :
-						cemuextend_hle::InspectCemodPackage(package);
+					auto inspection = titleId ? cemuextend_hle::InspectConfiguredCemodPackage(*titleId, package)
+													.value_or(cemuextend_hle::InspectCemodPackage(package))
+											  : cemuextend_hle::InspectCemodPackage(package);
 					CemodManagerPackage model;
 					model.packageKey = inspection.packageDigest;
 					if (model.packageKey.empty())
 					{
 						const auto path = _pathToUtf8(package.path);
 						std::uint64_t hash = 1469598103934665603ULL;
-						for (const auto byte : path) { hash ^= static_cast<unsigned char>(byte); hash *= 1099511628211ULL; }
+						for (const auto byte : path)
+						{
+							hash ^= static_cast<unsigned char>(byte);
+							hash *= 1099511628211ULL;
+						}
 						model.packageKey = fmt::format("invalid-{:016x}", hash);
 					}
-					model.titleIds = package.titleIds; model.modId = inspection.modId;
-					model.principal = inspection.principal; model.modIdentity = inspection.modIdentity;
-					model.packageDigest = inspection.packageDigest; model.pluginName = inspection.pluginName;
-					model.author = inspection.author; model.version = inspection.version;
+					model.titleIds = package.titleIds;
+					model.modId = inspection.modId;
+					model.principal = inspection.principal;
+					model.modIdentity = inspection.modIdentity;
+					model.packageDigest = inspection.packageDigest;
+					model.pluginName = inspection.pluginName;
+					model.author = inspection.author;
+					model.version = inspection.version;
 					model.description = inspection.description;
 					model.scope = inspection.scope;
 					model.approvalReason = inspection.approvalReason;
@@ -3475,15 +3706,17 @@ namespace Application
 					model.approved = inspection.approved;
 					model.signedPackage = inspection.signedPackage;
 					model.trustedNative = package.executionMode == ::CemodExecutionMode::TrustedNative;
-					model.wups = inspection.wups; model.headless = inspection.headless;
+					model.wups = inspection.wups;
+					model.headless = inspection.headless;
 					model.runtimeAvailable = true;
 					model.valid = inspection.valid;
-					model.status = !model.valid ? "rejected" : model.approved ? "ready" : "disabled";
+					model.status = !model.valid ? "rejected" : model.approved ? "ready"
+																			  : "disabled";
 					model.warnings = inspection.warnings;
 					for (const auto& permission : inspection.permissions)
 						model.permissions.push_back({permission.name,
-							permission.bit, permission.requested, permission.granted,
-							permission.dangerous, permission.manifestMismatch});
+													 permission.bit, permission.requested, permission.granted,
+													 permission.dangerous, permission.manifestMismatch});
 					snapshot.packages.push_back(std::move(model));
 				}
 				if (cancelled && cancelled())
@@ -3504,7 +3737,7 @@ namespace Application
 				if (snapshot.generation != update.generation)
 					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
 				const auto found = std::ranges::find(snapshot.packages, update.packageKey,
-					&CemodManagerPackage::packageKey);
+													 &CemodManagerPackage::packageKey);
 				if (found == snapshot.packages.end() || !found->valid ||
 					std::ranges::find(found->titleIds, update.titleId) == found->titleIds.end())
 					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
@@ -3517,12 +3750,14 @@ namespace Application
 				auto configLock = GetConfigHandle().Lock();
 				const auto previous = GetConfig().GetCemuExtendPermissionApproval(update.titleId, approvalKey);
 				GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey,
-					{found->packageDigest, found->modIdentity, found->requestedPermissions,
-						update.approved ? update.grantedPermissions : 0, update.approved, false});
+															{found->packageDigest, found->modIdentity, found->requestedPermissions,
+															 update.approved ? update.grantedPermissions : 0, update.approved, false});
 				if (!GetConfigHandle().Save())
 				{
-					if (previous) GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey, *previous);
-					else GetConfig().RemoveCemuExtendPermissionApproval(update.titleId, approvalKey);
+					if (previous)
+						GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey, *previous);
+					else
+						GetConfig().RemoveCemuExtendPermissionApproval(update.titleId, approvalKey);
 					return {CemodManagerError::SaveFailed, "The approval could not be persisted", std::move(snapshot)};
 				}
 				configLock.unlock();
@@ -3531,13 +3766,13 @@ namespace Application
 			}
 
 			CemodManagerResult ImportLegacyCemodPackageData(std::uint64_t generation,
-				std::uint64_t titleId, std::string_view packageKey) override
+															std::uint64_t titleId, std::string_view packageKey) override
 			{
 				auto snapshot = GetCemodManagerSnapshot(titleId);
 				if (snapshot.generation != generation)
 					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
 				const auto found = std::ranges::find(snapshot.packages, packageKey,
-					&CemodManagerPackage::packageKey);
+													 &CemodManagerPackage::packageKey);
 				if (found == snapshot.packages.end() || !found->valid ||
 					std::ranges::find(found->titleIds, titleId) == found->titleIds.end())
 					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
@@ -3565,7 +3800,10 @@ namespace Application
 				struct ListLease final
 				{
 					std::span<TitleInfo*> titles{CafeTitleList::AcquireInternalList()};
-					~ListLease() { CafeTitleList::ReleaseInternalList(); }
+					~ListLease()
+					{
+						CafeTitleList::ReleaseInternalList();
+					}
 				} lease;
 				std::vector<ManagedContentEntry> result;
 				result.reserve(lease.titles.size());
@@ -3670,15 +3908,17 @@ namespace Application
 					return {ContentOperationError::NotFound, "No title content selected"};
 				if (outputPath.empty())
 					return {ContentOperationError::UnableToCreateOutput,
-						"Archive output path is empty"};
+							"Archive output path is empty"};
 
 				const auto current = BuildWuaConversionPlan(plan.items.front().titleId,
-					plan.items.front().locationUid);
+															plan.items.front().locationUid);
 				auto samePlan = [](const WuaConversionPlan& left, const WuaConversionPlan& right) {
-					if (left.items.size() != right.items.size()) return false;
+					if (left.items.size() != right.items.size())
+						return false;
 					for (std::size_t index = 0; index < left.items.size(); ++index)
 					{
-						const auto& a = left.items[index]; const auto& b = right.items[index];
+						const auto& a = left.items[index];
+						const auto& b = right.items[index];
 						if (a.locationUid != b.locationUid || a.titleId != b.titleId ||
 							a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role)
 							return false;
@@ -3687,7 +3927,7 @@ namespace Application
 				};
 				if (!current || !samePlan(plan, *current))
 					return {ContentOperationError::VerificationFailure,
-						"Installed content changed after the WUA conversion was confirmed"};
+							"Installed content changed after the WUA conversion was confirmed"};
 
 				std::vector<TitleInfo> titles;
 				titles.reserve(plan.items.size());
@@ -3696,13 +3936,13 @@ namespace Application
 					auto title = CafeTitleList::GetTitleInfoByUID(item.locationUid);
 					if (!title.IsValid())
 						return {ContentOperationError::NotFound,
-							fmt::format("Title content {:016x} is no longer available", item.locationUid)};
+								fmt::format("Title content {:016x} is no longer available", item.locationUid)};
 					titles.push_back(std::move(title));
 				}
 
 				auto temporaryPath = outputPath;
 				temporaryPath += fmt::format(".tmp.{}",
-					std::chrono::steady_clock::now().time_since_epoch().count());
+											 std::chrono::steady_clock::now().time_since_epoch().count());
 				auto removeTemporary = [&temporaryPath] {
 					std::error_code ignored;
 					std::filesystem::remove(temporaryPath, ignored);
@@ -3711,15 +3951,15 @@ namespace Application
 				try
 				{
 					WuaWriterContext context(temporaryPath, std::move(progress),
-						cancelled);
+											 cancelled);
 					context.writer = new ZArchiveWriter(&WuaWriterContext::NewOutputFile,
-						&WuaWriterContext::WriteOutputData, &context);
+														&WuaWriterContext::WriteOutputData, &context);
 					if (!context.valid)
 					{
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::UnableToCreateOutput,
-							"Unable to create archive output"};
+								"Unable to create archive output"};
 					}
 
 					context.Publish(ContentOperationPhase::Counting);
@@ -3730,10 +3970,8 @@ namespace Application
 							const bool wasCancelled = context.IsCancelled();
 							context.Close();
 							removeTemporary();
-							return {wasCancelled ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								wasCancelled ? "Conversion cancelled" :
-								"Unable to enumerate title files"};
+							return {wasCancelled ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
+									wasCancelled ? "Conversion cancelled" : "Unable to enumerate title files"};
 						}
 					}
 					for (auto& title : titles)
@@ -3743,27 +3981,25 @@ namespace Application
 							const bool wasCancelled = context.IsCancelled();
 							context.Close();
 							removeTemporary();
-							return {wasCancelled ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								wasCancelled ? "Conversion cancelled" :
-								"Unable to read title files"};
+							return {wasCancelled ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
+									wasCancelled ? "Conversion cancelled" : "Unable to read title files"};
 						}
 					}
 					const auto afterRead = BuildWuaConversionPlan(plan.items.front().titleId,
-						plan.items.front().locationUid);
+																  plan.items.front().locationUid);
 					if (!afterRead || !samePlan(plan, *afterRead))
 					{
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::VerificationFailure,
-							"Installed content changed while the WUA archive was being created"};
+								"Installed content changed while the WUA archive was being created"};
 					}
 					if (!context.valid)
 					{
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::UnableToCreateOutput,
-							"Unable to write archive output"};
+								"Unable to write archive output"};
 					}
 
 					if (context.IsCancelled())
@@ -3783,19 +4019,17 @@ namespace Application
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::VerificationFailure,
-							"Unable to reopen the generated archive"};
+								"Unable to reopen the generated archive"};
 					}
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					removeTemporary();
 					return {ContentOperationError::ReadFailure, exception.what()};
-				}
-				catch (...)
+				} catch (...)
 				{
 					removeTemporary();
 					return {ContentOperationError::ReadFailure,
-						"Unknown archive conversion failure"};
+							"Unknown archive conversion failure"};
 				}
 
 				if (cancelled && cancelled())
@@ -3806,7 +4040,7 @@ namespace Application
 
 				auto backupPath = outputPath;
 				backupPath += fmt::format(".backup.{}",
-					std::chrono::steady_clock::now().time_since_epoch().count());
+										  std::chrono::steady_clock::now().time_since_epoch().count());
 				std::error_code renameError;
 				const bool destinationExists = std::filesystem::exists(outputPath, renameError);
 				if (renameError)
@@ -3834,9 +4068,9 @@ namespace Application
 						{
 							removeTemporary();
 							return {ContentOperationError::RenameFailure,
-								fmt::format("{}; original output remains at {} because restore failed: {}",
-									renameError.message(), _pathToUtf8(backupPath),
-									restoreError.message())};
+									fmt::format("{}; original output remains at {} because restore failed: {}",
+												renameError.message(), _pathToUtf8(backupPath),
+												restoreError.message())};
 						}
 					}
 					removeTemporary();
@@ -3858,14 +4092,16 @@ namespace Application
 				auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
 				if (!title.IsValid())
 					return {ContentOperationError::NotFound,
-						"Title content is no longer available", std::nullopt};
+							"Title content is no longer available", std::nullopt};
 
 				ContentChecksum checksum{
 					.titleId = title.GetAppTitleId(),
 					.version = title.GetAppTitleVersion(),
 					.region = static_cast<std::uint32_t>(title.GetMetaRegion()),
 				};
-				auto isCancelled = [&cancelled] { return cancelled && cancelled(); };
+				auto isCancelled = [&cancelled] {
+					return cancelled && cancelled();
+				};
 				auto publish = [&progress](const ContentOperationProgress& value) {
 					if (progress)
 						progress(value);
@@ -3887,30 +4123,30 @@ namespace Application
 						WudHandle wud(wud_open(title.GetPath()), &wud_close);
 						if (!wud)
 							return {ContentOperationError::ReadFailure,
-								"Unable to open game image", std::nullopt};
+									"Unable to open game image", std::nullopt};
 						const auto total = wud_getWUDSize(wud.get());
 						if (total <= 0)
 							return {ContentOperationError::ReadFailure,
-								"Game image is empty", std::nullopt};
+									"Game image is empty", std::nullopt};
 						using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 						DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
 						if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
 							return {ContentOperationError::ReadFailure,
-								"Unable to initialize SHA-256", std::nullopt};
+									"Unable to initialize SHA-256", std::nullopt};
 						std::vector<std::uint8_t> buffer(8 * 1024 * 1024);
 						std::uint64_t offset{};
 						while (offset < total)
 						{
 							if (isCancelled())
 								return {ContentOperationError::Cancelled, "Checksum cancelled",
-									std::nullopt};
+										std::nullopt};
 							const auto requested = static_cast<std::size_t>(
 								std::min<std::uint64_t>(buffer.size(), total - offset));
 							const auto read = wud_readData(wud.get(), buffer.data(), requested, offset);
 							if (read != requested ||
 								EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
 								return {ContentOperationError::ReadFailure,
-									"Game image ended before its declared size", std::nullopt};
+										"Game image ended before its declared size", std::nullopt};
 							offset += read;
 							publish({ContentOperationPhase::Hashing, 0, 0, offset, total});
 						}
@@ -3918,7 +4154,7 @@ namespace Application
 						if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
 							digestLength != digest.size())
 							return {ContentOperationError::ReadFailure,
-								"Unable to finalize SHA-256", std::nullopt};
+									"Unable to finalize SHA-256", std::nullopt};
 						checksum.imageSha256 = toHex(digest);
 					}
 					else
@@ -3926,12 +4162,15 @@ namespace Application
 						const auto mountPath = TitleInfo::GetUniqueTempMountingPath();
 						if (!title.Mount(mountPath, "", FSC_PRIORITY_BASE))
 							return {ContentOperationError::ReadFailure,
-								"Unable to mount title content", std::nullopt};
+									"Unable to mount title content", std::nullopt};
 						struct UnmountGuard
 						{
 							TitleInfo& title;
 							std::string path;
-							~UnmountGuard() { title.Unmount(path); }
+							~UnmountGuard()
+							{
+								title.Unmount(path);
+							}
 						} unmount{title, mountPath};
 
 						std::vector<std::pair<std::string, std::uint64_t>> files;
@@ -3944,124 +4183,123 @@ namespace Application
 						std::string collectionLimitError;
 						std::function<bool(const std::string&, std::size_t)> collect =
 							[&](const std::string& relative, std::size_t depth) {
-							if (isCancelled())
-								return false;
-							sint32 status{};
-							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> directory(
-								fsc_openDirIterator((mountPath + relative).c_str(), &status),
-								&fsc_close);
-							if (!directory)
-								return false;
-							FSCDirEntry entry;
-							while (fsc_nextDir(directory.get(), &entry))
-							{
-								const std::string_view component(entry.path);
-								if (component.empty() || component == "." || component == ".." ||
-									component.find_first_of("/\\\0") != std::string_view::npos)
-								{
-									collectionLimitError = "Title contains an invalid checksum path component";
+								if (isCancelled())
 									return false;
-								}
-								const auto child = relative + entry.path;
-								if (entry.isDirectory)
+								sint32 status{};
+								std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> directory(
+									fsc_openDirIterator((mountPath + relative).c_str(), &status),
+									&fsc_close);
+								if (!directory)
+									return false;
+								FSCDirEntry entry;
+								while (fsc_nextDir(directory.get(), &entry))
 								{
-									if (depth >= 256 || collectedDirectories >= 20000 ||
-										child.size() > kMaximumChecksumPath ||
-										child.size() > 4 * 1024 * 1024 - collectedPathBytes)
+									const std::string_view component(entry.path);
+									if (component.empty() || component == "." || component == ".." ||
+										component.find_first_of("/\\\0") != std::string_view::npos)
 									{
-										collectionLimitError = "Title exceeds the safe checksum directory depth or size limit";
+										collectionLimitError = "Title contains an invalid checksum path component";
 										return false;
 									}
-									++collectedDirectories;
-									collectedPathBytes += child.size();
-									if (!collect(child + "/", depth + 1))
-										return false;
-								}
-								else if (entry.isFile)
-								{
-									if (child.size() > kMaximumChecksumPath || files.size() >= kMaximumChecksumFiles ||
-										child.size() > 4 * 1024 * 1024 - collectedPathBytes ||
-										entry.fileSize > kMaximumChecksumBytes - collectedBytes)
+									const auto child = relative + entry.path;
+									if (entry.isDirectory)
 									{
-										collectionLimitError = "Title exceeds the safe checksum file, path, or size limit";
-										return false;
+										if (depth >= 256 || collectedDirectories >= 20000 ||
+											child.size() > kMaximumChecksumPath ||
+											child.size() > 4 * 1024 * 1024 - collectedPathBytes)
+										{
+											collectionLimitError = "Title exceeds the safe checksum directory depth or size limit";
+											return false;
+										}
+										++collectedDirectories;
+										collectedPathBytes += child.size();
+										if (!collect(child + "/", depth + 1))
+											return false;
 									}
-									collectedBytes += static_cast<std::uint64_t>(entry.fileSize);
-									collectedPathBytes += child.size();
-									files.emplace_back(child,
-										static_cast<std::uint64_t>(entry.fileSize));
-									publish({ContentOperationPhase::Collecting, 0,
-										static_cast<std::uint32_t>(files.size()), 0, 0});
+									else if (entry.isFile)
+									{
+										if (child.size() > kMaximumChecksumPath || files.size() >= kMaximumChecksumFiles ||
+											child.size() > 4 * 1024 * 1024 - collectedPathBytes ||
+											entry.fileSize > kMaximumChecksumBytes - collectedBytes)
+										{
+											collectionLimitError = "Title exceeds the safe checksum file, path, or size limit";
+											return false;
+										}
+										collectedBytes += static_cast<std::uint64_t>(entry.fileSize);
+										collectedPathBytes += child.size();
+										files.emplace_back(child,
+														   static_cast<std::uint64_t>(entry.fileSize));
+										publish({ContentOperationPhase::Collecting, 0,
+												 static_cast<std::uint32_t>(files.size()), 0, 0});
+									}
 								}
-							}
-							return true;
-						};
+								return true;
+							};
 						if (!collect("", 0))
-							return {isCancelled() ? ContentOperationError::Cancelled :
-								collectionLimitError.empty() ? ContentOperationError::ReadFailure :
-								ContentOperationError::VerificationFailure,
-								isCancelled() ? "Checksum cancelled" : !collectionLimitError.empty() ? collectionLimitError :
-								"Unable to enumerate title files", std::nullopt};
+							return {isCancelled() ? ContentOperationError::Cancelled : collectionLimitError.empty() ? ContentOperationError::ReadFailure
+																													: ContentOperationError::VerificationFailure,
+									isCancelled() ? "Checksum cancelled" : !collectionLimitError.empty() ? collectionLimitError
+																										 : "Unable to enumerate title files",
+									std::nullopt};
 						std::ranges::sort(files, {}, &decltype(files)::value_type::first);
 						for (std::size_t index = 0; index < files.size(); ++index)
 						{
 							const auto& [filePath, expectedSize] = files[index];
 							if (isCancelled())
 								return {ContentOperationError::Cancelled, "Checksum cancelled",
-									std::nullopt};
+										std::nullopt};
 							sint32 status{};
 							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> file(
 								fsc_open((mountPath + "/" + filePath).c_str(),
-									FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION,
-									&status), &fsc_close);
+										 FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION,
+										 &status),
+								&fsc_close);
 							if (!file)
 								return {ContentOperationError::ReadFailure,
-									fmt::format("Unable to read {}", filePath), std::nullopt};
+										fmt::format("Unable to read {}", filePath), std::nullopt};
 							using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 							DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
 							if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
 								return {ContentOperationError::ReadFailure,
-									"Unable to initialize SHA-256", std::nullopt};
+										"Unable to initialize SHA-256", std::nullopt};
 							std::vector<std::uint8_t> buffer(1024 * 1024);
 							std::uint64_t bytesRead{};
 							for (;;)
 							{
 								if (isCancelled())
 									return {ContentOperationError::Cancelled,
-										"Checksum cancelled", std::nullopt};
+											"Checksum cancelled", std::nullopt};
 								const auto read = file->fscReadData(buffer.data(), buffer.size());
 								if (read == 0)
 									break;
 								if (EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
 									return {ContentOperationError::ReadFailure,
-										"Unable to update SHA-256", std::nullopt};
+											"Unable to update SHA-256", std::nullopt};
 								bytesRead += read;
 							}
 							if (bytesRead != expectedSize)
 								return {ContentOperationError::ReadFailure,
-									fmt::format("{} ended before its declared size", filePath),
-									std::nullopt};
+										fmt::format("{} ended before its declared size", filePath),
+										std::nullopt};
 							unsigned int digestLength{};
 							if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
 								digestLength != digest.size())
 								return {ContentOperationError::ReadFailure,
-									"Unable to finalize SHA-256", std::nullopt};
+										"Unable to finalize SHA-256", std::nullopt};
 							checksum.files.push_back({filePath, toHex(digest)});
 							publish({ContentOperationPhase::Hashing,
-								static_cast<std::uint32_t>(index + 1),
-								static_cast<std::uint32_t>(files.size()), 0, 0});
+									 static_cast<std::uint32_t>(index + 1),
+									 static_cast<std::uint32_t>(files.size()), 0, 0});
 						}
 					}
 					return {ContentOperationError::None, {}, std::move(checksum)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {ContentOperationError::ReadFailure, exception.what(), std::nullopt};
-				}
-				catch (...)
+				} catch (...)
 				{
 					return {ContentOperationError::ReadFailure,
-						"Unknown checksum failure", std::nullopt};
+							"Unknown checksum failure", std::nullopt};
 				}
 			}
 
@@ -4102,12 +4340,20 @@ namespace Application
 				{
 					switch (*api)
 					{
-					case kOpenGL: result.settings.graphicsApi = GameProfileGraphicsApi::OpenGL; break;
-					case kVulkan: result.settings.graphicsApi = GameProfileGraphicsApi::Vulkan; break;
+					case kOpenGL:
+						result.settings.graphicsApi = GameProfileGraphicsApi::OpenGL;
+						break;
+					case kVulkan:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Vulkan;
+						break;
 #ifdef ENABLE_METAL
-					case kMetal: result.settings.graphicsApi = GameProfileGraphicsApi::Metal; break;
+					case kMetal:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Metal;
+						break;
 #endif
-					default: result.settings.graphicsApi = GameProfileGraphicsApi::Default; break;
+					default:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Default;
+						break;
 					}
 				}
 
@@ -4123,7 +4369,7 @@ namespace Application
 			}
 
 			GameProfileSaveResult SaveGameProfile(std::uint64_t titleId,
-				const GameProfileUpdate& update) override
+												  const GameProfileUpdate& update) override
 			{
 				GameProfile profile;
 				profile.Reset();
@@ -4131,8 +4377,7 @@ namespace Application
 				profile.SetStartWithGamepadView(update.startWithPadView);
 				profile.SetThreadQuantum(std::clamp<std::uint32_t>(
 					update.threadQuantum, 5000, 536870912));
-				profile.SetAccurateShaderMul(update.accurateShaderMultiplication ?
-					AccurateShaderMulOption::True : AccurateShaderMulOption::False);
+				profile.SetAccurateShaderMul(update.accurateShaderMultiplication ? AccurateShaderMulOption::True : AccurateShaderMulOption::False);
 
 				switch (update.cpuMode)
 				{
@@ -4152,22 +4397,30 @@ namespace Application
 
 				switch (update.graphicsApi)
 				{
-				case GameProfileGraphicsApi::OpenGL: profile.SetGraphicsAPI(kOpenGL); break;
-				case GameProfileGraphicsApi::Vulkan: profile.SetGraphicsAPI(kVulkan); break;
+				case GameProfileGraphicsApi::OpenGL:
+					profile.SetGraphicsAPI(kOpenGL);
+					break;
+				case GameProfileGraphicsApi::Vulkan:
+					profile.SetGraphicsAPI(kVulkan);
+					break;
 #ifdef ENABLE_METAL
-				case GameProfileGraphicsApi::Metal: profile.SetGraphicsAPI(kMetal); break;
+				case GameProfileGraphicsApi::Metal:
+					profile.SetGraphicsAPI(kMetal);
+					break;
 #endif
-				default: profile.SetGraphicsAPI(std::nullopt); break;
+				default:
+					profile.SetGraphicsAPI(std::nullopt);
+					break;
 				}
 
 #ifdef ENABLE_METAL
 				profile.SetShaderFastMath(update.shaderFastMath);
 				profile.SetBufferCacheMode(static_cast<MetalBufferCacheMode>(
 					std::min<std::uint8_t>(update.metalBufferCacheMode,
-						static_cast<std::uint8_t>(MetalBufferCacheMode::Host))));
+										   static_cast<std::uint8_t>(MetalBufferCacheMode::Host))));
 				profile.SetPositionInvariance(static_cast<PositionInvariance>(
 					std::min<std::uint8_t>(update.positionInvariance,
-						static_cast<std::uint8_t>(PositionInvariance::True))));
+										   static_cast<std::uint8_t>(PositionInvariance::True))));
 #endif
 				for (std::size_t index = 0; index < update.controllerProfiles.size(); ++index)
 					profile.SetControllerProfile(index, update.controllerProfiles[index]);
@@ -4184,20 +4437,22 @@ namespace Application
 			}
 
 			TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
-				TitleInstallDecision decision, TitleInstallProgressHandler progress,
-				TitleInstallCancellationCheck cancelled) override
+											TitleInstallDecision decision, TitleInstallProgressHandler progress,
+											TitleInstallCancellationCheck cancelled) override
 			{
 				if (plan.conflict != TitleInstallConflict::None &&
 					decision != TitleInstallDecision::AcceptConflict)
 					return {TitleInstallError::ConflictNotAccepted,
-						"The existing title conflict was not accepted", {}};
+							"The existing title conflict was not accepted",
+							{}};
 
 				auto currentPlanResult = SafeBuildTitleInstallPlan(plan.sourcePath);
 				if (!currentPlanResult)
 					return {currentPlanResult.error, currentPlanResult.diagnostic, {}};
 				if (!SameInstallSnapshot(plan, *currentPlanResult.plan))
 					return {TitleInstallError::StalePlan,
-						"The source or installed title changed before installation", {}};
+							"The source or installed title changed before installation",
+							{}};
 
 				std::error_code ec;
 				const auto canonicalSource = fs::weakly_canonical(plan.sourcePath, ec);
@@ -4205,19 +4460,20 @@ namespace Application
 				const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
 				if ((!canonicalSource.empty() && canonicalSource == canonicalTarget) ||
 					(fs::exists(plan.targetPath, ec) && !ec &&
-						fs::equivalent(plan.sourcePath, plan.targetPath, ec) && !ec))
+					 fs::equivalent(plan.sourcePath, plan.targetPath, ec) && !ec))
 					return {TitleInstallError::InvalidSource,
-						"A title cannot be installed from its destination folder", {}};
+							"A title cannot be installed from its destination folder",
+							{}};
 
 				if (cancelled && cancelled())
 					return {TitleInstallError::Cancelled, "Title installation cancelled", {}};
 
 				const auto stagingPath = UniqueInstallSibling(plan.targetPath, "installing");
-				const auto backupPath = plan.installed.exists ?
-					UniqueInstallSibling(plan.targetPath, "backup") : fs::path{};
+				const auto backupPath = plan.installed.exists ? UniqueInstallSibling(plan.targetPath, "backup") : fs::path{};
 				if (stagingPath.empty() || (plan.installed.exists && backupPath.empty()))
 					return {TitleInstallError::CopyFailure,
-						"Unable to reserve a temporary installation path", {}};
+							"Unable to reserve a temporary installation path",
+							{}};
 
 				auto removeStaging = [&] {
 					std::error_code ignored;
@@ -4230,7 +4486,8 @@ namespace Application
 						return {TitleInstallError::CopyFailure, ec.message(), {}};
 					if (!fs::create_directory(stagingPath, ec))
 						return {TitleInstallError::CopyFailure,
-							ec ? ec.message() : "Temporary installation path already exists", {}};
+								ec ? ec.message() : "Temporary installation path already exists",
+								{}};
 
 					std::uint64_t copiedBytes{};
 					std::vector<std::uint8_t> buffer(1024 * 1024);
@@ -4250,7 +4507,8 @@ namespace Application
 							{
 								removeStaging();
 								return {TitleInstallError::Cancelled,
-									"Title installation cancelled", {}};
+										"Title installation cancelled",
+										{}};
 							}
 							const auto relative = fs::relative(iterator->path(), plan.sourcePath, ec);
 							if (ec)
@@ -4269,10 +4527,10 @@ namespace Application
 									throw std::runtime_error(ec.message());
 								std::ifstream input(iterator->path(), std::ios::binary);
 								std::ofstream output(destination,
-									std::ios::binary | std::ios::trunc);
+													 std::ios::binary | std::ios::trunc);
 								if (!input || !output)
 									throw std::runtime_error(fmt::format("Unable to copy {}",
-										_pathToUtf8(iterator->path())));
+																		 _pathToUtf8(iterator->path())));
 								while (input)
 								{
 									if (cancelled && cancelled())
@@ -4281,7 +4539,8 @@ namespace Application
 										output.close();
 										removeStaging();
 										return {TitleInstallError::Cancelled,
-											"Title installation cancelled", {}};
+												"Title installation cancelled",
+												{}};
 									}
 									input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 									const auto count = input.gcount();
@@ -4290,18 +4549,18 @@ namespace Application
 									output.write(reinterpret_cast<const char*>(buffer.data()), count);
 									if (!output)
 										throw std::runtime_error(fmt::format("Unable to write {}",
-											_pathToUtf8(destination)));
+																			 _pathToUtf8(destination)));
 									copiedBytes += static_cast<std::uint64_t>(count);
 									if (progress)
 										progress({copiedBytes, plan.requiredBytes, relative});
 								}
 								if (!input.eof())
 									throw std::runtime_error(fmt::format("Unable to read {}",
-										_pathToUtf8(iterator->path())));
+																		 _pathToUtf8(iterator->path())));
 								output.flush();
 								if (!output)
 									throw std::runtime_error(fmt::format("Unable to flush {}",
-										_pathToUtf8(destination)));
+																		 _pathToUtf8(destination)));
 								const auto permissions = iterator->status(ec).permissions();
 								if (!ec)
 									fs::permissions(destination, permissions, ec);
@@ -4312,7 +4571,7 @@ namespace Application
 							else if (iterator->is_symlink(ec))
 							{
 								fs::copy(iterator->path(), destination,
-									fs::copy_options::copy_symlinks, ec);
+										 fs::copy_options::copy_symlinks, ec);
 								if (ec)
 									throw std::runtime_error(ec.message());
 							}
@@ -4333,23 +4592,26 @@ namespace Application
 					{
 						removeStaging();
 						return {TitleInstallError::StalePlan,
-							"The title source changed while staging the installation", {}};
+								"The title source changed while staging the installation",
+								{}};
 					}
 					if (cancelled && cancelled())
 					{
 						removeStaging();
 						return {TitleInstallError::Cancelled,
-							"Title installation cancelled", {}};
+								"Title installation cancelled",
+								{}};
 					}
 
 					const bool targetExists = fs::exists(plan.targetPath, ec) && !ec;
 					if (ec || targetExists != plan.installed.exists ||
 						(targetExists && FingerprintInstallTarget(plan.targetPath) !=
-							plan.installed.fingerprint))
+											 plan.installed.fingerprint))
 					{
 						removeStaging();
 						return {TitleInstallError::StalePlan,
-							"The installed title changed while staging the update", {}};
+								"The installed title changed while staging the update",
+								{}};
 					}
 
 					bool originalMoved{};
@@ -4376,8 +4638,9 @@ namespace Application
 							{
 								removeStaging();
 								return {TitleInstallError::RestoreFailure,
-									fmt::format("{}; original title remains at {} because restore failed: {}",
-										commitError.message(), _pathToUtf8(backupPath), ec.message()), {}};
+										fmt::format("{}; original title remains at {} because restore failed: {}",
+													commitError.message(), _pathToUtf8(backupPath), ec.message()),
+										{}};
 							}
 						}
 						removeStaging();
@@ -4391,7 +4654,7 @@ namespace Application
 						fs::remove_all(backupPath, ec);
 						if (ec)
 							warning = fmt::format("Installed title, but unable to remove backup {}: {}",
-								_pathToUtf8(backupPath), ec.message());
+												  _pathToUtf8(backupPath), ec.message());
 					}
 					try
 					{
@@ -4401,16 +4664,14 @@ namespace Application
 								warning.append("; ");
 							warning.append("installed title could not be refreshed in the title catalog");
 						}
-					}
-					catch (const std::exception& exception)
+					} catch (const std::exception& exception)
 					{
 						if (!warning.empty())
 							warning.append("; ");
 						warning.append(fmt::format(
 							"installed title could not be refreshed in the title catalog: {}",
 							exception.what()));
-					}
-					catch (...)
+					} catch (...)
 					{
 						if (!warning.empty())
 							warning.append("; ");
@@ -4418,17 +4679,16 @@ namespace Application
 							"installed title could not be refreshed in the title catalog");
 					}
 					return {TitleInstallError::None, std::move(warning), plan.targetPath};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					removeStaging();
 					return {TitleInstallError::CopyFailure, exception.what(), {}};
-				}
-				catch (...)
+				} catch (...)
 				{
 					removeStaging();
 					return {TitleInstallError::CopyFailure,
-						"Unknown title installation failure", {}};
+							"Unknown title installation failure",
+							{}};
 				}
 			}
 
@@ -4437,34 +4697,34 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {ManagedContentDeleteError::TitleRunning,
-						"Managed content cannot be deleted while a title is running", std::nullopt};
+							"Managed content cannot be deleted while a title is running", std::nullopt};
 				if (CafeTitleList::IsScanning())
 					return {ManagedContentDeleteError::Scanning,
-						"Managed content cannot be deleted while the title catalog is scanning", std::nullopt};
+							"Managed content cannot be deleted while the title catalog is scanning", std::nullopt};
 				const auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
 				if (!title.IsValid())
 					return {ManagedContentDeleteError::NotFound,
-						"The selected managed-content installation is no longer available", std::nullopt};
+							"The selected managed-content installation is no longer available", std::nullopt};
 				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), true);
 				if (!IsManagedContentDeletionSupported(entry.type))
 					return {ManagedContentDeleteError::Unsupported,
-						"System titles cannot be deleted from Title Manager", std::nullopt};
+							"System titles cannot be deleted from Title Manager", std::nullopt};
 				if (entry.path.empty())
 					return {ManagedContentDeleteError::Unsupported,
-						"The selected installation does not have a deletable catalog location", std::nullopt};
+							"The selected installation does not have a deletable catalog location", std::nullopt};
 				const auto safePath = ValidateCatalogDeletePath(entry.path);
 				if (!safePath)
 					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic, std::nullopt};
 				entry.path = safePath.canonicalPath;
 				return {ManagedContentDeleteError::None, {}, ManagedContentDeletePlan{
-					.locationUid = entry.locationUid,
-					.titleId = entry.titleId,
-					.fingerprint = ManagedContentFingerprint(entry),
-					.name = entry.name,
-					.displayPath = _pathToUtf8(entry.path),
-					.type = entry.type,
-					.format = entry.format,
-				}};
+																 .locationUid = entry.locationUid,
+																 .titleId = entry.titleId,
+																 .fingerprint = ManagedContentFingerprint(entry),
+																 .name = entry.name,
+																 .displayPath = _pathToUtf8(entry.path),
+																 .type = entry.type,
+																 .format = entry.format,
+															 }};
 			}
 
 			ManagedContentDeleteResult DeleteManagedContent(
@@ -4472,18 +4732,18 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {ManagedContentDeleteError::TitleRunning,
-						"Managed content cannot be deleted while a title is running"};
+							"Managed content cannot be deleted while a title is running"};
 				if (CafeTitleList::IsScanning())
 					return {ManagedContentDeleteError::Scanning,
-						"Managed content cannot be deleted while the title catalog is scanning"};
+							"Managed content cannot be deleted while the title catalog is scanning"};
 				const auto title = CafeTitleList::GetTitleInfoByUID(plan.locationUid);
 				if (!title.IsValid())
 					return {ManagedContentDeleteError::NotFound,
-						"The selected managed-content installation is no longer available"};
+							"The selected managed-content installation is no longer available"};
 				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), false);
 				if (!IsManagedContentDeletionSupported(entry.type))
 					return {ManagedContentDeleteError::Unsupported,
-						"System titles cannot be deleted from Title Manager"};
+							"System titles cannot be deleted from Title Manager"};
 				const auto safePath = ValidateCatalogDeletePath(entry.path);
 				if (!safePath)
 					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic};
@@ -4491,37 +4751,37 @@ namespace Application
 				if (entry.titleId != plan.titleId || entry.type != plan.type ||
 					entry.format != plan.format || ManagedContentFingerprint(entry) != plan.fingerprint)
 					return {ManagedContentDeleteError::StalePlan,
-						"The selected installation changed after deletion was confirmed"};
+							"The selected installation changed after deletion was confirmed"};
 				std::error_code error;
 				const auto status = fs::symlink_status(entry.path, error);
 				if (error || status.type() == fs::file_type::not_found)
 					return {ManagedContentDeleteError::NotFound,
-						error ? error.message() : "The selected installation no longer exists"};
+							error ? error.message() : "The selected installation no longer exists"};
 				if (status.type() == fs::file_type::symlink)
 					return {ManagedContentDeleteError::Unsupported,
-						"Managed-content catalog roots may not be symbolic links"};
+							"Managed-content catalog roots may not be symbolic links"};
 				const auto quarantine = UniqueInstallSibling(entry.path, "deleting");
 				if (quarantine.empty())
 					return {ManagedContentDeleteError::DeleteFailure,
-						"Unable to reserve a deletion quarantine path"};
+							"Unable to reserve a deletion quarantine path"};
 				fs::rename(entry.path, quarantine, error);
 				if (error)
 					return {ManagedContentDeleteError::DeleteFailure, error.message()};
-				auto moved = entry; moved.path = quarantine;
+				auto moved = entry;
+				moved.path = quarantine;
 				if (ManagedContentFingerprint(moved, &entry.path) != plan.fingerprint)
 				{
 					std::error_code restoreError;
 					fs::rename(quarantine, entry.path, restoreError);
-					return {ManagedContentDeleteError::StalePlan, restoreError ?
-						fmt::format("The selected installation changed; it was quarantined at {} because restore failed: {}",
-							_pathToUtf8(quarantine), restoreError.message()) :
-						"The selected installation changed while deletion was starting"};
+					return {ManagedContentDeleteError::StalePlan, restoreError ? fmt::format("The selected installation changed; it was quarantined at {} because restore failed: {}",
+																							 _pathToUtf8(quarantine), restoreError.message())
+																			   : "The selected installation changed while deletion was starting"};
 				}
 				fs::remove_all(quarantine, error);
 				if (error)
 					return {ManagedContentDeleteError::DeleteFailure,
-						fmt::format("Content was quarantined at {}, but deletion failed: {}",
-							_pathToUtf8(quarantine), error.message())};
+							fmt::format("Content was quarantined at {}, but deletion failed: {}",
+										_pathToUtf8(quarantine), error.message())};
 				CafeTitleList::Refresh();
 				return {};
 			}
@@ -4589,9 +4849,9 @@ namespace Application
 				for (const auto& account : snapshot.accounts)
 				{
 					snapshot.networkSettings.push_back({account.persistentId,
-						TranslateNetworkService(
-							GetConfig().GetAccountNetworkService(account.persistentId)),
-						ValidateOnlineAccount(account.persistentId)});
+														TranslateNetworkService(
+															GetConfig().GetAccountNetworkService(account.persistentId)),
+														ValidateOnlineAccount(account.persistentId)});
 				}
 				return snapshot;
 			}
@@ -4600,7 +4860,7 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"the active account cannot be changed while a title is running"};
+							"the active account cannot be changed while a title is running"};
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
@@ -4610,19 +4870,19 @@ namespace Application
 			}
 
 			AccountOperationResult SetAccountNetworkService(std::uint32_t persistentId,
-				AccountNetworkService service) override
+															AccountNetworkService service) override
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"network service cannot be changed while a title is running"};
+							"network service cannot be changed while a title is running"};
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
 				if (service != AccountNetworkService::Offline && !account->IsValidOnlineAccount())
 					return {AccountOperationError::BackendFailure,
-						"online account files must be valid before enabling a network service"};
+							"online account files must be valid before enabling a network service"};
 				GetConfig().SetAccountSelectedService(persistentId,
-					TranslateNetworkService(service));
+													  TranslateNetworkService(service));
 				GetConfigHandle().Save();
 				return {AccountOperationError::None, {}, TranslateAccount(*account)};
 			}
@@ -4682,23 +4942,23 @@ namespace Application
 			}
 
 			AccountOperationResult CreateAccount(std::uint32_t persistentId,
-				std::wstring_view miiName) override
+												 std::wstring_view miiName) override
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				if (persistentId < kMinimumPersistentId)
 					return {AccountOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				if (miiName.empty() || miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-						"account name must contain between 1 and 10 characters"};
+							"account name must contain between 1 and 10 characters"};
 				if (!::Account::HasFreeAccountSlots())
 					return {AccountOperationError::NoFreeSlots,
-						"all account slots are occupied"};
+							"all account slots are occupied"};
 				if (FindAccount(persistentId))
 					return {AccountOperationError::DuplicatePersistentId,
-						"persistent id is already in use"};
+							"persistent id is already in use"};
 				try
 				{
 					::Account account(persistentId, miiName);
@@ -4707,34 +4967,32 @@ namespace Application
 						return {AccountOperationError::IoFailure, error.message()};
 					::Account::RefreshAccounts();
 					return {AccountOperationError::None, {}, TranslateAccount(account)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {AccountOperationError::BackendFailure, exception.what()};
 				}
 			}
 
 			AccountOperationResult UpdateAccount(std::uint32_t persistentId,
-				const AccountUpdate& update) override
+												 const AccountUpdate& update) override
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				const auto* existing = FindAccount(persistentId);
 				if (!existing)
 					return {AccountOperationError::NotFound, "account no longer exists"};
 				if (update.miiName.empty() || update.miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-						"account name must contain between 1 and 10 characters"};
+							"account name must contain between 1 and 10 characters"};
 				if (update.birthYear > 2100 || update.birthMonth > 12 ||
 					update.birthDay > 31 || update.gender > 2 || update.email.size() > 320)
 					return {AccountOperationError::BackendFailure,
-						"account profile fields are outside the supported range"};
-				const char* country = update.country <= std::numeric_limits<std::uint8_t>::max() ?
-					NCrypto::GetCountryAsString(update.country) : nullptr;
+							"account profile fields are outside the supported range"};
+				const char* country = update.country <= std::numeric_limits<std::uint8_t>::max() ? NCrypto::GetCountryAsString(update.country) : nullptr;
 				if (!country || (update.country != 0 && boost::equals(country, "NN")))
 					return {AccountOperationError::BackendFailure,
-						"account country is not supported"};
+							"account country is not supported"};
 				try
 				{
 					::Account account = *existing;
@@ -4750,8 +5008,7 @@ namespace Application
 						return {AccountOperationError::IoFailure, error.message()};
 					::Account::RefreshAccounts();
 					return {AccountOperationError::None, {}, TranslateAccount(account)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {AccountOperationError::BackendFailure, exception.what()};
 				}
@@ -4762,11 +5019,11 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				const auto& accounts = ::Account::GetAccounts();
 				if (accounts.size() <= 1)
 					return {AccountOperationError::CannotDeleteOnlyAccount,
-						"the only account cannot be deleted"};
+							"the only account cannot be deleted"};
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
@@ -4793,7 +5050,7 @@ namespace Application
 				std::vector<std::uint32_t> result;
 				std::error_code ec;
 				for (fs::directory_iterator iterator(SaveUserRoot(titleId), ec), end;
-					!ec && iterator != end; iterator.increment(ec))
+					 !ec && iterator != end; iterator.increment(ec))
 				{
 					const auto status = iterator->symlink_status(ec);
 					if (ec || status.type() != fs::file_type::directory ||
@@ -4807,7 +5064,7 @@ namespace Application
 						continue;
 					std::uint32_t persistentId{};
 					const auto parsed = std::from_chars(name.data(), name.data() + name.size(),
-						persistentId, 16);
+														persistentId, 16);
 					if (parsed.ec == std::errc() && parsed.ptr == name.data() + name.size())
 						result.push_back(persistentId);
 				}
@@ -4816,32 +5073,31 @@ namespace Application
 			}
 
 			SaveEntryLocation InspectSaveEntry(std::uint64_t titleId,
-				std::uint32_t persistentId) const override
+											   std::uint32_t persistentId) const override
 			{
 				auto saveListLock = CafeSaveList::AcquireOperationLock();
 				return InspectSaveEntryPath(SaveAccountPath(titleId, persistentId));
 			}
 
 			SaveImportInspection InspectSaveImport(const fs::path& archivePath,
-				std::uint64_t titleId, std::uint32_t persistentId) const override
+												   std::uint64_t titleId, std::uint32_t persistentId) const override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				const auto plan = BuildSaveArchivePlan(archivePath);
 				if (!plan)
 					return {plan.error, plan.diagnostic};
 				auto saveListLock = CafeSaveList::AcquireOperationLock();
-				return {SaveOperationError::None, {}, plan.sourceTitleId,
-					InspectSaveEntryPath(SaveAccountPath(titleId, persistentId))};
+				return {SaveOperationError::None, {}, plan.sourceTitleId, InspectSaveEntryPath(SaveAccountPath(titleId, persistentId))};
 			}
 
 			SaveOperationResult DeleteSave(std::uint64_t titleId,
-				std::uint32_t persistentId) override
+										   std::uint32_t persistentId) override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -4851,11 +5107,9 @@ namespace Application
 					return {SaveOperationError::NotFound, "save directory no longer exists"};
 
 				SaveMetadataStage metadata;
-				auto metadataResult = StageSaveMetadata(titleId,
-					[persistentId](pugi::xml_node info) {
+				auto metadataResult = StageSaveMetadata(titleId, [persistentId](pugi::xml_node info) {
 						auto node = FindSaveAccountNode(info, persistentId);
-						return node ? info.remove_child(node) : false;
-					}, metadata);
+						return node ? info.remove_child(node) : false; }, metadata);
 				if (!metadataResult)
 					return metadataResult;
 
@@ -4864,7 +5118,7 @@ namespace Application
 				{
 					RemovePathQuietly(metadata.temporary);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save deletion staging path"};
+							"unable to reserve save deletion staging path"};
 				}
 				std::error_code ec;
 				fs::rename(target, quarantine, ec);
@@ -4889,14 +5143,14 @@ namespace Application
 			}
 
 			SaveOperationResult TransferSave(std::uint64_t titleId,
-				std::uint32_t sourcePersistentId, std::uint32_t targetPersistentId,
-				bool overwrite) override
+											 std::uint32_t sourcePersistentId, std::uint32_t targetPersistentId,
+											 bool overwrite) override
 			{
 				if (sourcePersistentId < kMinimumPersistentId ||
 					targetPersistentId < kMinimumPersistentId ||
 					sourcePersistentId == targetPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"source and target persistent ids must be distinct and valid"};
+							"source and target persistent ids must be distinct and valid"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -4908,14 +5162,13 @@ namespace Application
 				const auto targetState = InspectSaveEntryPath(target).state;
 				if (targetState == SaveEntryState::NonDirectory)
 					return {SaveOperationError::InvalidTarget,
-						"target save path is not a directory"};
+							"target save path is not a directory"};
 				if (targetState == SaveEntryState::Directory && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"target account already has save data"};
+							"target account already has save data"};
 
 				SaveMetadataStage metadata;
-				auto metadataResult = StageSaveMetadata(titleId,
-					[sourcePersistentId, targetPersistentId](pugi::xml_node info) {
+				auto metadataResult = StageSaveMetadata(titleId, [sourcePersistentId, targetPersistentId](pugi::xml_node info) {
 						if (auto targetNode = FindSaveAccountNode(info, targetPersistentId))
 							info.remove_child(targetNode);
 						const auto targetId = fmt::format("{:08x}", targetPersistentId);
@@ -4932,19 +5185,17 @@ namespace Application
 						constexpr std::int64_t unixToWiiEpoch = 946684800;
 						timestamp.text().set(fmt::format("{:016x}",
 							std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
-						return true;
-					}, metadata);
+						return true; }, metadata);
 				if (!metadataResult)
 					return metadataResult;
 
 				const auto staging = UniqueSiblingPath(source, "moving");
-				const auto backup = targetState == SaveEntryState::Directory ?
-					UniqueSiblingPath(target, "backup") : fs::path{};
+				const auto backup = targetState == SaveEntryState::Directory ? UniqueSiblingPath(target, "backup") : fs::path{};
 				if (staging.empty() || (targetState == SaveEntryState::Directory && backup.empty()))
 				{
 					RemovePathQuietly(metadata.temporary);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save transfer staging paths"};
+							"unable to reserve save transfer staging paths"};
 				}
 
 				std::error_code ec;
@@ -5002,13 +5253,13 @@ namespace Application
 			}
 
 			SaveOperationResult ImportSave(const fs::path& archivePath,
-				std::uint64_t titleId, std::uint32_t persistentId, bool overwrite,
-				SaveProgressHandler progress,
-				SaveCancellationCheck cancelled) override
+										   std::uint64_t titleId, std::uint32_t persistentId, bool overwrite,
+										   SaveProgressHandler progress,
+										   SaveCancellationCheck cancelled) override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -5020,10 +5271,10 @@ namespace Application
 				const auto targetState = InspectSaveEntryPath(target).state;
 				if (targetState == SaveEntryState::NonDirectory)
 					return {SaveOperationError::InvalidTarget,
-						"target save path is not a directory"};
+							"target save path is not a directory"};
 				if (targetState == SaveEntryState::Directory && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"target account already has save data"};
+							"target account already has save data"};
 
 				std::error_code ec;
 				fs::create_directories(target.parent_path(), ec);
@@ -5032,7 +5283,7 @@ namespace Application
 				const auto staging = UniqueSiblingPath(target, "importing");
 				if (staging.empty() || !fs::create_directory(staging, ec) || ec)
 					return {SaveOperationError::IoFailure,
-						ec ? ec.message() : "unable to create save import staging directory"};
+							ec ? ec.message() : "unable to create save import staging directory"};
 
 				SaveMetadataStage metadata;
 				auto cleanup = [&] {
@@ -5043,12 +5294,12 @@ namespace Application
 				{
 					int zipError{};
 					zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
-						&zipError);
+											  &zipError);
 					if (!archive)
 					{
 						cleanup();
 						return {SaveOperationError::ArchiveInvalid,
-							"unable to reopen save archive"};
+								"unable to reopen save archive"};
 					}
 					const std::unique_ptr<zip_t, decltype(&zip_discard)> closeArchive(
 						archive, &zip_discard);
@@ -5086,7 +5337,7 @@ namespace Application
 							{
 								cleanup();
 								return {SaveOperationError::ArchiveInvalid,
-									"unable to read save archive entry"};
+										"unable to read save archive entry"};
 							}
 							std::ofstream output(destination, std::ios::binary | std::ios::trunc);
 							if (!output)
@@ -5094,7 +5345,7 @@ namespace Application
 								zip_fclose(file);
 								cleanup();
 								return {SaveOperationError::IoFailure,
-									"unable to create staged save file"};
+										"unable to create staged save file"};
 							}
 							std::uint64_t remaining = entry.size;
 							while (remaining)
@@ -5105,7 +5356,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::Cancelled,
-										"save import was cancelled"};
+											"save import was cancelled"};
 								}
 								const auto requested = static_cast<zip_uint64_t>(
 									std::min<std::uint64_t>(remaining, buffer.size()));
@@ -5116,7 +5367,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::ArchiveInvalid,
-										"save archive entry is truncated"};
+											"save archive entry is truncated"};
 								}
 								output.write(buffer.data(), static_cast<std::streamsize>(read));
 								if (!output)
@@ -5125,7 +5376,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::IoFailure,
-										"unable to write staged save file"};
+											"unable to write staged save file"};
 								}
 								remaining -= static_cast<std::uint64_t>(read);
 								progressValue.bytesCompleted += static_cast<std::uint64_t>(read);
@@ -5137,7 +5388,7 @@ namespace Application
 							{
 								cleanup();
 								return {SaveOperationError::ArchiveInvalid,
-									"unable to finalize staged save file"};
+										"unable to finalize staged save file"};
 							}
 						}
 						++progressValue.filesCompleted;
@@ -5145,8 +5396,7 @@ namespace Application
 							progress(progressValue);
 					}
 
-					auto metadataResult = StageSaveMetadata(titleId,
-						[persistentId](pugi::xml_node info) {
+					auto metadataResult = StageSaveMetadata(titleId, [persistentId](pugi::xml_node info) {
 							if (FindSaveAccountNode(info, persistentId))
 								return false;
 							const auto id = fmt::format("{:08x}", persistentId);
@@ -5158,21 +5408,19 @@ namespace Application
 							constexpr std::int64_t unixToWiiEpoch = 946684800;
 							timestamp.text().set(fmt::format("{:016x}",
 								std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
-							return true;
-						}, metadata);
+							return true; }, metadata);
 					if (!metadataResult)
 					{
 						cleanup();
 						return metadataResult;
 					}
 
-					const auto backup = targetState == SaveEntryState::Directory ?
-						UniqueSiblingPath(target, "backup") : fs::path{};
+					const auto backup = targetState == SaveEntryState::Directory ? UniqueSiblingPath(target, "backup") : fs::path{};
 					if (targetState == SaveEntryState::Directory && backup.empty())
 					{
 						cleanup();
 						return {SaveOperationError::IoFailure,
-							"unable to reserve save backup path"};
+								"unable to reserve save backup path"};
 					}
 					if (!backup.empty())
 					{
@@ -5207,8 +5455,7 @@ namespace Application
 					}
 					RemovePathQuietly(backup);
 					return {};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					cleanup();
 					return {SaveOperationError::BackendFailure, exception.what()};
@@ -5216,13 +5463,13 @@ namespace Application
 			}
 
 			SaveOperationResult ExportSave(std::uint64_t titleId,
-				std::uint32_t persistentId, const fs::path& archivePath,
-				bool overwrite, SaveProgressHandler progress,
-				SaveCancellationCheck cancelled) override
+										   std::uint32_t persistentId, const fs::path& archivePath,
+										   bool overwrite, SaveProgressHandler progress,
+										   SaveCancellationCheck cancelled) override
 			{
 				if (persistentId < kMinimumPersistentId || archivePath.empty())
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id or archive path is invalid"};
+							"persistent id or archive path is invalid"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -5234,29 +5481,29 @@ namespace Application
 				const auto outputState = InspectSaveEntryPath(archivePath).state;
 				if (outputState == SaveEntryState::Directory)
 					return {SaveOperationError::InvalidTarget,
-						"archive target is a directory"};
+							"archive target is a directory"};
 				if (outputState != SaveEntryState::Missing && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"archive target already exists"};
+							"archive target already exists"};
 
 				std::vector<std::pair<fs::path, bool>> entries;
 				std::uint64_t bytesTotal{};
 				for (fs::recursive_directory_iterator iterator(source, ec), end;
-					!ec && iterator != end; iterator.increment(ec))
+					 !ec && iterator != end; iterator.increment(ec))
 				{
 					const auto status = iterator->symlink_status(ec);
 					if (ec || status.type() == fs::file_type::symlink ||
 						(status.type() != fs::file_type::directory &&
 						 status.type() != fs::file_type::regular))
 						return {SaveOperationError::PathUnsafe,
-							"save directory contains an unsupported entry"};
+								"save directory contains an unsupported entry"};
 					const bool directory = status.type() == fs::file_type::directory;
 					if (!directory)
 					{
 						const auto size = iterator->file_size(ec);
 						if (ec || bytesTotal > kMaximumSaveArchiveTotalSize - size)
 							return {SaveOperationError::IoFailure,
-								"save data exceeds export limits"};
+									"save data exceeds export limits"};
 						bytesTotal += size;
 					}
 					entries.emplace_back(iterator->path(), directory);
@@ -5267,13 +5514,13 @@ namespace Application
 				const auto staging = UniqueSiblingPath(archivePath, "exporting");
 				if (staging.empty())
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save export staging path"};
+							"unable to reserve save export staging path"};
 				int zipError{};
 				zip_t* archive = zip_open(_pathToUtf8(staging).c_str(),
-					ZIP_CREATE | ZIP_TRUNCATE, &zipError);
+										  ZIP_CREATE | ZIP_TRUNCATE, &zipError);
 				if (!archive)
 					return {SaveOperationError::IoFailure,
-						"unable to create save archive"};
+							"unable to create save archive"};
 				auto failArchive = [&](SaveOperationError error, std::string diagnostic) {
 					zip_discard(archive);
 					RemovePathQuietly(staging);
@@ -5286,32 +5533,32 @@ namespace Application
 				{
 					if (cancelled && cancelled())
 						return failArchive(SaveOperationError::Cancelled,
-							"save export was cancelled");
+										   "save export was cancelled");
 					const auto relative = fs::relative(entryPath, source, ec);
 					if (ec || relative.empty() || relative.has_root_path())
 						return failArchive(SaveOperationError::PathUnsafe,
-							"unable to derive safe archive path");
+										   "unable to derive safe archive path");
 					const auto archiveName = relative.generic_string();
 					progressValue.currentPath = relative;
 					if (directory)
 					{
 						if (zip_dir_add(archive, archiveName.c_str(), ZIP_FL_ENC_UTF_8) < 0)
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 					}
 					else
 					{
 						zip_source_t* zipSource = zip_source_file(archive,
-							_pathToUtf8(entryPath).c_str(), 0, 0);
+																  _pathToUtf8(entryPath).c_str(), 0, 0);
 						if (!zipSource)
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 						if (zip_file_add(archive, archiveName.c_str(), zipSource,
-							ZIP_FL_ENC_UTF_8) < 0)
+										 ZIP_FL_ENC_UTF_8) < 0)
 						{
 							zip_source_free(zipSource);
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 						}
 						progressValue.bytesCompleted += fs::file_size(entryPath, ec);
 						if (ec)
@@ -5324,27 +5571,26 @@ namespace Application
 
 				const std::string metadata = fmt::format("titleId = {:#016x}", titleId);
 				zip_source_t* metadataSource = zip_source_buffer(archive, metadata.data(),
-					metadata.size(), 0);
+																 metadata.size(), 0);
 				if (!metadataSource || zip_file_add(archive, "cemu_meta", metadataSource,
-					ZIP_FL_ENC_UTF_8) < 0)
+													ZIP_FL_ENC_UTF_8) < 0)
 				{
 					if (metadataSource)
 						zip_source_free(metadataSource);
 					return failArchive(SaveOperationError::IoFailure,
-						zip_strerror(archive));
+									   zip_strerror(archive));
 				}
 				if (zip_close(archive) != 0)
 					return failArchive(SaveOperationError::IoFailure,
-						"unable to finalize save archive");
+									   "unable to finalize save archive");
 				archive = nullptr;
 
-				const auto backup = outputState == SaveEntryState::Missing ? fs::path{} :
-					UniqueSiblingPath(archivePath, "backup");
+				const auto backup = outputState == SaveEntryState::Missing ? fs::path{} : UniqueSiblingPath(archivePath, "backup");
 				if (outputState != SaveEntryState::Missing && backup.empty())
 				{
 					RemovePathQuietly(staging);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve archive backup path"};
+							"unable to reserve archive backup path"};
 				}
 				if (!backup.empty())
 				{
@@ -5363,8 +5609,9 @@ namespace Application
 						fs::rename(backup, archivePath, restoreError);
 					RemovePathQuietly(staging);
 					return {SaveOperationError::IoFailure,
-						restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
-							restoreError.message()) : ec.message()};
+							restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+													   restoreError.message())
+										 : ec.message()};
 				}
 				RemovePathQuietly(backup);
 				return {};
@@ -5385,7 +5632,7 @@ namespace Application
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 
 				GraphicPackResult result;
 				result.changed = pack->IsEnabled() != enabled;
@@ -5428,12 +5675,12 @@ namespace Application
 			}
 
 			GraphicPackResult SetGraphicPackPreset(std::string_view key,
-				std::string_view category, std::string_view preset) override
+												   std::string_view category, std::string_view preset) override
 			{
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 
 				GraphicPackResult result;
 				if (!preset.empty())
@@ -5442,9 +5689,9 @@ namespace Application
 					const auto categorized = pack->GetCategorizedPresets(categoryOrder);
 					const auto categoryIt = categorized.find(std::string(category));
 					const bool presetExists = categoryIt != categorized.end() &&
-						std::ranges::any_of(categoryIt->second, [preset](const auto& candidate) {
-							return candidate->name == preset;
-						});
+											  std::ranges::any_of(categoryIt->second, [preset](const auto& candidate) {
+												  return candidate->name == preset;
+											  });
 					if (!presetExists)
 					{
 						result.error = GraphicPackError::InvalidPreset;
@@ -5473,7 +5720,7 @@ namespace Application
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 				GraphicPackResult result;
 				result.reloaded = ReloadGraphicPackInternal(pack);
 				result.info = TranslateGraphicPack(pack);
@@ -5484,13 +5731,13 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {.error = GraphicPackError::TitleRunning,
-						.diagnostic = "graphic packs cannot be refreshed while a title is running"};
+							.diagnostic = "graphic packs cannot be refreshed while a title is running"};
 
 				std::map<std::string, std::string> previouslyEnabled;
 				for (const auto& pack : GraphicPack2::GetGraphicPacks())
 					if (pack->IsEnabled())
 						previouslyEnabled.emplace(pack->GetNormalizedPathString(),
-							pack->GetVirtualPath());
+												  pack->GetVirtualPath());
 
 				GraphicPack2::ClearGraphicPacks();
 				GraphicPack2::LoadAll();
@@ -5510,7 +5757,7 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {GraphicPackInstallError::Conflict,
-						"graphic packs cannot be installed while a title is running"};
+							"graphic packs cannot be installed while a title is running"};
 				GraphicPackInstallTransaction transaction;
 				auto result = InstallGraphicPackFiles(request, progress, cancelled, &transaction);
 				if (!result || result.upToDate)
@@ -5521,7 +5768,8 @@ namespace Application
 					{
 						const auto rollback = transaction.Rollback();
 						return rollback ? GraphicPackInstallResult{GraphicPackInstallError::Cancelled,
-							"graphic-pack installation was cancelled"} : rollback;
+																   "graphic-pack installation was cancelled"}
+										: rollback;
 					}
 					if (progress)
 						progress({GraphicPackInstallPhase::Refreshing, 0, 0, {}});
@@ -5532,26 +5780,24 @@ namespace Application
 						if (!rollback)
 							return rollback;
 						return {GraphicPackInstallError::IoFailure,
-							refresh.diagnostic.empty() ? "installed packs could not be refreshed" :
-							refresh.diagnostic};
+								refresh.diagnostic.empty() ? "installed packs could not be refreshed" : refresh.diagnostic};
 					}
 					transaction.Commit();
 					result.removedEnabledPaths = refresh.removedEnabledPaths;
 					return result;
-				}
-				catch (const std::exception& error)
+				} catch (const std::exception& error)
 				{
 					const auto rollback = transaction.Rollback();
 					if (!rollback)
 						return rollback;
 					return {GraphicPackInstallError::IoFailure,
-						fmt::format("graphic-pack refresh failed and was rolled back: {}", error.what())};
-				}
-				catch (...)
+							fmt::format("graphic-pack refresh failed and was rolled back: {}", error.what())};
+				} catch (...)
 				{
 					const auto rollback = transaction.Rollback();
 					return rollback ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
-						"graphic-pack refresh failed and was rolled back"} : rollback;
+															   "graphic-pack refresh failed and was rolled back"}
+									: rollback;
 				}
 			}
 
@@ -5577,7 +5823,7 @@ namespace Application
 				GetConfigHandle().Save();
 			}
 
-		private:
+		  private:
 			struct DiagnosticSuspension
 			{
 				std::uint64_t identity{};
@@ -5596,7 +5842,8 @@ namespace Application
 			std::uint64_t TokenForInputController(
 				const std::shared_ptr<ControllerBase>& controller) const
 			{
-				if (!controller) return 0;
+				if (!controller)
+					return 0;
 				if (const auto found = m_inputTokensByPointer.find(controller.get());
 					found != m_inputTokensByPointer.end())
 					return found->second;
@@ -5610,7 +5857,8 @@ namespace Application
 				std::uint64_t token) const
 			{
 				const auto found = m_inputDeviceTokens.find(token);
-				if (found == m_inputDeviceTokens.end()) return {};
+				if (found == m_inputDeviceTokens.end())
+					return {};
 				return found->second;
 			}
 
@@ -5624,7 +5872,8 @@ namespace Application
 						m_armedInputCaptures.erase(it->first);
 						it = m_inputDeviceTokens.erase(it);
 					}
-					else ++it;
+					else
+						++it;
 				}
 			}
 
@@ -5652,10 +5901,10 @@ namespace Application
 			mutable std::unordered_set<std::uint64_t> m_armedInputCaptures;
 			bool m_inputAvailable{};
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<IEmulationBackend> CreateCafeEmulationBackend(ApplicationEvents& events)
 	{
 		return std::make_unique<CafeEmulationBackend>(events);
 	}
-}
+} // namespace Application

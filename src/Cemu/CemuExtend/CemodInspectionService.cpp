@@ -26,20 +26,20 @@ namespace CemuExtend
 		}
 
 		void AddMismatch(CemodInspection& inspection, CemodPermission permission,
-			bool requested, bool declared, std::string message)
+						 bool requested, bool declared, std::string message)
 		{
 			if (!requested || declared)
 				return;
 			inspection.permissionMismatches.emplace_back(std::move(message));
 			const auto found = std::ranges::find_if(inspection.permissions,
-				[permission](const auto& item) { return item.permission == permission; });
+													[permission](const auto& item) { return item.permission == permission; });
 			if (found != inspection.permissions.end())
 				found->manifestMismatch = true;
 		}
-	}
+	} // namespace
 
 	std::string CemodInspectionService::MakeApprovalKey(std::string_view modIdentity,
-		std::string_view packageDigest)
+														std::string_view packageDigest)
 	{
 		return std::string(modIdentity) + "|sha256:" + std::string(packageDigest);
 	}
@@ -55,7 +55,10 @@ namespace CemuExtend
 		}
 		struct DigestContextDeleter
 		{
-			void operator()(EVP_MD_CTX* context) const { EVP_MD_CTX_free(context); }
+			void operator()(EVP_MD_CTX* context) const
+			{
+				EVP_MD_CTX_free(context);
+			}
 		};
 		std::unique_ptr<EVP_MD_CTX, DigestContextDeleter> context(EVP_MD_CTX_new());
 		if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
@@ -69,7 +72,7 @@ namespace CemuExtend
 			input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 			const auto count = input.gcount();
 			if (count > 0 && EVP_DigestUpdate(context.get(), buffer.data(),
-				static_cast<std::size_t>(count)) != 1)
+											  static_cast<std::size_t>(count)) != 1)
 			{
 				error = "cannot update package approval digest";
 				return {};
@@ -98,26 +101,26 @@ namespace CemuExtend
 	bool CemodInspectionService::IsDangerous(CemodPermission permission)
 	{
 		return permission != CemodPermission::FilesystemRead &&
-			permission != CemodPermission::Notifications;
+			   permission != CemodPermission::Notifications;
 	}
 
 	std::uint64_t CemodInspectionService::DefaultGrantedPermissions(std::uint64_t requested)
 	{
 		std::uint64_t granted{};
 		for (const auto permission : kCemodPermissions)
-			if (!IsDangerous(permission)) granted |= PermissionBit(permission);
+			if (!IsDangerous(permission))
+				granted |= PermissionBit(permission);
 		return granted & requested;
 	}
 
 	CemodApprovalState CemodInspectionService::EvaluateApproval(std::uint64_t requested,
-		const std::optional<CemodApproval>& approval, bool headless)
+																const std::optional<CemodApproval>& approval, bool headless)
 	{
 		CemodApprovalState state;
 		state.requested = requested;
-		state.granted = approval ? approval->grantedPermissions & requested :
-			DefaultGrantedPermissions(requested);
+		state.granted = approval ? approval->grantedPermissions & requested : DefaultGrantedPermissions(requested);
 		if (headless && (!approval || !approval->approved ||
-			approval->requestedPermissions != requested))
+						 approval->requestedPermissions != requested))
 		{
 			state.result = CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval;
 			state.granted = 0;
@@ -143,7 +146,7 @@ namespace CemuExtend
 	}
 
 	CemodInspection CemodInspectionService::Inspect(const CemodPackageDescriptor& descriptor,
-		const std::optional<CemodApproval>& approval, bool headless)
+													const std::optional<CemodApproval>& approval, bool headless)
 	{
 		CemodInspection result;
 		result.path = descriptor.path;
@@ -183,29 +186,30 @@ namespace CemuExtend
 		{
 			requested = 0;
 			for (std::size_t index = 0; index < declared.size(); ++index)
-				if (declared[index]) requested |= 1ULL << index;
+				if (declared[index])
+					requested |= 1ULL << index;
 		}
 		result.approval = EvaluateApproval(requested, approval, headless);
 		if (approval && (approval->packageDigest != result.packageDigest ||
-			approval->modIdentity != result.modIdentity))
+						 approval->modIdentity != result.modIdentity))
 		{
-			result.approval.result = headless ?
-				CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval :
-				CemodApprovalResult::NeedsReapproval;
+			result.approval.result = headless ? CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval : CemodApprovalResult::NeedsReapproval;
 			result.approval.granted = 0;
-			result.approval.reason = headless ?
-				"Headless mode explicitly denies a package whose digest or mod identity changed" :
-				"The package digest or mod identity does not match this installed package";
+			result.approval.reason = headless ? "Headless mode explicitly denies a package whose digest or mod identity changed" : "The package digest or mod identity does not match this installed package";
 		}
 
 		switch (package->manifest.scope.type)
 		{
-		case CemodScopeType::Title: result.scope = CemodScope::Title; break;
+		case CemodScopeType::Title:
+			result.scope = CemodScope::Title;
+			break;
 		case CemodScopeType::Process:
 			result.scope = CemodScope::Process;
 			result.scopeTargets = package->manifest.scope.targets;
 			break;
-		case CemodScopeType::AromaNative: result.scope = CemodScope::AromaNative; break;
+		case CemodScopeType::AromaNative:
+			result.scope = CemodScope::AromaNative;
+			break;
 		}
 
 		for (const auto permission : kCemodPermissions)
@@ -213,8 +217,8 @@ namespace CemuExtend
 			const auto bit = PermissionBit(permission);
 			const auto index = static_cast<std::size_t>(permission);
 			result.permissions.push_back({permission, bit, (requested & bit) != 0,
-				(result.approval.granted & bit) != 0, IsDangerous(permission),
-				(requested & bit) != 0 && !declared[index]});
+										  (result.approval.granted & bit) != 0, IsDangerous(permission),
+										  (requested & bit) != 0 && !declared[index]});
 		}
 
 		if (package->wups)
@@ -231,7 +235,7 @@ namespace CemuExtend
 			result.requiredModules = wups.requiredModules;
 			result.processTargets = wups.processTargets;
 			result.compatibilityWarnings.insert(result.compatibilityWarnings.end(),
-				wups.compatibilityWarnings.begin(), wups.compatibilityWarnings.end());
+												wups.compatibilityWarnings.begin(), wups.compatibilityWarnings.end());
 			result.usesTls = wups.usesTls;
 			result.usesFixedAddressPatches = wups.usesFixedAddressPatches;
 			for (const auto& module : wups.requiredModules)
@@ -239,24 +243,24 @@ namespace CemuExtend
 					declaredPermissions.modules.end())
 				{
 					result.permissionMismatches.push_back("Required module '" + module +
-						"' is not declared in manifest permissions");
+														  "' is not declared in manifest permissions");
 					const auto modules = std::ranges::find_if(result.permissions,
-						[](const auto& item) {
-							return item.permission == CemodPermission::Modules;
-						});
+															  [](const auto& item) {
+																  return item.permission == CemodPermission::Modules;
+															  });
 					if (modules != result.permissions.end())
 						modules->manifestMismatch = true;
 				}
 			AddMismatch(result, CemodPermission::FunctionPatching, !wups.replacements.empty(),
-				declaredPermissions.functionPatching,
-				"Function patching is required by the payload but not declared in manifest permissions");
+						declaredPermissions.functionPatching,
+						"Function patching is required by the payload but not declared in manifest permissions");
 			AddMismatch(result, CemodPermission::PhysicalAddressPatching,
-				wups.usesFixedAddressPatches, declaredPermissions.physicalAddressPatching,
-				"Physical-address patching is required by the payload but not declared in manifest permissions");
+						wups.usesFixedAddressPatches, declaredPermissions.physicalAddressPatching,
+						"Physical-address patching is required by the payload but not declared in manifest permissions");
 			AddMismatch(result, CemodPermission::NativeMemory, wups.usesTls,
-				declaredPermissions.nativeMemory,
-				"Native memory is required by the payload but not declared in manifest permissions");
+						declaredPermissions.nativeMemory,
+						"Native memory is required by the payload but not declared in manifest permissions");
 		}
 		return result;
 	}
-}
+} // namespace CemuExtend

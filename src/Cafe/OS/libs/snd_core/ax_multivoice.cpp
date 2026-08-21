@@ -45,7 +45,7 @@ namespace snd_core
 					__AXVPBMultiVoiceArray[i].voice[f] = vpb;
 				}
 				__AXVPBMultiVoiceArray[i].channelCount = channelCount;
-				*multiVoiceOut = (__AXVPBMultiVoiceArray+i);
+				*multiVoiceOut = (__AXVPBMultiVoiceArray + i);
 				return 0;
 			}
 		}
@@ -58,7 +58,7 @@ namespace snd_core
 		uint16 numChannels = multiVoice->channelCount;
 		for (uint16 i = 0; i < numChannels; i++)
 		{
-			if(multiVoice->voice[i] != nullptr)
+			if (multiVoice->voice[i] != nullptr)
 				AXFreeVoice(multiVoice->voice[i].GetPtr());
 			multiVoice->voice[i] = nullptr;
 		}
@@ -79,7 +79,7 @@ namespace snd_core
 		}
 		else if (voiceFormat == AX_FORMAT_PCM8)
 		{
-			*sizeOutput = sizeInBytes<<1;
+			*sizeOutput = sizeInBytes << 1;
 		}
 		else
 			return -23;
@@ -88,7 +88,7 @@ namespace snd_core
 
 	void AXSetMultiVoiceType(AXVPBMULTI* mv, uint16 type)
 	{
-		for(uint32 i = 0; i < mv->channelCount; ++i)
+		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceType(mv->voice[i].GetPtr(), type);
 	}
 
@@ -127,31 +127,31 @@ namespace snd_core
 		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceVe(mv->voice[i].GetPtr(), ve);
 	}
-	
+
 	void AXSetMultiVoiceSrcRatio(AXVPBMULTI* mv, float ratio)
 	{
 		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceSrcRatio(mv->voice[i].GetPtr(), ratio);
 	}
-	
+
 	void AXSetMultiVoiceSrc(AXVPBMULTI* mv, AXPBSRC_t* src)
 	{
 		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceSrc(mv->voice[i].GetPtr(), src);
 	}
-	
+
 	void AXSetMultiVoiceLoop(AXVPBMULTI* mv, uint16 loop)
 	{
 		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceLoop(mv->voice[i].GetPtr(), loop);
 	}
-	
+
 	void AXSetMultiVoiceState(AXVPBMULTI* mv, uint16 state)
 	{
 		for (uint32 i = 0; i < mv->channelCount; ++i)
 			AXSetVoiceState(mv->voice[i].GetPtr(), state);
 	}
-	
+
 	void AXSetMultiVoiceAdpcmLoop(AXVPBMULTI* mv, AXPBADPCMLOOP_t* loops)
 	{
 		for (uint32 i = 0; i < mv->channelCount; ++i)
@@ -164,4 +164,4 @@ namespace snd_core
 		return result;
 	}
 
-}
+} // namespace snd_core

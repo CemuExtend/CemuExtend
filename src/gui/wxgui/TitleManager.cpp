@@ -62,7 +62,7 @@ wxPanel* TitleManager::CreateTitleManagerPage()
 		const wxBitmap help_bitmap = wxHelper::LoadThemedBitmapFromPNG(PNG_HELP_png, sizeof(PNG_HELP_png), wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 		auto* help_button = new wxStaticBitmap(panel, wxID_ANY, help_bitmap);
 		help_button->SetToolTip(formatWxString(_("The following prefixes are supported:\n{0}\n{1}\n{2}\n{3}\n{4}"),
-			"titleid:", "name:", "type:", "version:", "region:"));
+											   "titleid:", "name:", "type:", "version:", "region:"));
 		row->Add(help_button, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
 		sizer->Add(row, 0, wxEXPAND, 5);
@@ -71,7 +71,7 @@ wxPanel* TitleManager::CreateTitleManagerPage()
 	sizer->Add(new wxStaticLine(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL), 0, wxEXPAND | wxALL, 5);
 
 	m_title_list = new wxTitleManagerList(panel, m_emulationController,
-		m_uiDispatcher, m_pathProvider, m_requestLaunch);
+										  m_uiDispatcher, m_pathProvider, m_requestLaunch);
 	m_title_list->SetSizeHints(800, 600);
 	m_title_list->Bind(wxEVT_LIST_ITEM_SELECTED, &TitleManager::OnTitleSelected, this);
 	sizer->Add(m_title_list, 1, wxALL | wxEXPAND, 5);
@@ -95,7 +95,7 @@ wxPanel* TitleManager::CreateTitleManagerPage()
 			save_sizer->Add(new wxStaticText(m_save_panel, wxID_ANY, _("Account")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
 			m_save_account_list = new wxChoice(m_save_panel, wxID_ANY);
-			m_save_account_list->SetMinSize({ 170, -1 });
+			m_save_account_list->SetMinSize({170, -1});
 			m_save_account_list->Bind(wxEVT_CHOICE, &TitleManager::OnSaveAccountSelected, this);
 			save_sizer->Add(m_save_account_list, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
@@ -149,7 +149,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 
 #if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
 		m_account = new wxChoice(panel, wxID_ANY);
-		m_account->SetMinSize({ 250,-1 });
+		m_account->SetMinSize({250, -1});
 		auto accounts = m_emulationController.ListAccounts();
 		if (!accounts.empty())
 		{
@@ -157,14 +157,14 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 			for (const auto& a : accounts)
 			{
 				m_account->Append(fmt::format(L"{} ({:x})", a.miiName, a.persistentId),
-					(void*)static_cast<uintptr_t>(a.persistentId));
-				if(a.persistentId == id)
+								  (void*)static_cast<uintptr_t>(a.persistentId));
+				if (a.persistentId == id)
 				{
 					m_account->SetSelection(m_account->GetCount() - 1);
 				}
 			}
 		}
-	
+
 		row->Add(m_account, 0, wxALL, 5);
 #endif
 
@@ -178,7 +178,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 #if DOWNLOADMGR_HAS_ACCOUNT_DROPDOWN
 	m_status_text = new wxStaticText(panel, wxID_ANY, _("Select an account and press Connect"));
 #else
-	if(!m_emulationController.GetOnlineEnvironmentStatus().consoleCertificateAvailable)
+	if (!m_emulationController.GetOnlineEnvironmentStatus().consoleCertificateAvailable)
 	{
 		m_status_text = new wxStaticText(panel, wxID_ANY, _("Valid online files are required to download eShop titles. For more information, go to the Account tab in the General Settings."));
 		m_connect->Enable(false);
@@ -188,7 +188,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 #endif
 	this->Bind(wxEVT_SET_TEXT, &TitleManager::OnSetStatusText, this);
 	sizer->Add(m_status_text, 0, wxALL, 5);
-	
+
 	sizer->Add(new wxStaticLine(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL), 0, wxEXPAND | wxALL, 5);
 
 	{
@@ -213,7 +213,7 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 
 		sizer->Add(row, 0, wxEXPAND, 5);
 	}
-	
+
 	m_download_list = new wxDownloadManagerList(
 		panel, m_requestGameListRefresh);
 	m_download_list->SetSizeHints(800, 600);
@@ -225,14 +225,14 @@ wxPanel* TitleManager::CreateDownloadManagerPage()
 }
 
 TitleManager::TitleManager(wxWindow* parent,
-	Application::EmulationController& emulationController,
-	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
-	std::shared_ptr<Host::IPathProvider> pathProvider,
-	std::function<void(fs::path)> requestLaunch,
-	std::function<void()> requestGameListRefresh,
-	TitleManagerPage default_page)
+						   Application::EmulationController& emulationController,
+						   std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+						   std::shared_ptr<Host::IPathProvider> pathProvider,
+						   std::function<void(fs::path)> requestLaunch,
+						   std::function<void()> requestGameListRefresh,
+						   TitleManagerPage default_page)
 	: wxFrame(parent, wxID_ANY, _("Title Manager"), wxDefaultPosition, wxDefaultSize,
-		wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL),
+			  wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL),
 	  m_emulationController(emulationController),
 	  m_uiDispatcher(std::move(uiDispatcher)),
 	  m_pathProvider(std::move(pathProvider)),
@@ -240,9 +240,9 @@ TitleManager::TitleManager(wxWindow* parent,
 	  m_requestGameListRefresh(std::move(requestGameListRefresh))
 {
 	cemu_assert(m_uiDispatcher && m_pathProvider && static_cast<bool>(m_requestLaunch) &&
-		static_cast<bool>(m_requestGameListRefresh));
+				static_cast<bool>(m_requestGameListRefresh));
 	SetIcon(wxICON(X_BOX));
-	
+
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	m_notebook = new wxNotebook(this, wxID_ANY);
 
@@ -278,7 +278,6 @@ TitleManager::TitleManager(wxWindow* parent,
 			TitleManager::Callback_RemoveDownloadableTitle);
 		SetConnected(true);
 	}
-
 }
 
 TitleManager::~TitleManager()
@@ -339,11 +338,10 @@ void TitleManager::OnTitleSearchComplete(wxCommandEvent& event)
 	// update status bar text
 	m_title_list->SortEntries(-1);
 	m_status_bar->SetStatusText(formatWxString(_("Found {0} games, {1} updates, {2} DLCs and {3} save entries"),
-		m_title_list->GetCountByType(wxTitleManagerList::EntryType::Base) + m_title_list->GetCountByType(wxTitleManagerList::EntryType::System),
-		m_title_list->GetCountByType(wxTitleManagerList::EntryType::Update),
-		m_title_list->GetCountByType(wxTitleManagerList::EntryType::Dlc),
-		m_title_list->GetCountByType(wxTitleManagerList::EntryType::Save)
-	));
+											   m_title_list->GetCountByType(wxTitleManagerList::EntryType::Base) + m_title_list->GetCountByType(wxTitleManagerList::EntryType::System),
+											   m_title_list->GetCountByType(wxTitleManagerList::EntryType::Update),
+											   m_title_list->GetCountByType(wxTitleManagerList::EntryType::Dlc),
+											   m_title_list->GetCountByType(wxTitleManagerList::EntryType::Save)));
 
 	// re-filter if any filter is set
 	const auto filter = m_filter->GetValue();
@@ -397,12 +395,10 @@ void TitleManager::OnInstallTitle(wxCommandEvent& event)
 				throw std::runtime_error(frame.GetExceptionMessage());
 			}
 		}
-	}
-	catch (const AbortException&)
+	} catch (const AbortException&)
 	{
 		// ignored
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		wxMessageBox(ex.what(), _("Update error"));
 	}
@@ -413,7 +409,7 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 	event.Skip();
 
 	const auto entry = m_title_list->GetSelectedTitleEntry();
-	if(entry.has_value() && entry->type == wxTitleManagerList::EntryType::Save)
+	if (entry.has_value() && entry->type == wxTitleManagerList::EntryType::Save)
 	{
 		m_save_panel->Show();
 		m_save_account_list->Clear();
@@ -421,7 +417,7 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 		entry->persistent_ids = m_emulationController.ListSavePersistentIds(entry->title_id);
 
 		// an account must be selected before any of the control buttons can be used
-		for(auto&& v : m_save_panel->GetChildren())
+		for (auto&& v : m_save_panel->GetChildren())
 		{
 			if (dynamic_cast<wxButton*>(v) && v->GetId() != m_save_import->GetId()) // import is always enabled
 				v->Disable();
@@ -431,12 +427,12 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 		for (const auto& id : entry->persistent_ids)
 		{
 			const auto it = std::find_if(accounts.cbegin(), accounts.cend(),
-				[id](const auto& acc) { return acc.persistentId == id; });
-			if(it != accounts.cend())
+										 [id](const auto& acc) { return acc.persistentId == id; });
+			if (it != accounts.cend())
 			{
-				m_save_account_list->Append(fmt::format("{:x} ({})", id, 
-					boost::nowide::narrow(it->miiName)),
-					(void*)(uintptr_t)id);
+				m_save_account_list->Append(fmt::format("{:x} ({})", id,
+														boost::nowide::narrow(it->miiName)),
+											(void*)(uintptr_t)id);
 			}
 			else
 				m_save_account_list->Append(fmt::format("{:x}", id), (void*)(uintptr_t)id);
@@ -450,7 +446,7 @@ void TitleManager::OnTitleSelected(wxListEvent& event)
 
 void TitleManager::OnSaveOpenDirectory(wxCommandEvent& event)
 {
-	const auto selection=  m_save_account_list->GetSelection();
+	const auto selection = m_save_account_list->GetSelection();
 	if (selection == wxNOT_FOUND)
 		return;
 
@@ -461,7 +457,7 @@ void TitleManager::OnSaveOpenDirectory(wxCommandEvent& event)
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection);
 
 	const auto target = m_emulationController.InspectSaveEntry(entry->title_id,
-		persistent_id);
+															   persistent_id);
 	if (target.state != Application::SaveEntryState::Directory)
 		return;
 
@@ -473,11 +469,11 @@ void TitleManager::OnSaveDelete(wxCommandEvent& event)
 	const auto selection_index = m_save_account_list->GetSelection();
 	if (selection_index == wxNOT_FOUND)
 		return;
-	
+
 	const auto selection = m_save_account_list->GetStringSelection();
 	if (selection.IsEmpty())
 		return;
-	
+
 	const auto msg = formatWxString(_("Are you really sure that you want to delete the save entry for {}"), selection);
 	const auto result = wxMessageBox(msg, _("Warning"), wxYES_NO | wxCENTRE | wxICON_EXCLAMATION, this);
 	if (result == wxNO)
@@ -490,28 +486,28 @@ void TitleManager::OnSaveDelete(wxCommandEvent& event)
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection_index);
 
 	const auto deleted = m_emulationController.DeleteSave(entry->title_id,
-		persistent_id);
+														  persistent_id);
 	if (!deleted)
 	{
 		const auto error_msg = formatWxString(_("Error when trying to delete the save directory:\n{}"),
-			deleted.diagnostic);
+											  deleted.diagnostic);
 		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE, this);
 		return;
 	}
 
 	auto& persistent_ids = entry->persistent_ids;
 	persistent_ids.erase(std::remove(persistent_ids.begin(), persistent_ids.end(),
-		persistent_id), persistent_ids.end());
+									 persistent_id),
+						 persistent_ids.end());
 	m_save_account_list->Delete(selection_index);
 }
-
 
 void TitleManager::OnSaveTransfer(wxCommandEvent& event)
 {
 	const auto selection_index = m_save_account_list->GetSelection();
 	if (selection_index == wxNOT_FOUND)
 		return;
-	
+
 	const auto selection = m_save_account_list->GetStringSelection();
 	if (selection.IsEmpty())
 		return;
@@ -521,9 +517,9 @@ void TitleManager::OnSaveTransfer(wxCommandEvent& event)
 		return;
 
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection_index);
-	
+
 	SaveTransfer transfer(this, m_emulationController, entry->title_id, selection,
-		persistent_id);
+						  persistent_id);
 	if (transfer.ShowModal() == wxCANCEL)
 		return;
 
@@ -538,10 +534,10 @@ void TitleManager::OnSaveTransfer(wxCommandEvent& event)
 		persistent_ids.emplace_back(new_id);
 
 		const auto account = m_emulationController.GetAccount(new_id);
-		if(account)
+		if (account)
 			m_save_account_list->Append(fmt::format("{:x} ({})", new_id,
-				boost::nowide::narrow(account->miiName)),
-				(void*)(uintptr_t)new_id);
+													boost::nowide::narrow(account->miiName)),
+										(void*)(uintptr_t)new_id);
 		else
 			m_save_account_list->Append(fmt::format("{:x}", new_id), (void*)(uintptr_t)new_id);
 	}
@@ -576,16 +572,16 @@ void TitleManager::OnSaveExport(wxCommandEvent& event)
 	const auto persistent_id = (uint32)(uintptr_t)m_save_account_list->GetClientData(selection_index);
 
 	wxFileDialog path_dialog(this, _("Select a target file to export the save entry"), wxHelper::FromPath(entry->path), wxEmptyString,
-		fmt::format("{}|*.zip", _("Exported save entry (*.zip)")), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+							 fmt::format("{}|*.zip", _("Exported save entry (*.zip)")), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (path_dialog.ShowModal() != wxID_OK || path_dialog.GetPath().IsEmpty())
 		return;
 
 	const auto exported = m_emulationController.ExportSave(entry->title_id,
-		persistent_id, wxHelper::MakeFSPath(path_dialog.GetPath()), true);
+														   persistent_id, wxHelper::MakeFSPath(path_dialog.GetPath()), true);
 	if (!exported)
 	{
 		const auto error_msg = formatWxString(_("Error when creating the zip for the save entry:\n{}"),
-			exported.diagnostic);
+											  exported.diagnostic);
 		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 	}
 }
@@ -595,7 +591,7 @@ void TitleManager::OnSaveImport(wxCommandEvent& event)
 	auto entry = m_title_list->GetSelectedTitleEntry();
 	if (!entry.has_value())
 		return;
-	
+
 	SaveImportWindow save_import(this, m_emulationController, entry->title_id);
 	if (save_import.ShowModal() == wxCANCEL)
 		return;
@@ -610,12 +606,11 @@ void TitleManager::OnSaveImport(wxCommandEvent& event)
 		const auto account = m_emulationController.GetAccount(new_id);
 		if (account)
 			m_save_account_list->Append(fmt::format("{:x} ({})", new_id,
-				boost::nowide::narrow(account->miiName)),
-				(void*)(uintptr_t)new_id);
+													boost::nowide::narrow(account->miiName)),
+										(void*)(uintptr_t)new_id);
 		else
 			m_save_account_list->Append(fmt::format("{:x}", new_id), (void*)(uintptr_t)new_id);
 	}
-	
 }
 
 void TitleManager::InitiateConnect()
@@ -652,8 +647,8 @@ void TitleManager::InitiateConnect()
 		TitleManager::Callback_AddDownloadableTitle,
 		TitleManager::Callback_RemoveDownloadableTitle);
 	dlMgr->connect(context.accountName, context.passwordHash,
-		static_cast<CafeConsoleRegion>(context.region), context.country,
-		context.deviceId, context.serial, context.deviceCertificateBase64);
+				   static_cast<CafeConsoleRegion>(context.region), context.country,
+				   context.deviceId, context.serial, context.deviceCertificateBase64);
 }
 
 void TitleManager::OnConnect(wxCommandEvent& event)

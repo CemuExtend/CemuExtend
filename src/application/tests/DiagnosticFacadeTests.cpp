@@ -13,13 +13,23 @@ int main()
 		return 2;
 
 	bool rejected{};
-	try { (void)facade.GetTexturePage(texture.generation + 1, 0, 50, false, true); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.GetTexturePage(texture.generation + 1, 0, 50, false, true);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	if (!rejected)
 		return 3;
 	rejected = false;
-	try { (void)facade.GetAudioVoicePage(0, 0, 0, true); }
-	catch (const std::invalid_argument&) { rejected = true; }
+	try
+	{
+		(void)facade.GetAudioVoicePage(0, 0, 0, true);
+	} catch (const std::invalid_argument&)
+	{
+		rejected = true;
+	}
 	if (!rejected)
 		return 4;
 	return 0;

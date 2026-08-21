@@ -4,7 +4,7 @@
 
 class IPCServiceClient
 {
-public:
+  public:
 	class IPCServiceCall
 	{
 		struct IOVectorBuffer
@@ -16,7 +16,8 @@ public:
 			uint32 size;
 			bool isExternalBuffer{false}; // buffer provided by caller
 		};
-	public:
+
+	  public:
 		IPCServiceCall(IPCServiceClient& client, uint32 serviceId, uint32 commandId) : m_client(client)
 		{
 			// allocate a parameter and response buffer
@@ -25,9 +26,9 @@ public:
 			cmdBuf = client.AllocateCommandBuffer();
 			m_responseBuffers.emplace_back(cmdBuf->data, sizeof(IPCBuffer));
 			// write the request header
-			WriteParam<uint32be>(0); // ukn00
+			WriteParam<uint32be>(0);		 // ukn00
 			WriteParam<uint32be>(serviceId); // serviceId
-			WriteParam<uint32be>(0); // ukn08
+			WriteParam<uint32be>(0);		 // ukn08
 			WriteParam<uint32be>(commandId); // commandId
 		}
 
@@ -90,7 +91,7 @@ public:
 				vectorArray[m_responseBuffers.size() + i].size = m_paramBuffers[i].size;
 			}
 			IOS_ERROR r = coreinit::IOS_Ioctlv(m_client.GetDevHandle(), 0, m_responseBuffers.size(), m_paramBuffers.size(), vectorArray.GetPointer());
-			if ( (r&0x80000000) != 0)
+			if ((r & 0x80000000) != 0)
 			{
 				cemu_assert_unimplemented(); // todo - handle submission errors
 			}
@@ -115,7 +116,7 @@ public:
 			return value;
 		}
 
-	private:
+	  private:
 		struct BufferCopyOut
 		{
 			BufferCopyOut(void* dst, void* src, uint32 size) : dst(dst), src(src), size(size) {}
@@ -127,20 +128,20 @@ public:
 
 		void WriteInOutBuffer(MEMPTR<uint8> ptr, uint32 size, bool isOutput)
 		{
-			uint32 headSize = (0x40 - (ptr.GetMPTR()&0x3F))&0x3F;
+			uint32 headSize = (0x40 - (ptr.GetMPTR() & 0x3F)) & 0x3F;
 			headSize = std::min<uint32>(headSize, size);
 			uint32 alignedSize = size - headSize;
-			uint32 tailSize = alignedSize - (alignedSize&~0x3F);
+			uint32 tailSize = alignedSize - (alignedSize & ~0x3F);
 			alignedSize -= tailSize;
 			// verify
 			cemu_assert_debug(headSize + alignedSize + tailSize == size);
-			cemu_assert_debug(alignedSize == 0 || ((ptr.GetMPTR()+headSize)&0x3F) == 0);
-			cemu_assert_debug(tailSize == 0 || ((ptr.GetMPTR()+headSize+alignedSize)&0x3F) == 0);
+			cemu_assert_debug(alignedSize == 0 || ((ptr.GetMPTR() + headSize) & 0x3F) == 0);
+			cemu_assert_debug(tailSize == 0 || ((ptr.GetMPTR() + headSize + alignedSize) & 0x3F) == 0);
 
 			if (isOutput)
-				cemu_assert(m_responseBuffers.size()+2 <= m_responseBuffers.capacity());
+				cemu_assert(m_responseBuffers.size() + 2 <= m_responseBuffers.capacity());
 			else
-				cemu_assert(m_paramBuffers.size()+2 <= m_paramBuffers.capacity());
+				cemu_assert(m_paramBuffers.size() + 2 <= m_paramBuffers.capacity());
 			IOVectorBuffer alignedBuffer;
 			alignedBuffer.ptr = ptr + headSize;
 			alignedBuffer.size = alignedSize;
@@ -188,74 +189,75 @@ public:
 		boost::container::static_vector<BufferCopyOut, 16> m_bufferCopiesOut;
 	};
 
-    IPCServiceClient()
-    {
-    }
+	IPCServiceClient()
+	{
+	}
 
-    ~IPCServiceClient()
-    {
-    	Shutdown();
-    }
+	~IPCServiceClient()
+	{
+		Shutdown();
+	}
 
 	void Initialize(std::string_view devicePath, uint8_t* buffer, uint32_t bufferSize)
-    {
-    	m_devicePath = devicePath;
-    	m_buffer = buffer;
-    	m_bufferSize = bufferSize;
+	{
+		m_devicePath = devicePath;
+		m_buffer = buffer;
+		m_bufferSize = bufferSize;
 
-    	static_assert(sizeof(IPCBuffer) == 256);
-    	size_t numCommandBuffers = m_bufferSize / sizeof(IPCBuffer);
+		static_assert(sizeof(IPCBuffer) == 256);
+		size_t numCommandBuffers = m_bufferSize / sizeof(IPCBuffer);
 
-    	m_commandBuffersFree.resize(numCommandBuffers);
-    	for (size_t i = 0; i < numCommandBuffers; ++i)
-    	{
-    		m_commandBuffersFree[i] = reinterpret_cast<IPCBuffer*>(m_buffer + i * sizeof(IPCBuffer));
-    	}
-    	m_clientHandle = coreinit::IOS_Open(m_devicePath.c_str(), 0);
-    }
+		m_commandBuffersFree.resize(numCommandBuffers);
+		for (size_t i = 0; i < numCommandBuffers; ++i)
+		{
+			m_commandBuffersFree[i] = reinterpret_cast<IPCBuffer*>(m_buffer + i * sizeof(IPCBuffer));
+		}
+		m_clientHandle = coreinit::IOS_Open(m_devicePath.c_str(), 0);
+	}
 
-    void Shutdown()
-    {
-        if (m_clientHandle != 0)
-        {
-	        coreinit::IOS_Close(m_clientHandle);
-            m_clientHandle = 0;
-        }
-    }
+	void Shutdown()
+	{
+		if (m_clientHandle != 0)
+		{
+			coreinit::IOS_Close(m_clientHandle);
+			m_clientHandle = 0;
+		}
+	}
 
-    IPCServiceCall Begin(uint32_t serviceId, uint32_t commandId)
-    {
-        return IPCServiceCall(*this, serviceId, commandId);
-    }
+	IPCServiceCall Begin(uint32_t serviceId, uint32_t commandId)
+	{
+		return IPCServiceCall(*this, serviceId, commandId);
+	}
 
 	IOSDevHandle GetDevHandle() const
 	{
-    	cemu_assert(m_clientHandle != 0);
+		cemu_assert(m_clientHandle != 0);
 		return m_clientHandle;
 	}
-private:
-    struct IPCBuffer
-    {
+
+  private:
+	struct IPCBuffer
+	{
 		uint8 data[256];
-    };
+	};
 
-    IPCBuffer* AllocateCommandBuffer()
-    {
-        cemu_assert(m_commandBuffersFree.size() > 0);
-    	IPCBuffer* buf = m_commandBuffersFree.back();
-    	m_commandBuffersFree.pop_back();
-        return buf;
-    }
+	IPCBuffer* AllocateCommandBuffer()
+	{
+		cemu_assert(m_commandBuffersFree.size() > 0);
+		IPCBuffer* buf = m_commandBuffersFree.back();
+		m_commandBuffersFree.pop_back();
+		return buf;
+	}
 
-    void ReleaseCommandBuffer(IPCBuffer* buffer)
-    {
-    	m_commandBuffersFree.emplace_back(buffer);
-    }
+	void ReleaseCommandBuffer(IPCBuffer* buffer)
+	{
+		m_commandBuffersFree.emplace_back(buffer);
+	}
 
-private:
-    std::string m_devicePath;
-    IOSDevHandle m_clientHandle{0};
-    uint8_t* m_buffer{nullptr};
-    uint32_t m_bufferSize{0};
-    std::vector<IPCBuffer*> m_commandBuffersFree;
+  private:
+	std::string m_devicePath;
+	IOSDevHandle m_clientHandle{0};
+	uint8_t* m_buffer{nullptr};
+	uint32_t m_bufferSize{0};
+	std::vector<IPCBuffer*> m_commandBuffersFree;
 };

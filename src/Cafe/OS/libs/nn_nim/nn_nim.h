@@ -7,4 +7,4 @@ namespace nn
 	{
 		COSModule* GetModule();
 	}
-}
+} // namespace nn

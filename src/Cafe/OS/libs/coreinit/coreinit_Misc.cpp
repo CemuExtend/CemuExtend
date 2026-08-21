@@ -13,7 +13,7 @@ namespace coreinit
 	{
 		padLength = std::min<sint32>(padLength, maxLength);
 		sint32 paddedLength = padLength;
-		while ( padLength > 0)
+		while (padLength > 0)
 		{
 			*strOut = padChar;
 			strOut++;
@@ -40,7 +40,7 @@ namespace coreinit
 		if (precision.has_value())
 		{
 			stringLength = *precision;
-			for (sint32 i=0; i<stringLength; i++)
+			for (sint32 i = 0; i < stringLength; i++)
 			{
 				if (stringData[i] == '\0')
 				{
@@ -151,7 +151,7 @@ namespace coreinit
 		{
 			do
 			{
-				digitBuf[digitCount++] = GetHexDigit(tmpValue&0xF, uppercase);
+				digitBuf[digitCount++] = GetHexDigit(tmpValue & 0xF, uppercase);
 				tmpValue >>= 4;
 			}
 			while (tmpValue != 0);
@@ -447,7 +447,7 @@ namespace coreinit
 				{
 					// character
 					formatStr++;
-					char character = (char)(uint32)*(uint32be*)_ppc_va_arg(vargs, ppc_va_type::INT32);
+					char character = (char)(uint32) * (uint32be*)_ppc_va_arg(vargs, ppc_va_type::INT32);
 					writeIndex += ppc_vcprintf_char(strOut + writeIndex, maxLength - writeIndex, character, width, precision);
 				}
 				else if (*formatStr == 'f' || *formatStr == 'g' || *formatStr == 'G')
@@ -502,7 +502,7 @@ namespace coreinit
 				formatStr++;
 			}
 		}
-		writeIndex = std::min<sint32>(writeIndex, maxLength-1);
+		writeIndex = std::min<sint32>(writeIndex, maxLength - 1);
 		strOut[writeIndex] = '\0';
 		return writeIndex;
 	}
@@ -546,23 +546,26 @@ namespace coreinit
 
 	std::mutex sCafeConsoleMutex;
 	bool s_forwardConsoleLogs;
-	
+
 	void WriteCafeConsole(CafeLogType cafeLogType, const char* msg, sint32 len)
 	{
 		std::unique_lock _l(sCafeConsoleMutex);
 		CafeLogBuffer& logBuffer = getLogBuffer(cafeLogType);
 		// once a line is full or \n is written it will be posted to log
-		auto flushLine = [](CafeLogBuffer& cafeLogBuffer, std::string_view cafeLogName) -> void
-		{
+		auto flushLine = [](CafeLogBuffer& cafeLogBuffer, std::string_view cafeLogName) -> void {
 			cemuLog_log(LogType::CoreinitLogging, "[{0}] {1}", cafeLogName, std::basic_string_view(cafeLogBuffer.lineBuffer.data(), cafeLogBuffer.lineLength));
 			cafeLogBuffer.lineLength = 0;
 		};
 
-		if (s_forwardConsoleLogs) {
-			if (cafeLogType == CafeLogType::OSCONSOLE) {
+		if (s_forwardConsoleLogs)
+		{
+			if (cafeLogType == CafeLogType::OSCONSOLE)
+			{
 				fwrite(msg, 1, len, stdout);
 				fflush(stdout);
-			} else {
+			}
+			else
+			{
 				fwrite(msg, 1, len, stderr);
 			}
 		}
@@ -643,7 +646,7 @@ namespace coreinit
 		OSScreenEnableEx(OSSCREEN_TV, 1);
 		OSScreenEnableEx(OSSCREEN_DRC, 1);
 
-		while ( true )
+		while (true)
 		{
 			OSScreenClearBufferEx(OSSCREEN_TV, 0);
 			OSScreenClearBufferEx(OSSCREEN_DRC, 0);
@@ -710,7 +713,7 @@ namespace coreinit
 		{
 			if ((++retryCount % 100) == 1)
 				cemuLog_log(LogType::Force,
-					"Waiting for the active title lifecycle transition before process exit");
+							"Waiting for the active title lifecycle transition before process exit");
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 		CafeSystem::NotifyPPCProcessExit(status);
@@ -727,8 +730,8 @@ namespace coreinit
 
 	uint32 __LaunchByTitleId(uint64 titleId, uint32 argc, MEMPTR<char>* argv)
 	{
-		// prepare argument buffer
-		#if 0
+// prepare argument buffer
+#if 0
 		char argumentBuffer[4096];
 		uint32 argumentBufferLength = 0;
 		char* argWriter = argumentBuffer;
@@ -747,12 +750,12 @@ namespace coreinit
 			argWriter += argLength + 1;
 			argumentBufferLength += argLength + 1;
 		}
-		#endif
+#endif
 		// normally the above buffer is passed to the PPC kernel via syscall 0x2B and then
 		// the kernel forwards it to IOSU MCP when requesting a title launch
 		// but for now we HLE most of the launching code and can just set the argument array directly
 		std::vector<std::string> argArray;
-		for(uint32 i=0; i<argc; i++)
+		for (uint32 i = 0; i < argc; i++)
 			argArray.emplace_back(argv[i]);
 		CafeSystem::SetOverrideArgs(argArray);
 		(void)CafeSystem::PrepareTitleShutdown();
@@ -768,7 +771,7 @@ namespace coreinit
 	{
 		char appXmlPath[1024];
 		cemu_assert_debug(argc == 0); // custom args not supported yet
-		if(pathLength >= (sizeof(appXmlPath) - 32))
+		if (pathLength >= (sizeof(appXmlPath) - 32))
 		{
 			// path too long
 			cemuLog_logDebug(LogType::Force, "OSLaunchTitleByPathl: path too long");
@@ -794,7 +797,7 @@ namespace coreinit
 		if (!app_doc.load_buffer_inplace(tmpData.data(), tmpData.size()))
 			return false;
 		uint64 titleId = std::stoull(app_doc.child("app").child("title_id").child_value(), nullptr, 16);
-		if(titleId == 0)
+		if (titleId == 0)
 		{
 			cemuLog_logDebug(LogType::Force, "OSLaunchTitleByPathl: failed to parse titleId from app.xml");
 			return 0x80000000;
@@ -807,7 +810,7 @@ namespace coreinit
 	{
 		if (argc != 0)
 			cemuLog_log(LogType::Force,
-				"OSLaunchTitlel: variadic launch arguments are not supported");
+						"OSLaunchTitlel: variadic launch arguments are not supported");
 		__LaunchByTitleId(titleId, 0, nullptr);
 	}
 
@@ -834,23 +837,23 @@ namespace coreinit
 	// called at the beginning of OSReceiveMessage if the queue is the system message queue
 	void UpdateSystemMessageQueue()
 	{
-		if(!OSIsInterruptEnabled())
+		if (!OSIsInterruptEnabled())
 			return;
 		cemu_assert_debug(!__OSHasSchedulerLock());
 		// normally syscall 0x2E is used to get the next message
 		// for now we just have some preliminary logic here to allow a fake transition to background & foreground
-		if(s_transitionToBackground)
+		if (s_transitionToBackground)
 		{
 			// add transition to background message
 			OSMessage msg{};
 			msg.data0 = stdx::to_underlying(SysMessageId::MsgReleaseForeground);
 			msg.data1 = 0; // 1 -> System is shutting down 0 -> Begin transitioning to background
 			OSMessageQueue* systemMessageQueue = coreinit::OSGetSystemMessageQueue();
-			if(OSSendMessage(systemMessageQueue, &msg, 0))
+			if (OSSendMessage(systemMessageQueue, &msg, 0))
 				s_transitionToBackground = false;
 			return;
 		}
-		if(s_transitionToForeground)
+		if (s_transitionToForeground)
 		{
 			// add transition to foreground message
 			OSMessage msg{};
@@ -858,7 +861,7 @@ namespace coreinit
 			msg.data1 = 1; // ?
 			msg.data2 = 1; // ?
 			OSMessageQueue* systemMessageQueue = coreinit::OSGetSystemMessageQueue();
-			if(OSSendMessage(systemMessageQueue, &msg, 0))
+			if (OSSendMessage(systemMessageQueue, &msg, 0))
 				s_transitionToForeground = false;
 			return;
 		}
@@ -945,4 +948,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", __PPCExit, LogType::CoreinitThread);
 	}
 
-};
+}; // namespace coreinit

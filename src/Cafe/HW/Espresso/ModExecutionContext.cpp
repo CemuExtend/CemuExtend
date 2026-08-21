@@ -9,12 +9,12 @@ namespace
 	bool ContainsPermission(ModMemoryPermission available, ModMemoryPermission requested)
 	{
 		return (static_cast<std::uint8_t>(available) & static_cast<std::uint8_t>(requested)) ==
-			static_cast<std::uint8_t>(requested);
+			   static_cast<std::uint8_t>(requested);
 	}
-}
+} // namespace
 
 ModExecutionContext::ModExecutionContext(std::uint64_t addressSpaceId, std::uint32_t generation,
-	std::string principal, std::uint32_t virtualBase, std::uint32_t size)
+										 std::string principal, std::uint32_t virtualBase, std::uint32_t size)
 	: m_addressSpaceId(addressSpaceId), m_generation(generation), m_principal(std::move(principal)),
 	  m_virtualBase(virtualBase)
 {
@@ -32,7 +32,7 @@ ModExecutionContext::ModExecutionContext(std::uint64_t addressSpaceId, std::uint
 }
 
 bool ModExecutionContext::ValidateRange(std::uint32_t address, std::size_t size,
-	std::size_t& offset) const
+										std::size_t& offset) const
 {
 	if (size == 0 || address < m_virtualBase)
 		return false;
@@ -41,7 +41,7 @@ bool ModExecutionContext::ValidateRange(std::uint32_t address, std::size_t size,
 }
 
 bool ModExecutionContext::HasPermission(std::uint32_t address, std::size_t size,
-	ModMemoryPermission permission) const
+										ModMemoryPermission permission) const
 {
 	std::size_t offset{};
 	if (!ValidateRange(address, size, offset))
@@ -68,7 +68,7 @@ bool ModExecutionContext::IsMapped(std::uint32_t address, std::size_t size) cons
 }
 
 bool ModExecutionContext::Map(std::uint32_t address, std::span<const std::byte> initialData,
-	std::uint32_t mappedSize, ModMemoryPermission permissions)
+							  std::uint32_t mappedSize, ModMemoryPermission permissions)
 {
 	std::size_t offset{};
 	const auto flags = static_cast<std::uint8_t>(permissions);
@@ -83,7 +83,7 @@ bool ModExecutionContext::Map(std::uint32_t address, std::span<const std::byte> 
 	const auto firstPage = offset / kPageSize;
 	const auto pageCount = mappedSize / kPageSize;
 	if (!std::all_of(m_pages.begin() + firstPage, m_pages.begin() + firstPage + pageCount,
-		[](ModMemoryPermission page) { return page == ModMemoryPermission::None; }))
+					 [](ModMemoryPermission page) { return page == ModMemoryPermission::None; }))
 	{
 		Stop(ModFaultReason::InvalidMapping, address, permissions);
 		return false;
@@ -95,7 +95,7 @@ bool ModExecutionContext::Map(std::uint32_t address, std::span<const std::byte> 
 }
 
 std::byte* ModExecutionContext::Resolve(std::uint32_t address, std::size_t size,
-	ModMemoryPermission permission)
+										ModMemoryPermission permission)
 {
 	std::size_t offset{};
 	if (IsStopped())
@@ -119,7 +119,7 @@ std::byte* ModExecutionContext::Resolve(std::uint32_t address, std::size_t size,
 }
 
 const std::byte* ModExecutionContext::Resolve(std::uint32_t address, std::size_t size,
-	ModMemoryPermission permission) const
+											  ModMemoryPermission permission) const
 {
 	if (IsStopped() || !HasPermission(address, size, permission))
 		return nullptr;
@@ -138,7 +138,7 @@ bool ModExecutionContext::IsHleAllowed(std::uint16_t hleId) const
 }
 
 bool ModExecutionContext::IsServiceAllowed(std::uint16_t service, std::uint32_t permission,
-	std::uint16_t operation) const
+										   std::uint16_t operation) const
 {
 	if (service == 1 || permission == 0)
 		return true;
@@ -153,7 +153,8 @@ bool ModExecutionContext::IsServiceAllowed(std::uint16_t service, std::uint32_t 
 		return (m_serviceInjectMask.load(std::memory_order_acquire) & serviceBit) != 0;
 	if (permission == 8) // Clipboard Get/Set
 		return (((operation == 1 ? m_serviceReadMask : m_serviceWriteMask)
-			.load(std::memory_order_acquire)) & serviceBit) != 0;
+					 .load(std::memory_order_acquire)) &
+				serviceBit) != 0;
 	if (permission == 16) // Capture is host-state read access.
 		return (m_serviceReadMask.load(std::memory_order_acquire) & serviceBit) != 0;
 	return false;
@@ -186,7 +187,7 @@ void ModExecutionContext::BeginFrame()
 bool ModExecutionContext::ConsumeInstructions(std::uint64_t count)
 {
 	if (IsStopped() || count > kMaximumInstructionsPerFrame -
-		std::min(m_frameInstructions, kMaximumInstructionsPerFrame))
+								   std::min(m_frameInstructions, kMaximumInstructionsPerFrame))
 	{
 		MarkQuotaExceeded(ModFaultReason::InstructionQuota);
 		return false;
@@ -196,7 +197,7 @@ bool ModExecutionContext::ConsumeInstructions(std::uint64_t count)
 }
 
 bool ModExecutionContext::CheckWallClock(std::chrono::steady_clock::time_point now,
-	std::chrono::nanoseconds budget)
+										 std::chrono::nanoseconds budget)
 {
 	if (IsStopped() || now - m_frameStart > budget)
 	{
@@ -216,7 +217,7 @@ void ModExecutionContext::MarkQuotaExceeded(ModFaultReason reason)
 }
 
 void ModExecutionContext::Stop(ModFaultReason reason, std::uint32_t address,
-	ModMemoryPermission access)
+							   ModMemoryPermission access)
 {
 	std::lock_guard lock(m_faultMutex);
 	if (m_stopped.load(std::memory_order_relaxed))

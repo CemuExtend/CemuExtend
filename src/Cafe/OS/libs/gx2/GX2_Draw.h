@@ -10,4 +10,4 @@ namespace GX2
 	void GX2DrawIndexedEx(GX2PrimitiveMode2 primitiveMode, uint32 count, GX2IndexType indexType, void* indexData, uint32 baseVertex, uint32 numInstances);
 
 	void GX2DrawInit();
-}
+} // namespace GX2

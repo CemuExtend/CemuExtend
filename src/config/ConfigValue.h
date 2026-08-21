@@ -11,7 +11,7 @@
 template<typename TType>
 class ConfigValueAtomic
 {
-public:
+  public:
 	constexpr ConfigValueAtomic()
 		: m_value(TType()), m_init_value(TType()) {}
 
@@ -42,13 +42,25 @@ public:
 		return *this;
 	}
 
-	[[nodiscard]] inline TType GetValue() const { return m_value.load(); }
-	void SetValue(const TType& v) { m_value = v; }
+	[[nodiscard]] inline TType GetValue() const
+	{
+		return m_value.load();
+	}
+	void SetValue(const TType& v)
+	{
+		m_value = v;
+	}
 
-	[[nodiscard]] const TType& GetInitValue() const { return m_init_value; }
-	operator TType() const { return m_value.load(); }
+	[[nodiscard]] const TType& GetInitValue() const
+	{
+		return m_init_value;
+	}
+	operator TType() const
+	{
+		return m_value.load();
+	}
 
-private:
+  private:
 	std::atomic<TType> m_value;
 	const TType m_init_value;
 };
@@ -56,7 +68,7 @@ private:
 template<typename TType>
 class ConfigValueNoneAtomic
 {
-public:
+  public:
 	constexpr ConfigValueNoneAtomic()
 		: m_value({}), m_init_value({}) {}
 
@@ -113,14 +125,17 @@ public:
 		m_value = v;
 	}
 
-	[[nodiscard]] const TType& GetInitValue() const { return m_init_value; }
+	[[nodiscard]] const TType& GetInitValue() const
+	{
+		return m_init_value;
+	}
 
 	[[nodiscard]] operator TType() const
 	{
 		return GetValue();
 	}
 
-protected:
+  protected:
 	mutable std::shared_mutex m_mutex;
 	TType m_value;
 	const TType m_init_value;
@@ -132,7 +147,7 @@ constexpr bool is_atomic_type_v = std::is_trivially_copyable_v<TType> && std::is
 template<typename TType>
 class ConfigValue : public std::conditional<is_atomic_type_v<TType>, ConfigValueAtomic<TType>, ConfigValueNoneAtomic<TType>>::type
 {
-public:
+  public:
 	using base_type = typename std::conditional<is_atomic_type_v<TType>, ConfigValueAtomic<TType>, ConfigValueNoneAtomic<TType>>::type;
 	using base_type::base_type;
 
@@ -158,11 +173,11 @@ public:
 template<typename TType>
 class ConfigValueBounds : public ConfigValue<TType>
 {
-public:
+  public:
 	using base_type = ConfigValue<TType>;
 
 	constexpr ConfigValueBounds(const TType& min, const TType& init_value, const TType& max)
-		:base_type(init_value), m_min_value(min), m_max_value(max)
+		: base_type(init_value), m_min_value(min), m_max_value(max)
 	{
 		assert(m_min_value <= init_value && init_value <= m_max_value);
 	}
@@ -228,10 +243,16 @@ public:
 		return *this;
 	};
 
-	[[nodiscard]] const TType& GetMax() const { return m_max_value; }
-	[[nodiscard]] const TType& GetMin() const { return m_min_value; }
+	[[nodiscard]] const TType& GetMax() const
+	{
+		return m_max_value;
+	}
+	[[nodiscard]] const TType& GetMin() const
+	{
+		return m_min_value;
+	}
 
-private:
+  private:
 	const TType m_min_value;
 	const TType m_max_value;
 };

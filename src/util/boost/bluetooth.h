@@ -8,10 +8,10 @@ namespace boost
 {
 	namespace asio
 	{
-		template <typename Protocol>
+		template<typename Protocol>
 		class device_endpoint
 		{
-		public:
+		  public:
 			typedef Protocol protocol_type;
 			typedef detail::socket_addr_type data_type;
 
@@ -76,13 +76,13 @@ namespace boost
 				return size();
 			}
 
-		private:
+		  private:
 			SOCKADDR_BTH addr;
 		};
 
 		class bluetooth
 		{
-		public:
+		  public:
 			using endpoint = device_endpoint<bluetooth>;
 			using socket = basic_stream_socket<bluetooth>;
 			using acceptor = basic_socket_acceptor<bluetooth>;
@@ -105,5 +105,5 @@ namespace boost
 				return AF_BLUETOOTH;
 			}
 		};
-	}
-}
+	} // namespace asio
+} // namespace boost

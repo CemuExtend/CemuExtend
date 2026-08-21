@@ -3,7 +3,8 @@
 class WiimoteDevice
 {
 	friend class WiimoteInfo;
-public:
+
+  public:
 	virtual ~WiimoteDevice() = default;
 
 	virtual bool write_data(const std::vector<uint8>& data) = 0;

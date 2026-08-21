@@ -10,15 +10,21 @@
 #include <wx/timer.h>
 #include <wx/gauge.h>
 
-namespace Application { class EmulationController; }
-namespace Host { class IPathProvider; }
+namespace Application
+{
+	class EmulationController;
+}
+namespace Host
+{
+	class IPathProvider;
+}
 
 class DownloadGraphicPacksWindow : public wxDialog
 {
-public:
+  public:
 	DownloadGraphicPacksWindow(wxWindow* parent,
-		Application::EmulationController& emulationController,
-		std::shared_ptr<Host::IPathProvider> pathProvider);
+							   Application::EmulationController& emulationController,
+							   std::shared_ptr<Host::IPathProvider> pathProvider);
 	~DownloadGraphicPacksWindow();
 
 	const std::string& GetException() const;
@@ -29,7 +35,7 @@ public:
 	void OnUpdate(const wxTimerEvent& event);
 	void OnCancelButton(const wxCommandEvent& event);
 
-private:
+  private:
 	void UpdateThread();
 	void DownloadAndInstall();
 	void StartWorker(void (DownloadGraphicPacksWindow::*worker)());

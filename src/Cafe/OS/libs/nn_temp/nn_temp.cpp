@@ -18,7 +18,7 @@ namespace nn::temp
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_temp";
@@ -29,11 +29,10 @@ namespace nn::temp
 			osLib_addFunction("nn_temp", "TEMPCreateAndInitTempDir", nnTempExport_TEMPCreateAndInitTempDir);
 		};
 
-	}s_COSnnTempModule;
+	} s_COSnnTempModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnTempModule;
 	}
-};
-
+}; // namespace nn::temp

@@ -12,7 +12,7 @@ namespace Application
 		const std::size_t expectedBindingCount = endEmulationAvailable ? 7 : 6;
 		if (update.bindings.size() != expectedBindingCount ||
 			(update.controllerModifier &&
-				*update.controllerModifier >= kHotkeyControllerButtonCount))
+			 *update.controllerModifier >= kHotkeyControllerButtonCount))
 		{
 			diagnostic = "hotkey binding set is incomplete or invalid";
 			return HotkeySettingsError::InvalidBinding;
@@ -29,21 +29,22 @@ namespace Application
 				(binding.keyboardUsage == 0 && binding.keyboardModifiers != 0) ||
 				(binding.keyboardUsage >= 0xe0 && binding.keyboardUsage <= 0xe7) ||
 				(binding.controllerButton &&
-					*binding.controllerButton >= kHotkeyControllerButtonCount))
+				 *binding.controllerButton >= kHotkeyControllerButtonCount))
 			{
 				diagnostic = "hotkey binding contains an invalid action, key, or button";
 				return HotkeySettingsError::InvalidBinding;
 			}
 			actions[action] = true;
 			if (binding.keyboardUsage && !keyboardBindings.emplace(
-				binding.keyboardUsage, binding.keyboardModifiers).second)
+															  binding.keyboardUsage, binding.keyboardModifiers)
+											  .second)
 			{
 				diagnostic = "keyboard hotkeys must be unique";
 				return HotkeySettingsError::DuplicateBinding;
 			}
 			if (binding.controllerButton &&
 				((update.controllerModifier && *binding.controllerButton ==
-					*update.controllerModifier) ||
+												   *update.controllerModifier) ||
 				 !controllerBindings.emplace(*binding.controllerButton).second))
 			{
 				diagnostic = "controller hotkeys must be unique and differ from the modifier";
@@ -53,7 +54,8 @@ namespace Application
 		for (std::size_t action = 0; action < actions.size(); ++action)
 		{
 			if (!endEmulationAvailable &&
-				action == static_cast<std::size_t>(HotkeyAction::EndEmulation)) continue;
+				action == static_cast<std::size_t>(HotkeyAction::EndEmulation))
+				continue;
 			if (!actions[action])
 			{
 				diagnostic = "hotkey binding set is incomplete";
@@ -63,4 +65,4 @@ namespace Application
 		diagnostic.clear();
 		return HotkeySettingsError::None;
 	}
-}
+} // namespace Application

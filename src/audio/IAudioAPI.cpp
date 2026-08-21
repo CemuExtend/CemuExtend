@@ -164,7 +164,7 @@ AudioAPIPtr IAudioAPI::CreateDevice(AudioAPI api, const DeviceDescriptionPtr& de
 		if (!surfaces || !surfaces->mainWindow.surface)
 			throw std::runtime_error("DirectSound requires a native main window");
 		return std::make_unique<DirectSoundAPI>(tmp->GetGUID(), surfaces->mainWindow,
-			samplerate, channels, samples_per_block, bits_per_sample);
+												samplerate, channels, samples_per_block, bits_per_sample);
 	}
 	case XAudio27:
 	{

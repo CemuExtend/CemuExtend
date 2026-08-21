@@ -8,7 +8,7 @@ TLV::TLV()
 }
 
 TLV::TLV(Tag tag, std::vector<std::byte> value)
- : mTag(tag), mValue(std::move(value))
+	: mTag(tag), mValue(std::move(value))
 {
 }
 
@@ -31,34 +31,35 @@ std::vector<TLV> TLV::FromBytes(const std::span<std::byte>& data)
 
 		switch (tag)
 		{
-			case TLV::TAG_NULL:
-				// Don't need to do anything for NULL tags
-				break;
-			
-			case TLV::TAG_TERMINATOR:
-				tlvs.emplace_back(tag, std::vector<std::byte>{});
-				hasTerminator = true;
-				break;
+		case TLV::TAG_NULL:
+			// Don't need to do anything for NULL tags
+			break;
 
-			default:
+		case TLV::TAG_TERMINATOR:
+			tlvs.emplace_back(tag, std::vector<std::byte>{});
+			hasTerminator = true;
+			break;
+
+		default:
+		{
+			// Read the length
+			uint16 length;
+			stream >> byte;
+			length = byte;
+
+			// If the length is 0xff, 2 bytes with length follow
+			if (length == 0xff)
 			{
-				// Read the length
-				uint16 length;
-				stream >> byte;
-				length = byte;
-
-				// If the length is 0xff, 2 bytes with length follow
-				if (length == 0xff) {
-					stream >> length;
-				}
-
-				std::vector<std::byte> value;
-				value.resize(length);
-				stream.Read(value);
-
-				tlvs.emplace_back(tag, value);
-				break;
+				stream >> length;
 			}
+
+			std::vector<std::byte> value;
+			value.resize(length);
+			stream.Read(value);
+
+			tlvs.emplace_back(tag, value);
+			break;
+		}
 		}
 
 		if (stream.GetError() != Stream::ERROR_OK)
@@ -89,27 +90,27 @@ std::vector<std::byte> TLV::ToBytes() const
 
 	switch (mTag)
 	{
-		case TLV::TAG_NULL:
-		case TLV::TAG_TERMINATOR:
-			// Nothing to do here
-			break;
+	case TLV::TAG_NULL:
+	case TLV::TAG_TERMINATOR:
+		// Nothing to do here
+		break;
 
-		default:
+	default:
+	{
+		// Write length (decide if as a 8-bit or 16-bit value)
+		if (mValue.size() >= 0xff)
 		{
-			// Write length (decide if as a 8-bit or 16-bit value)
-			if (mValue.size() >= 0xff)
-			{
-				stream << uint8(0xff);
-				stream << uint16(mValue.size());
-			}
-			else
-			{
-				stream << uint8(mValue.size());
-			}
-
-			// Write value
-			stream.Write(mValue);
+			stream << uint8(0xff);
+			stream << uint16(mValue.size());
 		}
+		else
+		{
+			stream << uint8(mValue.size());
+		}
+
+		// Write value
+		stream.Write(mValue);
+	}
 	}
 
 	return bytes;

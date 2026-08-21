@@ -17,8 +17,8 @@ class EventService : public Singleton<EventService>
 	friend class Singleton<EventService>;
 	EventService() = default;
 
-public:
-	template <Events event, typename TFunc, typename TClass>
+  public:
+	template<Events event, typename TFunc, typename TClass>
 	boost::signals2::connection connect(TFunc function, TClass thisptr)
 	{
 		using namespace boost::placeholders;
@@ -30,7 +30,7 @@ public:
 		}
 	}
 
-	template <Events event>
+	template<Events event>
 	void disconnect(const boost::signals2::connection& slot)
 	{
 		using namespace boost::placeholders;
@@ -42,7 +42,7 @@ public:
 		}
 	}
 
-	template <Events event, typename ... TArgs>
+	template<Events event, typename... TArgs>
 	void signal(TArgs&&... args)
 	{
 		try
@@ -53,14 +53,12 @@ public:
 			{
 				cemu_assert_suspicious();
 			}
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "error when signaling {}: {}", event, ex.what());
 		}
 	}
 
-private:
+  private:
 	boost::signals2::signal<ControllerChangedFunc> m_controller_changed_signal;
-
 };

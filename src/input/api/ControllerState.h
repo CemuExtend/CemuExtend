@@ -3,7 +3,8 @@
 #include <glm/vec2.hpp>
 #include "util/helpers/fspinlock.h"
 
-enum class PositionVisibility {
+enum class PositionVisibility
+{
 	NONE = 0,
 	FULL = 1,
 	PARTIAL = 2
@@ -123,7 +124,7 @@ struct ControllerButtonState
 		return *this;
 	}
 
-private:
+  private:
 	std::vector<uint32> m_pressedButtons; // since only very few buttons are pressed at a time, using a vector with linear scan is more efficient than a set/map
 	mutable FSpinlock m_spinlock;
 };
@@ -139,9 +140,9 @@ struct ControllerState
 	constexpr static float kMinAxisValue = 0.0000001f;
 
 	// [-1; 1]
-	glm::vec2 axis{ };
-	glm::vec2 rotation{ };
-	glm::vec2 trigger{ };
+	glm::vec2 axis{};
+	glm::vec2 rotation{};
+	glm::vec2 trigger{};
 
 	ControllerButtonState buttons{};
 

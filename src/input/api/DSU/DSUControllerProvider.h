@@ -38,12 +38,12 @@ struct DSUProviderSettings : public ControllerProviderSettings
 	}
 };
 
-
 class DSUControllerProvider : public ControllerProvider<DSUProviderSettings>
 {
 	friend class DSUController;
 	using base_type = ControllerProvider<DSUProviderSettings>;
-public:
+
+  public:
 	constexpr static int kMaxClients = 8;
 
 	struct ControllerState
@@ -65,7 +65,10 @@ public:
 	~DSUControllerProvider();
 
 	inline static InputAPI::Type kAPIType = InputAPI::DSUClient;
-	InputAPI::Type api() const override { return kAPIType; }
+	InputAPI::Type api() const override
+	{
+		return kAPIType;
+	}
 
 	std::vector<std::shared_ptr<ControllerBase>> get_controllers() override;
 
@@ -88,7 +91,7 @@ public:
 	void request_pad_data();
 	void request_pad_data(uint8_t index);
 
-private:
+  private:
 	uint16 m_server_version = 0;
 
 	std::atomic_bool m_running = false;

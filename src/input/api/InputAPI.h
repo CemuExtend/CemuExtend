@@ -67,13 +67,13 @@ namespace InputAPI
 			return SDLController;
 		else if (str == "DSU") // legacy
 			return DSUClient;
-		
-		//else if (str == "WGIGamepad")
+
+		// else if (str == "WGIGamepad")
 		//	return WGIGamepad;
 		//
-		//else if (str == "WGIRawController")
+		// else if (str == "WGIRawController")
 		//	return WGIRawController;
 
 		throw std::runtime_error(fmt::format("unknown input api: {}", str));
 	}
-}
+} // namespace InputAPI

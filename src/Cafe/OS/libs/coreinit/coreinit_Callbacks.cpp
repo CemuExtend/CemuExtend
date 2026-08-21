@@ -3,8 +3,7 @@
 
 struct CoreinitAsyncCallback
 {
-	CoreinitAsyncCallback(MPTR functionMPTR, uint32 numParameters, uint32 r3, uint32 r4, uint32 r5, uint32 r6, uint32 r7, uint32 r8, uint32 r9, uint32 r10) :
-		m_functionMPTR(functionMPTR), m_numParameters(numParameters), m_gprParam{ r3, r4, r5, r6, r7, r8, r9, r10 } {};
+	CoreinitAsyncCallback(MPTR functionMPTR, uint32 numParameters, uint32 r3, uint32 r4, uint32 r5, uint32 r6, uint32 r7, uint32 r8, uint32 r9, uint32 r10) : m_functionMPTR(functionMPTR), m_numParameters(numParameters), m_gprParam{r3, r4, r5, r6, r7, r8, r9, r10} {};
 
 	static void queue(MPTR functionMPTR, uint32 numParameters, uint32 r3, uint32 r4, uint32 r5, uint32 r6, uint32 r7, uint32 r8, uint32 r9, uint32 r10)
 	{
@@ -31,12 +30,12 @@ struct CoreinitAsyncCallback
 		s_asyncCallbackSpinlock.unlock();
 	}
 
-private:
+  private:
 	void doCall()
 	{
 		PPCCoreCallback(m_functionMPTR, m_gprParam[0], m_gprParam[1], m_gprParam[2], m_gprParam[3], m_gprParam[4], m_gprParam[5], m_gprParam[6], m_gprParam[7]);
 	}
-	
+
 	static CoreinitAsyncCallback* allocateAndInitFromPool(MPTR functionMPTR, uint32 numParameters, uint32 r3, uint32 r4, uint32 r5, uint32 r6, uint32 r7, uint32 r8, uint32 r9, uint32 r10)
 	{
 		cemu_assert_debug(s_asyncCallbackSpinlock.is_locked());
@@ -62,9 +61,9 @@ private:
 	static std::vector<struct CoreinitAsyncCallback*> s_asyncCallbackQueue;
 	static FSpinlock s_asyncCallbackSpinlock;
 
-	sint32	m_numParameters;
-	uint32	m_gprParam[9];
-	MPTR	m_functionMPTR;
+	sint32 m_numParameters;
+	uint32 m_gprParam[9];
+	MPTR m_functionMPTR;
 };
 
 std::vector<struct CoreinitAsyncCallback*> CoreinitAsyncCallback::s_asyncCallbackPool;
@@ -72,7 +71,7 @@ std::vector<struct CoreinitAsyncCallback*> CoreinitAsyncCallback::s_asyncCallbac
 FSpinlock CoreinitAsyncCallback::s_asyncCallbackSpinlock;
 
 SysAllocator<OSThread_t> g_coreinitCallbackThread;
-SysAllocator<uint8, 1024*64> _g_coreinitCallbackThreadStack;
+SysAllocator<uint8, 1024 * 64> _g_coreinitCallbackThreadStack;
 SysAllocator<coreinit::OSSemaphore> g_asyncCallbackAsync;
 SysAllocator<char, 32> _g_coreinitCBThreadName;
 

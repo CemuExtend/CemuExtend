@@ -19,7 +19,10 @@ namespace Application
 	{
 		std::filesystem::path canonicalPath;
 		std::string diagnostic;
-		[[nodiscard]] explicit operator bool() const { return !canonicalPath.empty(); }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return !canonicalPath.empty();
+		}
 	};
 
 	// Destructive operations accept catalog paths only when their complete path is
@@ -34,22 +37,31 @@ namespace Application
 			return {{}, "Managed-content catalog path is not absolute"};
 		std::error_code error;
 		const auto lexical = fs::absolute(candidate, error).lexically_normal();
-		if (error) return {{}, error.message()};
+		if (error)
+			return {{}, error.message()};
 		const auto canonical = fs::canonical(candidate, error);
-		if (error) return {{}, error.message()};
+		if (error)
+			return {{}, error.message()};
 		if (canonical != lexical)
 			return {{}, "Managed-content catalog path traverses a symbolic link or reparse point"};
 		const auto status = fs::symlink_status(canonical, error);
-		if (error) return {{}, error.message()};
+		if (error)
+			return {{}, error.message()};
 		if (status.type() == fs::file_type::symlink)
 			return {{}, "Managed-content catalog root is a symbolic link"};
 		for (const auto& root : trustedRoots)
 		{
-			if (root.empty()) continue;
+			if (root.empty())
+				continue;
 			const auto canonicalRoot = fs::canonical(root, error);
-			if (error) { error.clear(); continue; }
+			if (error)
+			{
+				error.clear();
+				continue;
+			}
 			const auto relative = canonical.lexically_relative(canonicalRoot);
-			if (relative.empty() || relative == ".") continue;
+			if (relative.empty() || relative == ".")
+				continue;
 			const auto first = *relative.begin();
 			if (first != ".." && !relative.is_absolute())
 				return {canonical, {}};
@@ -104,11 +116,11 @@ namespace Application
 
 	class IManagedContentService
 	{
-	public:
+	  public:
 		virtual ~IManagedContentService() = default;
 		[[nodiscard]] virtual ManagedContentDeletePlanResult PlanManagedContentDelete(
 			std::uint64_t locationUid) const = 0;
 		[[nodiscard]] virtual ManagedContentDeleteResult DeleteManagedContent(
 			const ManagedContentDeletePlan& plan) = 0;
 	};
-}
+} // namespace Application

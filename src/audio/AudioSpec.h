@@ -20,4 +20,4 @@ namespace AudioSpec
 
 	static_assert(kOutputSamplesPerBlock == 576);
 	static_assert(kInputSamplesPerBlock == 96);
-}
+} // namespace AudioSpec

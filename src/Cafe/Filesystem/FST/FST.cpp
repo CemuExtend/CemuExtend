@@ -11,17 +11,19 @@
 
 #include "boost/range/adaptor/reversed.hpp"
 
-#define SET_FST_ERROR(__code) 	if (errorCodeOut) *errorCodeOut = ErrorCode::__code
+#define SET_FST_ERROR(__code) \
+	if (errorCodeOut)         \
+	*errorCodeOut = ErrorCode::__code
 
 static_assert(sizeof(NCrypto::AesIv) == 16); // make sure IV is actually 16 bytes
 
 class FSTDataSource
 {
-public:
+  public:
 	virtual uint64 readData(uint16 clusterIndex, uint64 clusterOffset, uint64 offset, void* data, uint64 size) = 0;
 	virtual ~FSTDataSource() {};
 
-protected:
+  protected:
 	FSTDataSource() {};
 
 	bool m_isOpen;
@@ -29,8 +31,7 @@ protected:
 
 class FSTDataSourceWUD : public FSTDataSource
 {
-public:
-
+  public:
 	static FSTDataSourceWUD* Open(const fs::path& path)
 	{
 		wud_t* wudFile = wud_open(path);
@@ -59,12 +60,12 @@ public:
 
 	~FSTDataSourceWUD() override
 	{
-		if(m_wudFile)
+		if (m_wudFile)
 			wud_close(m_wudFile);
 	}
 
-protected:
-	FSTDataSourceWUD() {}	
+  protected:
+	FSTDataSourceWUD() {}
 	wud_t* m_wudFile;
 	uint64 m_baseOffset{};
 	std::vector<uint64> m_clusterOffset;
@@ -72,7 +73,7 @@ protected:
 
 class FSTDataSourceApp : public FSTDataSource
 {
-public:
+  public:
 	static FSTDataSourceApp* Open(fs::path path, NCrypto::TMDParser& tmd)
 	{
 		std::vector<std::unique_ptr<FileStream>> clusterFile;
@@ -109,7 +110,7 @@ public:
 	{
 	}
 
-private:
+  private:
 	FSTDataSourceApp(std::vector<std::unique_ptr<FileStream>>&& clusterFiles)
 	{
 		m_clusterFile = std::move(clusterFiles);
@@ -142,7 +143,7 @@ struct DiscPartitionTableHeader
 	static constexpr uint32 MAGIC_VALUE = 0xCCA6E67B;
 
 	/* +0x00 */ uint32be magic;
-	/* +0x04 */ uint32be blockSize; // must be 0x8000?
+	/* +0x04 */ uint32be blockSize;			  // must be 0x8000?
 	/* +0x08 */ uint8 partitionTableHash[20]; // hash of the data range at +0x800 to end of sector (0x8000)
 	/* +0x1C */ uint32be numPartitions;
 };
@@ -152,7 +153,7 @@ static_assert(sizeof(DiscPartitionTableHeader) == 0x20);
 struct DiscPartitionTableEntry
 {
 	/* +0x00 */ uint8be partitionName[31];
-	/* +0x1F */ uint8be numAddresses; // ?
+	/* +0x1F */ uint8be numAddresses;	   // ?
 	/* +0x20 */ uint32be partitionAddress; // this is an array?
 	/* +0x24 */ uint8 padding[0x80 - 0x24];
 };
@@ -170,7 +171,7 @@ struct DiscPartitionHeader
 	/* +0x08 */ uint32be ukn008;
 	/* +0x0C */ uint32be ukn00C; // h3 array size?
 	/* +0x10 */ uint32be h3HashNum;
-	/* +0x14 */ uint32be fstSize; // in bytes
+	/* +0x14 */ uint32be fstSize;	// in bytes
 	/* +0x18 */ uint32be fstSector; // relative to partition start
 	/* +0x1C */ uint32be ukn01C;
 	/* +0x20 */ uint32be ukn020;
@@ -187,7 +188,7 @@ struct DiscPartitionHeader
 	/* +0x40 */ uint8be h3HashArray[32]; // dynamic size. Only present if fstHashType != 0
 };
 
-static_assert(sizeof(DiscPartitionHeader) == 0x40+0x20);
+static_assert(sizeof(DiscPartitionHeader) == 0x40 + 0x20);
 
 bool FSTVolume::FindDiscKey(const fs::path& path, NCrypto::AesKey& discTitleKey)
 {
@@ -196,19 +197,19 @@ bool FSTVolume::FindDiscKey(const fs::path& path, NCrypto::AesKey& discTitleKey)
 		return false;
 
 	// read section of header which should only contain zero bytes if decrypted
-	uint8 header[16*3];
+	uint8 header[16 * 3];
 	if (dataSource->readData(0, 0, 0x18000 + 0x100, header, sizeof(header)) != sizeof(header))
 		return false;
 
 	// try all the keys in the key cache
-	uint8 headerDecrypted[sizeof(header)-16];
+	uint8 headerDecrypted[sizeof(header) - 16];
 	for (sint32 i = 0; i < 0x7FFFFFFF; i++)
 	{
 		uint8* key128 = KeyCache_GetAES128(i);
 		if (key128 == NULL)
 			break;
 		AES128_CBC_decrypt(headerDecrypted, header + 16, sizeof(headerDecrypted), key128, header);
-		if (std::all_of(headerDecrypted, headerDecrypted + sizeof(headerDecrypted), [](const uint8 v) {return v == 0; }))
+		if (std::all_of(headerDecrypted, headerDecrypted + sizeof(headerDecrypted), [](const uint8 v) { return v == 0; }))
 		{
 			// key found
 			std::memcpy(discTitleKey.b, key128, 16);
@@ -322,8 +323,7 @@ FSTVolume* FSTVolume::OpenFromDiscImage(const fs::path& path, NCrypto::AesKey& d
 	}
 
 	// read and verify partition headers for SI and GM
-	auto readPartitionHeader = [&](DiscPartitionHeader& partitionHeader, uint32 partitionIndex) -> bool
-	{
+	auto readPartitionHeader = [&](DiscPartitionHeader& partitionHeader, uint32 partitionIndex) -> bool {
 		cemu_assert_debug(dataSource->GetBaseOffset() == 0);
 		if (dataSource->readData(0, 0, partitionArray[partitionIndex].partitionAddress * DISC_SECTOR_SIZE, &partitionHeader, sizeof(DiscPartitionHeader)) != sizeof(DiscPartitionHeader))
 			return false;
@@ -344,7 +344,7 @@ FSTVolume* FSTVolume::OpenFromDiscImage(const fs::path& path, NCrypto::AesKey& d
 	cemu_assert_debug(partitionHeaderSI.fstEncryptionType == 1);
 	// todo - check other fields?
 
-	if(partitionHeaderSI.fstHashType == 0 && partitionHeaderSI.h3HashNum != 0)
+	if (partitionHeaderSI.fstHashType == 0 && partitionHeaderSI.h3HashNum != 0)
 		cemuLog_log(LogType::Force, "FST: Partition uses unhashed blocks but stores a non-zero amount of H3 hashes");
 
 	// GM partition
@@ -497,15 +497,15 @@ FSTVolume* FSTVolume::OpenFST(FSTDataSource* dataSource, uint64 fstOffset, uint3
 	}
 	// if the TMD is available (when opening .app files) we can use the extra info from it to validate unhashed clusters
 	// each content entry in the TMD corresponds to one cluster used by the FST
-	if(optionalTMD)
+	if (optionalTMD)
 	{
-		if(numCluster != optionalTMD->GetContentList().size())
+		if (numCluster != optionalTMD->GetContentList().size())
 		{
 			cemuLog_log(LogType::Force, "FST: Number of clusters does not match TMD content list");
 			return nullptr;
 		}
 		auto& contentList = optionalTMD->GetContentList();
-		for(size_t i=0; i<contentList.size(); i++)
+		for (size_t i = 0; i < contentList.size(); i++)
 		{
 			auto& cluster = clusterTable[i];
 			auto& content = contentList[i];
@@ -515,7 +515,7 @@ FSTVolume* FSTVolume::OpenFST(FSTDataSource* dataSource, uint64 fstOffset, uint3
 			static_assert(sizeof(content.hash32) == sizeof(cluster.contentHash32));
 			memcpy(cluster.contentHash32, content.hash32, sizeof(cluster.contentHash32));
 			// if unhashed mode, then initialize the hash context
-			if(cluster.hashMode == ClusterHashMode::RAW || cluster.hashMode == ClusterHashMode::RAW_STREAM)
+			if (cluster.hashMode == ClusterHashMode::RAW || cluster.hashMode == ClusterHashMode::RAW_STREAM)
 			{
 				cluster.singleHashCtx.reset(EVP_MD_CTX_new());
 				EVP_DigestInit_ex(cluster.singleHashCtx.get(), cluster.contentHashIsSHA1 ? EVP_sha1() : EVP_sha256(), nullptr);
@@ -609,11 +609,11 @@ bool FSTVolume::ProcessFST(FSTHeader_FileEntry* fileTable, uint32 numFileEntries
 		pFileOut->nameHash = _QuickNameHash(nameStringTable.data() + nameOffset, nameLen);
 		// parent directory index
 		pFileOut->parentDirIndex = currentDirEnd.back().parentIndex;
-		//if (currentDirEnd.back().parentIndex == 0)
+		// if (currentDirEnd.back().parentIndex == 0)
 		//	pFileOut->parentDirIndex = std::numeric_limits<uint32>::max();
-		//else
+		// else
 		//	pFileOut->parentDirIndex = currentDirEnd.back().parentIndex;
-		// process type specific data
+		//  process type specific data
 		auto entryType = pFileIn->GetType();
 
 		uint8 flags = 0;
@@ -691,7 +691,7 @@ bool FSTVolume::OpenFile(std::string_view path, FSTFileHandle& fileHandleOut, bo
 	if (fscPath.GetNodeCount() == 0)
 	{
 		// empty path pointers to root directory
-		if(openOnlyFiles)
+		if (openOnlyFiles)
 			return false;
 		fileHandleOut.m_fstIndex = 0;
 		return true;
@@ -699,8 +699,7 @@ bool FSTVolume::OpenFile(std::string_view path, FSTFileHandle& fileHandleOut, bo
 
 	// scan directory and find sub folder or file
 	// skips iterating subdirectories
-	auto findSubentry = [this](size_t firstIndex, size_t lastIndex, std::string_view nodeName) -> sint32
-	{
+	auto findSubentry = [this](size_t firstIndex, size_t lastIndex, std::string_view nodeName) -> sint32 {
 		uint16 nodeHash = _QuickNameHash(nodeName.data(), nodeName.size());
 		size_t index = firstIndex;
 		while (index < lastIndex)
@@ -879,7 +878,7 @@ struct FSTCachedRawBlock
 	uint64 lastAccess;
 };
 
-struct FSTCachedHashedBlock 
+struct FSTCachedHashedBlock
 {
 	FSTHashedBlock blockData;
 	uint64 lastAccess;
@@ -895,19 +894,17 @@ void FSTVolume::TrimCacheIfRequired(FSTCachedRawBlock** droppedRawBlock, FSTCach
 	for (auto& itr : m_cacheDecryptedHashedBlocks)
 		cacheSize += sizeof(FSTCachedHashedBlock) + sizeof(FSTHashedBlock);
 	// only trim if cache is full (larger than 2MB)
-	if (cacheSize < 2*1024*1024) // 2MB
+	if (cacheSize < 2 * 1024 * 1024) // 2MB
 		return;
 	// scan both cache lists to find least recently accessed block to drop
-	auto dropRawItr = std::min_element(m_cacheDecryptedRawBlocks.begin(), m_cacheDecryptedRawBlocks.end(), [](const auto& a, const auto& b) -> bool
-										{ return a.second->lastAccess < b.second->lastAccess; });
-	auto dropHashedItr = std::min_element(m_cacheDecryptedHashedBlocks.begin(), m_cacheDecryptedHashedBlocks.end(), [](const auto& a, const auto& b) -> bool
-										{ return a.second->lastAccess < b.second->lastAccess; });
+	auto dropRawItr = std::min_element(m_cacheDecryptedRawBlocks.begin(), m_cacheDecryptedRawBlocks.end(), [](const auto& a, const auto& b) -> bool { return a.second->lastAccess < b.second->lastAccess; });
+	auto dropHashedItr = std::min_element(m_cacheDecryptedHashedBlocks.begin(), m_cacheDecryptedHashedBlocks.end(), [](const auto& a, const auto& b) -> bool { return a.second->lastAccess < b.second->lastAccess; });
 	uint64 lastAccess = std::numeric_limits<uint64>::max();
-	if(dropRawItr != m_cacheDecryptedRawBlocks.end())
+	if (dropRawItr != m_cacheDecryptedRawBlocks.end())
 		lastAccess = dropRawItr->second->lastAccess;
-	if(dropHashedItr != m_cacheDecryptedHashedBlocks.end())
+	if (dropHashedItr != m_cacheDecryptedHashedBlocks.end())
 		lastAccess = std::min<uint64>(lastAccess, dropHashedItr->second->lastAccess);
-	if(dropRawItr != m_cacheDecryptedRawBlocks.end() && dropRawItr->second->lastAccess == lastAccess)
+	if (dropRawItr != m_cacheDecryptedRawBlocks.end() && dropRawItr->second->lastAccess == lastAccess)
 	{
 		if (droppedRawBlock)
 			*droppedRawBlock = dropRawItr->second;
@@ -916,7 +913,7 @@ void FSTVolume::TrimCacheIfRequired(FSTCachedRawBlock** droppedRawBlock, FSTCach
 		m_cacheDecryptedRawBlocks.erase(dropRawItr);
 		return;
 	}
-	else if(dropHashedItr != m_cacheDecryptedHashedBlocks.end() && dropHashedItr->second->lastAccess == lastAccess)
+	else if (dropHashedItr != m_cacheDecryptedHashedBlocks.end() && dropHashedItr->second->lastAccess == lastAccess)
 	{
 		if (droppedHashedBlock)
 			*droppedHashedBlock = dropHashedItr->second;
@@ -929,7 +926,7 @@ void FSTVolume::TrimCacheIfRequired(FSTCachedRawBlock** droppedRawBlock, FSTCach
 void FSTVolume::DetermineUnhashedBlockIV(uint32 clusterIndex, uint32 blockIndex, NCrypto::AesIv& ivOut)
 {
 	ivOut = {};
-	if(blockIndex == 0)
+	if (blockIndex == 0)
 	{
 		ivOut.iv[0] = (uint8)(clusterIndex >> 8);
 		ivOut.iv[1] = (uint8)(clusterIndex >> 0);
@@ -996,22 +993,22 @@ FSTCachedRawBlock* FSTVolume::GetDecryptedRawBlock(uint32 clusterIndex, uint32 b
 	std::copy(block->blockData.rawData.data() + m_sectorSize - NCrypto::AesIv::SIZE, block->blockData.rawData.data() + m_sectorSize, block->ivForNextBlock.iv);
 	AES128_CBC_decrypt(block->blockData.rawData.data(), block->blockData.rawData.data(), m_sectorSize, m_partitionTitlekey.b, iv.iv);
 	// if this is the next block, then hash it
-	if(cluster.hasContentHash)
+	if (cluster.hasContentHash)
 	{
-		if(cluster.singleHashNumBlocksHashed == blockIndex)
+		if (cluster.singleHashNumBlocksHashed == blockIndex)
 		{
 			cemu_assert_debug(!(cluster.contentSize % m_sectorSize)); // size should be multiple of sector size? Regardless, the hashing code below can handle non-aligned sizes
 			bool isLastBlock = blockIndex == (std::max<uint32>(cluster.contentSize / m_sectorSize, 1) - 1);
 			uint32 hashSize = m_sectorSize;
-			if(isLastBlock)
-				hashSize = cluster.contentSize - (uint64)blockIndex*m_sectorSize;
+			if (isLastBlock)
+				hashSize = cluster.contentSize - (uint64)blockIndex * m_sectorSize;
 			EVP_DigestUpdate(cluster.singleHashCtx.get(), block->blockData.rawData.data(), hashSize);
 			cluster.singleHashNumBlocksHashed++;
-			if(isLastBlock)
+			if (isLastBlock)
 			{
 				uint8 hash[32];
 				EVP_DigestFinal_ex(cluster.singleHashCtx.get(), hash, nullptr);
-				if(memcmp(hash, cluster.contentHash32, cluster.contentHashIsSHA1 ? 20 : 32) != 0)
+				if (memcmp(hash, cluster.contentHash32, cluster.contentHashIsSHA1 ? 20 : 32) != 0)
 				{
 					cemuLog_log(LogType::Force, "FST: Raw section hash mismatch");
 					delete block;
@@ -1058,7 +1055,7 @@ FSTCachedHashedBlock* FSTVolume::GetDecryptedHashedBlock(uint32 clusterIndex, ui
 	uint8 iv[16]{};
 	AES128_CBC_decrypt(block->blockData.getHashData(), block->blockData.getHashData(), BLOCK_HASH_SIZE, m_partitionTitlekey.b, iv);
 	// decrypt file data
-	AES128_CBC_decrypt(block->blockData.getFileData(), block->blockData.getFileData(), BLOCK_FILE_SIZE, m_partitionTitlekey.b, block->blockData.getH0Hash(blockIndex%16));
+	AES128_CBC_decrypt(block->blockData.getFileData(), block->blockData.getFileData(), BLOCK_FILE_SIZE, m_partitionTitlekey.b, block->blockData.getH0Hash(blockIndex % 16));
 	// compare with H0 to verify data integrity
 	NCrypto::CHash160 h0;
 	SHA1(block->blockData.getFileData(), BLOCK_FILE_SIZE, h0.b);
@@ -1086,7 +1083,7 @@ uint32 FSTVolume::ReadFile_HashModeRaw(uint32 clusterIndex, FSTEntry& entry, uin
 	uint32 remainingReadSize = readSize;
 	while (remainingReadSize > 0)
 	{
-		const FSTCachedRawBlock* rawBlock = this->GetDecryptedRawBlock(clusterIndex, absFileOffset/m_sectorSize);
+		const FSTCachedRawBlock* rawBlock = this->GetDecryptedRawBlock(clusterIndex, absFileOffset / m_sectorSize);
 		if (!rawBlock)
 			break;
 		uint32 blockOffset = (uint32)(absFileOffset % m_sectorSize);
@@ -1109,7 +1106,7 @@ uint32 FSTVolume::ReadFile_HashModeHashed(uint32 clusterIndex, FSTEntry& entry, 
 		+0x0240		Hash20[16]		H2 hashes
 		+0x03C0		uint8[64]		padding
 		+0x0400		uint8[0xFC00]	fileData
-	
+
 		The hash part (0-0x3FF) uses AES-CBC with IV initialized to zero
 		The file part (0x400 - 0xFFFF) uses AES-CBC with IV initialized to block->h0Hash[blockIndex % 16]
 
@@ -1192,7 +1189,7 @@ FSTVolume::~FSTVolume()
 bool FSTVerifier::VerifyContentFile(FileStream* fileContent, const NCrypto::AesKey* key, uint32 contentIndex, uint32 contentSize, uint32 contentSizePadded, bool isSHA1, const uint8* tmdContentHash)
 {
 	cemu_assert_debug(isSHA1); // test this case
-	cemu_assert_debug(((contentSize+0xF)&~0xF) == contentSizePadded);
+	cemu_assert_debug(((contentSize + 0xF) & ~0xF) == contentSizePadded);
 
 	std::vector<uint8> buffer;
 	buffer.resize(64 * 1024);
@@ -1206,7 +1203,7 @@ bool FSTVerifier::VerifyContentFile(FileStream* fileContent, const NCrypto::AesK
 	uint64 remainingBytes = contentSize;
 	uint8 calculatedHash[SHA256_DIGEST_LENGTH];
 
-	EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
 	EVP_DigestInit(ctx, isSHA1 ? EVP_sha1() : EVP_sha256());
 
 	while (remainingBytes > 0)
@@ -1263,8 +1260,8 @@ bool FSTVerifier::VerifyHashedContentFile(FileStream* fileContent, const NCrypto
 			uint32 h1Index = ((h0Index - 15) / 16);
 
 			NCrypto::CHash160 h1;
-			SHA1((unsigned char *) (h0List.data() + h1Index * 16), sizeof(NCrypto::CHash160) * 16, h1.b);
-			if (memcmp(h1.b, block.getH1Hash(h1Index&0xF), sizeof(h1.b)) != 0)
+			SHA1((unsigned char*)(h0List.data() + h1Index * 16), sizeof(NCrypto::CHash160) * 16, h1.b);
+			if (memcmp(h1.b, block.getH1Hash(h1Index & 0xF), sizeof(h1.b)) != 0)
 				return false;
 		}
 		// todo - repeat same for H1 and H2

@@ -4,7 +4,6 @@
 #include "Cemu/PPCAssembler/ppcAssembler.h"
 #include "Cafe/OS/RPL/rpl_structs.h"
 
-
 sint32 GraphicPack2::GetLengthWithoutComment(const char* str, size_t length)
 {
 	sint32 index = 0;
@@ -27,7 +26,7 @@ sint32 GraphicPack2::GetLengthWithoutComment(const char* str, size_t length)
 void GraphicPack2::LogPatchesSyntaxError(sint32 lineNumber, std::string_view errorMsg)
 {
 	cemuLog_log(LogType::Force, "Syntax error while parsing patch for graphic pack '{}':", _pathToUtf8(this->GetRulesPath()));
-	if(lineNumber >= 0)
+	if (lineNumber >= 0)
 		cemuLog_log(LogType::Force, fmt::format("Line {0}: {1}", lineNumber, errorMsg));
 	else
 		cemuLog_log(LogType::Force, fmt::format("{0}", errorMsg));
@@ -44,8 +43,8 @@ enum class RAW_HEX_PARSE_RESULT
 static bool _isHexDigit(char c)
 {
 	return (c >= '0' && c <= '9') ||
-		(c >= 'a' && c <= 'f') ||
-		(c >= 'A' && c <= 'F');
+		   (c >= 'a' && c <= 'f') ||
+		   (c >= 'A' && c <= 'F');
 }
 
 static uint8 _hexDigitToValue(char c)
@@ -59,7 +58,9 @@ static uint8 _hexDigitToValue(char c)
 
 static RAW_HEX_PARSE_RESULT _parseRawHexPatchData(std::string_view text, std::vector<uint8>& outData, std::string& errorMsg)
 {
-	auto isWhitespace = [](char c) { return c == ' ' || c == '\t'; };
+	auto isWhitespace = [](char c) {
+		return c == ' ' || c == '\t';
+	};
 	size_t index = 0;
 	bool parsedAnyValue = false;
 	while (index < text.size())
@@ -137,7 +138,6 @@ void GraphicPack2::AddPatchGroup(PatchGroup* group)
 				codeCavePatchedBytes += patchData->getSize();
 			}
 		}
-
 	}
 	if (codeCavePatchedBytes < (codeCaveMaxAddr / 8))
 	{
@@ -177,7 +177,6 @@ void GraphicPack2::ParseCemuhookPatchesTxtInternal(MemStreamReader& patchesStrea
 			sint32 groupNameLength = parser.skipToCharacter(']');
 			if (groupNameLength < 0)
 			{
-
 				LogPatchesSyntaxError(lineNumber, "Expected ']'");
 				CancelParsingPatches();
 				return;
@@ -235,7 +234,7 @@ void GraphicPack2::ParseCemuhookPatchesTxtInternal(MemStreamReader& patchesStrea
 					return;
 				}
 				std::vector<PPCAssemblerReloc> noRelocs;
-				currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchedAddress, { rawPatchData.data(), rawPatchData.size() }, noRelocs));
+				currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchedAddress, {rawPatchData.data(), rawPatchData.size()}, noRelocs));
 				continue;
 			}
 			// assemble instruction
@@ -247,7 +246,7 @@ void GraphicPack2::ParseCemuhookPatchesTxtInternal(MemStreamReader& patchesStrea
 				CancelParsingPatches();
 				return;
 			}
-			currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchedAddress, { ctx.outputData.data(), ctx.outputData.size() }, ctx.list_relocs));
+			currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchedAddress, {ctx.outputData.data(), ctx.outputData.size()}, ctx.list_relocs));
 		}
 		else if (parser.matchWordI("moduleMatches"))
 		{
@@ -290,7 +289,7 @@ void GraphicPack2::ParseCemuhookPatchesTxtInternal(MemStreamReader& patchesStrea
 		{
 			// Cemuhook requires that user defined symbols start with _ but we are more lenient and allow them to start with letters too
 			// the downside is that there is some ambiguity and parsing gets a little bit more complex
-			
+
 			// check for <symbolName> = pattern
 			StringTokenParser bakParser;
 			const char* symbolStr;
@@ -326,7 +325,7 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 	sint32 lineNumber = 0;
 	PatchGroup* currentGroup = nullptr;
 
-	struct  
+	struct
 	{
 		void reset()
 		{
@@ -358,16 +357,15 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 
 		uint32 currentOrigin{};
 		uint32 codeCaveOrigin{};
-	}originInfo;
+	} originInfo;
 	// labels dont get emitted immediately, instead they are assigned a VA after the next alignment zone
-	std::vector<PatchEntryLabel*> scheduledLabels; 
+	std::vector<PatchEntryLabel*> scheduledLabels;
 	// this is to prevent code like this from putting alignment bytes after the label. (The label 'sticks' to the data after it)
 	// .byte 123
 	// Label:
 	// BLR
 
-	auto flushLabels = [&]()
-	{
+	auto flushLabels = [&]() {
 		// flush remaining labels
 		for (auto& itr : scheduledLabels)
 		{
@@ -443,12 +441,12 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 			// read the checksums
 			while (true)
 			{
-                if (parser.matchWordI("rpx"))
-                {
-                   	currentGroup->m_isRpxOnlyTarget = true;
-                   	break;
-                }
-			
+				if (parser.matchWordI("rpx"))
+				{
+					currentGroup->m_isRpxOnlyTarget = true;
+					break;
+				}
+
 				uint32 checksum = 0;
 				if (parser.parseU32(checksum) == false)
 				{
@@ -518,7 +516,7 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 				// keyword codecave means we set the origin to the end of the current known codecave size
 				originInfo.setOriginCodeCave();
 			}
-			else if(parser.parseU32(originAddress))
+			else if (parser.parseU32(originAddress))
 			{
 				// hex address
 				originInfo.setOrigin(originAddress);
@@ -533,24 +531,24 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 		}
 		else if (parser.matchWordI(".callback"))
 		{
-		    if (parser.matchWordI("entry"))
-    		{
-                const char* symbolStr;
-    			sint32 symbolLen;
-    		    if (parser.parseSymbolName(symbolStr, symbolLen))
-    		    {
-    				currentGroup->list_callbacks.push_back(std::make_pair(std::string(symbolStr, static_cast<size_t>(symbolLen)), GPCallbackType::Entry));
-    				continue;
-    		    }
-    		    else
-    		    {
-                    LogPatchesSyntaxError(lineNumber, "'.callback' must reference a symbol after the type");
-                    CancelParsingPatches();
-                    return false;
-    		    }
-    		}
-		    else
-		    {
+			if (parser.matchWordI("entry"))
+			{
+				const char* symbolStr;
+				sint32 symbolLen;
+				if (parser.parseSymbolName(symbolStr, symbolLen))
+				{
+					currentGroup->list_callbacks.push_back(std::make_pair(std::string(symbolStr, static_cast<size_t>(symbolLen)), GPCallbackType::Entry));
+					continue;
+				}
+				else
+				{
+					LogPatchesSyntaxError(lineNumber, "'.callback' must reference a symbol after the type");
+					CancelParsingPatches();
+					return false;
+				}
+			}
+			else
+			{
 				LogPatchesSyntaxError(lineNumber, "Unrecognized type for '.callback'");
 				CancelParsingPatches();
 				return false;
@@ -597,7 +595,7 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 			}
 			scheduledLabels.clear();
 			std::vector<PPCAssemblerReloc> noRelocs;
-			currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchAddress, { rawPatchData.data(), rawPatchData.size() }, noRelocs));
+			currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, patchAddress, {rawPatchData.data(), rawPatchData.size()}, noRelocs));
 			continue;
 		}
 
@@ -669,7 +667,7 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 		ctx.forceNoAlignment = overwriteOrigin != INVALID_ORIGIN; // dont auto-align when a fixed address is assigned
 		if (overwriteOrigin != INVALID_ORIGIN)
 			ctx.virtualAddress = overwriteOrigin;
-		else if(originInfo.isValidOrigin())
+		else if (originInfo.isValidOrigin())
 			ctx.virtualAddress = originInfo.currentOrigin;
 		else
 		{
@@ -686,8 +684,8 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 		cemu_assert_debug(ctx.alignmentRequirement != 0);
 		if (overwriteOrigin == INVALID_ORIGIN)
 		{
-			originInfo.incrementOrigin((sint32)ctx.alignmentPaddingSize); // alignment padding	
-			originInfo.incrementOrigin((sint32)ctx.outputData.size()); // instruction size
+			originInfo.incrementOrigin((sint32)ctx.alignmentPaddingSize); // alignment padding
+			originInfo.incrementOrigin((sint32)ctx.outputData.size());	  // instruction size
 		}
 		// flush labels
 		for (auto& itr : scheduledLabels)
@@ -697,7 +695,7 @@ bool GraphicPack2::ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream)
 		}
 		scheduledLabels.clear();
 		// append instruction
-		currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, ctx.virtualAddressAligned, { ctx.outputData.data(), ctx.outputData.size() }, ctx.list_relocs));
+		currentGroup->list_patches.emplace_back(new PatchEntryInstruction(lineNumber, ctx.virtualAddressAligned, {ctx.outputData.data(), ctx.outputData.size()}, ctx.list_relocs));
 	}
 	flushLabels();
 

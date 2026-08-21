@@ -1,7 +1,7 @@
 #pragma once
 
-#define OSSCREEN_TV		(0)
-#define OSSCREEN_DRC	(1)
+#define OSSCREEN_TV (0)
+#define OSSCREEN_DRC (1)
 
 namespace coreinit
 {
@@ -15,4 +15,4 @@ namespace coreinit
 	void OSScreenPutFontEx(uint32 screenIndex, sint32 x, sint32 y, const char* str);
 
 	void InitializeOSScreen();
-}
+} // namespace coreinit

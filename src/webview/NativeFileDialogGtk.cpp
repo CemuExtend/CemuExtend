@@ -8,17 +8,17 @@ namespace WebFrontend
 	namespace
 	{
 		std::optional<std::filesystem::path> Select(void* owner, std::string_view title,
-			GtkFileChooserAction action, std::string_view suggested)
+													GtkFileChooserAction action, std::string_view suggested)
 		{
 			auto* dialog = gtk_file_chooser_dialog_new(std::string(title).c_str(),
-				GTK_WINDOW(owner), action, "_Cancel", GTK_RESPONSE_CANCEL,
-				action == GTK_FILE_CHOOSER_ACTION_OPEN ? "_Open" : "_Save",
-				GTK_RESPONSE_ACCEPT, nullptr);
+													   GTK_WINDOW(owner), action, "_Cancel", GTK_RESPONSE_CANCEL,
+													   action == GTK_FILE_CHOOSER_ACTION_OPEN ? "_Open" : "_Save",
+													   GTK_RESPONSE_ACCEPT, nullptr);
 			if (action == GTK_FILE_CHOOSER_ACTION_SAVE)
 			{
 				gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
 				gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog),
-					std::string(suggested).c_str());
+												  std::string(suggested).c_str());
 			}
 			auto* filter = gtk_file_filter_new();
 			gtk_file_filter_set_name(filter, "ZIP save archives (*.zip)");
@@ -36,14 +36,17 @@ namespace WebFrontend
 			gtk_widget_destroy(dialog);
 			return result;
 		}
-	}
+	} // namespace
 
 	std::optional<std::filesystem::path> SelectArchiveToOpen(void* owner,
-		std::string_view title) { return Select(owner, title, GTK_FILE_CHOOSER_ACTION_OPEN, {}); }
+															 std::string_view title)
+	{
+		return Select(owner, title, GTK_FILE_CHOOSER_ACTION_OPEN, {});
+	}
 	std::optional<std::filesystem::path> SelectArchiveToSave(void* owner,
-		std::string_view title, std::string_view suggestedName)
+															 std::string_view title, std::string_view suggestedName)
 	{
 		return Select(owner, title, GTK_FILE_CHOOSER_ACTION_SAVE, suggestedName);
 	}
-}
+} // namespace WebFrontend
 #endif

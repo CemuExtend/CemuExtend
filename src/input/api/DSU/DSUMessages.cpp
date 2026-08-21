@@ -6,7 +6,7 @@ constexpr uint32_t kMagicServer = 'SUSD';
 constexpr uint16_t kProtocolVersion = 1001;
 
 MessageHeader::MessageHeader(uint32_t magic, uint32_t uid)
-	: m_magic(magic), m_protocol_version(kProtocolVersion), m_uid(uid) { }
+	: m_magic(magic), m_protocol_version(kProtocolVersion), m_uid(uid) {}
 
 void MessageHeader::Finalize(size_t size)
 {
@@ -26,17 +26,22 @@ uint32_t MessageHeader::CRC32(size_t size) const
 	return tmp2;
 }
 
-bool MessageHeader::IsClientMessage() const { return m_magic == kMagicClient; }
-bool MessageHeader::IsServerMessage() const { return m_magic == kMagicServer; }
+bool MessageHeader::IsClientMessage() const
+{
+	return m_magic == kMagicClient;
+}
+bool MessageHeader::IsServerMessage() const
+{
+	return m_magic == kMagicServer;
+}
 
 Message::Message(uint32_t magic, uint32_t uid, MessageType type)
 	: MessageHeader(magic, uid), m_message_type(type)
 {
-	
 }
 
 ClientMessage::ClientMessage(uint32_t uid, MessageType message_type)
-	: Message(kMagicClient, uid, message_type) { }
+	: Message(kMagicClient, uid, message_type) {}
 
 VersionRequest::VersionRequest(uint32_t uid)
 	: ClientMessage(uid, MessageType::Version)

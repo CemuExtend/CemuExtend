@@ -4,4 +4,3 @@ namespace nsyskbd
 {
 	COSModule* GetModule();
 }
-

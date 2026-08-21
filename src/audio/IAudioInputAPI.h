@@ -4,23 +4,26 @@ class IAudioInputAPI
 {
 	friend class GeneralSettings2;
 
-public:
+  public:
 	class DeviceDescription
 	{
-	public:
+	  public:
 		explicit DeviceDescription(std::wstring name)
-			: m_name(std::move(name)) { }
+			: m_name(std::move(name)) {}
 
 		virtual ~DeviceDescription() = default;
 		virtual std::wstring GetIdentifier() const = 0;
-		const std::wstring& GetName() const { return m_name; }
+		const std::wstring& GetName() const
+		{
+			return m_name;
+		}
 
 		bool operator==(const DeviceDescription& o) const
 		{
 			return GetIdentifier() == o.GetIdentifier();
 		}
 
-	private:
+	  private:
 		std::wstring m_name;
 	};
 
@@ -38,10 +41,19 @@ public:
 	virtual ~IAudioInputAPI() = default;
 	virtual AudioInputAPI GetType() const = 0;
 
-	sint32 GetChannels() const { return m_channels; }
+	sint32 GetChannels() const
+	{
+		return m_channels;
+	}
 
-	virtual sint32 GetVolume() const { return m_volume; }
-	virtual void SetVolume(sint32 volume) { m_volume = volume; }
+	virtual sint32 GetVolume() const
+	{
+		return m_volume;
+	}
+	virtual void SetVolume(sint32 volume)
+	{
+		m_volume = volume;
+	}
 
 	virtual bool ConsumeBlock(sint16* data) = 0;
 	virtual bool Play() = 0;
@@ -55,7 +67,7 @@ public:
 	static std::unique_ptr<IAudioInputAPI> CreateDevice(AudioInputAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample);
 	static std::vector<DeviceDescriptionPtr> GetDevices(AudioInputAPI api);
 
-protected:
+  protected:
 	uint32 m_samplerate, m_channels, m_samplesPerBlock, m_bitsPerSample;
 	uint32 m_bytesPerBlock;
 
@@ -63,7 +75,7 @@ protected:
 
 	static std::array<bool, AudioInputAPIEnd> s_availableApis;
 
-private:
+  private:
 };
 
 using AudioInputAPIPtr = std::unique_ptr<IAudioInputAPI>;

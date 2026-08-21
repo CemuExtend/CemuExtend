@@ -11,19 +11,25 @@
 #include <functional>
 #include <memory>
 
-namespace Application { class EmulationController; }
-namespace Host { class IPathProvider; }
+namespace Application
+{
+	class EmulationController;
+}
+namespace Host
+{
+	class IPathProvider;
+}
 
 class GettingStartedDialog : public wxDialog
 {
-public:
+  public:
 	GettingStartedDialog(Application::EmulationController& emulationController,
-		std::function<bool()> escapeDown,
-		std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
-		std::shared_ptr<Host::IPathProvider> pathProvider,
-		wxWindow* parent = nullptr);
+						 std::function<bool()> escapeDown,
+						 std::shared_ptr<class IWxUiDispatcher> uiDispatcher,
+						 std::shared_ptr<Host::IPathProvider> pathProvider,
+						 wxWindow* parent = nullptr);
 
-private:
+  private:
 	wxPanel* CreatePage1();
 	wxPanel* CreatePage2();
 	void ApplySettings();
@@ -50,12 +56,12 @@ private:
 		wxStaticText* gamePathText{};
 		wxStaticText* gamePathText2{};
 		wxDirPickerCtrl* gamePathPicker{};
-	}m_page1;
+	} m_page1;
 
 	struct
 	{
 		wxCheckBox* fullscreenCheckbox;
 		wxCheckBox* separateCheckbox;
 		wxCheckBox* updateCheckbox;
-	}m_page2;
+	} m_page2;
 };

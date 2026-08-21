@@ -60,10 +60,10 @@ namespace Application
 
 	class IFrontendSettingsService
 	{
-	public:
+	  public:
 		virtual ~IFrontendSettingsService() = default;
 		[[nodiscard]] virtual FrontendSettingsSnapshot GetFrontendSettings() const = 0;
 		[[nodiscard]] virtual FrontendSettingsResult ApplyFrontendSettings(
 			const FrontendSettingsUpdate& update) = 0;
 	};
-}
+} // namespace Application

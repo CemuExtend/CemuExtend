@@ -5,7 +5,7 @@
 
 class CachedFBOGL : public LatteCachedFBO
 {
-public:
+  public:
 	CachedFBOGL(uint64 key)
 		: LatteCachedFBO(key)
 	{
@@ -67,7 +67,7 @@ public:
 		SetDrawBuffers();
 	}
 
-private:
+  private:
 	void SetDrawBuffers()
 	{
 		GLenum buffers[8];
@@ -96,6 +96,6 @@ private:
 			glDrawBuffers(bufferCount, buffers);
 	}
 
-public:
+  public:
 	GLuint glId_fbo{};
 };

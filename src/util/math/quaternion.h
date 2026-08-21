@@ -3,14 +3,13 @@
 #include <tuple>
 #include "util/helpers/helpers.h"
 #include "util/math/vector3.h"
-#define DEG2RAD(__d__) ((__d__ * M_PI) / 180.0f )
+#define DEG2RAD(__d__) ((__d__ * M_PI) / 180.0f)
 #define RAD2DEG(__r__) ((__r__ * 180.0f) / M_PI)
 
-
-template<typename T> 
+template<typename T>
 class Quaternion
 {
-public:
+  public:
 	T w;
 	T x;
 	T y;
@@ -65,8 +64,7 @@ public:
 		return Vector3<T>(
 			2.0f * (x * y + w * z),
 			2.0f * (w * w + y * y) - 1.0f,
-			2.0f * (y * z - w * x)
-			);
+			2.0f * (y * z - w * x));
 	}
 
 	Vector3<T> GetVectorZ() const
@@ -80,9 +78,9 @@ public:
 	Quaternion& operator*=(const Quaternion<T>& rhs)
 	{
 		Assign(w * rhs.w - x * rhs.x - y * rhs.y - z * rhs.z,
-			w * rhs.x + x * rhs.w + y * rhs.z - z * rhs.y,
-			w * rhs.y - x * rhs.z + y * rhs.w + z * rhs.x,
-			w * rhs.z + x * rhs.y - y * rhs.x + z * rhs.w);
+			   w * rhs.x + x * rhs.w + y * rhs.z - z * rhs.y,
+			   w * rhs.y - x * rhs.z + y * rhs.w + z * rhs.x,
+			   w * rhs.z + x * rhs.y - y * rhs.x + z * rhs.w);
 		return *this;
 	}
 
@@ -100,20 +98,19 @@ public:
 		lhs *= rhs;
 		return lhs;
 	}
-
 };
 
-template <typename T>
-Quaternion<T>::Quaternion() 
+template<typename T>
+Quaternion<T>::Quaternion()
 	: w(), x(), y(), z()
 {}
 
-template <typename T>
+template<typename T>
 Quaternion<T>::Quaternion(const T& w, const T& x, const T& y, const T& z)
 	: w(w), x(x), y(y), z(z)
 {}
 
-template <typename T>
+template<typename T>
 Quaternion<T>::Quaternion(float x, float y, float z)
 {
 	float pitch = DEG2RAD(x);
@@ -146,47 +143,47 @@ Quaternion<T> Quaternion<T>::FromAngleAxis(float inAngle, float inX, float inY, 
 	return result;
 }
 
-template <typename T>
+template<typename T>
 std::tuple<Vector3<T>, Vector3<T>, Vector3<T>> Quaternion<T>::GetRotationMatrix()
 {
-	float sqw = w*w;
-	float sqx = x*x;
-	float sqy = y*y;
-	float sqz = z*z;
+	float sqw = w * w;
+	float sqx = x * x;
+	float sqy = y * y;
+	float sqz = z * z;
 
 	// invs (inverse square length) is only required if quaternion is not already normalised
 	float invs = 1.0f / (sqx + sqy + sqz + sqw);
-	
+
 	Vector3<T> v1, v2, v3;
 	v1.x = (sqx - sqy - sqz + sqw) * invs; // since sqw + sqx + sqy + sqz =1/invs*invs
 	v2.y = (-sqx + sqy - sqz + sqw) * invs;
 	v3.z = (-sqx - sqy + sqz + sqw) * invs;
 
-	float tmp1 = x*y;
-	float tmp2 = z*w;
-	v2.x = 2.0 * (tmp1 + tmp2)*invs;
-	v1.y = 2.0 * (tmp1 - tmp2)*invs;
+	float tmp1 = x * y;
+	float tmp2 = z * w;
+	v2.x = 2.0 * (tmp1 + tmp2) * invs;
+	v1.y = 2.0 * (tmp1 - tmp2) * invs;
 
-	tmp1 = x*z;
-	tmp2 = y*w;
-	v3.x = 2.0 * (tmp1 - tmp2)*invs;
-	v1.z = 2.0 * (tmp1 + tmp2)*invs;
+	tmp1 = x * z;
+	tmp2 = y * w;
+	v3.x = 2.0 * (tmp1 - tmp2) * invs;
+	v1.z = 2.0 * (tmp1 + tmp2) * invs;
 
-	tmp1 = y*z;
-	tmp2 = x*w;
-	v3.y = 2.0 * (tmp1 + tmp2)*invs;
-	v2.z = 2.0 * (tmp1 - tmp2)*invs;
+	tmp1 = y * z;
+	tmp2 = x * w;
+	v3.y = 2.0 * (tmp1 + tmp2) * invs;
+	v2.z = 2.0 * (tmp1 - tmp2) * invs;
 
 	return std::make_tuple(v1, v2, v3);
 }
 
-template <typename T>
+template<typename T>
 std::tuple<Vector3<T>, Vector3<T>, Vector3<T>> Quaternion<T>::GetTransposedRotationMatrix()
 {
-	float sqw = w*w;
-	float sqx = x*x;
-	float sqy = y*y;
-	float sqz = z*z;
+	float sqw = w * w;
+	float sqx = x * x;
+	float sqy = y * y;
+	float sqz = z * z;
 
 	// invs (inverse square length) is only required if quaternion is not already normalised
 	float invs = 1.0f / (sqx + sqy + sqz + sqw);
@@ -196,20 +193,20 @@ std::tuple<Vector3<T>, Vector3<T>, Vector3<T>> Quaternion<T>::GetTransposedRotat
 	v2.y = (-sqx + sqy - sqz + sqw) * invs;
 	v3.z = (-sqx - sqy + sqz + sqw) * invs;
 
-	float tmp1 = x*y;
-	float tmp2 = z*w;
-	v1.y = 2.0 * (tmp1 + tmp2)*invs;
-	v2.x = 2.0 * (tmp1 - tmp2)*invs;
+	float tmp1 = x * y;
+	float tmp2 = z * w;
+	v1.y = 2.0 * (tmp1 + tmp2) * invs;
+	v2.x = 2.0 * (tmp1 - tmp2) * invs;
 
-	tmp1 = x*z;
-	tmp2 = y*w;
-	v1.z = 2.0 * (tmp1 - tmp2)*invs;
-	v3.x = 2.0 * (tmp1 + tmp2)*invs;
+	tmp1 = x * z;
+	tmp2 = y * w;
+	v1.z = 2.0 * (tmp1 - tmp2) * invs;
+	v3.x = 2.0 * (tmp1 + tmp2) * invs;
 
-	tmp1 = y*z;
-	tmp2 = x*w;
-	v2.z = 2.0 * (tmp1 + tmp2)*invs;
-	v3.y = 2.0 * (tmp1 - tmp2)*invs;
+	tmp1 = y * z;
+	tmp2 = x * w;
+	v2.z = 2.0 * (tmp1 + tmp2) * invs;
+	v3.y = 2.0 * (tmp1 - tmp2) * invs;
 
 	return std::make_tuple(v1, v2, v3);
 }

@@ -46,7 +46,11 @@ namespace Application
 		std::optional<std::string> wiimoteExtension;
 		PhysicalControllerSettings settings;
 	};
-	struct CapturedInputButton { std::uint64_t id{}; std::string label; };
+	struct CapturedInputButton
+	{
+		std::uint64_t id{};
+		std::string label;
+	};
 
 	struct InputMappingInfo
 	{
@@ -101,19 +105,25 @@ namespace Application
 		InputSettingsError error{InputSettingsError::None};
 		std::string diagnostic;
 		std::vector<InputDeviceCandidate> devices;
-		[[nodiscard]] explicit operator bool() const { return error == InputSettingsError::None; }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == InputSettingsError::None;
+		}
 	};
 
 	struct InputSettingsResult
 	{
 		InputSettingsError error{InputSettingsError::None};
 		std::string diagnostic;
-		[[nodiscard]] explicit operator bool() const { return error == InputSettingsError::None; }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == InputSettingsError::None;
+		}
 	};
 
 	class IInputSettingsService
 	{
-	public:
+	  public:
 		virtual ~IInputSettingsService() = default;
 		[[nodiscard]] virtual InputSettingsModel GetInputSettings() const = 0;
 		[[nodiscard]] virtual InputDeviceEnumerationResult EnumerateInputDevices(
@@ -144,4 +154,4 @@ namespace Application
 		[[nodiscard]] virtual InputSettingsResult DeleteInputProfile(
 			std::string_view profile) = 0;
 	};
-}
+} // namespace Application

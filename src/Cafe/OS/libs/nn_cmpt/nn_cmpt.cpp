@@ -20,7 +20,7 @@ namespace nn::cmpt
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_cmpt";
@@ -32,11 +32,11 @@ namespace nn::cmpt
 			cafeExportRegister("nn_cmpt", CMPTGetDataSize, LogType::Placeholder);
 		};
 
-	}s_COSnnCmptModule;
+	} s_COSnnCmptModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnCmptModule;
 	}
 
-}
+} // namespace nn::cmpt

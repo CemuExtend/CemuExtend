@@ -29,12 +29,12 @@ BreakpointWindow::BreakpointWindow(wxFrame& parent, const wxPoint& main_position
 	: wxFrame(&parent, wxID_ANY, _("Breakpoints"), wxDefaultPosition, wxSize(420, 250), wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxFRAME_FLOAT_ON_PARENT)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	
+
 	wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
 	m_breakpoints = new wxListView(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_breakpoints->EnableCheckBoxes(true);
-	
+
 	wxListItem col0;
 	col0.SetId(ColumnEnabled);
 	col0.SetText(_("On"));
@@ -201,7 +201,7 @@ void BreakpointWindow::OnLeftDClick(wxMouseEvent& event)
 
 		const auto item = m_breakpoints->GetItemText(index, ColumnAddress);
 		const auto address = std::stoul(item.ToStdString(), nullptr, 16);
-		
+
 		bool isLoggingBP = bp->bpType == DEBUGGER_BP_T_LOGGING;
 		const wxString dialogTitle = isLoggingBP ? _("Enter a new logging message") : _("Enter a new comment");
 		const wxString dialogMessage = isLoggingBP ? _("Set logging message when code at address %08x is ran.\nUse placeholders like {r3} or {f3} to log register values") : _("Set comment for breakpoint at address %08x");
@@ -292,9 +292,8 @@ void BreakpointWindow::OnContextMenuClick(wxCommandEvent& evt)
 		try
 		{
 			debugger_addParserSymbols(parser);
-			newBreakpointAddress = parser.IsConstantExpression("0x"+value) ? (uint32)parser.Evaluate("0x"+value) : (uint32)parser.Evaluate(value);
-		}
-		catch (const std::exception& ex)
+			newBreakpointAddress = parser.IsConstantExpression("0x" + value) ? (uint32)parser.Evaluate("0x" + value) : (uint32)parser.Evaluate(value);
+		} catch (const std::exception& ex)
 		{
 			wxMessageBox(ex.what(), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;

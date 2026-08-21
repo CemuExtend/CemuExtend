@@ -24,8 +24,8 @@ namespace coreinit
 		/* +0x0C */ uint32be uknFromParamR7; // boolean?
 		/* +0x10 */ uint32be ukn10;			 // set to zero on init
 		/* +0x14 */ uint32be entrySize1;
-		/* +0x18 */ uint32be entrySize2;	 // set to same value as entrySize1
-		/* +0x1C */ uint32be entryCount;	 // actual number of used entries
+		/* +0x18 */ uint32be entrySize2; // set to same value as entrySize1
+		/* +0x1C */ uint32be entryCount; // actual number of used entries
 		/* +0x20 */ MEMPTR<uint8> entryStartPtr;
 		/* +0x24 */ uint32be entryCountMul4;
 		/* +0x28 */ IPCFifo_t fifo;

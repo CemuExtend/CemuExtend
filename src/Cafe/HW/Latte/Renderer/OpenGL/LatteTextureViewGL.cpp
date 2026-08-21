@@ -8,7 +8,7 @@ LatteTextureViewGL::LatteTextureViewGL(LatteTextureGL* texture, Latte::E_DIM dim
 	: LatteTextureView(texture, firstMip, mipCount, firstSlice, sliceCount, dim, format, registerView)
 {
 	if (dim != texture->dim || format != texture->format ||
-		firstSlice != 0 || firstMip != 0 || mipCount != texture->mipLevels || sliceCount != texture->depth ||	
+		firstSlice != 0 || firstMip != 0 || mipCount != texture->mipLevels || sliceCount != texture->depth ||
 		forceCreateNewTexId)
 	{
 		LatteTextureGL::GenerateEmptyTextureFromGX2Dim(dim, glTexId, glTexTarget, false);
@@ -56,7 +56,7 @@ void LatteTextureViewGL::InitAliasView()
 {
 	const auto texture = (LatteTextureGL*)baseTexture;
 	// compute internal format
-	if(texture->overwriteInfo.hasFormatOverwrite)
+	if (texture->overwriteInfo.hasFormatOverwrite)
 	{
 		cemu_assert_debug(format == texture->format);
 		glInternalFormat = texture->glInternalFormat; // for format overwrite no aliasing is allowed and thus we always inherit the internal format of the base texture
@@ -109,7 +109,7 @@ void LatteTextureViewGL::InitAliasView()
 	if (useGLDebugNames)
 	{
 		char textureDebugLabel[512];
-		sprintf(textureDebugLabel, "%08x_f%04x_p%04x_viewFMT%04x%s_org%d", baseTexture->physAddress, (uint32)baseTexture->format, baseTexture->pitch, (uint32)this->format, baseTexture->isDepth?"_d":"", texture->glId_texture);
+		sprintf(textureDebugLabel, "%08x_f%04x_p%04x_viewFMT%04x%s_org%d", baseTexture->physAddress, (uint32)baseTexture->format, baseTexture->pitch, (uint32)this->format, baseTexture->isDepth ? "_d" : "", texture->glId_texture);
 		glObjectLabel(GL_TEXTURE, glTexId, -1, textureDebugLabel);
 	}
 }

@@ -89,31 +89,42 @@ NetworkService GetNetworkServiceFromSelection(int selection)
 
 class wxDeviceDescription : public wxClientData
 {
-public:
+  public:
 	wxDeviceDescription(const IAudioAPI::DeviceDescriptionPtr& description) : m_description(description) {}
-	const IAudioAPI::DeviceDescriptionPtr& GetDescription() const { return m_description; }
-private:
+	const IAudioAPI::DeviceDescriptionPtr& GetDescription() const
+	{
+		return m_description;
+	}
+
+  private:
 	IAudioAPI::DeviceDescriptionPtr m_description;
 };
 
 class wxInputDeviceDescription : public wxClientData
 {
-public:
+  public:
 	wxInputDeviceDescription(const IAudioInputAPI::DeviceDescriptionPtr& description) : m_description(description) {}
-	const IAudioInputAPI::DeviceDescriptionPtr& GetDescription() const { return m_description; }
-private:
+	const IAudioInputAPI::DeviceDescriptionPtr& GetDescription() const
+	{
+		return m_description;
+	}
+
+  private:
 	IAudioInputAPI::DeviceDescriptionPtr m_description;
 };
 
 #ifdef ENABLE_VULKAN
 class wxVulkanUUID : public wxClientData
 {
-public:
+  public:
 	wxVulkanUUID(const WxRendererAdapters::VulkanDevice& info)
 		: m_device_info(info) {}
-	const WxRendererAdapters::VulkanDevice& GetDeviceInfo() const { return m_device_info; }
+	const WxRendererAdapters::VulkanDevice& GetDeviceInfo() const
+	{
+		return m_device_info;
+	}
 
-private:
+  private:
 	WxRendererAdapters::VulkanDevice m_device_info;
 };
 #endif
@@ -121,26 +132,35 @@ private:
 #ifdef ENABLE_METAL
 class wxMetalUUID : public wxClientData
 {
-public:
+  public:
 	wxMetalUUID(const WxRendererAdapters::MetalDevice& info)
 		: m_device_info(info) {}
-	const WxRendererAdapters::MetalDevice& GetDeviceInfo() const { return m_device_info; }
+	const WxRendererAdapters::MetalDevice& GetDeviceInfo() const
+	{
+		return m_device_info;
+	}
 
-private:
+  private:
 	WxRendererAdapters::MetalDevice m_device_info;
 };
 #endif
 
 class wxAccountData : public wxClientData
 {
-public:
+  public:
 	explicit wxAccountData(Application::AccountInfo account)
 		: m_account(account) {}
 
-	Application::AccountInfo& GetAccount() { return m_account; }
-	const Application::AccountInfo& GetAccount() const { return m_account; }
+	Application::AccountInfo& GetAccount()
+	{
+		return m_account;
+	}
+	const Application::AccountInfo& GetAccount() const
+	{
+		return m_account;
+	}
 
-private:
+  private:
 	Application::AccountInfo m_account;
 };
 
@@ -160,7 +180,7 @@ wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
 
 			first_row->Add(new wxStaticText(box, wxID_ANY, _("Language")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
-			wxString language_choices[] = { _("Default") };
+			wxString language_choices[] = {_("Default")};
 			m_language = new wxChoice(box, wxID_ANY, wxDefaultPosition, wxDefaultSize, std::size(language_choices), language_choices);
 			m_language->SetSelection(0);
 			m_language->SetToolTip(_("Changes the interface language of Cemu\nAvailable languages are stored in the translation directory\nA restart will be required after changing the language"));
@@ -202,18 +222,16 @@ wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
 			third_row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
 
 			sint32 checkboxCount = 0;
-			auto CountRowElement = [&]()
-			{
+			auto CountRowElement = [&]() {
 				checkboxCount++;
-				if(checkboxCount != 2)
+				if (checkboxCount != 2)
 					return;
 				third_row->AddSpacer(10);
 				checkboxCount = 0;
 			};
 
-			auto InsertEmptyRow = [&]()
-			{
-				while(checkboxCount != 0)
+			auto InsertEmptyRow = [&]() {
+				while (checkboxCount != 0)
 					CountRowElement();
 				third_row->AddSpacer(10);
 				third_row->AddSpacer(10);
@@ -225,7 +243,7 @@ wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
 			m_save_window_position_size->SetToolTip(_("Restores the last known window position and size when starting Cemu"));
 			third_row->Add(m_save_window_position_size, 0, topflag, 5);
 			CountRowElement();
-			//third_row->AddSpacer(10);
+			// third_row->AddSpacer(10);
 			m_save_padwindow_position_size = new wxCheckBox(box, wxID_ANY, _("Remember pad window position"));
 			m_save_padwindow_position_size->SetToolTip(_("Restores the last known pad window position and size when opening it"));
 			third_row->Add(m_save_padwindow_position_size, 0, topflag, 5);
@@ -281,7 +299,8 @@ wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
 			m_receive_untested_releases->SetToolTip(_("When checking for updates, include brand new and untested releases. These may contain bugs!"));
 			third_row->Add(m_receive_untested_releases, 0, botflag, 5);
 #if BOOST_OS_LINUX
-			if (!std::getenv("APPIMAGE")) {
+			if (!std::getenv("APPIMAGE"))
+			{
 				m_auto_update->Disable();
 			}
 #elif BOOST_OS_BSD // BSD users must update from source so disable auto updates
@@ -405,13 +424,13 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 		m_graphic_api->Bind(wxEVT_CHOICE, &GeneralSettings2::OnGraphicAPISelected, this);
 
 		row->Add(new wxStaticText(box, wxID_ANY, _("Graphics Device")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-		m_graphic_device = new wxChoice(box, wxID_ANY, wxDefaultPosition, { 230, -1 }, api_size, choices);
+		m_graphic_device = new wxChoice(box, wxID_ANY, wxDefaultPosition, {230, -1}, api_size, choices);
 		m_graphic_device->SetSelection(0);
 		m_graphic_device->SetToolTip(_("Select the used graphic device"));
 		row->Add(m_graphic_device, 0, wxALL, 5);
 
 		row->Add(new wxStaticText(box, wxID_ANY, _("VSync")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-		m_vsync = new wxChoice(box, wxID_ANY, wxDefaultPosition, { 230, -1 });
+		m_vsync = new wxChoice(box, wxID_ANY, wxDefaultPosition, {230, -1});
 		m_vsync->SetToolTip(_("Controls the vsync state"));
 		m_vsync->Bind(wxEVT_CHOICE, [](wxCommandEvent& event) {
 			GetConfig().vsync = event.GetSelection();
@@ -455,9 +474,8 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 		targetGammaLabel->SetToolTip(targetGammaTooltip);
 		m_overrideGammaValue->SetToolTip(targetGammaTooltip);
 		m_overrideGammaValue->Bind(wxEVT_SPINCTRLDOUBLE, [](wxSpinDoubleEvent& event) {
-			 GetConfig().overrideGammaValue = event.GetValue();
+			GetConfig().overrideGammaValue = event.GetValue();
 		});
-
 
 		auto displayGammaLabel = new wxStaticText(box, wxID_ANY, _("Display Gamma"));
 		row->Add(displayGammaLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
@@ -470,7 +488,7 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 		m_userDisplayGamma->SetToolTip(displayGammaTooltip);
 		displayGammaLabel->SetToolTip(displayGammaTooltip);
 		m_userDisplayGamma->Bind(wxEVT_SPINCTRLDOUBLE, [](wxSpinDoubleEvent& event) {
-			 GetConfig().userDisplayGamma = event.GetValue();
+			GetConfig().userDisplayGamma = event.GetValue();
 		});
 
 		m_userDisplayisSRGB = new wxCheckBox(box, wxID_ANY, "sRGB");
@@ -499,7 +517,7 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 	}
 
 	{
-		wxString choices[] = { _("Bilinear"), _("Bicubic"), _("Hermite"), _("Nearest Neighbor") };
+		wxString choices[] = {_("Bilinear"), _("Bicubic"), _("Hermite"), _("Nearest Neighbor")};
 		m_upscale_filter = new wxRadioBox(graphics_panel, wxID_ANY, _("Upscale filter"), wxDefaultPosition, wxDefaultSize, std::size(choices), choices, 5, wxRA_SPECIFY_COLS);
 		m_upscale_filter->SetToolTip(_("Upscaling filters are used when the game resolution is smaller than the window size"));
 		m_upscale_filter->Bind(wxEVT_RADIOBOX, [](wxCommandEvent& event) {
@@ -516,7 +534,7 @@ wxPanel* GeneralSettings2::AddGraphicsPage(wxNotebook* notebook)
 	}
 
 	{
-		wxString choices[] = { _("Keep aspect ratio"), _("Stretch") };
+		wxString choices[] = {_("Keep aspect ratio"), _("Stretch")};
 		m_fullscreen_scaling = new wxRadioBox(graphics_panel, wxID_ANY, _("Fullscreen scaling"), wxDefaultPosition, wxDefaultSize, std::size(choices), choices, 5, wxRA_SPECIFY_COLS);
 		m_fullscreen_scaling->SetToolTip(_("Controls the output aspect ratio when it doesn't match the ratio of the game"));
 		m_fullscreen_scaling->Bind(wxEVT_RADIOBOX, [](wxCommandEvent& event) {
@@ -575,7 +593,7 @@ wxPanel* GeneralSettings2::AddAudioPage(wxNotebook* notebook)
 		audio_panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
 	}
 
-	const wxString audio_channel_choices[] = { _("Mono"), _("Stereo") , _("Surround") };
+	const wxString audio_channel_choices[] = {_("Mono"), _("Stereo"), _("Surround")};
 	{
 		auto box = new wxStaticBox(audio_panel, wxID_ANY, _("TV"));
 		auto box_sizer = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -632,7 +650,7 @@ wxPanel* GeneralSettings2::AddAudioPage(wxNotebook* notebook)
 
 		m_pad_device->Bind(wxEVT_CHOICE, &GeneralSettings2::OnAudioDeviceSelected, this);
 
-		const wxString audio_channel_drc_choices[] = { _("Stereo") }; // stereo for now only
+		const wxString audio_channel_drc_choices[] = {_("Stereo")}; // stereo for now only
 
 		audio_pad_row->Add(new wxStaticText(box, wxID_ANY, _("Channels")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 		m_pad_channels = new wxChoice(box, wxID_ANY, wxDefaultPosition, wxDefaultSize, std::size(audio_channel_drc_choices), audio_channel_drc_choices);
@@ -673,7 +691,7 @@ wxPanel* GeneralSettings2::AddAudioPage(wxNotebook* notebook)
 
 		m_input_device->Bind(wxEVT_CHOICE, &GeneralSettings2::OnAudioDeviceSelected, this);
 
-		const wxString audio_channel_drc_choices[] = { _("Mono") }; // mono for now only
+		const wxString audio_channel_drc_choices[] = {_("Mono")}; // mono for now only
 
 		audio_input_row->Add(new wxStaticText(box, wxID_ANY, _("Channels")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 		m_input_channels = new wxChoice(box, wxID_ANY, wxDefaultPosition, wxDefaultSize, std::size(audio_channel_drc_choices), audio_channel_drc_choices);
@@ -736,8 +754,8 @@ wxPanel* GeneralSettings2::AddOverlayPage(wxNotebook* notebook)
 	auto* panel = new wxPanel(notebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	auto* panel_sizer = new wxBoxSizer(wxVERTICAL);
 
-	const wxString positions[]{ _("Disabled"), _("Top left"), _("Top center"), _("Top right"), _("Bottom left"), _("Bottom center"), _("Bottom right") };
-	const wxString text_scale[]{ "50%", "75%", "100%", "125%", "150%", "175%", "200%", "225%", "250%", "275%", "300%" };
+	const wxString positions[]{_("Disabled"), _("Top left"), _("Top center"), _("Top right"), _("Bottom left"), _("Bottom center"), _("Bottom right")};
+	const wxString text_scale[]{"50%", "75%", "100%", "125%", "150%", "175%", "200%", "225%", "250%", "275%", "300%"};
 	{
 		auto box = new wxStaticBox(panel, wxID_ANY, _("Overlay"));
 		auto box_sizer = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -794,7 +812,7 @@ wxPanel* GeneralSettings2::AddOverlayPage(wxNotebook* notebook)
 #if BOOST_OS_WINDOWS
 			using RtlGetVersion_t = LONG(WINAPI*)(PRTL_OSVERSIONINFOW lpVersionInformation);
 			const auto pRtlGetVersion = (RtlGetVersion_t)GetProcAddress(GetModuleHandleA("ntdll.dll"), "RtlGetVersion");
-			//if(IsWindows8Point1OrGreater()) requires manifest
+			// if(IsWindows8Point1OrGreater()) requires manifest
 			RTL_OSVERSIONINFOW info{};
 			// Windows 8.1 	6.3*
 			if (pRtlGetVersion && pRtlGetVersion(&info) == 0 && ((info.dwMajorVersion == 6 && info.dwMinorVersion >= 3) || info.dwMajorVersion > 6))
@@ -868,7 +886,6 @@ wxPanel* GeneralSettings2::AddOverlayPage(wxNotebook* notebook)
 		}
 		box_sizer->Add(settings1_row, 0, wxEXPAND, 5);
 
-
 		panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
 	}
 
@@ -896,7 +913,7 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		content->Add(new wxStaticText(box, wxID_ANY, _("Active account")), 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
 		m_active_account = new wxChoice(box, wxID_ANY);
-		m_active_account->SetMinSize({ 250, -1 });
+		m_active_account->SetMinSize({250, -1});
 		content->Add(m_active_account, 0, wxEXPAND | wxALL, 5);
 		m_active_account->Bind(wxEVT_CHOICE, &GeneralSettings2::OnActiveAccountChanged, this);
 
@@ -920,9 +937,8 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		}
 	}
 
-
 	{
-		wxString choices[] = { _("Offline"),  _("Nintendo"), _("Pretendo"), _("Plasma"), _("Custom") };
+		wxString choices[] = {_("Offline"), _("Nintendo"), _("Pretendo"), _("Plasma"), _("Custom")};
 		m_active_service = new wxRadioBox(online_panel, wxID_ANY, _("Network Service"), wxDefaultPosition, wxDefaultSize, std::size(choices), choices, 5, wxRA_SPECIFY_COLS);
 		if (!NetworkConfig::XMLExists())
 			m_active_service->Enable(4, false);
@@ -933,7 +949,7 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		m_active_service->SetItemToolTip(3, _("Connect to the Plasma Network Service"));
 		m_active_service->SetItemToolTip(4, _("Connect to a custom Network Service (configured via network_services.xml)"));
 
-		m_active_service->Bind(wxEVT_RADIOBOX, &GeneralSettings2::OnAccountServiceChanged,this);
+		m_active_service->Bind(wxEVT_RADIOBOX, &GeneralSettings2::OnAccountServiceChanged, this);
 		online_panel_sizer->Add(m_active_service, 0, wxEXPAND | wxALL, 5);
 
 		if (m_emulationController.IsTitleRunning())
@@ -963,7 +979,6 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 		auto* tutorial_link = new wxHyperlinkCtrl(box, wxID_ANY, _("Online play tutorial"), "https://cemu.info/online-guide");
 		box_sizer->Add(tutorial_link, 0, wxALL, 5);
 
-
 		online_panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
 	}
 
@@ -975,8 +990,8 @@ wxPanel* GeneralSettings2::AddAccountPage(wxNotebook* notebook)
 
 		m_account_grid = new wxPropertyGrid(win, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxPG_HIDE_MARGIN | wxPG_STATIC_SPLITTER);
 		m_account_grid->SetExtraStyle(wxPG_EX_HELP_AS_TOOLTIPS);
-		m_account_grid->SetMinSize({ 300, -1 });
-		//m_account_grid->Append(new wxPropertyCategory("Main"));
+		m_account_grid->SetMinSize({300, -1});
+		// m_account_grid->Append(new wxPropertyCategory("Main"));
 
 		auto* persistent_id_gprop = m_account_grid->Append(new wxStringProperty("PersistentId", kPropertyPersistentId));
 		persistent_id_gprop->SetHelpString(_("The persistent id is the internal folder name used for your saves"));
@@ -1022,7 +1037,7 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	auto* modParent = modBox->GetStaticBox();
 	auto* gameRow = new wxBoxSizer(wxHORIZONTAL);
 	gameRow->Add(new wxStaticText(modParent, wxID_ANY, _("Game")), 0,
-		wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+				 wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 	m_cemuextend_title_choice = new wxChoice(modParent, wxID_ANY);
 	gameRow->Add(m_cemuextend_title_choice, 1, wxRIGHT, 8);
 	auto* refreshMods = new wxButton(modParent, wxID_ANY, _("Refresh"));
@@ -1032,8 +1047,8 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	m_cemod_list = new wxCheckListBox(modParent, wxID_ANY, wxDefaultPosition, wxSize(-1, 110));
 	modBox->Add(m_cemod_list, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 	modBox->Add(new wxStaticText(modParent, wxID_ANY,
-		_("Check a Mod to enable it for this game. Uncheck it to disable it. Changes apply on the next game launch.")),
-		0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+								 _("Check a Mod to enable it for this game. Uncheck it to disable it. Changes apply on the next game launch.")),
+				0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 	m_cemod_status = new wxStaticText(modParent, wxID_ANY, wxEmptyString);
 	modBox->Add(m_cemod_status, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 	m_cemod_details = new wxStaticText(modParent, wxID_ANY, wxEmptyString);
@@ -1043,16 +1058,15 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	auto* permissionParent = permissionBox->GetStaticBox();
 	const std::array<const char*, 6> permissionNames{
 		"Read host state", "Write Mod storage/logging", "Input injection", "Clipboard", "Capture",
-		"Network"
-	};
+		"Network"};
 	for (std::size_t index = 0; index < permissionNames.size(); ++index)
 	{
 		m_cemod_permissions[index] = new wxCheckBox(permissionParent, wxID_ANY,
-			wxString::FromUTF8(permissionNames[index]));
+													wxString::FromUTF8(permissionNames[index]));
 		permissionBox->Add(m_cemod_permissions[index], 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
 	}
 	m_cemod_trust_updates = new wxCheckBox(permissionParent, wxID_ANY,
-		_("Trust future updates to this Mod (keep it enabled after the .cemod file is replaced with a newer version)"));
+										   _("Trust future updates to this Mod (keep it enabled after the .cemod file is replaced with a newer version)"));
 	permissionBox->Add(m_cemod_trust_updates, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
 	auto* modButtons = new wxBoxSizer(wxHORIZONTAL);
 	auto* import = new wxButton(permissionParent, wxID_ANY, _("Import legacy data…"));
@@ -1076,12 +1090,11 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	grid->Add(new wxStaticText(titleParent, wxID_ANY, _("Write")), 0, wxALIGN_CENTER);
 	grid->Add(new wxStaticText(titleParent, wxID_ANY, _("Mapped injection")), 0, wxALIGN_CENTER);
 	const std::array<const char*, 9> names{
-		"Core", "Input", "Logging", "Configuration", "File", "Clipboard", "Window", "Capture", "Diagnostics"
-	};
+		"Core", "Input", "Logging", "Configuration", "File", "Clipboard", "Window", "Capture", "Diagnostics"};
 	for (size_t index = 0; index < names.size(); ++index)
 	{
 		grid->Add(new wxStaticText(titleParent, wxID_ANY, wxString::FromUTF8(names[index])), 0,
-			wxALIGN_CENTER_VERTICAL);
+				  wxALIGN_CENTER_VERTICAL);
 		m_cemuextend_read[index] = new wxCheckBox(titleParent, wxID_ANY, wxEmptyString);
 		m_cemuextend_write[index] = new wxCheckBox(titleParent, wxID_ANY, wxEmptyString);
 		m_cemuextend_inject[index] = new wxCheckBox(titleParent, wxID_ANY, wxEmptyString);
@@ -1095,8 +1108,8 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 	titleParent->SetSizer(titleBox);
 	root->Add(advanced, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 	root->Add(new wxStaticText(panel, wxID_ANY,
-		_("Defaults allow Core, Input read, Logging, Configuration/File read, Window and Diagnostics. Clipboard, Capture, file/config changes and all input injection require an explicit grant.")),
-		0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+							   _("Defaults allow Core, Input read, Logging, Configuration/File read, Window and Diagnostics. Clipboard, Capture, file/config changes and all input injection require an explicit grant.")),
+			  0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 	panel->SetSizer(root);
 
 	m_cemuextend_title_choice->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { LoadCemuExtendGrant(); });
@@ -1116,7 +1129,7 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 		if (!titleId)
 		{
 			wxMessageBox(_("Select a title with an installed .cemod package first."),
-				_("CemuExtend"), wxOK | wxICON_WARNING, this);
+						 _("CemuExtend"), wxOK | wxICON_WARNING, this);
 			return;
 		}
 		CemodPluginManagerDialog dialog(this, *titleId, m_emulationController);
@@ -1129,7 +1142,8 @@ wxPanel* GeneralSettings2::AddCemuExtendPage(wxNotebook* notebook)
 
 std::optional<uint64> GeneralSettings2::SelectedCemuExtendTitle() const
 {
-	if (!m_cemuextend_title_choice) return std::nullopt;
+	if (!m_cemuextend_title_choice)
+		return std::nullopt;
 	const auto selection = m_cemuextend_title_choice->GetSelection();
 	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_cemuextend_title_ids.size())
 		return std::nullopt;
@@ -1144,7 +1158,11 @@ void GeneralSettings2::RefreshCemuExtendTitles()
 	std::size_t rejected{};
 	for (const auto& package : m_emulationController.DiscoverCemodCatalog())
 	{
-		if (!package.error.empty()) { ++rejected; continue; }
+		if (!package.error.empty())
+		{
+			++rejected;
+			continue;
+		}
 		packageIds.insert(package.titleIds.begin(), package.titleIds.end());
 	}
 	std::set<uint64> ids;
@@ -1152,11 +1170,14 @@ void GeneralSettings2::RefreshCemuExtendTitles()
 	for (const auto& title : m_emulationController.ListTitles())
 	{
 		installedNames.try_emplace(title.titleId, title.name);
-		if (packageIds.contains(title.titleId)) ids.insert(title.titleId);
+		if (packageIds.contains(title.titleId))
+			ids.insert(title.titleId);
 	}
-	if (running != 0 && packageIds.contains(running)) ids.insert(running);
+	if (running != 0 && packageIds.contains(running))
+		ids.insert(running);
 	// Keep packages manageable before their game has been added to Cemu.
-	if (ids.empty()) ids = packageIds;
+	if (ids.empty())
+		ids = packageIds;
 	m_cemuextend_title_choice->Clear();
 	m_cemuextend_title_ids.clear();
 	for (const auto titleId : ids)
@@ -1170,12 +1191,10 @@ void GeneralSettings2::RefreshCemuExtendTitles()
 	if (!m_cemuextend_title_ids.empty())
 	{
 		auto selected = std::ranges::find(m_cemuextend_title_ids, running != 0 ? running : previous.value_or(0));
-		m_cemuextend_title_choice->SetSelection(selected == m_cemuextend_title_ids.end() ? 0 :
-			static_cast<int>(std::distance(m_cemuextend_title_ids.begin(), selected)));
+		m_cemuextend_title_choice->SetSelection(selected == m_cemuextend_title_ids.end() ? 0 : static_cast<int>(std::distance(m_cemuextend_title_ids.begin(), selected)));
 	}
 	if (m_cemuextend_title_ids.empty())
-		m_cemod_status->SetLabel(rejected == 0 ? _("No .cemod packages are installed.") :
-			_("No valid .cemod packages were found."));
+		m_cemod_status->SetLabel(rejected == 0 ? _("No .cemod packages are installed.") : _("No valid .cemod packages were found."));
 	LoadCemuExtendGrant();
 }
 
@@ -1213,16 +1232,19 @@ void GeneralSettings2::StoreCemuExtendGrant()
 	if (!titleId)
 	{
 		wxMessageBox(_("Select a game with an installed .cemod package."), _("CemuExtend"),
-			wxOK | wxICON_WARNING, this);
+					 wxOK | wxICON_WARNING, this);
 		return;
 	}
 	CemuExtendTitleGrant grant{};
 	for (size_t index = 0; index < m_cemuextend_read.size(); ++index)
 	{
 		const auto bit = 1U << index;
-		if (m_cemuextend_read[index]->IsChecked()) grant.read_mask |= bit;
-		if (m_cemuextend_write[index]->IsChecked()) grant.write_mask |= bit;
-		if (m_cemuextend_inject[index]->IsChecked()) grant.inject_mask |= bit;
+		if (m_cemuextend_read[index]->IsChecked())
+			grant.read_mask |= bit;
+		if (m_cemuextend_write[index]->IsChecked())
+			grant.write_mask |= bit;
+		if (m_cemuextend_inject[index]->IsChecked())
+			grant.inject_mask |= bit;
 	}
 	GetConfig().SetCemuExtendGrant(*titleId, grant);
 	GetConfigHandle().Save();
@@ -1231,7 +1253,8 @@ void GeneralSettings2::StoreCemuExtendGrant()
 
 void GeneralSettings2::RefreshCemodList()
 {
-	if (!m_cemod_list) return;
+	if (!m_cemod_list)
+		return;
 	m_cemod_list->Clear();
 	m_cemod_principals.clear();
 	m_cemod_mod_ids.clear();
@@ -1248,21 +1271,26 @@ void GeneralSettings2::RefreshCemodList()
 	std::size_t rejected{};
 	for (const auto& package : m_emulationController.DiscoverCemods(*titleId))
 	{
-		if (!package.error.empty()) { ++rejected; continue; }
+		if (!package.error.empty())
+		{
+			++rejected;
+			continue;
+		}
 		m_cemod_list->Append(wxString::FromUTF8(fmt::format("{}  —  {} / {}", package.modId,
-			package.executionMode == Application::CemodExecutionMode::TrustedNative ? "trusted native" : "isolated",
-			package.signedPackage ? "signed" : "unsigned")));
+															package.executionMode == Application::CemodExecutionMode::TrustedNative ? "trusted native" : "isolated",
+															package.signedPackage ? "signed" : "unsigned")));
 		m_cemod_principals.push_back(package.principal);
 		m_cemod_mod_ids.push_back(package.modId);
 		m_cemod_requested.push_back(package.requestedPermissions);
 		m_cemod_trusted.push_back(package.executionMode == Application::CemodExecutionMode::TrustedNative);
 		m_cemod_signed.push_back(package.signedPackage);
 		const auto grant = m_emulationController.ResolveCemodGrant(*titleId, package.modId, package.principal,
-			package.requestedPermissions);
+																   package.requestedPermissions);
 		m_cemod_list->Check(m_cemod_principals.size() - 1,
-			grant.approved && (package.requestedPermissions & ~grant.approvedRequestMask) == 0);
+							grant.approved && (package.requestedPermissions & ~grant.approvedRequestMask) == 0);
 	}
-	if (!m_cemod_principals.empty()) m_cemod_list->SetSelection(0);
+	if (!m_cemod_principals.empty())
+		m_cemod_list->SetSelection(0);
 	m_cemod_status->SetLabel(wxString::FromUTF8(fmt::format(
 		"{} compatible package(s), {} rejected — {}",
 		m_cemod_principals.size(), rejected,
@@ -1275,10 +1303,11 @@ void GeneralSettings2::LoadCemodGrant()
 	const auto selection = m_cemod_list ? m_cemod_list->GetSelection() : wxNOT_FOUND;
 	const auto titleId = SelectedCemuExtendTitle();
 	const bool valid = selection != wxNOT_FOUND && static_cast<std::size_t>(selection) < m_cemod_principals.size() &&
-		titleId.has_value();
+					   titleId.has_value();
 	const auto grant = valid ? m_emulationController.ResolveCemodGrant(*titleId,
-		m_cemod_mod_ids[selection], m_cemod_principals[selection],
-		m_cemod_requested[selection]) : Application::CemodGrant{};
+																	   m_cemod_mod_ids[selection], m_cemod_principals[selection],
+																	   m_cemod_requested[selection])
+							 : Application::CemodGrant{};
 	const auto granted = grant.permissions;
 	const auto requested = valid ? m_cemod_requested[selection] : 0;
 	if (valid && m_cemod_trusted[selection])
@@ -1295,13 +1324,15 @@ void GeneralSettings2::LoadCemodGrant()
 	}
 	m_cemod_trust_updates->Enable(valid);
 	m_cemod_trust_updates->SetValue(valid && GetConfig().GetCemuExtendModTrustAnchor(*titleId,
-		m_cemod_mod_ids[selection]).has_value());
+																					 m_cemod_mod_ids[selection])
+												 .has_value());
 }
 
 void GeneralSettings2::ToggleCemod(std::size_t selection, bool enabled)
 {
 	const auto titleId = SelectedCemuExtendTitle();
-	if (!titleId || selection >= m_cemod_principals.size()) return;
+	if (!titleId || selection >= m_cemod_principals.size())
+		return;
 	if (enabled && m_cemod_trusted[selection])
 	{
 		const auto answer = wxMessageBox(
@@ -1314,18 +1345,16 @@ void GeneralSettings2::ToggleCemod(std::size_t selection, bool enabled)
 		}
 	}
 	auto grant = m_emulationController.ResolveCemodGrant(*titleId, m_cemod_mod_ids[selection],
-		m_cemod_principals[selection], m_cemod_requested[selection]);
+														 m_cemod_principals[selection], m_cemod_requested[selection]);
 	grant.permissions &= m_cemod_requested[selection];
 	grant.approvedRequestMask = enabled ? m_cemod_requested[selection] : 0U;
 	grant.approved = enabled;
 	GetConfig().SetCemuExtendModGrant(*titleId, m_cemod_principals[selection],
-		{grant.permissions, grant.approvedRequestMask, grant.approved});
+									  {grant.permissions, grant.approvedRequestMask, grant.approved});
 	if (!enabled)
 		GetConfig().RemoveCemuExtendModTrustAnchor(*titleId, m_cemod_mod_ids[selection]);
 	GetConfigHandle().Save();
-	m_cemod_details->SetLabel(enabled ?
-		_("Enabled. The Mod will load on the next game launch.") :
-		_("Disabled. The Mod will not load on the next game launch."));
+	m_cemod_details->SetLabel(enabled ? _("Enabled. The Mod will load on the next game launch.") : _("Disabled. The Mod will not load on the next game launch."));
 	LoadCemodGrant();
 }
 
@@ -1334,7 +1363,8 @@ void GeneralSettings2::StoreCemodGrant()
 	const auto selection = m_cemod_list->GetSelection();
 	const auto titleId = SelectedCemuExtendTitle();
 	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_cemod_principals.size() ||
-		!titleId) return;
+		!titleId)
+		return;
 	uint32 permissions{};
 	for (std::size_t index = 0; index < m_cemod_permissions.size(); ++index)
 		if (m_cemod_permissions[index]->IsEnabled() && m_cemod_permissions[index]->IsChecked())
@@ -1342,10 +1372,10 @@ void GeneralSettings2::StoreCemodGrant()
 	permissions &= m_cemod_requested[selection];
 	const bool enabled = m_cemod_list->IsChecked(static_cast<unsigned int>(selection));
 	GetConfig().SetCemuExtendModGrant(*titleId, m_cemod_principals[selection],
-		{permissions, enabled ? m_cemod_requested[selection] : 0U, enabled});
+									  {permissions, enabled ? m_cemod_requested[selection] : 0U, enabled});
 	if (enabled && m_cemod_trust_updates->IsChecked())
 		GetConfig().SetCemuExtendModTrustAnchor(*titleId, m_cemod_mod_ids[selection],
-			{permissions, m_cemod_requested[selection]});
+												{permissions, m_cemod_requested[selection]});
 	else
 		GetConfig().RemoveCemuExtendModTrustAnchor(*titleId, m_cemod_mod_ids[selection]);
 	GetConfigHandle().Save();
@@ -1357,17 +1387,19 @@ void GeneralSettings2::ImportLegacyCemodData()
 	const auto selection = m_cemod_list->GetSelection();
 	const auto titleId = SelectedCemuExtendTitle();
 	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_cemod_principals.size() ||
-		!titleId) return;
+		!titleId)
+		return;
 	if (wxMessageBox(_("Copy this title's legacy shared File and Configuration data into only the selected Mod? Existing ABI 2 data will not be overwritten."),
-		_("Import CemuExtend data"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES) return;
+					 _("Import CemuExtend data"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES)
+		return;
 	std::string error;
 	if (m_emulationController.ImportLegacyCemodData(
-		*titleId, m_cemod_principals[selection], error))
+			*titleId, m_cemod_principals[selection], error))
 		wxMessageBox(_("Legacy data was imported for the selected Mod."), _("Import CemuExtend data"),
-			wxOK | wxICON_INFORMATION, this);
+					 wxOK | wxICON_INFORMATION, this);
 	else
 		wxMessageBox(wxString::FromUTF8(error), _("Import CemuExtend data"),
-			wxOK | wxICON_ERROR, this);
+					 wxOK | wxICON_ERROR, this);
 }
 
 wxPanel* GeneralSettings2::AddDebugPage(wxNotebook* notebook)
@@ -1504,9 +1536,9 @@ wxPanel* GeneralSettings2::AddTcpGeckoPage(wxNotebook* notebook)
 }
 
 GeneralSettings2::GeneralSettings2(wxWindow* parent, bool game_launched,
-	Application::EmulationController& emulationController,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-	std::shared_ptr<Host::IPathProvider> pathProvider)
+								   Application::EmulationController& emulationController,
+								   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+								   std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("General settings"), wxDefaultPosition, wxDefaultSize, wxCLOSE_BOX | wxCLIP_CHILDREN | wxCAPTION | wxRESIZE_BORDER),
 	  m_game_launched(game_launched), m_emulationController(emulationController),
 	  m_nativeSurfaces(std::move(nativeSurfaces)),
@@ -1569,7 +1601,7 @@ void GeneralSettings2::StoreConfig()
 	SyncWxFrontendSettingsToNeutral();
 	wxGuiConfig.receive_untested_updates = m_receive_untested_releases->IsChecked();
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
-    wxGuiConfig.feral_gamemode = m_feral_gamemode->IsChecked();
+	wxGuiConfig.feral_gamemode = m_feral_gamemode->IsChecked();
 #endif
 #if BOOST_OS_WINDOWS
 	wxGuiConfig.msw_theme = m_msw_theme->GetSelection();
@@ -1583,10 +1615,10 @@ void GeneralSettings2::StoreConfig()
 	}
 
 	// -1 is default wx widget value -> set to dummy 0 so mainwindow and padwindow will update it
-	wxGuiConfig.window_position = m_save_window_position_size->IsChecked() ? Vector2i{ 0,0 } : Vector2i{-1,-1};
-	wxGuiConfig.window_size = m_save_window_position_size->IsChecked() ? Vector2i{ 0,0 } : Vector2i{-1,-1};
-	wxGuiConfig.pad_position = m_save_padwindow_position_size->IsChecked() ? Vector2i{ 0,0 } : Vector2i{-1,-1};
-	wxGuiConfig.pad_size = m_save_padwindow_position_size->IsChecked() ? Vector2i{ 0,0 } : Vector2i{-1,-1};
+	wxGuiConfig.window_position = m_save_window_position_size->IsChecked() ? Vector2i{0, 0} : Vector2i{-1, -1};
+	wxGuiConfig.window_size = m_save_window_position_size->IsChecked() ? Vector2i{0, 0} : Vector2i{-1, -1};
+	wxGuiConfig.pad_position = m_save_padwindow_position_size->IsChecked() ? Vector2i{0, 0} : Vector2i{-1, -1};
+	wxGuiConfig.pad_size = m_save_padwindow_position_size->IsChecked() ? Vector2i{0, 0} : Vector2i{-1, -1};
 
 	config.game_paths.clear();
 	for (auto& path : m_game_paths->GetStrings())
@@ -1620,9 +1652,9 @@ void GeneralSettings2::StoreConfig()
 
 	config.audio_delay = m_audio_latency->GetValue();
 	config.tv_channels = (AudioChannels)m_tv_channels->GetSelection();
-	//config.pad_channels =  (AudioChannels)m_pad_channels->GetSelection();
+	// config.pad_channels =  (AudioChannels)m_pad_channels->GetSelection();
 	config.pad_channels = kStereo; // (AudioChannels)m_pad_channels->GetSelection();
-	//config.input_channels =  (AudioChannels)m_input_channels->GetSelection();
+	// config.input_channels =  (AudioChannels)m_input_channels->GetSelection();
 	config.input_channels = kMono; // (AudioChannels)m_input_channels->GetSelection();
 
 	config.tv_volume = m_tv_volume->GetValue();
@@ -1635,7 +1667,7 @@ void GeneralSettings2::StoreConfig()
 	if (tv_device != wxNOT_FOUND && tv_device != 0 && m_tv_device->HasClientObjectData())
 	{
 		const auto* device_description = (wxDeviceDescription*)m_tv_device->GetClientObject(tv_device);
-		if(device_description)
+		if (device_description)
 			config.tv_device = device_description->GetDescription()->GetIdentifier();
 	}
 
@@ -1707,14 +1739,14 @@ void GeneralSettings2::StoreConfig()
 #endif
 	}
 
-
 	config.gx2drawdone_sync = m_gx2drawdone_sync->IsChecked();
 #ifdef ENABLE_METAL
 	config.force_mesh_shaders = m_force_mesh_shaders->IsChecked();
 #endif
 	config.async_compile = m_async_compile->IsChecked();
 
-	config.overlay.position = (ScreenPosition)m_overlay_position->GetSelection(); wxASSERT((int)config.overlay.position <= (int)ScreenPosition::kBottomRight);
+	config.overlay.position = (ScreenPosition)m_overlay_position->GetSelection();
+	wxASSERT((int)config.overlay.position <= (int)ScreenPosition::kBottomRight);
 	config.overlay.text_color = m_overlay_font_color->GetColour().GetRGBA();
 	config.overlay.text_scale = m_overlay_scale->GetSelection() * 25 + 50;
 
@@ -1726,7 +1758,8 @@ void GeneralSettings2::StoreConfig()
 	config.overlay.vram_usage = m_overlay_vram->GetValue();
 	config.overlay.debug = m_overlay_debug->GetValue();
 
-	config.notification.position = (ScreenPosition)m_notification_position->GetSelection(); wxASSERT((int)config.notification.position <= (int)ScreenPosition::kBottomRight);
+	config.notification.position = (ScreenPosition)m_notification_position->GetSelection();
+	wxASSERT((int)config.notification.position <= (int)ScreenPosition::kBottomRight);
 	config.notification.text_color = m_notification_font_color->GetColour().GetRGBA();
 	config.notification.text_scale = m_notification_scale->GetSelection() * 25 + 50;
 	config.notification.controller_profiles = m_controller_profile_name->GetValue();
@@ -1776,7 +1809,7 @@ void GeneralSettings2::ValidateConfig()
 
 	auto& data = GetConfigHandle().data();
 	// todo
-	//data.fullscreen_scaling = min(max(data.fullscreen_scaling,))
+	// data.fullscreen_scaling = min(max(data.fullscreen_scaling,))
 }
 
 void GeneralSettings2::DisableSettings(bool game_launched)
@@ -1791,8 +1824,7 @@ void GeneralSettings2::OnAudioLatencyChanged(wxCommandEvent& event)
 
 void GeneralSettings2::OnVolumeChanged(wxCommandEvent& event)
 {
-
-	if(event.GetEventObject() == m_input_volume)
+	if (event.GetEventObject() == m_input_volume)
 	{
 		std::shared_lock lock(g_audioInputMutex);
 		if (g_inputAudio)
@@ -1801,7 +1833,7 @@ void GeneralSettings2::OnVolumeChanged(wxCommandEvent& event)
 	else
 	{
 		std::shared_lock lock(g_audioMutex);
-		if(event.GetEventObject() == m_pad_volume)
+		if (event.GetEventObject() == m_pad_volume)
 		{
 			if (g_padAudio)
 				g_padAudio->SetVolume(event.GetInt());
@@ -1815,11 +1847,10 @@ void GeneralSettings2::OnVolumeChanged(wxCommandEvent& event)
 		}
 		else
 		{
-			if(g_portalAudio)
+			if (g_portalAudio)
 				g_portalAudio->SetVolume(event.GetInt());
 		}
 	}
-
 
 	event.Skip();
 }
@@ -1898,7 +1929,7 @@ void GeneralSettings2::UpdateAudioDeviceList()
 		m_input_device->Append(device->GetName(), new wxInputDeviceDescription(device));
 	}
 
-	if(m_tv_device->GetCount() > 1)
+	if (m_tv_device->GetCount() > 1)
 		m_tv_device->SetSelection(1);
 	else
 		m_tv_device->SetSelection(0);
@@ -1917,16 +1948,16 @@ void GeneralSettings2::ResetAccountInformation()
 	m_account_grid->SetSplitterPosition(100);
 	m_active_account->SetSelection(0);
 
-	for(auto it = m_account_grid->GetIterator(); !it.AtEnd(); ++it)
+	for (auto it = m_account_grid->GetIterator(); !it.AtEnd(); ++it)
 	{
 		(*it)->SetValueToUnspecified();
 	}
 
 	// refresh pane size
 	m_account_information->InvalidateBestSize();
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	m_account_information->OnStateChange(GetBestSize());
-	#endif
+#endif
 }
 
 void GeneralSettings2::OnAccountCreate(wxCommandEvent& event)
@@ -1942,7 +1973,7 @@ void GeneralSettings2::OnAccountCreate(wxCommandEvent& event)
 	if (!result || !result.account)
 	{
 		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
-			wxOK | wxCENTRE | wxICON_ERROR, this);
+					 wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 	const auto& account = *result.account;
@@ -1966,7 +1997,7 @@ void GeneralSettings2::OnAccountCreate(wxCommandEvent& event)
 
 void GeneralSettings2::OnAccountDelete(wxCommandEvent& event)
 {
-	if(m_active_account->GetCount() == 1)
+	if (m_active_account->GetCount() == 1)
 	{
 		wxMessageBox(_("Can't delete the only account!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
@@ -1980,7 +2011,7 @@ void GeneralSettings2::OnAccountDelete(wxCommandEvent& event)
 
 	const std::wstring format_str = _("Are you sure you want to delete the account {} with id {:x}?").ToStdWstring();
 	const std::wstring msg = fmt::format(fmt::runtime(format_str),
-	                                     account.miiName, account.persistentId);
+										 account.miiName, account.persistentId);
 
 	const int answer = wxMessageBox(msg, _("Confirmation"), wxYES_NO | wxCENTRE | wxICON_QUESTION, this);
 	if (answer == wxNO)
@@ -2001,9 +2032,8 @@ void GeneralSettings2::OnAccountDelete(wxCommandEvent& event)
 	else
 	{
 		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
-			wxOK | wxCENTRE | wxICON_ERROR, this);
+					 wxOK | wxCENTRE | wxICON_ERROR, this);
 	}
-
 }
 
 void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
@@ -2045,7 +2075,7 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 	else if (property->GetName() == kPropertyBirthday)
 	{
 		const std::string birthday = value.As<wxString>().ToStdString();
-		const boost::char_separator<char> sep{ "-" };
+		const boost::char_separator<char> sep{"-"};
 
 		std::vector<std::string> tokens;
 		for (const auto& token : boost::tokenizer(birthday, sep))
@@ -2067,7 +2097,6 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 	else if (property->GetName() == kPropertyEmail)
 	{
 		update.email = value.As<wxString>().ToStdString();
-
 	}
 	else if (property->GetName() == kPropertyCountry)
 	{
@@ -2080,14 +2109,14 @@ void GeneralSettings2::OnAccountSettingsChanged(wxPropertyGridEvent& event)
 	if (!result || !result.account)
 	{
 		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Error"),
-			wxOK | wxCENTRE | wxICON_ERROR, this);
+					 wxOK | wxCENTRE | wxICON_ERROR, this);
 		UpdateOnlineAccounts();
 		return;
 	}
 	account = *result.account;
 	UpdateAccountInformation(); // refresh on invalid values
 
-	if(refresh_accounts)
+	if (refresh_accounts)
 	{
 		wxCommandEvent refresh_event(wxEVT_ACCOUNTLIST_REFRESH);
 		GetParent()->ProcessWindowEvent(refresh_event);
@@ -2099,7 +2128,7 @@ void GeneralSettings2::UpdateAccountInformation()
 	m_account_grid->SetSplitterPosition(100);
 
 	const auto selection = m_active_account->GetSelection();
-	if(selection == wxNOT_FOUND)
+	if (selection == wxNOT_FOUND)
 	{
 		m_validate_online->SetBitmap(wxBITMAP_PNG_FROM_DATA(PNG_ERROR).ConvertToImage().Scale(16, 16));
 		m_validate_online->SetWindowStyleFlag(m_validate_online->GetWindowStyleFlag() & ~wxBORDER_NONE);
@@ -2113,7 +2142,7 @@ void GeneralSettings2::UpdateAccountInformation()
 	const auto& account = obj->GetAccount();
 
 	m_active_account->SetString(selection,
-		fmt::format(L"{} ({:x})", account.miiName, account.persistentId));
+								fmt::format(L"{} ({:x})", account.miiName, account.persistentId));
 
 	m_account_grid->GetProperty(kPropertyPersistentId)->SetValueFromString(fmt::format("{:x}", account.persistentId));
 	m_account_grid->GetProperty(kPropertyMiiName)->SetValueFromString(account.miiName);
@@ -2133,25 +2162,25 @@ void GeneralSettings2::UpdateAccountInformation()
 
 	const auto onlineEnvironment = m_emulationController.GetOnlineEnvironmentStatus();
 	const bool online_fully_valid = account.validOnlineAccount &&
-		onlineEnvironment.requiredFilesAvailable;
+									onlineEnvironment.requiredFilesAvailable;
 	if (onlineEnvironment.requiredFilesAvailable)
 	{
-		if(account.validOnlineAccount)
+		if (account.validOnlineAccount)
 			m_online_status->SetLabel(_("Selected account is a valid online account"));
 		else
 			m_online_status->SetLabel(_("Selected account is not linked to a NNID or PNID"));
 	}
 	else
 	{
-		if(onlineEnvironment.otpPresent != onlineEnvironment.seepromPresent)
+		if (onlineEnvironment.otpPresent != onlineEnvironment.seepromPresent)
 			m_online_status->SetLabel(_("OTP.bin or SEEPROM.bin is missing"));
-		else if(onlineEnvironment.otpPresent && onlineEnvironment.seepromPresent)
+		else if (onlineEnvironment.otpPresent && onlineEnvironment.seepromPresent)
 			m_online_status->SetLabel(_("OTP and SEEPROM present but no certificate files were found"));
 		else
 			m_online_status->SetLabel(_("Online play is not set up. Follow the guide below to get started"));
 	}
 
-	if(online_fully_valid)
+	if (online_fully_valid)
 	{
 		m_validate_online->SetBitmap(wxBITMAP_PNG_FROM_DATA(PNG_CHECK_YES).ConvertToImage().Scale(16, 16));
 		m_validate_online->SetWindowStyleFlag(m_validate_online->GetWindowStyleFlag() | wxBORDER_NONE);
@@ -2164,7 +2193,7 @@ void GeneralSettings2::UpdateAccountInformation()
 
 	// enable/disable network service field depending on online requirements
 	m_active_service->Enable(online_fully_valid && !m_emulationController.IsTitleRunning());
-	if(online_fully_valid)
+	if (online_fully_valid)
 	{
 		NetworkService service = GetConfig().GetAccountNetworkService(account.persistentId);
 		m_active_service->SetSelection(GetNetworkServiceSelection(service));
@@ -2185,17 +2214,17 @@ void GeneralSettings2::UpdateAccountInformation()
 
 	// refresh pane size
 	m_account_grid->InvalidateBestSize();
-	//m_account_grid->GetParent()->FitInside();
-	//m_account_information->OnStateChange(GetBestSize()); idk..
+	// m_account_grid->GetParent()->FitInside();
+	// m_account_information->OnStateChange(GetBestSize()); idk..
 }
 
 void GeneralSettings2::UpdateOnlineAccounts()
 {
 	m_active_account->Clear();
-	for(const auto& account : m_emulationController.ListAccounts())
+	for (const auto& account : m_emulationController.ListAccounts())
 	{
 		m_active_account->Append(fmt::format(L"{} ({:x})", account.miiName, account.persistentId),
-			new wxAccountData(account));
+								 new wxAccountData(account));
 	}
 
 	m_active_account->SetSelection(0);
@@ -2207,7 +2236,7 @@ void GeneralSettings2::UpdateOnlineAccounts()
 void GeneralSettings2::HandleGraphicsApiSelection()
 {
 	int selection = m_vsync->GetSelection();
-	if(selection == wxNOT_FOUND)
+	if (selection == wxNOT_FOUND)
 		selection = GetConfig().vsync;
 
 	m_vsync->Clear();
@@ -2268,18 +2297,18 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		m_graphic_device->Enable();
 		const auto surfaces = m_nativeSurfaces->GetNativeSurfaces();
 		auto devices = WxRendererAdapters::EnumerateVulkanDevices(surfaces.mainWindow);
-		if(!devices.empty())
+		if (!devices.empty())
 		{
-			for(const auto& device : devices)
+			for (const auto& device : devices)
 			{
 				m_graphic_device->Append(device.name, new wxVulkanUUID(device));
 			}
 			m_graphic_device->SetSelection(0);
 
 			const auto& config = GetConfig();
-			for(size_t i = 0; i < devices.size(); ++i)
+			for (size_t i = 0; i < devices.size(); ++i)
 			{
-				if(config.vk_graphic_device_uuid == devices[i].uuid)
+				if (config.vk_graphic_device_uuid == devices[i].uuid)
 				{
 					m_graphic_device->SetSelection(i);
 					break;
@@ -2288,7 +2317,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		}
 		break;
 	}
-	#endif
+#endif
 #ifdef ENABLE_METAL
 	case GraphicAPI::kMetal:
 	{
@@ -2306,7 +2335,7 @@ void GeneralSettings2::HandleGraphicsApiSelection()
 		m_graphic_device->Clear();
 
 		auto devices = WxRendererAdapters::EnumerateMetalDevices();
-		if(!devices.empty())
+		if (!devices.empty())
 		{
 			for (const auto& device : devices)
 			{
@@ -2341,8 +2370,8 @@ void GeneralSettings2::ApplyConfig()
 	else
 		m_mlc_path->SetValue(wxString::FromUTF8(config.mlc_path.GetValue()));
 
-	m_save_window_position_size->SetValue(wxGUIconfig.window_position != Vector2i{-1,-1});
-	m_save_padwindow_position_size->SetValue(wxGUIconfig.pad_position != Vector2i{-1,-1});
+	m_save_window_position_size->SetValue(wxGUIconfig.window_position != Vector2i{-1, -1});
+	m_save_padwindow_position_size->SetValue(wxGUIconfig.pad_position != Vector2i{-1, -1});
 
 	m_discord_presence->SetValue(wxGUIconfig.use_discord_presence);
 	m_fullscreen_menubar->SetValue(wxGUIconfig.fullscreen_menubar);
@@ -2357,7 +2386,7 @@ void GeneralSettings2::ApplyConfig()
 	m_msw_theme->SetSelection(wxGUIconfig.msw_theme);
 #endif
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
-    	m_feral_gamemode->SetValue(wxGUIconfig.feral_gamemode);
+	m_feral_gamemode->SetValue(wxGUIconfig.feral_gamemode);
 #endif
 	// temporary workaround because feature crashes on macOS
 #if BOOST_OS_MACOS
@@ -2394,7 +2423,7 @@ void GeneralSettings2::ApplyConfig()
 	m_overrideGammaValue->SetValue(config.overrideGammaValue);
 	m_userDisplayisSRGB->SetValue(config.userDisplayGamma == 0.0f);
 	m_userDisplayGamma->SetValue(config.userDisplayGamma);
-	if(m_userDisplayisSRGB->GetValue())
+	if (m_userDisplayisSRGB->GetValue())
 	{
 		m_userDisplayGamma->Disable();
 		m_userDisplayGamma->SetValue(2.2f);
@@ -2438,28 +2467,28 @@ void GeneralSettings2::ApplyConfig()
 	m_friends_data->SetValue(config.notification.friends);
 
 	// audio
-	if(config.audio_api == IAudioAPI::DirectSound)
+	if (config.audio_api == IAudioAPI::DirectSound)
 		m_audio_api->SetStringSelection(kDirectSound);
-	else if(config.audio_api == IAudioAPI::XAudio27)
+	else if (config.audio_api == IAudioAPI::XAudio27)
 		m_audio_api->SetStringSelection(kXAudio27);
-	else if(config.audio_api == IAudioAPI::XAudio2)
+	else if (config.audio_api == IAudioAPI::XAudio2)
 		m_audio_api->SetStringSelection(kXAudio2);
-	else if(config.audio_api == IAudioAPI::Cubeb)
+	else if (config.audio_api == IAudioAPI::Cubeb)
 		m_audio_api->SetStringSelection(kCubeb);
 
 	SendSliderEvent(m_audio_latency, config.audio_delay);
 
 	m_tv_channels->SetSelection(config.tv_channels);
-	//m_pad_channels->SetSelection(config.pad_channels);
+	// m_pad_channels->SetSelection(config.pad_channels);
 	m_pad_channels->SetSelection(0);
-	//m_input_channels->SetSelection(config.pad_channels);
+	// m_input_channels->SetSelection(config.pad_channels);
 	m_input_channels->SetSelection(0);
 
 	SendSliderEvent(m_tv_volume, config.tv_volume);
 
 	if (!config.tv_device.empty() && m_tv_device->HasClientObjectData())
 	{
-		for(uint32 i = 0; i < m_tv_device->GetCount(); ++i)
+		for (uint32 i = 0; i < m_tv_device->GetCount(); ++i)
 		{
 			const auto device_description = (wxDeviceDescription*)m_tv_device->GetClientObject(i);
 			if (device_description && config.tv_device == device_description->GetDescription()->GetIdentifier())
@@ -2523,11 +2552,11 @@ void GeneralSettings2::ApplyConfig()
 	// account
 	UpdateOnlineAccounts();
 	m_active_account->SetSelection(0);
-	for(uint32 i = 0; i < m_active_account->GetCount(); ++i)
+	for (uint32 i = 0; i < m_active_account->GetCount(); ++i)
 	{
 		const auto* obj = dynamic_cast<wxAccountData*>(m_active_account->GetClientObject(i));
 		wxASSERT(obj);
-		if(obj->GetAccount().persistentId == ActiveSettings::GetPersistentId())
+		if (obj->GetAccount().persistentId == ActiveSettings::GetPersistentId())
 		{
 			m_active_account->SetSelection(i);
 			break;
@@ -2607,8 +2636,7 @@ void GeneralSettings2::UpdateAudioDevice()
 				{
 					g_tvAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), AudioSpec::kOutputSampleRate, channels, AudioSpec::kOutputSamplesPerBlock, 16);
 					g_tvAudio->SetVolume(m_tv_volume->GetValue());
-				}
-				catch (std::runtime_error& ex)
+				} catch (std::runtime_error& ex)
 				{
 					cemuLog_log(LogType::Force, "can't initialize tv audio: {}", ex.what());
 				}
@@ -2644,8 +2672,7 @@ void GeneralSettings2::UpdateAudioDevice()
 				{
 					g_padAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), AudioSpec::kOutputSampleRate, channels, AudioSpec::kOutputSamplesPerBlock, 16);
 					g_padAudio->SetVolume(m_pad_volume->GetValue());
-				}
-				catch (std::runtime_error& ex)
+				} catch (std::runtime_error& ex)
 				{
 					cemuLog_log(LogType::Force, "can't initialize pad audio: {}", ex.what());
 				}
@@ -2679,8 +2706,7 @@ void GeneralSettings2::UpdateAudioDevice()
 				{
 					g_inputAudio = IAudioInputAPI::CreateDevice(IAudioInputAPI::AudioInputAPI::Cubeb, description->GetDescription(), AudioSpec::kInputSampleRate, channels, AudioSpec::kInputSamplesPerBlock, 16);
 					g_inputAudio->SetVolume(m_input_volume->GetValue());
-				}
-				catch (std::runtime_error& ex)
+				} catch (std::runtime_error& ex)
 				{
 					cemuLog_log(LogType::Force, "can't initialize pad audio: {}", ex.what());
 				}
@@ -2714,14 +2740,12 @@ void GeneralSettings2::UpdateAudioDevice()
 				{
 					g_portalAudio = IAudioAPI::CreateDevice((IAudioAPI::AudioAPI)config.audio_api, description->GetDescription(), 8000, 1, 32, 16);
 					g_portalAudio->SetVolume(m_portal_volume->GetValue());
-				}
-				catch (std::runtime_error& ex)
+				} catch (std::runtime_error& ex)
 				{
 					cemuLog_log(LogType::Force, "can't initialize portal audio: {}", ex.what());
 				}
 			}
 		}
-
 	}
 }
 
@@ -2755,7 +2779,7 @@ void GeneralSettings2::OnAudioChannelsSelected(wxCommandEvent& event)
 	else
 		cemu_assert_debug(false);
 
-	if(m_game_launched)
+	if (m_game_launched)
 		wxMessageBox(_("You have to restart the game in order to apply the new settings."), _("Information"), wxOK | wxCENTRE, this);
 	else
 		UpdateAudioDevice();
@@ -2769,7 +2793,7 @@ void GeneralSettings2::OnGraphicAPISelected(wxCommandEvent& event)
 void GeneralSettings2::OnUserDisplaySRGBSelected(wxCommandEvent& event)
 {
 	m_userDisplayGamma->SetValue(2.2f);
-	if(event.IsChecked())
+	if (event.IsChecked())
 		m_userDisplayGamma->Disable();
 	else
 		m_userDisplayGamma->Enable();
@@ -2834,7 +2858,7 @@ void GeneralSettings2::OnAccountServiceChanged(wxCommandEvent& event)
 
 void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 {
-	if(m_emulationController.IsTitleRunning())
+	if (m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Can't change MLC path while a game is running!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
@@ -2845,14 +2869,14 @@ void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 		return;
 	// check if the choosen MLC path is an already initialized MLC location
 	fs::path newMlc = wxHelper::MakeFSPath(path_dialog.GetPath());
-	if(CemuApp::CheckMLCPath(newMlc))
+	if (CemuApp::CheckMLCPath(newMlc))
 	{
 		// ask user if they are sure they want to use this folder and let them know that accounts and saves wont transfer
 		wxString message = _("Note that changing the MLC location will not transfer any accounts or save files. Are you sure you want to change the path?");
 		wxMessageDialog dialog(this, message, _("Warning"), wxYES_NO | wxCENTRE | wxICON_WARNING);
-		if(dialog.ShowModal() == wxID_NO)
+		if (dialog.ShowModal() == wxID_NO)
 			return;
-		if( !CemuApp::CreateDefaultMLCFiles(newMlc) ) // creating also acts as a check for read+write access
+		if (!CemuApp::CreateDefaultMLCFiles(newMlc)) // creating also acts as a check for read+write access
 		{
 			wxMessageBox(_("Failed to create default MLC files in the selected directory. The MLC path has not been changed"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;
@@ -2863,7 +2887,7 @@ void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 		// ask user if they want to create a new mlc structure at the choosen location
 		wxString message = _("The selected directory does not contain the expected MLC structure. Do you want to create a new MLC structure in this directory?\nNote that changing the MLC location will not transfer any accounts or save files.");
 		wxMessageDialog dialog(this, message, _("Warning"), wxYES_NO | wxCENTRE | wxICON_WARNING);
-		if( !CemuApp::CreateDefaultMLCFiles(newMlc) )
+		if (!CemuApp::CreateDefaultMLCFiles(newMlc))
 		{
 			wxMessageBox(_("Failed to create default MLC files in the selected directory. The MLC path has not been changed"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;
@@ -2881,14 +2905,14 @@ void GeneralSettings2::OnMLCPathSelect(wxCommandEvent& event)
 
 void GeneralSettings2::OnMLCPathClear(wxCommandEvent& event)
 {
-	if(m_emulationController.IsTitleRunning())
+	if (m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Can't change MLC path while a game is running!"), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 	wxString message = _("Note that changing the MLC location will not transfer any accounts or save files. Are you sure you want to change the path?");
 	wxMessageDialog dialog(this, message, _("Warning"), wxYES_NO | wxCENTRE | wxICON_WARNING);
-	if(dialog.ShowModal() == wxID_NO)
+	if (dialog.ShowModal() == wxID_NO)
 		return;
 	GetConfig().SetMLCPath("");
 	StoreConfig();
@@ -2919,15 +2943,15 @@ void GeneralSettings2::OnShowOnlineValidator(wxCommandEvent& event)
 
 	if (validator.otp == Application::AccountFileState::Missing)
 		err << _("otp.bin missing in Cemu directory") << '\n';
-	else if(validator.otp == Application::AccountFileState::Corrupted)
+	else if (validator.otp == Application::AccountFileState::Corrupted)
 		err << _("otp.bin is invalid") << '\n';
 
 	if (validator.seeprom == Application::AccountFileState::Missing)
 		err << _("seeprom.bin missing in Cemu directory") << '\n';
-	else if(validator.seeprom == Application::AccountFileState::Corrupted)
+	else if (validator.seeprom == Application::AccountFileState::Corrupted)
 		err << _("seeprom.bin is invalid") << '\n';
 
-	if(!validator.missingFiles.empty())
+	if (!validator.missingFiles.empty())
 	{
 		err << _("Missing certificate and key files:") << '\n';
 
@@ -2937,7 +2961,7 @@ void GeneralSettings2::OnShowOnlineValidator(wxCommandEvent& event)
 			err << f << '\n';
 
 			++counter;
-			if(counter > 10)
+			if (counter > 10)
 			{
 				err << "..." << '\n';
 				break;
@@ -2960,15 +2984,15 @@ wxString GeneralSettings2::GetOnlineAccountErrorMessage(Application::AccountOnli
 {
 	switch (error)
 	{
-		case Application::AccountOnlineError::NoAccountId:
-			return _("AccountId missing (The account is not connected to a NNID/PNID)");
-		case Application::AccountOnlineError::NoPasswordCached:
-			return _("IsPasswordCacheEnabled is set to false (The remember password option on your Wii U must be enabled for this account before dumping it)");
-		case Application::AccountOnlineError::PasswordCacheEmpty:
-			return _("AccountPasswordCache is empty (The remember password option on your Wii U must be enabled for this account before dumping it)");
-		case Application::AccountOnlineError::NoPrincipalId:
-			return _("PrincipalId missing");
-		default:
-			return "no error";
+	case Application::AccountOnlineError::NoAccountId:
+		return _("AccountId missing (The account is not connected to a NNID/PNID)");
+	case Application::AccountOnlineError::NoPasswordCached:
+		return _("IsPasswordCacheEnabled is set to false (The remember password option on your Wii U must be enabled for this account before dumping it)");
+	case Application::AccountOnlineError::PasswordCacheEmpty:
+		return _("AccountPasswordCache is empty (The remember password option on your Wii U must be enabled for this account before dumping it)");
+	case Application::AccountOnlineError::NoPrincipalId:
+		return _("PrincipalId missing");
+	default:
+		return "no error";
 	}
 }

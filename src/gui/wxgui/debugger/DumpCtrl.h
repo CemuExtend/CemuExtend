@@ -3,13 +3,13 @@
 
 class DumpCtrl : public TextList
 {
-public:
+  public:
 	DumpCtrl(wxWindow* parent, const wxWindowID& id, const wxPoint& pos, const wxSize& size, long style);
 
 	void Init();
 	wxSize DoGetBestSize() const override;
 
-protected:
+  protected:
 	void GoToAddressDialog();
 	void CenterOffset(std::uint32_t offset);
 	std::uint32_t LineToOffset(std::uint32_t line);
@@ -23,16 +23,17 @@ protected:
 	void OnContextMenu(const wxPoint& position, std::uint32_t line) override;
 	void OnMenuSelected(wxCommandEvent& event);
 
-	template <typename T>
+	template<typename T>
 	bool WriteNumericDialog(std::uint32_t address);
 	bool WriteString(std::uint32_t address);
-private:
-	struct  
+
+  private:
+	struct
 	{
 		std::uint32_t baseAddress;
 		std::uint32_t size;
-	}m_memoryRegion;
+	} m_memoryRegion;
 	std::uint32_t m_lastGotoOffset{0};
-	std::uint32_t m_writerContextAddress {0};
-	std::uint32_t m_writerContextLine {0};
+	std::uint32_t m_writerContextAddress{0};
+	std::uint32_t m_writerContextLine{0};
 };

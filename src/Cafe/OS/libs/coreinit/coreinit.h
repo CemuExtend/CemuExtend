@@ -2,7 +2,7 @@
 #include "Cafe/HW/Espresso/Const.h"
 #include "Cafe/OS/RPL/COSModule.h"
 
-#define PPC_CORE_COUNT     (Espresso::CORE_COUNT)
+#define PPC_CORE_COUNT (Espresso::CORE_COUNT)
 
 #include "Cafe/OS/libs/coreinit/coreinit_MessageQueue.h"
 
@@ -41,4 +41,4 @@ namespace coreinit
 	uint32 OSGetStackPointer();
 
 	COSModule* GetModule();
-};
+}; // namespace coreinit

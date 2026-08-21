@@ -108,7 +108,7 @@ void OpenGLRenderer::surfaceCopy_copySurfaceWithFormatConversion(LatteTexture* s
 	catchOpenGLError();
 
 	// draw
-	uint16 indexData[6] = { 0,1,3,0,2,3 };
+	uint16 indexData[6] = {0, 1, 3, 0, 2, 3};
 	glDrawRangeElements(GL_TRIANGLES, 0, 5, 6, GL_UNSIGNED_SHORT, indexData);
 	catchOpenGLError();
 
@@ -187,7 +187,6 @@ LatteGLDefaultShader_t* LatteGLDefaultShader_getPixelCopyShader_colorToDepth()
 	fCStr_defaultFragShader.add("void main(){\r\n");
 	fCStr_defaultFragShader.add("gl_FragDepth = texture(textureSrc, passUV).r;\r\n");
 	fCStr_defaultFragShader.add("}\r\n");
-
 
 	defaultShader->glProgamId = gxShaderDepr_compileRaw(&fCStr_vertexShader, &fCStr_defaultFragShader);
 	defaultShader->copyShaderUniforms.uniformLoc_textureSrc = glGetUniformLocation(defaultShader->glProgamId, "textureSrc");

@@ -11,12 +11,12 @@ namespace nn
 	{
 		class UploadedCommunityData
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_HAS_TITLE_TEXT = (1 << 0);
 			static const inline uint32 FLAG_HAS_DESC_TEXT = (1 << 1);
 			static const inline uint32 FLAG_HAS_APP_DATA = (1 << 2);
 			static const inline uint32 FLAG_HAS_ICON_DATA = (1 << 3);
-		
+
 			UploadedCommunityData()
 			{
 				this->titleTextMaxLen = 0;
@@ -83,7 +83,7 @@ namespace nn
 				uint32 len = 0;
 				if (FormatCommunityCode(pBuffer, &len, this->communityId))
 					return OLV_RESULT_SUCCESS;
-				
+
 				return OLV_RESULT_INVALID_PARAMETER;
 			}
 			static sint32 __GetCommunityCode(UploadedCommunityData* _this, char* pBuffer, uint32 bufferSize)
@@ -104,7 +104,7 @@ namespace nn
 			{
 				if (!pBuffer)
 					return OLV_RESULT_INVALID_PTR;
-				
+
 				if (numChars)
 				{
 					if (!this->TestFlags(FLAG_HAS_TITLE_TEXT))
@@ -116,7 +116,7 @@ namespace nn
 						readSize = numChars;
 
 					olv_wstrncpy(pBuffer, this->titleText, readSize);
-					return  OLV_RESULT_SUCCESS;
+					return OLV_RESULT_SUCCESS;
 				}
 
 				return OLV_RESULT_NOT_ENOUGH_SIZE;
@@ -153,7 +153,7 @@ namespace nn
 				uint32 appDataSize = bufferSize;
 				if (!pBuffer)
 					return OLV_RESULT_INVALID_PTR;
-				
+
 				if (bufferSize)
 				{
 					if (!this->TestFlags(FLAG_HAS_APP_DATA))
@@ -223,7 +223,7 @@ namespace nn
 				return _this->GetIconData(pBuffer, pOutSize, bufferSize);
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			uint32be communityId;
 			uint32be pid;
@@ -239,12 +239,11 @@ namespace nn
 		};
 		static_assert(sizeof(nn::olv::UploadedCommunityData) == 0x12000, "sizeof(nn::olv::UploadedCommunityData) != 0x12000");
 
-
 		class UploadCommunityDataParam
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_DELETION = (1 << 0);
-		
+
 			UploadCommunityDataParam()
 			{
 				this->appDataLen = 0;
@@ -319,7 +318,7 @@ namespace nn
 			{
 				if (pText)
 					return olv_copy_wstr(this->titleText, pText, 127, 128);
-			
+
 				memset(this->titleText, 0, sizeof(this->titleText));
 				return OLV_RESULT_SUCCESS;
 			}
@@ -379,7 +378,7 @@ namespace nn
 				return _this->SetIconData(pBuffer, bufferSize);
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			sint32be ___padding_0c;
 			uint64be titleId;
@@ -410,7 +409,7 @@ namespace nn
 			cafeExportRegisterFunc(UploadedCommunityData::__GetAppData, "nn_olv", "GetAppData__Q3_2nn3olv21UploadedCommunityDataCFPUcPUiUi", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadedCommunityData::__GetAppDataSize, "nn_olv", "GetAppDataSize__Q3_2nn3olv21UploadedCommunityDataCFv", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadedCommunityData::__GetIconData, "nn_olv", "GetIconData__Q3_2nn3olv21UploadedCommunityDataCFPUcPUiUi", LogType::NN_OLV);
-		
+
 			cafeExportRegisterFunc(UploadCommunityDataParam::__ctor, "nn_olv", "__ct__Q3_2nn3olv24UploadCommunityDataParamFv", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadCommunityDataParam::__SetFlags, "nn_olv", "SetFlags__Q3_2nn3olv24UploadCommunityDataParamFUi", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadCommunityDataParam::__SetCommunityId, "nn_olv", "SetCommunityId__Q3_2nn3olv24UploadCommunityDataParamFUi", LogType::NN_OLV);
@@ -419,12 +418,12 @@ namespace nn
 			cafeExportRegisterFunc(UploadCommunityDataParam::__SetDescriptionText, "nn_olv", "SetDescriptionText__Q3_2nn3olv24UploadCommunityDataParamFPCw", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadCommunityDataParam::__SetIconData, "nn_olv", "SetIconData__Q3_2nn3olv24UploadCommunityDataParamFPCUcUi", LogType::NN_OLV);
 
-			cafeExportRegisterFunc((sint32(*)(UploadCommunityDataParam const*))UploadCommunityData,
-				"nn_olv", "UploadCommunityData__Q2_2nn3olvFPCQ3_2nn3olv24UploadCommunityDataParam", LogType::NN_OLV);
-		
-			cafeExportRegisterFunc((sint32(*)(UploadedCommunityData *, UploadCommunityDataParam const*))UploadCommunityData,
-				"nn_olv", "UploadCommunityData__Q2_2nn3olvFPQ3_2nn3olv21UploadedCommunityDataPCQ3_2nn3olv24UploadCommunityDataParam", LogType::NN_OLV);
+			cafeExportRegisterFunc((sint32 (*)(UploadCommunityDataParam const*))UploadCommunityData,
+								   "nn_olv", "UploadCommunityData__Q2_2nn3olvFPCQ3_2nn3olv24UploadCommunityDataParam", LogType::NN_OLV);
+
+			cafeExportRegisterFunc((sint32 (*)(UploadedCommunityData*, UploadCommunityDataParam const*))UploadCommunityData,
+								   "nn_olv", "UploadCommunityData__Q2_2nn3olvFPQ3_2nn3olv21UploadedCommunityDataPCQ3_2nn3olv24UploadCommunityDataParam", LogType::NN_OLV);
 		}
 
-	}
-}
+	} // namespace olv
+} // namespace nn

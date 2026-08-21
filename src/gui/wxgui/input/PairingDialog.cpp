@@ -260,14 +260,14 @@ void PairingDialog::WorkerThread()
 		UpdateCallback(PairingState::SearchFailed);
 		return;
 	}
-	stdx::scope_exit infoFree([&]() { bt_free(infos);});
+	stdx::scope_exit infoFree([&]() { bt_free(infos); });
 
 	if (m_threadShouldQuit.load(std::memory_order_acquire))
 		return;
 
 	// Open dev to read name
 	const auto hostDev = hci_open_dev(hostId);
-	stdx::scope_exit devClose([&]() { hci_close_dev(hostDev);});
+	stdx::scope_exit devClose([&]() { hci_close_dev(hostDev); });
 
 	char nameBuffer[HCI_MAX_NAME_LENGTH] = {};
 
@@ -276,8 +276,8 @@ void PairingDialog::WorkerThread()
 	for (const auto& devInfo : std::span(infos, respCount))
 	{
 		const auto& addr = devInfo.bdaddr;
-		const auto err =  hci_read_remote_name(hostDev, &addr, HCI_MAX_NAME_LENGTH, nameBuffer,
-								 2000);
+		const auto err = hci_read_remote_name(hostDev, &addr, HCI_MAX_NAME_LENGTH, nameBuffer,
+											  2000);
 		if (m_threadShouldQuit.load(std::memory_order_acquire))
 			return;
 		if (err || !isWiimoteName(nameBuffer))

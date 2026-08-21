@@ -7,25 +7,25 @@
 #include "TagV0.h"
 #include "ndef.h"
 
-#define NFC_MODE_INVALID	-1
-#define NFC_MODE_IDLE		0
-#define NFC_MODE_ACTIVE		1
+#define NFC_MODE_INVALID -1
+#define NFC_MODE_IDLE 0
+#define NFC_MODE_ACTIVE 1
 
-#define NFC_STATE_UNINITIALIZED		0x0
-#define NFC_STATE_INITIALIZED		0x1
-#define NFC_STATE_IDLE			0x2
-#define NFC_STATE_READ			0x3
-#define NFC_STATE_WRITE			0x4
-#define NFC_STATE_ABORT			0x5
-#define NFC_STATE_FORMAT		0x6
-#define NFC_STATE_SET_READ_ONLY		0x7
-#define NFC_STATE_TAG_PRESENT		0x8
-#define NFC_STATE_DETECT		0x9
-#define NFC_STATE_SEND_RAW_DATA		0xA
+#define NFC_STATE_UNINITIALIZED 0x0
+#define NFC_STATE_INITIALIZED 0x1
+#define NFC_STATE_IDLE 0x2
+#define NFC_STATE_READ 0x3
+#define NFC_STATE_WRITE 0x4
+#define NFC_STATE_ABORT 0x5
+#define NFC_STATE_FORMAT 0x6
+#define NFC_STATE_SET_READ_ONLY 0x7
+#define NFC_STATE_TAG_PRESENT 0x8
+#define NFC_STATE_DETECT 0x9
+#define NFC_STATE_SEND_RAW_DATA 0xA
 
-#define NFC_STATUS_COMMAND_COMPLETE	0x1
-#define NFC_STATUS_READY		0x2
-#define NFC_STATUS_HAS_TAG		0x4
+#define NFC_STATUS_COMMAND_COMPLETE 0x1
+#define NFC_STATUS_READY 0x2
+#define NFC_STATUS_HAS_TAG 0x4
 
 namespace nfc
 {
@@ -39,7 +39,8 @@ namespace nfc
 		uint32 nfcStatus;
 		std::chrono::time_point<std::chrono::system_clock> touchTime;
 		std::chrono::time_point<std::chrono::system_clock> discoveryTimeout;
-		struct {
+		struct
+		{
 			NFCUid uid;
 			NFCUid mask;
 		} filter;
@@ -476,7 +477,7 @@ namespace nfc
 			ctx->tagInfo->uidSize = sizeof(NFCUid);
 			memcpy(ctx->tagInfo->uid, ctx->tag->GetUIDBlock().data(), ctx->tagInfo->uidSize);
 			ctx->tagInfo->technology = NFC_TECHNOLOGY_A;
-			ctx->tagInfo->protocol = NFC_PROTOCOL_T1T;            
+			ctx->tagInfo->protocol = NFC_PROTOCOL_T1T;
 		}
 
 		PPCCoreCallback(ctx->getTagInfoCallback, chan, error, ctx->tagInfo.GetPtr(), context);
@@ -616,7 +617,7 @@ namespace nfc
 		// Create ndef message which contains the record
 		ndef::Message msg;
 		msg.append(rec);
-		ctx->writeMessage = msg; 
+		ctx->writeMessage = msg;
 
 		ctx->state = NFC_STATE_WRITE;
 		ctx->writeCallback = callback;
@@ -640,7 +641,7 @@ namespace nfc
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nfc";
@@ -662,7 +663,7 @@ namespace nfc
 			cafeExportRegister("nfc", NFCRead, LogType::NFC);
 			cafeExportRegister("nfc", NFCWrite, LogType::NFC);
 		};
-	}s_COSnfcModule;
+	} s_COSnfcModule;
 
 	COSModule* GetModule()
 	{
@@ -701,4 +702,4 @@ namespace nfc
 		*nfcError = NFC_TOUCH_TAG_ERROR_NONE;
 		return true;
 	}
-}
+} // namespace nfc

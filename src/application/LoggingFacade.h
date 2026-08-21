@@ -37,11 +37,14 @@ namespace Application
 		bool truncated{};
 	};
 
-	namespace Detail { struct LoggingState; }
+	namespace Detail
+	{
+		struct LoggingState;
+	}
 
 	class LoggingSubscription final
 	{
-	public:
+	  public:
 		LoggingSubscription() = default;
 		LoggingSubscription(LoggingSubscription&& other) noexcept;
 		LoggingSubscription& operator=(LoggingSubscription&& other) noexcept;
@@ -51,7 +54,7 @@ namespace Application
 		LoggingSubscription& operator=(const LoggingSubscription&) = delete;
 		void Reset();
 
-	private:
+	  private:
 		friend class LoggingFacade;
 		LoggingSubscription(std::weak_ptr<Detail::LoggingState> state, std::uint64_t id);
 		std::weak_ptr<Detail::LoggingState> m_state;
@@ -62,7 +65,7 @@ namespace Application
 	// into a bounded buffer; callers never receive a core global or borrowed pointer.
 	class LoggingFacade final : private LoggingCallbacks
 	{
-	public:
+	  public:
 		using Handler = std::function<void(const LoggingEntry&)>;
 		static constexpr std::size_t MaximumEntries = 2048;
 		static constexpr std::size_t MaximumBytes = 1024 * 1024;
@@ -76,14 +79,14 @@ namespace Application
 
 		[[nodiscard]] LoggingSubscription Subscribe(Handler handler);
 		[[nodiscard]] LoggingSnapshot Snapshot(std::uint64_t afterSequence = 0,
-			std::size_t maximumEntries = MaximumEntries) const;
+											   std::size_t maximumEntries = MaximumEntries) const;
 		// Atomically clears retained entries and returns the last sequence covered.
 		[[nodiscard]] std::uint64_t Clear();
 
-	private:
+	  private:
 		void Log(std::string_view category, std::string_view message) override;
 		void Log(std::string_view category, std::wstring_view message) override;
 		void Publish(std::string category, std::string message);
 		std::shared_ptr<Detail::LoggingState> m_state;
 	};
-}
+} // namespace Application

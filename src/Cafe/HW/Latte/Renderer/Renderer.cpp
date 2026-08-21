@@ -14,7 +14,7 @@ std::unique_ptr<Renderer> g_renderer;
 bool Renderer::GetVRAMInfo(int& usageInMB, int& totalInMB) const
 {
 	usageInMB = totalInMB = -1;
-	
+
 #if BOOST_OS_WINDOWS
 	if (m_dxgi_wrapper)
 	{
@@ -31,14 +31,13 @@ bool Renderer::GetVRAMInfo(int& usageInMB, int& totalInMB) const
 	return false;
 }
 
-
 void Renderer::Initialize()
 {
 	// imgui
 	imguiFontAtlas = new ImFontAtlas();
 	imguiFontAtlas->AddFontDefault();
 
-	auto setupContext = [](ImGuiContext* context){
+	auto setupContext = [](ImGuiContext* context) {
 		ImGui::SetCurrentContext(context);
 		ImGuiIO& io = ImGui::GetIO();
 		io.WantSaveIniSettings = false;
@@ -56,7 +55,7 @@ void Renderer::Shutdown()
 	// imgui
 	ImGui::DestroyContext(imguiTVContext);
 	ImGui::DestroyContext(imguiPadContext);
-    ImGui_ClearFonts();
+	ImGui_ClearFonts();
 	delete imguiFontAtlas;
 }
 
@@ -67,7 +66,7 @@ bool Renderer::ImguiBegin(bool mainWindow)
 		return false;
 	const sint32 w = mainWindow ? window.physicalWidth : window.physicalPadWidth;
 	const sint32 h = mainWindow ? window.physicalHeight : window.physicalPadHeight;
-		
+
 	if (w == 0 || h == 0)
 		return false;
 
@@ -145,7 +144,6 @@ void Renderer::CancelScreenshotRequest()
 	m_screenshot_active_request_id = 0;
 }
 
-
 Renderer::ScreenshotRequestId Renderer::GetActiveScreenshotRequestId()
 {
 	std::lock_guard lock(m_screenshot_mutex);
@@ -153,7 +151,7 @@ Renderer::ScreenshotRequestId Renderer::GetActiveScreenshotRequestId()
 }
 
 void Renderer::SaveScreenshot(ScreenshotRequestId requestId, const std::vector<uint8>& rgb_data,
-	int width, int height, bool mainWindow)
+							  int width, int height, bool mainWindow)
 {
 	ScreenshotSaveFunction onSaveScreenshot;
 	{

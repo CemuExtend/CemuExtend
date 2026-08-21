@@ -43,6 +43,7 @@ void QueryCoreTimes(uint32 count, std::vector<ProcessorTime>& out)
 	}
 	else
 	{
-		for (auto i = 0; i < count; ++i) out[i] = { };
+		for (auto i = 0; i < count; ++i)
+			out[i] = {};
 	}
 }

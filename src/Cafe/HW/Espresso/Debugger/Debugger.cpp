@@ -44,7 +44,7 @@ struct DebuggerState
 		PPCInterpreter_t* hCPU{};
 		// step control
 		std::atomic<DebuggerStepCommand> stepCommand{DebuggerStepCommand::None};
-	}debugSession;
+	} debugSession;
 };
 
 DebuggerState s_debuggerState{};
@@ -148,7 +148,7 @@ void debugger_updateMemoryU32(uint32 address, uint32 newValue)
 	if (newValue != memory_readU32(address))
 		memChanged = true;
 	memory_writeU32(address, newValue);
-	if(memChanged)
+	if (memChanged)
 		PPCRecompiler_invalidateRange(address, address + 4);
 }
 
@@ -219,31 +219,31 @@ void debugger_updateMemoryBreakpoint(DebuggerBreakpoint* bp)
 			ctx.Dr0 = (DWORD64)memory_getPointerFromVirtualOffset(bp->address);
 			ctx.Dr1 = (DWORD64)memory_getPointerFromVirtualOffset(bp->address);
 			// breakpoint 0
-			SetBits(ctx.Dr7, 0, 1, 1);  // breakpoint #0 enabled: true
+			SetBits(ctx.Dr7, 0, 1, 1);	// breakpoint #0 enabled: true
 			SetBits(ctx.Dr7, 16, 2, 1); // breakpoint #0 condition: 1 (write)
 			SetBits(ctx.Dr7, 18, 2, 3); // breakpoint #0 length: 3 (4 bytes)
 			// breakpoint 1
-			SetBits(ctx.Dr7, 2, 1, 1);  // breakpoint #1 enabled: true
+			SetBits(ctx.Dr7, 2, 1, 1);	// breakpoint #1 enabled: true
 			SetBits(ctx.Dr7, 20, 2, 3); // breakpoint #1 condition: 3 (read & write)
 			SetBits(ctx.Dr7, 22, 2, 3); // breakpoint #1 length: 3 (4 bytes)
 		}
 		else
 		{
 			// breakpoint 0
-			SetBits(ctx.Dr7, 0, 1, 0);  // breakpoint #0 enabled: false
+			SetBits(ctx.Dr7, 0, 1, 0);	// breakpoint #0 enabled: false
 			SetBits(ctx.Dr7, 16, 2, 0); // breakpoint #0 condition: 1 (write)
 			SetBits(ctx.Dr7, 18, 2, 0); // breakpoint #0 length: 3 (4 bytes)
 			// breakpoint 1
-			SetBits(ctx.Dr7, 2, 1, 0);  // breakpoint #1 enabled: false
+			SetBits(ctx.Dr7, 2, 1, 0);	// breakpoint #1 enabled: false
 			SetBits(ctx.Dr7, 20, 2, 0); // breakpoint #1 condition: 3 (read & write)
 			SetBits(ctx.Dr7, 22, 2, 0); // breakpoint #1 length: 3 (4 bytes)
 		}
 		SetThreadContext(hThread, &ctx);
 		ResumeThread(hThread);
 	}
-	#else
+#else
 	cemuLog_log(LogType::Force, "Debugger breakpoints are not supported");
-	#endif
+#endif
 }
 
 void debugger_handleSingleStepException(uint64 dr6)
@@ -271,12 +271,11 @@ void debugger_handleSingleStepException(uint64 dr6)
 			float memValueF = memory_readFloat(s_debuggerState.activeMemoryBreakpoint->address);
 			uint32 memValue = memory_readU32(s_debuggerState.activeMemoryBreakpoint->address);
 			cemuLog_log(LogType::Force, "[Debugger] 0x{:08X} was read/written! New Value: 0x{:08X} (float {}) IP: {:08X} LR: {:08X}",
-				s_debuggerState.activeMemoryBreakpoint->address,
-				memValue,
-				memValueF,
-				hCPU->instructionPointer,
-				hCPU->spr.LR
-			);
+						s_debuggerState.activeMemoryBreakpoint->address,
+						memValue,
+						memValueF,
+						hCPU->instructionPointer,
+						hCPU->spr.LR);
 			if (cemuLog_advancedPPCLoggingEnabled())
 				DebugLogStackTrace(coreinit::OSGetCurrentThread(), hCPU->gpr[1]);
 		}
@@ -575,7 +574,7 @@ void debugger_createPatch(uint32 address, std::span<uint8> patchData)
 		}
 	}
 	// merge with existing patches if the ranges touch
-	for(sint32 i=0; i<s_debuggerState.patches.size(); i++)
+	for (sint32 i = 0; i < s_debuggerState.patches.size(); i++)
 	{
 		auto& patchItr = s_debuggerState.patches[i];
 		if (address + patchData.size() >= patchItr->address && address <= patchItr->address + patchItr->length)
@@ -599,7 +598,7 @@ void debugger_createPatch(uint32 address, std::span<uint8> patchData)
 			patch = newPatch;
 			delete patchItr;
 			// remove currently iterated patch
-			s_debuggerState.patches.erase(s_debuggerState.patches.begin()+i);
+			s_debuggerState.patches.erase(s_debuggerState.patches.begin() + i);
 			i--;
 		}
 	}
@@ -671,7 +670,7 @@ void debugger_removePatch(uint32 address)
 
 bool debugger_CanStepOverInstruction(MPTR address)
 {
-	PPCDisassembledInstruction disasmInstr = { 0 };
+	PPCDisassembledInstruction disasmInstr = {0};
 	ppcAssembler_disassemble(address, debugger_getAddressOriginalOpcode(address), &disasmInstr);
 	return disasmInstr.ppcAsmCode == PPCASM_OP_BL || disasmInstr.ppcAsmCode == PPCASM_OP_BLA || disasmInstr.ppcAsmCode == PPCASM_OP_BCTRL;
 }
@@ -680,8 +679,7 @@ void debugger_handleLoggingBreakpoint(PPCInterpreter_t* hCPU, DebuggerBreakpoint
 {
 	std::string comment = !bp->comment.empty() ? boost::nowide::narrow(bp->comment) : fmt::format("Breakpoint at 0x{:08X} (no comment)", bp->address);
 
-	auto replacePlaceholders = [&](const std::string& prefix, const auto& formatFunc)
-	{
+	auto replacePlaceholders = [&](const std::string& prefix, const auto& formatFunc) {
 		size_t pos = 0;
 		while ((pos = comment.find(prefix, pos)) != std::string::npos)
 		{
@@ -701,8 +699,7 @@ void debugger_handleLoggingBreakpoint(PPCInterpreter_t* hCPU, DebuggerBreakpoint
 				{
 					pos = endPos + 1;
 				}
-			}
-			catch (...)
+			} catch (...)
 			{
 				pos = endPos + 1;
 			}
@@ -742,10 +739,10 @@ void debugger_stepOverCurrentBreakpoint(PPCInterpreter_t* hCPU)
 void debugger_enterTW(PPCInterpreter_t* hCPU, bool isSingleStep)
 {
 	s_debuggerState.debugSession.debugSessionMtx.lock();
-	while ( true )
+	while (true)
 	{
 		bool trappedExpectedVal = false;
-		if ( s_debuggerState.debugSession.isTrapped.compare_exchange_strong(trappedExpectedVal, true) )
+		if (s_debuggerState.debugSession.isTrapped.compare_exchange_strong(trappedExpectedVal, true))
 			break;
 		s_debuggerState.debugSession.debugSessionMtx.unlock();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));

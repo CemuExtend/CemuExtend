@@ -20,14 +20,18 @@
 class WiimoteControllerProvider : public ControllerProviderBase
 {
 	friend class WiimoteController;
-public:
+
+  public:
 	constexpr static uint32 kDefaultPacketDelay = 25;
 
 	WiimoteControllerProvider();
 	~WiimoteControllerProvider();
 
 	inline static InputAPI::Type kAPIType = InputAPI::Wiimote;
-	InputAPI::Type api() const override { return kAPIType; }
+	InputAPI::Type api() const override
+	{
+		return kAPIType;
+	}
 
 	std::vector<std::shared_ptr<ControllerBase>> get_controllers() override;
 
@@ -63,25 +67,24 @@ public:
 
 			glm::vec2 position{}, m_prev_position{};
 			PositionVisibility m_positionVisibility;
-			glm::vec2 middle {};
+			glm::vec2 middle{};
 			float distance = 0;
-			std::pair<sint32, sint32> indices{ 0,1 };
-		}ir_camera{};
+			std::pair<sint32, sint32> indices{0, 1};
+		} ir_camera{};
 
 		std::optional<MotionPlusData> m_motion_plus;
 		std::variant<std::monostate, NunchuckData, ClassicData> m_extension{};
 	};
 	WiimoteState get_state(size_t index);
-	
 
-private:
+  private:
 	std::atomic_bool m_running = false;
 	std::thread m_reader_thread, m_writer_thread;
 	std::shared_mutex m_device_mutex;
 
 	std::thread m_connectionThread;
 	std::mutex m_connectionMutex;
-    std::condition_variable m_connectionCond;
+	std::condition_variable m_connectionCond;
 	std::vector<WiimoteDevicePtr> m_connectedDevices;
 	std::mutex m_connectedDeviceMutex;
 	struct Wiimote
@@ -100,7 +103,7 @@ private:
 	};
 	boost::ptr_vector<Wiimote> m_wiimotes;
 
-	std::list<std::pair<size_t,std::vector<uint8>>> m_write_queue;
+	std::list<std::pair<size_t, std::vector<uint8>>> m_write_queue;
 	std::mutex m_writer_mutex;
 	std::condition_variable m_writer_cond;
 
@@ -127,6 +130,3 @@ private:
 
 	void update_report_type(size_t index);
 };
-
-
-

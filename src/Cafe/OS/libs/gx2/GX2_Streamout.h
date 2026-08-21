@@ -10,7 +10,7 @@ namespace GX2
 		/* +0x00 */ uint32be size; // size of buffer (if dataPtr is not NULL)
 		/* +0x04 */ MEMPTR<void> dataPtr;
 		/* +0x08 */ uint32be vertexStride;
-		/* +0x0C */ GX2RBuffer rBuffer; // if dataPtr is NULL, use this as the buffer and size
+		/* +0x0C */ GX2RBuffer rBuffer;	 // if dataPtr is NULL, use this as the buffer and size
 		/* +0x1C */ MEMPTR<void> ctxPtr; // stream out context
 	};
 
@@ -18,4 +18,4 @@ namespace GX2
 
 	void GX2SetStreamOutBuffer(uint32 bufferIndex, GX2StreamOutBuffer* streamOutBuffer);
 	void GX2StreamoutInit();
-}
+} // namespace GX2

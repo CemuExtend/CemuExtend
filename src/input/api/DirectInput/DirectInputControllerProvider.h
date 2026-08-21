@@ -14,19 +14,25 @@
 
 class DirectInputControllerProvider : public ControllerProviderBase
 {
-public:
+  public:
 	DirectInputControllerProvider();
 	~DirectInputControllerProvider() override;
 
 	inline static InputAPI::Type kAPIType = InputAPI::DirectInput;
-	InputAPI::Type api() const override { return kAPIType; }
+	InputAPI::Type api() const override
+	{
+		return kAPIType;
+	}
 
 	std::vector<std::shared_ptr<ControllerBase>> get_controllers() override;
 
-	IDirectInput8W* get_dinput() const { return m_dinput8.Get(); }
+	IDirectInput8W* get_dinput() const
+	{
+		return m_dinput8.Get();
+	}
 	LPCDIDATAFORMAT get_data_format() const;
 
-private:
+  private:
 	HMODULE m_module = nullptr;
 
 	decltype(&DirectInput8Create) m_DirectInput8Create;

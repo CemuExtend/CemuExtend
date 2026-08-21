@@ -7,9 +7,9 @@ namespace coreinit
 {
 	void expheap_load();
 
-#define MEM_EXPHEAP_ALLOC_MODE_FIRST	(0)
-#define MEM_EXPHEAP_ALLOC_MODE_NEAR		(1)
-#define MEM_EXPHEAP_USE_ALIGN_MARGIN	(2)
+#define MEM_EXPHEAP_ALLOC_MODE_FIRST (0)
+#define MEM_EXPHEAP_ALLOC_MODE_NEAR (1)
+#define MEM_EXPHEAP_USE_ALIGN_MARGIN (2)
 
 	enum class MEMExpHeapAllocDirection : uint32
 	{
@@ -49,4 +49,4 @@ namespace coreinit
 	void* MEMAllocFromExpHeapEx(MEMHeapHandle heap, uint32 size, sint32 alignment);
 	void MEMFreeToExpHeap(MEMHeapHandle heap, void* mem);
 	uint32 MEMGetAllocatableSizeForExpHeapEx(MEMHeapHandle heap, sint32 alignment);
-}
+} // namespace coreinit

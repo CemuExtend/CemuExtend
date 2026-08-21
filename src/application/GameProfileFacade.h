@@ -49,16 +49,19 @@ namespace Application
 		bool saved{};
 		std::string diagnostic;
 
-		[[nodiscard]] explicit operator bool() const { return saved; }
+		[[nodiscard]] explicit operator bool() const
+		{
+			return saved;
+		}
 	};
 
 	class IGameProfileService
 	{
-	public:
+	  public:
 		virtual ~IGameProfileService() = default;
 		[[nodiscard]] virtual GameProfileView LoadGameProfile(
 			std::uint64_t titleId) const = 0;
 		[[nodiscard]] virtual GameProfileSaveResult SaveGameProfile(
 			std::uint64_t titleId, const GameProfileUpdate& update) = 0;
 	};
-}
+} // namespace Application

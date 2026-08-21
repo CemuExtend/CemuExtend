@@ -38,7 +38,13 @@ namespace
 		std::cerr << "CHECK failed at line " << line << ": " << expression << '\n';
 		std::abort();
 	}
-#define CHECK(condition) do { if (!(condition)) CheckFailed(#condition, __LINE__); } while (false)
+#define CHECK(condition)                       \
+	do                                         \
+	{                                          \
+		if (!(condition))                      \
+			CheckFailed(#condition, __LINE__); \
+	}                                          \
+	while (false)
 
 	constexpr std::uint32_t HookTarget(WupsHookType type)
 	{
@@ -47,30 +53,30 @@ namespace
 
 	struct RuntimeLog
 	{
-			std::vector<std::uint64_t> mappedOwners;
-			std::vector<std::uint32_t> invokedTargets;
-			std::vector<std::uint64_t> unloadLifetimes;
+		std::vector<std::uint64_t> mappedOwners;
+		std::vector<std::uint32_t> invokedTargets;
+		std::vector<std::uint64_t> unloadLifetimes;
 		std::vector<std::pair<std::uint64_t, std::uint32_t>> releases;
 		std::uint32_t relocations{};
-			std::uint32_t unloads{};
-			std::uint32_t failNextMaps{};
-			std::uint32_t failNextUnloads{};
-			std::atomic_uint32_t releaseCalls{};
-			std::atomic_uint32_t unloadCalls{};
-			std::atomic_uint32_t deactivationCalls{};
-			std::uint32_t failNextDeactivations{};
-			std::optional<std::uint32_t> failTarget;
-			std::function<void()> onMap;
-			std::function<void(WupsHookType)> onPrepare;
-			std::function<void(std::uint32_t)> onInvoke;
-			bool throwNextPrepare{};
-			bool throwNextInvoke{};
-			bool inScope{true};
+		std::uint32_t unloads{};
+		std::uint32_t failNextMaps{};
+		std::uint32_t failNextUnloads{};
+		std::atomic_uint32_t releaseCalls{};
+		std::atomic_uint32_t unloadCalls{};
+		std::atomic_uint32_t deactivationCalls{};
+		std::uint32_t failNextDeactivations{};
+		std::optional<std::uint32_t> failTarget;
+		std::function<void()> onMap;
+		std::function<void(WupsHookType)> onPrepare;
+		std::function<void(std::uint32_t)> onInvoke;
+		bool throwNextPrepare{};
+		bool throwNextInvoke{};
+		bool inScope{true};
 	};
 
 	class FakeServices final : public IWupsRuntimeServices
 	{
-	public:
+	  public:
 		explicit FakeServices(std::shared_ptr<RuntimeLog> log) : m_log(std::move(log)) {}
 
 		std::optional<std::uint32_t> ResolveImport(
@@ -82,29 +88,29 @@ namespace
 		}
 
 		bool PrepareHookInvocation(const CemodPackage&, const WupsMetadata&,
-				std::uint64_t, std::uint32_t, WupsHookType type,
-				WupsHookInvocation& invocation, std::string&) override
+								   std::uint64_t, std::uint32_t, WupsHookType type,
+								   WupsHookInvocation& invocation, std::string&) override
+		{
+			if (m_log->onPrepare)
+				m_log->onPrepare(type);
+			if (m_log->throwNextPrepare)
 			{
-				if (m_log->onPrepare)
-					m_log->onPrepare(type);
-				if (m_log->throwNextPrepare)
-				{
-					m_log->throwNextPrepare = false;
-					throw std::runtime_error("injected prepare exception");
-				}
-				invocation = {};
-				return true;
+				m_log->throwNextPrepare = false;
+				throw std::runtime_error("injected prepare exception");
+			}
+			invocation = {};
+			return true;
 		}
 
 		bool ActivatePlugin(const CemodPackage&, const WupsMetadata&,
-			std::uint64_t, std::uint32_t,
-			std::span<const WupsPatchRequest>, std::string&) override
+							std::uint64_t, std::uint32_t,
+							std::span<const WupsPatchRequest>, std::string&) override
 		{
 			return true;
 		}
 
 		bool DeactivatePlugin(std::uint64_t, std::uint32_t,
-			std::string& error) override
+							  std::string& error) override
 		{
 			++m_log->deactivationCalls;
 			if (m_log->failNextDeactivations != 0)
@@ -117,7 +123,7 @@ namespace
 		}
 
 		bool ReleaseOwnerResources(std::uint64_t owner,
-			std::uint32_t generation, std::string&) override
+								   std::uint32_t generation, std::string&) override
 		{
 			++m_log->releaseCalls;
 			m_log->releases.emplace_back(owner, generation);
@@ -131,20 +137,20 @@ namespace
 			return m_log->inScope;
 		}
 
-	private:
+	  private:
 		std::shared_ptr<RuntimeLog> m_log;
 	};
 
 	class FakeModuleLoader final : public IWupsModuleLoader
 	{
-	public:
+	  public:
 		explicit FakeModuleLoader(std::shared_ptr<RuntimeLog> log) : m_log(std::move(log)) {}
 
 		bool Map(std::span<const std::byte>, std::string_view,
-			std::uint64_t owner, std::uint32_t generation,
-			const CemodPackage&, const WupsMetadata&,
-			const std::shared_ptr<IWupsRuntimeServices>&,
-			RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) override
+				 std::uint64_t owner, std::uint32_t generation,
+				 const CemodPackage&, const WupsMetadata&,
+				 const std::shared_ptr<IWupsRuntimeServices>&,
+				 RPLModule*& module, std::uint64_t& lifetimeId, std::string& error) override
 		{
 			m_log->mappedOwners.push_back(owner);
 			if (m_log->failNextMaps != 0)
@@ -169,19 +175,19 @@ namespace
 		}
 
 		bool Invoke(RPLModule*, std::uint64_t, std::uint32_t target,
-			std::span<const std::uint32_t>, std::uint32_t& result,
-			std::string& error) override
+					std::span<const std::uint32_t>, std::uint32_t& result,
+					std::string& error) override
 		{
 			m_log->invokedTargets.push_back(target);
 			result = 0;
-				if (m_log->onInvoke)
-					m_log->onInvoke(target);
-				if (m_log->throwNextInvoke)
-				{
-					m_log->throwNextInvoke = false;
-					throw std::runtime_error("injected invoke exception");
-				}
-				if (m_log->failTarget == target)
+			if (m_log->onInvoke)
+				m_log->onInvoke(target);
+			if (m_log->throwNextInvoke)
+			{
+				m_log->throwNextInvoke = false;
+				throw std::runtime_error("injected invoke exception");
+			}
+			if (m_log->failTarget == target)
 			{
 				error = "injected guest callback failure";
 				return false;
@@ -190,29 +196,29 @@ namespace
 		}
 
 		bool ResolveAddress(RPLModule*, std::uint64_t,
-			std::uint32_t virtualAddress, std::uint32_t,
-			WupsSymbolKind, std::uint32_t& mappedAddress,
-			std::string&) override
+							std::uint32_t virtualAddress, std::uint32_t,
+							WupsSymbolKind, std::uint32_t& mappedAddress,
+							std::string&) override
 		{
 			mappedAddress = virtualAddress;
 			return true;
 		}
 
-			bool Unload(RPLModule*, std::uint64_t lifetimeId, std::string& error) override
+		bool Unload(RPLModule*, std::uint64_t lifetimeId, std::string& error) override
+		{
+			++m_log->unloadCalls;
+			++m_log->unloads;
+			m_log->unloadLifetimes.push_back(lifetimeId);
+			if (m_log->failNextUnloads != 0)
 			{
-				++m_log->unloadCalls;
-				++m_log->unloads;
-				m_log->unloadLifetimes.push_back(lifetimeId);
-				if (m_log->failNextUnloads != 0)
-				{
-					--m_log->failNextUnloads;
-					error = "injected unload failure";
-					return false;
-				}
-				return true;
+				--m_log->failNextUnloads;
+				error = "injected unload failure";
+				return false;
+			}
+			return true;
 		}
 
-	private:
+	  private:
 		std::shared_ptr<RuntimeLog> m_log;
 	};
 
@@ -248,7 +254,7 @@ namespace
 	}
 
 	CemodPackage Package(std::string id, std::string name,
-		std::span<const WupsHookType> hooks = {})
+						 std::span<const WupsHookType> hooks = {})
 	{
 		CemodPackage package;
 		package.manifest.packageVersion = 2;
@@ -278,7 +284,7 @@ namespace
 	}
 
 	void CheckTargets(const std::vector<std::uint32_t>& actual,
-		std::span<const WupsHookType> expected)
+					  std::span<const WupsHookType> expected)
 	{
 		CHECK(actual.size() == expected.size());
 		for (std::size_t index = 0; index < expected.size(); ++index)
@@ -329,18 +335,18 @@ namespace
 
 		std::vector<WupsHookType> completeOrder = startOrder;
 		completeOrder.insert(completeOrder.end(), {
-			WupsHookType::ReleaseForeground,
-			WupsHookType::AcquiredForeground,
-			WupsHookType::ApplicationRequestsExit,
-			WupsHookType::ApplicationEnds,
-			WupsHookType::DeinitPlugin,
-			WupsHookType::FiniWrapper,
-			WupsHookType::FiniWutSockets,
-			WupsHookType::FiniWutDevoptab,
-			WupsHookType::FiniWutStdcpp,
-			WupsHookType::FiniWutNewlib,
-			WupsHookType::FiniWutMalloc,
-		});
+													  WupsHookType::ReleaseForeground,
+													  WupsHookType::AcquiredForeground,
+													  WupsHookType::ApplicationRequestsExit,
+													  WupsHookType::ApplicationEnds,
+													  WupsHookType::DeinitPlugin,
+													  WupsHookType::FiniWrapper,
+													  WupsHookType::FiniWutSockets,
+													  WupsHookType::FiniWutDevoptab,
+													  WupsHookType::FiniWutStdcpp,
+													  WupsHookType::FiniWutNewlib,
+													  WupsHookType::FiniWutMalloc,
+												  });
 		CheckTargets(log->invokedTargets, completeOrder);
 		CHECK(log->releases.empty());
 
@@ -557,7 +563,9 @@ namespace
 			Package("map_race", "Map Race"), 82, 23,
 			services, loader, error);
 		CHECK(runtime);
-		log->onMap = [&runtime] { runtime->Unload(); };
+		log->onMap = [&runtime] {
+			runtime->Unload();
+		};
 		CHECK(!runtime->OnApplicationStarts(error));
 		log->onMap = {};
 		CHECK(error.find("generation was revoked") != std::string::npos);
@@ -629,7 +637,7 @@ namespace
 
 		WupsPayloadRuntime manager(services, loader);
 		const auto unloadHandle = manager.Load(Package("manager_unload", "Manager Unload"),
-			error);
+											   error);
 		CHECK(unloadHandle);
 		CHECK(manager.OnApplicationStarts(error));
 		log->failNextUnloads = 1;
@@ -655,12 +663,12 @@ namespace
 		CHECK(failedLoadManager.Size() == 0);
 
 		const auto reloadHandle = manager.Load(Package("manager_reload", "Reload Original"),
-			error);
+											   error);
 		CHECK(reloadHandle);
 		CHECK(manager.OnApplicationStarts(error));
 		log->failNextUnloads = 1;
 		CHECK(!manager.Reload(*reloadHandle,
-			Package("manager_reload", "Reload Replacement"), error));
+							  Package("manager_reload", "Reload Replacement"), error));
 		CHECK(error.find("remains retryable") != std::string::npos);
 		CHECK(manager.Size() == 1);
 		CHECK(manager.Find(*reloadHandle)->Metadata().name == "Reload Original");
@@ -668,9 +676,9 @@ namespace
 		CHECK(manager.Unload(*reloadHandle, error));
 
 		const auto first = manager.Load(Package("unload_all_first", "Unload All First"),
-			error);
+										error);
 		const auto second = manager.Load(Package("unload_all_second", "Unload All Second"),
-			error);
+										 error);
 		CHECK(first && second);
 		log->failNextUnloads = 1;
 		CHECK(!manager.UnloadAll(error));
@@ -849,16 +857,13 @@ namespace
 		CHECK(IsVisibleThroughOrdinaryModuleScan(true, true));
 		CHECK(!IsVisibleThroughOrdinaryModuleScan(true, false));
 
-		CHECK(ClassifyExternalSectionMapping({
-			1, kSectionFlagAlloc | kSectionFlagExecute, 0x02000000, 4}) ==
-			ExternalMappingRegion::Text);
-		CHECK(ClassifyExternalSectionMapping({
-			kSectionTypeImports, kSectionFlagAlloc | kSectionFlagExecute,
-			0xc0000000, 16}) == ExternalMappingRegion::Loader);
-		CHECK(ClassifyExternalSectionMapping({
-			kSectionTypeExports,
-			kSectionFlagAlloc | kSectionFlagWrite | kSectionFlagExecute,
-			0x10000000, 16}) == ExternalMappingRegion::Data);
+		CHECK(ClassifyExternalSectionMapping({1, kSectionFlagAlloc | kSectionFlagExecute, 0x02000000, 4}) ==
+			  ExternalMappingRegion::Text);
+		CHECK(ClassifyExternalSectionMapping({kSectionTypeImports, kSectionFlagAlloc | kSectionFlagExecute,
+											  0xc0000000, 16}) == ExternalMappingRegion::Loader);
+		CHECK(ClassifyExternalSectionMapping({kSectionTypeExports,
+											  kSectionFlagAlloc | kSectionFlagWrite | kSectionFlagExecute,
+											  0x10000000, 16}) == ExternalMappingRegion::Data);
 
 		const std::array sections{
 			ExternalSectionMapping{
@@ -902,7 +907,7 @@ namespace
 			FindExternalMappingViolation(highSection, wrappingRegion);
 		CHECK(overflowViolation);
 		CHECK(overflowViolation->reason ==
-			ExternalMappingViolation::Reason::RegionAddressOverflow);
+			  ExternalMappingViolation::Reason::RegionAddressOverflow);
 	}
 
 	void TestMissingBackendPermissionIsAnError()
@@ -917,7 +922,7 @@ namespace
 		CHECK(runtime);
 		CHECK(!runtime->OnApplicationStarts(error));
 		CHECK(error.find("INIT_STORAGE requires homebrew_wupsbackend permission") !=
-			std::string::npos);
+			  std::string::npos);
 		CHECK(runtime->State() == WupsPluginState::Failed);
 		CHECK(log->unloads == 1);
 	}
@@ -968,7 +973,7 @@ namespace
 		CHECK(restored->Metadata().name == "Original");
 		CHECK(restored->Generation() > previousGeneration);
 	}
-}
+} // namespace
 
 // WupsRuntime.cpp references the production factory even when tests inject a
 // loader. Keep the test binary independent of Cemu's guest-memory subsystem.

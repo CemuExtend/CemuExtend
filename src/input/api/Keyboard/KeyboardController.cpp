@@ -6,7 +6,6 @@
 KeyboardController::KeyboardController()
 	: base_type("keyboard", "Keyboard")
 {
-	
 }
 
 std::string KeyboardController::get_button_name(uint64 button) const

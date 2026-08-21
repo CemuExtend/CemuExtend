@@ -18,7 +18,7 @@
 #include "Cafe/OS/libs/vpad/vpad.h"
 
 #if BOOST_OS_WINDOWS
-#pragma comment(lib,"Dbghelp.lib")
+#pragma comment(lib, "Dbghelp.lib")
 #endif
 
 #ifdef HAS_SDL
@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
 #else
 
 int BreathOfTheWildChildProcessMain();
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 #if BOOST_OS_LINUX && defined(ENABLE_VULKAN)
 	if (getenv("CEMU_DETECT_RADV") != nullptr)
@@ -94,9 +94,9 @@ int main(int argc, char *argv[])
 #endif
 
 #if BOOST_OS_LINUX || BOOST_OS_BSD
-    XInitThreads();
+	XInitThreads();
 #endif
-    if (!LaunchSettings::HandleCommandline(argc, argv))
+	if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;
 	Frontend::Run();
 	return 0;

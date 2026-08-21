@@ -48,13 +48,13 @@ namespace snd_core
 	{
 		AXUpsampler upsamplerArray[6];
 		bool useLinearUpsampler; // false -> FIR, true -> linear
-	}__AXTVUpsampler;
+	} __AXTVUpsampler;
 
 	struct
 	{
 		AXUpsampler upsamplerArray[4];
 		bool useLinearUpsampler; // false -> FIR, true -> linear
-	}__AXDRCUpsampler[2];
+	} __AXDRCUpsampler[2];
 
 	void AXUpsampler_Init(AXUpsampler* upsampler)
 	{
@@ -83,7 +83,7 @@ namespace snd_core
 	SysAllocator<MEMPTR<sint32>, 6> __AXFinalMixCBStructTV_dataPtrArray;
 	SysAllocator<MEMPTR<sint32>, 4 * 2> __AXFinalMixCBStructDRC_dataPtrArray;
 
-	sint32 __AXFinalMixOutputChannelCount[AX_DEV_COUNT] = { 0 }; // number of output channels returned by final mix callback
+	sint32 __AXFinalMixOutputChannelCount[AX_DEV_COUNT] = {0}; // number of output channels returned by final mix callback
 
 	// callbacks
 	MPTR __AXFrameCallback = MPTR_NULL; // set via AXRegisterFrameCallback()
@@ -146,9 +146,9 @@ namespace snd_core
 		return prevCallbackFunc;
 	}
 
-	sint32 __AXTVUpsamplerSampleHistory[AX_TV_CHANNEL_COUNT] = { 0 };
-	sint32 __AXDRC0UpsamplerSampleHistory[AX_DRC_CHANNEL_COUNT] = { 0 };
-	sint32 __AXDRC1UpsamplerSampleHistory[AX_DRC_CHANNEL_COUNT] = { 0 };
+	sint32 __AXTVUpsamplerSampleHistory[AX_TV_CHANNEL_COUNT] = {0};
+	sint32 __AXDRC0UpsamplerSampleHistory[AX_DRC_CHANNEL_COUNT] = {0};
+	sint32 __AXDRC1UpsamplerSampleHistory[AX_DRC_CHANNEL_COUNT] = {0};
 
 	void AXIst_Init()
 	{
@@ -211,7 +211,6 @@ namespace snd_core
 		return 0;
 	}
 
-
 	SysAllocator<AXRemixMatrices_t, 12> g_remix_matrices;
 
 	sint32 AXSetDeviceRemixMatrix(sint32 deviceId, uint32 inputChannelCount, uint32 outputChannelCount, const MEMPTR<float32be>& matrix)
@@ -219,12 +218,12 @@ namespace snd_core
 		// validate parameters
 		if (deviceId == AX_DEV_TV)
 		{
-			if(inputChannelCount > AX_TV_CHANNEL_COUNT)
+			if (inputChannelCount > AX_TV_CHANNEL_COUNT)
 			{
 				cemuLog_log(LogType::APIErrors, "AXSetDeviceRemixMatrix: Input channel count must be smaller or equal to 6 for TV device");
 				return -7;
 			}
-			if(outputChannelCount != 1 && outputChannelCount != 2 && outputChannelCount != 6)
+			if (outputChannelCount != 1 && outputChannelCount != 2 && outputChannelCount != 6)
 			{
 				// seems like Watch Dogs uses 4 as outputChannelCount for some reason?
 				cemuLog_log(LogType::APIErrors, "AXSetDeviceRemixMatrix: Output channel count must be 1, 2 or 6 for TV device");
@@ -233,12 +232,12 @@ namespace snd_core
 		}
 		else if (deviceId == AX_DEV_DRC)
 		{
-			if(inputChannelCount > AX_DRC_CHANNEL_COUNT)
+			if (inputChannelCount > AX_DRC_CHANNEL_COUNT)
 			{
 				cemuLog_log(LogType::APIErrors, "AXSetDeviceRemixMatrix: Input channel count must be smaller or equal to 4 for DRC device");
 				return -7;
 			}
-			if(outputChannelCount != 1 && outputChannelCount != 2 && outputChannelCount != 4)
+			if (outputChannelCount != 1 && outputChannelCount != 2 && outputChannelCount != 4)
 			{
 				cemuLog_log(LogType::APIErrors, "AXSetDeviceRemixMatrix: Output channel count must be 1, 2 or 4 for DRC device");
 				return -8;
@@ -446,7 +445,7 @@ namespace snd_core
 				*outputBuffer = _swapEndianS32(sample0);
 				outputBuffer++;
 			}
-			for (sint32 c = 0; c < AX_DRC_CHANNEL_COUNT*2; c++)
+			for (sint32 c = 0; c < AX_DRC_CHANNEL_COUNT * 2; c++)
 			{
 				__AXFinalMixCBStructDRC_dataPtrArray[c] = __AXTempFinalMixDRCBuffer.GetPtr() + c * inputSampleCount;
 			}
@@ -466,7 +465,7 @@ namespace snd_core
 			}
 			// DRC1
 			if (__AXDRCUpsampler[1].useLinearUpsampler || forceLinearUpsampler)
-				upsampledSampleCount = AXUpsampleLinear32To48(__AXDRCOutputBuffer + (upsampledSampleCount*AX_DRC_CHANNEL_COUNT), __AXDRCBuffer48.GetPtr()+inputSampleCount*AX_DRC_CHANNEL_COUNT, __AXDRC1UpsamplerSampleHistory, inputSampleCount, true, AX_DRC_CHANNEL_COUNT);
+				upsampledSampleCount = AXUpsampleLinear32To48(__AXDRCOutputBuffer + (upsampledSampleCount * AX_DRC_CHANNEL_COUNT), __AXDRCBuffer48.GetPtr() + inputSampleCount * AX_DRC_CHANNEL_COUNT, __AXDRC1UpsamplerSampleHistory, inputSampleCount, true, AX_DRC_CHANNEL_COUNT);
 			else
 			{
 				cemu_assert(false); // todo
@@ -476,7 +475,6 @@ namespace snd_core
 			__AXFinalMixCBStructDRC->numSamples = (uint16)upsampledSampleCount;
 			__AXFinalMixCBStructDRC->data = __AXFinalMixCBStructDRC_dataPtrArray.GetPtr();
 		}
-		
 
 		// do callbacks
 		__AXFinalMixOutputChannelCount[0] = AX_TV_CHANNEL_COUNT;
@@ -507,9 +505,9 @@ namespace snd_core
 		if (isRenderer48)
 		{
 			// copy TV
-			AXTransferSamples(__AXTempFinalMixTVBuffer.GetPtr(), __AXTVBuffer48.GetPtr(), AX_SAMPLES_PER_3MS_48KHZ*AX_TV_CHANNEL_COUNT, false);
+			AXTransferSamples(__AXTempFinalMixTVBuffer.GetPtr(), __AXTVBuffer48.GetPtr(), AX_SAMPLES_PER_3MS_48KHZ * AX_TV_CHANNEL_COUNT, false);
 			// copy DRC 0
-			AXTransferSamples(__AXTempFinalMixDRCBuffer.GetPtr(), __AXDRCBuffer48.GetPtr(), AX_SAMPLES_PER_3MS_48KHZ*AX_DRC_CHANNEL_COUNT, false);
+			AXTransferSamples(__AXTempFinalMixDRCBuffer.GetPtr(), __AXDRCBuffer48.GetPtr(), AX_SAMPLES_PER_3MS_48KHZ * AX_DRC_CHANNEL_COUNT, false);
 		}
 		else
 		{
@@ -570,25 +568,25 @@ namespace snd_core
 		internalShadowCopy->reserved29E = internalVPB->reserved29E;
 
 		// sync current playback state
-		if ((sync&AX_SYNCFLAG_PLAYBACKSTATE) == 0)
+		if ((sync & AX_SYNCFLAG_PLAYBACKSTATE) == 0)
 		{
 			uint32 playbackState = _swapEndianU16(internalShadowCopy->playbackState);
 			vpb->playbackState = playbackState;
 			internalVPB->playbackState = _swapEndianU16(playbackState);
 		}
 		// sync current offset
-		if ((sync&(AX_SYNCFLAG_CURRENTOFFSET | AX_SYNCFLAG_OFFSETS)) == 0)
+		if ((sync & (AX_SYNCFLAG_CURRENTOFFSET | AX_SYNCFLAG_OFFSETS)) == 0)
 		{
 			internalVPB->internalOffsets.currentOffsetPtrHigh = internalShadowCopy->internalOffsets.currentOffsetPtrHigh;
 			internalVPB->internalOffsets.currentOffsetPtrLow = internalShadowCopy->internalOffsets.currentOffsetPtrLow;
 		}
 		// sync volume
-		if ((sync&AX_SYNCFLAG_VE) == 0)
+		if ((sync & AX_SYNCFLAG_VE) == 0)
 		{
 			internalVPB->veVolume = internalShadowCopy->veVolume;
 		}
 		// sync adpcm data
-		if ((sync&AX_SYNCFLAG_ADPCMDATA) == 0)
+		if ((sync & AX_SYNCFLAG_ADPCMDATA) == 0)
 		{
 			for (sint32 i = 0; i < 16; i++)
 				internalVPB->adpcmData.coef[i] = internalShadowCopy->adpcmData.coef[i];
@@ -598,7 +596,7 @@ namespace snd_core
 			internalVPB->adpcmData.yn2 = internalShadowCopy->adpcmData.yn2;
 		}
 		// sync src data
-		if ((sync&AX_SYNCFLAG_SRCDATA) == 0)
+		if ((sync & AX_SYNCFLAG_SRCDATA) == 0)
 		{
 			internalVPB->src.currentFrac = internalShadowCopy->src.currentFrac;
 			internalVPB->src.historySamples[0] = internalShadowCopy->src.historySamples[0];
@@ -613,13 +611,13 @@ namespace snd_core
 		}
 		// internal data -> shadow copy
 		// sync src type
-		if ((sync&AX_SYNCFLAG_SRCFILTER) != 0)
+		if ((sync & AX_SYNCFLAG_SRCFILTER) != 0)
 		{
 			internalShadowCopy->srcFilterMode = internalVPB->srcFilterMode;
 			internalShadowCopy->srcTapFilter = internalVPB->srcTapFilter;
 		}
 		// Sync device mix
-		if ((sync&AX_SYNCFLAG_DEVICEMIXMASK) != 0)
+		if ((sync & AX_SYNCFLAG_DEVICEMIXMASK) != 0)
 		{
 			memcpy(internalShadowCopy->deviceMixMaskTV, internalVPB->deviceMixMaskTV, 8);
 			memcpy(internalShadowCopy->deviceMixMaskDRC, internalVPB->deviceMixMaskDRC, 0x10);
@@ -633,21 +631,21 @@ namespace snd_core
 			memcpy(internalShadowCopy->deviceMixRMT, internalVPB->deviceMixRMT, 0x40);
 		}
 		// sync playback state
-		if ((sync&AX_SYNCFLAG_PLAYBACKSTATE) != 0)
+		if ((sync & AX_SYNCFLAG_PLAYBACKSTATE) != 0)
 		{
 			internalShadowCopy->playbackState = internalVPB->playbackState;
 		}
 		// sync voice type
-		if ((sync&AX_SYNCFLAG_VOICETYPE) != 0)
+		if ((sync & AX_SYNCFLAG_VOICETYPE) != 0)
 		{
 			internalShadowCopy->voiceType = internalVPB->voiceType;
 		}
 		// itd
-		if ((sync&AX_SYNCFLAG_ITD40) == 0)
+		if ((sync & AX_SYNCFLAG_ITD40) == 0)
 		{
-			if ((sync&AX_SYNCFLAG_ITD20) != 0)
+			if ((sync & AX_SYNCFLAG_ITD20) != 0)
 			{
-				//cemu_assert_debug(false); // sync PB itd
+				// cemu_assert_debug(false); // sync PB itd
 			}
 		}
 		else
@@ -658,17 +656,17 @@ namespace snd_core
 		}
 		// sync volume envelope
 		// the part below could be incorrect (it seems strange that the delta flag overwrites the full ve flag? But PPC code looks like this)
-		if ((sync&AX_SYNCFLAG_VEDELTA) != 0)
+		if ((sync & AX_SYNCFLAG_VEDELTA) != 0)
 		{
 			internalShadowCopy->veDelta = internalVPB->veDelta;
 		}
-		else if ((sync&AX_SYNCFLAG_VE) != 0)
+		else if ((sync & AX_SYNCFLAG_VE) != 0)
 		{
 			internalShadowCopy->veVolume = internalVPB->veVolume;
 			internalShadowCopy->veDelta = internalVPB->veDelta;
 		}
 		// sync offsets
-		if ((sync&AX_SYNCFLAG_OFFSETS) != 0)
+		if ((sync & AX_SYNCFLAG_OFFSETS) != 0)
 		{
 			// sync entire offsets block
 			memcpy(&internalShadowCopy->internalOffsets, &internalVPB->internalOffsets, sizeof(axOffsetsInternal_t));
@@ -676,31 +674,31 @@ namespace snd_core
 		else
 		{
 			// sync individual offset fields
-			if ((sync&AX_SYNCFLAG_LOOPFLAG) != 0)
+			if ((sync & AX_SYNCFLAG_LOOPFLAG) != 0)
 			{
 				// sync loop flag
 				internalShadowCopy->internalOffsets.loopFlag = internalVPB->internalOffsets.loopFlag;
 			}
-			if ((sync&AX_SYNCFLAG_LOOPOFFSET) != 0)
+			if ((sync & AX_SYNCFLAG_LOOPOFFSET) != 0)
 			{
 				// sync loop offset
 				internalShadowCopy->internalOffsets.loopOffsetPtrLow = internalVPB->internalOffsets.loopOffsetPtrLow;
 				internalShadowCopy->internalOffsets.loopOffsetPtrHigh = internalVPB->internalOffsets.loopOffsetPtrHigh;
 			}
-			if ((sync&AX_SYNCFLAG_ENDOFFSET) != 0)
+			if ((sync & AX_SYNCFLAG_ENDOFFSET) != 0)
 			{
 				// sync end offset
 				internalShadowCopy->internalOffsets.endOffsetPtrLow = internalVPB->internalOffsets.endOffsetPtrLow;
 				internalShadowCopy->internalOffsets.endOffsetPtrHigh = internalVPB->internalOffsets.endOffsetPtrHigh;
 			}
-			if ((sync&AX_SYNCFLAG_CURRENTOFFSET) != 0)
+			if ((sync & AX_SYNCFLAG_CURRENTOFFSET) != 0)
 			{
 				// sync current offset
 				internalShadowCopy->internalOffsets.currentOffsetPtrLow = internalVPB->internalOffsets.currentOffsetPtrLow;
 				internalShadowCopy->internalOffsets.currentOffsetPtrHigh = internalVPB->internalOffsets.currentOffsetPtrHigh;
 			}
 		}
-		if ((sync&AX_SYNCFLAG_ADPCMDATA) != 0)
+		if ((sync & AX_SYNCFLAG_ADPCMDATA) != 0)
 		{
 			// sync adpcm data
 			for (sint32 i = 0; i < 16; i++)
@@ -708,7 +706,7 @@ namespace snd_core
 			internalShadowCopy->adpcmData.gain = internalVPB->adpcmData.gain;
 			internalShadowCopy->adpcmData.scale = internalVPB->adpcmData.scale;
 		}
-		if ((sync&AX_SYNCFLAG_SRCDATA) != 0)
+		if ((sync & AX_SYNCFLAG_SRCDATA) != 0)
 		{
 			// sync voice all src data
 			internalShadowCopy->src.ratioHigh = internalVPB->src.ratioHigh;
@@ -721,21 +719,21 @@ namespace snd_core
 		}
 		else
 		{
-			if ((sync&AX_SYNCFLAG_SRCRATIO) != 0)
+			if ((sync & AX_SYNCFLAG_SRCRATIO) != 0)
 			{
 				// sync voice src ratio
 				internalShadowCopy->src.ratioHigh = internalVPB->src.ratioHigh;
 				internalShadowCopy->src.ratioLow = internalVPB->src.ratioLow;
 			}
 		}
-		if ((sync&AX_SYNCFLAG_ADPCMLOOP) != 0)
+		if ((sync & AX_SYNCFLAG_ADPCMLOOP) != 0)
 		{
 			// sync voice adpcm loop
 			internalShadowCopy->adpcmLoop.loopScale = internalVPB->adpcmLoop.loopScale;
 			internalShadowCopy->adpcmLoop.loopYn1 = internalVPB->adpcmLoop.loopYn1;
 			internalShadowCopy->adpcmLoop.loopYn2 = internalVPB->adpcmLoop.loopYn2;
 		}
-		if ((sync&AX_SYNCFLAG_LPFCOEF) != 0)
+		if ((sync & AX_SYNCFLAG_LPFCOEF) != 0)
 		{
 			// sync lpf coef
 			internalShadowCopy->lpf.a0 = internalVPB->lpf.a0;
@@ -743,7 +741,7 @@ namespace snd_core
 		}
 		else
 		{
-			if ((sync&AX_SYNCFLAG_LPFDATA) != 0)
+			if ((sync & AX_SYNCFLAG_LPFDATA) != 0)
 			{
 				// sync lpf
 				internalShadowCopy->lpf.on = internalVPB->lpf.on;
@@ -752,7 +750,7 @@ namespace snd_core
 				internalShadowCopy->lpf.b0 = internalVPB->lpf.b0;
 			}
 		}
-		if ((sync&AX_SYNCFLAG_BIQUADCOEF) != 0)
+		if ((sync & AX_SYNCFLAG_BIQUADCOEF) != 0)
 		{
 			// sync biquad coef
 			internalShadowCopy->biquad.b0 = internalVPB->biquad.b0;
@@ -761,7 +759,7 @@ namespace snd_core
 			internalShadowCopy->biquad.a1 = internalVPB->biquad.a1;
 			internalShadowCopy->biquad.a2 = internalVPB->biquad.a2;
 		}
-		else if ((sync&AX_SYNCFLAG_BIQUADDATA) != 0)
+		else if ((sync & AX_SYNCFLAG_BIQUADDATA) != 0)
 		{
 			// sync biquad
 			internalShadowCopy->biquad.on = internalVPB->biquad.on;
@@ -775,16 +773,16 @@ namespace snd_core
 			internalShadowCopy->biquad.a1 = internalVPB->biquad.a1;
 			internalShadowCopy->biquad.a2 = internalVPB->biquad.a2;
 		}
-		if ((sync&AX_SYNCFLAG_VOICEREMOTEON) != 0)
+		if ((sync & AX_SYNCFLAG_VOICEREMOTEON) != 0)
 		{
 			// sync VoiceRmtOn (AXSetVoiceRmtOn)
 			internalShadowCopy->reserved148_voiceRmtOn = internalVPB->reserved148_voiceRmtOn;
 		}
-		if ((sync&AX_SYNCFLAG_4000000) != 0)
+		if ((sync & AX_SYNCFLAG_4000000) != 0)
 		{
 			// todo
 		}
-		if ((sync&AX_SYNCFLAG_8000000) != 0)
+		if ((sync & AX_SYNCFLAG_8000000) != 0)
 		{
 			// todo
 			// AXSetVoiceRmtSrc
@@ -801,7 +799,7 @@ namespace snd_core
 		for (sint32 priority = AX_PRIORITY_MAX - 1; priority >= AX_PRIORITY_LOWEST; priority--)
 		{
 			auto& voiceArray = AXVoiceList_GetListByPriority(priority);
-			for(auto vpb : voiceArray)
+			for (auto vpb : voiceArray)
 			{
 				sint32 index = vpb->index;
 				sint32 depop = vpb->depop;
@@ -849,7 +847,7 @@ namespace snd_core
 		}
 		// depop and reset voices which just stopped playing
 		auto& freeVoicesArray = AXVoiceList_GetFreeVoices();
-		for(auto vpb : freeVoicesArray)
+		for (auto vpb : freeVoicesArray)
 		{
 			AXVPBInternal_t* internalVPB = __AXVPBInternalVoiceArray + (sint32)vpb->index;
 			AXVPBInternal_t* internalShadowCopy = __AXVPBInternalVoiceShadowCopyArrayPtr + (sint32)vpb->index;
@@ -911,14 +909,14 @@ namespace snd_core
 		for (auto i = 0; i < sampleCount; ++i)
 		{
 			float tmp[6]{};
-			for(auto j = 0; j < inputChannelCount; ++j)
+			for (auto j = 0; j < inputChannelCount; ++j)
 			{
 				tmp[j] = (float)samples[j * sampleCount + i];
 			}
 
 			float32be* mtx = matrix;
 			int tmpOut[10]{};
-			for(auto j = 0; j < outputChannelCount; ++j)
+			for (auto j = 0; j < outputChannelCount; ++j)
 			{
 				tmpOut[j] = 0;
 				for (auto k = 0; k < inputChannelCount; ++k)
@@ -934,7 +932,7 @@ namespace snd_core
 			}
 		}
 	}
-	
+
 	void AXIst_HandleDeviceRemix()
 	{
 		extern SysAllocator<AXRemixMatrices_t, 12> g_remix_matrices;
@@ -942,10 +940,10 @@ namespace snd_core
 		extern sint32 __AXOutDRCOutputChannelCount;
 
 		// tv remix matrix
-		for(uint32 i = 0; i < g_remix_matrices.GetCount(); ++i)
+		for (uint32 i = 0; i < g_remix_matrices.GetCount(); ++i)
 		{
 			const auto& entry = g_remix_matrices[i];
-			if(entry.deviceEntry[0].channelIn == __AXFinalMixCBStructTV->numChannelInput && entry.deviceEntry[0].channelOut == __AXOutTVOutputChannelCount && !entry.deviceEntry[0].matrix.IsNull())
+			if (entry.deviceEntry[0].channelIn == __AXFinalMixCBStructTV->numChannelInput && entry.deviceEntry[0].channelOut == __AXOutTVOutputChannelCount && !entry.deviceEntry[0].matrix.IsNull())
 			{
 				AXIst_ApplyDeviceRemix((sint32be*)__AXTVBuffer48.GetPtr(), entry.deviceEntry[0].matrix.GetPtr(), __AXFinalMixCBStructTV->numChannelInput, __AXOutTVOutputChannelCount, AX_SAMPLES_PER_3MS_48KHZ);
 				break;
@@ -974,7 +972,7 @@ namespace snd_core
 
 	void AXIst_InitThread()
 	{
-        __AXIstIsProcessingFrame = false;
+		__AXIstIsProcessingFrame = false;
 		// create ist message queue
 		OSInitMessageQueue(__AXIstThreadMsgQueue.GetPtr(), __AXIstThreadMsgArray.GetPtr(), 0x10);
 		// create thread
@@ -1070,4 +1068,4 @@ namespace snd_core
 	{
 		return __AXIstIsProcessingFrame.load();
 	}
-}
+} // namespace snd_core

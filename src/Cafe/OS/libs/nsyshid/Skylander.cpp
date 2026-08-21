@@ -560,7 +560,8 @@ namespace nsyshid
 
 	Device::WriteResult SkylanderPortalDevice::Write(WriteMessage* message)
 	{
-		if (message->length != 64) {
+		if (message->length != 64)
+		{
 			cemu_assert_error();
 		}
 

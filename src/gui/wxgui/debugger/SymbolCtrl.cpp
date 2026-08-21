@@ -12,7 +12,7 @@ enum SymbolColumns
 };
 
 SymbolListCtrl::SymbolListCtrl(wxWindow* parent, const wxWindowID& id, const wxPoint& pos, const wxSize& size) : wxListView(parent, id, pos, size, wxLC_REPORT | wxLC_VIRTUAL)
-{    
+{
 	wxListItem col0;
 	col0.SetId(ColumnName);
 	col0.SetText(_("Name"));
@@ -60,8 +60,7 @@ void SymbolListCtrl::OnGameLoaded()
 			address,
 			symbolNameWX,
 			libNameWX,
-			searchNameWX
-		);
+			searchNameWX);
 	}
 	rplSymbolStorage_unlockSymbolMap();
 
@@ -83,7 +82,6 @@ wxString SymbolListCtrl::OnGetItemText(long item, long column) const
 
 	return wxEmptyString;
 }
-
 
 void SymbolListCtrl::OnLeftDClick(wxListEvent& event)
 {

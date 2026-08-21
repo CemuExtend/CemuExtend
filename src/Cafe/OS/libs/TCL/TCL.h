@@ -23,5 +23,5 @@ namespace TCL
 	void TCLGPUNotifyNewRetirementTimestamp();
 
 	COSModule* GetModule();
-}
+} // namespace TCL
 ENABLE_BITMASK_OPERATORS(TCL::TCLSubmissionFlag);

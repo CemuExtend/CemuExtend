@@ -11,12 +11,12 @@ namespace nn
 	{
 		class UploadedFavoriteToCommunityData
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_HAS_TITLE_TEXT = (1 << 0);
 			static const inline uint32 FLAG_HAS_DESC_TEXT = (1 << 1);
 			static const inline uint32 FLAG_HAS_APP_DATA = (1 << 2);
 			static const inline uint32 FLAG_HAS_ICON_DATA = (1 << 3);
-		
+
 			UploadedFavoriteToCommunityData()
 			{
 				this->titleTextMaxLen = 0;
@@ -33,7 +33,7 @@ namespace nn
 				{
 					assert_dbg(); // DO NOT CONTINUE, SHOULD NEVER HAPPEN
 					return nullptr;
-				} 
+				}
 				else
 					return new (_this) UploadedFavoriteToCommunityData();
 			}
@@ -83,7 +83,7 @@ namespace nn
 				uint32 len = 0;
 				if (FormatCommunityCode(pBuffer, &len, this->communityId))
 					return OLV_RESULT_SUCCESS;
-				
+
 				return OLV_RESULT_INVALID_PARAMETER;
 			}
 			static sint32 __GetCommunityCode(UploadedFavoriteToCommunityData* _this, char* pBuffer, uint32 bufferSize)
@@ -104,7 +104,7 @@ namespace nn
 			{
 				if (!pBuffer)
 					return OLV_RESULT_INVALID_PTR;
-				
+
 				if (numChars)
 				{
 					if (!this->TestFlags(FLAG_HAS_TITLE_TEXT))
@@ -153,7 +153,7 @@ namespace nn
 				uint32 appDataSize = bufferSize;
 				if (!pBuffer)
 					return OLV_RESULT_INVALID_PTR;
-				
+
 				if (bufferSize)
 				{
 					if (!this->TestFlags(FLAG_HAS_APP_DATA))
@@ -223,7 +223,7 @@ namespace nn
 				return _this->GetIconData(pBuffer, pOutSize, bufferSize);
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			uint32be communityId;
 			uint32be pid;
@@ -241,8 +241,7 @@ namespace nn
 
 		class UploadFavoriteToCommunityDataParam
 		{
-
-		public:
+		  public:
 			static const inline uint32 FLAG_DELETION = (1 << 0);
 
 			UploadFavoriteToCommunityDataParam()
@@ -303,7 +302,7 @@ namespace nn
 				return _this->SetCommunityId(communityId);
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			uint32be communityId;
 			uint8 unk[54]; // Unused
@@ -325,18 +324,18 @@ namespace nn
 			cafeExportRegisterFunc(UploadedFavoriteToCommunityData::__GetAppData, "nn_olv", "GetAppData__Q3_2nn3olv31UploadedFavoriteToCommunityDataCFPUcPUiUi", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadedFavoriteToCommunityData::__GetAppDataSize, "nn_olv", "GetAppDataSize__Q3_2nn3olv31UploadedFavoriteToCommunityDataCFv", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadedFavoriteToCommunityData::__GetIconData, "nn_olv", "GetIconData__Q3_2nn3olv31UploadedFavoriteToCommunityDataCFPUcPUiUi", LogType::NN_OLV);
-			
+
 			cafeExportRegisterFunc(UploadFavoriteToCommunityDataParam::__ctor, "nn_olv", "__ct__Q3_2nn3olv34UploadFavoriteToCommunityDataParamFv", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadFavoriteToCommunityDataParam::__SetFlags, "nn_olv", "SetFlags__Q3_2nn3olv34UploadFavoriteToCommunityDataParamFUi", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadFavoriteToCommunityDataParam::__SetCommunityCode, "nn_olv", "SetCommunityCode__Q3_2nn3olv34UploadFavoriteToCommunityDataParamFPCc", LogType::NN_OLV);
 			cafeExportRegisterFunc(UploadFavoriteToCommunityDataParam::__SetCommunityId, "nn_olv", "SetCommunityId__Q3_2nn3olv34UploadFavoriteToCommunityDataParamFUi", LogType::NN_OLV);
 
-			cafeExportRegisterFunc((sint32(*)(const UploadFavoriteToCommunityDataParam*))UploadFavoriteToCommunityData,
-				"nn_olv", "UploadFavoriteToCommunityData__Q2_2nn3olvFPCQ3_2nn3olv34UploadFavoriteToCommunityDataParam", LogType::NN_OLV);
+			cafeExportRegisterFunc((sint32 (*)(const UploadFavoriteToCommunityDataParam*))UploadFavoriteToCommunityData,
+								   "nn_olv", "UploadFavoriteToCommunityData__Q2_2nn3olvFPCQ3_2nn3olv34UploadFavoriteToCommunityDataParam", LogType::NN_OLV);
 
-			cafeExportRegisterFunc((sint32(*)(UploadedFavoriteToCommunityData*, const UploadFavoriteToCommunityDataParam*))UploadFavoriteToCommunityData,
-				"nn_olv", "UploadFavoriteToCommunityData__Q2_2nn3olvFPQ3_2nn3olv31UploadedFavoriteToCommunityDataPCQ3_2nn3olv34UploadFavoriteToCommunityDataParam", LogType::NN_OLV);
+			cafeExportRegisterFunc((sint32 (*)(UploadedFavoriteToCommunityData*, const UploadFavoriteToCommunityDataParam*))UploadFavoriteToCommunityData,
+								   "nn_olv", "UploadFavoriteToCommunityData__Q2_2nn3olvFPQ3_2nn3olv31UploadedFavoriteToCommunityDataPCQ3_2nn3olv34UploadFavoriteToCommunityDataParam", LogType::NN_OLV);
 		}
 
-	}
-}
+	} // namespace olv
+} // namespace nn

@@ -77,8 +77,8 @@ void gx2SurfaceCopySoftware_specialized(
 // this only supports the cases where every micro tile fits within 256 bytes (group size)
 // we could accelerate this even further if we copied whole macro blocks
 void gx2SurfaceCopySoftware_fastPath_tm4Copy(uint8* inputData, sint32 surfSrcHeight, sint32 srcPitch, sint32 srcDepth, uint32 srcSlice, uint32 srcSwizzle,
-	uint8* outputData, sint32 surfDstHeight, sint32 dstPitch, sint32 dstDepth, uint32 dstSlice, uint32 dstSwizzle,
-	uint32 copyWidth, uint32 copyHeight, uint32 copyBpp)
+											 uint8* outputData, sint32 surfDstHeight, sint32 dstPitch, sint32 dstDepth, uint32 dstSlice, uint32 dstSwizzle,
+											 uint32 copyWidth, uint32 copyHeight, uint32 copyBpp)
 {
 	cemu_assert_debug((copyWidth & 7) == 0);
 	cemu_assert_debug((copyHeight & 7) == 0);
@@ -172,12 +172,12 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 	sint32 srcWidth = srcSurface->width;
 	sint32 srcHeight = srcSurface->height;
 
-	sint32 dstMipWidth = std::max(dstWidth>>dstMip, 1);
-	sint32 dstMipHeight = std::max(dstHeight>>dstMip, 1);
-	sint32 srcMipWidth = std::max(srcWidth>>srcMip, 1);
-	sint32 srcMipHeight = std::max(srcHeight>>srcMip, 1);
+	sint32 dstMipWidth = std::max(dstWidth >> dstMip, 1);
+	sint32 dstMipHeight = std::max(dstHeight >> dstMip, 1);
+	sint32 srcMipWidth = std::max(srcWidth >> srcMip, 1);
+	sint32 srcMipHeight = std::max(srcHeight >> srcMip, 1);
 
-	if( dstMipWidth != srcMipWidth || dstMipHeight != srcMipHeight )
+	if (dstMipWidth != srcMipWidth || dstMipHeight != srcMipHeight)
 	{
 		cemuLog_logDebugOnce(LogType::Force, "GX2CopySurface: Mismatching mip resolution");
 		return;
@@ -199,7 +199,7 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 		return;
 	}
 	// make sure formats are compatible
-	if( surfOutSrc.bpp != surfOutDst.bpp )
+	if (surfOutSrc.bpp != surfOutDst.bpp)
 	{
 		cemuLog_logDebug(LogType::Force, "GX2CopySurface(): Format bpp mismatch (src=0x{:04x} dst=0x{:04x})", (sint32)srcFormat, (sint32)dstFormat);
 		return;
@@ -207,18 +207,18 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 	// get input pointer
 	cemu_assert(srcMip < srcSurface->numLevels);
 	uint8* srcDataPtr = nullptr;
-	if( srcMip == 0 )
+	if (srcMip == 0)
 		srcDataPtr = (uint8*)memory_getPointerFromVirtualOffset(srcSurface->imagePtr);
-	else if( srcMip == 1 )
+	else if (srcMip == 1)
 		srcDataPtr = (uint8*)memory_getPointerFromVirtualOffset(srcSurface->mipPtr);
 	else
 		srcDataPtr = (uint8*)memory_getPointerFromVirtualOffset(srcSurface->mipPtr + srcSurface->mipOffset[srcMip - 1]);
 	// get output pointer
 	cemu_assert(dstMip < dstSurface->numLevels);
 	uint8* dstDataPtr = nullptr;
-	if( dstMip == 0 )
+	if (dstMip == 0)
 		dstDataPtr = (uint8*)memory_getPointerFromVirtualOffset(dstSurface->imagePtr);
-	else if( dstMip == 1 )
+	else if (dstMip == 1)
 		dstDataPtr = (uint8*)memory_getPointerFromVirtualOffset(dstSurface->mipPtr);
 	else
 		dstDataPtr = (uint8*)memory_getPointerFromVirtualOffset(dstSurface->mipPtr + dstSurface->mipOffset[dstMip - 1]);
@@ -233,19 +233,19 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 		srcPitch = srcSurface->pitch >> srcMip;
 		srcPitch = std::max<uint32>(srcPitch, 1);
 	}
-	uint32 copyWidth = std::max<uint32>(dstWidth>>dstMip, 1);
-	uint32 copyHeight = std::max<uint32>(dstHeight>>dstMip, 1);
+	uint32 copyWidth = std::max<uint32>(dstWidth >> dstMip, 1);
+	uint32 copyHeight = std::max<uint32>(dstHeight >> dstMip, 1);
 
-	cemu_assert(copyWidth <= std::max<uint32>(srcWidth>>srcMip, 1));
-	cemu_assert(copyHeight <= std::max<uint32>(srcHeight>>srcMip, 1));
+	cemu_assert(copyWidth <= std::max<uint32>(srcWidth >> srcMip, 1));
+	cemu_assert(copyHeight <= std::max<uint32>(srcHeight >> srcMip, 1));
 
 	cemuLog_log(LogType::GX2, "GX2CopySurface:");
-	cemuLog_log(LogType::GX2,"srcSurface: imagePtr=0x{:08x} mipPtr=0x{:08x} swizzle=0x{:06x} width={} height={} depth={} pitch=0x{:x} tilemode=0x{:x} format=0x{:x} mip={} slice={}",
-		(uint32)srcSurface->imagePtr, (uint32)srcSurface->mipPtr, (uint32)srcSurface->swizzle, (uint32)srcSurface->width, (uint32)srcSurface->height, (uint32)srcSurface->depth, (uint32)srcSurface->pitch,
-		(uint32)srcSurface->tileMode.value(), (uint32)srcSurface->format.value(), srcMip, srcSlice);
+	cemuLog_log(LogType::GX2, "srcSurface: imagePtr=0x{:08x} mipPtr=0x{:08x} swizzle=0x{:06x} width={} height={} depth={} pitch=0x{:x} tilemode=0x{:x} format=0x{:x} mip={} slice={}",
+				(uint32)srcSurface->imagePtr, (uint32)srcSurface->mipPtr, (uint32)srcSurface->swizzle, (uint32)srcSurface->width, (uint32)srcSurface->height, (uint32)srcSurface->depth, (uint32)srcSurface->pitch,
+				(uint32)srcSurface->tileMode.value(), (uint32)srcSurface->format.value(), srcMip, srcSlice);
 	cemuLog_log(LogType::GX2, "dstSurface: imagePtr=0x{:08x} mipPtr=0x{:08x} swizzle=0x{:06x} width={} height={} depth={} pitch=0x{:x} tilemode=0x{:x} format=0x{:x} mip={} slice={}",
-		(uint32)dstSurface->imagePtr, (uint32)dstSurface->mipPtr, (uint32)dstSurface->swizzle, (uint32)dstSurface->width, (uint32)dstSurface->height, (uint32)dstSurface->depth, (uint32)dstSurface->pitch,
-		(uint32)dstSurface->tileMode.value(), (uint32)dstSurface->format.value(), dstMip, dstSlice);
+				(uint32)dstSurface->imagePtr, (uint32)dstSurface->mipPtr, (uint32)dstSurface->swizzle, (uint32)dstSurface->width, (uint32)dstSurface->height, (uint32)dstSurface->depth, (uint32)dstSurface->pitch,
+				(uint32)dstSurface->tileMode.value(), (uint32)dstSurface->format.value(), dstMip, dstSlice);
 
 	bool isGX2CPUCopy = srcSurface->tileMode == Latte::E_GX2TILEMODE::TM_LINEAR_SPECIAL || dstSurface->tileMode == Latte::E_GX2TILEMODE::TM_LINEAR_SPECIAL;
 	if (isGX2CPUCopy)
@@ -289,33 +289,32 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 	// for simplicity and performance Cemu uses a HLE command to handle surface copies,
 	// a more accurate implementation would setup actual drawcalls to copy the texture data
 	GX2::GX2ReserveCmdSpace(23);
-	gx2WriteGather_submit(pm4HeaderType3(IT_HLE_COPY_SURFACE_NEW, 4+9*2),
-	// copy rect
-	(uint32)0, // x
-	(uint32)0, // y
-	(uint32)copyWidth,
-	(uint32)copyHeight,
-	// src
-	(uint32)MEMPTR<void>(srcDataPtr).GetMPTR(),
-	(uint32)srcSurface->swizzle,
-	(uint32)srcSurface->format.value(),
-	(uint32)surfOutSrc.pitch,
-	(uint32)surfOutSrc.height,
-	srcSlice,
-	(uint32)srcSurface->dim.value(),
-	(uint32)srcTilemode,
-	(uint32)srcSurface->aa,
-	// dst
-	(uint32)MEMPTR<void>(dstDataPtr).GetMPTR(),
-	(uint32)dstSurface->swizzle,
-	(uint32)dstSurface->format.value(),
-	(uint32)surfOutDst.pitch,
-	(uint32)surfOutDst.height,
-	dstSlice,
-	(uint32)dstSurface->dim.value(),
-	(uint32)dstTilemode,
-	(uint32)dstSurface->aa
-	);
+	gx2WriteGather_submit(pm4HeaderType3(IT_HLE_COPY_SURFACE_NEW, 4 + 9 * 2),
+						  // copy rect
+						  (uint32)0, // x
+						  (uint32)0, // y
+						  (uint32)copyWidth,
+						  (uint32)copyHeight,
+						  // src
+						  (uint32)MEMPTR<void>(srcDataPtr).GetMPTR(),
+						  (uint32)srcSurface->swizzle,
+						  (uint32)srcSurface->format.value(),
+						  (uint32)surfOutSrc.pitch,
+						  (uint32)surfOutSrc.height,
+						  srcSlice,
+						  (uint32)srcSurface->dim.value(),
+						  (uint32)srcTilemode,
+						  (uint32)srcSurface->aa,
+						  // dst
+						  (uint32)MEMPTR<void>(dstDataPtr).GetMPTR(),
+						  (uint32)dstSurface->swizzle,
+						  (uint32)dstSurface->format.value(),
+						  (uint32)surfOutDst.pitch,
+						  (uint32)surfOutDst.height,
+						  dstSlice,
+						  (uint32)dstSurface->dim.value(),
+						  (uint32)dstTilemode,
+						  (uint32)dstSurface->aa);
 }
 
 void gx2Surface_GX2CopySurface(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSlice, GX2Surface* dstSurface, uint32 dstMip, uint32 dstSlice)
@@ -341,17 +340,17 @@ typedef struct
 	sint32 top;
 	sint32 right;
 	sint32 bottom;
-}GX2Rect_t;
+} GX2Rect_t;
 
-typedef struct  
+typedef struct
 {
 	sint32 x;
 	sint32 y;
-}GX2Point_t;
+} GX2Point_t;
 
 void gx2Export_GX2CopySurfaceEx(PPCInterpreter_t* hCPU)
 {
-	cemuLog_logDebug(LogType::Force, "GX2CopySurfaceEx(0x{:08x},{},{},0x{:08x},{},{},{},0x{:08x},0x{:08x})", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9], hCPU->gpr[10], memory_readU32(hCPU->gpr[1]+0x8));
+	cemuLog_logDebug(LogType::Force, "GX2CopySurfaceEx(0x{:08x},{},{},0x{:08x},{},{},{},0x{:08x},0x{:08x})", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9], hCPU->gpr[10], memory_readU32(hCPU->gpr[1] + 0x8));
 	GX2Surface* srcSurface = (GX2Surface*)memory_getPointerFromVirtualOffset(hCPU->gpr[3]);
 	uint32 srcMip = hCPU->gpr[4];
 	uint32 srcSlice = hCPU->gpr[5];
@@ -360,7 +359,7 @@ void gx2Export_GX2CopySurfaceEx(PPCInterpreter_t* hCPU)
 	uint32 dstSlice = hCPU->gpr[8];
 	sint32 rectCount = hCPU->gpr[9];
 	MPTR rectSrcArrayMPTR = hCPU->gpr[10];
-	MPTR pointDstArrayMPTR = memory_readU32(hCPU->gpr[1]+0x8);
+	MPTR pointDstArrayMPTR = memory_readU32(hCPU->gpr[1] + 0x8);
 
 	GX2Rect_t* rectSrc = (GX2Rect_t*)memory_getPointerFromVirtualOffset(rectSrcArrayMPTR);
 	GX2Point_t* rectDst = (GX2Point_t*)memory_getPointerFromVirtualOffset(pointDstArrayMPTR);
@@ -370,19 +369,19 @@ void gx2Export_GX2CopySurfaceEx(PPCInterpreter_t* hCPU)
 	}
 
 #ifdef CEMU_DEBUG_ASSERT
-	if( rectCount != 1 )
+	if (rectCount != 1)
 		assert_dbg();
-	if( srcMip != 0 )
+	if (srcMip != 0)
 		assert_dbg();
-	if( srcSlice != 0 )
+	if (srcSlice != 0)
 		assert_dbg();
-	if( dstMip != 0 )
+	if (dstMip != 0)
 		assert_dbg();
-	if( dstSlice != 0 )
+	if (dstSlice != 0)
 		assert_dbg();
 #endif
 
-	for(sint32 i=0; i<rectCount; i++)
+	for (sint32 i = 0; i < rectCount; i++)
 	{
 		uint32 srcWidth = srcSurface->width;
 		uint32 srcHeight = srcSurface->height;
@@ -391,7 +390,7 @@ void gx2Export_GX2CopySurfaceEx(PPCInterpreter_t* hCPU)
 		sint32 rectSrcY = (sint32)_swapEndianU32((uint32)rectSrc[i].top);
 		sint32 rectWidth = (sint32)_swapEndianU32((uint32)rectSrc[i].right) - rectSrcX;
 		sint32 rectHeight = (sint32)_swapEndianU32((uint32)rectSrc[i].bottom) - rectSrcY;
-		if( rectSrcX == 0 && rectSrcY == 0 && rectWidth == srcWidth && rectHeight == srcHeight )
+		if (rectSrcX == 0 && rectSrcY == 0 && rectWidth == srcWidth && rectHeight == srcHeight)
 		{
 			// special case in which GX2CopySurfaceEx acts like GX2CopySurface()
 			gx2Surface_GX2CopySurface(srcSurface, srcMip, srcSlice, dstSurface, dstMip, dstSlice);
@@ -413,7 +412,7 @@ void gx2Export_GX2ResolveAAColorBuffer(PPCInterpreter_t* hCPU)
 	uint32 dstSlice = hCPU->gpr[6];
 
 #ifdef CEMU_DEBUG_ASSERT
-	if( srcColorBuffer->viewMip != 0 || srcColorBuffer->viewFirstSlice != 0 )
+	if (srcColorBuffer->viewMip != 0 || srcColorBuffer->viewFirstSlice != 0)
 		assert_dbg();
 #endif
 
@@ -423,18 +422,18 @@ void gx2Export_GX2ResolveAAColorBuffer(PPCInterpreter_t* hCPU)
 	sint32 srcWidth = srcSurface->width;
 	sint32 srcHeight = srcSurface->height;
 
-	uint32 dstMipWidth = std::max(dstWidth>>dstMip, 1);
-	uint32 dstMipHeight = std::max(dstHeight>>dstMip, 1);
-	uint32 srcMipWidth = std::max(srcWidth>>srcMip, 1);
-	uint32 srcMipHeight = std::max(srcHeight>>srcMip, 1);
+	uint32 dstMipWidth = std::max(dstWidth >> dstMip, 1);
+	uint32 dstMipHeight = std::max(dstHeight >> dstMip, 1);
+	uint32 srcMipWidth = std::max(srcWidth >> srcMip, 1);
+	uint32 srcMipHeight = std::max(srcHeight >> srcMip, 1);
 
 	// check if surface properties match
-	if( srcSurface->width != dstSurface->width || srcSurface->height != dstSurface->height )
+	if (srcSurface->width != dstSurface->width || srcSurface->height != dstSurface->height)
 	{
 		osLib_returnFromFunction(hCPU, 0);
 		return;
 	}
-	if( dstMipWidth != srcMipWidth || dstMipHeight != srcMipHeight )
+	if (dstMipWidth != srcMipWidth || dstMipHeight != srcMipHeight)
 	{
 		cemu_assert_suspicious();
 		osLib_returnFromFunction(hCPU, 0);
@@ -450,19 +449,19 @@ void gx2Export_GX2ResolveAAColorBuffer(PPCInterpreter_t* hCPU)
 	auto srcHwFormat = Latte::GetHWFormat(srcFormat);
 	auto dstHwFormat = Latte::GetHWFormat(dstFormat);
 	// calculate step size for compressed textures
-	if( Latte::IsCompressedFormat(srcHwFormat) )
+	if (Latte::IsCompressedFormat(srcHwFormat))
 	{
 		srcStepX = 4;
 		srcStepY = 4;
 	}
-	if(Latte::IsCompressedFormat(dstHwFormat) )
+	if (Latte::IsCompressedFormat(dstHwFormat))
 	{
 		dstStepX = 4;
 		dstStepY = 4;
 	}
 	cemu_assert_debug(srcStepX == dstStepX && srcStepY == dstStepY);
 
-	if( srcHwFormat != dstHwFormat )
+	if (srcHwFormat != dstHwFormat)
 	{
 		// mismatching format
 		debug_printf("GX2ResolveAAColorBuffer(): Format mismatch\n");
@@ -485,9 +484,9 @@ void gx2Export_GX2ConvertDepthBufferToTextureSurface(PPCInterpreter_t* hCPU)
 	if (dstMip != 0 || dstSlice != 0)
 		debugBreakpoint();
 	// get texture info
-	LatteAddrLib::AddrSurfaceInfo_OUT surfOutSrc = { 0 };
+	LatteAddrLib::AddrSurfaceInfo_OUT surfOutSrc = {0};
 	GX2::GX2CalculateSurfaceInfo(&depthBuffer->surface, 0, &surfOutSrc);
-	LatteAddrLib::AddrSurfaceInfo_OUT surfOutDst = { 0 };
+	LatteAddrLib::AddrSurfaceInfo_OUT surfOutDst = {0};
 	GX2::GX2CalculateSurfaceInfo(dstSurface, 0, &surfOutDst);
 
 	if (depthBuffer->surface.imagePtr == dstSurface->imagePtr)
@@ -519,23 +518,21 @@ namespace GX2
 		osLib_addFunction("gx2", "GX2ResolveAAColorBuffer", gx2Export_GX2ResolveAAColorBuffer);
 		osLib_addFunction("gx2", "GX2ConvertDepthBufferToTextureSurface", gx2Export_GX2ConvertDepthBufferToTextureSurface);
 	}
-};
+}; // namespace GX2
 
 void gx2CopySurfaceTest()
 {
-
 	return;
 
 	BenchmarkTimer bt;
 
 	// copy 0
 	bt.Start();
-	for(sint32 i=0; i<100; i++)
+	for (sint32 i = 0; i < 100; i++)
 		gx2SurfaceCopySoftware(
 			memory_base + 0x10000000, 256, 256, 1, 0, 0, 4,
 			memory_base + 0x20000000, 256, 256, 1, 0, 0, 4,
-			64, 64, 32
-		);
+			64, 64, 32);
 	bt.Stop();
 	debug_printf("Copy 0 - %lfms\n", bt.GetElapsedMilliseconds());
 	// copy 1
@@ -544,8 +541,7 @@ void gx2CopySurfaceTest()
 		gx2SurfaceCopySoftware(
 			memory_base + 0x11000000, 256, 256, 1, 0, 0, 4,
 			memory_base + 0x21000000, 256, 256, 1, 0, 0, 2,
-			64, 64, 32
-		);
+			64, 64, 32);
 	bt.Stop();
 	debug_printf("Copy 1 - %lfms\n", bt.GetElapsedMilliseconds());
 	// copy 2
@@ -554,8 +550,7 @@ void gx2CopySurfaceTest()
 		gx2SurfaceCopySoftware(
 			memory_base + 0x12000000, 256, 256, 1, 0, 0, 1,
 			memory_base + 0x22000000, 256, 256, 1, 0, 0, 4,
-			64, 64, 128
-		);
+			64, 64, 128);
 	bt.Stop();
 	debug_printf("Copy 2 - %lfms\n", bt.GetElapsedMilliseconds());
 	// copy 3
@@ -564,8 +559,7 @@ void gx2CopySurfaceTest()
 		gx2SurfaceCopySoftware(
 			memory_base + 0x12000000, 256, 256, 1, 0, 0, 4,
 			memory_base + 0x22000000, 256, 256, 1, 0, 0, 4,
-			64, 512, 32
-		);
+			64, 512, 32);
 	bt.Stop();
 	debug_printf("Copy 3 - %lfms\n", bt.GetElapsedMilliseconds());
 

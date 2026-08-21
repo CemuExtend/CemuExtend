@@ -16,24 +16,24 @@ namespace WebFrontend
 	class WebHostState;
 
 	class WebHostServices final : public Host::IWindowMetrics,
-		public Host::IPathProvider,
-		public Host::INativeSurfaceProvider,
-		public Host::INativeSurfacePublisher,
-		public Host::IKeyboardState,
-		public Host::IInputHostEvents,
-		public Host::IClipboard,
-		public Host::IExternalLauncher,
-		public Host::IInputFocus,
-		public Host::ICanvasHost,
-		public Input::IControllerStateObserver
+								  public Host::IPathProvider,
+								  public Host::INativeSurfaceProvider,
+								  public Host::INativeSurfacePublisher,
+								  public Host::IKeyboardState,
+								  public Host::IInputHostEvents,
+								  public Host::IClipboard,
+								  public Host::IExternalLauncher,
+								  public Host::IInputFocus,
+								  public Host::ICanvasHost,
+								  public Input::IControllerStateObserver
 	{
-	public:
+	  public:
 		using UiDispatch = std::function<bool(std::function<void()>)>;
 		using CanvasRecreator = std::function<bool()>;
 		using ControllerObserver = std::function<void(const ControllerState&, const ControllerState&)>;
 
 		WebHostServices(std::shared_ptr<WebHostState> state, INativeWindowHost& nativeWindow,
-			UiDispatch dispatch, CanvasRecreator recreateCanvas);
+						UiDispatch dispatch, CanvasRecreator recreateCanvas);
 
 		void Deactivate();
 		void UpdateKey(std::uint32_t key, bool pressed);
@@ -53,16 +53,16 @@ namespace WebFrontend
 		[[nodiscard]] Host::NativeSurfacePublication PublishPadWindow(Host::NativeWindowHandle handle) override;
 		void ClearPadWindow(Host::NativeSurfacePublication publication) override;
 		[[nodiscard]] Host::NativeSurfacePublication PublishCanvas(bool mainWindow,
-			Host::NativeWindowHandle handle) override;
+																   Host::NativeWindowHandle handle) override;
 		void ClearCanvas(bool mainWindow, Host::NativeSurfacePublication publication) override;
 		[[nodiscard]] bool IsKeyDown(Host::Key key) const override;
 		[[nodiscard]] std::string GetKeyName(std::uint32_t key) const override;
 		[[nodiscard]] std::vector<Host::KeyState> GetKeyStates() const override;
 		void UpdateMousePosition(Host::PointerSurface surface, Host::PointerPosition position) override;
 		void UpdateMouseButton(Host::PointerSurface surface, Host::PointerButton button,
-			bool pressed, Host::PointerPosition position) override;
+							   bool pressed, Host::PointerPosition position) override;
 		void UpdateTouch(Host::PointerSurface surface, Host::PointerPosition position,
-			bool pressed) override;
+						 bool pressed) override;
 		void UpdateMouseWheel(float value, std::int32_t cumulativeSteps) override;
 		void NotifyDeviceChanged() override;
 		void GetTextAsync(GetTextCallback callback) override;
@@ -71,9 +71,9 @@ namespace WebFrontend
 		[[nodiscard]] bool InputConfigurationHasFocus() const override;
 		[[nodiscard]] bool RecreateCanvas() override;
 		void OnControllerState(const ControllerState& current,
-			const ControllerState& previous) override;
+							   const ControllerState& previous) override;
 
-	private:
+	  private:
 		struct PendingOperation
 		{
 			std::atomic_bool completed{};
@@ -100,4 +100,4 @@ namespace WebFrontend
 		mutable std::mutex m_pendingMutex;
 		std::vector<std::shared_ptr<PendingOperation>> m_pendingOperations;
 	};
-}
+} // namespace WebFrontend

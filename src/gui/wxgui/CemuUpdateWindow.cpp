@@ -24,7 +24,6 @@
 #include <boost/tokenizer.hpp>
 #include <fstream>
 
-
 wxDECLARE_EVENT(wxEVT_RESULT, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_RESULT, wxCommandEvent);
 
@@ -47,12 +46,12 @@ namespace
 			return true;
 		return operatingSystem == ZIP_OPSYS_UNIX && ((attributes >> 16U) & 0170000U) == 0120000U;
 	}
-}
+} // namespace
 
 CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
-	std::shared_ptr<Host::IPathProvider> pathProvider)
+								   std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Cemu update"), wxDefaultPosition, wxDefaultSize,
-		wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+			   wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
 	  m_pathProvider(std::move(pathProvider))
 {
 	cemu_assert(static_cast<bool>(m_pathProvider));
@@ -157,7 +156,7 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 #endif
 
 	const auto& config = GetWxGUIConfig();
-	if(config.receive_untested_updates)
+	if (config.receive_untested_updates)
 		urlStr.append("&allowNewUpdates=1");
 
 	curl_easy_setopt(curl.get(), CURLOPT_URL, urlStr.c_str());
@@ -185,7 +184,7 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 		}
 
 		std::vector<std::string> tokens;
-		const boost::char_separator<char> sep{ "|" };
+		const boost::char_separator<char> sep{"|"};
 		for (const auto& token : boost::tokenizer(buffer, sep))
 			tokens.emplace_back(token);
 
@@ -221,9 +220,8 @@ bool CemuUpdateWindow::CheckVersion()
 	return QueryUpdateInfo(downloadUrl, changelogUrl);
 }
 
-
 int CemuUpdateWindow::ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal,
-	curl_off_t ulnow)
+									   curl_off_t ulnow)
 {
 	auto* thisptr = (CemuUpdateWindow*)clientp;
 	if (thisptr->m_workerMailbox.StopRequested() ||
@@ -272,9 +270,7 @@ bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& f
 			update_size > 0 && update_size <= std::numeric_limits<int>::max())
 			m_gaugeMaxValue.store((int)update_size, std::memory_order_release);
 
-
-		auto _curlWriteData = +[](void* ptr, size_t size, size_t nmemb, void* ctx) -> size_t
-		{
+		auto _curlWriteData = +[](void* ptr, size_t size, size_t nmemb, void* ctx) -> size_t {
 			FileStream* fs = (FileStream*)ctx;
 			const size_t writeSize = size * nmemb;
 			fs->writeData(ptr, writeSize);
@@ -300,8 +296,7 @@ bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& f
 		try
 		{
 			fs::remove(filename);
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "can't remove update.zip on error: {}", ex.what());
 		}
@@ -347,7 +342,7 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 		if (!relativePath)
 			return false;
 		const bool directory = stat.name[std::strlen(stat.name) - 1] == '/' ||
-			stat.name[std::strlen(stat.name) - 1] == '\\';
+							   stat.name[std::strlen(stat.name) - 1] == '\\';
 		if (!directory)
 		{
 			if (stat.size > kMaximumUpdateFileSize || totalSize > kMaximumUpdateTotalSize - stat.size)
@@ -466,7 +461,7 @@ void CemuUpdateWindow::WorkerThread()
 				const auto update_file = tmppath / L"Cemu.AppImage";
 #elif BOOST_OS_MACOS
 				const auto update_file = tmppath / L"cemu.dmg";
-#endif	
+#endif
 				if (DownloadCemuZip(url, update_file))
 				{
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
@@ -525,8 +520,7 @@ void CemuUpdateWindow::WorkerThread()
 						try
 						{
 							fs::remove(tmppath);
-						}
-						catch (const std::exception& ex)
+						} catch (const std::exception& ex)
 						{
 							SystemException sys(ex);
 							cemuLog_log(LogType::Force, "can't remove extracted tmp files: {}", sys.what());
@@ -550,7 +544,7 @@ void CemuUpdateWindow::WorkerThread()
 				const auto exec = m_pathProvider->GetExecutablePath();
 				const auto target_exe = fs::path(exec).replace_extension("exe.backup");
 				fs::rename(exec, target_exe);
-				m_restartFile = exec;				
+				m_restartFile = exec;
 #elif BOOST_OS_LINUX
 				const char* appimage_path = std::getenv("APPIMAGE");
 				const auto target_exe = fs::path(appimage_path).replace_extension("AppImage.backup");
@@ -560,7 +554,7 @@ void CemuUpdateWindow::WorkerThread()
 				m_restartFile = appimage_path;
 				chmod(filePath, permissions);
 				wxString wxAppPath = wxString::FromUTF8(appimage_path);
-				wxCopyFile (wxT("/tmp/cemu_update/Cemu.AppImage"), wxAppPath);
+				wxCopyFile(wxT("/tmp/cemu_update/Cemu.AppImage"), wxAppPath);
 #endif
 #if BOOST_OS_WINDOWS
 				const auto index = expected_path.wstring().size();
@@ -583,8 +577,7 @@ void CemuUpdateWindow::WorkerThread()
 							else
 								fs::rename(it.path(), target_file);
 						}
-					}
-					catch (const std::exception& ex)
+					} catch (const std::exception& ex)
 					{
 						SystemException sys(ex);
 						cemuLog_log(LogType::Force, "applying update error: {}", sys.what());
@@ -599,15 +592,14 @@ void CemuUpdateWindow::WorkerThread()
 				}
 #endif
 				auto* event = new wxCommandEvent(wxEVT_PROGRESS);
-			event->SetInt(m_gaugeMaxValue.load(std::memory_order_acquire));
+				event->SetInt(m_gaugeMaxValue.load(std::memory_order_acquire));
 				wxQueueEvent(this, event);
 
 				auto* result_event = new wxCommandEvent(wxEVT_RESULT);
 				result_event->SetInt((int)Result::Success);
 				wxQueueEvent(this, result_event);
 			}
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			SystemException sys(ex);
 			cemuLog_log(LogType::Force, "update error: {}", sys.what());
@@ -623,7 +615,6 @@ void CemuUpdateWindow::WorkerThread()
 				wxQueueEvent(this, result_event);
 			}
 		}
-
 	}
 }
 
@@ -652,24 +643,23 @@ void CemuUpdateWindow::OnClose(wxCloseEvent& event)
 	if (m_restartRequired && !m_restartFile.empty() && fs::exists(m_restartFile))
 	{
 		const char* appimage_path = std::getenv("APPIMAGE");
-		execlp(appimage_path, appimage_path, (char *)NULL);
+		execlp(appimage_path, appimage_path, (char*)NULL);
 
 		exit(0);
 	}
 #elif BOOST_OS_MACOS
 	if (m_restartRequired)
 	{
-	    const auto tmppath = fs::temp_directory_path() / L"cemu_update/Cemu.dmg";
-	    fs::path exePath = m_pathProvider->GetExecutablePath().parent_path();
+		const auto tmppath = fs::temp_directory_path() / L"cemu_update/Cemu.dmg";
+		fs::path exePath = m_pathProvider->GetExecutablePath().parent_path();
 		const auto appResources = exePath.parent_path().parent_path() / L"Resources";
 		const auto apppath = appResources / L"update.sh";
-	    execlp("sh", "sh", apppath.c_str(), NULL);
-        
-        exit(0);
-	}	
+		execlp("sh", "sh", apppath.c_str(), NULL);
+
+		exit(0);
+	}
 #endif
 }
-
 
 void CemuUpdateWindow::OnResult(wxCommandEvent& event)
 {

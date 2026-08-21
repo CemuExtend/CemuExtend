@@ -22,4 +22,4 @@ namespace GX2
 	void GX2Invalidate(uint32 invalidationFlags, MPTR invalidationAddr, uint32 invalidationSize);
 
 	void GX2MiscInit();
-};
+}; // namespace GX2

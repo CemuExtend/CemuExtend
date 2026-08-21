@@ -15,12 +15,12 @@ namespace Application
 
 class GameProfileWindow : public wxFrame
 {
-public:
+  public:
 	GameProfileWindow(wxWindow* parent,
-		Application::EmulationController& emulationController, uint64_t title_id);
+					  Application::EmulationController& emulationController, uint64_t title_id);
 	~GameProfileWindow();
 
-private:
+  private:
 	uint64_t m_title_id;
 	Application::EmulationController& m_emulationController;
 	Application::GameProfileUpdate m_profile;
@@ -33,15 +33,15 @@ private:
 	void SaveProfile();
 
 	// general
-	wxCheckBox* m_load_libs, *m_start_with_padview;
+	wxCheckBox *m_load_libs, *m_start_with_padview;
 
 	// cpu
-	wxChoice *m_cpu_mode;
+	wxChoice* m_cpu_mode;
 	wxChoice* m_thread_quantum;
 
 	// gpu
-	//wxCheckBox* m_extended_texture_readback;
-	//wxChoice* m_precompiled;
+	// wxCheckBox* m_extended_texture_readback;
+	// wxChoice* m_precompiled;
 	wxChoice* m_graphic_api;
 
 	wxChoice* m_shader_mul_accuracy;
@@ -50,10 +50,10 @@ private:
 	wxChoice* m_metal_buffer_cache_mode;
 	wxChoice* m_position_invariance;
 #endif
-	//wxChoice* m_cache_accuracy;
+	// wxChoice* m_cache_accuracy;
 
 	// audio
-	//wxCheckBox* m_disable_audio;
+	// wxCheckBox* m_disable_audio;
 
 	// controller
 	wxComboBox* m_controller_profile[8];

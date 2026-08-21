@@ -13,7 +13,7 @@ void nexThread_run()
 	{
 		// check for new services
 		mtx_queuedServices.lock();
-		for(auto& it : list_queuedServices)
+		for (auto& it : list_queuedServices)
 			list_activeNexServices.push_back(it);
 		list_queuedServices.clear();
 		mtx_queuedServices.unlock();

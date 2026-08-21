@@ -30,22 +30,22 @@ namespace snd_core
 		// todo
 	}
 
-#define handleAdpcmDecodeLoop() \
-	if (internalShadowCopy->internalOffsets.loopFlag != 0) \
-	{	\
-		scale = _swapEndianU16(internalShadowCopy->adpcmLoop.loopScale); \
-		delta = 1 << (scale & 0xF); \
-		coefIndex = (scale >> 4) & 7; \
+#define handleAdpcmDecodeLoop()                                                                        \
+	if (internalShadowCopy->internalOffsets.loopFlag != 0)                                             \
+	{                                                                                                  \
+		scale = _swapEndianU16(internalShadowCopy->adpcmLoop.loopScale);                               \
+		delta = 1 << (scale & 0xF);                                                                    \
+		coefIndex = (scale >> 4) & 7;                                                                  \
 		coefA = (sint32)(sint16)_swapEndianU16(internalShadowCopy->adpcmData.coef[coefIndex * 2 + 0]); \
 		coefB = (sint32)(sint16)_swapEndianU16(internalShadowCopy->adpcmData.coef[coefIndex * 2 + 1]); \
-		playbackNibbleOffset = vpbLoopOffset; \
-	} \
-	else \
-	{ \
-		/* no loop */ \
-		internalShadowCopy->playbackState = 0; \
-		memset(outputWriter, 0, sampleCount * sizeof(sint16)); \
-		break; \
+		playbackNibbleOffset = vpbLoopOffset;                                                          \
+	}                                                                                                  \
+	else                                                                                               \
+	{                                                                                                  \
+		/* no loop */                                                                                  \
+		internalShadowCopy->playbackState = 0;                                                         \
+		memset(outputWriter, 0, sampleCount * sizeof(sint16));                                         \
+		break;                                                                                         \
 	}
 
 	uint32 _AX_fixAdpcmEndOffset(uint32 adpcmOffset)
@@ -73,7 +73,7 @@ namespace snd_core
 
 		uint32 vpbLoopOffset = _swapEndianU32(*(uint32*)&vpb->offsets.loopOffset);
 		uint32 vpbEndOffset = _swapEndianU32(*(uint32*)&vpb->offsets.endOffset);
-		
+
 		vpbEndOffset = _AX_fixAdpcmEndOffset(vpbEndOffset);
 
 		uint32 internalCurrentOffset = _swapEndianU32(*(uint32*)&internalShadowCopy->internalOffsets.currentOffsetPtrHigh);
@@ -259,7 +259,7 @@ namespace snd_core
 		sint16 adpcmSampleBuffer[4096];
 		if (numberOfDecodedAdpcmSamples >= 4096)
 		{
-			memset(output, 0, sizeof(float)*sampleCount);
+			memset(output, 0, sizeof(float) * sampleCount);
 			cemuLog_log(LogType::Force, "Too many ADPCM samples to decode. ratio = {:08x}", ratio);
 			return;
 		}
@@ -355,7 +355,7 @@ namespace snd_core
 
 		sint32 historyIndex = 0;
 
-		for (sint32 i = 0; i<sampleCount; i++)
+		for (sint32 i = 0; i < sampleCount; i++)
 		{
 			currentFracPos += ratio;
 			while (currentFracPos >= 0x10000)
@@ -553,7 +553,7 @@ namespace snd_core
 
 		if (internalShadowCopy->playbackState == 0)
 		{
-			memset(output, 0, sizeof(float)*sampleCount);
+			memset(output, 0, sizeof(float) * sampleCount);
 			return;
 		}
 
@@ -669,10 +669,10 @@ namespace snd_core
 			// without delta
 			for (sint32 i = 0; i < sampleCount; i += 4)
 			{
-				sampleData[i+0] *= volumeScaler;
-				sampleData[i+1] *= volumeScaler;
-				sampleData[i+2] *= volumeScaler;
-				sampleData[i+3] *= volumeScaler;
+				sampleData[i + 0] *= volumeScaler;
+				sampleData[i + 1] *= volumeScaler;
+				sampleData[i + 2] *= volumeScaler;
+				sampleData[i + 3] *= volumeScaler;
 			}
 			return;
 		}
@@ -700,7 +700,7 @@ namespace snd_core
 		// sndcore2 clamps samples to -8388608,8388352 range (16bit signed range << 8)
 		uint16 volume = internalShadowCopy->veVolume;
 		sint16 volumeDelta = (sint16)internalShadowCopy->veDelta;
-		uint16 finalVolume =  (uint16)((sint32)volume + volumeDelta * sampleCount);
+		uint16 finalVolume = (uint16)((sint32)volume + volumeDelta * sampleCount);
 		if (volume == 0x8000 && volumeDelta == 0)
 			return;
 		if (volume <= 0x8000 && finalVolume <= 0x8000) // if volume scaler doesn't exceed 1.0 then we don't need to clamp. We assume that volume never wraps around
@@ -711,10 +711,10 @@ namespace snd_core
 			// without delta
 			for (sint32 i = 0; i < sampleCount; i += 4)
 			{
-				sampleData[i+0] = ClampADSRSample(sampleData[i+0] * volumeScaler);
-				sampleData[i+1] = ClampADSRSample(sampleData[i+1] * volumeScaler);
-				sampleData[i+2] = ClampADSRSample(sampleData[i+2] * volumeScaler);
-				sampleData[i+3] = ClampADSRSample(sampleData[i+3] * volumeScaler);
+				sampleData[i + 0] = ClampADSRSample(sampleData[i + 0] * volumeScaler);
+				sampleData[i + 1] = ClampADSRSample(sampleData[i + 1] * volumeScaler);
+				sampleData[i + 2] = ClampADSRSample(sampleData[i + 2] * volumeScaler);
+				sampleData[i + 3] = ClampADSRSample(sampleData[i + 3] * volumeScaler);
 			}
 			return;
 		}
@@ -821,13 +821,13 @@ namespace snd_core
 				uint32 channelMixMask = (_swapEndianU16(internalShadowCopy->deviceMixMaskTV[busIndex]) >> (channel * 2)) & 3;
 				if (channelMixMask == 0)
 				{
-					internalShadowCopy->reserved1E8[busIndex*AX_TV_CHANNEL_COUNT + channel] = 0;
+					internalShadowCopy->reserved1E8[busIndex * AX_TV_CHANNEL_COUNT + channel] = 0;
 					continue;
 				}
 				AXCHMIX_DEPR* mix = internalShadowCopy->deviceMixTV + channel * 4 + busIndex;
 				float* output = __AXMixBufferTV + (busIndex * 6 + channel) * samplesPerFrame;
 				AXVoiceMix_MergeInto(sampleData, output, sampleCount, mix, _swapEndianS16(mix->delta));
-				internalShadowCopy->reserved1E8[busIndex*AX_TV_CHANNEL_COUNT + channel] = mix->vol;
+				internalShadowCopy->reserved1E8[busIndex * AX_TV_CHANNEL_COUNT + channel] = mix->vol;
 			}
 		}
 		// DRC0 mixing
@@ -839,7 +839,7 @@ namespace snd_core
 
 				if (channelMixMask == 0)
 				{
-					//internalShadowCopy->reserved1E8[busIndex*AX_DRC_CHANNEL_COUNT + channel] = 0;
+					// internalShadowCopy->reserved1E8[busIndex*AX_DRC_CHANNEL_COUNT + channel] = 0;
 					continue;
 				}
 				AXCHMIX_DEPR* mix = internalShadowCopy->deviceMixDRC + channel * 4 + busIndex;
@@ -930,7 +930,7 @@ namespace snd_core
 
 		for (sint32 i = 0; i < sampleCount; i++)
 		{
-			float s = (float)(((sint32)*input)<<8);
+			float s = (float)(((sint32)*input) << 8);
 			input++;
 			s *= volumeF;
 			*output += s;
@@ -981,7 +981,7 @@ namespace snd_core
 	void AXMix_mergeDRC0Buses()
 	{
 		sint32* output = __AXDRCOutputBuffer.GetPtr();
-		uint16 masterVolume = __AXDRCMasterVolume;		
+		uint16 masterVolume = __AXDRCMasterVolume;
 		size_t sampleCount = AXGetInputSamplesPerFrame();
 
 		// todo - drc0 AUX
@@ -1030,4 +1030,4 @@ namespace snd_core
 		mic_updateOnAXFrame();
 	}
 
-}
+} // namespace snd_core

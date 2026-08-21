@@ -4,7 +4,7 @@
 
 class RBSPInputBitstream
 {
-public:
+  public:
 	RBSPInputBitstream() {};
 
 	RBSPInputBitstream(uint8* stream, uint32 length, bool removeEmulationByte = true) : m_removeEmulationByte(removeEmulationByte)
@@ -149,7 +149,6 @@ public:
 		return readIndex >= streamLength;
 	}
 
-
 	uint8* getBasePtr()
 	{
 		return streamPtr;
@@ -160,7 +159,7 @@ public:
 		return streamLength;
 	}
 
-private:
+  private:
 	uint8 _getCurrentRBSPByte()
 	{
 		return currentRBSPByte;
@@ -181,11 +180,11 @@ private:
 		}
 	}
 
-private:
+  private:
 	uint8* streamPtr;
 	uint32 streamLength;
 	uint32 readIndex{};
-	uint8  currentRBSPByte{};
+	uint8 currentRBSPByte{};
 	sint32 bitIndex{};
 	bool errorFlag{};
 	bool m_removeEmulationByte{};
@@ -193,7 +192,7 @@ private:
 
 class NALInputBitstream
 {
-public:
+  public:
 	NALInputBitstream(uint8* stream, uint32 length)
 	{
 		this->nalStreamPtr = stream;
@@ -244,7 +243,7 @@ public:
 		return readIndex >= nalStreamLength;
 	}
 
-private:
+  private:
 	sint32 findNextStartSignature()
 	{
 		if (readIndex >= nalStreamLength)
@@ -277,7 +276,7 @@ private:
 		return -1;
 	}
 
-private:
+  private:
 	uint8* nalStreamPtr;
 	sint32 nalStreamLength;
 	sint32 readIndex{};
@@ -290,14 +289,14 @@ struct h264_scaling_matrix4x4_t
 {
 	uint8 isPresent;
 	uint8 UseDefaultScalingMatrix;
-	sint32 list[4*4];
+	sint32 list[4 * 4];
 };
 
 struct h264_scaling_matrix8x8_t
 {
 	uint8 isPresent;
 	uint8 UseDefaultScalingMatrix;
-	sint32 list[8*8];
+	sint32 list[8 * 8];
 };
 
 struct h264State_pic_parameter_set_t
@@ -333,12 +332,11 @@ struct h264State_pic_parameter_set_t
 	sint32 second_chroma_qp_index_offset;
 };
 
-
 struct h264State_seq_parameter_set_t
 {
 	uint8 profile_idc; // 0x64 = high profile
-	uint8 constraint; // 6 flags + 2 reserved bits
-	uint8 level_idc; // 0x29 = level 4.1
+	uint8 constraint;  // 6 flags + 2 reserved bits
+	uint8 level_idc;   // 0x29 = level 4.1
 
 	uint32 seq_parameter_set_id;
 	uint32 chroma_format_idc;
@@ -366,7 +364,7 @@ struct h264State_seq_parameter_set_t
 	uint8 mb_adaptive_frame_field_flag;
 
 	uint8 direct_8x8_inference_flag;
-	
+
 	uint8 frame_cropping_flag;
 	uint32 frame_crop_left_offset;
 	uint32 frame_crop_right_offset;
@@ -375,9 +373,8 @@ struct h264State_seq_parameter_set_t
 
 	uint32 getMaxFrameNum() const
 	{
-		return 1<<(log2_max_frame_num_minus4+4);
+		return 1 << (log2_max_frame_num_minus4 + 4);
 	}
-
 };
 
 struct H264SliceType
@@ -385,13 +382,28 @@ struct H264SliceType
 	H264SliceType() {};
 	H264SliceType(uint32 slice_type) : m_sliceType(slice_type) {};
 
-	bool isSliceTypeP() const { return (this->m_sliceType % 5) == 0; };
-	bool isSliceTypeB() const { return (this->m_sliceType % 5) == 1; };
-	bool isSliceTypeI() const { return (this->m_sliceType % 5) == 2; };
-	bool isSliceTypeSP() const { return (this->m_sliceType % 5) == 3; };
-	bool isSliceTypeSI() const { return (this->m_sliceType % 5) == 4; };
+	bool isSliceTypeP() const
+	{
+		return (this->m_sliceType % 5) == 0;
+	};
+	bool isSliceTypeB() const
+	{
+		return (this->m_sliceType % 5) == 1;
+	};
+	bool isSliceTypeI() const
+	{
+		return (this->m_sliceType % 5) == 2;
+	};
+	bool isSliceTypeSP() const
+	{
+		return (this->m_sliceType % 5) == 3;
+	};
+	bool isSliceTypeSI() const
+	{
+		return (this->m_sliceType % 5) == 4;
+	};
 
-private:
+  private:
 	uint32 m_sliceType{};
 };
 
@@ -410,7 +422,7 @@ typedef struct
 	uint8 bottom_field_flag;
 
 	uint32 idr_pic_id;
-	
+
 	uint32 pic_order_cnt_lsb;
 	sint32 delta_pic_order_cnt_bottom;
 
@@ -425,21 +437,21 @@ typedef struct
 	uint32 num_ref_idx_l1_active_minus1;
 
 	// ref_pic_list_modification_flag_l0
-	struct  
+	struct
 	{
 		uint8 type;
 		uint32 abs_diff_pic_num_minus1;
 		uint32 long_term_pic_num;
-	}pic_list_modification0Array[32];
+	} pic_list_modification0Array[32];
 	sint32 pic_list_modification0Count;
 
 	// ref_pic_list_modification_flag_l1
-	struct  
+	struct
 	{
 		uint8 type;
 		uint32 abs_diff_pic_num_minus1;
 		uint32 long_term_pic_num;
-	}pic_list_modification1Array[32];
+	} pic_list_modification1Array[32];
 	sint32 pic_list_modification1Count;
 
 	// memory_management_control_operation
@@ -455,61 +467,61 @@ typedef struct
 	};
 
 	uint8 adaptive_ref_pic_marking_mode_flag;
-	struct  
+	struct
 	{
 		uint8 op;
 		uint32 difference_of_pic_nums_minus1;
 		uint32 long_term_pic_num;
 		uint32 long_term_frame_idx;
 		uint32 max_long_term_frame_idx_plus1;
-	}memory_management_control_operation[16];
+	} memory_management_control_operation[16];
 	sint32 memory_management_control_operation_num;
 
 	// derived values
 	uint8 IdrPicFlag;
 
-	struct  
+	struct
 	{
 		uint32 TopFieldOrderCnt;
-	}calculated;
-}nal_slice_header_t;
+	} calculated;
+} nal_slice_header_t;
 
 typedef struct
 {
 	sint32 streamSubOffset;
 	sint32 streamSubSize;
 	nal_slice_header_t header;
-}nal_slice_info_t;
+} nal_slice_info_t;
 
-typedef struct  
+typedef struct
 {
 	bool hasSPS;
 	bool hasPPS;
 	// list of NAL slices
 	sint32 sliceCount;
 	std::array<nal_slice_info_t, 32> sliceInfo;
-}h264ParserOutput_t;
+} h264ParserOutput_t;
 
 typedef struct
 {
 	nal_slice_header_t slice_header;
-}nal_slice_t;
+} nal_slice_t;
 
-typedef struct  
+typedef struct
 {
-	//static const int MAX_SLICES = 32;
+	// static const int MAX_SLICES = 32;
 	bool hasSPS;
 	bool hasPPS;
 	h264State_seq_parameter_set_t sps;
 	h264State_pic_parameter_set_t pps;
-	struct  
+	struct
 	{
 		uint32 prevPicOrderCntMsb;
 		uint32 prevPicOrderCntLsb;
 		uint32 prevFrameNum;
 		uint32 prevFrameNumOffset;
-	}picture_order;
-}h264ParserState_t;
+	} picture_order;
+} h264ParserState_t;
 
 void h264Parse(h264ParserState_t* h264ParserState, h264ParserOutput_t* output, uint8* data, uint32 length, bool parseSlices = true);
 sint32 h264GetUnitLength(h264ParserState_t* h264ParserState, uint8* data, uint32 length);
@@ -521,7 +533,7 @@ void h264Parser_getScalingMatrix8x8(h264State_seq_parameter_set_t* sps, h264Stat
 
 static sint32 h264GetFramePitch(sint32 width)
 {
-	return (width+0xFF)&~0xFF;
+	return (width + 0xFF) & ~0xFF;
 }
 
 static sint32 h264GetFrameSize(sint32 width, sint32 height)

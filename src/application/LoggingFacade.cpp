@@ -23,7 +23,8 @@ namespace Application
 
 		void AppendUtf8(std::string& output, std::uint32_t codepoint)
 		{
-			if (codepoint <= 0x7f) output.push_back(static_cast<char>(codepoint));
+			if (codepoint <= 0x7f)
+				output.push_back(static_cast<char>(codepoint));
 			else if (codepoint <= 0x7ff)
 			{
 				output.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
@@ -49,7 +50,8 @@ namespace Application
 			std::string result;
 			result.reserve(std::min(value.size() * 2, LoggingFacade::MaximumEntryBytes));
 			for (std::size_t index = 0; index < value.size() &&
-				result.size() < LoggingFacade::MaximumEntryBytes; ++index)
+										result.size() < LoggingFacade::MaximumEntryBytes;
+				 ++index)
 			{
 				std::uint32_t codepoint = static_cast<std::uint32_t>(value[index]);
 				if constexpr (sizeof(wchar_t) == 2)
@@ -75,7 +77,7 @@ namespace Application
 		{
 			std::string prefix(message.substr(0, std::min<std::size_t>(message.size(), 96)));
 			std::ranges::transform(prefix, prefix.begin(),
-				[](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+								   [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
 			if (prefix.find("error") != std::string::npos || prefix.find("failed") != std::string::npos ||
 				prefix.find("fatal") != std::string::npos)
 				return LoggingLevel::Error;
@@ -83,7 +85,7 @@ namespace Application
 				return LoggingLevel::Warning;
 			return LoggingLevel::Info;
 		}
-	}
+	} // namespace
 
 	namespace Detail
 	{
@@ -97,10 +99,10 @@ namespace Application
 			std::uint64_t droppedEntries{};
 			std::size_t retainedBytes{};
 		};
-	}
+	} // namespace Detail
 
 	LoggingSubscription::LoggingSubscription(std::weak_ptr<Detail::LoggingState> state,
-		std::uint64_t id) : m_state(std::move(state)), m_id(id) {}
+											 std::uint64_t id) : m_state(std::move(state)), m_id(id) {}
 
 	LoggingSubscription::LoggingSubscription(LoggingSubscription&& other) noexcept
 		: m_state(std::move(other.m_state)), m_id(std::exchange(other.m_id, 0)) {}
@@ -116,11 +118,15 @@ namespace Application
 		return *this;
 	}
 
-	LoggingSubscription::~LoggingSubscription() { Reset(); }
+	LoggingSubscription::~LoggingSubscription()
+	{
+		Reset();
+	}
 
 	void LoggingSubscription::Reset()
 	{
-		if (m_id == 0) return;
+		if (m_id == 0)
+			return;
 		if (const auto state = m_state.lock())
 		{
 			std::scoped_lock lock(state->mutex);
@@ -142,7 +148,8 @@ namespace Application
 
 	LoggingSubscription LoggingFacade::Subscribe(Handler handler)
 	{
-		if (!handler) return {};
+		if (!handler)
+			return {};
 		std::scoped_lock lock(m_state->mutex);
 		const auto id = m_state->nextHandlerId++;
 		m_state->handlers.emplace(id, std::move(handler));
@@ -150,19 +157,19 @@ namespace Application
 	}
 
 	LoggingSnapshot LoggingFacade::Snapshot(std::uint64_t afterSequence,
-		std::size_t maximumEntries) const
+											std::size_t maximumEntries) const
 	{
 		std::scoped_lock lock(m_state->mutex);
 		LoggingSnapshot result;
 		result.nextSequence = m_state->nextSequence;
 		result.droppedEntries = m_state->droppedEntries;
 		result.retainedBytes = m_state->retainedBytes;
-		result.firstAvailableSequence = m_state->entries.empty() ? m_state->nextSequence :
-			m_state->entries.front().sequence;
+		result.firstAvailableSequence = m_state->entries.empty() ? m_state->nextSequence : m_state->entries.front().sequence;
 		maximumEntries = std::min(maximumEntries, MaximumEntries);
 		for (const auto& entry : m_state->entries)
 		{
-			if (entry.sequence <= afterSequence) continue;
+			if (entry.sequence <= afterSequence)
+				continue;
 			if (result.entries.size() == maximumEntries)
 			{
 				result.truncated = true;
@@ -199,12 +206,12 @@ namespace Application
 		{
 			std::scoped_lock lock(m_state->mutex);
 			published = {m_state->nextSequence++, Classify(message), std::move(category),
-				std::move(message)};
+						 std::move(message)};
 			const auto bytes = published.category.size() + published.message.size();
 			m_state->entries.push_back(published);
 			m_state->retainedBytes += bytes;
 			while (m_state->entries.size() > MaximumEntries ||
-				m_state->retainedBytes > MaximumBytes)
+				   m_state->retainedBytes > MaximumBytes)
 			{
 				const auto& oldest = m_state->entries.front();
 				m_state->retainedBytes -= oldest.category.size() + oldest.message.size();
@@ -212,8 +219,10 @@ namespace Application
 				++m_state->droppedEntries;
 			}
 			handlers.reserve(m_state->handlers.size());
-			for (const auto& [_, handler] : m_state->handlers) handlers.push_back(handler);
+			for (const auto& [_, handler] : m_state->handlers)
+				handlers.push_back(handler);
 		}
-		for (const auto& handler : handlers) handler(published);
+		for (const auto& handler : handlers)
+			handler(published);
 	}
-}
+} // namespace Application

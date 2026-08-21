@@ -7,7 +7,7 @@
 
 class RendererOutputShader
 {
-public:
+  public:
 	struct OutputUniformVariables
 	{
 		Vector2f textureSrcResolution;
@@ -56,12 +56,11 @@ public:
 
 	static std::string PrependFragmentPreamble(const std::string& shaderSrc);
 
-protected:
+  protected:
 	std::unique_ptr<RendererShader> m_vertex_shader;
 	std::unique_ptr<RendererShader> m_fragment_shader;
 
-
-private:
+  private:
 	static const std::string s_copy_shader_source;
 	static const std::string s_bicubic_shader_source;
 	static const std::string s_hermite_shader_source;

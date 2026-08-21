@@ -19,7 +19,7 @@ std::vector<GraphicPackPtr> GraphicPack2::s_graphic_packs;
 std::vector<GraphicPackPtr> GraphicPack2::s_active_graphic_packs;
 std::atomic_bool GraphicPack2::s_isReady;
 
-#define GP_LEGACY_VERSION		(2)
+#define GP_LEGACY_VERSION (2)
 
 template<typename T>
 bool ParseRule(const ExpressionParser& parser, IniParser& iniParser, const char* option_name, T* valueOut)
@@ -45,8 +45,7 @@ std::vector<T> ParseList(const ExpressionParser& parser, IniParser& iniParser, c
 		try
 		{
 			result.emplace_back(parser.Evaluate<T>(token));
-		} 
-		catch (const std::invalid_argument&)
+		} catch (const std::invalid_argument&)
 		{}
 	}
 	return result;
@@ -151,8 +150,7 @@ bool GraphicPack2::LoadGraphicPack(const fs::path& rulesPath, IniParser& rules)
 
 		s_graphic_packs.emplace_back(gp);
 		return true;
-	}
-	catch (const std::exception&)
+	} catch (const std::exception&)
 	{
 		return false;
 	}
@@ -176,11 +174,9 @@ bool GraphicPack2::DeactivateGraphicPack(const std::shared_ptr<GraphicPack2>& gr
 		return false;
 
 	const auto it = std::find_if(s_active_graphic_packs.begin(), s_active_graphic_packs.end(),
-		[graphic_pack](const GraphicPackPtr& gp)
-	{
-		return gp->GetNormalizedPathString() == graphic_pack->GetNormalizedPathString();
-	}
-	);
+								 [graphic_pack](const GraphicPackPtr& gp) {
+									 return gp->GetNormalizedPathString() == graphic_pack->GetNormalizedPathString();
+								 });
 
 	if (it == s_active_graphic_packs.end())
 		return false;
@@ -230,7 +226,7 @@ std::unordered_map<std::string, GraphicPack2::PresetVar> GraphicPack2::ParsePres
 {
 	ExpressionParser parser;
 	std::unordered_map<std::string, PresetVar> vars;
-	for(auto& itr : rules.GetAllOptions())
+	for (auto& itr : rules.GetAllOptions())
 	{
 		auto option_name = itr.first;
 		auto option_value = itr.second;
@@ -239,7 +235,7 @@ std::unordered_map<std::string, GraphicPack2::PresetVar> GraphicPack2::ParsePres
 		VarType type = kDouble;
 		std::string name(option_name);
 		const auto index = name.find(':');
-		if(index != std::string::npos)
+		if (index != std::string::npos)
 		{
 			auto type_name = name.substr(index + 1);
 			name = name.substr(0, index);
@@ -287,7 +283,7 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 	}
 
 	auto option_defaultEnabled = rules.FindOption("default");
-	if(option_defaultEnabled)
+	if (option_defaultEnabled)
 	{
 		m_default_enabled = boost::iequals(*option_defaultEnabled, "true") || boost::iequals(*option_defaultEnabled, "1");
 		m_enabled = m_default_enabled;
@@ -335,7 +331,7 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 	}
 
 	m_title_ids = ParseTitleIds(rules, "titleIds");
-	if(m_title_ids.empty() && !m_universal)
+	if (m_title_ids.empty() && !m_universal)
 		throw std::exception();
 
 	auto option_fsPriority = rules.FindOption("fsPriority");
@@ -379,8 +375,7 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 				if (default_selected)
 					preset->is_default = StringHelpers::ToInt(*default_selected) != 0;
 				m_presets.emplace_back(preset);
-			}
-			catch (const std::exception & ex)
+			} catch (const std::exception& ex)
 			{
 				cemuLog_log(LogType::Force, "Graphic pack \"{}\": Can't parse preset \"{}\": {}", GetNormalizedPathString(), *preset_name, ex.what());
 			}
@@ -427,26 +422,23 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 				}
 			}
 		}
-		else if (boost::iequals(currentSectionName, "Permissions")) 
+		else if (boost::iequals(currentSectionName, "Permissions"))
 		{
-			std::array<std::pair<std::string_view, CosCapabilityGroup>, 15> permissionTable
-			{{
-				{"BSP",  CosCapabilityGroup::BSP},
-				{"DK",   CosCapabilityGroup::DK},
-				{"USB",  CosCapabilityGroup::USB},
-				{"UHS",  CosCapabilityGroup::UHS},
-				{"FS",   CosCapabilityGroup::FS},
-				{"MCP",  CosCapabilityGroup::MCP},
-				{"NIM",  CosCapabilityGroup::NIM},
-				{"ACT",  CosCapabilityGroup::ACT},
-				{"FPD",  CosCapabilityGroup::FPD},
-				{"BOSS", CosCapabilityGroup::BOSS},
-				{"ACP",  CosCapabilityGroup::ACP},
-				{"PDM",  CosCapabilityGroup::PDM},
-				{"AC",   CosCapabilityGroup::AC},
-				{"NDM",  CosCapabilityGroup::NDM},
-				{"NSEC", CosCapabilityGroup::NSEC}
-			}};
+			std::array<std::pair<std::string_view, CosCapabilityGroup>, 15> permissionTable{{{"BSP", CosCapabilityGroup::BSP},
+																							 {"DK", CosCapabilityGroup::DK},
+																							 {"USB", CosCapabilityGroup::USB},
+																							 {"UHS", CosCapabilityGroup::UHS},
+																							 {"FS", CosCapabilityGroup::FS},
+																							 {"MCP", CosCapabilityGroup::MCP},
+																							 {"NIM", CosCapabilityGroup::NIM},
+																							 {"ACT", CosCapabilityGroup::ACT},
+																							 {"FPD", CosCapabilityGroup::FPD},
+																							 {"BOSS", CosCapabilityGroup::BOSS},
+																							 {"ACP", CosCapabilityGroup::ACP},
+																							 {"PDM", CosCapabilityGroup::PDM},
+																							 {"AC", CosCapabilityGroup::AC},
+																							 {"NDM", CosCapabilityGroup::NDM},
+																							 {"NSEC", CosCapabilityGroup::NSEC}}};
 
 			for (const auto& [name, group] : permissionTable)
 			{
@@ -457,7 +449,6 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 					uint64 permissionMask = ConvertString<uint64>(*permissionOption, 16);
 					m_permissions.push_back({group, permissionMask});
 				}
-
 			}
 		}
 	}
@@ -486,7 +477,7 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 			}
 		}
 
-		if(!mismatchingPresetVars.empty())
+		if (!mismatchingPresetVars.empty())
 		{
 			cemuLog_log(LogType::Force, "Graphic pack \"{}\" contains preset variables which are not defined in the [Default] section:", GetNormalizedPathString());
 			for (const auto& [presetName, varName] : mismatchingPresetVars)
@@ -495,7 +486,7 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 		}
 
 		// have first entry be default active for every category if no default= is set
-		for(auto entry : get_values(tmp_map))
+		for (auto entry : get_values(tmp_map))
 		{
 			if (!entry.empty())
 			{
@@ -535,9 +526,9 @@ GraphicPack2::GraphicPack2(fs::path rulesPath, IniParser& rules)
 					throw std::exception();
 				}
 
-				if(p1->is_default)
+				if (p1->is_default)
 				{
-					if(has_default)
+					if (has_default)
 						cemuLog_log(LogType::Force, "Graphic pack: \"{}\" has more than one preset with the default key set for the same category \"{}\"", GetNormalizedPathString(), p1->name);
 					p1->active = true;
 					has_default = true;
@@ -581,26 +572,23 @@ bool GraphicPack2::ContainsTitleId(uint64_t title_id) const
 
 bool GraphicPack2::HasActivePreset() const
 {
-	return std::any_of(m_presets.cbegin(), m_presets.cend(), [](const PresetPtr& preset)
-		{
-			return preset->active;
-		});
+	return std::any_of(m_presets.cbegin(), m_presets.cend(), [](const PresetPtr& preset) {
+		return preset->active;
+	});
 }
 
 std::string GraphicPack2::GetActivePreset(std::string_view category) const
 {
-	const auto it = std::find_if(m_presets.cbegin(), m_presets.cend(), [category](const PresetPtr& preset)
-		{
-			return preset->active && preset->category == category;
-		});
-	return it != m_presets.cend() ? (*it)->name : std::string{ "" };
+	const auto it = std::find_if(m_presets.cbegin(), m_presets.cend(), [category](const PresetPtr& preset) {
+		return preset->active && preset->category == category;
+	});
+	return it != m_presets.cend() ? (*it)->name : std::string{""};
 }
 
 void GraphicPack2::UpdatePresetVisibility()
 {
 	// update visiblity of each preset
-	std::for_each(m_presets.begin(), m_presets.end(), [this](PresetPtr& p)
-	{
+	std::for_each(m_presets.begin(), m_presets.end(), [this](PresetPtr& p) {
 		p->visible = m_version >= 5 ? IsPresetVisible(p) : true;
 	});
 }
@@ -679,9 +667,8 @@ void GraphicPack2::ValidatePresetSelections()
 bool GraphicPack2::SetActivePreset(std::string_view category, std::string_view name, bool update_visibility)
 {
 	// disable currently active preset
-	std::for_each(m_presets.begin(), m_presets.end(), [category](PresetPtr& p)
-	{
-		if(p->category == category)
+	std::for_each(m_presets.begin(), m_presets.end(), [category](PresetPtr& p) {
+		if (p->category == category)
 			p->active = false;
 	});
 
@@ -689,10 +676,9 @@ bool GraphicPack2::SetActivePreset(std::string_view category, std::string_view n
 		return true;
 
 	// enable new preset
-	const auto it = std::find_if(m_presets.cbegin(), m_presets.cend(), [category, name](const PresetPtr& preset)
-		{
-			return preset->category == category && preset->name == name;
-		});
+	const auto it = std::find_if(m_presets.cbegin(), m_presets.cend(), [category, name](const PresetPtr& preset) {
+		return preset->category == category && preset->name == name;
+	});
 
 	bool result;
 	if (it != m_presets.cend())
@@ -730,7 +716,7 @@ void GraphicPack2::LoadShaders()
 			wchar_t shader_type[256]{};
 			if (filename.size() < 256 && swscanf(filename.c_str(), L"%" SCNx64 "_%" SCNx64 "_%ls", &shader_base_hash, &shader_aux_hash, shader_type) == 3)
 			{
-			    bool isMetalShader = (shader_type[2] == '_' && shader_type[3] == 'm' && shader_type[4] == 's' && shader_type[5] == 'l');
+				bool isMetalShader = (shader_type[2] == '_' && shader_type[3] == 'm' && shader_type[4] == 's' && shader_type[5] == 'l');
 
 				if (shader_type[0] == 'p' && shader_type[1] == 's')
 					m_custom_shaders.emplace_back(LoadShader(p, shader_base_hash, shader_aux_hash, GP_SHADER_TYPE::PIXEL, isMetalShader));
@@ -778,8 +764,7 @@ void GraphicPack2::LoadShaders()
 				m_downscaling_shader_source.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 				ApplyShaderPresets(m_downscaling_shader_source);
 			}
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			cemuLog_log(LogType::Force, "graphicPack: error while loading custom shader: {}", ex.what());
 		}
@@ -801,8 +786,7 @@ bool GraphicPack2::IsPresetVisible(const PresetPtr& preset) const
 		TExpressionParser<int> p;
 		FillPresetConstants(p);
 		return p.Evaluate(preset->condition) != 0;
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "error when trying to check visiblity of preset: {}", ex.what());
 		return false;
@@ -812,7 +796,7 @@ bool GraphicPack2::IsPresetVisible(const PresetPtr& preset) const
 std::optional<GraphicPack2::PresetVar> GraphicPack2::GetPresetVariable(const std::vector<PresetPtr>& presets, std::string_view var_name) const
 {
 	// no priority and visibility filter
-	if(m_version < 5)
+	if (m_version < 5)
 	{
 		for (const auto& preset : presets)
 		{
@@ -927,14 +911,14 @@ void GraphicPack2::LoadReplacedFiles()
 		fscDeviceRedirect_map();
 		_iterateReplacedFiles(aocPath, true, nullptr);
 	}
-	
+
 	// /code/
 	fs::path codePath(gfxPackPath);
 	codePath.append("code");
-	
+
 	if (fs::exists(codePath, ec))
 	{
-	    // setup redirections
+		// setup redirections
 		fscDeviceRedirect_map();
 		_iterateReplacedFiles(codePath, false, CafeSystem::GetInternalVirtualCodeFolder().c_str());
 	}
@@ -963,7 +947,7 @@ bool GraphicPack2::Activate()
 	fs_rules->extract(rulesData);
 	delete fs_rules;
 
-	IniParser rules({ (char*)rulesData.data(), rulesData.size()}, GetNormalizedPathString());
+	IniParser rules({(char*)rulesData.data(), rulesData.size()}, GetNormalizedPathString());
 
 	// load rules
 	try
@@ -973,7 +957,7 @@ bool GraphicPack2::Activate()
 
 		while (rules.NextSection())
 		{
-			//const char* category_name = sPref_currentCategoryName(rules);
+			// const char* category_name = sPref_currentCategoryName(rules);
 			std::string_view category_name = rules.GetCurrentSectionName();
 			if (boost::iequals(category_name, "TextureRedefine"))
 			{
@@ -997,10 +981,10 @@ bool GraphicPack2::Activate()
 				ParseRule(parser, rules, "overwriteFormat", &rule.overwrite_settings.format);
 
 				float lod_bias;
-				if(ParseRule(parser, rules, "overwriteLodBias", &lod_bias))
+				if (ParseRule(parser, rules, "overwriteLodBias", &lod_bias))
 					rule.overwrite_settings.lod_bias = (sint32)(lod_bias * 64.0f);
 
-				if(ParseRule(parser, rules, "overwriteRelativeLodBias", &lod_bias))
+				if (ParseRule(parser, rules, "overwriteRelativeLodBias", &lod_bias))
 					rule.overwrite_settings.relative_lod_bias = (sint32)(lod_bias * 64.0f);
 
 				sint32 anisotropyValue;
@@ -1028,15 +1012,14 @@ bool GraphicPack2::Activate()
 			else if (boost::iequals(category_name, "OutputShader"))
 			{
 				auto option_upscale = rules.FindOption("upscaleMagFilter");
-				if(option_upscale && boost::iequals(*option_upscale, "NearestNeighbor"))
+				if (option_upscale && boost::iequals(*option_upscale, "NearestNeighbor"))
 					m_output_settings.upscale_filter = LatteTextureView::MagFilter::kNearestNeighbor;
 				auto option_downscale = rules.FindOption("downscaleMinFilter");
 				if (option_downscale && boost::iequals(*option_downscale, "NearestNeighbor"))
 					m_output_settings.downscale_filter = LatteTextureView::MagFilter::kNearestNeighbor;
 			}
 		}
-	}
-	catch(const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, ex.what());
 		return false;
@@ -1111,7 +1094,7 @@ const std::string* GraphicPack2::FindCustomShaderSource(uint64 shaderBaseHash, u
 	for (const auto& gp : GraphicPack2::GetActiveGraphicPacks())
 	{
 		const auto it = std::find_if(gp->m_custom_shaders.begin(), gp->m_custom_shaders.end(),
-			[shaderBaseHash, shaderAuxHash, type](const auto& s) { return s.shader_base_hash == shaderBaseHash && s.shader_aux_hash == shaderAuxHash && s.type == type; });
+									 [shaderBaseHash, shaderAuxHash, type](const auto& s) { return s.shader_base_hash == shaderBaseHash && s.shader_aux_hash == shaderAuxHash && s.type == type; });
 
 		if (it == gp->m_custom_shaders.end())
 			continue;
@@ -1120,7 +1103,7 @@ const std::string* GraphicPack2::FindCustomShaderSource(uint64 shaderBaseHash, u
 			continue;
 
 		if (isMetalRenderer != (*it).isMetalShader)
-		    continue;
+			continue;
 
 		return &it->source;
 	}
@@ -1132,7 +1115,7 @@ std::unordered_map<std::string, std::vector<GraphicPack2::PresetPtr>> GraphicPac
 	order.clear();
 
 	std::unordered_map<std::string, std::vector<PresetPtr>> result;
-	for(const auto& entry : m_presets)
+	for (const auto& entry : m_presets)
 	{
 		result[entry->category].emplace_back(entry);
 		const auto it = std::find(order.cbegin(), order.cend(), entry->category);
@@ -1145,13 +1128,12 @@ std::unordered_map<std::string, std::vector<GraphicPack2::PresetPtr>> GraphicPac
 
 bool GraphicPack2::HasShaders() const
 {
-	return !GetCustomShaders().empty()
-	|| !m_output_shader_source.empty() || !m_upscaling_shader_source.empty() || !m_downscaling_shader_source.empty();
+	return !GetCustomShaders().empty() || !m_output_shader_source.empty() || !m_upscaling_shader_source.empty() || !m_downscaling_shader_source.empty();
 }
 
 RendererOutputShader* GraphicPack2::GetOuputShader(bool render_upside_down)
 {
-	if(render_upside_down)
+	if (render_upside_down)
 	{
 		if (m_output_shader_ud)
 			return m_output_shader_ud.get();
@@ -1221,7 +1203,6 @@ RendererOutputShader* GraphicPack2::GetDownscalingShader(bool render_upside_down
 	}
 }
 
-
 std::vector<GraphicPack2::PresetPtr> GraphicPack2::GetActivePresets() const
 {
 	std::vector<PresetPtr> result;
@@ -1249,8 +1230,8 @@ std::vector<uint64> GraphicPack2::ParseTitleIds(IniParser& rules, const char* op
 		try
 		{
 			result.emplace_back(ConvertString<uint64>(token, 16));
-		}
-		catch (const std::invalid_argument&) {}
+		} catch (const std::invalid_argument&)
+		{}
 	}
 
 	return result;
@@ -1271,7 +1252,7 @@ void GraphicPack2::ApplyShaderPresets(std::string& shader_source) const
 		const auto str = match.str();
 
 		std::optional<PresetVar> var = GetPresetVariable(active_presets, str);
-		if(!var)
+		if (!var)
 			throw std::runtime_error("using an unknown preset variable in shader");
 
 		std::string new_value;
@@ -1323,9 +1304,8 @@ std::vector<std::pair<MPTR, MPTR>> GraphicPack2::GetActiveRAMMappings()
 			v.insert(v.end(), gp->m_ramMappings.begin(), gp->m_ramMappings.end());
 	}
 	std::sort(v.begin(), v.end(),
-		[](const std::pair<MPTR, MPTR>& a, const std::pair<MPTR, MPTR>& b) -> bool
-		{
-			return a.first < b.first;
-		});
+			  [](const std::pair<MPTR, MPTR>& a, const std::pair<MPTR, MPTR>& b) -> bool {
+				  return a.first < b.first;
+			  });
 	return v;
 }

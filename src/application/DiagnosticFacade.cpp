@@ -19,14 +19,22 @@ namespace Application
 		{
 			switch (dimension)
 			{
-			case Latte::E_DIM::DIM_1D: return "1D";
-			case Latte::E_DIM::DIM_2D: return "2D";
-			case Latte::E_DIM::DIM_3D: return "3D";
-			case Latte::E_DIM::DIM_CUBEMAP: return "cubemap";
-			case Latte::E_DIM::DIM_2D_ARRAY: return "2D array";
-			case Latte::E_DIM::DIM_2D_MSAA: return "2D MSAA";
-			case Latte::E_DIM::DIM_2D_ARRAY_MSAA: return "2D array MSAA";
-			default: return "unknown";
+			case Latte::E_DIM::DIM_1D:
+				return "1D";
+			case Latte::E_DIM::DIM_2D:
+				return "2D";
+			case Latte::E_DIM::DIM_3D:
+				return "3D";
+			case Latte::E_DIM::DIM_CUBEMAP:
+				return "cubemap";
+			case Latte::E_DIM::DIM_2D_ARRAY:
+				return "2D array";
+			case Latte::E_DIM::DIM_2D_MSAA:
+				return "2D MSAA";
+			case Latte::E_DIM::DIM_2D_ARRAY_MSAA:
+				return "2D array MSAA";
+			default:
+				return "unknown";
 			}
 		}
 
@@ -42,15 +50,15 @@ namespace Application
 
 		template<typename Page, typename Row>
 		void CopyPage(Page& page, const std::vector<Row>& source,
-			std::size_t offset, std::size_t limit)
+					  std::size_t offset, std::size_t limit)
 		{
 			page.offset = std::min(offset, source.size());
 			page.total = source.size();
 			const auto count = std::min(limit, source.size() - page.offset);
 			page.rows.assign(source.begin() + page.offset,
-				source.begin() + page.offset + count);
+							 source.begin() + page.offset + count);
 		}
-	}
+	} // namespace
 
 	void DiagnosticFacade::RefreshTextures(bool activeOnly, bool includeViews)
 	{
@@ -102,12 +110,9 @@ namespace Application
 				.ageMilliseconds = age,
 				.alternativeViewCount = texture.alternativeViewCount,
 				.resolutionOverridden = texture.overwriteInfo.hasResolutionOverwrite,
-				.effectiveWidth = texture.overwriteInfo.hasResolutionOverwrite ?
-					NonNegative(texture.overwriteInfo.width) : NonNegative(texture.width),
-				.effectiveHeight = texture.overwriteInfo.hasResolutionOverwrite ?
-					NonNegative(texture.overwriteInfo.height) : NonNegative(texture.height),
-				.effectiveDepth = texture.overwriteInfo.hasResolutionOverwrite ?
-					NonNegative(texture.overwriteInfo.depth) : NonNegative(texture.depth),
+				.effectiveWidth = texture.overwriteInfo.hasResolutionOverwrite ? NonNegative(texture.overwriteInfo.width) : NonNegative(texture.width),
+				.effectiveHeight = texture.overwriteInfo.hasResolutionOverwrite ? NonNegative(texture.overwriteInfo.height) : NonNegative(texture.height),
+				.effectiveDepth = texture.overwriteInfo.hasResolutionOverwrite ? NonNegative(texture.overwriteInfo.depth) : NonNegative(texture.depth),
 			});
 			if (!includeViews)
 				continue;
@@ -139,7 +144,7 @@ namespace Application
 	}
 
 	TextureDiagnosticPage DiagnosticFacade::GetTexturePage(std::uint64_t generation,
-		std::size_t offset, std::size_t limit, bool activeOnly, bool includeViews)
+														   std::size_t offset, std::size_t limit, bool activeOnly, bool includeViews)
 	{
 		if (limit == 0 || limit > MaximumPageSize)
 			throw std::invalid_argument("limit must be between 1 and 200");
@@ -178,15 +183,15 @@ namespace Application
 			if (activeOnly && !playing)
 				continue;
 			const auto format = _swapEndianU16(voice.offsets.format);
-			const char* formatName = format == snd_core::AX_FORMAT_ADPCM ? "ADPCM" :
-				format == snd_core::AX_FORMAT_PCM16 ? "PCM16" :
-				format == snd_core::AX_FORMAT_PCM8 ? "PCM8" : "unknown";
+			const char* formatName = format == snd_core::AX_FORMAT_ADPCM ? "ADPCM" : format == snd_core::AX_FORMAT_PCM16 ? "PCM16"
+																				 : format == snd_core::AX_FORMAT_PCM8	 ? "PCM8"
+																														 : "unknown";
 			std::string mix;
 			mix.reserve(snd_core::AX_TV_CHANNEL_COUNT * snd_core::AX_MAX_NUM_BUS);
 			for (std::uint32_t channel = 0; channel < snd_core::AX_TV_CHANNEL_COUNT; ++channel)
 				for (std::uint32_t bus = 0; bus < snd_core::AX_MAX_NUM_BUS; ++bus)
 					mix += fmt::format("{:x}", std::min<std::uint32_t>(15,
-						(static_cast<std::uint16_t>(internal.deviceMixTV[channel * 4 + bus].vol) + 0x0fff) >> 12));
+																	   (static_cast<std::uint16_t>(internal.deviceMixTV[channel * 4 + bus].vol) + 0x0fff) >> 12));
 			m_audioRows.push_back({
 				.id = fmt::format("voice:{}:{}", m_audioGeneration, index),
 				.index = index,
@@ -198,7 +203,7 @@ namespace Application
 				.volume = static_cast<std::uint16_t>(internal.veVolume),
 				.volumeDelta = static_cast<std::int16_t>(internal.veDelta),
 				.sourceRatio = (static_cast<std::uint32_t>(_swapEndianU16(internal.src.ratioHigh)) << 16) |
-					_swapEndianU16(internal.src.ratioLow),
+							   _swapEndianU16(internal.src.ratioLow),
 				.lowPassEnabled = internal.lpf.on != 0,
 				.biquadEnabled = internal.biquad.on != 0,
 				.deviceMix = std::move(mix),
@@ -207,7 +212,7 @@ namespace Application
 	}
 
 	AudioVoiceDiagnosticPage DiagnosticFacade::GetAudioVoicePage(std::uint64_t generation,
-		std::size_t offset, std::size_t limit, bool activeOnly)
+																 std::size_t offset, std::size_t limit, bool activeOnly)
 	{
 		if (limit == 0 || limit > MaximumPageSize)
 			throw std::invalid_argument("limit must be between 1 and 200");
@@ -223,4 +228,4 @@ namespace Application
 		CopyPage(page, m_audioRows, offset, limit);
 		return page;
 	}
-}
+} // namespace Application

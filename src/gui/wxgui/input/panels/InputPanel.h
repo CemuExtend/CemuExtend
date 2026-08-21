@@ -16,7 +16,7 @@ class wxComboBox;
 
 class InputPanel : public wxPanel
 {
-public:
+  public:
 	const wxColour kKeyColourNormalMode = GetBackgroundColour();
 	const wxColour kKeyColourEditMode = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
 	const wxColour kKeyColourActiveMode = wxHelper::CalculateAccentColour(GetBackgroundColour());
@@ -34,7 +34,7 @@ public:
 	void set_selected_controller(const EmulatedControllerPtr& emulated_controller, const ControllerPtr& controller_base);
 	void reset_colours();
 
-protected:
+  protected:
 	void bind_hotkey_events(wxTextCtrl* text_ctrl);
 
 	void on_edit_key_focus(wxFocusEvent& event);

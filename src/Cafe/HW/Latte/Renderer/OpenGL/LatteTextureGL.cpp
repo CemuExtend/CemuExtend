@@ -6,7 +6,7 @@
 #include "config/LaunchSettings.h"
 
 LatteTextureGL::LatteTextureGL(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels, uint32 swizzle,
-	Latte::E_HWTILEMODE tileMode, bool isDepth)
+							   Latte::E_HWTILEMODE tileMode, bool isDepth)
 	: LatteTexture(dim, physAddress, physMipAddress, format, width, height, depth, pitch, mipLevels, swizzle, tileMode, isDepth)
 {
 	GenerateEmptyTextureFromGX2Dim(dim, this->glId_texture, this->glTexTarget, true);
@@ -54,7 +54,7 @@ void LatteTextureGL::GenerateEmptyTextureFromGX2Dim(Latte::E_DIM dim, GLuint& te
 	{
 		cemu_assert_unimplemented();
 	}
-	if(createForTargetType)
+	if (createForTargetType)
 		texId = glCreateTextureWrapper(texTarget); // initializes the texture to texTarget (equivalent to calling glGenTextures + glBindTexture)
 	else
 		glGenTextures(1, &texId);
@@ -143,7 +143,7 @@ void LatteTextureGL::GetOpenGLFormatInfo(bool isDepth, Latte::E_GX2SURFFMT forma
 		return;
 	}
 	else if (format == Latte::E_GX2SURFFMT::BC1_UNORM ||
-		format == Latte::E_GX2SURFFMT::BC1_SRGB)
+			 format == Latte::E_GX2SURFFMT::BC1_SRGB)
 	{
 		if (format == Latte::E_GX2SURFFMT::BC1_SRGB)
 			formatInfoOut->setCompressed(GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, -1, -1);

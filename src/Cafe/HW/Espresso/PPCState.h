@@ -11,7 +11,7 @@ enum
 	CPUException_SYSTEMCALL
 };
 
-#define PPC_LWARX_RESERVATION_MAX	(4)
+#define PPC_LWARX_RESERVATION_MAX (4)
 
 union FPR_t
 {
@@ -23,7 +23,7 @@ union FPR_t
 	};
 	struct
 	{
-		uint64 guint; 
+		uint64 guint;
 	};
 	struct
 	{
@@ -32,16 +32,16 @@ union FPR_t
 	};
 };
 
-typedef struct  
+typedef struct
 {
-	struct  
+	struct
 	{
 		uint32 scr;
 		uint32 car;
-		//uint32 bcr;
-	}sprGlobal;
+		// uint32 bcr;
+	} sprGlobal;
 	uint64 tb;
-}PPCInterpreterGlobal_t;
+} PPCInterpreterGlobal_t;
 
 struct PPCInterpreter_t
 {
@@ -50,12 +50,12 @@ struct PPCInterpreter_t
 	FPR_t fpr[32];
 	uint32 fpscr;
 	uint8 cr[32]; // 0 -> bit not set, 1 -> bit set (upper 7 bits of each byte must always be zero) (cr0 starts at index 0, cr1 at index 4 ..)
-	uint8 xer_ca;  // carry from xer
+	uint8 xer_ca; // carry from xer
 	uint8 xer_so;
 	uint8 xer_ov;
 	// thread remaining cycles
 	sint32 remainingCycles; // if this value goes below zero, the next thread is scheduled
-	sint32 skippedCycles; // number of skipped cycles
+	sint32 skippedCycles;	// number of skipped cycles
 	struct
 	{
 		uint32 LR;
@@ -63,7 +63,7 @@ struct PPCInterpreter_t
 		uint32 XER;
 		uint32 UPIR;
 		uint32 UGQR[8];
-	}spr;
+	} spr;
 	// LWARX and STWCX
 	uint32 reservedMemAddr;
 	uint32 reservedMemValue;
@@ -94,7 +94,7 @@ struct PPCInterpreter_t
 		uint32 ibatL[8];
 		uint32 sr[16];
 		uint32 sdr1;
-	}sprExtended;
+	} sprExtended;
 	uint8 LSQE;
 	uint8 PSE;
 	// global CPU values
@@ -122,13 +122,13 @@ static uint32 PPCInterpreter_getCallParamU32(PPCInterpreter_t* hCPU, uint32 inde
 static uint64 PPCInterpreter_getCallParamU64(PPCInterpreter_t* hCPU, uint32 index)
 {
 	uint64 v = ((uint64)PPCInterpreter_getCallParamU32(hCPU, index)) << 32ULL;
-	v |= ((uint64)PPCInterpreter_getCallParamU32(hCPU, index+1));
+	v |= ((uint64)PPCInterpreter_getCallParamU32(hCPU, index + 1));
 	return v;
 }
 
 #define ppcGetCallParamU32(__index) PPCInterpreter_getCallParamU32(hCPU, __index)
-#define ppcGetCallParamU16(__index) ((uint16)(PPCInterpreter_getCallParamU32(hCPU, __index)&0xFFFF))
-#define ppcGetCallParamU8(__index) ((uint8)(PPCInterpreter_getCallParamU32(hCPU, __index)&0xFF))
+#define ppcGetCallParamU16(__index) ((uint16)(PPCInterpreter_getCallParamU32(hCPU, __index) & 0xFFFF))
+#define ppcGetCallParamU8(__index) ((uint8)(PPCInterpreter_getCallParamU32(hCPU, __index) & 0xFF))
 #define ppcGetCallParamStruct(__index, __type) ((__type*)memory_getPointerFromVirtualOffsetAllowNull(PPCInterpreter_getCallParamU32(hCPU, __index)))
 
 // legacy way of accessing parameters
@@ -138,8 +138,12 @@ static uint64 PPCInterpreter_getCallParamU64(PPCInterpreter_t* hCPU, uint32 inde
 #define ppcDefineParamS32(__name, __index) sint32 __name = (sint32)PPCInterpreter_getCallParamU32(hCPU, __index)
 #define ppcDefineParamU64(__name, __index) uint64 __name = PPCInterpreter_getCallParamU64(hCPU, __index)
 #define ppcDefineParamMPTR(__name, __index) MPTR __name = (MPTR)PPCInterpreter_getCallParamU32(hCPU, __index)
-#define ppcDefineParamMEMPTR(__name, __type, __index) MEMPTR<__type> __name{PPCInterpreter_getCallParamU32(hCPU, __index)}
-#define ppcDefineParamU8(__name, __index) uint8 __name = (PPCInterpreter_getCallParamU32(hCPU, __index)&0xFF)
+#define ppcDefineParamMEMPTR(__name, __type, __index) \
+	MEMPTR<__type> __name                             \
+	{                                                 \
+		PPCInterpreter_getCallParamU32(hCPU, __index) \
+	}
+#define ppcDefineParamU8(__name, __index) uint8 __name = (PPCInterpreter_getCallParamU32(hCPU, __index) & 0xFF)
 #define ppcDefineParamStructPtr(__name, __type, __index) __type* __name = ((__type*)memory_getPointerFromVirtualOffsetAllowNull(PPCInterpreter_getCallParamU32(hCPU, __index)))
 #define ppcDefineParamTypePtr(__name, __type, __index) __type* __name = ((__type*)memory_getPointerFromVirtualOffsetAllowNull(PPCInterpreter_getCallParamU32(hCPU, __index)))
 #define ppcDefineParamPtr(__name, __type, __index) __type* __name = ((__type*)memory_getPointerFromVirtualOffsetAllowNull(PPCInterpreter_getCallParamU32(hCPU, __index)))
@@ -172,21 +176,21 @@ uint32 PPCInterpreter_getXER(PPCInterpreter_t* hCPU);
 void PPCInterpreter_setXER(PPCInterpreter_t* hCPU, uint32 v);
 
 // Wii U clocks (deprecated. Moved to Espresso/Const.h)
-#define ESPRESSO_CORE_CLOCK       1243125000
-#define ESPRESSO_BUS_CLOCK        248625000
-#define ESPRESSO_TIMER_CLOCK      (ESPRESSO_BUS_CLOCK/4) // 62156250
+#define ESPRESSO_CORE_CLOCK 1243125000
+#define ESPRESSO_BUS_CLOCK 248625000
+#define ESPRESSO_TIMER_CLOCK (ESPRESSO_BUS_CLOCK / 4) // 62156250
 
-#define ESPRESSO_CORE_CLOCK_TO_TIMER_CLOCK(__cc) ((__cc)/20ULL)
+#define ESPRESSO_CORE_CLOCK_TO_TIMER_CLOCK(__cc) ((__cc) / 20ULL)
 
 // interrupt vectors
-#define CPU_EXCEPTION_DSI			0x00000300
-#define CPU_EXCEPTION_INTERRUPT		0x00000500 // todo: validate
-#define CPU_EXCEPTION_FPUUNAVAIL	0x00000800 // todo: validate
-#define CPU_EXCEPTION_SYSTEMCALL	0x00000C00 // todo: validate
-#define CPU_EXCEPTION_DECREMENTER	0x00000900 // todo: validate
+#define CPU_EXCEPTION_DSI 0x00000300
+#define CPU_EXCEPTION_INTERRUPT 0x00000500	 // todo: validate
+#define CPU_EXCEPTION_FPUUNAVAIL 0x00000800	 // todo: validate
+#define CPU_EXCEPTION_SYSTEMCALL 0x00000C00	 // todo: validate
+#define CPU_EXCEPTION_DECREMENTER 0x00000900 // todo: validate
 
 // FPU available check
-//#define FPUCheckAvailable() if ((hCPU->msr & MSR_FP) == 0) { IPTException(hCPU, CPU_EXCEPTION_FPUUNAVAIL); return; }
+// #define FPUCheckAvailable() if ((hCPU->msr & MSR_FP) == 0) { IPTException(hCPU, CPU_EXCEPTION_FPUUNAVAIL); return; }
 #define FPUCheckAvailable() // since the emulated code always runs in usermode we can assume that MSR_FP is always set
 
 // spr
@@ -200,7 +204,7 @@ uint32 PPCInterpreter_getCurrentCoreIndex();
 void PPCInterpreter_setDEC(PPCInterpreter_t* hCPU, uint32 newValue);
 
 // timing for main processor
-extern uint64 ppcCyclesSince2000; // on init this is set to the cycles that passed since 1.1.2000
+extern uint64 ppcCyclesSince2000;			// on init this is set to the cycles that passed since 1.1.2000
 extern uint64 ppcCyclesSince2000TimerClock; // on init this is set to the cycles that passed since 1.1.2000 / 20
 extern uint64 ppcCyclesSince2000_UTC;
 extern uint64 ppcMainThreadDECCycleValue; // value that was set to dec register
@@ -234,7 +238,7 @@ static inline float flushDenormalToZero(float f)
 
 // HLE interface
 
-using HLECALL = void(*)(PPCInterpreter_t*);
+using HLECALL = void (*)(PPCInterpreter_t*);
 using HLEIDX = sint32;
 
 HLEIDX PPCInterpreter_registerHLECall(HLECALL hleCall, std::string hleName);

@@ -26,43 +26,43 @@ void DemangleAndPrintBacktrace(char** backtrace, size_t size)
 		size_t parenthesesClose = traceLine.find_last_of(')');
 		size_t offsetPlus = traceLine.find_last_of('+');
 		if (!parenthesesOpen || !parenthesesClose || !offsetPlus ||
-			 offsetPlus < parenthesesOpen || offsetPlus > parenthesesClose)
+			offsetPlus < parenthesesOpen || offsetPlus > parenthesesClose)
 		{
 			// fall back to default string
-            CrashLog_WriteLine(traceLine);
+			CrashLog_WriteLine(traceLine);
 			continue;
 		}
 
 		// attempt to resolve symbol from regular symbol table if missing from dynamic symbol table
 		uint64 newOffset = -1;
-		std::string_view symbolName = traceLine.substr(parenthesesOpen+1, offsetPlus-parenthesesOpen-1);
+		std::string_view symbolName = traceLine.substr(parenthesesOpen + 1, offsetPlus - parenthesesOpen - 1);
 		if (symbolName.empty())
 		{
-			uint64 symbolOffset = StringHelpers::ToInt64(traceLine.substr(offsetPlus+1,offsetPlus+1-parenthesesClose-1));
+			uint64 symbolOffset = StringHelpers::ToInt64(traceLine.substr(offsetPlus + 1, offsetPlus + 1 - parenthesesClose - 1));
 			symbolName = symTable.OffsetToSymbol(symbolOffset, newOffset);
 		}
 
-        CrashLog_WriteLine(traceLine.substr(0, parenthesesOpen+1), false);
+		CrashLog_WriteLine(traceLine.substr(0, parenthesesOpen + 1), false);
 
-        CrashLog_WriteLine(boost::core::demangle(symbolName.empty() ? "" : symbolName.data()), false);
+		CrashLog_WriteLine(boost::core::demangle(symbolName.empty() ? "" : symbolName.data()), false);
 
 		// print relative or existing symbol offset.
-        CrashLog_WriteLine("+", false);
+		CrashLog_WriteLine("+", false);
 		if (newOffset != -1)
 		{
-            CrashLog_WriteLine(fmt::format("0x{:x}", newOffset), false);
-            CrashLog_WriteLine(traceLine.substr(parenthesesClose));
+			CrashLog_WriteLine(fmt::format("0x{:x}", newOffset), false);
+			CrashLog_WriteLine(traceLine.substr(parenthesesClose));
 		}
 		else
 		{
-            CrashLog_WriteLine(traceLine.substr(offsetPlus+1));
+			CrashLog_WriteLine(traceLine.substr(offsetPlus + 1));
 		}
 	}
 }
 #endif
 
 // handle signals that would dump core, print stacktrace and then dump depending on config
-void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
+void handlerDumpingSignal(int sig, siginfo_t* info, void* context)
 {
 #if defined(ARCH_X86_64) && BOOST_OS_LINUX
 	// Check for hardware breakpoints
@@ -74,10 +74,10 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
 	}
 #endif
 
-    if(!CrashLog_Create())
-        return; // give up if crashlog was already created
+	if (!CrashLog_Create())
+		return; // give up if crashlog was already created
 
-    char* sigName = strsignal(sig);
+	char* sigName = strsignal(sig);
 	if (sigName)
 	{
 		printf("%s!\n", sigName);
@@ -93,36 +93,36 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
 
 	// get void*'s for all entries on the stack
 	size = backtrace(backtraceArray, 128);
-    // replace the deepest entry with the actual crash address
+	// replace the deepest entry with the actual crash address
 #if defined(ARCH_X86_64) && BOOST_OS_LINUX > 0
-    ucontext_t *uc = (ucontext_t *)context;
-    backtraceArray[0] = (void *)uc->uc_mcontext.gregs[REG_RIP];
+	ucontext_t* uc = (ucontext_t*)context;
+	backtraceArray[0] = (void*)uc->uc_mcontext.gregs[REG_RIP];
 #endif
 
-    CrashLog_WriteLine(fmt::format("Error: signal {}:", sig));
+	CrashLog_WriteLine(fmt::format("Error: signal {}:", sig));
 
 #if BOOST_OS_LINUX
 	char** symbol_trace = backtrace_symbols(backtraceArray, size);
 
 	if (symbol_trace)
 	{
-        DemangleAndPrintBacktrace(symbol_trace, size);
+		DemangleAndPrintBacktrace(symbol_trace, size);
 		free(symbol_trace);
 	}
 	else
 	{
-        CrashLog_WriteLine("Failed to read backtrace");
+		CrashLog_WriteLine("Failed to read backtrace");
 	}
 #else
 	backtrace_symbols_fd(backtraceArray, size, STDERR_FILENO);
 #endif
 
-    std::cerr << fmt::format("\nStacktrace and additional info written to:") << std::endl;
-    std::cerr << cemuLog_GetLogFilePath().generic_string() << std::endl;
+	std::cerr << fmt::format("\nStacktrace and additional info written to:") << std::endl;
+	std::cerr << cemuLog_GetLogFilePath().generic_string() << std::endl;
 
-    CrashLog_SetOutputChannels(false, true);
-    ExceptionHandler_LogGeneralInfo();
-    CrashLog_SetOutputChannels(true, true);
+	CrashLog_SetOutputChannels(false, true);
+	ExceptionHandler_LogGeneralInfo();
+	CrashLog_SetOutputChannels(true, true);
 
 	if (GetConfig().crash_dump == CrashDump::Enabled)
 	{
@@ -157,8 +157,8 @@ void ExceptionHandler_Init()
 	sigaction(SIGINT, &action, nullptr);
 	sigaction(SIGTERM, &action, nullptr);
 
-    action.sa_flags = SA_SIGINFO;
-    action.sa_handler = nullptr;
+	action.sa_flags = SA_SIGINFO;
+	action.sa_handler = nullptr;
 	action.sa_sigaction = handlerDumpingSignal;
 	sigaction(SIGABRT, &action, nullptr);
 	sigaction(SIGBUS, &action, nullptr);

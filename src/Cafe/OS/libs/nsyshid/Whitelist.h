@@ -3,7 +3,8 @@
 
 namespace nsyshid
 {
-	class Whitelist {
+	class Whitelist
+	{
 	  public:
 		static Whitelist& GetInstance();
 

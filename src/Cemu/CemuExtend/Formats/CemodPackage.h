@@ -120,7 +120,7 @@ struct CemodPackage
 	}
 
 	[[nodiscard]] static std::optional<CemodPackage> Load(const std::filesystem::path& path,
-		std::uint64_t titleId, std::string& error);
+														  std::uint64_t titleId, std::string& error);
 	[[nodiscard]] static std::optional<CemodPackage> Inspect(const std::filesystem::path& path,
-		std::string& error);
+															 std::string& error);
 };

@@ -15,7 +15,7 @@ namespace WebFrontend
 	{
 		class WglOpenGLHost final : public INativeOpenGLHost
 		{
-		public:
+		  public:
 			explicit WglOpenGLHost(Host::NativeWindowHandle handle)
 				: m_window(static_cast<HWND>(handle.surface))
 			{
@@ -48,9 +48,12 @@ namespace WebFrontend
 					else
 					{
 						const int attributes[] = {
-							WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
-							WGL_CONTEXT_MINOR_VERSION_ARB, 1,
-							WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+							WGL_CONTEXT_MAJOR_VERSION_ARB,
+							4,
+							WGL_CONTEXT_MINOR_VERSION_ARB,
+							1,
+							WGL_CONTEXT_PROFILE_MASK_ARB,
+							WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
 							0,
 						};
 						auto modernContext = createContext(m_device, nullptr, attributes);
@@ -63,15 +66,17 @@ namespace WebFrontend
 					(void)wglMakeCurrent(nullptr, nullptr);
 					SetOpenGLCanvasCallbacks(this);
 					m_callbacksInstalled = true;
-				}
-				catch (...)
+				} catch (...)
 				{
 					Cleanup();
 					throw;
 				}
 			}
 
-			~WglOpenGLHost() override { Cleanup(); }
+			~WglOpenGLHost() override
+			{
+				Cleanup();
+			}
 			bool HasPadViewOpen() const override
 			{
 				return m_padActive.load(std::memory_order_acquire);
@@ -139,7 +144,7 @@ namespace WebFrontend
 				(void)MakeCurrent(false);
 			}
 
-		private:
+		  private:
 			void Cleanup() noexcept
 			{
 				if (std::exchange(m_cleanedUp, true))
@@ -165,7 +170,7 @@ namespace WebFrontend
 			bool m_callbacksInstalled{};
 			bool m_cleanedUp{};
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<INativeOpenGLHost> CreateNativeOpenGLHost(
 		Host::NativeWindowHandle surface,
@@ -173,4 +178,4 @@ namespace WebFrontend
 	{
 		return std::make_unique<WglOpenGLHost>(surface);
 	}
-}
+} // namespace WebFrontend

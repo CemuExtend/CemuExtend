@@ -4,7 +4,7 @@
 // inspired by xxHash and MurmurHash3
 class DualStateHasher
 {
-public:
+  public:
 	FORCE_INLINE DualStateHasher()
 	{
 		m_h0 = 0x9E3779B97F4A7C15;
@@ -36,7 +36,7 @@ public:
 		return combined;
 	}
 
-private:
+  private:
 	uint64 m_h0;
 	uint64 m_h1;
 };

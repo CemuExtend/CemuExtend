@@ -13,9 +13,9 @@
 #include "pugixml.hpp"
 #include <charconv>
 
-#include"openssl/bn.h"
-#include"openssl/x509.h"
-#include"openssl/ssl.h"
+#include "openssl/bn.h"
+#include "openssl/x509.h"
+#include "openssl/ssl.h"
 
 CURLcode _sslctx_function_NUS(CURL* curl, void* sslctx, void* param)
 {
@@ -81,12 +81,11 @@ CURLcode _sslctx_function_OLIVE(CURL* curl, void* sslctx, void* param)
 
 	{
 		std::vector<sint16> certGroups = {
-			100,  101,  102,   103,  104,  105,
+			100, 101, 102, 103, 104, 105,
 			1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009,
 			1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019,
 			1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029,
-			1030, 1031, 1032, 1033
-		};
+			1030, 1031, 1032, 1033};
 
 		for (auto& certId : certGroups)
 			iosuCrypto_addCACertificate(sslctx, certId);
@@ -134,7 +133,7 @@ CurlRequestHelper::CurlRequestHelper()
 	curl_easy_setopt(m_curl, CURLOPT_MAXREDIRS, 2);
 	curl_easy_setopt(m_curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
-	if(GetConfig().proxy_server.GetValue() != "")
+	if (GetConfig().proxy_server.GetValue() != "")
 	{
 		curl_easy_setopt(m_curl, CURLOPT_PROXY, GetConfig().proxy_server.GetValue().c_str());
 	}
@@ -212,7 +211,7 @@ void CurlRequestHelper::addPostField(const char* fieldName, std::string_view val
 	m_postData.insert(m_postData.end(), (uint8*)value.data(), (uint8*)value.data() + value.size());
 }
 
-void CurlRequestHelper::setWriteCallback(bool(*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData)
+void CurlRequestHelper::setWriteCallback(bool (*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData)
 {
 	m_cbWriteCallback = cbWriteCallback;
 	m_writeCallbackUserData = userData;
@@ -269,7 +268,7 @@ bool CurlRequestHelper::submitRequest(bool isPost)
 		if (res != CURLE_OK)
 			return false;
 	}
-	
+
 	// check response code
 	long httpCode = 0;
 	curl_easy_getinfo(m_curl, CURLINFO_RESPONSE_CODE, &httpCode);
@@ -285,7 +284,7 @@ bool CurlRequestHelper::submitRequest(bool isPost)
 		if (httpCode >= 400 && httpCode <= 599 && httpCode != 400)
 			return false;
 		// for other status codes we assume success if the message is non-empty
-		if(m_receiveBuffer.empty())
+		if (m_receiveBuffer.empty())
 			return false;
 	}
 
@@ -357,8 +356,8 @@ void CurlSOAPHelper::SOAP_generateEnvelope()
 	m_envelopeStr.append(fmt::format("<{}:Version>{}</{}:Version>\n", m_serviceType, m_requestVersion, m_serviceType));
 
 	// the server echos the message id
-	static uint64 s_msgHigh = 1 + (uint64)HighResolutionTimer::now().getTick()/7;
-	uint64 msgId_high = s_msgHigh; // usually this is set to the deviceId
+	static uint64 s_msgHigh = 1 + (uint64)HighResolutionTimer::now().getTick() / 7;
+	uint64 msgId_high = s_msgHigh;									 // usually this is set to the deviceId
 	uint64 msgId_low = (uint64)HighResolutionTimer::now().getTick(); // uptime
 	m_envelopeStr.append(fmt::format("<{}:MessageId>EC-{}-{}</{}:MessageId>", m_serviceType, msgId_high, msgId_low, m_serviceType));
 
@@ -384,9 +383,8 @@ void CurlSOAPHelper::SOAP_generateEnvelope()
 	// DeviceToken -> Everything except BGS and NUS
 
 	// ECS:
-	//m_envelopeStr.append(fmt::format("<{}:Region>EUR</{}:Region>", serviceType, serviceType));
-	//m_envelopeStr.append(fmt::format("<{}:Country>AT</{}:Country>", serviceType, serviceType));
-
+	// m_envelopeStr.append(fmt::format("<{}:Region>EUR</{}:Region>", serviceType, serviceType));
+	// m_envelopeStr.append(fmt::format("<{}:Country>AT</{}:Country>", serviceType, serviceType));
 
 	// device token format:
 	// <ECS:DeviceToken>WT-<md5hash_in_hex></ECS:DeviceToken>
@@ -394,11 +392,10 @@ void CurlSOAPHelper::SOAP_generateEnvelope()
 	// unknown fields:
 	// VirtualDeviceType (shared but optional?)
 
-
 	// device cert not needed for ECS:GetAccountStatus ? (it complains if present)
-	//char deviceCertStr[1024 * 4];
-	//iosuCrypto_getDeviceCertificateBase64Encoded(deviceCertStr);
-	//m_envelopeStr.append(fmt::format("<{}:DeviceCert>{}</{}:DeviceCert>", serviceType, deviceCertStr, serviceType));
+	// char deviceCertStr[1024 * 4];
+	// iosuCrypto_getDeviceCertificateBase64Encoded(deviceCertStr);
+	// m_envelopeStr.append(fmt::format("<{}:DeviceCert>{}</{}:DeviceCert>", serviceType, deviceCertStr, serviceType));
 
 	// only device token needed
 	// DeviceToken comes from GetRegistrationInfo and is then stored in ec_account_info.exi
@@ -407,8 +404,6 @@ void CurlSOAPHelper::SOAP_generateEnvelope()
 
 	m_envelopeStr.append("</SOAP-ENV:Body>\n");
 	m_envelopeStr.append("</SOAP-ENV:Envelope>\n");
-
-
 }
 
 sint32 iosuCrypto_getDeviceCertificateBase64Encoded(char* output);
@@ -490,4 +485,4 @@ namespace NAPI
 		result.apiError = NAPI_RESULT::SUCCESS;
 		return true;
 	}
-};
+}; // namespace NAPI

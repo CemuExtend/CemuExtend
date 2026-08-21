@@ -1,98 +1,485 @@
 {
-  "windowRoles": ["main-library", "general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "save-manager", "update-manager", "logging", "memory-searcher", "ppc-debugger", "audio-debugger", "texture-relations", "ppc-threads", "emulated-usb-devices", "checksum-tool", "getting-started", "about"],
-  "implementedWindowRoles": ["general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "save-manager", "update-manager", "logging", "memory-searcher", "ppc-debugger", "audio-debugger", "texture-relations", "ppc-threads", "emulated-usb-devices", "checksum-tool", "getting-started", "about"],
+  "windowRoles": [
+    "main-library",
+    "general-settings",
+    "input-settings",
+    "hotkey-settings",
+    "graphic-packs",
+    "title-manager",
+    "cemod-manager",
+    "cemod-permissions",
+    "account-manager",
+    "save-manager",
+    "update-manager",
+    "logging",
+    "memory-searcher",
+    "ppc-debugger",
+    "audio-debugger",
+    "texture-relations",
+    "ppc-threads",
+    "emulated-usb-devices",
+    "checksum-tool",
+    "getting-started",
+    "about"
+  ],
+  "implementedWindowRoles": [
+    "general-settings",
+    "input-settings",
+    "hotkey-settings",
+    "graphic-packs",
+    "title-manager",
+    "cemod-manager",
+    "cemod-permissions",
+    "account-manager",
+    "save-manager",
+    "update-manager",
+    "logging",
+    "memory-searcher",
+    "ppc-debugger",
+    "audio-debugger",
+    "texture-relations",
+    "ppc-threads",
+    "emulated-usb-devices",
+    "checksum-tool",
+    "getting-started",
+    "about"
+  ],
   "methods": [
-    { "name": "system.bootstrap", "params": "undefined", "result": "Bootstrap" },
+    {
+      "name": "system.bootstrap",
+      "params": "undefined",
+      "result": "Bootstrap"
+    },
     { "name": "system.quit", "params": "undefined", "result": "EmptyResult" },
     { "name": "window.close", "params": "undefined", "result": "EmptyResult" },
-    { "name": "window.open", "params": "WindowOpenRequest", "result": "{ windowId: string }" },
+    {
+      "name": "window.open",
+      "params": "WindowOpenRequest",
+      "result": "{ windowId: string }"
+    },
     { "name": "window.focus", "params": "undefined", "result": "EmptyResult" },
-    { "name": "system.openExternalUrl", "params": "{ url: string }", "result": "EmptyResult" },
+    {
+      "name": "system.openExternalUrl",
+      "params": "{ url: string }",
+      "result": "EmptyResult"
+    },
     { "name": "about.get", "params": "undefined", "result": "AboutInfo" },
-    { "name": "settings.getFrontend", "params": "undefined", "result": "FrontendSettings" },
-    { "name": "settings.applyFrontend", "params": "FrontendSettingsUpdate", "result": "FrontendSettingsApplyResult" },
-    { "name": "accounts.getModel", "params": "undefined", "result": "AccountManagerModel" },
-    { "name": "accounts.create", "params": "{ persistentId: number; miiName: string }", "result": "Account" },
-    { "name": "accounts.update", "params": "AccountUpdate", "result": "Account" },
-    { "name": "accounts.delete", "params": "{ persistentId: number }", "result": "EmptyResult" },
-    { "name": "accounts.setActive", "params": "{ persistentId: number }", "result": "EmptyResult" },
-    { "name": "accounts.setNetworkService", "params": "{ persistentId: number; service: AccountNetworkService }", "result": "EmptyResult" },
-    { "name": "input.getModel", "params": "undefined", "result": "InputSettingsModel" },
-    { "name": "input.enumerate", "params": "{ api: string }", "result": "InputDeviceCandidate[]" },
-    { "name": "input.setType", "params": "{ player: number; type: EmulatedControllerType; preserveDevices: boolean }", "result": "InputSettingsModel" },
-    { "name": "input.addDevice", "params": "{ player: number; token: number }", "result": "InputSettingsModel" },
-    { "name": "input.removeDevice", "params": "{ player: number; token: number }", "result": "InputSettingsModel" },
-    { "name": "input.connectDevice", "params": "{ token: number }", "result": "InputSettingsModel" },
-    { "name": "input.captureButton", "params": "{ token: number }", "result": "CapturedInputButton | null" },
-    { "name": "input.setMapping", "params": "{ player: number; mappingId: number; controllerToken: number; buttonId: number }", "result": "InputSettingsModel" },
-    { "name": "input.clearMapping", "params": "{ player: number; mappingId?: number }", "result": "InputSettingsModel" },
-    { "name": "input.setDeviceSettings", "params": "{ token: number; settings: PhysicalControllerSettings }", "result": "InputSettingsModel" },
-    { "name": "input.calibrate", "params": "{ token: number }", "result": "InputSettingsModel" },
-    { "name": "input.profileLoad", "params": "{ player: number; profile: string }", "result": "InputSettingsModel" },
-    { "name": "input.profileSave", "params": "{ player: number; profile: string }", "result": "InputSettingsModel" },
-    { "name": "input.profileDelete", "params": "{ profile: string }", "result": "InputSettingsModel" },
-    { "name": "hotkeys.get", "params": "undefined", "result": "HotkeySettingsModel" },
-    { "name": "hotkeys.apply", "params": "HotkeySettingsUpdate", "result": "HotkeySettingsApplyResult" },
-    { "name": "usb.getModel", "params": "undefined", "result": "EmulatedUsbModel" },
-    { "name": "usb.setEnabled", "params": "{ deviceId: EmulatedUsbDeviceId; vendorId: number; productId: number; enabled: boolean }", "result": "EmulatedUsbModel" },
-    { "name": "graphicPacks.list", "params": "undefined", "result": "GraphicPack[]" },
-    { "name": "graphicPacks.setEnabled", "params": "{ key: string; enabled: boolean }", "result": "GraphicPackMutation" },
-    { "name": "graphicPacks.setPreset", "params": "{ key: string; category: string; preset: string }", "result": "GraphicPackMutation" },
-    { "name": "graphicPacks.reload", "params": "{ key: string }", "result": "GraphicPackMutation" },
-    { "name": "graphicPacks.refresh", "params": "undefined", "result": "{ removedEnabledPaths: string[]; diagnostic: string }" },
-    { "name": "graphicPacks.save", "params": "undefined", "result": "EmptyResult" },
-    { "name": "graphicPacks.install", "params": "GraphicPackInstallRequest", "result": "{ jobId: string }" },
-    { "name": "updates.getModel", "params": "undefined", "result": "UpdateManagerModel" },
-    { "name": "updates.pickTitleSource", "params": "undefined", "result": "TitleInstallSelection | null" },
-    { "name": "updates.installTitle", "params": "{ planToken: string; acceptConflict: boolean }", "result": "{ jobId: string }" },
-    { "name": "diagnostics.getTextureRelations", "params": "DiagnosticPageRequest & { activeOnly: boolean; includeViews: boolean }", "result": "TextureDiagnosticPage" },
-    { "name": "diagnostics.getAudioVoices", "params": "DiagnosticPageRequest & { activeOnly: boolean }", "result": "AudioVoiceDiagnosticPage" },
-    { "name": "titleManager.getModel", "params": "undefined", "result": "TitleManagerModel" },
-    { "name": "titleManager.refresh", "params": "undefined", "result": "EmptyResult" },
-    { "name": "titleManager.launch", "params": "{ locationUid: string }", "result": "TitleLaunchResult" },
-    { "name": "logging.getSnapshot", "params": "undefined", "result": "LoggingSnapshot" },
-    { "name": "logging.clear", "params": "undefined", "result": "{ clearedThroughSequence: string }" },
-    { "name": "save.getModel", "params": "undefined", "result": "SaveManagerModel" },
-    { "name": "save.inspect", "params": "SaveIdentity", "result": "{ state: SaveEntryState }" },
-    { "name": "save.delete.prepare", "params": "SaveIdentity", "result": "{ confirmationToken: string }" },
-    { "name": "save.delete", "params": "{ confirmationToken: string }", "result": "EmptyResult" },
-    { "name": "save.transfer.inspect", "params": "{ titleId: string; sourcePersistentId: string; targetPersistentId: string }", "result": "{ targetState: SaveEntryState; confirmationToken: string }" },
-    { "name": "save.transfer", "params": "{ confirmationToken: string }", "result": "EmptyResult" },
-    { "name": "save.import.pick", "params": "{ titleId: string }", "result": "{ selected: boolean; fileToken?: string; name?: string }" },
-    { "name": "save.import.inspect", "params": "{ fileToken: string; titleId: string; persistentId: string }", "result": "SaveImportInspection" },
-    { "name": "save.import.start", "params": "{ confirmationToken: string }", "result": "{ jobId: string }" },
-    { "name": "save.export.pick", "params": "SaveIdentity", "result": "{ selected: boolean; confirmationToken?: string; name?: string }" },
-    { "name": "save.export.start", "params": "{ confirmationToken: string }", "result": "{ jobId: string }" },
-    { "name": "titleManager.pickInstallSource", "params": "undefined", "result": "NativeSelection" },
-    { "name": "titleManager.planInstall", "params": "{ sourceToken: string }", "result": "TitleInstallPlanView" },
-    { "name": "titleManager.startInstall", "params": "{ planToken: string; decision: \"proceed\" | \"acceptConflict\" }", "result": "{ jobId: string }" },
-    { "name": "titleManager.planWua", "params": "{ locationUid: string }", "result": "WuaConversionPlanView" },
-    { "name": "titleManager.pickWuaDestination", "params": "{ suggestedFileName: string }", "result": "NativeDestination" },
-    { "name": "titleManager.startWua", "params": "{ planToken: string; destinationToken: string }", "result": "{ jobId: string }" },
-    { "name": "titleManager.planDelete", "params": "{ locationUid: string }", "result": "ManagedContentDeletePlanView" },
-    { "name": "titleManager.delete", "params": "{ planToken: string }", "result": "EmptyResult" },
-    { "name": "checksum.getModel", "params": "undefined", "result": "ChecksumModel" },
-    { "name": "checksum.start", "params": "{ locationUid: string }", "result": "{ jobId: string }" },
-    { "name": "cemod.discover", "params": "{ titleId?: string }", "result": "{ jobId: string }" },
-    { "name": "cemod.openPermissions", "params": "{ requestId: string; titleId: string; packageKey: string; generation: string }", "result": "{ windowId: string }" },
-    { "name": "cemod.saveApproval", "params": "CemodApprovalUpdate", "result": "CemodManagerResult" },
-    { "name": "cemod.importLegacy", "params": "{ generation: string; titleId: string; packageKey: string; confirmed: boolean }", "result": "CemodManagerResult" },
-    { "name": "diagnostics.ppcThreadsSnapshot", "params": "undefined", "result": "PpcThreadsModel" },
-    { "name": "diagnostics.ppcThreadCommand", "params": "{ generation: string; threadAddress: string; threadIdentity: string; command: PpcThreadCommand; priorityDelta?: number }", "result": "PpcThreadCommandResult" },
-    { "name": "memorySearch.start", "params": "{ value: MemoryTypedValue; maximumBytes: number }", "result": "MemorySearchSession" },
-    { "name": "memorySearch.filter", "params": "{ sessionToken: string; generation: string; value: MemoryTypedValue }", "result": "MemorySearchSession" },
-    { "name": "memorySearch.status", "params": "{ sessionToken: string }", "result": "MemorySearchStatus" },
-    { "name": "memorySearch.page", "params": "{ sessionToken: string; generation: string; offset: number; limit: number }", "result": "MemorySearchPage" },
-    { "name": "memorySearch.cancel", "params": "{ sessionToken: string; generation: string }", "result": "EmptyResult" },
-    { "name": "ppcDebugger.snapshot", "params": "{ center: GuestAddress; instructionCount: number }", "result": "PpcDebuggerSnapshot" },
-    { "name": "ppcDebugger.toggleBreakpoint", "params": "{ generation: string; address: GuestAddress }", "result": "EmptyResult" },
-    { "name": "ppcDebugger.setBreakpointEnabled", "params": "{ generation: string; identity: string; enabled: boolean }", "result": "EmptyResult" },
-    { "name": "ppcDebugger.deleteBreakpoint", "params": "{ generation: string; identity: string }", "result": "EmptyResult" },
-    { "name": "ppcDebugger.control", "params": "{ generation: string; command: PpcDebuggerControl }", "result": "EmptyResult" },
-    { "name": "jobs.cancel", "params": "{ jobId: string }", "result": "EmptyResult" },
+    {
+      "name": "settings.getFrontend",
+      "params": "undefined",
+      "result": "FrontendSettings"
+    },
+    {
+      "name": "settings.applyFrontend",
+      "params": "FrontendSettingsUpdate",
+      "result": "FrontendSettingsApplyResult"
+    },
+    {
+      "name": "accounts.getModel",
+      "params": "undefined",
+      "result": "AccountManagerModel"
+    },
+    {
+      "name": "accounts.create",
+      "params": "{ persistentId: number; miiName: string }",
+      "result": "Account"
+    },
+    {
+      "name": "accounts.update",
+      "params": "AccountUpdate",
+      "result": "Account"
+    },
+    {
+      "name": "accounts.delete",
+      "params": "{ persistentId: number }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "accounts.setActive",
+      "params": "{ persistentId: number }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "accounts.setNetworkService",
+      "params": "{ persistentId: number; service: AccountNetworkService }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "input.getModel",
+      "params": "undefined",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.enumerate",
+      "params": "{ api: string }",
+      "result": "InputDeviceCandidate[]"
+    },
+    {
+      "name": "input.setType",
+      "params": "{ player: number; type: EmulatedControllerType; preserveDevices: boolean }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.addDevice",
+      "params": "{ player: number; token: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.removeDevice",
+      "params": "{ player: number; token: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.connectDevice",
+      "params": "{ token: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.captureButton",
+      "params": "{ token: number }",
+      "result": "CapturedInputButton | null"
+    },
+    {
+      "name": "input.setMapping",
+      "params": "{ player: number; mappingId: number; controllerToken: number; buttonId: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.clearMapping",
+      "params": "{ player: number; mappingId?: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.setDeviceSettings",
+      "params": "{ token: number; settings: PhysicalControllerSettings }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.calibrate",
+      "params": "{ token: number }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.profileLoad",
+      "params": "{ player: number; profile: string }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.profileSave",
+      "params": "{ player: number; profile: string }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "input.profileDelete",
+      "params": "{ profile: string }",
+      "result": "InputSettingsModel"
+    },
+    {
+      "name": "hotkeys.get",
+      "params": "undefined",
+      "result": "HotkeySettingsModel"
+    },
+    {
+      "name": "hotkeys.apply",
+      "params": "HotkeySettingsUpdate",
+      "result": "HotkeySettingsApplyResult"
+    },
+    {
+      "name": "usb.getModel",
+      "params": "undefined",
+      "result": "EmulatedUsbModel"
+    },
+    {
+      "name": "usb.setEnabled",
+      "params": "{ deviceId: EmulatedUsbDeviceId; vendorId: number; productId: number; enabled: boolean }",
+      "result": "EmulatedUsbModel"
+    },
+    {
+      "name": "graphicPacks.list",
+      "params": "undefined",
+      "result": "GraphicPack[]"
+    },
+    {
+      "name": "graphicPacks.setEnabled",
+      "params": "{ key: string; enabled: boolean }",
+      "result": "GraphicPackMutation"
+    },
+    {
+      "name": "graphicPacks.setPreset",
+      "params": "{ key: string; category: string; preset: string }",
+      "result": "GraphicPackMutation"
+    },
+    {
+      "name": "graphicPacks.reload",
+      "params": "{ key: string }",
+      "result": "GraphicPackMutation"
+    },
+    {
+      "name": "graphicPacks.refresh",
+      "params": "undefined",
+      "result": "{ removedEnabledPaths: string[]; diagnostic: string }"
+    },
+    {
+      "name": "graphicPacks.save",
+      "params": "undefined",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "graphicPacks.install",
+      "params": "GraphicPackInstallRequest",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "updates.getModel",
+      "params": "undefined",
+      "result": "UpdateManagerModel"
+    },
+    {
+      "name": "updates.pickTitleSource",
+      "params": "undefined",
+      "result": "TitleInstallSelection | null"
+    },
+    {
+      "name": "updates.installTitle",
+      "params": "{ planToken: string; acceptConflict: boolean }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "diagnostics.getTextureRelations",
+      "params": "DiagnosticPageRequest & { activeOnly: boolean; includeViews: boolean }",
+      "result": "TextureDiagnosticPage"
+    },
+    {
+      "name": "diagnostics.getAudioVoices",
+      "params": "DiagnosticPageRequest & { activeOnly: boolean }",
+      "result": "AudioVoiceDiagnosticPage"
+    },
+    {
+      "name": "titleManager.getModel",
+      "params": "undefined",
+      "result": "TitleManagerModel"
+    },
+    {
+      "name": "titleManager.refresh",
+      "params": "undefined",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "titleManager.launch",
+      "params": "{ locationUid: string }",
+      "result": "TitleLaunchResult"
+    },
+    {
+      "name": "logging.getSnapshot",
+      "params": "undefined",
+      "result": "LoggingSnapshot"
+    },
+    {
+      "name": "logging.clear",
+      "params": "undefined",
+      "result": "{ clearedThroughSequence: string }"
+    },
+    {
+      "name": "save.getModel",
+      "params": "undefined",
+      "result": "SaveManagerModel"
+    },
+    {
+      "name": "save.inspect",
+      "params": "SaveIdentity",
+      "result": "{ state: SaveEntryState }"
+    },
+    {
+      "name": "save.delete.prepare",
+      "params": "SaveIdentity",
+      "result": "{ confirmationToken: string }"
+    },
+    {
+      "name": "save.delete",
+      "params": "{ confirmationToken: string }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "save.transfer.inspect",
+      "params": "{ titleId: string; sourcePersistentId: string; targetPersistentId: string }",
+      "result": "{ targetState: SaveEntryState; confirmationToken: string }"
+    },
+    {
+      "name": "save.transfer",
+      "params": "{ confirmationToken: string }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "save.import.pick",
+      "params": "{ titleId: string }",
+      "result": "{ selected: boolean; fileToken?: string; name?: string }"
+    },
+    {
+      "name": "save.import.inspect",
+      "params": "{ fileToken: string; titleId: string; persistentId: string }",
+      "result": "SaveImportInspection"
+    },
+    {
+      "name": "save.import.start",
+      "params": "{ confirmationToken: string }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "save.export.pick",
+      "params": "SaveIdentity",
+      "result": "{ selected: boolean; confirmationToken?: string; name?: string }"
+    },
+    {
+      "name": "save.export.start",
+      "params": "{ confirmationToken: string }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "titleManager.pickInstallSource",
+      "params": "undefined",
+      "result": "NativeSelection"
+    },
+    {
+      "name": "titleManager.planInstall",
+      "params": "{ sourceToken: string }",
+      "result": "TitleInstallPlanView"
+    },
+    {
+      "name": "titleManager.startInstall",
+      "params": "{ planToken: string; decision: \"proceed\" | \"acceptConflict\" }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "titleManager.planWua",
+      "params": "{ locationUid: string }",
+      "result": "WuaConversionPlanView"
+    },
+    {
+      "name": "titleManager.pickWuaDestination",
+      "params": "{ suggestedFileName: string }",
+      "result": "NativeDestination"
+    },
+    {
+      "name": "titleManager.startWua",
+      "params": "{ planToken: string; destinationToken: string }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "titleManager.planDelete",
+      "params": "{ locationUid: string }",
+      "result": "ManagedContentDeletePlanView"
+    },
+    {
+      "name": "titleManager.delete",
+      "params": "{ planToken: string }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "checksum.getModel",
+      "params": "undefined",
+      "result": "ChecksumModel"
+    },
+    {
+      "name": "checksum.start",
+      "params": "{ locationUid: string }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "cemod.discover",
+      "params": "{ titleId?: string }",
+      "result": "{ jobId: string }"
+    },
+    {
+      "name": "cemod.openPermissions",
+      "params": "{ requestId: string; titleId: string; packageKey: string; generation: string }",
+      "result": "{ windowId: string }"
+    },
+    {
+      "name": "cemod.saveApproval",
+      "params": "CemodApprovalUpdate",
+      "result": "CemodManagerResult"
+    },
+    {
+      "name": "cemod.importLegacy",
+      "params": "{ generation: string; titleId: string; packageKey: string; confirmed: boolean }",
+      "result": "CemodManagerResult"
+    },
+    {
+      "name": "diagnostics.ppcThreadsSnapshot",
+      "params": "undefined",
+      "result": "PpcThreadsModel"
+    },
+    {
+      "name": "diagnostics.ppcThreadCommand",
+      "params": "{ generation: string; threadAddress: string; threadIdentity: string; command: PpcThreadCommand; priorityDelta?: number }",
+      "result": "PpcThreadCommandResult"
+    },
+    {
+      "name": "memorySearch.start",
+      "params": "{ value: MemoryTypedValue; maximumBytes: number }",
+      "result": "MemorySearchSession"
+    },
+    {
+      "name": "memorySearch.filter",
+      "params": "{ sessionToken: string; generation: string; value: MemoryTypedValue }",
+      "result": "MemorySearchSession"
+    },
+    {
+      "name": "memorySearch.status",
+      "params": "{ sessionToken: string }",
+      "result": "MemorySearchStatus"
+    },
+    {
+      "name": "memorySearch.page",
+      "params": "{ sessionToken: string; generation: string; offset: number; limit: number }",
+      "result": "MemorySearchPage"
+    },
+    {
+      "name": "memorySearch.cancel",
+      "params": "{ sessionToken: string; generation: string }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "ppcDebugger.snapshot",
+      "params": "{ center: GuestAddress; instructionCount: number }",
+      "result": "PpcDebuggerSnapshot"
+    },
+    {
+      "name": "ppcDebugger.toggleBreakpoint",
+      "params": "{ generation: string; address: GuestAddress }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "ppcDebugger.setBreakpointEnabled",
+      "params": "{ generation: string; identity: string; enabled: boolean }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "ppcDebugger.deleteBreakpoint",
+      "params": "{ generation: string; identity: string }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "ppcDebugger.control",
+      "params": "{ generation: string; command: PpcDebuggerControl }",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "jobs.cancel",
+      "params": "{ jobId: string }",
+      "result": "EmptyResult"
+    },
     { "name": "titles.list", "params": "undefined", "result": "Title[]" },
-    { "name": "titles.refresh", "params": "undefined", "result": "EmptyResult" },
-    { "name": "titles.launch", "params": "{ titleId: string }", "result": "TitleLaunchResult" },
+    {
+      "name": "titles.refresh",
+      "params": "undefined",
+      "result": "EmptyResult"
+    },
+    {
+      "name": "titles.launch",
+      "params": "{ titleId: string }",
+      "result": "TitleLaunchResult"
+    },
     { "name": "emulation.stop", "params": "undefined", "result": "EmptyResult" }
   ]
 }

@@ -1,20 +1,20 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include <memory>
 
-#define FG_BUCKET_AREA_FREE					0	// free area available game
-#define FG_BUCKET_AREA_AUDIO_TRANSITION		1	// transition audio buffer
-#define FG_BUCKET_AREA2						2	// frame storage?	TV?
-#define FG_BUCKET_AREA3						3	// frame storage?	DRC?
-#define FG_BUCKET_AREA4						4	// frame storage?	TV?
-#define FG_BUCKET_AREA5						5	// frame storage?	DRC?
-#define FG_BUCKET_AREA_SAVE					6
-#define FG_BUCKET_AREA_COPY					7	// for OS copy data (clipboard and title switch parameters)
+#define FG_BUCKET_AREA_FREE 0			  // free area available game
+#define FG_BUCKET_AREA_AUDIO_TRANSITION 1 // transition audio buffer
+#define FG_BUCKET_AREA2 2				  // frame storage?	TV?
+#define FG_BUCKET_AREA3 3				  // frame storage?	DRC?
+#define FG_BUCKET_AREA4 4				  // frame storage?	TV?
+#define FG_BUCKET_AREA5 5				  // frame storage?	DRC?
+#define FG_BUCKET_AREA_SAVE 6
+#define FG_BUCKET_AREA_COPY 7 // for OS copy data (clipboard and title switch parameters)
 
-#define FG_BUCKET_AREA_FREE_SIZE			0x2800000
-#define FG_BUCKET_AREA_SAVE_SIZE			0x1000
-#define FG_BUCKET_AREA_COPY_SIZE			0x400000
+#define FG_BUCKET_AREA_FREE_SIZE 0x2800000
+#define FG_BUCKET_AREA_SAVE_SIZE 0x1000
+#define FG_BUCKET_AREA_COPY_SIZE 0x400000
 
-#define FG_BUCKET_AREA_COUNT	8
+#define FG_BUCKET_AREA_COUNT 8
 
 namespace coreinit
 {
@@ -26,17 +26,16 @@ namespace coreinit
 		uint32 id;
 		uint32 startOffset;
 		uint32 size;
-	}fgAreaEntries[FG_BUCKET_AREA_COUNT] =
-	{
-		{ 0, 0, 0x2800000 },
-		{ 7, 0x2800000, 0x400000 },
-		{ 1, 0x2C00000, 0x900000 },
-		{ 2, 0x3500000, 0x3C0000 },
-		{ 3, 0x38C0000, 0x1C0000 },
-		{ 4, 0x3A80000, 0x3C0000 },
-		{ 5, 0x3E40000, 0x1BF000 },
-		{ 6, 0x3FFF000, 0x1000 }
-	};
+	} fgAreaEntries[FG_BUCKET_AREA_COUNT] =
+		{
+			{0, 0, 0x2800000},
+			{7, 0x2800000, 0x400000},
+			{1, 0x2C00000, 0x900000},
+			{2, 0x3500000, 0x3C0000},
+			{3, 0x38C0000, 0x1C0000},
+			{4, 0x3A80000, 0x3C0000},
+			{5, 0x3E40000, 0x1BF000},
+			{6, 0x3FFF000, 0x1000}};
 
 	MEMPTR<uint8> GetFGMemByArea(uint32 areaId)
 	{
@@ -50,12 +49,11 @@ namespace coreinit
 		return nullptr;
 	}
 
-
 	bool OSGetForegroundBucket(MEMPTR<void>* offset, uint32be* size)
 	{
 		// return full size of foreground bucket area
 		if (offset)
-			*offset = { (MPTR)MEMORY_FGBUCKET_AREA_ADDR };
+			*offset = {(MPTR)MEMORY_FGBUCKET_AREA_ADDR};
 		if (size)
 			*size = MEMORY_FGBUCKET_AREA_SIZE;
 		// return true if in foreground
@@ -73,8 +71,8 @@ namespace coreinit
 
 	void coreinitExport_OSGetForegroundBucket(PPCInterpreter_t* hCPU)
 	{
-		//debug_printf("OSGetForegroundBucket(0x%x,0x%x)\n", hCPU->gpr[3], hCPU->gpr[4]);
-		// returns the whole FG bucket area (if the current process is in the foreground)
+		// debug_printf("OSGetForegroundBucket(0x%x,0x%x)\n", hCPU->gpr[3], hCPU->gpr[4]);
+		//  returns the whole FG bucket area (if the current process is in the foreground)
 		ppcDefineParamMPTR(areaOutput, 0);
 		ppcDefineParamMPTR(areaSize, 1);
 		bool r = OSGetForegroundBucket((MEMPTR<void>*)memory_getPointerFromVirtualOffsetAllowNull(areaOutput), (uint32be*)memory_getPointerFromVirtualOffsetAllowNull(areaSize));
@@ -188,4 +186,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSGetForegroundBucketFreeArea, LogType::CoreinitMem);
 		osLib_addFunction("coreinit", "OSCopyFromClipboard", coreinitExport_OSCopyFromClipboard);
 	}
-}
+} // namespace coreinit

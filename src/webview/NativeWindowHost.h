@@ -93,7 +93,7 @@ namespace WebFrontend
 
 	class INativeWindowHost
 	{
-	public:
+	  public:
 		using CloseHandler = std::function<void()>;
 		using MenuHandler = std::function<void(MenuCommand)>;
 		using MetricsHandler = std::function<void(Host::WindowMetricsSnapshot)>;
@@ -127,7 +127,7 @@ namespace WebFrontend
 		[[nodiscard]] virtual std::pair<bool, std::string> GetClipboardText() = 0;
 		[[nodiscard]] virtual bool SetClipboardText(std::string text) = 0;
 		[[nodiscard]] virtual bool SetClipboardImage(std::span<const std::uint8_t> rgb,
-			std::int32_t width, std::int32_t height) = 0;
+													 std::int32_t width, std::int32_t height) = 0;
 		[[nodiscard]] virtual bool OpenExternalUrl(std::string url) = 0;
 		// File-system paths remain native-only. Callers expose short-lived opaque
 		// tokens to web content instead of returning either path across the bridge.
@@ -137,4 +137,4 @@ namespace WebFrontend
 	};
 
 	[[nodiscard]] std::unique_ptr<INativeWindowHost> CreateNativeWindowHost();
-}
+} // namespace WebFrontend

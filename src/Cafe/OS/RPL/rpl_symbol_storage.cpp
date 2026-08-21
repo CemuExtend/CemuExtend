@@ -7,7 +7,7 @@ struct rplSymbolLib_t
 	rplSymbolLib_t* next;
 };
 
-struct  
+struct
 {
 	rplSymbolLib_t* libs;
 	std::mutex m_symbolStorageMutex;
@@ -16,9 +16,9 @@ struct
 	char* strAllocatorBlock;
 	sint32 strAllocatorOffset;
 	std::vector<void*> list_strAllocatedBlocks;
-}rplSymbolStorage = { 0 };
+} rplSymbolStorage = {0};
 
-#define STR_ALLOC_BLOCK_SIZE	(128*1024) // allocate 128KB blocks at once
+#define STR_ALLOC_BLOCK_SIZE (128 * 1024) // allocate 128KB blocks at once
 
 char* rplSymbolStorage_allocDupString(const char* str)
 {
@@ -92,17 +92,17 @@ RPLStoredSymbol* rplSymbolStorage_getByAddress(MPTR address)
 
 RPLStoredSymbol* rplSymbolStorage_getByClosestAddress(MPTR address)
 {
-    // highly inefficient but doesn't matter for now
-    std::unique_lock<std::mutex> lck(rplSymbolStorage.m_symbolStorageMutex);
-    for(uint32 i=0; i<4096; i++)
-    {
+	// highly inefficient but doesn't matter for now
+	std::unique_lock<std::mutex> lck(rplSymbolStorage.m_symbolStorageMutex);
+	for (uint32 i = 0; i < 4096; i++)
+	{
 		auto it = rplSymbolStorage.map_symbolByAddress.find(address);
 		RPLStoredSymbol* symbol = (it == rplSymbolStorage.map_symbolByAddress.end()) ? nullptr : it->second;
-        if(symbol)
-            return symbol;
-        address -= 4;
-    }
-    return nullptr;
+		if (symbol)
+			return symbol;
+		address -= 4;
+	}
+	return nullptr;
 }
 
 void rplSymbolStorage_remove(RPLStoredSymbol* storedSymbol)
@@ -129,7 +129,6 @@ void rplSymbolStorage_remove(RPLStoredSymbol* storedSymbol)
 	}
 	delete storedSymbol;
 }
-
 
 void rplSymbolStorage_removeRange(MPTR address, sint32 length, uint32 type)
 {
@@ -220,7 +219,7 @@ void rplSymbolStorage_unloadAll()
 	// free strings
 	for (auto it : rplSymbolStorage.list_strAllocatedBlocks)
 		free(it);
-    rplSymbolStorage.list_strAllocatedBlocks.clear();
+	rplSymbolStorage.list_strAllocatedBlocks.clear();
 	rplSymbolStorage.strAllocatorBlock = nullptr;
 	rplSymbolStorage.strAllocatorOffset = 0;
 }

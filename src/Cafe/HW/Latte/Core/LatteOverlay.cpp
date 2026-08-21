@@ -25,9 +25,9 @@ struct OverlayStats
 	double fps{};
 	uint32 draw_calls_per_frame{};
 	uint32 fast_draw_calls_per_frame{};
-	float cpu_usage{}; // cemu cpu usage in %
+	float cpu_usage{};				 // cemu cpu usage in %
 	std::vector<float> cpu_per_core; // global cpu usage in % per core
-	uint32 ram_usage{}; // ram usage in MB
+	uint32 ram_usage{};				 // ram usage in MB
 
 	int vramUsage{}, vramTotal{}; // vram usage in mb
 } g_state{};
@@ -42,10 +42,10 @@ std::atomic_int g_compiling_pipelines_async;
 std::atomic_uint64_t g_compiling_pipelines_syncTimeSum;
 
 extern std::mutex g_friend_notification_mutex;
-extern std::vector< std::pair<std::string, int> > g_friend_notifications;
+extern std::vector<std::pair<std::string, int>> g_friend_notifications;
 
 std::mutex g_notification_mutex;
-std::vector< std::pair<std::string, int> > g_notifications;
+std::vector<std::pair<std::string, int>> g_notifications;
 
 void LatteOverlay_pushNotification(const std::string& text, sint32 duration)
 {
@@ -103,14 +103,14 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 			if (config.overlay.ram_usage)
 				ImGui::Text("RAM: %dMB", g_state.ram_usage);
 
-			if(config.overlay.vram_usage && g_state.vramUsage != -1 && g_state.vramTotal != -1)
+			if (config.overlay.vram_usage && g_state.vramUsage != -1 && g_state.vramTotal != -1)
 				ImGui::Text("VRAM: %dMB / %dMB", g_state.vramUsage, g_state.vramTotal);
 
 			if (config.overlay.debug)
 			{
 				// general debug info
 				ImGui::Text("--- Debug info ---");
-				ImGui::Text("IndexUploadPerFrame: %dKB", (performanceMonitor.stats.indexDataUploadPerFrame+1023)/1024);
+				ImGui::Text("IndexUploadPerFrame: %dKB", (performanceMonitor.stats.indexDataUploadPerFrame + 1023) / 1024);
 				ImGui::Text("SHCSets: %d / %d", g_shaderStateCacheSetCount.load(), g_shaderStateCacheSetAuxCount.load());
 				// backend specific info
 				g_renderer->AppendOverlayDebugInfo();
@@ -158,7 +158,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 					if (s_mii_name.empty())
 					{
 						auto tmp_view = Account::GetAccount(ActiveSettings::GetPersistentId()).GetMiiName();
-						std::wstring tmp{ tmp_view };
+						std::wstring tmp{tmp_view};
 						s_mii_name = boost::nowide::narrow(tmp);
 					}
 					ImGui::TextUnformatted(s_mii_name.c_str());
@@ -166,7 +166,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 					position.y += (ImGui::GetWindowSize().y + 10.0f) * direction;
 				}
 				ImGui::End();
-				
+
 				// controller
 				std::vector<std::pair<int, std::string>> profiles;
 				auto& input_manager = InputManager::instance();
@@ -216,7 +216,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 
 	if (config.notification.friends)
 	{
-		static std::vector< std::pair<std::string, std::chrono::steady_clock::time_point> > s_friend_list;
+		static std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>> s_friend_list;
 
 		std::unique_lock lock(g_friend_notification_mutex);
 		if (!g_friend_notifications.empty())
@@ -341,7 +341,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 
 					if (s_shader_count_async > 0 && GetConfig().async_compile) // the latter condition is to never show async count when async isn't enabled. Since it can be confusing to the user
 					{
-						if(s_shader_count > 1)
+						if (s_shader_count > 1)
 							ImGui::Text("Compiled %d new shaders... (%d async)", s_shader_count, s_shader_count_async);
 						else
 							ImGui::Text("Compiled %d new shader... (%d async)", s_shader_count, s_shader_count_async);
@@ -359,7 +359,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 				ImGui::End();
 			}
 		}
-		
+
 		static int32_t s_pipeline_count = 0;
 		static int32_t s_pipeline_count_async = 0;
 		if (s_pipeline_count > 0 || g_compiling_pipelines > 0)
@@ -434,7 +434,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 	}
 
 	// misc notifications
-	static std::vector< std::pair<std::string, std::chrono::steady_clock::time_point> > s_misc_notifications;
+	static std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>> s_misc_notifications;
 
 	std::unique_lock misc_lock(g_notification_mutex);
 	if (!g_notifications.empty())
@@ -479,33 +479,33 @@ void LatteOverlay_translateScreenPosition(ScreenPosition pos, const Vector2f& wi
 	switch (pos)
 	{
 	case ScreenPosition::kTopLeft:
-		position = { 10, 10 };
-		pivot = { 0, 0 };
+		position = {10, 10};
+		pivot = {0, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kTopCenter:
-		position = { window_size.x / 2.0f, 10 };
-		pivot = { 0.5f, 0 };
+		position = {window_size.x / 2.0f, 10};
+		pivot = {0.5f, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kTopRight:
-		position = { window_size.x - 10, 10 };
-		pivot = { 1, 0 };
+		position = {window_size.x - 10, 10};
+		pivot = {1, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kBottomLeft:
-		position = { 10, window_size.y - 10 };
-		pivot = { 0, 1 };
+		position = {10, window_size.y - 10};
+		pivot = {0, 1};
 		direction = -1;
 		break;
 	case ScreenPosition::kBottomCenter:
-		position = { window_size.x / 2.0f, window_size.y - 10 };
-		pivot = { 0.5f, 1 };
+		position = {window_size.x / 2.0f, window_size.y - 10};
+		pivot = {0.5f, 1};
 		direction = -1;
 		break;
 	case ScreenPosition::kBottomRight:
-		position = { window_size.x - 10, window_size.y - 10 };
-		pivot = { 1, 1 };
+		position = {window_size.x - 10, window_size.y - 10};
+		pivot = {1, 1};
 		direction = -1;
 		break;
 	default:
@@ -516,21 +516,19 @@ void LatteOverlay_translateScreenPosition(ScreenPosition pos, const Vector2f& wi
 void LatteOverlay_render(bool pad_view)
 {
 	const auto& config = GetConfig();
-	if(config.overlay.position == ScreenPosition::kDisabled && config.notification.position == ScreenPosition::kDisabled)
+	if (config.overlay.position == ScreenPosition::kDisabled && config.notification.position == ScreenPosition::kDisabled)
 		return;
 
-	const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
-		Host::WindowMetricsSnapshot{};
+	const auto window = g_renderer ? g_renderer->GetWindowMetrics() : Host::WindowMetricsSnapshot{};
 	const sint32 w = pad_view && window.padOpen ? window.physicalPadWidth : window.physicalWidth;
 	const sint32 h = pad_view && window.padOpen ? window.physicalPadHeight : window.physicalHeight;
 
 	if (w == 0 || h == 0)
 		return;
 
-	const Vector2f window_size{ (float)w,(float)h };
+	const Vector2f window_size{(float)w, (float)h};
 
-	const float fontDPIScale = static_cast<float>(!pad_view ? window.dpiScale :
-		(window.padOpen ? window.padDpiScale : 1.0));
+	const float fontDPIScale = static_cast<float>(!pad_view ? window.dpiScale : (window.padOpen ? window.padDpiScale : 1.0));
 
 	float overlayFontSize = 14.0f * (float)config.overlay.text_scale / 100.0f * fontDPIScale;
 
@@ -539,7 +537,7 @@ void LatteOverlay_render(bool pad_view)
 		return;
 
 	float notificationsFontSize = 14.0f * (float)config.notification.text_scale / 100.0f * fontDPIScale;
-	
+
 	if (!ImGui_GetFont(notificationsFontSize))
 		return;
 
@@ -551,11 +549,10 @@ void LatteOverlay_render(bool pad_view)
 		LatteOverlay_translateScreenPosition(config.overlay.position, window_size, position, pivot, direction);
 		LatteOverlay_renderOverlay(position, pivot, direction, overlayFontSize, pad_view);
 	}
-	
 
 	if (config.notification.position != ScreenPosition::kDisabled)
 	{
-		if(config.overlay.position != config.notification.position)
+		if (config.overlay.position != config.notification.position)
 			LatteOverlay_translateScreenPosition(config.notification.position, window_size, position, pivot, direction);
 
 		LatteOverlay_RenderNotifications(position, pivot, direction, notificationsFontSize, pad_view);
@@ -574,10 +571,10 @@ static void UpdateStats_CemuCpu()
 {
 	ProcessorTime now;
 	QueryProcTime(now);
-	
+
 	double cpu = ProcessorTime::Compare(g_state.processor_time_cemu, now);
 	cpu /= g_state.processor_count;
-	
+
 	g_state.cpu_usage = cpu * 100;
 	g_state.processor_time_cemu = now;
 }

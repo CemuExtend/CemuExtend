@@ -15,7 +15,7 @@ BootSoundReader::BootSoundReader(FSCVirtualFile* bootsndFile, sint32 blockSize) 
 
 	// workaround: SM3DW has incorrect loop point
 	const auto titleId = CafeSystem::GetForegroundTitleId();
-	if(titleId == 0x0005000010145D00 || titleId == 0x0005000010145C00 || titleId == 0x0005000010106100)
+	if (titleId == 0x0005000010145D00 || titleId == 0x0005000010145C00 || titleId == 0x0005000010106100)
 		loopPoint = 113074;
 }
 
@@ -44,7 +44,7 @@ sint16* BootSoundReader::getSamples()
 	}
 
 	// handle case where the end of a block of samples lines up with the end of the file
-	if(fsc_getFileSeek(bootsndFile) == fsc_getFileSize(bootsndFile))
+	if (fsc_getFileSeek(bootsndFile) == fsc_getFileSize(bootsndFile))
 		fsc_setFileSeek(bootsndFile, loopPointOffset);
 
 	return buffer.data();

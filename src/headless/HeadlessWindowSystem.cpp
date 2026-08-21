@@ -19,7 +19,7 @@ void Frontend::Run()
 			break;
 		if ((++shutdownAttempts % 100) == 1)
 			cemuLog_log(LogType::Force,
-				"Headless shutdown retained resources; retrying: {}", shutdown.diagnostic);
+						"Headless shutdown retained resources; retrying: {}", shutdown.diagnostic);
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	InputManager::instance().Shutdown();

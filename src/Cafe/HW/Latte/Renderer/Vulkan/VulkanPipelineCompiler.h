@@ -4,15 +4,14 @@
 
 class PipelineCompiler : public VKRMoveableRefCounter
 {
-private:
+  private:
 	// helper functions
 	VkFormat GetVertexFormat(uint8 format);
 	bool ConsumesBlendConstants(VkBlendFactor blendFactor);
 
 	void CreateDescriptorSetLayout(VulkanRenderer* vkRenderer, LatteDecompilerShader* shader, VkDescriptorSetLayout& layout, PipelineInfo* vkrPipelineInfo);
 
-private:
-
+  private:
 	/* shader stages (requires compiled shader) */
 
 	RendererShaderVk* m_rectEmulationGS{};
@@ -30,7 +29,7 @@ private:
 	void InitDepthStencilState();
 	void InitDynamicState(PipelineInfo* pipelineInfo, bool usesBlendConstants, bool usesDepthBias);
 
-public:
+  public:
 	PipelineCompiler();
 	~PipelineCompiler();
 
@@ -85,10 +84,9 @@ public:
 	VkPipelineDepthStencilStateCreateInfo depthStencilState{};
 
 	/* dynamic state */
-	std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 	VkPipelineDynamicStateCreateInfo dynamicState = {};
 
 	// returns true if the shader was compiled (even if errors occurred)
 	bool Compile(bool forceCompile, bool isRenderThread, bool showInOverlay);
-
 };

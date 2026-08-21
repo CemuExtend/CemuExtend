@@ -9,7 +9,7 @@
 // images use TrustedCemodRuntime's stricter title-wide late-release contract.
 class ITrustedPayloadInstance
 {
-public:
+  public:
 	virtual ~ITrustedPayloadInstance() = default;
 
 	[[nodiscard]] virtual CemodPayloadFormat Format() const = 0;

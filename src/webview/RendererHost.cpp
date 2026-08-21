@@ -28,10 +28,10 @@ namespace WebFrontend
 	{
 		class RendererHost final : public IRendererHost
 		{
-		public:
+		  public:
 			RendererHost(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-				std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-				std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+						 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+						 std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 				: m_windowMetrics(std::move(windowMetrics)),
 				  m_nativeSurfaces(std::move(nativeSurfaces)),
 				  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
@@ -96,8 +96,7 @@ namespace WebFrontend
 					default:
 						throw std::runtime_error("the configured graphics API is unavailable");
 					}
-				}
-				catch (...)
+				} catch (...)
 				{
 					m_nativeSurfacePublisher->ClearCanvas(true, m_mainPublication);
 					m_mainPublication = {};
@@ -168,26 +167,25 @@ namespace WebFrontend
 					}
 					else
 						LatteAsyncCommands_runOnRendererThread([this, bounds] {
-						switch (m_api)
-						{
+							switch (m_api)
+							{
 #ifdef ENABLE_VULKAN
-						case kVulkan:
-							VulkanRenderer::GetInstance()->InitializeSurface(
-								{bounds.width, bounds.height}, false);
-							break;
+							case kVulkan:
+								VulkanRenderer::GetInstance()->InitializeSurface(
+									{bounds.width, bounds.height}, false);
+								break;
 #endif
 #ifdef ENABLE_OPENGL
-						case kOpenGL:
-							m_openGLHost->ActivatePad();
-							break;
+							case kOpenGL:
+								m_openGLHost->ActivatePad();
+								break;
 #endif
-						default:
-							throw std::runtime_error("the configured GamePad graphics API is unavailable");
-						}
+							default:
+								throw std::runtime_error("the configured GamePad graphics API is unavailable");
+							}
 						});
 					m_padRendererInitialized = true;
-				}
-				catch (...)
+				} catch (...)
 				{
 #ifdef ENABLE_OPENGL
 					if (m_api == kOpenGL && m_openGLHost)
@@ -233,11 +231,11 @@ namespace WebFrontend
 									m_openGLHost->DeactivatePad();
 									break;
 #endif
-								default: break;
+								default:
+									break;
 								}
 							});
-					}
-					catch (...)
+					} catch (...)
 					{
 						if (!Latte_GetStopSignal())
 							throw;
@@ -257,7 +255,7 @@ namespace WebFrontend
 				m_padRendererInitialized = false;
 			}
 
-		private:
+		  private:
 			std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 			std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 			std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
@@ -270,7 +268,7 @@ namespace WebFrontend
 			std::unique_ptr<INativeOpenGLHost> m_openGLHost;
 #endif
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<IRendererHost> CreateRendererHost(
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
@@ -278,6 +276,6 @@ namespace WebFrontend
 		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 	{
 		return std::make_unique<RendererHost>(std::move(windowMetrics),
-			std::move(nativeSurfaces), std::move(nativeSurfacePublisher));
+											  std::move(nativeSurfaces), std::move(nativeSurfacePublisher));
 	}
-}
+} // namespace WebFrontend

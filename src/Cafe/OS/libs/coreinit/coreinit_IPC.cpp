@@ -8,13 +8,13 @@
 namespace coreinit
 {
 	static constexpr inline size_t IPC_NUM_RESOURCE_BUFFERS = 0x30;
-	
+
 	struct IPCResourceBuffer
 	{
 		IPCCommandBody commandBody;
 		uint8 bufferData[0x80 - 0x48];
 	};
-	
+
 	static_assert(sizeof(IPCCommandBody) == 0x48);
 	static_assert(sizeof(IPCResourceBuffer) == 0x80);
 
@@ -22,7 +22,7 @@ namespace coreinit
 	{
 		/* +0x00 */ uint32be IsAllocated;
 		/* +0x04 */ MEMPTR<OSMessageQueue> asyncMsgQueue; // optional, if set a message will be sent to this queue...
-		/* +0x08 */ MEMPTR<void> asyncResultFunc; // ...otherwise this is checked and delegated to the IPC threads. If false, only eventSynchronousIPC will be signaled. If true, a message will be sent to the per-core ipc queue
+		/* +0x08 */ MEMPTR<void> asyncResultFunc;		  // ...otherwise this is checked and delegated to the IPC threads. If false, only eventSynchronousIPC will be signaled. If true, a message will be sent to the per-core ipc queue
 		/* +0x0C */ MEMPTR<void> asyncResultUserParam;
 		/* +0x10 */ uint32 ukn10;
 		/* +0x14 */ MEMPTR<IPCResourceBuffer> resourcePtr;
@@ -100,7 +100,7 @@ namespace coreinit
 		/* 0x3FC */ IPCResourceBufferDescriptor resBufferDescriptor[IPC_NUM_RESOURCE_BUFFERS];
 	};
 
-	//static_assert(sizeof(IPCDriverInstance) == 0x1740);
+	// static_assert(sizeof(IPCDriverInstance) == 0x1740);
 
 	SysAllocator<IPCResourceBuffer, IPC_NUM_RESOURCE_BUFFERS * Espresso::CORE_COUNT, 0x40> s_ipcResourceBuffers;
 	SysAllocator<IPCDriver, Espresso::CORE_COUNT, 0x40> s_ipcDriver;
@@ -137,7 +137,7 @@ namespace coreinit
 	{
 		cemu_assert_debug(ipcDriver->coreIndex == OSGetCoreId());
 		IPCResourceBufferDescriptor* descriptor = nullptr;
-		while (true) 
+		while (true)
 		{
 			descriptor = ipcDriver->fifoFreeBuffers.Pop();
 			if (!descriptor)
@@ -191,7 +191,7 @@ namespace coreinit
 			OSMessage msg;
 			OSReceiveMessage(gIPCThreadMsgQueue.GetPtr() + coreIndex, &msg, OS_MESSAGE_BLOCK);
 			cemu_assert(msg.data2 == 1); // type must be callback
-			MEMPTR<void> cbFunc{ msg.message };
+			MEMPTR<void> cbFunc{msg.message};
 			cemu_assert(cbFunc != nullptr);
 			PPCCoreCallback(cbFunc.GetPtr(), (uint32)msg.data0, (uint32)msg.data1);
 		}
@@ -205,7 +205,7 @@ namespace coreinit
 		OSInitMessageQueue(gIPCThreadMsgQueue.GetPtr() + coreIndex, _gIPCThreadSemaphoreStorage.GetPtr() + coreIndex * IPC_NUM_RESOURCE_BUFFERS, IPC_NUM_RESOURCE_BUFFERS);
 		OSThread_t* ipcThread = gIPCThread.GetPtr() + coreIndex;
 		__OSCreateThreadType(ipcThread, PPCInterpreter_makeCallableExportDepr(__IPCDriverThreadFunc), 0, nullptr, _gIPCThreadStack.GetPtr() + 0x4000 * coreIndex + 0x4000, 0x4000, 15, (1 << coreIndex), OSThread_t::THREAD_TYPE::TYPE_DRIVER);
-		sprintf((char*)_gIPCThreadNameStorage.GetPtr()+coreIndex*0x18, "{SYS IPC Core %d}", coreIndex);
+		sprintf((char*)_gIPCThreadNameStorage.GetPtr() + coreIndex * 0x18, "{SYS IPC Core %d}", coreIndex);
 		OSSetThreadName(ipcThread, (char*)_gIPCThreadNameStorage.GetPtr() + coreIndex * 0x18);
 		OSResumeThread(ipcThread);
 	}
@@ -464,4 +464,4 @@ namespace coreinit
 		}
 	}
 
-};
+}; // namespace coreinit

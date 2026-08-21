@@ -4,31 +4,33 @@
 
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include "Cafe/HW/Latte/Core/LatteConst.h"
-//#include "Cafe/HW/Latte/Core/FetchShader.h"
+// #include "Cafe/HW/Latte/Core/FetchShader.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Common/precompiled.h"
 #include "HW/Latte/Core/LatteTextureLoader.h"
 
-struct Uvec2 {
-    uint32 x;
-    uint32 y;
+struct Uvec2
+{
+	uint32 x;
+	uint32 y;
 };
 
 enum class MetalDataType
 {
-    NONE,
-    INT,
-    UINT,
-    FLOAT,
+	NONE,
+	INT,
+	UINT,
+	FLOAT,
 };
 
-struct MetalPixelFormatInfo {
-    MTL::PixelFormat pixelFormat;
-    MetalDataType dataType;
-    size_t bytesPerBlock;
-    Uvec2 blockTexelSize = {1, 1};
-    bool hasStencil = false;
-    TextureDecoder* textureDecoder = nullptr;
+struct MetalPixelFormatInfo
+{
+	MTL::PixelFormat pixelFormat;
+	MetalDataType dataType;
+	size_t bytesPerBlock;
+	Uvec2 blockTexelSize = {1, 1};
+	bool hasStencil = false;
+	TextureDecoder* textureDecoder = nullptr;
 };
 
 void CheckForPixelFormatSupport(const MetalPixelFormatSupport& support);
@@ -39,8 +41,8 @@ MTL::PixelFormat GetMtlPixelFormat(Latte::E_GX2SURFFMT format, bool isDepth);
 
 inline MetalDataType GetColorBufferDataType(const uint32 index, const LatteContextRegister& lcr)
 {
-    auto format = LatteMRT::GetColorBufferFormat(index, lcr);
-    return GetMtlPixelFormatInfo(format, false).dataType;
+	auto format = LatteMRT::GetColorBufferFormat(index, lcr);
+	return GetMtlPixelFormatInfo(format, false).dataType;
 }
 
 inline const char* GetDataTypeStr(MetalDataType dataType)
@@ -48,13 +50,13 @@ inline const char* GetDataTypeStr(MetalDataType dataType)
 	switch (dataType)
 	{
 	case MetalDataType::INT:
-	    return "int4";
+		return "int4";
 	case MetalDataType::UINT:
-	    return "uint4";
+		return "uint4";
 	case MetalDataType::FLOAT:
-	    return "float4";
+		return "float4";
 	default:
-	    cemu_assert_suspicious();
+		cemu_assert_suspicious();
 		return "INVALID";
 	}
 }

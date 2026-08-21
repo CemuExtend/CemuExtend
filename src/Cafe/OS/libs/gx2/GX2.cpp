@@ -24,26 +24,25 @@
 
 #include <cinttypes>
 
-#define GX2_TV_RENDER_NONE			0
-#define GX2_TV_RENDER_480			1
-#define GX2_TV_RENDER_480_WIDE		2
-#define GX2_TV_RENDER_720			3
-#define GX2_TV_RENDER_720I			4
-#define GX2_TV_RENDER_1080			5
-#define GX2_TV_RENDER_COUNT			6
+#define GX2_TV_RENDER_NONE 0
+#define GX2_TV_RENDER_480 1
+#define GX2_TV_RENDER_480_WIDE 2
+#define GX2_TV_RENDER_720 3
+#define GX2_TV_RENDER_720I 4
+#define GX2_TV_RENDER_1080 5
+#define GX2_TV_RENDER_COUNT 6
 
 struct
 {
 	sint32 width;
 	sint32 height;
-}tvScanBufferResolutions[GX2_TV_RENDER_COUNT] = {
-0,0,
-640,480,
-854,480,
-1280,720,
-1280,720,
-1920,1080
-};
+} tvScanBufferResolutions[GX2_TV_RENDER_COUNT] = {
+	0, 0,
+	640, 480,
+	854, 480,
+	1280, 720,
+	1280, 720,
+	1920, 1080};
 
 uint64 lastSwapTime = 0;
 
@@ -62,7 +61,7 @@ void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
 	if (isPokken)
 		GX2::GX2DrawDone();
 
-	GX2::GX2ReserveCmdSpace(5+2);
+	GX2::GX2ReserveCmdSpace(5 + 2);
 
 	uint64 tick64 = PPCInterpreter_getMainCoreCycleCounter() / 20ULL;
 	lastSwapTime = tick64;
@@ -132,13 +131,13 @@ void gx2Export_GX2GetCurrentScanBuffer(PPCInterpreter_t* hCPU)
 	colorBufferBE->surface.width = 100;
 	colorBufferBE->surface.height = 100;
 	// note: For now we abuse the tiling aperture memory area as framebuffer pointers
-	if( scanTarget == GX2_SCAN_TARGET_TV )
+	if (scanTarget == GX2_SCAN_TARGET_TV)
 	{
-		colorBufferBE->surface.imagePtr = MEMORY_TILINGAPERTURE_AREA_ADDR+0x200000;
+		colorBufferBE->surface.imagePtr = MEMORY_TILINGAPERTURE_AREA_ADDR + 0x200000;
 	}
-	else if( scanTarget == GX2_SCAN_TARGET_DRC_FIRST )
+	else if (scanTarget == GX2_SCAN_TARGET_DRC_FIRST)
 	{
-		colorBufferBE->surface.imagePtr = MEMORY_TILINGAPERTURE_AREA_ADDR+0x40000;
+		colorBufferBE->surface.imagePtr = MEMORY_TILINGAPERTURE_AREA_ADDR + 0x40000;
 	}
 	osLib_returnFromFunction(hCPU, 0);
 }
@@ -191,7 +190,7 @@ void gx2Export_GX2CalcTVSize(PPCInterpreter_t* hCPU)
 
 	uint32 width = tvScanBufferResolutions[tvRenderMode].width;
 	uint32 height = tvScanBufferResolutions[tvRenderMode].height;
-	
+
 	GX2ColorBuffer colorBuffer;
 	memset(&colorBuffer, 0, sizeof(GX2ColorBuffer));
 	_GX2InitScanBuffer(&colorBuffer, width, height, format);
@@ -199,7 +198,7 @@ void gx2Export_GX2CalcTVSize(PPCInterpreter_t* hCPU)
 	uint32 imageSize = colorBuffer.surface.imageSize;
 	uint32 alignment = colorBuffer.surface.alignment;
 
-	uint32 alignmentPaddingSize = (alignment - (imageSize%alignment)) % alignment;
+	uint32 alignmentPaddingSize = (alignment - (imageSize % alignment)) % alignment;
 
 	uint32 uknMult = 1; // probably for interlaced?
 	if (tvRenderMode == GX2_TV_RENDER_720I)
@@ -211,7 +210,7 @@ void gx2Export_GX2CalcTVSize(PPCInterpreter_t* hCPU)
 
 	uint32 bufferedImageSize = (imageSize + alignmentPaddingSize) * adjustedBufferingMode;
 	bufferedImageSize = bufferedImageSize * uknMult - alignmentPaddingSize;
-	
+
 	memory_writeU32(outputSizeMPTR, bufferedImageSize);
 	memory_writeU32(outputScaleNeededMPTR, 0); // todo
 	osLib_returnFromFunction(hCPU, 0);
@@ -219,7 +218,6 @@ void gx2Export_GX2CalcTVSize(PPCInterpreter_t* hCPU)
 
 void gx2Export_GX2CalcDRCSize(PPCInterpreter_t* hCPU)
 {
-
 	ppcDefineParamS32(drcMode, 0);
 	ppcDefineParamU32(format, 1);
 	ppcDefineParamU32(bufferingMode, 2);
@@ -241,8 +239,7 @@ void gx2Export_GX2CalcDRCSize(PPCInterpreter_t* hCPU)
 	uint32 imageSize = colorBuffer.surface.imageSize;
 	uint32 alignment = colorBuffer.surface.alignment;
 
-	uint32 alignmentPaddingSize = (alignment - (imageSize%alignment)) % alignment;
-
+	uint32 alignmentPaddingSize = (alignment - (imageSize % alignment)) % alignment;
 
 	uint32 adjustedBufferingMode = bufferingMode;
 
@@ -266,7 +263,7 @@ void gx2Export_GX2SetDRCConnectCallback(PPCInterpreter_t* hCPU)
 	ppcDefineParamS32(channel, 0);
 	ppcDefineParamMEMPTR(callback, void, 1);
 	cemuLog_log(LogType::GX2, "GX2SetDRCConnectCallback({}, 0x{:08x})", channel, callback.GetMPTR());
-	if(callback.GetPtr())
+	if (callback.GetPtr())
 		PPCCoreCallback(callback, channel, TRUE);
 	osLib_returnFromFunction(hCPU, 0);
 }
@@ -301,7 +298,7 @@ void gx2Export_GX2SetSemaphore(PPCInterpreter_t* hCPU)
 	GX2::GX2ReserveCmdSpace(3);
 	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_MEM_SEMAPHORE, 2));
 	gx2WriteGather_submitU32AsBE(memory_virtualToPhysical(semaphoreMPTR)); // semaphore physical address
-	gx2WriteGather_submitU32AsBE(semaphoreControl); // control
+	gx2WriteGather_submitU32AsBE(semaphoreControl);						   // control
 
 	osLib_returnFromFunction(hCPU, 0);
 }
@@ -310,7 +307,7 @@ namespace GX2
 {
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::vector<std::string_view> GetDependencies() override
 		{
 			return {"avm", "coreinit", "tcl"};
@@ -397,10 +394,10 @@ namespace GX2
 			GX2::GX2QueryInit();
 			GX2::GX2MiscInit();
 		};
-	}s_COSGX2Module;
+	} s_COSGX2Module;
 
 	COSModule* GetModule()
 	{
 		return &s_COSGX2Module;
 	}
-}
+} // namespace GX2

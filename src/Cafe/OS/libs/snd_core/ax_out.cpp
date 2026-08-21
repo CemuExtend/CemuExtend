@@ -2,7 +2,7 @@
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/HW/MMU/MMU.h"
 #include "audio/IAudioAPI.h"
-//#include "ax.h"
+// #include "ax.h"
 #include "config/CemuConfig.h"
 
 namespace snd_core
@@ -20,7 +20,6 @@ namespace snd_core
 	}
 
 	sint32 __AXMode[AX_DEV_COUNT]; // audio mode (AX_MODE_*) per device
-
 
 	bool AVMGetTVAudioMode(uint32be* tvAudioMode)
 	{
@@ -141,23 +140,22 @@ namespace snd_core
 	}
 
 	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT> __AXTVBuffer48;
-	extern SysAllocator<sint32, AX_SAMPLES_MAX* AX_DRC_CHANNEL_COUNT * 2> __AXDRCBuffer48;
+	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_DRC_CHANNEL_COUNT * 2> __AXDRCBuffer48;
 
 	sint16 __buf_AXTVDMABuffers_0[AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT];
 	sint16 __buf_AXTVDMABuffers_1[AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT];
 	sint16 __buf_AXTVDMABuffers_2[AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT];
 	sint16* __AXTVDMABuffers[3] = {__buf_AXTVDMABuffers_0, __buf_AXTVDMABuffers_1, __buf_AXTVDMABuffers_2};
 
-	#define AX_FRAMES_PER_GROUP		(4)
+#define AX_FRAMES_PER_GROUP (4)
 
 	sint16 tempTVChannelData[AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT * AX_FRAMES_PER_GROUP] = {};
 	sint32 tempAudioBlockCounter = 0;
 
-
 	sint16 __buf_AXDRCDMABuffers_0[AX_SAMPLES_MAX * 6];
 	sint16 __buf_AXDRCDMABuffers_1[AX_SAMPLES_MAX * 6];
 	sint16 __buf_AXDRCDMABuffers_2[AX_SAMPLES_MAX * 6];
-	sint16* __AXDRCDMABuffers[3] = { __buf_AXDRCDMABuffers_0, __buf_AXDRCDMABuffers_1, __buf_AXDRCDMABuffers_2 };
+	sint16* __AXDRCDMABuffers[3] = {__buf_AXDRCDMABuffers_0, __buf_AXDRCDMABuffers_1, __buf_AXDRCDMABuffers_2};
 
 	sint16 tempDRCChannelData[AX_SAMPLES_MAX * 6 * AX_FRAMES_PER_GROUP] = {};
 	sint32 tempDRCAudioBlockCounter = 0;
@@ -183,7 +181,7 @@ namespace snd_core
 		tempAudioBlockCounter++;
 		if (tempAudioBlockCounter == AX_FRAMES_PER_GROUP)
 		{
-			if(g_tvAudio)
+			if (g_tvAudio)
 				g_tvAudio->FeedBlock(tempTVChannelData);
 
 			tempAudioBlockCounter = 0;
@@ -396,7 +394,6 @@ namespace snd_core
 
 	void AXOut_init()
 	{
-
 		numQueuedFramesSndGeneric = 0;
 
 		std::unique_lock lock(g_audioMutex);
@@ -405,8 +402,7 @@ namespace snd_core
 			try
 			{
 				g_tvAudio = IAudioAPI::CreateDeviceFromConfig(IAudioAPI::AudioType::TV, 48000, snd_core::AX_SAMPLES_PER_3MS_48KHZ * AX_FRAMES_PER_GROUP, 16);
-			}
-			catch (std::runtime_error& ex)
+			} catch (std::runtime_error& ex)
 			{
 				cemuLog_log(LogType::Force, "can't initialize tv audio: {}", ex.what());
 			}
@@ -418,8 +414,7 @@ namespace snd_core
 			try
 			{
 				g_padAudio = IAudioAPI::CreateDeviceFromConfig(IAudioAPI::AudioType::Gamepad, 48000, snd_core::AX_SAMPLES_PER_3MS_48KHZ * AX_FRAMES_PER_GROUP, 16);
-			}
-			catch (std::runtime_error& ex)
+			} catch (std::runtime_error& ex)
 			{
 				cemuLog_log(LogType::Force, "can't initialize pad audio: {}", ex.what());
 			}
@@ -495,7 +490,7 @@ namespace snd_core
 		// s_ax_interval_timer increases by the wait period
 		// it can lag behind by multiple periods (up to kTimeout) if there is minor stutter in the CPU thread
 		// s_last_check is always set to the timestamp at the time of firing
-		// it's used to enforce the minimum wait delay (we want to avoid calling AX update in quick succession because other threads may need to do work first) 
+		// it's used to enforce the minimum wait delay (we want to avoid calling AX update in quick succession because other threads may need to do work first)
 
 		static auto s_ax_interval_timer = now_cached() - kWaitDuration;
 		static auto s_last_check = now_cached();
@@ -517,7 +512,6 @@ namespace snd_core
 		else
 			s_ax_interval_timer += wait_duration;
 
-
 		if (snd_core::isInitialized())
 		{
 			if (numQueuedFramesSndGeneric == snd_core::getNumProcessedFrames())
@@ -529,4 +523,4 @@ namespace snd_core
 		}
 	}
 
-}
+} // namespace snd_core

@@ -19,14 +19,14 @@ namespace GX2
 	void GX2SetGPUFence(uint32be* fencePtr, uint32 mask, uint32 compareOp, uint32 compareValue)
 	{
 		GX2ReserveCmdSpace(7);
-		uint8 compareOpTable[] = { 0x7,0x1,0x3,0x2,0x6,0x4,0x5,0x0 };
+		uint8 compareOpTable[] = {0x7, 0x1, 0x3, 0x2, 0x6, 0x4, 0x5, 0x0};
 		gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_WAIT_REG_MEM, 6));
-		gx2WriteGather_submitU32AsBE((uint32)(compareOpTable[compareOp & 7]) | 0x10); // compare operand + memory select (0x10)
+		gx2WriteGather_submitU32AsBE((uint32)(compareOpTable[compareOp & 7]) | 0x10);							  // compare operand + memory select (0x10)
 		gx2WriteGather_submitU32AsBE(memory_virtualToPhysical(memory_getVirtualOffsetFromPointer(fencePtr)) | 2); // physical address + type size flag(?)
-		gx2WriteGather_submitU32AsBE(0); // ukn, always set to 0
-		gx2WriteGather_submitU32AsBE(compareValue); // fence value
-		gx2WriteGather_submitU32AsBE(mask); // fence mask
-		gx2WriteGather_submitU32AsBE(0xA); // unknown purpose
+		gx2WriteGather_submitU32AsBE(0);																		  // ukn, always set to 0
+		gx2WriteGather_submitU32AsBE(compareValue);																  // fence value
+		gx2WriteGather_submitU32AsBE(mask);																		  // fence mask
+		gx2WriteGather_submitU32AsBE(0xA);																		  // unknown purpose
 	}
 
 	enum class GX2PipeEventType : uint32
@@ -49,8 +49,8 @@ namespace GX2
 			// write when on top of pipe
 			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_MEM_WRITE, 4));
 			gx2WriteGather_submitU32AsBE(physTimestampAddr | 0x2);
-			gx2WriteGather_submitU32AsBE(0); // 0x40000 -> 32bit write, 0x0 -> 64bit write?
-			gx2WriteGather_submitU32AsBE(valLow); // low
+			gx2WriteGather_submitU32AsBE(0);	   // 0x40000 -> 32bit write, 0x0 -> 64bit write?
+			gx2WriteGather_submitU32AsBE(valLow);  // low
 			gx2WriteGather_submitU32AsBE(valHigh); // high
 			if (triggerInterrupt != 0)
 			{
@@ -64,8 +64,8 @@ namespace GX2
 			// write when on bottom of pipe
 			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_MEM_WRITE, 4));
 			gx2WriteGather_submitU32AsBE(physTimestampAddr | 0x2);
-			gx2WriteGather_submitU32AsBE(0); // 0x40000 -> 32bit write, 0x0 -> 64bit write?
-			gx2WriteGather_submitU32AsBE(valLow); // low
+			gx2WriteGather_submitU32AsBE(0);	   // 0x40000 -> 32bit write, 0x0 -> 64bit write?
+			gx2WriteGather_submitU32AsBE(valLow);  // low
 			gx2WriteGather_submitU32AsBE(valHigh); // high
 			// trigger CB
 			if (triggerInterrupt != 0)
@@ -78,7 +78,7 @@ namespace GX2
 				// used by Mario & Sonic Rio
 				gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_HLE_BOTTOM_OF_PIPE_CB, 3));
 				gx2WriteGather_submitU32AsBE(physTimestampAddr);
-				gx2WriteGather_submitU32AsBE(valLow); // low
+				gx2WriteGather_submitU32AsBE(valLow);  // low
 				gx2WriteGather_submitU32AsBE(valHigh); // high
 			}
 		}
@@ -92,7 +92,7 @@ namespace GX2
 				// todo: Use correct packet
 				gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_HLE_BOTTOM_OF_PIPE_CB, 3));
 				gx2WriteGather_submitU32AsBE(physTimestampAddr);
-				gx2WriteGather_submitU32AsBE(valLow); // low
+				gx2WriteGather_submitU32AsBE(valLow);  // low
 				gx2WriteGather_submitU32AsBE(valHigh); // high
 			}
 			else
@@ -100,8 +100,8 @@ namespace GX2
 				// write value but don't trigger CB
 				gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_MEM_WRITE, 4));
 				gx2WriteGather_submitU32AsBE(physTimestampAddr | 0x2);
-				gx2WriteGather_submitU32AsBE(0); // 0x40000 -> 32bit write, 0x0 -> 64bit write?
-				gx2WriteGather_submitU32AsBE(valLow); // low
+				gx2WriteGather_submitU32AsBE(0);	   // 0x40000 -> 32bit write, 0x0 -> 64bit write?
+				gx2WriteGather_submitU32AsBE(valLow);  // low
 				gx2WriteGather_submitU32AsBE(valHigh); // high
 			}
 		}
@@ -115,7 +115,7 @@ namespace GX2
 	{
 		MEMPTR<void> callbackFuncPtr;
 		MEMPTR<void> userData;
-	}s_eventCallback[GX2CallbackEventTypeCount]{};
+	} s_eventCallback[GX2CallbackEventTypeCount]{};
 
 	void GX2SetEventCallback(GX2CallbackEventType eventType, void* callbackFuncPtr, void* userData)
 	{
@@ -191,7 +191,7 @@ namespace GX2
 			GX2EventQueueEntry entry;
 			if (!s_eventCbQueue.peek2(entry))
 				continue;
-			if(!s_eventCallback[(size_t)entry.eventType].callbackFuncPtr)
+			if (!s_eventCallback[(size_t)entry.eventType].callbackFuncPtr)
 				continue;
 			PPCCoreCallback(s_eventCallback[(size_t)entry.eventType].callbackFuncPtr, (sint32)entry.eventType, s_eventCallback[(size_t)entry.eventType].userData);
 		}
@@ -266,13 +266,13 @@ namespace GX2
 		coreinit::OSInitSemaphore(s_eventCbQueueSemaphore, 0);
 	}
 
-    void GX2EventResetToDefaultState()
-    {
-        s_callbackThreadLaunched = false;
-        for(auto& it : s_eventCallback)
-        {
-            it.callbackFuncPtr = nullptr;
-            it.userData = nullptr;
-        }
-    }
-}
+	void GX2EventResetToDefaultState()
+	{
+		s_callbackThreadLaunched = false;
+		for (auto& it : s_eventCallback)
+		{
+			it.callbackFuncPtr = nullptr;
+			it.userData = nullptr;
+		}
+	}
+} // namespace GX2

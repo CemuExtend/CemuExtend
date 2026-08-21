@@ -10,7 +10,10 @@ wxInputDraw::wxInputDraw(wxWindow* parent, wxWindowID id, const wxPoint& pos, co
 	Bind(wxEVT_PAINT, &wxInputDraw::OnPaintEvent, this);
 }
 
-wxInputDraw::~wxInputDraw() { Unbind(wxEVT_PAINT, &wxInputDraw::OnPaintEvent, this); }
+wxInputDraw::~wxInputDraw()
+{
+	Unbind(wxEVT_PAINT, &wxInputDraw::OnPaintEvent, this);
+}
 
 void wxInputDraw::OnPaintEvent(wxPaintEvent& event)
 {
@@ -34,7 +37,7 @@ void wxInputDraw::OnRender(wxDC& dc)
 	wxBrush grey_brush = wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
 	wxBrush green_brush = wxSystemSettings::SelectLightDark(0x336600, 0x99FF99);
 
-	if(!IsEnabled())
+	if (!IsEnabled())
 	{
 		position = {};
 		black.SetColour(black.GetColour());
@@ -98,11 +101,9 @@ void wxInputDraw::OnRender(wxDC& dc)
 	}
 
 	// draw axis
-	const wxPoint pos
-	{
+	const wxPoint pos{
 		static_cast<int>(middle.x + position.x * middle.x),
-		static_cast<int>(middle.y - position.y * middle.y)
-	};
+		static_cast<int>(middle.y - position.y * middle.y)};
 	dc.DrawCircle(pos.x, pos.y, 2);
 
 	dc.SetBrush(*wxTRANSPARENT_BRUSH);

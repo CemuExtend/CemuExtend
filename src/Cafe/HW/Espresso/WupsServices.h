@@ -18,7 +18,10 @@ class ModuleExportRegistry;
 class WupsFunctionPatchManager;
 class IWupsPatchPlatform;
 class WupsBackendManagementRuntime;
-namespace cemuextend_hle { class Cex2Owner; }
+namespace cemuextend_hle
+{
+	class Cex2Owner;
+}
 
 struct WupsOwnerToken
 {
@@ -26,17 +29,20 @@ struct WupsOwnerToken
 	std::uint32_t generation{};
 
 	[[nodiscard]] friend bool operator==(const WupsOwnerToken&,
-		const WupsOwnerToken&) = default;
+										 const WupsOwnerToken&) = default;
 };
 
 class WupsGuestOwnerScope
 {
-public:
+  public:
 	explicit WupsGuestOwnerScope(WupsOwnerToken owner) : m_previous(s_current)
 	{
 		s_current = owner;
 	}
-	~WupsGuestOwnerScope() { s_current = m_previous; }
+	~WupsGuestOwnerScope()
+	{
+		s_current = m_previous;
+	}
 	WupsGuestOwnerScope(const WupsGuestOwnerScope&) = delete;
 	WupsGuestOwnerScope& operator=(const WupsGuestOwnerScope&) = delete;
 
@@ -50,7 +56,7 @@ public:
 		s_scheduled = owner;
 	}
 
-private:
+  private:
 	std::optional<WupsOwnerToken> m_previous;
 	inline static thread_local std::optional<WupsOwnerToken> s_current;
 	inline static thread_local std::optional<WupsOwnerToken> s_scheduled;
@@ -256,26 +262,26 @@ struct WupsContentRedirectRule
 using WupsHostExportHandler = std::function<std::int32_t(
 	std::span<const std::uint32_t> arguments, std::string& error)>;
 using WupsGuestInvoker = std::function<bool(std::uint32_t target,
-	std::span<const std::uint32_t> arguments, std::uint32_t& result,
-	std::string& error)>;
+											std::span<const std::uint32_t> arguments, std::uint32_t& result,
+											std::string& error)>;
 
 class IWupsPlatform
 {
-public:
+  public:
 	virtual ~IWupsPlatform() = default;
 
 	[[nodiscard]] virtual bool ValidateGuestRange(std::uint32_t address,
-		std::uint32_t size, WupsGuestAccess access) const = 0;
+												  std::uint32_t size, WupsGuestAccess access) const = 0;
 	[[nodiscard]] virtual bool ValidateGuestRangeForOwner(WupsOwnerToken,
-		std::uint32_t address, std::uint32_t size,
-		WupsGuestAccess access) const
+														  std::uint32_t address, std::uint32_t size,
+														  WupsGuestAccess access) const
 	{
 		return ValidateGuestRange(address, size, access);
 	}
 	[[nodiscard]] virtual bool ReadGuest(std::uint32_t address,
-		std::span<std::byte> output) const = 0;
+										 std::span<std::byte> output) const = 0;
 	[[nodiscard]] virtual bool WriteGuest(std::uint32_t address,
-		std::span<const std::byte> input) = 0;
+										  std::span<const std::byte> input) = 0;
 	[[nodiscard]] virtual std::optional<std::uint32_t> AllocateGuestData(
 		WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,
 		std::string& error) = 0;
@@ -289,14 +295,17 @@ public:
 
 	[[nodiscard]] virtual std::uint64_t CurrentGuestThreadId() const = 0;
 	[[nodiscard]] virtual bool QueueCpuTask(WupsOwnerToken owner,
-		std::function<void()> task, std::string& error) = 0;
+											std::function<void()> task, std::string& error) = 0;
 	// Must synchronously destroy every queued (not currently executing) task
 	// owned by this token before returning. Tasks already executing may finish.
 	virtual void CancelCpuTasks(WupsOwnerToken owner) = 0;
 	// A platform which cannot map host-owned memory into Cafe's effective and
 	// physical address spaces must say so. Import resolution then fails instead
 	// of publishing a callable API which can only return null.
-	[[nodiscard]] virtual bool SupportsMappedMemory() const { return true; }
+	[[nodiscard]] virtual bool SupportsMappedMemory() const
+	{
+		return true;
+	}
 	// False unless arbitrary guest heap pointers can be attributed to the
 	// currently executing owner generation. Heap-taking ABIs are withheld when
 	// this provenance is unavailable.
@@ -312,7 +321,10 @@ public:
 	// platform actually has one; the redirection is then withheld and those
 	// data imports fail to resolve rather than silently falling back to the
 	// game's heap.
-	[[nodiscard]] virtual bool SupportsPluginHeap() const { return false; }
+	[[nodiscard]] virtual bool SupportsPluginHeap() const
+	{
+		return false;
+	}
 	// Allocates `size` bytes from the platform's plugin heap on behalf of
 	// `owner`. `alignment` mirrors MEMAllocFromExpHeapEx's own signed
 	// alignment ABI (negative requests a tail allocation). Returns 0 on any
@@ -328,7 +340,7 @@ public:
 	// Frees `address` on behalf of `owner`. Must be a no-op (aside from
 	// logging) for any address the plugin heap did not itself hand out.
 	virtual void FreePluginHeapMemory(WupsOwnerToken owner,
-		std::uint32_t address)
+									  std::uint32_t address)
 	{
 		(void)owner;
 		(void)address;
@@ -338,29 +350,29 @@ public:
 		WupsOwnerToken owner, std::uint32_t size, std::uint32_t alignment,
 		bool writable, WupsMappedMemoryPurpose purpose, std::string& error) = 0;
 	[[nodiscard]] virtual bool FreeMappedMemory(WupsOwnerToken owner,
-		const WupsMappedMemoryInfo& allocation, std::string& error) = 0;
+												const WupsMappedMemoryInfo& allocation, std::string& error) = 0;
 
 	virtual void ShowNotification(WupsOwnerToken owner,
-		const WupsNotificationModel& notification) = 0;
+								  const WupsNotificationModel& notification) = 0;
 	virtual void Log(WupsOwnerToken owner, WupsLogLevel level,
-		std::string_view moduleName, std::string_view source,
-		std::string_view message) = 0;
+					 std::string_view moduleName, std::string_view source,
+					 std::string_view message) = 0;
 };
 
 class IWupsFunctionPatcherFacade
 {
-public:
+  public:
 	virtual ~IWupsFunctionPatcherFacade() = default;
 
 	[[nodiscard]] virtual std::uint32_t ApiVersion() const = 0;
 	[[nodiscard]] virtual WupsServiceStatus AddPatch(WupsOwnerToken owner,
-		std::uint32_t descriptorAddress, bool allowPhysicalAddress,
-		std::uint32_t& handle,
-		bool& applied, std::string& error) = 0;
+													 std::uint32_t descriptorAddress, bool allowPhysicalAddress,
+													 std::uint32_t& handle,
+													 bool& applied, std::string& error) = 0;
 	[[nodiscard]] virtual WupsServiceStatus RemovePatch(WupsOwnerToken owner,
-		std::uint32_t handle, std::string& error) = 0;
+														std::uint32_t handle, std::string& error) = 0;
 	[[nodiscard]] virtual WupsServiceStatus IsPatchApplied(WupsOwnerToken owner,
-		std::uint32_t handle, bool& applied, std::string& error) const = 0;
+														   std::uint32_t handle, bool& applied, std::string& error) const = 0;
 	virtual void ReleaseOwner(WupsOwnerToken owner) = 0;
 };
 
@@ -405,4 +417,4 @@ CreateUnsupportedFunctionPatcherFacade();
 [[nodiscard]] std::shared_ptr<IWupsPlatform> CreateCemuWupsPlatform();
 [[nodiscard]] std::shared_ptr<IWupsFunctionPatcherFacade>
 CreateWupsFunctionPatcherFacade(std::shared_ptr<IWupsPlatform> platform,
-	std::shared_ptr<WupsFunctionPatchManager> manager);
+								std::shared_ptr<WupsFunctionPatchManager> manager);

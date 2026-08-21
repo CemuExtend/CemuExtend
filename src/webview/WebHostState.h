@@ -9,11 +9,11 @@
 namespace WebFrontend
 {
 	class WebHostState final : public Host::IWindowMetrics,
-		public Host::INativeSurfaceProvider,
-		public Host::INativeSurfacePublisher,
-		public std::enable_shared_from_this<WebHostState>
+							   public Host::INativeSurfaceProvider,
+							   public Host::INativeSurfacePublisher,
+							   public std::enable_shared_from_this<WebHostState>
 	{
-	public:
+	  public:
 		void UpdateMetrics(Host::WindowMetricsSnapshot metrics);
 		[[nodiscard]] Host::WindowMetricsSnapshot GetWindowMetrics() const override;
 		[[nodiscard]] Host::NativeSurfaceSnapshot GetNativeSurfaces() const override;
@@ -25,11 +25,11 @@ namespace WebFrontend
 			Host::NativeWindowHandle handle) override;
 		void ClearPadWindow(Host::NativeSurfacePublication publication) override;
 		[[nodiscard]] Host::NativeSurfacePublication PublishCanvas(bool mainWindow,
-			Host::NativeWindowHandle handle) override;
+																   Host::NativeWindowHandle handle) override;
 		void ClearCanvas(bool mainWindow,
-			Host::NativeSurfacePublication publication) override;
+						 Host::NativeSurfacePublication publication) override;
 
-	private:
+	  private:
 		[[nodiscard]] Host::NativeSurfacePublication NextPublication();
 
 		mutable std::shared_mutex m_mutex;
@@ -44,4 +44,4 @@ namespace WebFrontend
 		Host::NativeSurfacePublication m_mainSurfacePublication{};
 		Host::NativeSurfacePublication m_padSurfacePublication{};
 	};
-}
+} // namespace WebFrontend

@@ -70,7 +70,7 @@ class FSCDeviceWuhbFileCtx : public FSCVirtualFile
 		{
 			romfs_direntry_t entry = m_wuhbReader->GetDirEntry(m_dirIterOffset);
 			m_dirIterOffset = entry.listNext;
-			if(entry.name_size > 0)
+			if (entry.name_size > 0)
 			{
 				dirEntry->isDirectory = true;
 				dirEntry->isFile = false;
@@ -83,7 +83,7 @@ class FSCDeviceWuhbFileCtx : public FSCVirtualFile
 		{
 			romfs_fentry_t entry = m_wuhbReader->GetFileEntry(m_fileIterOffset);
 			m_fileIterOffset = entry.listNext;
-			if(entry.name_size > 0)
+			if (entry.name_size > 0)
 			{
 				dirEntry->isDirectory = false;
 				dirEntry->isFile = true;

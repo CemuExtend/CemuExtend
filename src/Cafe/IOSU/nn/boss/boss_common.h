@@ -20,9 +20,8 @@ namespace nn::boss
 		static bool IsValid(TitleId* _thisptr);
 		static TitleId* ctorDefault(TitleId* _thisptr);
 		static TitleId* ctorFromTitleId(TitleId* _thisptr, uint64 titleId); // __ct__Q3_2nn4boss7TitleIDFUL
-		static TitleId* ctorCopy(TitleId* _thisptr, TitleId* titleId); // __ct__Q3_2nn4boss7TitleIDFRCQ3_2nn4boss7TitleID
+		static TitleId* ctorCopy(TitleId* _thisptr, TitleId* titleId);		// __ct__Q3_2nn4boss7TitleIDFRCQ3_2nn4boss7TitleID
 		static bool operator_ne(TitleId* _thisptr, TitleId* titleId);
-
 	};
 	static_assert(sizeof(TitleId) == 8);
 
@@ -31,13 +30,17 @@ namespace nn::boss
 		CafeString<8> id;
 
 		TaskId() = default;
-		TaskId(const char* taskId) { id.assign(taskId); }
+		TaskId(const char* taskId)
+		{
+			id.assign(taskId);
+		}
 
 		static TaskId* ctorDefault(TaskId* _thisptr);
 		static TaskId* ctorFromString(TaskId* _thisptr, const char* taskId);
 
-		//auto operator<=>(const TaskId& other) const = default;
-		std::strong_ordering operator<=>(const TaskId& other) const noexcept {
+		// auto operator<=>(const TaskId& other) const = default;
+		std::strong_ordering operator<=>(const TaskId& other) const noexcept
+		{
 			return id <=> other.id; // Delegate to CafeString's operator<=>
 		}
 	};
@@ -45,8 +48,8 @@ namespace nn::boss
 
 	struct Title
 	{
-		uint32be accountId{}; // 0x00
-		TitleId titleId{}; // 0x8
+		uint32be accountId{};	  // 0x00
+		TitleId titleId{};		  // 0x8
 		MEMPTR<void> vTablePtr{}; // 0x10
 
 		struct VTable
@@ -86,7 +89,6 @@ namespace nn::boss
 		static BossAccount* ctor(BossAccount* _this, uint32 accountId);
 		static void dtor(BossAccount* _this, uint32 options);
 		static void InitVTable();
-
 	};
 	static_assert(sizeof(BossAccount) == 8);
 
@@ -144,35 +146,35 @@ namespace nn::boss
 		uint32be ukn14;
 		uint32be ukn18;
 		uint32be ukn1C;
-		TaskId taskId; // +0x20
-		betype<TaskType> taskType; // +0x28
-		uint8be priority; // +0x2A
-		uint8be mode; // +0x2B
-		uint8be permission; // +0x2C
-		uint16be intervalA; // +0x2E
-		uint32be intervalB; // +0x30
-		uint32be unk34; // +0x34 - could be padding
-		LifeTime lifeTime; // +0x38 - this is a 64bit value, but the whole struct has a size of 0x1004 and doesnt preserve the alignment in an array. Its probably handled as two 32bit values?
-		uint8be httpProtocol; // +0x40
-		uint8be internalClientCert; // +0x41
-		uint16be httpOption; // +0x42
-		uint8 ukn44[0x48 - 0x44]; // padding?
-		CafeString<256> url; // +0x48
+		TaskId taskId;					 // +0x20
+		betype<TaskType> taskType;		 // +0x28
+		uint8be priority;				 // +0x2A
+		uint8be mode;					 // +0x2B
+		uint8be permission;				 // +0x2C
+		uint16be intervalA;				 // +0x2E
+		uint32be intervalB;				 // +0x30
+		uint32be unk34;					 // +0x34 - could be padding
+		LifeTime lifeTime;				 // +0x38 - this is a 64bit value, but the whole struct has a size of 0x1004 and doesnt preserve the alignment in an array. Its probably handled as two 32bit values?
+		uint8be httpProtocol;			 // +0x40
+		uint8be internalClientCert;		 // +0x41
+		uint16be httpOption;			 // +0x42
+		uint8 ukn44[0x48 - 0x44];		 // padding?
+		CafeString<256> url;			 // +0x48
 		CafeString<64> lastModifiedTime; // +0x148
-		uint8be internalCaCert[3]; // +0x188
-		uint8 ukn18B; // +0x18B - padding?
-		uint32be httpTimeout; // +0x18C
-		CafeString<128> caCert[3]; // +0x190 - 3 entries, each 0x80 bytes
-		CafeString<128> clientCertName; // +0x310
-		CafeString<128> clientCertKey; // +0x390
+		uint8be internalCaCert[3];		 // +0x188
+		uint8 ukn18B;					 // +0x18B - padding?
+		uint32be httpTimeout;			 // +0x18C
+		CafeString<128> caCert[3];		 // +0x190 - 3 entries, each 0x80 bytes
+		CafeString<128> clientCertName;	 // +0x310
+		CafeString<128> clientCertKey;	 // +0x390
 		struct HttpHeader
 		{
-			CafeString<32> name; // +0x00
+			CafeString<32> name;  // +0x00
 			CafeString<64> value; // +0x20
 		};
-		HttpHeader httpHeaders[3]; // +0x410
+		HttpHeader httpHeaders[3];		// +0x410
 		CafeString<96> httpQueryString; // +0x530
-		CafeString<512> serviceToken; // +0x590
+		CafeString<512> serviceToken;	// +0x590
 
 		uint8 ukn790[0x7C0 - 0x790];
 		// after 0x7C0 the task-specific fields seem to start?
@@ -181,41 +183,41 @@ namespace nn::boss
 		{
 			struct
 			{
-				uint32be optionValue; // +0x7C0
-				CafeString<32> largeHttpHeaderKey; // +0x7C4
+				uint32be optionValue;				  // +0x7C0
+				CafeString<32> largeHttpHeaderKey;	  // +0x7C4
 				CafeString<512> largeHttpHeaderValue; // +0x7E4
-			}rawUl; // RawUlTaskSetting
+			} rawUl;								  // RawUlTaskSetting
 			struct
 			{
-				uint32be optionValue; // +0x7C0
-				CafeString<32> largeHttpHeaderKey; // +0x7C4
+				uint32be optionValue;				  // +0x7C0
+				CafeString<32> largeHttpHeaderKey;	  // +0x7C4
 				CafeString<512> largeHttpHeaderValue; // +0x7E4
-				// inherits the above values from RawUlTaskSetting
-				// the play report fields are too large to fit into the available space, so instead they are passed via their own system call that attaches it to the task. See PlayReportSetting::RegisterPreprocess
-			}playReportSetting;
+													  // inherits the above values from RawUlTaskSetting
+													  // the play report fields are too large to fit into the available space, so instead they are passed via their own system call that attaches it to the task. See PlayReportSetting::RegisterPreprocess
+			} playReportSetting;
 			struct
 			{
-				uint8be newArrival; // +0x7C0
-				uint8be led; // +0x7C1
-				uint8be ukn7C2[6]; // +0x7C2 - padding?
+				uint8be newArrival;			 // +0x7C0
+				uint8be led;				 // +0x7C1
+				uint8be ukn7C2[6];			 // +0x7C2 - padding?
 				CafeString<8> bossDirectory; // +0x7C8
-				CafeString<32> fileName; // +0x7D0 Not 100% sure this is fileName
-			}rawDl; // RawDlTaskSetting
+				CafeString<32> fileName;	 // +0x7D0 Not 100% sure this is fileName
+			} rawDl;						 // RawDlTaskSetting
 			struct
 			{
-				CafeString<32> bossCode; // +0x7C0
+				CafeString<32> bossCode;	 // +0x7C0
 				CafeString<8> bossDirectory; // +0x7E0
 				uint32be ukn7E8;
 				uint32be ukn7EC;
 				uint32be directorySizeLimitHigh; // +0x7F0
-				uint32be directorySizeLimitLow; // +0x7F4
-				CafeString<32> fileName; // +0x7F8
-				// more fields here...
-			}nbdl;
+				uint32be directorySizeLimitLow;	 // +0x7F4
+				CafeString<32> fileName;		 // +0x7F8
+												 // more fields here...
+			} nbdl;
 			struct
 			{
 				uint8 finalPadding[0xC00 - 0x7C0];
-			}paddedBlock;
+			} paddedBlock;
 		};
 	};
 	static_assert(sizeof(TaskSettingCore) == 0xC00);
@@ -279,7 +281,8 @@ namespace nn::boss
 	struct NetTaskSetting : TaskSetting
 	{
 		struct VTableNetTaskSetting : public VTableTaskSetting
-		{ };
+		{
+		};
 		static inline SysAllocator<VTableNetTaskSetting> s_VTable;
 
 		static NetTaskSetting* ctor(NetTaskSetting* _thisptr);
@@ -299,7 +302,7 @@ namespace nn::boss
 		{
 			VTableEntry rttiNetTaskSetting; // unknown
 		};
-		static_assert(sizeof(VTableNbdlTaskSetting) == 8*5);
+		static_assert(sizeof(VTableNbdlTaskSetting) == 8 * 5);
 		static inline SysAllocator<VTableNbdlTaskSetting> s_VTable;
 
 		static NbdlTaskSetting* ctor(NbdlTaskSetting* _thisptr);
@@ -313,16 +316,16 @@ namespace nn::boss
 
 	struct RawUlTaskSetting : NetTaskSetting
 	{
-		uint32be ukRaw1; // 0x1004
-		uint32be ukRaw2; // 0x1008
-		uint32be ukRaw3; // 0x100C
+		uint32be ukRaw1;	   // 0x1004
+		uint32be ukRaw2;	   // 0x1008
+		uint32be ukRaw3;	   // 0x100C
 		uint8 rawSpace[0x200]; // 0x1010
 
 		struct VTableRawUlTaskSetting : public VTableNetTaskSetting
 		{
 			VTableEntry rttiNetTaskSetting; // unknown
 		};
-		static_assert(sizeof(VTableRawUlTaskSetting) == 8*5);
+		static_assert(sizeof(VTableRawUlTaskSetting) == 8 * 5);
 		static inline SysAllocator<VTableRawUlTaskSetting> s_VTable;
 
 		static RawUlTaskSetting* ctor(RawUlTaskSetting* _thisptr);
@@ -338,7 +341,7 @@ namespace nn::boss
 		{
 			VTableEntry rttiNetTaskSetting; // unknown
 		};
-		static_assert(sizeof(VTableRawDlTaskSetting) == 8*5);
+		static_assert(sizeof(VTableRawDlTaskSetting) == 8 * 5);
 		static inline SysAllocator<VTableRawDlTaskSetting> s_VTable;
 
 		static RawDlTaskSetting* ctor(RawDlTaskSetting* _thisptr);
@@ -353,13 +356,14 @@ namespace nn::boss
 	struct PlayReportSetting : RawUlTaskSetting
 	{
 		MEMPTR<uint8> ukn1210_ptr; // 0x1210
-		uint32be ukn1214_size; // 0x1214
-		uint32be ukPlay3; // 0x1218
-		uint32be ukPlay4; // 0x121C
+		uint32be ukn1214_size;	   // 0x1214
+		uint32be ukPlay3;		   // 0x1218
+		uint32be ukPlay4;		   // 0x121C
 
 		struct VTablePlayReportSetting : public VTableRawUlTaskSetting
-		{};
-		static_assert(sizeof(VTablePlayReportSetting) == 8*5);
+		{
+		};
+		static_assert(sizeof(VTablePlayReportSetting) == 8 * 5);
 		static inline SysAllocator<VTablePlayReportSetting> s_VTable;
 
 		static PlayReportSetting* ctor(PlayReportSetting* _this);
@@ -381,7 +385,7 @@ namespace nn::boss
 	{
 		CafeString<32> name;
 
-		static DataName* ctor(DataName* _this); // __ct__Q3_2nn4boss8DataNameFv
+		static DataName* ctor(DataName* _this);					 // __ct__Q3_2nn4boss8DataNameFv
 		static const char* operator_const_char(DataName* _this); // __opPCc__Q3_2nn4boss8DataNameCFv
 
 		const char* c_str() const
@@ -427,5 +431,4 @@ namespace nn::boss
 		DeleteDataRelated = 0xA6,
 	};
 
-
-}
+} // namespace nn::boss

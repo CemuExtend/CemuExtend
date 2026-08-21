@@ -25,8 +25,16 @@ namespace nsyshid
 		bool opened{};
 	};
 
-	enum class DeviceChangeKind { Attached, Detached };
-	struct DeviceChange { DeviceChangeKind kind{}; DeviceDescriptor device; };
+	enum class DeviceChangeKind
+	{
+		Attached,
+		Detached
+	};
+	struct DeviceChange
+	{
+		DeviceChangeKind kind{};
+		DeviceDescriptor device;
+	};
 	using DeviceObserver = std::function<void(const DeviceChange&)>;
 	using DeviceObserverToken = std::uint64_t;
 

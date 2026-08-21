@@ -44,7 +44,7 @@ namespace coreinit
 		/* +0x28 */ MEMPTR<void> userdata;
 	};
 	static_assert(sizeof(MPTask) == 0x2C);
-	
+
 #pragma pack()
 
 	struct MPTaskQ
@@ -59,10 +59,10 @@ namespace coreinit
 		/* +0x2C */ sint32be endIndex[PPC_CORE_COUNT];
 		/* +0x38 */ MEMPTR<MEMPTR<MPTask>> taskQueue;
 		/* +0x3C */ uint32be taskQueueSize;
-		/* +0x40 */	OSSpinLock spinlock;
+		/* +0x40 */ OSSpinLock spinlock;
 	};
 	static_assert(sizeof(MPTaskQ) == 0x50);
-	
+
 	struct MPTaskQInfo
 	{
 		/* +0x00 */ uint32be state;
@@ -72,7 +72,7 @@ namespace coreinit
 		/* +0x10 */ uint32be taskDoneCount;
 	};
 	static_assert(sizeof(MPTaskQInfo) == 0x14);
-	
+
 	struct MPTaskInfo
 	{
 		/* +0x00 */ uint32be state;
@@ -103,4 +103,4 @@ namespace coreinit
 	bool MPResetTaskQ(MPTaskQ* taskq);
 
 	void InitializeMP();
-}
+} // namespace coreinit

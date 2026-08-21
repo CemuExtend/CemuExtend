@@ -15,8 +15,8 @@ struct CopySurfacePipelineInfo
 		TexSliceMipMapping(LatteTextureVk* texture) : m_texture(texture) {};
 		~TexSliceMipMapping()
 		{
-			//delete vkObjPipeline;
-			//delete vkObjRenderPass;
+			// delete vkObjPipeline;
+			// delete vkObjRenderPass;
 			for (auto itr : m_array)
 			{
 				if (itr != nullptr)
@@ -70,7 +70,7 @@ struct CopySurfacePipelineInfo
 	{
 		VKRObjectDescriptorSet* vkObjDescriptorSet;
 		VKRObjectTextureView* vkObjImageView;
-		//VKRObjectSampler* vkObjSampler;
+		// VKRObjectSampler* vkObjSampler;
 	};
 
 	CopySurfacePipelineInfo() = default;
@@ -82,18 +82,18 @@ struct CopySurfacePipelineInfo
 		renderer->ReleaseDestructibleObject(vkObjRenderPass);
 		renderer->ReleaseDestructibleObject(vkObjPipeline);
 
-		for(auto& i : map_framebuffers)
+		for (auto& i : map_framebuffers)
 		{
-			for(auto& fb : i.second.m_array)
+			for (auto& fb : i.second.m_array)
 			{
 				renderer->ReleaseDestructibleObject(fb->vkObjFramebuffer);
 				renderer->ReleaseDestructibleObject(fb->vkObjImageView);
 			}
 		}
 
-		for(auto& i : map_descriptors)
+		for (auto& i : map_descriptors)
 		{
-			for(auto& descriptor : i.second.m_array)
+			for (auto& descriptor : i.second.m_array)
 			{
 				renderer->ReleaseDestructibleObject(descriptor->vkObjImageView);
 				renderer->ReleaseDestructibleObject(descriptor->vkObjDescriptorSet);
@@ -154,7 +154,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getCachedPipeline(VkCopySur
 
 RendererShaderVk* _vkGenSurfaceCopyShader_vs()
 {
-	const char* vsShaderSrc = 
+	const char* vsShaderSrc =
 		"#version 450\r\n"
 		"layout(location = 0) out ivec2 passSrcTexelOffset;\r\n"
 		"layout(push_constant) uniform pushConstants {\r\n"
@@ -188,14 +188,14 @@ RendererShaderVk* _vkGenSurfaceCopyShader_vs()
 RendererShaderVk* _vkGenSurfaceCopyShader_ps_colorToDepth()
 {
 	const char* psShaderSrc = ""
-		"#version 450\r\n"
-		"layout(location = 0) in flat ivec2 passSrcTexelOffset;\r\n"
-		"layout(binding = 0) uniform sampler2D textureSrc;\r\n"
-		"in vec4 gl_FragCoord;\r\n"
-		"\r\n"
-		"void main(){\r\n"
-		"gl_FragDepth = texelFetch(textureSrc, passSrcTexelOffset + ivec2(gl_FragCoord.xy), 0).r;\r\n"
-		"}\r\n";
+							  "#version 450\r\n"
+							  "layout(location = 0) in flat ivec2 passSrcTexelOffset;\r\n"
+							  "layout(binding = 0) uniform sampler2D textureSrc;\r\n"
+							  "in vec4 gl_FragCoord;\r\n"
+							  "\r\n"
+							  "void main(){\r\n"
+							  "gl_FragDepth = texelFetch(textureSrc, passSrcTexelOffset + ivec2(gl_FragCoord.xy), 0).r;\r\n"
+							  "}\r\n";
 
 	std::string shaderStr(psShaderSrc);
 	auto vkShader = new RendererShaderVk(RendererShader::ShaderType::kFragment, 0, 0, false, false, shaderStr);
@@ -206,15 +206,15 @@ RendererShaderVk* _vkGenSurfaceCopyShader_ps_colorToDepth()
 RendererShaderVk* _vkGenSurfaceCopyShader_ps_depthToColor()
 {
 	const char* psShaderSrc = ""
-		"#version 450\r\n"
-		"layout(location = 0) in flat ivec2 passSrcTexelOffset;\r\n"
-		"layout(binding = 0) uniform sampler2D textureSrc;\r\n"
-		"layout(location = 0) out vec4 colorOut0;\r\n"
-		"in vec4 gl_FragCoord;\r\n"
-		"\r\n"
-		"void main(){\r\n"
-		"colorOut0.r = texelFetch(textureSrc, passSrcTexelOffset + ivec2(gl_FragCoord.xy), 0).r;\r\n"
-		"}\r\n";
+							  "#version 450\r\n"
+							  "layout(location = 0) in flat ivec2 passSrcTexelOffset;\r\n"
+							  "layout(binding = 0) uniform sampler2D textureSrc;\r\n"
+							  "layout(location = 0) out vec4 colorOut0;\r\n"
+							  "in vec4 gl_FragCoord;\r\n"
+							  "\r\n"
+							  "void main(){\r\n"
+							  "colorOut0.r = texelFetch(textureSrc, passSrcTexelOffset + ivec2(gl_FragCoord.xy), 0).r;\r\n"
+							  "}\r\n";
 
 	std::string shaderStr(psShaderSrc);
 	auto vkShader = new RendererShaderVk(RendererShader::ShaderType::kFragment, 0, 0, false, false, shaderStr);
@@ -253,7 +253,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 	{
 		// on first call generate shaders
 		defaultShaders.copySurface_vs = _vkGenSurfaceCopyShader_vs();
-		defaultShaders.copySurface_psColor2Depth = _vkGenSurfaceCopyShader_ps_colorToDepth(); 
+		defaultShaders.copySurface_psColor2Depth = _vkGenSurfaceCopyShader_ps_colorToDepth();
 		defaultShaders.copySurface_psDepth2Color = _vkGenSurfaceCopyShader_ps_depthToColor();
 	}
 
@@ -339,7 +339,6 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 		colorBlending.logicOpEnable = VK_FALSE;
 	}
 
-
 	// ##########################################################################################################################################
 
 	std::vector<VkDescriptorSetLayoutBinding> descriptorSetLayoutBindings;
@@ -400,7 +399,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 
 	// ##########################################################################################################################################
 
-	std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
 	VkPipelineDynamicStateCreateInfo dynamicState = {};
 	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -424,7 +423,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.pRasterizationState = &rasterizer;
 	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pColorBlendState = state.destinationTexture->isDepth?nullptr:&colorBlending;
+	pipelineInfo.pColorBlendState = state.destinationTexture->isDepth ? nullptr : &colorBlending;
 	pipelineInfo.layout = vkObjPipeline->m_pipelineLayout;
 	pipelineInfo.renderPass = copyPipeline->vkObjRenderPass->m_renderPass;
 	pipelineInfo.pDepthStencilState = &depthStencilState;
@@ -449,7 +448,6 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 
 VKRObjectTextureView* VulkanRenderer::surfaceCopy_createImageView(LatteTextureVk* textureVk, uint32 sliceIndex, uint32 mipIndex)
 {
-
 	VkImageViewCreateInfo viewCreateInfo = {};
 	viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewCreateInfo.image = textureVk->GetImageObj()->m_image;
@@ -500,7 +498,7 @@ VKRObjectFramebuffer* VulkanRenderer::surfaceCopy_getOrCreateFramebuffer(VkCopyS
 	CopySurfacePipelineInfo::FramebufferValue* framebufferVal = insertResult.first->second.create(state.dstSlice, state.dstMip);
 	framebufferVal->vkObjFramebuffer = vkObjFramebuffer;
 	framebufferVal->vkObjImageView = vkObjTextureView;
-	
+
 	return vkObjFramebuffer;
 }
 
@@ -575,7 +573,7 @@ VKRObjectDescriptorSet* VulkanRenderer::surfaceCopy_getOrCreateDescriptorSet(VkC
 	CopySurfacePipelineInfo::DescriptorValue* descriptorValue = insertResult.first->second.create(state.srcSlice, state.srcMip);
 	descriptorValue->vkObjDescriptorSet = vkObjDescriptorSet;
 	descriptorValue->vkObjImageView = vkObjImageView;
-	
+
 	return vkObjDescriptorSet;
 }
 
@@ -583,8 +581,7 @@ void VulkanRenderer::surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint3
 {
 	draw_endRenderPass();
 
-	//debug_printf("surfaceCopy_viaDrawcall Src %04d %04d Dst %04d %04d CopySize %04d %04d\n", srcTextureVk->width, srcTextureVk->height, dstTextureVk->width, dstTextureVk->height, effectiveCopyWidth, effectiveCopyHeight);
-
+	// debug_printf("surfaceCopy_viaDrawcall Src %04d %04d Dst %04d %04d CopySize %04d %04d\n", srcTextureVk->width, srcTextureVk->height, dstTextureVk->width, dstTextureVk->height, effectiveCopyWidth, effectiveCopyHeight);
 
 	VkImageSubresourceLayers srcImageSubresource;
 	srcImageSubresource.aspectMask = srcTextureVk->GetImageAspect();
@@ -616,7 +613,7 @@ void VulkanRenderer::surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint3
 
 	// get descriptor set
 	VKRObjectDescriptorSet* vkObjDescriptorSet = surfaceCopy_getOrCreateDescriptorSet(copySurfaceState, copySurfacePipelineInfo);
-	
+
 	sint32 dstEffectiveWidth, dstEffectiveHeight;
 	dstTextureVk->GetEffectiveSize(dstEffectiveWidth, dstEffectiveHeight, texDstMip);
 
@@ -650,8 +647,8 @@ void VulkanRenderer::surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint3
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = copySurfacePipelineInfo->vkObjRenderPass->m_renderPass;
 	renderPassInfo.framebuffer = vkObjFramebuffer->m_frameBuffer;
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = { (uint32_t)effectiveCopyWidth, (uint32_t)effectiveCopyHeight };
+	renderPassInfo.renderArea.offset = {0, 0};
+	renderPassInfo.renderArea.extent = {(uint32_t)effectiveCopyWidth, (uint32_t)effectiveCopyHeight};
 	renderPassInfo.clearValueCount = 0;
 
 	VkViewport viewport{};
@@ -673,10 +670,9 @@ void VulkanRenderer::surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint3
 
 	cemu_assert_debug(srcTextureVk->GetImageObj()->m_image != dstTextureVk->GetImageObj()->m_image);
 
-	barrier_image<SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER, SYNC_OP::IMAGE_READ>(srcTextureVk, srcImageSubresource, srcTextureVk->GetDefaultLayout()); // wait for any modifying operations on source image to complete
+	barrier_image<SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER, SYNC_OP::IMAGE_READ>(srcTextureVk, srcImageSubresource, srcTextureVk->GetDefaultLayout());						  // wait for any modifying operations on source image to complete
 	barrier_image<SYNC_OP::IMAGE_READ | SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER, SYNC_OP::IMAGE_WRITE>(dstTextureVk, dstImageSubresource, dstTextureVk->GetDefaultLayout()); // wait for any operations on destination image to complete
 
-	
 	vkCmdBeginRenderPass(m_state.currentCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	vkCmdBindPipeline(m_state.currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, copySurfacePipelineInfo->vkObjPipeline->GetPipeline());
@@ -685,14 +681,14 @@ void VulkanRenderer::surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint3
 	m_state.currentPipeline = copySurfacePipelineInfo->vkObjPipeline->GetPipeline();
 
 	vkCmdBindDescriptorSets(m_state.currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		copySurfacePipelineInfo->vkObjPipeline->m_pipelineLayout, 0, 1, &vkObjDescriptorSet->descriptorSet, 0, nullptr);
+							copySurfacePipelineInfo->vkObjPipeline->m_pipelineLayout, 0, 1, &vkObjDescriptorSet->descriptorSet, 0, nullptr);
 	vkObjDescriptorSet->flagForCurrentCommandBuffer();
 
 	vkCmdDraw(m_state.currentCommandBuffer, 6, 1, 0, 0);
 
 	vkCmdEndRenderPass(m_state.currentCommandBuffer);
 
-	barrier_image<SYNC_OP::IMAGE_READ, SYNC_OP::IMAGE_READ | SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER>(srcTextureVk, srcImageSubresource, srcTextureVk->GetDefaultLayout()); // wait for drawcall to complete before any other operations on the source image
+	barrier_image<SYNC_OP::IMAGE_READ, SYNC_OP::IMAGE_READ | SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER>(srcTextureVk, srcImageSubresource, srcTextureVk->GetDefaultLayout());  // wait for drawcall to complete before any other operations on the source image
 	barrier_image<SYNC_OP::IMAGE_WRITE, SYNC_OP::IMAGE_READ | SYNC_OP::IMAGE_WRITE | SYNC_OP::ANY_TRANSFER>(dstTextureVk, dstImageSubresource, dstTextureVk->GetDefaultLayout()); // wait for drawcall to complete before any other operations on the destination image
 
 	// restore viewport and scissor box
@@ -828,7 +824,7 @@ void VulkanRenderer::surfaceCopy_notifyTextureRelease(LatteTextureVk* hostTextur
 	for (auto& itr : m_copySurfacePipelineCache)
 	{
 		auto& pipelineInfo = itr.second;
-		
+
 		auto itrDescriptors = pipelineInfo->map_descriptors.find(hostTexture);
 		if (itrDescriptors != pipelineInfo->map_descriptors.end())
 		{
@@ -865,7 +861,7 @@ void VulkanRenderer::surfaceCopy_notifyTextureRelease(LatteTextureVk* hostTextur
 
 void VulkanRenderer::surfaceCopy_cleanup()
 {
-	for(auto& i : m_copySurfacePipelineCache)
+	for (auto& i : m_copySurfacePipelineCache)
 	{
 		delete i.second;
 	}

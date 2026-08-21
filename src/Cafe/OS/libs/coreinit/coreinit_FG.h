@@ -14,4 +14,4 @@ namespace coreinit
 	void InitForegroundBucket();
 
 	void InitializeFG();
-}
+} // namespace coreinit

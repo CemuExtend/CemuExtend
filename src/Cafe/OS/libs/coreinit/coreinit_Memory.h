@@ -10,4 +10,4 @@ namespace coreinit
 	void* OSBlockSet(MEMPTR<void> dst, uint32 value, uint32 size);
 
 	void OSMemoryBarrier();
-}
+} // namespace coreinit

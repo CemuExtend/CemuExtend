@@ -6,18 +6,18 @@
 
 class TLV
 {
-public:
+  public:
 	enum Tag
 	{
-		TAG_NULL        = 0x00,
-		TAG_LOCK_CTRL   = 0x01,
-		TAG_MEM_CTRL    = 0x02,
-		TAG_NDEF        = 0x03,
+		TAG_NULL = 0x00,
+		TAG_LOCK_CTRL = 0x01,
+		TAG_MEM_CTRL = 0x02,
+		TAG_NDEF = 0x03,
 		TAG_PROPRIETARY = 0xFD,
-		TAG_TERMINATOR  = 0xFE,
+		TAG_TERMINATOR = 0xFE,
 	};
 
-public:
+  public:
 	TLV();
 	TLV(Tag tag, std::vector<std::byte> value);
 	virtual ~TLV();
@@ -31,7 +31,7 @@ public:
 	void SetTag(Tag tag);
 	void SetValue(const std::span<const std::byte>& value);
 
-private:
+  private:
 	Tag mTag;
 	std::vector<std::byte> mValue;
 };

@@ -16,7 +16,7 @@ namespace
 	std::atomic_bool s_verboseLogging{};
 	std::shared_mutex s_logPathMutex;
 	fs::path s_logFilePath = "log.txt";
-}
+} // namespace
 
 class LoggingDispatcher
 {
@@ -95,34 +95,33 @@ struct _LogContext
 			log_writer.join();
 		}
 	}
-}LogContext;
+} LogContext;
 
-const std::map<LogType, std::string> g_logging_window_mapping
-{
-	{LogType::UnsupportedAPI,     "Unsupported API calls"},
-	{LogType::APIErrors, 		  "Invalid API usage"},
-	{LogType::CoreinitLogging,    "Coreinit Logging"},
-	{LogType::CoreinitFile,       "Coreinit File-Access"},
+const std::map<LogType, std::string> g_logging_window_mapping{
+	{LogType::UnsupportedAPI, "Unsupported API calls"},
+	{LogType::APIErrors, "Invalid API usage"},
+	{LogType::CoreinitLogging, "Coreinit Logging"},
+	{LogType::CoreinitFile, "Coreinit File-Access"},
 	{LogType::CoreinitThreadSync, "Coreinit Thread-Synchronization"},
-	{LogType::CoreinitMem,        "Coreinit Memory"},
-	{LogType::CoreinitMP,         "Coreinit MP"},
-	{LogType::CoreinitThread,     "Coreinit Thread"},
-	{LogType::NN_NFP,             "nn::nfp"},
-	{LogType::NN_FP,              "nn::fp"},
-	{LogType::NN_BOSS,            "nn::boss"},
-	{LogType::GX2,                "GX2"},
-	{LogType::SoundAPI,           "Audio"},
-	{LogType::InputAPI,           "Input"},
-	{LogType::Socket,             "Socket"},
-	{LogType::Save,               "Save"},
-	{LogType::H264,               "H264"},
-	{LogType::NFC,                "NFC"},
-	{LogType::NTAG,               "NTAG"},
-	{LogType::Patches,            "Graphic pack patches"},
-	{LogType::TextureCache,       "Texture cache"},
-	{LogType::TextureReadback,    "Texture readback"},
-	{LogType::OpenGLLogging,      "OpenGL debug output"},
-	{LogType::VulkanValidation,   "Vulkan validation layer"},
+	{LogType::CoreinitMem, "Coreinit Memory"},
+	{LogType::CoreinitMP, "Coreinit MP"},
+	{LogType::CoreinitThread, "Coreinit Thread"},
+	{LogType::NN_NFP, "nn::nfp"},
+	{LogType::NN_FP, "nn::fp"},
+	{LogType::NN_BOSS, "nn::boss"},
+	{LogType::GX2, "GX2"},
+	{LogType::SoundAPI, "Audio"},
+	{LogType::InputAPI, "Input"},
+	{LogType::Socket, "Socket"},
+	{LogType::Save, "Save"},
+	{LogType::H264, "H264"},
+	{LogType::NFC, "NFC"},
+	{LogType::NTAG, "NTAG"},
+	{LogType::Patches, "Graphic pack patches"},
+	{LogType::TextureCache, "Texture cache"},
+	{LogType::TextureReadback, "Texture readback"},
+	{LogType::OpenGLLogging, "OpenGL debug output"},
+	{LogType::VulkanValidation, "Vulkan validation layer"},
 };
 
 bool cemuLog_advancedPPCLoggingEnabled()
@@ -190,7 +189,7 @@ void cemuLog_writeLineToLog(std::string_view text, bool date, bool new_line)
 		const auto& time = *std::localtime(&temp_time);
 
 		auto time_str = fmt::format("[{:02d}:{:02d}:{:02d}.{:03d}] ", time.tm_hour, time.tm_min, time.tm_sec,
-			std::chrono::duration_cast<std::chrono::milliseconds>(now - std::chrono::time_point_cast<std::chrono::seconds>(now)).count());
+									std::chrono::duration_cast<std::chrono::milliseconds>(now - std::chrono::time_point_cast<std::chrono::seconds>(now)).count());
 
 		LogContext.text_cache.emplace_back(std::move(time_str));
 	}
@@ -215,7 +214,7 @@ bool cemuLog_log(LogType type, std::string_view text)
 	cemuLog_writeLineToLog(text);
 
 	const auto it = std::find_if(g_logging_window_mapping.cbegin(), g_logging_window_mapping.cend(),
-		[type](const auto& entry) { return entry.first == type; });
+								 [type](const auto& entry) { return entry.first == type; });
 	if (it == g_logging_window_mapping.cend())
 		s_loggingDispatcher.Log(text);
 	else
@@ -239,7 +238,7 @@ void cemuLog_logHexDump(LogType type, const void* data, size_t size, size_t line
 	{
 		sprintf(hexLine.data(), "%04X: ", (int)i);
 		size_t remainingSize = std::min<size_t>(lineSize, size - i);
-		for (size_t j=0; j<remainingSize; j++)
+		for (size_t j = 0; j < remainingSize; j++)
 			sprintf(hexLine.data() + 6 + j * 3, "%02X ", dataU8[j]);
 		dataU8 += remainingSize;
 		if (remainingSize == lineSize)
@@ -252,7 +251,7 @@ void cemuLog_waitForFlush()
 {
 	cemuLog_createLogFile(false);
 	std::unique_lock lock(LogContext.log_mutex);
-	while(!LogContext.text_cache.empty())
+	while (!LogContext.text_cache.empty())
 	{
 		lock.unlock();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));

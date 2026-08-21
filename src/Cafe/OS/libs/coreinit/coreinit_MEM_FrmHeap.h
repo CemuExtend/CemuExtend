@@ -37,5 +37,5 @@ namespace coreinit
 	void MEMFreeToFrmHeap(MEMFrmHeap* frmHeap, FrmHeapMode mode);
 
 	void InitializeMEMFrmHeap();
-}
+} // namespace coreinit
 ENABLE_BITMASK_OPERATORS(coreinit::FrmHeapMode);

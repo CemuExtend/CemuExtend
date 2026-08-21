@@ -13,7 +13,7 @@ namespace coreinit
 			initTrackMem = nullptr;
 		else if (initTrackMem == nullptr)
 			initTrackMemSize = 0;
-		
+
 		MEMInitHeapBase(memStart, MEMHeapMagic::BLOCK_HEAP, startAddr, endAddr, createFlags);
 
 		memStart->track.addrStart = startAddr;
@@ -28,15 +28,15 @@ namespace coreinit
 		memStart->freeBlocksLeft = 0;
 
 		uint8 flags = memStart->flags;
-		if(HAS_FLAG(flags, MEM_HEAP_OPTION_FILL))
+		if (HAS_FLAG(flags, MEM_HEAP_OPTION_FILL))
 		{
 			cemu_assert_unimplemented();
 		}
 
-		if(initTrackMemSize != 0)
+		if (initTrackMemSize != 0)
 		{
 			sint32 result = MEMAddBlockHeapTracking(MEMPTR<void>(memStart).GetMPTR(), MEMPTR<void>(initTrackMem).GetMPTR(), initTrackMemSize);
-			if(result != 0)
+			if (result != 0)
 			{
 				MEMBaseDestroyHeap(memStart);
 				return nullptr;
@@ -108,7 +108,7 @@ namespace coreinit
 		/* +0x08 */ uint32 isFree; // if 0 -> block is used
 		/* +0x0C */ MPTR previousBlock;
 		/* +0x10 */ MPTR nextBlock;
-	}MEMBlockHeapTrackDEPR;
+	} MEMBlockHeapTrackDEPR;
 
 	typedef struct
 	{
@@ -116,37 +116,36 @@ namespace coreinit
 		/* +0x04 */ uint32 ukn04;
 		/* +0x08 */ uint32 trackArray;
 		/* +0x0C */ uint32 trackCount;
-	}MEMBlockHeapGroupDEPR;
+	} MEMBlockHeapGroupDEPR;
 
 	typedef struct
 	{
 		/* +0x000 */ betype<MEMHeapMagic> magic;
-		/* +0x004 */ MEMLink_t		link;
-		/* +0x00C */ MEMList_t		childList;
-		/* +0x018 */ MPTR			heapStart;
-		/* +0x01C */ MPTR			heapEnd;
-		/* +0x020 */ coreinit::OSSpinLock	spinlock;
+		/* +0x004 */ MEMLink_t link;
+		/* +0x00C */ MEMList_t childList;
+		/* +0x018 */ MPTR heapStart;
+		/* +0x01C */ MPTR heapEnd;
+		/* +0x020 */ coreinit::OSSpinLock spinlock;
 		/* +0x030 */
 		union
 		{
-			uint32       val;
-			uint32		flags;
-		}
-		attribute;
+			uint32 val;
+			uint32 flags;
+		} attribute;
 		// start of block heap header
-		/* +0x034 */ uint8			ukn034[0x50 - 0x34]; // ?
+		/* +0x034 */ uint8 ukn034[0x50 - 0x34]; // ?
 		/* +0x050 */ MEMBlockHeapTrackDEPR nullBlockTrack;
-		/* +0x064 */ MPTR			headBlock;
-		/* +0x068 */ MPTR			tailBlock;
-		/* +0x06C */ MPTR			nextFreeBlock;
-		/* +0x070 */ uint32			freeBlocksLeft;
-	}MEMBlockHeapDEPR;
+		/* +0x064 */ MPTR headBlock;
+		/* +0x068 */ MPTR tailBlock;
+		/* +0x06C */ MPTR nextFreeBlock;
+		/* +0x070 */ uint32 freeBlocksLeft;
+	} MEMBlockHeapDEPR;
 
 	void _blockHeapDebugVerifyIfBlockIsLinked(MEMBlockHeapDEPR* blockHeapHead, MEMBlockHeapTrackDEPR* track)
 	{
-		//MEMBlockHeapTrack_t* trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(blockHeapHead->firstBlock));
-		//MEMBlockHeapTrack_t* prevHistory[4];
-		//while( trackItr )
+		// MEMBlockHeapTrack_t* trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(blockHeapHead->firstBlock));
+		// MEMBlockHeapTrack_t* prevHistory[4];
+		// while( trackItr )
 		//{
 		//	if( trackItr == track )
 		//	{
@@ -162,14 +161,14 @@ namespace coreinit
 		//	prevHistory[0] = trackItr;
 		//	// next
 		//	trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(trackItr->nextBlock));
-		//}
+		// }
 	}
 
 	void _blockHeapDebugVerifyLinkOrder(MEMBlockHeapDEPR* blockHeapHead)
 	{
-		//MEMBlockHeapTrack_t* trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(blockHeapHead->firstBlock));
-		//MEMBlockHeapTrack_t* prev = NULL;
-		//while( trackItr )
+		// MEMBlockHeapTrack_t* trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(blockHeapHead->firstBlock));
+		// MEMBlockHeapTrack_t* prev = NULL;
+		// while( trackItr )
 		//{
 		//	MPTR prevMPTR = memory_getVirtualOffsetFromPointer(prev);
 		//	if( _swapEndianU32(trackItr->previousBlock) != prevMPTR )
@@ -177,7 +176,7 @@ namespace coreinit
 		//	// next
 		//	prev = trackItr;
 		//	trackItr = (MEMBlockHeapTrack_t*)memory_getPointerFromVirtualOffsetAllowNull(_swapEndianU32(trackItr->nextBlock));
-		//}
+		// }
 	}
 
 	sint32 MEMAddBlockHeapTracking(MPTR heap, MPTR trackMem, uint32 trackMemSize)
@@ -509,9 +508,9 @@ namespace coreinit
 						tempNextBlock->previousBlock = _swapEndianU32(blockMPTR);
 					}
 					//// merged block becomes the new current block
-					//blockMPTR = previousBlockMPTR;
-					//block = previousBlock;
-					// update last block
+					// blockMPTR = previousBlockMPTR;
+					// block = previousBlock;
+					//  update last block
 					if (_swapEndianU32(blockHeapHead->tailBlock) == nextBlockMPTR)
 					{
 						blockHeapHead->tailBlock = _swapEndianU32(blockMPTR);
@@ -593,4 +592,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", MEMFreeToBlockHeap, LogType::CoreinitMem);
 		cafeExportRegister("coreinit", MEMGetTotalFreeSizeForBlockHeap, LogType::CoreinitMem);
 	}
-}
+} // namespace coreinit

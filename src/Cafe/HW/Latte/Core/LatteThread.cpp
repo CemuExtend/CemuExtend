@@ -37,8 +37,8 @@ void Latte_LoadInitialRegisters()
 
 extern bool gx2WriteGatherInited;
 
-LatteTextureView* osScreenTVTex[2] = { nullptr };
-LatteTextureView* osScreenDRCTex[2] = { nullptr };
+LatteTextureView* osScreenTVTex[2] = {nullptr};
+LatteTextureView* osScreenDRCTex[2] = {nullptr};
 
 LatteTextureView* LatteHandleOSScreen_getOrCreateScreenTex(MPTR physAddress, uint32 width, uint32 height, uint32 pitch)
 {
@@ -76,7 +76,7 @@ bool LatteHandleOSScreen_TV()
 
 	// TV screen
 	LatteRenderTarget_copyToBackbuffer(osScreenTVTex[bufferIndexTV]->baseTexture->baseView, false);
-	
+
 	if (LatteGPUState.osScreen.screen[0].flipExecuteCount != LatteGPUState.osScreen.screen[0].flipRequestCount)
 		LatteGPUState.osScreen.screen[0].flipExecuteCount.store(LatteGPUState.osScreen.screen[0].flipRequestCount);
 	return true;
@@ -108,15 +108,14 @@ void LatteThread_HandleOSScreen()
 {
 	bool swapTV = LatteHandleOSScreen_TV();
 	bool swapDRC = LatteHandleOSScreen_DRC();
-	if(swapTV || swapDRC)
+	if (swapTV || swapDRC)
 		g_renderer->SwapBuffers(swapTV, swapDRC);
 }
 
 int Latte_ThreadEntry()
 {
 	SetThreadName("LatteThread");
-	const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
-		Host::WindowMetricsSnapshot{};
+	const auto window = g_renderer ? g_renderer->GetWindowMetrics() : Host::WindowMetricsSnapshot{};
 	const sint32 w = window.physicalWidth;
 	const sint32 h = window.physicalHeight;
 
@@ -133,21 +132,21 @@ int Latte_ThreadEntry()
 	LatteStreamout_InitCache();
 
 	g_renderer->renderTarget_setViewport(0, 0, w, h, 0.0f, 1.0f);
-	
+
 	// enable GLSL gl_PointSize support
 	// glEnable(GL_PROGRAM_POINT_SIZE); // breaks shader caching on AMD (as of 2018)
-	
+
 	LatteGPUState.glVendor = GLVENDOR_UNKNOWN;
-	switch(g_renderer->GetVendor())
+	switch (g_renderer->GetVendor())
 	{
-	case GfxVendor::AMD: 
+	case GfxVendor::AMD:
 		LatteGPUState.glVendor = GLVENDOR_AMD;
 		break;
 	case GfxVendor::Intel:
-		LatteGPUState.glVendor = GLVENDOR_INTEL; 
+		LatteGPUState.glVendor = GLVENDOR_INTEL;
 		break;
-	case GfxVendor::Nvidia: 
-		LatteGPUState.glVendor = GLVENDOR_NVIDIA; 
+	case GfxVendor::Nvidia:
+		LatteGPUState.glVendor = GLVENDOR_NVIDIA;
 		break;
 	case GfxVendor::Apple:
 		LatteGPUState.glVendor = GLVENDOR_APPLE;
@@ -162,16 +161,16 @@ int Latte_ThreadEntry()
 		g_renderer->EnableDebugMode();
 
 	// wait till a game is started
-	while( true )
+	while (true)
 	{
 		LatteAsyncCommands_checkAndExecute();
-		if( CafeSystem::IsTitleRunning() )
+		if (CafeSystem::IsTitleRunning())
 			break;
 
 		g_renderer->DrawEmptyFrame(true);
 		g_renderer->DrawEmptyFrame(false);
 		g_renderer->CancelScreenshotRequest(); // keep the screenshot request queue empty
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
 	}
 
 	g_renderer->DrawEmptyFrame(true);
@@ -180,13 +179,13 @@ int Latte_ThreadEntry()
 	GraphicPack2::WaitUntilReady();
 	// if legacy packs are enabled we cannot use the colorbuffer resolution optimization
 	LatteGPUState.allowFramebufferSizeOptimization = true;
-	for(auto& pack : GraphicPack2::GetActiveGraphicPacks())
+	for (auto& pack : GraphicPack2::GetActiveGraphicPacks())
 	{
-		if(pack->AllowRendertargetSizeOptimization())
+		if (pack->AllowRendertargetSizeOptimization())
 			continue;
-		for(auto& rule : pack->GetTextureRules())
+		for (auto& rule : pack->GetTextureRules())
 		{
-			if(rule.filter_settings.width >= 0 || rule.filter_settings.height >= 0 || rule.filter_settings.depth >= 0 ||
+			if (rule.filter_settings.width >= 0 || rule.filter_settings.height >= 0 || rule.filter_settings.depth >= 0 ||
 				rule.overwrite_settings.width >= 0 || rule.overwrite_settings.height >= 0 || rule.overwrite_settings.depth >= 0)
 			{
 				LatteGPUState.allowFramebufferSizeOptimization = false;
@@ -196,7 +195,7 @@ int Latte_ThreadEntry()
 		}
 	}
 	// load disk shader cache
-    LatteShaderCache_Load();
+	LatteShaderCache_Load();
 	// init registers
 	Latte_LoadInitialRegisters();
 	// let CPU thread know the GPU is done initializing
@@ -261,16 +260,16 @@ void LatteThread_Exit()
 {
 	if (g_renderer)
 		g_renderer->Shutdown();
-    // clean up vertex/uniform cache
-    LatteBufferCache_UnloadAll();
+	// clean up vertex/uniform cache
+	LatteBufferCache_UnloadAll();
 	// clean up texture cache
 	LatteTC_UnloadAllTextures();
 	// clean up runtime shader cache
-    LatteSHRC_UnloadAll();
-    // close disk cache
-    LatteShaderCache_Close();
+	LatteSHRC_UnloadAll();
+	// close disk cache
+	LatteShaderCache_Close();
 	RendererOutputShader::ShutdownStatic();
-    // destroy renderer but make sure that g_renderer remains valid until the destructor has finished
+	// destroy renderer but make sure that g_renderer remains valid until the destructor has finished
 	if (g_renderer)
 	{
 		Renderer* renderer = g_renderer.get();
@@ -281,10 +280,10 @@ void LatteThread_Exit()
 	sLatteThreadActive.notify_all();
 	// reset GPU7 state
 	std::memset(&LatteGPUState, 0, sizeof(LatteGPUState));
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	ExitThread(0);
-	#else
+#else
 	pthread_exit(nullptr);
-	#endif
+#endif
 	cemu_assert_unimplemented();
 }

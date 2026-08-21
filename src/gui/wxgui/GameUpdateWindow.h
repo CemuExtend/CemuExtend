@@ -15,28 +15,39 @@ namespace Application
 	class EmulationController;
 }
 
-class AbortException : public std::exception {};
+class AbortException : public std::exception
+{
+};
 
 class GameUpdateWindow : public wxDialog
 {
-public:
+  public:
 	GameUpdateWindow(wxWindow& parent,
-		Application::EmulationController& emulationController,
-		const fs::path& sourcePath);
+					 Application::EmulationController& emulationController,
+					 const fs::path& sourcePath);
 	~GameUpdateWindow();
 
-	[[nodiscard]] uint64 GetTitleId() const { return m_plan.titleId; }
+	[[nodiscard]] uint64 GetTitleId() const
+	{
+		return m_plan.titleId;
+	}
 	[[nodiscard]] bool HasException() const
 	{
 		return m_result.error != Application::TitleInstallError::None &&
-			m_result.error != Application::TitleInstallError::Cancelled;
+			   m_result.error != Application::TitleInstallError::Cancelled;
 	}
 	[[nodiscard]] const std::string& GetExceptionMessage() const
 	{
 		return HasException() ? m_result.diagnostic : m_emptyDiagnostic;
 	}
-	[[nodiscard]] const std::string& GetGameName() const { return m_plan.titleName; }
-	[[nodiscard]] uint32 GetTargetVersion() const { return m_plan.version; }
+	[[nodiscard]] const std::string& GetGameName() const
+	{
+		return m_plan.titleName;
+	}
+	[[nodiscard]] uint32 GetTargetVersion() const
+	{
+		return m_plan.version;
+	}
 	[[nodiscard]] fs::path GetTargetPath() const
 	{
 		return m_result.installedPath.empty() ? m_plan.targetPath : m_result.installedPath;
@@ -47,7 +58,7 @@ public:
 	void OnUpdate(wxTimerEvent& event);
 	void OnCancelButton(wxCommandEvent& event);
 
-private:
+  private:
 	enum class ThreadState : std::uint8_t
 	{
 		Running,

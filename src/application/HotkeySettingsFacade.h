@@ -76,10 +76,10 @@ namespace Application
 
 	class IHotkeySettingsService
 	{
-	public:
+	  public:
 		virtual ~IHotkeySettingsService() = default;
 		[[nodiscard]] virtual HotkeySettingsModel GetHotkeySettings() const = 0;
 		[[nodiscard]] virtual HotkeySettingsResult ApplyHotkeySettings(
 			const HotkeySettingsUpdate& update) = 0;
 	};
-}
+} // namespace Application

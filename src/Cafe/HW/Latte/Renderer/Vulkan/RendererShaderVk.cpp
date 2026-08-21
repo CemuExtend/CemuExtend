@@ -10,7 +10,7 @@
 #include <glslang/SPIRV/GlslangToSpv.h>
 #include "util/helpers/helpers.h"
 
-bool s_isLoadingShadersVk{ false };
+bool s_isLoadingShadersVk{false};
 class FileCache* s_spirvCache{nullptr};
 
 extern std::atomic_int g_compiled_shaders_total;
@@ -127,7 +127,7 @@ consteval TBuiltInResource GetDefaultBuiltInResource()
 
 class _ShaderVkThreadPool
 {
-public:
+  public:
 	void StartThreads()
 	{
 		if (m_threadsActive.exchange(true))
@@ -182,18 +182,21 @@ public:
 		}
 	}
 
-	bool HasThreadsRunning() const { return m_threadsActive; }
+	bool HasThreadsRunning() const
+	{
+		return m_threadsActive;
+	}
 
-public:
+  public:
 	std::vector<std::thread> s_threads;
 
 	std::deque<RendererShaderVk*> s_compilationQueue;
 	CounterSemaphore s_compilationQueueCount;
 	std::mutex s_compilationQueueMutex;
 
-private:
+  private:
 	std::atomic<bool> m_threadsActive;
-}ShaderVkThreadPool;
+} ShaderVkThreadPool;
 
 RendererShaderVk::RendererShaderVk(ShaderType type, uint64 baseHash, uint64 auxHash, bool isGameShader, bool isGfxPackShader, const std::string& glslCode)
 	: RendererShader(type, baseHash, auxHash, isGameShader, isGfxPackShader), m_glslCode(glslCode)
@@ -275,7 +278,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
 		std::vector<uint8> cacheFileData;
-		if (s_spirvCache->GetFile({ h1, h2 }, cacheFileData))
+		if (s_spirvCache->GetFile({h1, h2}, cacheFileData))
 		{
 			// generate shader from cached SPIR-V buffer
 			CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
@@ -366,19 +369,19 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		Shader.setSourceFile(fmt::format("shader_{:016x}_{:016x}.glsl", m_baseHash, m_auxHash).c_str());
 	}
 
-	//auto beginTime = benchmarkTimer_start();
+	// auto beginTime = benchmarkTimer_start();
 
 	GlslangToSpv(*Program.getIntermediate(state), spirvBuffer, &logger, &spvOptions);
 
-	//double timeDur = benchmarkTimer_stop(beginTime);
-	//forceLogRemoveMe_printf("Shader GLSL-to-SPIRV compilation took %lfms Size %08x", timeDur, spirvBuffer.size()*4);
+	// double timeDur = benchmarkTimer_stop(beginTime);
+	// forceLogRemoveMe_printf("Shader GLSL-to-SPIRV compilation took %lfms Size %08x", timeDur, spirvBuffer.size()*4);
 
 	// store in cache, unless it got compiled with debug info or is a modified shader from a gfx pack
 	if (s_spirvCache && m_isGameShader && m_isGfxPackShader == false && !compileWithDebugInfo)
 	{
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
-		s_spirvCache->AddFile({ h1, h2 }, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
+		s_spirvCache->AddFile({h1, h2}, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
 	}
 
 	CreateVkShaderModule(spirvBuffer);
@@ -386,7 +389,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	// count compiled shader
 	if (!s_isLoadingShadersVk)
 	{
-		if( m_isGameShader )
+		if (m_isGameShader)
 			++g_compiled_shaders_total;
 	}
 
@@ -453,6 +456,6 @@ void RendererShaderVk::ShaderCacheLoading_end()
 
 void RendererShaderVk::ShaderCacheLoading_Close()
 {
-    delete s_spirvCache;
-    s_spirvCache = nullptr;
+	delete s_spirvCache;
+	s_spirvCache = nullptr;
 }

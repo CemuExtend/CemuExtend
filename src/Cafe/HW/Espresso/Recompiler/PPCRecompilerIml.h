@@ -90,12 +90,11 @@ void PPCIMLGen_CreateSegmentBranchedPathMultiple(ppcImlGenContext_t& ppcImlGenCo
 
 class IMLRedirectInstOutput
 {
-public:
+  public:
 	IMLRedirectInstOutput(ppcImlGenContext_t* ppcImlGenContext, IMLSegment* outputSegment);
 	~IMLRedirectInstOutput();
 
-
-private:
+  private:
 	ppcImlGenContext_t* m_context;
 	IMLSegment* m_prevSegment;
 };

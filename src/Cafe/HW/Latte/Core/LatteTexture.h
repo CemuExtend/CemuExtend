@@ -23,7 +23,7 @@ struct LatteSamplerState
 
 class LatteTexture
 {
-public:
+  public:
 	LatteTexture(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels, uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth);
 	virtual ~LatteTexture();
 
@@ -55,7 +55,10 @@ public:
 		return Latte::GetFormatBits(format);
 	}
 
-	bool Is3DTexture() const { return dim == Latte::E_DIM::DIM_3D; };
+	bool Is3DTexture() const
+	{
+		return dim == Latte::E_DIM::DIM_3D;
+	};
 
 	void GetSize(sint32& width, sint32& height, sint32 mipLevel) const
 	{
@@ -66,7 +69,7 @@ public:
 	// similar to GetSize, but returns the real size of the texture taking into account any resolution overwrite by gfx pack rules
 	void GetEffectiveSize(sint32& effectiveWidth, sint32& effectiveHeight, sint32 mipLevel) const
 	{
-		if( overwriteInfo.hasResolutionOverwrite )
+		if (overwriteInfo.hasResolutionOverwrite)
 		{
 			effectiveWidth = overwriteInfo.width;
 			effectiveHeight = overwriteInfo.height;
@@ -120,11 +123,10 @@ public:
 	struct LatteTextureSliceMipInfo* GetSliceMipArrayEntry(sint32 sliceIndex, sint32 mipIndex);
 	static std::vector<LatteTexture*>& GetAllTextures(); // note: can contain nullptr entries
 
-protected:
+  protected:
 	virtual LatteTextureView* CreateView(Latte::E_DIM dim, Latte::E_GX2SURFFMT format, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount) = 0;
 
-public:
-
+  public:
 	// Latte texture info
 	MPTR physAddress;
 	MPTR physMipAddress;
@@ -135,7 +137,7 @@ public:
 	sint32 height;
 	sint32 depth;
 	sint32 pitch;
-	sint32 mipLevels; // number of used mip levels (must be at least 1)
+	sint32 mipLevels;			   // number of used mip levels (must be at least 1)
 	sint32 maxPossibleMipLevels{}; // number of mips that can potentially be used (uses resolution from texture rules)
 	uint32 swizzle;
 	uint32 lastRenderTargetSwizzle{}; // set to rt swizzle bits whenever the texture is being rendered to
@@ -150,8 +152,8 @@ public:
 	MPTR texDataPtrHigh{};
 	uint32 texDataHash2{};
 	// state
-	bool isUpdatedOnGPU{ false }; // set if any GPU-side operation modified this texture and strict one-way RAM->VRAM memory mirroring no longer applies
-	bool enableReadback{ false }; // if true, texture will be mirrored back to CPU RAM under specific circumstances
+	bool isUpdatedOnGPU{false}; // set if any GPU-side operation modified this texture and strict one-way RAM->VRAM memory mirroring no longer applies
+	bool enableReadback{false}; // if true, texture will be mirrored back to CPU RAM under specific circumstances
 	// invalidation
 	bool forceInvalidate{};
 	// cache control
@@ -183,8 +185,8 @@ public:
 		sint16 relativeLodBias; // in 1/64th steps
 		bool hasRelativeLodBias;
 		// anisotropic
-		sint8 anisotropicLevel{ -1 }; // 1<<n, 0 is disabled
-	}overwriteInfo{};
+		sint8 anisotropicLevel{-1}; // 1<<n, 0 is disabled
+	} overwriteInfo{};
 	// for detecting multiple references during the same drawcall
 	uint32 lockTextureUpdateId{}; // set to current texture update id whenever texture is bound and used
 	uint32 lockCount{};
@@ -271,7 +273,7 @@ struct LatteTextureRelation
 	sint32 baseMipIndex;
 	sint32 sliceCount;
 	sint32 mipCount;
-	//sint32 xOffset;
+	// sint32 xOffset;
 	sint32 yOffset;
 };
 
@@ -291,7 +293,7 @@ struct LatteTextureViewInformation
 	Latte::E_DIM dim;
 };
 
-struct LatteTextureInformation 
+struct LatteTextureInformation
 {
 	MPTR physAddress;
 	MPTR physMipAddress;
@@ -318,7 +320,7 @@ struct LatteTextureInformation
 		sint32 width;
 		sint32 height;
 		sint32 depth;
-	}overwriteInfo{};
+	} overwriteInfo{};
 
 	std::vector<LatteTextureViewInformation> views;
 };

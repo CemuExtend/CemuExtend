@@ -21,7 +21,7 @@ namespace H264
 			// alignment is atleast sizeof(void*)
 			alignment = std::max<WORD32>(alignment, sizeof(void*));
 
-			//smallest multiple of 2 at least as large as alignment
+			// smallest multiple of 2 at least as large as alignment
 			alignment--;
 			alignment |= alignment << 1;
 			alignment |= alignment >> 1;
@@ -62,8 +62,8 @@ namespace H264
 
 		void Init(bool isBufferedMode)
 		{
-			ih264d_create_ip_t s_create_ip{ 0 };
-			ih264d_create_op_t s_create_op{ 0 };
+			ih264d_create_ip_t s_create_ip{0};
+			ih264d_create_op_t s_create_op{0};
 
 			s_create_ip.s_ivd_create_ip_t.u4_size = sizeof(ih264d_create_ip_t);
 			s_create_ip.s_ivd_create_ip_t.e_cmd = IVD_CMD_CREATE;
@@ -96,8 +96,8 @@ namespace H264
 		{
 			if (!m_codecCtx)
 				return;
-			ih264d_delete_ip_t s_delete_ip{ 0 };
-			ih264d_delete_op_t s_delete_op{ 0 };
+			ih264d_delete_ip_t s_delete_ip{0};
+			ih264d_delete_op_t s_delete_op{0};
 			s_delete_ip.s_ivd_delete_ip_t.u4_size = sizeof(ih264d_delete_ip_t);
 			s_delete_ip.s_ivd_delete_ip_t.e_cmd = IVD_CMD_DELETE;
 			s_delete_op.s_ivd_delete_op_t.u4_size = sizeof(ih264d_delete_op_t);
@@ -154,8 +154,8 @@ namespace H264
 				m_hasBufferSizeInfo = true;
 			}
 
-			ivd_video_decode_ip_t s_dec_ip{ 0 };
-			ivd_video_decode_op_t s_dec_op{ 0 };
+			ivd_video_decode_ip_t s_dec_ip{0};
+			ivd_video_decode_op_t s_dec_op{0};
 			s_dec_ip.u4_size = sizeof(ivd_video_decode_ip_t);
 			s_dec_op.u4_size = sizeof(ivd_video_decode_op_t);
 
@@ -174,7 +174,7 @@ namespace H264
 			BenchmarkTimer bt;
 			bt.Start();
 			WORD32 status = ih264d_api_function(m_codecCtx, &s_dec_ip, &s_dec_op);
-			if (status != 0 && (s_dec_op.u4_error_code&0xFF) == IVD_RES_CHANGED)
+			if (status != 0 && (s_dec_op.u4_error_code & 0xFF) == IVD_RES_CHANGED)
 			{
 				// resolution change
 				ResetDecoder();
@@ -223,8 +223,8 @@ namespace H264
 				}
 				cemu_assert_debug(bufferId == s_dec_op.u4_disp_buf_id);
 				cemu_assert(bufferId >= 0);
-				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{ 0 };
-				ivd_rel_display_frame_op_t s_video_rel_disp_op{ 0 };
+				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{0};
+				ivd_rel_display_frame_op_t s_video_rel_disp_op{0};
 				s_video_rel_disp_ip.e_cmd = IVD_CMD_REL_DISPLAY_FRAME;
 				s_video_rel_disp_ip.u4_size = sizeof(ivd_rel_display_frame_ip_t);
 				s_video_rel_disp_op.u4_size = sizeof(ivd_rel_display_frame_op_t);
@@ -242,24 +242,23 @@ namespace H264
 			if (s_dec_op.u4_frame_decoded_flag)
 				m_numDecodedFrames++;
 			// get VUI
-			//ih264d_ctl_get_vui_params_ip_t s_ctl_get_vui_params_ip;
-			//ih264d_ctl_get_vui_params_op_t s_ctl_get_vui_params_op;
+			// ih264d_ctl_get_vui_params_ip_t s_ctl_get_vui_params_ip;
+			// ih264d_ctl_get_vui_params_op_t s_ctl_get_vui_params_op;
 
-			//s_ctl_get_vui_params_ip.e_cmd = IVD_CMD_VIDEO_CTL;
-			//s_ctl_get_vui_params_ip.e_sub_cmd = (IVD_CONTROL_API_COMMAND_TYPE_T)IH264D_CMD_CTL_GET_VUI_PARAMS;
-			//s_ctl_get_vui_params_ip.u4_size = sizeof(ih264d_ctl_get_vui_params_ip_t);
-			//s_ctl_get_vui_params_op.u4_size = sizeof(ih264d_ctl_get_vui_params_op_t);
+			// s_ctl_get_vui_params_ip.e_cmd = IVD_CMD_VIDEO_CTL;
+			// s_ctl_get_vui_params_ip.e_sub_cmd = (IVD_CONTROL_API_COMMAND_TYPE_T)IH264D_CMD_CTL_GET_VUI_PARAMS;
+			// s_ctl_get_vui_params_ip.u4_size = sizeof(ih264d_ctl_get_vui_params_ip_t);
+			// s_ctl_get_vui_params_op.u4_size = sizeof(ih264d_ctl_get_vui_params_op_t);
 
-			//status = ih264d_api_function(mCodecCtx, &s_ctl_get_vui_params_ip, &s_ctl_get_vui_params_op);
-			//cemu_assert(status == 0);
+			// status = ih264d_api_function(mCodecCtx, &s_ctl_get_vui_params_ip, &s_ctl_get_vui_params_op);
+			// cemu_assert(status == 0);
 		}
 
 		void Flush()
 		{
-			auto releaseDisplayFrame = [this](uint32 displayBufferId)
-			{
-				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{ 0 };
-				ivd_rel_display_frame_op_t s_video_rel_disp_op{ 0 };
+			auto releaseDisplayFrame = [this](uint32 displayBufferId) {
+				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{0};
+				ivd_rel_display_frame_op_t s_video_rel_disp_op{0};
 				s_video_rel_disp_ip.e_cmd = IVD_CMD_REL_DISPLAY_FRAME;
 				s_video_rel_disp_ip.u4_size = sizeof(ivd_rel_display_frame_ip_t);
 				s_video_rel_disp_op.u4_size = sizeof(ivd_rel_display_frame_op_t);
@@ -270,8 +269,8 @@ namespace H264
 			};
 
 			// set flush mode
-			ivd_ctl_flush_ip_t s_video_flush_ip{ 0 };
-			ivd_ctl_flush_op_t s_video_flush_op{ 0 };
+			ivd_ctl_flush_ip_t s_video_flush_ip{0};
+			ivd_ctl_flush_op_t s_video_flush_op{0};
 			s_video_flush_ip.e_cmd = IVD_CMD_VIDEO_CTL;
 			s_video_flush_ip.e_sub_cmd = IVD_CMD_CTL_FLUSH;
 			s_video_flush_ip.u4_size = sizeof(ivd_ctl_flush_ip_t);
@@ -282,8 +281,8 @@ namespace H264
 			// get all frames from the decoder
 			while (true)
 			{
-				ivd_video_decode_ip_t s_dec_ip{ 0 };
-				ivd_video_decode_op_t s_dec_op{ 0 };
+				ivd_video_decode_ip_t s_dec_ip{0};
+				ivd_video_decode_op_t s_dec_op{0};
 				s_dec_ip.u4_size = sizeof(ivd_video_decode_ip_t);
 				s_dec_op.u4_size = sizeof(ivd_video_decode_op_t);
 				s_dec_ip.e_cmd = IVD_CMD_VIDEO_DECODE;
@@ -296,7 +295,7 @@ namespace H264
 				if (status != 0)
 					break;
 				cemu_assert_debug(s_dec_op.u4_output_present != 0); // should never be false?
-				if(s_dec_op.u4_output_present == 0)
+				if (s_dec_op.u4_output_present == 0)
 					continue;
 				if (H264_IsBotW())
 				{
@@ -331,13 +330,14 @@ namespace H264
 
 			// copy UV
 			uint8* uvOut = bufOut + outputStride * imageHeight;
-			for (uint32 row = 0; row < imageHeight/2; row++)
+			for (uint32 row = 0; row < imageHeight / 2; row++)
 			{
 				memcpy(uvOut, uvIn, imageWidth);
 				uvIn += inputStride;
 				uvOut += outputStride;
 			}
 		}
+
 	  private:
 		void SetDecoderCoreCount(uint32 coreCount)
 		{
@@ -348,7 +348,7 @@ namespace H264
 			s_set_cores_ip.u4_num_cores = coreCount; // valid numbers are 1-4
 			s_set_cores_ip.u4_size = sizeof(ih264d_ctl_set_num_cores_ip_t);
 			s_set_cores_op.u4_size = sizeof(ih264d_ctl_set_num_cores_op_t);
-			IV_API_CALL_STATUS_T status = ih264d_api_function(m_codecCtx, (void *)&s_set_cores_ip, (void *)&s_set_cores_op);
+			IV_API_CALL_STATUS_T status = ih264d_api_function(m_codecCtx, (void*)&s_set_cores_ip, (void*)&s_set_cores_op);
 			cemu_assert(status == IV_SUCCESS);
 		}
 
@@ -357,13 +357,13 @@ namespace H264
 			numByteConsumed = 0;
 			UpdateParameters(true);
 
-			ivd_video_decode_ip_t s_dec_ip{ 0 };
-			ivd_video_decode_op_t s_dec_op{ 0 };
+			ivd_video_decode_ip_t s_dec_ip{0};
+			ivd_video_decode_op_t s_dec_op{0};
 			s_dec_ip.u4_size = sizeof(ivd_video_decode_ip_t);
 			s_dec_op.u4_size = sizeof(ivd_video_decode_op_t);
 
 			s_dec_ip.e_cmd = IVD_CMD_VIDEO_DECODE;
-			s_dec_ip.pv_stream_buffer =	(uint8*)data;
+			s_dec_ip.pv_stream_buffer = (uint8*)data;
 			s_dec_ip.u4_num_Bytes = length;
 			s_dec_ip.s_out_buffer.u4_num_bufs = 0;
 			WORD32 status = ih264d_api_function(m_codecCtx, &s_dec_ip, &s_dec_op);
@@ -383,8 +383,8 @@ namespace H264
 
 		void ReinitBuffers()
 		{
-			ivd_ctl_getbufinfo_ip_t s_ctl_ip{ 0 };
-			ivd_ctl_getbufinfo_op_t s_ctl_op{ 0 };
+			ivd_ctl_getbufinfo_ip_t s_ctl_ip{0};
+			ivd_ctl_getbufinfo_op_t s_ctl_op{0};
 
 			s_ctl_ip.e_cmd = IVD_CMD_VIDEO_CTL;
 			s_ctl_ip.e_sub_cmd = IVD_CMD_CTL_GETBUFINFO;
@@ -401,8 +401,8 @@ namespace H264
 				m_displayBuf.emplace_back().resize(s_ctl_op.u4_min_out_buf_size[0] + s_ctl_op.u4_min_out_buf_size[1]);
 			}
 			// set
-			ivd_set_display_frame_ip_t s_set_display_frame_ip{ 0 }; // make sure to zero-initialize this. The codec seems to check the first 3 pointers/sizes per frame, regardless of the value of u4_num_bufs
-			ivd_set_display_frame_op_t s_set_display_frame_op{ 0 };
+			ivd_set_display_frame_ip_t s_set_display_frame_ip{0}; // make sure to zero-initialize this. The codec seems to check the first 3 pointers/sizes per frame, regardless of the value of u4_num_bufs
+			ivd_set_display_frame_op_t s_set_display_frame_op{0};
 
 			s_set_display_frame_ip.e_cmd = IVD_CMD_SET_DISPLAY_FRAME;
 			s_set_display_frame_ip.u4_size = sizeof(ivd_set_display_frame_ip_t);
@@ -428,8 +428,8 @@ namespace H264
 			// mark all as released (available)
 			for (uint32 i = 0; i < s_ctl_op.u4_num_disp_bufs; i++)
 			{
-				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{ 0 };
-				ivd_rel_display_frame_op_t s_video_rel_disp_op{ 0 };
+				ivd_rel_display_frame_ip_t s_video_rel_disp_ip{0};
+				ivd_rel_display_frame_op_t s_video_rel_disp_op{0};
 
 				s_video_rel_disp_ip.e_cmd = IVD_CMD_REL_DISPLAY_FRAME;
 				s_video_rel_disp_ip.u4_size = sizeof(ivd_rel_display_frame_ip_t);
@@ -457,8 +457,8 @@ namespace H264
 
 		void UpdateParameters(bool headerDecodeOnly)
 		{
-			ih264d_ctl_set_config_ip_t s_h264d_ctl_ip{ 0 };
-			ih264d_ctl_set_config_op_t s_h264d_ctl_op{ 0 };
+			ih264d_ctl_set_config_ip_t s_h264d_ctl_ip{0};
+			ih264d_ctl_set_config_op_t s_h264d_ctl_op{0};
 			ivd_ctl_set_config_ip_t* ps_ctl_ip = &s_h264d_ctl_ip.s_ivd_ctl_set_config_ip_t;
 			ivd_ctl_set_config_op_t* ps_ctl_op = &s_h264d_ctl_op.s_ivd_ctl_set_config_op_t;
 
@@ -478,7 +478,7 @@ namespace H264
 	  private:
 		void DecoderThread()
 		{
-			while(!m_threadShouldExit)
+			while (!m_threadShouldExit)
 			{
 				m_decodeSem.decrementWithWait();
 				std::unique_lock _l(m_decodeQueueMtx);
@@ -487,7 +487,7 @@ namespace H264
 				uint32 decodeIndex = m_decodeQueue.front();
 				m_decodeQueue.erase(m_decodeQueue.begin());
 				_l.unlock();
-				if(decodeIndex == CMD_FLUSH)
+				if (decodeIndex == CMD_FLUSH)
 				{
 					Flush();
 					_l.lock();
@@ -504,8 +504,8 @@ namespace H264
 		}
 
 		iv_obj_t* m_codecCtx{nullptr};
-		bool m_hasBufferSizeInfo{ false };
-		bool m_isBufferedMode{ false };
+		bool m_hasBufferSizeInfo{false};
+		bool m_isBufferedMode{false};
 		uint32 m_numDecodedFrames{0};
 		std::vector<std::vector<uint8>> m_displayBuf;
 
@@ -517,4 +517,4 @@ namespace H264
 	{
 		return new H264AVCDecoder();
 	}
-};
+}; // namespace H264

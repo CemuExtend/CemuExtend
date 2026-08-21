@@ -3,7 +3,7 @@
 template<typename TCtor, typename TDtor>
 class TempState
 {
-public:
+  public:
 	TempState(TCtor ctor, TDtor dtor)
 		: m_dtor(std::move(dtor))
 	{
@@ -15,6 +15,6 @@ public:
 		m_dtor();
 	}
 
-private:
+  private:
 	TDtor m_dtor;
 };

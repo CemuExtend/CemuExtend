@@ -10,7 +10,7 @@ uint64 ProcessorTime::total()
 	return idle + user + kernel;
 }
 
-double ProcessorTime::Compare(ProcessorTime &last, ProcessorTime &now)
+double ProcessorTime::Compare(ProcessorTime& last, ProcessorTime& now)
 {
 	auto dwork = now.work() - last.work();
 	auto dtotal = now.total() - last.total();
@@ -23,7 +23,7 @@ uint32 GetProcessorCount()
 	return std::thread::hardware_concurrency();
 }
 
-void QueryProcTime(ProcessorTime &out)
+void QueryProcTime(ProcessorTime& out)
 {
 	uint64 now, user, kernel;
 	QueryProcTime(now, user, kernel);

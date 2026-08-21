@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MemorySearchPage, MemorySearchSession, MemorySearchStatus, MemoryValueType } from "../bridge/contracts";
+import type {
+  MemorySearchPage,
+  MemorySearchSession,
+  MemorySearchStatus,
+  MemoryValueType,
+} from "../bridge/contracts";
 import { invoke } from "../bridge/native";
-import { pageOffset, parseMemoryValue, progressPercent } from "./memorySearchModel";
+import {
+  pageOffset,
+  parseMemoryValue,
+  progressPercent,
+} from "./memorySearchModel";
 
 const PAGE_SIZE = 100;
 const typeOptions: Array<{ value: MemoryValueType; label: string }> = [
-  { value: "float32", label: "float" }, { value: "float64", label: "double" },
-  { value: "int8", label: "int8" }, { value: "int16", label: "int16" },
-  { value: "int32", label: "int32" }, { value: "int64", label: "int64" }
+  { value: "float32", label: "float" },
+  { value: "float64", label: "double" },
+  { value: "int8", label: "int8" },
+  { value: "int16", label: "int16" },
+  { value: "int32", label: "int32" },
+  { value: "int64", label: "int64" },
 ];
 
 export function MemorySearcherWindow() {
@@ -21,13 +33,25 @@ export function MemorySearcherWindow() {
   const [pageNumber, setPageNumber] = useState(0);
   const [error, setError] = useState("");
 
-  const loadPage = useCallback(async (active: MemorySearchSession, nextPage: number, total: number) => {
-    const offset = pageOffset(nextPage, PAGE_SIZE, total);
-    const result = await invoke("memorySearch.page", { sessionToken: active.sessionToken, generation: active.generation, offset, limit: PAGE_SIZE });
-    if (sessionRef.current?.sessionToken === active.sessionToken && sessionRef.current.generation === active.generation) {
-      setPage(result); setPageNumber(Math.floor(offset / PAGE_SIZE));
-    }
-  }, []);
+  const loadPage = useCallback(
+    async (active: MemorySearchSession, nextPage: number, total: number) => {
+      const offset = pageOffset(nextPage, PAGE_SIZE, total);
+      const result = await invoke("memorySearch.page", {
+        sessionToken: active.sessionToken,
+        generation: active.generation,
+        offset,
+        limit: PAGE_SIZE,
+      });
+      if (
+        sessionRef.current?.sessionToken === active.sessionToken &&
+        sessionRef.current.generation === active.generation
+      ) {
+        setPage(result);
+        setPageNumber(Math.floor(offset / PAGE_SIZE));
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     sessionRef.current = session;
@@ -36,55 +60,216 @@ export function MemorySearcherWindow() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const next = await invoke("memorySearch.status", { sessionToken: session.sessionToken });
+        const next = await invoke("memorySearch.status", {
+          sessionToken: session.sessionToken,
+        });
         if (stopped) return;
         setStatus(next);
-        if (next.state === "scanning") timer = setTimeout(() => void poll(), 150);
-        else if (next.state === "complete") await loadPage(session, 0, next.resultCount);
-        else if (next.state === "failed") setError(next.diagnostic || "Memory search failed.");
-      } catch (reason) { if (!stopped) setError(String(reason)); }
+        if (next.state === "scanning")
+          timer = setTimeout(() => void poll(), 150);
+        else if (next.state === "complete")
+          await loadPage(session, 0, next.resultCount);
+        else if (next.state === "failed")
+          setError(next.diagnostic || "Memory search failed.");
+      } catch (reason) {
+        if (!stopped) setError(String(reason));
+      }
     };
     void poll();
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [loadPage, session]);
 
   const begin = async (filter: boolean) => {
     const parsed = parseMemoryValue(type, input);
-    if (typeof parsed === "string") { setError(parsed); return; }
-    setError(""); setPage(undefined); setStatus(undefined); setPageNumber(0);
+    if (typeof parsed === "string") {
+      setError(parsed);
+      return;
+    }
+    setError("");
+    setPage(undefined);
+    setStatus(undefined);
+    setPageNumber(0);
     try {
-      const next = filter && session
-        ? await invoke("memorySearch.filter", { sessionToken: session.sessionToken, generation: session.generation, value: parsed })
-        : await invoke("memorySearch.start", { value: parsed, maximumBytes: scanMiB * 1024 * 1024 });
+      const next =
+        filter && session
+          ? await invoke("memorySearch.filter", {
+              sessionToken: session.sessionToken,
+              generation: session.generation,
+              value: parsed,
+            })
+          : await invoke("memorySearch.start", {
+              value: parsed,
+              maximumBytes: scanMiB * 1024 * 1024,
+            });
       setSession(next);
-    } catch (reason) { setError(String(reason)); }
+    } catch (reason) {
+      setError(String(reason));
+    }
   };
   const cancel = async () => {
     if (!session) return;
-    try { await invoke("memorySearch.cancel", { sessionToken: session.sessionToken, generation: session.generation }); }
-    catch (reason) { setError(String(reason)); }
+    try {
+      await invoke("memorySearch.cancel", {
+        sessionToken: session.sessionToken,
+        generation: session.generation,
+      });
+    } catch (reason) {
+      setError(String(reason));
+    }
   };
-  const clear = () => { setSession(undefined); sessionRef.current = undefined; setStatus(undefined); setPage(undefined); setPageNumber(0); setError(""); };
+  const clear = () => {
+    setSession(undefined);
+    sessionRef.current = undefined;
+    setStatus(undefined);
+    setPage(undefined);
+    setPageNumber(0);
+    setError("");
+  };
   const busy = status?.state === "scanning";
   const totalPages = Math.max(1, Math.ceil((page?.total ?? 0) / PAGE_SIZE));
 
-  return <main className="role-window memory-search-window">
-    <header><div><span className="eyebrow">Runtime diagnostics</span><h1>Memory Searcher</h1></div><div className="button-row"><button onClick={() => void invoke("window.close")}>Close</button></div></header>
-    {error && <div className="notice error" role="alert">{error}</div>}
-    <section className="memory-search-controls" aria-label="Search controls">
-      <label>Data type<select disabled={!!session} value={type} onChange={(event) => setType(event.target.value as MemoryValueType)}>{typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      <label>Value<input value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !busy) void begin(!!session); }} /></label>
-      <label>Scan cap<select disabled={!!session} value={scanMiB} onChange={(event) => setScanMiB(Number(event.target.value))}><option value={64}>64 MiB</option><option value={128}>128 MiB</option><option value={256}>256 MiB</option><option value={512}>512 MiB</option></select></label>
-      <div className="button-row"><button className="primary" disabled={busy} onClick={() => void begin(false)}>Search</button><button disabled={!session || busy || status?.state !== "complete"} onClick={() => void begin(true)}>Filter</button>{busy && <button onClick={() => void cancel()}>Cancel</button>}<button disabled={!session} onClick={clear}>Clear</button></div>
-    </section>
-    <section className="memory-search-summary" aria-live="polite">
-      {status ? <><progress max={100} value={progressPercent(status)} /><span>{status.state === "scanning" ? "Scanning" : status.state}: {Math.round(status.bytesScanned / 1048576)} / {Math.round(status.bytesTotal / 1048576)} MiB · {status.resultCount.toLocaleString()} results</span>{status.scanCapReached && <span className="warning">Scan stopped at the selected byte cap.</span>}{status.resultCapReached && <span className="warning">Result cap reached (50,000).</span>}</> : <p className="muted">Start a running Wii U title, then search mapped guest memory. Addresses are session-bound diagnostics; the web UI never receives native pointers.</p>}
-    </section>
-    <section className="memory-results" aria-label="Memory search results">
-      <div className="memory-result-header"><strong>Address</strong><strong>Value</strong><strong>Type</strong></div>
-      {page?.results.map((result) => <div className="memory-result-row" key={result.address.value}><code>{result.address.value}</code><code>{result.value.text}</code><span>{result.value.type}</span></div>)}
-      {status?.state === "complete" && !page?.results.length && <p className="empty-results">No matching values found.</p>}
-    </section>
-    <footer className="memory-pagination"><button disabled={!page || pageNumber === 0} onClick={() => session && void loadPage(session, pageNumber - 1, page?.total ?? 0)}>Previous</button><span>Page {pageNumber + 1} of {totalPages}</span><button disabled={!page || pageNumber + 1 >= totalPages} onClick={() => session && void loadPage(session, pageNumber + 1, page?.total ?? 0)}>Next</button></footer>
-  </main>;
+  return (
+    <main className="role-window memory-search-window">
+      <header>
+        <div>
+          <span className="eyebrow">Runtime diagnostics</span>
+          <h1>Memory Searcher</h1>
+        </div>
+        <div className="button-row">
+          <button onClick={() => void invoke("window.close")}>Close</button>
+        </div>
+      </header>
+      {error && (
+        <div className="notice error" role="alert">
+          {error}
+        </div>
+      )}
+      <section className="memory-search-controls" aria-label="Search controls">
+        <label>
+          Data type
+          <select
+            disabled={!!session}
+            value={type}
+            onChange={(event) => setType(event.target.value as MemoryValueType)}
+          >
+            {typeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Value
+          <input
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !busy) void begin(!!session);
+            }}
+          />
+        </label>
+        <label>
+          Scan cap
+          <select
+            disabled={!!session}
+            value={scanMiB}
+            onChange={(event) => setScanMiB(Number(event.target.value))}
+          >
+            <option value={64}>64 MiB</option>
+            <option value={128}>128 MiB</option>
+            <option value={256}>256 MiB</option>
+            <option value={512}>512 MiB</option>
+          </select>
+        </label>
+        <div className="button-row">
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void begin(false)}
+          >
+            Search
+          </button>
+          <button
+            disabled={!session || busy || status?.state !== "complete"}
+            onClick={() => void begin(true)}
+          >
+            Filter
+          </button>
+          {busy && <button onClick={() => void cancel()}>Cancel</button>}
+          <button disabled={!session} onClick={clear}>
+            Clear
+          </button>
+        </div>
+      </section>
+      <section className="memory-search-summary" aria-live="polite">
+        {status ? (
+          <>
+            <progress max={100} value={progressPercent(status)} />
+            <span>
+              {status.state === "scanning" ? "Scanning" : status.state}:{" "}
+              {Math.round(status.bytesScanned / 1048576)} /{" "}
+              {Math.round(status.bytesTotal / 1048576)} MiB ·{" "}
+              {status.resultCount.toLocaleString()} results
+            </span>
+            {status.scanCapReached && (
+              <span className="warning">
+                Scan stopped at the selected byte cap.
+              </span>
+            )}
+            {status.resultCapReached && (
+              <span className="warning">Result cap reached (50,000).</span>
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            Start a running Wii U title, then search mapped guest memory.
+            Addresses are session-bound diagnostics; the web UI never receives
+            native pointers.
+          </p>
+        )}
+      </section>
+      <section className="memory-results" aria-label="Memory search results">
+        <div className="memory-result-header">
+          <strong>Address</strong>
+          <strong>Value</strong>
+          <strong>Type</strong>
+        </div>
+        {page?.results.map((result) => (
+          <div className="memory-result-row" key={result.address.value}>
+            <code>{result.address.value}</code>
+            <code>{result.value.text}</code>
+            <span>{result.value.type}</span>
+          </div>
+        ))}
+        {status?.state === "complete" && !page?.results.length && (
+          <p className="empty-results">No matching values found.</p>
+        )}
+      </section>
+      <footer className="memory-pagination">
+        <button
+          disabled={!page || pageNumber === 0}
+          onClick={() =>
+            session && void loadPage(session, pageNumber - 1, page?.total ?? 0)
+          }
+        >
+          Previous
+        </button>
+        <span>
+          Page {pageNumber + 1} of {totalPages}
+        </span>
+        <button
+          disabled={!page || pageNumber + 1 >= totalPages}
+          onClick={() =>
+            session && void loadPage(session, pageNumber + 1, page?.total ?? 0)
+          }
+        >
+          Next
+        </button>
+      </footer>
+    </main>
+  );
 }

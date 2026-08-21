@@ -18,30 +18,27 @@
 
 wxDEFINE_EVENT(wxEVT_DISASMCTRL_NOTIFY_GOTO_ADDRESS, wxCommandEvent);
 
-#define MAX_SYMBOL_LEN			(120)
-
+#define MAX_SYMBOL_LEN (120)
 
 constexpr uint8 arrowRightPNG[] =
-{
-	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0B,
-	0x08, 0x03, 0x00, 0x00, 0x00, 0x41, 0x3C, 0xFD, 0x0B, 0x00, 0x00, 0x00,
-	0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xAE, 0xCE, 0x1C, 0xE9, 0x00, 0x00,
-	0x00, 0x04, 0x67, 0x41, 0x4D, 0x41, 0x00, 0x00, 0xB1, 0x8F, 0x0B, 0xFC,
-	0x61, 0x05, 0x00, 0x00, 0x00, 0x06, 0x50, 0x4C, 0x54, 0x45, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0xA5, 0x67, 0xB9, 0xCF, 0x00, 0x00, 0x00, 0x02,
-	0x74, 0x52, 0x4E, 0x53, 0xFF, 0x00, 0xE5, 0xB7, 0x30, 0x4A, 0x00, 0x00,
-	0x00, 0x09, 0x70, 0x48, 0x59, 0x73, 0x00, 0x00, 0x0E, 0xC3, 0x00, 0x00,
-	0x0E, 0xC3, 0x01, 0xC7, 0x6F, 0xA8, 0x64, 0x00, 0x00, 0x00, 0x2C, 0x49,
-	0x44, 0x41, 0x54, 0x18, 0x57, 0x63, 0x60, 0x84, 0x03, 0x08, 0x13, 0x59,
-	0x00, 0xCC, 0x46, 0x11, 0x00, 0x71, 0x80, 0x24, 0x32, 0xC0, 0x10, 0x60,
-	0xC0, 0x10, 0xC0, 0x00, 0x58, 0xCC, 0x80, 0xD8, 0x00, 0x02, 0x60, 0x3E,
-	0x7E, 0x77, 0x00, 0x31, 0x23, 0x23, 0x00, 0x21, 0x95, 0x00, 0x5B, 0x20,
-	0x73, 0x8D, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-	0x42, 0x60, 0x82
-};
+	{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+		0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0B,
+		0x08, 0x03, 0x00, 0x00, 0x00, 0x41, 0x3C, 0xFD, 0x0B, 0x00, 0x00, 0x00,
+		0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xAE, 0xCE, 0x1C, 0xE9, 0x00, 0x00,
+		0x00, 0x04, 0x67, 0x41, 0x4D, 0x41, 0x00, 0x00, 0xB1, 0x8F, 0x0B, 0xFC,
+		0x61, 0x05, 0x00, 0x00, 0x00, 0x06, 0x50, 0x4C, 0x54, 0x45, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0xA5, 0x67, 0xB9, 0xCF, 0x00, 0x00, 0x00, 0x02,
+		0x74, 0x52, 0x4E, 0x53, 0xFF, 0x00, 0xE5, 0xB7, 0x30, 0x4A, 0x00, 0x00,
+		0x00, 0x09, 0x70, 0x48, 0x59, 0x73, 0x00, 0x00, 0x0E, 0xC3, 0x00, 0x00,
+		0x0E, 0xC3, 0x01, 0xC7, 0x6F, 0xA8, 0x64, 0x00, 0x00, 0x00, 0x2C, 0x49,
+		0x44, 0x41, 0x54, 0x18, 0x57, 0x63, 0x60, 0x84, 0x03, 0x08, 0x13, 0x59,
+		0x00, 0xCC, 0x46, 0x11, 0x00, 0x71, 0x80, 0x24, 0x32, 0xC0, 0x10, 0x60,
+		0xC0, 0x10, 0xC0, 0x00, 0x58, 0xCC, 0x80, 0xD8, 0x00, 0x02, 0x60, 0x3E,
+		0x7E, 0x77, 0x00, 0x31, 0x23, 0x23, 0x00, 0x21, 0x95, 0x00, 0x5B, 0x20,
+		0x73, 0x8D, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+		0x42, 0x60, 0x82};
 std::optional<wxBitmap> g_ipArrowBitmap;
-
 
 static wxColour theme_textForeground;
 static wxColour theme_textForegroundMuted;
@@ -70,7 +67,6 @@ static wxColour theme_typeData;
 static wxColour theme_patchedOpCode;
 static wxColour theme_patchedData;
 
-
 static void InitSyntaxColors()
 {
 	theme_textForeground = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
@@ -78,33 +74,32 @@ static void InitSyntaxColors()
 	theme_background = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 
 	// line background highlights
-	theme_lineBreakpointSet = wxSystemSettings::SelectLightDark(wxColour(0xFF,0x80,0x80), wxColour(0x84,0x21,0x21)); // red for a non-current breakpoint
-	theme_lineBreakpointAndCurrentInstruction = wxSystemSettings::SelectLightDark(wxColour(0xD2,0x7E,0xD2), wxColour(0x91,0x44,0xA4)); // pink for a current breakpoint
-	theme_lineCurrentInstruction = wxSystemSettings::SelectLightDark(wxColour(0xFF,0xA0,0x80), wxColour(0x87,0x53,0x1A)); // light orange
-	theme_lineLoggingBreakpointSet = wxSystemSettings::SelectLightDark(wxColour(0xAB,0xED,0xEE), wxColour(0x25,0x5D,0x6D)); // light blue
-	theme_lineLastGotoAddress = wxSystemSettings::SelectLightDark(wxColour(0xE0,0xE0,0xE0), wxColour(0x40,0x40,0x40)); // very light gray to indicate the line that was last jumped to
+	theme_lineBreakpointSet = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0x80, 0x80), wxColour(0x84, 0x21, 0x21));				   // red for a non-current breakpoint
+	theme_lineBreakpointAndCurrentInstruction = wxSystemSettings::SelectLightDark(wxColour(0xD2, 0x7E, 0xD2), wxColour(0x91, 0x44, 0xA4)); // pink for a current breakpoint
+	theme_lineCurrentInstruction = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0xA0, 0x80), wxColour(0x87, 0x53, 0x1A));			   // light orange
+	theme_lineLoggingBreakpointSet = wxSystemSettings::SelectLightDark(wxColour(0xAB, 0xED, 0xEE), wxColour(0x25, 0x5D, 0x6D));			   // light blue
+	theme_lineLastGotoAddress = wxSystemSettings::SelectLightDark(wxColour(0xE0, 0xE0, 0xE0), wxColour(0x40, 0x40, 0x40));				   // very light gray to indicate the line that was last jumped to
 
 	// disassembly syntax colors
-	theme_syntaxGPR = wxSystemSettings::SelectLightDark(wxColour(0x66,0x00,0x00), wxColour(0xE0,0x6C,0x75));
-	theme_syntaxFPR = wxSystemSettings::SelectLightDark(wxColour(0x66,0x66,0x00), wxColour(0xD1,0x9A,0x66));
-	theme_syntaxSPR = wxSystemSettings::SelectLightDark(wxColour(0x00,0x66,0x66), wxColour(0x56,0xB6,0xC2));
-	theme_syntaxCR = wxSystemSettings::SelectLightDark(wxColour(0x00,0x66,0x66), wxColour(0x56,0xB6,0xC2));
-	theme_syntaxIMM = wxSystemSettings::SelectLightDark(wxColour(0x00,0x66,0x00), wxColour(0x9D,0xDE,0x6F));
-	theme_syntaxIMMOffset = wxSystemSettings::SelectLightDark(wxColour(0x00,0x66,0x00), wxColour(0x9D,0xDE,0x6F));
-	theme_syntaxCallIMM = wxSystemSettings::SelectLightDark(wxColour(0x00,0x00,0x88), wxColour(0x61,0xAF,0xEF));
-	theme_syntaxPseudoOrUnknown = wxSystemSettings::SelectLightDark(wxColour(0xA0,0xA0,0xA0), wxColour(0x5C,0x63,0x70));
-	theme_syntaxSymbol = wxSystemSettings::SelectLightDark(wxColour(0xA0,0x00,0x00), wxColour(0xE0,0x6C,0x75));
+	theme_syntaxGPR = wxSystemSettings::SelectLightDark(wxColour(0x66, 0x00, 0x00), wxColour(0xE0, 0x6C, 0x75));
+	theme_syntaxFPR = wxSystemSettings::SelectLightDark(wxColour(0x66, 0x66, 0x00), wxColour(0xD1, 0x9A, 0x66));
+	theme_syntaxSPR = wxSystemSettings::SelectLightDark(wxColour(0x00, 0x66, 0x66), wxColour(0x56, 0xB6, 0xC2));
+	theme_syntaxCR = wxSystemSettings::SelectLightDark(wxColour(0x00, 0x66, 0x66), wxColour(0x56, 0xB6, 0xC2));
+	theme_syntaxIMM = wxSystemSettings::SelectLightDark(wxColour(0x00, 0x66, 0x00), wxColour(0x9D, 0xDE, 0x6F));
+	theme_syntaxIMMOffset = wxSystemSettings::SelectLightDark(wxColour(0x00, 0x66, 0x00), wxColour(0x9D, 0xDE, 0x6F));
+	theme_syntaxCallIMM = wxSystemSettings::SelectLightDark(wxColour(0x00, 0x00, 0x88), wxColour(0x61, 0xAF, 0xEF));
+	theme_syntaxPseudoOrUnknown = wxSystemSettings::SelectLightDark(wxColour(0xA0, 0xA0, 0xA0), wxColour(0x5C, 0x63, 0x70));
+	theme_syntaxSymbol = wxSystemSettings::SelectLightDark(wxColour(0xA0, 0x00, 0x00), wxColour(0xE0, 0x6C, 0x75));
 
 	// opcode & data highlighting
-	theme_opCode = wxSystemSettings::SelectLightDark(wxColour(0xFF,0x00,0x40), wxColour(0xFF,0x70,0x7B));
-	theme_patchedOpCode = wxSystemSettings::SelectLightDark(wxColour(0xFF,0x20,0x20), wxColour(0xCC,0x52,0xF5));
-	theme_typeData = wxSystemSettings::SelectLightDark(wxColour(0xFF,0x20,0x20), wxColour(0xCE,0x91,0x78));
-	theme_patchedData = wxSystemSettings::SelectLightDark(wxColour(0xFF,0x20,0x20), wxColour(0xF4,0x43,0x36));
+	theme_opCode = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0x00, 0x40), wxColour(0xFF, 0x70, 0x7B));
+	theme_patchedOpCode = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0x20, 0x20), wxColour(0xCC, 0x52, 0xF5));
+	theme_typeData = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0x20, 0x20), wxColour(0xCE, 0x91, 0x78));
+	theme_patchedData = wxSystemSettings::SelectLightDark(wxColour(0xFF, 0x20, 0x20), wxColour(0xF4, 0x43, 0x36));
 
 	// theme the current instruction pointer arrow
 	g_ipArrowBitmap = wxHelper::LoadThemedBitmapFromPNG(arrowRightPNG, sizeof(arrowRightPNG), wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 }
-
 
 #define OFFSET_ADDRESS (60)
 #define OFFSET_ADDRESS_RELATIVE (90)
@@ -207,7 +202,7 @@ void DisasmCtrl::DrawDisassemblyLine(wxDC& dc, const wxPoint& linePosition, MPTR
 		background_colour = theme_lineCurrentInstruction;
 	else if (bp != nullptr)
 		background_colour = bp->bpType == DEBUGGER_BP_T_NORMAL ? theme_lineBreakpointSet : theme_lineLoggingBreakpointSet;
-	else if(virtualAddress == m_lastGotoTarget)
+	else if (virtualAddress == m_lastGotoTarget)
 		background_colour = theme_lineLastGotoAddress;
 	else
 		background_colour = theme_background;
@@ -227,7 +222,7 @@ void DisasmCtrl::DrawDisassemblyLine(wxDC& dc, const wxPoint& linePosition, MPTR
 	position.x += OFFSET_ADDRESS_RELATIVE;
 
 	// draw arrow to clearly indicate instruction pointer
-	if(hasActiveBP)
+	if (hasActiveBP)
 		dc.DrawBitmap(*g_ipArrowBitmap, wxPoint(position.x - 24, position.y + 2), false);
 
 	// handle data symbols
@@ -263,14 +258,14 @@ void DisasmCtrl::DrawDisassemblyLine(wxDC& dc, const wxPoint& linePosition, MPTR
 	position.x += OFFSET_DISASSEMBLY_OPERAND;
 
 	bool isRLWINM = disasmInstr.ppcAsmCode == PPCASM_OP_RLWINM || disasmInstr.ppcAsmCode == PPCASM_OP_RLWINM_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_CLRLWI || disasmInstr.ppcAsmCode == PPCASM_OP_CLRLWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_CLRRWI || disasmInstr.ppcAsmCode == PPCASM_OP_CLRRWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_EXTLWI || disasmInstr.ppcAsmCode == PPCASM_OP_EXTLWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_EXTRWI || disasmInstr.ppcAsmCode == PPCASM_OP_EXTRWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_SLWI || disasmInstr.ppcAsmCode == PPCASM_OP_SLWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_SRWI || disasmInstr.ppcAsmCode == PPCASM_OP_SRWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_ROTRWI || disasmInstr.ppcAsmCode == PPCASM_OP_ROTRWI_ ||
-		disasmInstr.ppcAsmCode == PPCASM_OP_ROTLWI || disasmInstr.ppcAsmCode == PPCASM_OP_ROTLWI_;
+					disasmInstr.ppcAsmCode == PPCASM_OP_CLRLWI || disasmInstr.ppcAsmCode == PPCASM_OP_CLRLWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_CLRRWI || disasmInstr.ppcAsmCode == PPCASM_OP_CLRRWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_EXTLWI || disasmInstr.ppcAsmCode == PPCASM_OP_EXTLWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_EXTRWI || disasmInstr.ppcAsmCode == PPCASM_OP_EXTRWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_SLWI || disasmInstr.ppcAsmCode == PPCASM_OP_SLWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_SRWI || disasmInstr.ppcAsmCode == PPCASM_OP_SRWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_ROTRWI || disasmInstr.ppcAsmCode == PPCASM_OP_ROTRWI_ ||
+					disasmInstr.ppcAsmCode == PPCASM_OP_ROTLWI || disasmInstr.ppcAsmCode == PPCASM_OP_ROTLWI_;
 	bool forceDecDisplay = isRLWINM;
 
 	if (disasmInstr.ppcAsmCode == PPCASM_OP_UKN)
@@ -349,7 +344,7 @@ void DisasmCtrl::DrawDisassemblyLine(wxDC& dc, const wxPoint& linePosition, MPTR
 		case PPCASM_OPERAND_TYPE_CIMM:
 		{
 			wxString string;
-			// use symbol for function calls if available 
+			// use symbol for function calls if available
 			uint32 callDest = disasmInstr.operand[o].immU32;
 			RPLStoredSymbol* storedSymbol = nullptr;
 			if (disasmInstr.ppcAsmCode == PPCASM_OP_BL || disasmInstr.ppcAsmCode == PPCASM_OP_BLA)
@@ -470,7 +465,7 @@ void DisasmCtrl::OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& sta
 	wxPoint position(0, 0);
 
 	RPLModule* current_rpl_module = RPLLoader_FindModuleByCodeAddr(GetViewBaseAddress());
-	
+
 	if (currentCodeRegionStart == currentCodeRegionEnd)
 		return;
 
@@ -483,11 +478,11 @@ void DisasmCtrl::OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& sta
 	sint32 numLinesToUpdate = lineOffset + count;
 	numLinesToUpdate = std::min(numLinesToUpdate, (sint32)m_elements_visible);
 
-	if(m_lineToAddress.size() != m_elements_visible)
+	if (m_lineToAddress.size() != m_elements_visible)
 		m_lineToAddress.resize(m_elements_visible);
 
 	sint32 lineIndex = 0;
-	while(lineIndex < numLinesToUpdate)
+	while (lineIndex < numLinesToUpdate)
 	{
 		const uint32 virtualAddress = GetViewBaseAddress() + instructionIndex * 4;
 		instructionIndex++;
@@ -498,7 +493,7 @@ void DisasmCtrl::OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& sta
 			NextLine(position, &start_position);
 			m_lineToAddress[lineIndex] = std::nullopt;
 			lineIndex++;
-			continue;	
+			continue;
 		}
 
 		// check if valid memory address
@@ -514,7 +509,7 @@ void DisasmCtrl::OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& sta
 		RPLStoredSymbol* storedSymbol = rplSymbolStorage_getByAddress(virtualAddress);
 		if (storedSymbol)
 		{
-			if(lineIndex >= lineOffset)
+			if (lineIndex >= lineOffset)
 				DrawLabelName(dc, position, virtualAddress, storedSymbol);
 			m_lineToAddress[lineIndex] = virtualAddress;
 			lineIndex++;
@@ -572,9 +567,8 @@ void DisasmCtrl::OnMouseMove(const wxPoint& start_position, uint32 line)
 	// disassembly code
 	if (position.x <= OFFSET_DISASSEMBLY)
 	{
-		if(m_mouse_down)
+		if (m_mouse_down)
 		{
-			
 		}
 
 		if (position.x <= OFFSET_DISASSEMBLY_OPERAND)
@@ -591,25 +585,25 @@ void DisasmCtrl::OnKeyPressed(sint32 key_code, const wxPoint& position)
 	auto optVirtualAddress = LinePixelPosToAddress(position.y);
 	switch (key_code)
 	{
-		case WXK_F9:
+	case WXK_F9:
+	{
+		if (optVirtualAddress)
 		{
-			if (optVirtualAddress)
-			{
-				debugger_toggleExecuteBreakpoint(*optVirtualAddress);
+			debugger_toggleExecuteBreakpoint(*optVirtualAddress);
 
-				wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
-				wxPostEvent(this->m_parent, evt);
-			}
+			wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
+			wxPostEvent(this->m_parent, evt);
+		}
+		return;
+	}
+	case 'G':
+	{
+		if (IsKeyDown(WXK_CONTROL))
+		{
+			GoToAddressDialog();
 			return;
 		}
-		case 'G':
-		{
-			if(IsKeyDown(WXK_CONTROL))
-			{
-				GoToAddressDialog();
-				return;
-			}
-		}
+	}
 	}
 
 	// debugger currently in break state
@@ -618,21 +612,21 @@ void DisasmCtrl::OnKeyPressed(sint32 key_code, const wxPoint& position)
 	{
 		switch (key_code)
 		{
-			case WXK_F5:
-			{
-				debugger_stepCommand(DebuggerStepCommand::Run);
-				break;
-			}
-			case WXK_F10:
-			{
-				debugger_stepCommand(DebuggerStepCommand::StepOver);
-				break;
-			}
-			case WXK_F11:
-			{
-				debugger_stepCommand(DebuggerStepCommand::StepInto);
-				break;
-			}
+		case WXK_F5:
+		{
+			debugger_stepCommand(DebuggerStepCommand::Run);
+			break;
+		}
+		case WXK_F10:
+		{
+			debugger_stepCommand(DebuggerStepCommand::StepOver);
+			break;
+		}
+		case WXK_F11:
+		{
+			debugger_stepCommand(DebuggerStepCommand::StepInto);
+			break;
+		}
 		}
 		debugger_unlockDebugSession(debugCpu);
 	}
@@ -670,11 +664,11 @@ void DisasmCtrl::OnMouseDClick(const wxPoint& position, uint32 line)
 		wxTextEntryDialog set_value_dialog(this, _("Enter a new instruction."), wxString::Format(_("Overwrite instruction at address %08x"), virtualAddress), currentInstruction);
 		if (set_value_dialog.ShowModal() == wxID_OK)
 		{
-			PPCAssemblerInOut ctx = { 0 };
+			PPCAssemblerInOut ctx = {0};
 			ctx.virtualAddress = virtualAddress;
 			if (ppcAssembler_assembleSingleInstruction(set_value_dialog.GetValue().c_str(), &ctx))
 			{
-				debugger_createPatch(virtualAddress, { ctx.outputData.data(), ctx.outputData.size() });
+				debugger_createPatch(virtualAddress, {ctx.outputData.data(), ctx.outputData.size()});
 				RefreshLine(line);
 			}
 		}
@@ -729,7 +723,7 @@ void DisasmCtrl::OnContextMenu(const wxPoint& position, uint32 line)
 	wxMenu menu;
 	menu.Append(IDContextMenu_ToggleBreakpoint, _("Toggle breakpoint"));
 	menu.Append(IDContextMenu_ToggleLoggingBreakpoint, _("Toggle logging point"));
-	if(debugger_hasPatch(virtualAddress))
+	if (debugger_hasPatch(virtualAddress))
 		menu.Append(IDContextMenu_RestoreOriginalInstructions, _("Restore original instructions"));
 	menu.AppendSeparator();
 	menu.Append(IDContextMenu_CopyAddress, _("Copy address"));
@@ -741,42 +735,42 @@ void DisasmCtrl::OnContextMenu(const wxPoint& position, uint32 line)
 
 void DisasmCtrl::OnContextMenuEntryClicked(wxCommandEvent& event)
 {
-	switch(event.GetId())
+	switch (event.GetId())
 	{
-		case IDContextMenu_ToggleBreakpoint:
-		{
-			debugger_toggleExecuteBreakpoint(m_contextMenuAddress);
-			wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
-			wxPostEvent(this->m_parent, evt);
-			break;
-		}
-		case IDContextMenu_ToggleLoggingBreakpoint:
-		{
-			debugger_toggleLoggingBreakpoint(m_contextMenuAddress);
-			wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
-			wxPostEvent(this->m_parent, evt);
-			break;
-		}
-		case IDContextMenu_RestoreOriginalInstructions:
-		{
-			debugger_removePatch(m_contextMenuAddress);
-			wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE); // This also refreshes the disassembly view
-			wxPostEvent(this->m_parent, evt);
-			break;
-		}
-		case IDContextMenu_CopyAddress:
-		{
-			CopyToClipboard(fmt::format("{:#10x}", m_contextMenuAddress));
-			break;
-		}
-		case IDContextMenu_CopyUnrelocatedAddress:
-		{
-			uint32 unrelocatedAddress = GetUnrelocatedAddress(m_contextMenuAddress);
-			CopyToClipboard(fmt::format("{:#10x}", unrelocatedAddress));
-			break;
-		}
-		default:
-			UNREACHABLE;
+	case IDContextMenu_ToggleBreakpoint:
+	{
+		debugger_toggleExecuteBreakpoint(m_contextMenuAddress);
+		wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
+		wxPostEvent(this->m_parent, evt);
+		break;
+	}
+	case IDContextMenu_ToggleLoggingBreakpoint:
+	{
+		debugger_toggleLoggingBreakpoint(m_contextMenuAddress);
+		wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE);
+		wxPostEvent(this->m_parent, evt);
+		break;
+	}
+	case IDContextMenu_RestoreOriginalInstructions:
+	{
+		debugger_removePatch(m_contextMenuAddress);
+		wxCommandEvent evt(wxEVT_BREAKPOINT_CHANGE); // This also refreshes the disassembly view
+		wxPostEvent(this->m_parent, evt);
+		break;
+	}
+	case IDContextMenu_CopyAddress:
+	{
+		CopyToClipboard(fmt::format("{:#10x}", m_contextMenuAddress));
+		break;
+	}
+	case IDContextMenu_CopyUnrelocatedAddress:
+	{
+		uint32 unrelocatedAddress = GetUnrelocatedAddress(m_contextMenuAddress);
+		CopyToClipboard(fmt::format("{:#10x}", unrelocatedAddress));
+		break;
+	}
+	default:
+		UNREACHABLE;
 	}
 }
 
@@ -855,15 +849,15 @@ void DisasmCtrl::GoToAddressDialog()
 		std::transform(value.begin(), value.end(), value.begin(), tolower);
 
 		// trim any leading spaces
-		while(!value.empty() && value[0] == ' ')
+		while (!value.empty() && value[0] == ' ')
 			value.erase(value.begin());
 
 		debugger_addParserSymbols(parser);
 
 		// try to parse expression as hex value first (it should interpret 1234 as 0x1234, not 1234)
-		if (parser.IsConstantExpression("0x"+value))
+		if (parser.IsConstantExpression("0x" + value))
 		{
-			const auto result = (uint32)parser.Evaluate("0x"+value);
+			const auto result = (uint32)parser.Evaluate("0x" + value);
 			m_lastGotoTarget = result;
 			CenterOffset(result);
 			wxCommandEvent evt(wxEVT_DISASMCTRL_NOTIFY_GOTO_ADDRESS);
@@ -885,8 +879,7 @@ void DisasmCtrl::GoToAddressDialog()
 			{
 				// if not a constant expression (i.e. relying on unknown variables), then evaluating will throw an exception with a detailed error message
 				const auto _ = (uint32)parser.Evaluate(value);
-			}
-			catch (const std::exception& ex)
+			} catch (const std::exception& ex)
 			{
 				wxMessageBox(ex.what(), _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 			}

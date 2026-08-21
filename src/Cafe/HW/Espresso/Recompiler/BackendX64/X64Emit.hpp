@@ -3,7 +3,7 @@
 template<uint8 op0, bool rex64Bit = false>
 class x64_opc_1byte
 {
-public:
+  public:
 	static void emitBytes(x64GenContext_t* x64GenContext)
 	{
 		// write out op0
@@ -24,7 +24,7 @@ public:
 template<uint8 op0, bool rex64Bit = false>
 class x64_opc_1byte_rev
 {
-public:
+  public:
 	static void emitBytes(x64GenContext_t* x64GenContext)
 	{
 		// write out op0
@@ -45,7 +45,7 @@ public:
 template<uint8 op0, uint8 op1, bool rex64Bit = false>
 class x64_opc_2byte
 {
-public:
+  public:
 	static void emitBytes(x64GenContext_t* x64GenContext)
 	{
 		x64Gen_writeU8(x64GenContext, op0);
@@ -71,7 +71,7 @@ enum class MODRM_OPR_TYPE
 
 class x64MODRM_opr_reg64
 {
-public:
+  public:
 	x64MODRM_opr_reg64(uint8 reg)
 	{
 		this->reg = reg;
@@ -87,13 +87,13 @@ public:
 		return reg;
 	}
 
-private:
+  private:
 	uint8 reg;
 };
 
 class x64MODRM_opr_memReg64
 {
-public:
+  public:
 	x64MODRM_opr_memReg64(uint8 reg)
 	{
 		this->reg = reg;
@@ -130,14 +130,15 @@ public:
 	{
 		return false;
 	}
-private:
+
+  private:
 	uint8 reg;
 	sint32 offset;
 };
 
 class x64MODRM_opr_memRegPlusReg
 {
-public:
+  public:
 	x64MODRM_opr_memRegPlusReg(uint8 regBase, uint8 regIndex)
 	{
 		if ((regIndex & 7) == 4)
@@ -166,7 +167,7 @@ public:
 
 	static constexpr MODRM_OPR_TYPE getType()
 	{
-return MODRM_OPR_TYPE::MEM;
+		return MODRM_OPR_TYPE::MEM;
 	}
 
 	const uint8 getBaseReg() const
@@ -193,7 +194,8 @@ return MODRM_OPR_TYPE::MEM;
 	{
 		return true;
 	}
-private:
+
+  private:
 	uint8 regBase;
 	uint8 regIndex; // multiplied by scaler which is fixed to 1
 	sint32 offset;
@@ -271,7 +273,7 @@ void _x64Gen_writeMODRM_internal(x64GenContext_t* x64GenContext, TA opA, TB opB)
 				// [form: index*1+base]
 				x64Gen_writeU8(x64GenContext, 0x00 + (4) + ((opA.getReg() & 7) << 3));
 				// SIB byte
-				x64Gen_writeU8(x64GenContext, ((opB.getIndexReg()&7) << 3) + (opB.getBaseReg() & 7));
+				x64Gen_writeU8(x64GenContext, ((opB.getIndexReg() & 7) << 3) + (opB.getBaseReg() & 7));
 			}
 			else if (offset == (uint32)(sint32)(sint8)offset)
 			{

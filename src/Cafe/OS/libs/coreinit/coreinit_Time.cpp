@@ -48,30 +48,27 @@ namespace coreinit
 	}
 
 	uint32 dayToMonth[12] =
-	{
-		0,31,59,90,120,151,181,212,243,273,304,334
-	};
+		{
+			0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 	uint32 dayToMonthLeapYear[12] =
-	{
-		0,31,60,91,121,152,182,213,244,274,305,335
-	};
+		{
+			0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335};
 
 	uint32 getDayInYearByYearAndMonth(uint32 year, uint32 month)
 	{
 		// Project Zero Maiden of Black Water (JPN) gives us an invalid calendar object
 		month %= 12; // or return 0 if too big?
-		
+
 		if (IsLeapYear(year))
 			return dayToMonthLeapYear[month];
-		
+
 		return dayToMonth[month];
 	}
 
-
 	inline const uint64 DAY_BIAS_2000 = 0xB2575;
 
-	uint64 OSCalendarTimeToTicks(OSCalendarTime_t *calendar)
+	uint64 OSCalendarTimeToTicks(OSCalendarTime_t* calendar)
 	{
 		uint32 year = calendar->year;
 
@@ -79,7 +76,7 @@ namespace coreinit
 		uint32 startDayOfCurrentMonth = getDayInYearByYearAndMonth(year, calendar->month);
 
 		uint64 dayInYear = (startDayOfCurrentMonth + calendar->dayOfMonth) - 1;
-		
+
 		uint64 dayCount = dayInYear + year * 365 + leapDays - DAY_BIAS_2000;
 
 		// convert date to seconds
@@ -109,7 +106,7 @@ namespace coreinit
 		millisecond %= 1000ull;
 		calenderStruct->millisecond = (uint32)millisecond;
 
-		uint64 dayOfWeek = (tSeconds/(24ull * 60 * 60) + 6ull) % 7ull;
+		uint64 dayOfWeek = (tSeconds / (24ull * 60 * 60) + 6ull) % 7ull;
 		uint64 secondOfDay = (tSeconds % (24ull * 60 * 60));
 
 		calenderStruct->dayOfWeek = (sint32)dayOfWeek;
@@ -144,7 +141,7 @@ namespace coreinit
 		uint32 month = 0; // 0-11
 		uint32 dayInMonth = 0;
 
-		if (isLeapYear && dayInYear < (31+29))
+		if (isLeapYear && dayInYear < (31 + 29))
 		{
 			if (dayInYear < 31)
 			{
@@ -156,7 +153,7 @@ namespace coreinit
 			{
 				// February
 				month = 1;
-				dayInMonth = dayInYear-31;
+				dayInMonth = dayInYear - 31;
 			}
 		}
 		else
@@ -315,7 +312,6 @@ namespace coreinit
 		{
 			iterCount++;
 
-
 			uint64 ticks = OSCalendarTimeToTicks(&ct);
 
 			// make sure converting it back results in the same date
@@ -334,7 +330,7 @@ namespace coreinit
 			// add a day manually
 			sint32 daysInMonth = getDaysInMonth(ctExpected.year, ctExpected.month);
 			ctExpected.dayOfMonth = ctExpected.dayOfMonth + 1;
-			if (ctExpected.dayOfMonth >= daysInMonth+1)
+			if (ctExpected.dayOfMonth >= daysInMonth + 1)
 			{
 				ctExpected.dayOfMonth = 1;
 				ctExpected.month = ctExpected.month + 1;
@@ -361,6 +357,6 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSTicksToCalendarTime, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSCalendarTimeToTicks, LogType::Placeholder);
 
-		//timeTest();
+		// timeTest();
 	}
-};
+}; // namespace coreinit

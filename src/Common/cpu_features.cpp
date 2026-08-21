@@ -11,7 +11,8 @@
 #include <cpuid.h>
 #endif
 
-inline void cpuid(int cpuInfo[4], int functionId) {
+inline void cpuid(int cpuInfo[4], int functionId)
+{
 #if defined(_MSC_VER)
 	__cpuid(cpuInfo, functionId);
 #elif defined(__GNUC__)
@@ -21,7 +22,8 @@ inline void cpuid(int cpuInfo[4], int functionId) {
 #endif
 }
 
-inline void cpuidex(int cpuInfo[4], int functionId, int subFunctionId) {
+inline void cpuidex(int cpuInfo[4], int functionId, int subFunctionId)
+{
 #if defined(_MSC_VER)
 	__cpuidex(cpuInfo, functionId, subFunctionId);
 #elif defined(__GNUC__)
@@ -31,7 +33,6 @@ inline void cpuidex(int cpuInfo[4], int functionId, int subFunctionId) {
 #endif
 }
 #endif
-
 
 CPUFeaturesImpl::CPUFeaturesImpl()
 {
@@ -86,14 +87,13 @@ CPUFeaturesImpl::CPUFeaturesImpl()
 
 std::string CPUFeaturesImpl::GetCPUName()
 {
-	return { m_cpuBrandName };
+	return {m_cpuBrandName};
 }
 
 std::string CPUFeaturesImpl::GetCommaSeparatedExtensionList()
 {
 	std::string tmp;
-	auto appendExt = [&tmp](const char* str)
-	{
+	auto appendExt = [&tmp](const char* str) {
 		if (!tmp.empty())
 			tmp.append(", ");
 		tmp.append(str);
@@ -114,7 +114,7 @@ std::string CPUFeaturesImpl::GetCommaSeparatedExtensionList()
 		appendExt("BMI2");
 	if (x86.aesni)
 		appendExt("AES-NI");
-	if(x86.invariant_tsc)
+	if (x86.invariant_tsc)
 		appendExt("INVARIANT-TSC");
 	return tmp;
 }

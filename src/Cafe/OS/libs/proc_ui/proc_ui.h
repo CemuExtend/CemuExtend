@@ -42,4 +42,4 @@ namespace proc_ui
 	ProcUIStatus ProcUISubProcessMessages(bool isBlockingInBackground);
 
 	COSModule* GetModule();
-}
+} // namespace proc_ui

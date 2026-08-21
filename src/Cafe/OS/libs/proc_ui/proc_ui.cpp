@@ -54,7 +54,7 @@ namespace proc_ui
 	bool s_isForegroundProcess;
 	bool s_previouslyWasBlocking;
 	ProcUIStatus s_currentProcUIStatus;
-	MEMPTR<void> s_saveCallback; // no param and no return value, set by ProcUIInit()
+	MEMPTR<void> s_saveCallback;   // no param and no return value, set by ProcUIInit()
 	MEMPTR<void> s_saveCallbackEx; // with custom param and return value, set by ProcUIInitEx()
 	MEMPTR<void> s_saveCallbackExUserParam;
 	MEMPTR<coreinit::OSMessageQueue> s_systemMessageQueuePtr;
@@ -105,7 +105,6 @@ namespace proc_ui
 	SysAllocator<OSDriverInterface> s_ProcUIDriver;
 	SysAllocator<CafeString<16>> s_ProcUIDriverName;
 
-
 	void* _AllocMem(uint32 size)
 	{
 		MEMPTR<void> r{PPCCoreCallback(s_memAllocPtr, size)};
@@ -129,7 +128,7 @@ namespace proc_ui
 
 	void ShutdownThreads()
 	{
-		if ( !s_coreThreadsCreated)
+		if (!s_coreThreadsCreated)
 			return;
 		s_commandForCoreThread = ProcUICoreThreadCommand::Initial;
 		coreinit::OSMemoryBarrier();
@@ -159,7 +158,7 @@ namespace proc_ui
 		while (entry)
 		{
 			uint32 r = PPCCoreCallback(entry->funcPtr, entry->userParam);
-			if ( r )
+			if (r)
 				cemuLog_log(LogType::APIErrors, "ProcUI: Callback returned error {}\n", r);
 			entry = entry->next;
 		}
@@ -170,7 +169,7 @@ namespace proc_ui
 		coreinit::OSAlarm_t* arg = MEMPTR<coreinit::OSAlarm_t>(hCPU->gpr[3]);
 		ProcUIInternalCallbackEntry* entry = (ProcUIInternalCallbackEntry*)arg;
 		uint32 r = PPCCoreCallback(entry->funcPtr, entry->userParam);
-		if ( r )
+		if (r)
 			cemuLog_log(LogType::APIErrors, "ProcUI: Background callback returned error {}\n", r);
 		osLib_returnFromFunction(hCPU, 0); // return type is void
 	}
@@ -178,7 +177,7 @@ namespace proc_ui
 	void StartBackgroundAlarms()
 	{
 		ProcUIInternalCallbackEntry* cb = s_backgroundCallbackList.first;
-		while(cb)
+		while (cb)
 		{
 			coreinit::OSCreateAlarm(&cb->alarm);
 			uint64 currentTime = coreinit::OSGetTime();
@@ -207,7 +206,7 @@ namespace proc_ui
 			ProcUIInternalCallbackEntry* cbChain = nullptr;
 			cemuLog_logDebug(LogType::Force, "ProcUI: Core {} got command {}", coreIndex, (uint32)s_commandForCoreThread.load());
 			auto cmd = s_commandForCoreThread.load();
-			switch(cmd)
+			switch (cmd)
 			{
 			case ProcUICoreThreadCommand::Initial:
 			{
@@ -236,13 +235,13 @@ namespace proc_ui
 			default:
 				cemu_assert_suspicious(); // invalid command
 			}
-			if(cmd == ProcUICoreThreadCommand::AcquireForeground)
+			if (cmd == ProcUICoreThreadCommand::AcquireForeground)
 			{
 				if (coreIndex == 2)
 					CancelBackgroundAlarms();
 				cbChain = s_callbacksType0_AcquireForeground[coreIndex].first;
 			}
-			else if(cmd == ProcUICoreThreadCommand::ReleaseForeground)
+			else if (cmd == ProcUICoreThreadCommand::ReleaseForeground)
 			{
 				if (coreIndex == 2)
 					StartBackgroundAlarms();
@@ -250,19 +249,19 @@ namespace proc_ui
 			}
 			DoCallbackChain(cbChain);
 			OSWaitRendezvous(&s_coreThreadRendezvousA, 7);
-			if ( !coreIndex )
+			if (!coreIndex)
 			{
 				OSInitRendezvous(&s_coreThreadRendezvousC);
 				OSResetEvent(&s_eventCoreThreadsNewCommandReady);
 			}
 			OSWaitRendezvous(&s_coreThreadRendezvousB, 7);
-			if ( !coreIndex )
+			if (!coreIndex)
 			{
 				OSInitRendezvous(&s_coreThreadRendezvousA);
 				OSSignalEvent(&s_eventCoreThreadsCommandDone);
 			}
 			OSWaitRendezvous(&s_coreThreadRendezvousC, 7);
-			if ( !coreIndex )
+			if (!coreIndex)
 				OSInitRendezvous(&s_coreThreadRendezvousB);
 			if (cmd == ProcUICoreThreadCommand::ReleaseForeground)
 			{
@@ -284,8 +283,8 @@ namespace proc_ui
 		for (sint32 coreIndex = 0; coreIndex < Espresso::CORE_COUNT; coreIndex++)
 		{
 			__OSCreateThreadType(&s_coreThreadArray[coreIndex], RPLLoader_MakePPCCallable(ProcUICoreThread), coreIndex, nullptr,
-				(uint8*)s_coreThreadStackPerCore[coreIndex].GetPtr() + s_coreThreadStackSize, s_coreThreadStackSize, 16,
-				(1<<coreIndex), OSThread_t::THREAD_TYPE::TYPE_DRIVER);
+								 (uint8*)s_coreThreadStackPerCore[coreIndex].GetPtr() + s_coreThreadStackSize, s_coreThreadStackSize, 16,
+								 (1 << coreIndex), OSThread_t::THREAD_TYPE::TYPE_DRIVER);
 			OSResumeThread(&s_coreThreadArray[coreIndex]);
 		}
 		s_coreThread0NameBuffer->assign("{SYS ProcUI Core 0}");
@@ -308,7 +307,7 @@ namespace proc_ui
 
 	void ProcUIInitInternal()
 	{
-		if( s_isInitialized.exchange(true) )
+		if (s_isInitialized.exchange(true))
 			return;
 		if (!s_memoryPoolHeapPtr)
 		{
@@ -357,7 +356,7 @@ namespace proc_ui
 			return;
 		if (!OSIsSchedulerActive())
 			return; // CafeSystem shutdown in progress, OS functions shouldn't be called anymore. reset() will clean up state on next re-init
-		if ( !s_isInForeground )
+		if (!s_isInForeground)
 			CancelBackgroundAlarms();
 		for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
 			OSSetThreadPriority(&s_coreThreadArray[i], 0);
@@ -383,13 +382,13 @@ namespace proc_ui
 
 	void AddCallbackInternal(void* funcPtr, void* userParam, uint64 tickDelay, sint32 priority, ProcUICallbackList& callbackList)
 	{
-		if ( __OSGetProcessSDKVersion() < 21102 )
+		if (__OSGetProcessSDKVersion() < 21102)
 		{
 			// in earlier COS versions it was possible/allowed to register a callback before initializing ProcUI
 			s_memAllocPtr = gCoreinitData->MEMAllocFromDefaultHeap.GetMPTR();
 			s_memFreePtr = gCoreinitData->MEMFreeToDefaultHeap.GetMPTR();
 		}
-		else if ( !s_isInitialized )
+		else if (!s_isInitialized)
 		{
 			cemuLog_log(LogType::Force, "ProcUI: Trying to register callback before init");
 			cemu_assert_suspicious();
@@ -422,12 +421,12 @@ namespace proc_ui
 
 	void ProcUIRegisterCallbackCore(ProcUICallbackId callbackType, void* funcPtr, void* userParam, sint32 priority, uint32 coreIndex)
 	{
-		if(callbackType >= ProcUICallbackId::COUNT)
+		if (callbackType >= ProcUICallbackId::COUNT)
 		{
 			cemuLog_log(LogType::Force, "ProcUIRegisterCallback: Invalid callback type {}", stdx::to_underlying(callbackType));
 			return;
 		}
-		if(callbackType != ProcUICallbackId::AcquireForeground)
+		if (callbackType != ProcUICallbackId::AcquireForeground)
 			priority = -priority;
 		AddCallbackInternal(funcPtr, userParam, 0, priority, s_CallbackTables[stdx::to_underlying(callbackType)][coreIndex]);
 	}
@@ -478,7 +477,7 @@ namespace proc_ui
 	void ProcUISetCallbackStackSize(uint32 newStackSize)
 	{
 		s_coreThreadStackSize = newStackSize;
-		if( s_isInitialized )
+		if (s_isInitialized)
 			RecreateProcUICoreThreads();
 	}
 
@@ -517,7 +516,7 @@ namespace proc_ui
 		MEMPTR<void> fgBase;
 		uint32be fgFreeSize;
 		OSGetForegroundBucketFreeArea(&fgBase, &fgFreeSize);
-		if(fgFreeSize < size)
+		if (fgFreeSize < size)
 			cemuLog_log(LogType::Force, "ProcUISetBucketStorage: Buffer size too small");
 		s_bucketStorageBasePtr = memBase;
 	}
@@ -527,7 +526,7 @@ namespace proc_ui
 		MEMPTR<void> memBound;
 		uint32be memBoundSize;
 		OSGetMemBound(1, &memBound, &memBoundSize);
-		if(memBoundSize < size)
+		if (memBoundSize < size)
 			cemuLog_log(LogType::Force, "ProcUISetMEM1Storage: Buffer size too small");
 		s_mem1StorageBasePtr = memBase;
 	}
@@ -542,19 +541,19 @@ namespace proc_ui
 	void ProcUI_BackgroundThread_ReceiveSingleMessage(PPCInterpreter_t* hCPU)
 	{
 		// the background thread receives messages in a loop until the title is either exited or foreground is acquired
-		while ( true )
+		while (true)
 		{
 			OSReceiveMessage(s_systemMessageQueuePtr, &g_lastMsg, OS_MESSAGE_BLOCK); // blocking receive
 			SysMessageId lastMsgId = static_cast<SysMessageId>((uint32)g_lastMsg.data0);
-			if(lastMsgId == SysMessageId::MsgExit || lastMsgId == SysMessageId::MsgAcquireForeground)
+			if (lastMsgId == SysMessageId::MsgExit || lastMsgId == SysMessageId::MsgAcquireForeground)
 				break;
 			else if (lastMsgId == SysMessageId::HomeButtonDenied)
 			{
 				cemu_assert_suspicious(); // Home button denied should not be sent to background app
 			}
-			else if ( lastMsgId == SysMessageId::NetIoStartOrStop )
+			else if (lastMsgId == SysMessageId::NetIoStartOrStop)
 			{
-				if (g_lastMsg.data1 )
+				if (g_lastMsg.data1)
 				{
 					// NetIo start message
 					for (sint32 i = 0; i < Espresso::CORE_COUNT; i++)
@@ -581,7 +580,7 @@ namespace proc_ui
 	bool ProcessSysMessage(OSMessage* msg)
 	{
 		SysMessageId lastMsgId = static_cast<SysMessageId>((uint32)msg->data0);
-		if ( lastMsgId == SysMessageId::MsgAcquireForeground )
+		if (lastMsgId == SysMessageId::MsgAcquireForeground)
 		{
 			cemuLog_logDebug(LogType::Force, "ProcUI: Received Acquire Foreground message");
 			s_isInShutdown = false;
@@ -624,7 +623,7 @@ namespace proc_ui
 			cemuLog_logDebug(LogType::Force, "ProcUI: Received Home Button Denied message");
 			_SubmitCommandToCoreThreads(ProcUICoreThreadCommand::HomeButtonDenied);
 		}
-		else if ( lastMsgId == SysMessageId::NetIoStartOrStop )
+		else if (lastMsgId == SysMessageId::NetIoStartOrStop)
 		{
 			if (msg->data1 != 0)
 			{
@@ -653,11 +652,11 @@ namespace proc_ui
 			cemu_assert_suspicious();
 			return ProcUIStatus::Foreground;
 		}
-		if ( !isBlockingInBackground && OSGetCoreId() != 2 )
+		if (!isBlockingInBackground && OSGetCoreId() != 2)
 		{
 			cemuLog_logOnce(LogType::Force, "ProcUIProcessMessages: Non-blocking call must run on core 2");
 		}
-		if (s_previouslyWasBlocking && isBlockingInBackground )
+		if (s_previouslyWasBlocking && isBlockingInBackground)
 		{
 			cemuLog_logOnce(LogType::Force, "ProcUIProcessMessages: Cannot switch to blocking mode when in background");
 		}
@@ -668,16 +667,16 @@ namespace proc_ui
 			s_currentProcUIStatus = ProcUIStatus::Background;
 			_SubmitCommandToCoreThreads(ProcUICoreThreadCommand::ReleaseForeground);
 			OSResetEvent(&s_eventWaitingBeforeReleaseForeground);
-			if(s_saveCallback)
+			if (s_saveCallback)
 				PPCCoreCallback(s_saveCallback);
-			if(s_saveCallbackEx)
+			if (s_saveCallbackEx)
 				PPCCoreCallback(s_saveCallbackEx, s_saveCallbackExUserParam);
 			if (s_isForegroundProcess && isBlockingInBackground)
 			{
 				// start background thread
 				__OSCreateThreadType(&s_backgroundThread, RPLLoader_MakePPCCallable(ProcUI_BackgroundThread_ReceiveSingleMessage),
-					0, nullptr, (uint8*)s_backgroundThreadStack.GetPtr() + s_coreThreadStackSize, s_coreThreadStackSize,
-					16, (1<<2), OSThread_t::THREAD_TYPE::TYPE_DRIVER);
+									 0, nullptr, (uint8*)s_backgroundThreadStack.GetPtr() + s_coreThreadStackSize, s_coreThreadStackSize,
+									 16, (1 << 2), OSThread_t::THREAD_TYPE::TYPE_DRIVER);
 				OSResumeThread(&s_backgroundThread);
 				s_previouslyWasBlocking = true;
 			}
@@ -688,10 +687,10 @@ namespace proc_ui
 		if (s_isInForeground || !isBlockingInBackground)
 		{
 			// non-blocking mode
-			if ( OSReceiveMessage(s_systemMessageQueuePtr, &msg, 0) )
+			if (OSReceiveMessage(s_systemMessageQueuePtr, &msg, 0))
 			{
 				s_previouslyWasBlocking = false;
-				if ( !ProcessSysMessage(&msg) )
+				if (!ProcessSysMessage(&msg))
 					return s_currentProcUIStatus;
 				// continue below, if we are now in background then ProcUIProcessMessages enters blocking mode
 			}
@@ -699,11 +698,11 @@ namespace proc_ui
 		// blocking mode (if in background and param is true)
 		while (!s_isInForeground && isBlockingInBackground)
 		{
-			if ( !s_isForegroundProcess)
+			if (!s_isForegroundProcess)
 			{
 				OSReceiveMessage(s_systemMessageQueuePtr, &msg, OS_MESSAGE_BLOCK);
 				s_previouslyWasBlocking = false;
-				if ( !ProcessSysMessage(&msg) )
+				if (!ProcessSysMessage(&msg))
 					return s_currentProcUIStatus;
 			}
 			// this code should only run if the background thread was started? Maybe rearrange the code to make this more clear
@@ -712,7 +711,7 @@ namespace proc_ui
 			OSJoinThread(&s_backgroundThread, nullptr);
 			msg = g_lastMsg; // g_lastMsg is set by the background thread
 			s_previouslyWasBlocking = false;
-			if ( !ProcessSysMessage(&msg) )
+			if (!ProcessSysMessage(&msg))
 				return s_currentProcUIStatus;
 		}
 		return s_currentProcUIStatus;
@@ -843,12 +842,11 @@ namespace proc_ui
 
 	void load()
 	{
-
 	}
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "proc_ui";
@@ -884,7 +882,7 @@ namespace proc_ui
 
 		void rpl_entry(uint32 moduleHandle, coreinit::RplEntryReason reason) override
 		{
-			if ( reason == RplEntryReason::Loaded )
+			if (reason == RplEntryReason::Loaded)
 			{
 				s_ProcUIDriver->getDriverName = RPLLoader_MakePPCCallable([](PPCInterpreter_t* hCPU) {MEMPTR<const char> namePtr(ProcUIDriver_GetName()); osLib_returnFromFunction(hCPU, namePtr.GetMPTR()); });
 				s_ProcUIDriver->init = RPLLoader_MakePPCCallable([](PPCInterpreter_t* hCPU) {ProcUIDriver_Init(); osLib_returnFromFunction(hCPU, 0); });
@@ -898,9 +896,9 @@ namespace proc_ui
 				s_driverInBackground = false;
 				uint32be ukn3;
 				OSDriver_Register(moduleHandle, 200, &s_ProcUIDriver, 0, &s_driverArgUkn1, &s_driverArgUkn2, &ukn3);
-				if ( ukn3 )
+				if (ukn3)
 				{
-					if ( OSGetForegroundBucket(nullptr, nullptr) )
+					if (OSGetForegroundBucket(nullptr, nullptr))
 					{
 						ProcUIDriver_Init();
 						OSMemoryBarrier();
@@ -910,17 +908,17 @@ namespace proc_ui
 				}
 				OSMemoryBarrier();
 			}
-			else if ( reason == RplEntryReason::Unloaded )
+			else if (reason == RplEntryReason::Unloaded)
 			{
 				ProcUIDriver_OnDone();
 				OSDriver_Deregister(moduleHandle, 0);
 			}
 		}
-	}s_COSprocuiModule;
+	} s_COSprocuiModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSprocuiModule;
 	}
 
-};
+}; // namespace proc_ui

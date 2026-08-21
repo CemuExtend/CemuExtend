@@ -30,7 +30,7 @@ namespace nn
 			coreinit::OSCreateThreadType(s_OlvReleaseBgThread.GetPtr(), RPLLoader_MakePPCCallable(StubPostAppReleaseBackground), 0, nullptr, s_OlvReleaseBgThreadStack.GetPtr() + s_OlvReleaseBgThreadStack.GetByteSize(), (sint32)s_OlvReleaseBgThreadStack.GetByteSize(), 0, (1 << 1) | (1 << 3), OSThread_t::THREAD_TYPE::TYPE_APP);
 			coreinit::OSResumeThread(s_OlvReleaseBgThread.GetPtr());
 			strcpy(s_OlvReleaseBgThreadName.GetPtr(), "StubPostApp!");
-			coreinit::OSSetThreadName(s_OlvReleaseBgThread.GetPtr(),s_OlvReleaseBgThreadName.GetPtr());
+			coreinit::OSSetThreadName(s_OlvReleaseBgThread.GetPtr(), s_OlvReleaseBgThreadName.GetPtr());
 			return OLV_RESULT_SUCCESS;
 		}
 
@@ -97,7 +97,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_olv";
@@ -139,12 +139,12 @@ namespace nn
 					OfflineDB_Shutdown();
 				}
 			}
-		}s_COSnnOlvModule;
+		} s_COSnnOlvModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnOlvModule;
 		}
 
-	}
-}
+	} // namespace olv
+} // namespace nn

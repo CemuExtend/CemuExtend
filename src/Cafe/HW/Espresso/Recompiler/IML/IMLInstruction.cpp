@@ -8,7 +8,7 @@
 bool IMLInstruction::HasSideEffects() const
 {
 	bool hasSideEffects = true;
-	if(type == PPCREC_IML_TYPE_R_R || type == PPCREC_IML_TYPE_R_R_S32 || type == PPCREC_IML_TYPE_COMPARE || type == PPCREC_IML_TYPE_COMPARE_S32)
+	if (type == PPCREC_IML_TYPE_R_R || type == PPCREC_IML_TYPE_R_R_S32 || type == PPCREC_IML_TYPE_COMPARE || type == PPCREC_IML_TYPE_COMPARE_S32)
 		hasSideEffects = false;
 	// todo - add more cases
 	return hasSideEffects;
@@ -57,10 +57,10 @@ void IMLInstruction::CheckRegisterUsage(IMLUsedRegisters* registersUsed) const
 	else if (type == PPCREC_IML_TYPE_R_S32)
 	{
 		cemu_assert_debug(operation != PPCREC_IML_OP_ADD &&
-			operation != PPCREC_IML_OP_SUB &&
-			operation != PPCREC_IML_OP_AND &&
-			operation != PPCREC_IML_OP_OR &&
-			operation != PPCREC_IML_OP_XOR); // deprecated, use r_r_s32 for these
+						  operation != PPCREC_IML_OP_SUB &&
+						  operation != PPCREC_IML_OP_AND &&
+						  operation != PPCREC_IML_OP_OR &&
+						  operation != PPCREC_IML_OP_XOR); // deprecated, use r_r_s32 for these
 
 		if (operation == PPCREC_IML_OP_LEFT_ROTATE)
 		{
@@ -108,7 +108,7 @@ void IMLInstruction::CheckRegisterUsage(IMLUsedRegisters* registersUsed) const
 		// in all cases result is written and other operands are read only
 		// with the exception of XOR, where if regA == regB then all bits are zeroed out. So we don't consider it a read
 		registersUsed->writtenGPR1 = op_r_r_r.regR;
-		if(!(operation == PPCREC_IML_OP_XOR && op_r_r_r.regA == op_r_r_r.regB))
+		if (!(operation == PPCREC_IML_OP_XOR && op_r_r_r.regA == op_r_r_r.regB))
 		{
 			registersUsed->readGPR1 = op_r_r_r.regA;
 			registersUsed->readGPR2 = op_r_r_r.regB;
@@ -260,25 +260,23 @@ void IMLInstruction::CheckRegisterUsage(IMLUsedRegisters* registersUsed) const
 		if (
 			operation == PPCREC_IML_OP_FPR_ASSIGN ||
 			operation == PPCREC_IML_OP_FPR_EXPAND_F32_TO_F64 ||
-			operation == PPCREC_IML_OP_FPR_FCTIWZ
-			)
+			operation == PPCREC_IML_OP_FPR_FCTIWZ)
 		{
 			registersUsed->readGPR1 = op_fpr_r_r.regA;
 			registersUsed->writtenGPR1 = op_fpr_r_r.regR;
 		}
 		else if (operation == PPCREC_IML_OP_FPR_MULTIPLY ||
-			operation == PPCREC_IML_OP_FPR_DIVIDE ||
-			operation == PPCREC_IML_OP_FPR_ADD ||
-			operation == PPCREC_IML_OP_FPR_SUB)
+				 operation == PPCREC_IML_OP_FPR_DIVIDE ||
+				 operation == PPCREC_IML_OP_FPR_ADD ||
+				 operation == PPCREC_IML_OP_FPR_SUB)
 		{
 			registersUsed->readGPR1 = op_fpr_r_r.regA;
 			registersUsed->readGPR2 = op_fpr_r_r.regR;
 			registersUsed->writtenGPR1 = op_fpr_r_r.regR;
-
 		}
 		else if (operation == PPCREC_IML_OP_FPR_FLOAT_TO_INT ||
-			operation == PPCREC_IML_OP_FPR_INT_TO_FLOAT ||
-			operation == PPCREC_IML_OP_FPR_BITCAST_INT_TO_FLOAT)
+				 operation == PPCREC_IML_OP_FPR_INT_TO_FLOAT ||
+				 operation == PPCREC_IML_OP_FPR_BITCAST_INT_TO_FLOAT)
 		{
 			registersUsed->writtenGPR1 = op_fpr_r_r.regR;
 			registersUsed->readGPR1 = op_fpr_r_r.regA;

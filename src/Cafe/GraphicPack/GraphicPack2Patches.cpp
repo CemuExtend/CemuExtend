@@ -64,8 +64,8 @@ void PatchErrorHandler::showStageErrorMessageBox()
 	}
 
 	CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
-		.diagnosticCode = CafeSystem::DiagnosticCode::GraphicPackInvalid,
-		.diagnostic = std::move(errorMsg)});
+						   .diagnosticCode = CafeSystem::DiagnosticCode::GraphicPackInvalid,
+						   .diagnostic = std::move(errorMsg)});
 }
 
 // Loads upstream Cemu-style patch_<anything>.asm files and patches.txt.
@@ -96,8 +96,8 @@ bool GraphicPack2::LoadCemuPatches()
 		if (fileData.empty() || fileData.size() > 64ULL * 1024ULL * 1024ULL)
 		{
 			cemuLog_log(LogType::Force,
-				"Patch file \"{}\" is empty or exceeds 64 MiB. No patches for this graphic pack will be applied.",
-				_pathToUtf8(patchPath));
+						"Patch file \"{}\" is empty or exceeds 64 MiB. No patches for this graphic pack will be applied.",
+						_pathToUtf8(patchPath));
 			list_patchGroups.clear();
 			return true;
 		}
@@ -105,8 +105,8 @@ bool GraphicPack2::LoadCemuPatches()
 		if (!ParseCemuPatchesTxtInternal(patchesStream))
 		{
 			cemuLog_log(LogType::Force,
-				"Error while processing \"{}\". No patches for this graphic pack will be applied.",
-				_pathToUtf8(patchPath));
+						"Error while processing \"{}\". No patches for this graphic pack will be applied.",
+						_pathToUtf8(patchPath));
 			cemu_assert_debug(list_patchGroups.empty());
 			return true;
 		}
@@ -160,7 +160,8 @@ bool GraphicPack2::HasPatches()
 	return !list_patchGroups.empty();
 }
 
-const std::vector<PatchGroup*>& GraphicPack2::GetPatchGroups() {
+const std::vector<PatchGroup*>& GraphicPack2::GetPatchGroups()
+{
 	return list_patchGroups;
 }
 

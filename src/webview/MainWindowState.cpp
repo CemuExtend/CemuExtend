@@ -71,4 +71,4 @@ namespace WebFrontend
 		std::scoped_lock lock(m_mutex);
 		return m_state;
 	}
-}
+} // namespace WebFrontend

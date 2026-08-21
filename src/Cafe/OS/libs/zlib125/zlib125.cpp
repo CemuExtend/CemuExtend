@@ -2,26 +2,27 @@
 #include "zlib125.h"
 #include "zlib.h"
 
-typedef struct {
-	/* +0x00 */ MEMPTR<uint8>		next_in;     /* next input byte */
-	/* +0x04 */ uint32be			avail_in;  /* number of bytes available at next_in */
-	/* +0x08 */ uint32be			total_in;  /* total number of input bytes read so far */
+typedef struct
+{
+	/* +0x00 */ MEMPTR<uint8> next_in; /* next input byte */
+	/* +0x04 */ uint32be avail_in;	   /* number of bytes available at next_in */
+	/* +0x08 */ uint32be total_in;	   /* total number of input bytes read so far */
 
-	/* +0x0C */ MEMPTR<uint8>		next_out; /* next output byte should be put there */
-	/* +0x10 */ uint32be			avail_out; /* remaining free space at next_out */
-	/* +0x14 */ uint32be			total_out; /* total number of bytes output so far */
+	/* +0x0C */ MEMPTR<uint8> next_out; /* next output byte should be put there */
+	/* +0x10 */ uint32be avail_out;		/* remaining free space at next_out */
+	/* +0x14 */ uint32be total_out;		/* total number of bytes output so far */
 
-	/* +0x18 */ MEMPTR<char>		msg;  /* last error message, NULL if no error */
-	/* +0x1C */ MEMPTR<void>		state; /* not visible by applications */
+	/* +0x18 */ MEMPTR<char> msg;	/* last error message, NULL if no error */
+	/* +0x1C */ MEMPTR<void> state; /* not visible by applications */
 
-	/* +0x20 */ MEMPTR<void>		zalloc;  /* used to allocate the internal state */
-	/* +0x24 */ MEMPTR<void>		zfree;   /* used to free the internal state */
-	/* +0x28 */ MEMPTR<void>		opaque;  /* private data object passed to zalloc and zfree */
+	/* +0x20 */ MEMPTR<void> zalloc; /* used to allocate the internal state */
+	/* +0x24 */ MEMPTR<void> zfree;	 /* used to free the internal state */
+	/* +0x28 */ MEMPTR<void> opaque; /* private data object passed to zalloc and zfree */
 
-	/* +0x2C */ uint32be			data_type;  /* best guess about the data type: binary or text */
-	/* +0x30 */ uint32be			adler;      /* adler32 value of the uncompressed data */
-	/* +0x34 */ uint32be			reserved;   /* reserved for future use */
-}z_stream_ppc2;
+	/* +0x2C */ uint32be data_type; /* best guess about the data type: binary or text */
+	/* +0x30 */ uint32be adler;		/* adler32 value of the uncompressed data */
+	/* +0x34 */ uint32be reserved;	/* reserved for future use */
+} z_stream_ppc2;
 
 static_assert(sizeof(z_stream_ppc2) == 0x38);
 
@@ -33,7 +34,7 @@ voidpf zcallocWrapper(voidpf opaque, uInt items, uInt size)
 	hCPU->gpr[4] = items;
 	hCPU->gpr[5] = size;
 	PPCCore_executeCallbackInternal(zstream->zalloc.GetMPTR());
-	memset(memory_getPointerFromVirtualOffset(hCPU->gpr[3]), 0, items*size);
+	memset(memory_getPointerFromVirtualOffset(hCPU->gpr[3]), 0, items * size);
 	return memory_getPointerFromVirtualOffset(hCPU->gpr[3]);
 }
 
@@ -53,7 +54,7 @@ void zlib125_zcalloc(PPCInterpreter_t* hCPU)
 	ppcDefineParamU32(items, 1);
 	ppcDefineParamU32(size, 2);
 
-	hCPU->gpr[3] = items*size;
+	hCPU->gpr[3] = items * size;
 	hCPU->instructionPointer = gCoreinitData->MEMAllocFromDefaultHeap.GetMPTR();
 }
 
@@ -111,7 +112,6 @@ void zlib125_setupUpdateZStream(z_stream* input, z_stream_ppc2* output)
 	output->data_type = input->data_type;
 	output->adler = input->adler;
 	output->reserved = input->reserved;
-
 }
 
 void zlib125Export_inflateInit_(PPCInterpreter_t* hCPU)
@@ -363,12 +363,11 @@ namespace zlib
 {
 	void load()
 	{
-
 	}
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "zlib125";
@@ -396,10 +395,10 @@ namespace zlib
 			osLib_addFunction("zlib125", "compressBound", zlib125Export_compressBound);
 		};
 
-	}s_COSZlib125Module;
+	} s_COSZlib125Module;
 
 	COSModule* GetModule()
 	{
 		return &s_COSZlib125Module;
 	}
-}
+} // namespace zlib

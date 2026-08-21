@@ -99,7 +99,7 @@ void VPADController::VPADRead(VPADStatus_t& status, const BtnRepeat& repeat)
 	if (rotation.x <= -kAxisThreshold || (HAS_FLAG(last_hold, VPAD_STICK_R_LEFT) && rotation.x <= -kHoldAxisThreshold))
 		status.hold |= VPAD_STICK_R_LEFT;
 	else if (rotation.x >= kAxisThreshold || (HAS_FLAG(last_hold, VPAD_STICK_R_RIGHT) && rotation.x >=
-		kHoldAxisThreshold))
+																							 kHoldAxisThreshold))
 		status.hold |= VPAD_STICK_R_RIGHT;
 
 	if (rotation.y <= -kAxisThreshold || (HAS_FLAG(last_hold, VPAD_STICK_R_DOWN) && rotation.y <= -kHoldAxisThreshold))
@@ -211,8 +211,8 @@ void VPADController::update_touch(VPADStatus_t& status)
 		const glm::ivec2 image_size{imageArea.width, imageArea.height};
 
 		glm::vec2 relative_mouse_pos = left_mouse.value() - image_pos;
-		relative_mouse_pos = { std::min(relative_mouse_pos.x, (float)image_size.x), std::min(relative_mouse_pos.y, (float)image_size.y) };
-		relative_mouse_pos = { std::max(relative_mouse_pos.x, 0.0f), std::max(relative_mouse_pos.y, 0.0f) };
+		relative_mouse_pos = {std::min(relative_mouse_pos.x, (float)image_size.x), std::min(relative_mouse_pos.y, (float)image_size.y)};
+		relative_mouse_pos = {std::max(relative_mouse_pos.x, 0.0f), std::max(relative_mouse_pos.y, 0.0f)};
 		relative_mouse_pos /= image_size;
 
 		status.tpData.touch = kTpTouchOn;
@@ -220,7 +220,7 @@ void VPADController::update_touch(VPADStatus_t& status)
 		status.tpData.x = (uint16)((relative_mouse_pos.x * 3883.0f) + 92.0f);
 		status.tpData.y = (uint16)(4095.0f - (relative_mouse_pos.y * 3694.0f) - 254.0f);
 
-		m_last_touch_position = glm::ivec2{ status.tpData.x, status.tpData.y };
+		m_last_touch_position = glm::ivec2{status.tpData.x, status.tpData.y};
 
 		/*cemuLog_log(LogType::Force, "TDATA: {},{} -> {},{} -> {},{} -> {},{} -> {},{} -> {},{}",
 			left_mouse->x, left_mouse->y,
@@ -243,7 +243,7 @@ void VPADController::update_motion(VPADStatus_t& status)
 
 		glm::vec3 acc;
 		motionSample.getVPADAccelerometer(&acc[0]);
-		//const auto& acc = motionSample.getVPADAccelerometer();
+		// const auto& acc = motionSample.getVPADAccelerometer();
 		status.acc.x = acc.x;
 		status.acc.y = acc.y;
 		status.acc.z = acc.z;
@@ -252,16 +252,16 @@ void VPADController::update_motion(VPADStatus_t& status)
 
 		glm::vec3 gyroChange;
 		motionSample.getVPADGyroChange(&gyroChange[0]);
-		//const auto& gyroChange = motionSample.getVPADGyroChange();
+		// const auto& gyroChange = motionSample.getVPADGyroChange();
 		status.gyroChange.x = gyroChange.x;
 		status.gyroChange.y = gyroChange.y;
 		status.gyroChange.z = gyroChange.z;
 
-		//debug_printf("GyroChange %7.2lf %7.2lf %7.2lf\n", (float)status.gyroChange.x, (float)status.gyroChange.y, (float)status.gyroChange.z);
+		// debug_printf("GyroChange %7.2lf %7.2lf %7.2lf\n", (float)status.gyroChange.x, (float)status.gyroChange.y, (float)status.gyroChange.z);
 
 		glm::vec3 gyroOrientation;
 		motionSample.getVPADOrientation(&gyroOrientation[0]);
-		//const auto& gyroOrientation = motionSample.getVPADOrientation();
+		// const auto& gyroOrientation = motionSample.getVPADOrientation();
 		status.gyroOrientation.x = gyroOrientation.x;
 		status.gyroOrientation.y = gyroOrientation.y;
 		status.gyroOrientation.z = gyroOrientation.z;
@@ -298,10 +298,10 @@ void VPADController::update_motion(VPADStatus_t& status)
 		static glm::vec3 m_lastGyroRotation{}, m_startGyroRotation{};
 		static bool m_startGyroRotationSet{};
 
-		float rotX = (wy * 2 - 1.0f) * 135.0f; // up/down best
+		float rotX = (wy * 2 - 1.0f) * 135.0f;	// up/down best
 		float rotY = (wx * 2 - 1.0f) * -180.0f; // left/right
 		float rotZ = input_manager.ConsumeHostMouseWheel() * 14.0f +
-			m_lastGyroRotation.z;
+					 m_lastGyroRotation.z;
 
 		if (!m_startGyroRotationSet)
 		{
@@ -329,7 +329,7 @@ void VPADController::update_motion(VPADStatus_t& status)
 			(float)status.dir.z.x, (float)status.dir.z.y, (float)status.dir.z.z);*/
 
 		glm::vec3 rotation(rotX - m_lastGyroRotation.x, (rotY - m_lastGyroRotation.y) * 15.0f,
-		                   rotZ - m_lastGyroRotation.z);
+						   rotZ - m_lastGyroRotation.z);
 
 		rotation.x = std::min(1.0f, std::max(-1.0f, rotation.x / 360.0f));
 		rotation.y = std::min(1.0f, std::max(-1.0f, rotation.y / 360.0f));
@@ -341,7 +341,7 @@ void VPADController::update_motion(VPADStatus_t& status)
 		constexpr float pi2 = (float)(M_PI * 2);
 		status.gyroChange = {rotation.x, rotation.y, rotation.z};
 		status.gyroOrientation = {rotation.x, rotation.y, rotation.z};
-		//status.angle = { rotation.x / pi2, rotation.y / pi2, rotation.z / pi2 };
+		// status.angle = { rotation.x / pi2, rotation.y / pi2, rotation.z / pi2 };
 
 		status.acc = {rotation.x, rotation.y, rotation.z};
 		status.accAcceleration = 1.0f;
@@ -353,36 +353,60 @@ void VPADController::update_motion(VPADStatus_t& status)
 	}
 }
 
-
 std::string_view VPADController::get_button_name(ButtonId id)
 {
 	switch (id)
 	{
-	case kButtonId_A: return "A";
-	case kButtonId_B: return "B";
-	case kButtonId_X: return "X";
-	case kButtonId_Y: return "Y";
-	case kButtonId_L: return "L";
-	case kButtonId_R: return "R";
-	case kButtonId_ZL: return "ZL";
-	case kButtonId_ZR: return "ZR";
-	case kButtonId_Plus: return "+";
-	case kButtonId_Minus: return "-";
-	case kButtonId_Up: return TR_NOOP("up");
-	case kButtonId_Down: return TR_NOOP("down");
-	case kButtonId_Left: return TR_NOOP("left");
-	case kButtonId_Right: return TR_NOOP("right");
-	case kButtonId_StickL: return TR_NOOP("click");
-	case kButtonId_StickR: return TR_NOOP("click");
-	case kButtonId_StickL_Up: return TR_NOOP("up");
-	case kButtonId_StickL_Down: return TR_NOOP("down");
-	case kButtonId_StickL_Left: return TR_NOOP("left");
-	case kButtonId_StickL_Right: return TR_NOOP("right");
-	case kButtonId_StickR_Up: return TR_NOOP("up");
-	case kButtonId_StickR_Down: return TR_NOOP("down");
-	case kButtonId_StickR_Left: return TR_NOOP("left");
-	case kButtonId_StickR_Right: return TR_NOOP("right");
-	case kButtonId_Home: return TR_NOOP("home");
+	case kButtonId_A:
+		return "A";
+	case kButtonId_B:
+		return "B";
+	case kButtonId_X:
+		return "X";
+	case kButtonId_Y:
+		return "Y";
+	case kButtonId_L:
+		return "L";
+	case kButtonId_R:
+		return "R";
+	case kButtonId_ZL:
+		return "ZL";
+	case kButtonId_ZR:
+		return "ZR";
+	case kButtonId_Plus:
+		return "+";
+	case kButtonId_Minus:
+		return "-";
+	case kButtonId_Up:
+		return TR_NOOP("up");
+	case kButtonId_Down:
+		return TR_NOOP("down");
+	case kButtonId_Left:
+		return TR_NOOP("left");
+	case kButtonId_Right:
+		return TR_NOOP("right");
+	case kButtonId_StickL:
+		return TR_NOOP("click");
+	case kButtonId_StickR:
+		return TR_NOOP("click");
+	case kButtonId_StickL_Up:
+		return TR_NOOP("up");
+	case kButtonId_StickL_Down:
+		return TR_NOOP("down");
+	case kButtonId_StickL_Left:
+		return TR_NOOP("left");
+	case kButtonId_StickL_Right:
+		return TR_NOOP("right");
+	case kButtonId_StickR_Up:
+		return TR_NOOP("up");
+	case kButtonId_StickR_Down:
+		return TR_NOOP("down");
+	case kButtonId_StickR_Left:
+		return TR_NOOP("left");
+	case kButtonId_StickR_Right:
+		return TR_NOOP("right");
+	case kButtonId_Home:
+		return TR_NOOP("home");
 	default:
 		cemu_assert_debug(false);
 		return "";
@@ -431,7 +455,6 @@ bool VPADController::push_rumble(uint8* pattern, uint8 length)
 		len -= 8;
 	}
 
-
 	m_rumble_queue.emplace(std::move(bitset));
 	m_last_rumble_check = {};
 
@@ -442,32 +465,56 @@ uint32 VPADController::get_emulated_button_flag(uint32 id) const
 {
 	switch (id)
 	{
-	case kButtonId_A: return VPAD_A;
-	case kButtonId_B: return VPAD_B;
-	case kButtonId_X: return VPAD_X;
-	case kButtonId_Y: return VPAD_Y;
-	case kButtonId_L: return VPAD_L;
-	case kButtonId_R: return VPAD_R;
-	case kButtonId_ZL: return VPAD_ZL;
-	case kButtonId_ZR: return VPAD_ZR;
-	case kButtonId_Plus: return VPAD_PLUS;
-	case kButtonId_Minus: return VPAD_MINUS;
-	case kButtonId_Up: return VPAD_UP;
-	case kButtonId_Down: return VPAD_DOWN;
-	case kButtonId_Left: return VPAD_LEFT;
-	case kButtonId_Right: return VPAD_RIGHT;
-	case kButtonId_StickL: return VPAD_STICK_L;
-	case kButtonId_StickR: return VPAD_STICK_R;
+	case kButtonId_A:
+		return VPAD_A;
+	case kButtonId_B:
+		return VPAD_B;
+	case kButtonId_X:
+		return VPAD_X;
+	case kButtonId_Y:
+		return VPAD_Y;
+	case kButtonId_L:
+		return VPAD_L;
+	case kButtonId_R:
+		return VPAD_R;
+	case kButtonId_ZL:
+		return VPAD_ZL;
+	case kButtonId_ZR:
+		return VPAD_ZR;
+	case kButtonId_Plus:
+		return VPAD_PLUS;
+	case kButtonId_Minus:
+		return VPAD_MINUS;
+	case kButtonId_Up:
+		return VPAD_UP;
+	case kButtonId_Down:
+		return VPAD_DOWN;
+	case kButtonId_Left:
+		return VPAD_LEFT;
+	case kButtonId_Right:
+		return VPAD_RIGHT;
+	case kButtonId_StickL:
+		return VPAD_STICK_L;
+	case kButtonId_StickR:
+		return VPAD_STICK_R;
 
-	case kButtonId_StickL_Up: return VPAD_STICK_L_UP;
-	case kButtonId_StickL_Down: return VPAD_STICK_L_DOWN;
-	case kButtonId_StickL_Left: return VPAD_STICK_L_LEFT;
-	case kButtonId_StickL_Right: return VPAD_STICK_L_RIGHT;
+	case kButtonId_StickL_Up:
+		return VPAD_STICK_L_UP;
+	case kButtonId_StickL_Down:
+		return VPAD_STICK_L_DOWN;
+	case kButtonId_StickL_Left:
+		return VPAD_STICK_L_LEFT;
+	case kButtonId_StickL_Right:
+		return VPAD_STICK_L_RIGHT;
 
-	case kButtonId_StickR_Up: return VPAD_STICK_R_UP;
-	case kButtonId_StickR_Down: return VPAD_STICK_R_DOWN;
-	case kButtonId_StickR_Left: return VPAD_STICK_R_LEFT;
-	case kButtonId_StickR_Right: return VPAD_STICK_R_RIGHT;
+	case kButtonId_StickR_Up:
+		return VPAD_STICK_R_UP;
+	case kButtonId_StickR_Down:
+		return VPAD_STICK_R_DOWN;
+	case kButtonId_StickR_Left:
+		return VPAD_STICK_R_LEFT;
+	case kButtonId_StickR_Right:
+		return VPAD_STICK_R_RIGHT;
 	}
 	return 0;
 }
@@ -513,126 +560,127 @@ bool VPADController::set_default_mapping(const std::shared_ptr<ControllerBase>& 
 	switch (controller->api())
 	{
 #ifdef HAS_SDL
-	case InputAPI::SDLController: {
+	case InputAPI::SDLController:
+	{
 		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
 		if (sdl_controller->get_guid() == SDLController::kLeftJoyCon)
 		{
 			mapping =
-			{
-				{kButtonId_L, kButton9},
-				{kButtonId_ZL, kTriggerXP},
+				{
+					{kButtonId_L, kButton9},
+					{kButtonId_ZL, kTriggerXP},
 
-				{kButtonId_Minus, kButton4},
+					{kButtonId_Minus, kButton4},
 
-				{kButtonId_Up, kButton11},
-				{kButtonId_Down, kButton12},
-				{kButtonId_Left, kButton13},
-				{kButtonId_Right, kButton14},
+					{kButtonId_Up, kButton11},
+					{kButtonId_Down, kButton12},
+					{kButtonId_Left, kButton13},
+					{kButtonId_Right, kButton14},
 
-				{kButtonId_StickL, kButton7},
+					{kButtonId_StickL, kButton7},
 
-				{kButtonId_StickL_Up, kAxisYN},
-				{kButtonId_StickL_Down, kAxisYP},
-				{kButtonId_StickL_Left, kAxisXN},
-				{kButtonId_StickL_Right, kAxisXP},
+					{kButtonId_StickL_Up, kAxisYN},
+					{kButtonId_StickL_Down, kAxisYP},
+					{kButtonId_StickL_Left, kAxisXN},
+					{kButtonId_StickL_Right, kAxisXP},
 
-				{kButtonId_Mic, kButton15},
-			};
+					{kButtonId_Mic, kButton15},
+				};
 		}
 		else if (sdl_controller->get_guid() == SDLController::kRightJoyCon)
 		{
 			mapping =
-			{
-				{kButtonId_A, kButton0},
-				{kButtonId_B, kButton1},
-				{kButtonId_X, kButton2},
-				{kButtonId_Y, kButton3},
+				{
+					{kButtonId_A, kButton0},
+					{kButtonId_B, kButton1},
+					{kButtonId_X, kButton2},
+					{kButtonId_Y, kButton3},
 
-				{kButtonId_R, kButton10},
-				{kButtonId_ZR, kTriggerYP},
+					{kButtonId_R, kButton10},
+					{kButtonId_ZR, kTriggerYP},
 
-				{kButtonId_Plus, kButton6},
+					{kButtonId_Plus, kButton6},
 
-				{kButtonId_StickR, kButton8},
+					{kButtonId_StickR, kButton8},
 
-				{kButtonId_StickR_Up, kRotationYN},
-				{kButtonId_StickR_Down, kRotationYP},
-				{kButtonId_StickR_Left, kRotationXN},
-				{kButtonId_StickR_Right, kRotationXP},
-			};
+					{kButtonId_StickR_Up, kRotationYN},
+					{kButtonId_StickR_Down, kRotationYP},
+					{kButtonId_StickR_Left, kRotationXN},
+					{kButtonId_StickR_Right, kRotationXP},
+				};
 		}
 		else if (sdl_controller->get_guid() == SDLController::kSwitchProController)
 		{
 			// Switch Pro Controller is similar to default mapping, but with a/b and x/y swapped
 			mapping =
-			{
-				{kButtonId_A, kButton0},
-				{kButtonId_B, kButton1},
-				{kButtonId_X, kButton2},
-				{kButtonId_Y, kButton3},
+				{
+					{kButtonId_A, kButton0},
+					{kButtonId_B, kButton1},
+					{kButtonId_X, kButton2},
+					{kButtonId_Y, kButton3},
 
-				{kButtonId_L, kButton9},
-				{kButtonId_R, kButton10},
-				{kButtonId_ZL, kTriggerXP},
-				{kButtonId_ZR, kTriggerYP},
+					{kButtonId_L, kButton9},
+					{kButtonId_R, kButton10},
+					{kButtonId_ZL, kTriggerXP},
+					{kButtonId_ZR, kTriggerYP},
 
-				{kButtonId_Plus, kButton6},
-				{kButtonId_Minus, kButton4},
+					{kButtonId_Plus, kButton6},
+					{kButtonId_Minus, kButton4},
 
-				{kButtonId_Up, kButton11},
-				{kButtonId_Down, kButton12},
-				{kButtonId_Left, kButton13},
-				{kButtonId_Right, kButton14},
+					{kButtonId_Up, kButton11},
+					{kButtonId_Down, kButton12},
+					{kButtonId_Left, kButton13},
+					{kButtonId_Right, kButton14},
 
-				{kButtonId_StickL, kButton7},
-				{kButtonId_StickR, kButton8},
+					{kButtonId_StickL, kButton7},
+					{kButtonId_StickR, kButton8},
 
-				{kButtonId_StickL_Up, kAxisYN},
-				{kButtonId_StickL_Down, kAxisYP},
-				{kButtonId_StickL_Left, kAxisXN},
-				{kButtonId_StickL_Right, kAxisXP},
+					{kButtonId_StickL_Up, kAxisYN},
+					{kButtonId_StickL_Down, kAxisYP},
+					{kButtonId_StickL_Left, kAxisXN},
+					{kButtonId_StickL_Right, kAxisXP},
 
-				{kButtonId_StickR_Up, kRotationYN},
-				{kButtonId_StickR_Down, kRotationYP},
-				{kButtonId_StickR_Left, kRotationXN},
-				{kButtonId_StickR_Right, kRotationXP},
-			};
+					{kButtonId_StickR_Up, kRotationYN},
+					{kButtonId_StickR_Down, kRotationYP},
+					{kButtonId_StickR_Left, kRotationXN},
+					{kButtonId_StickR_Right, kRotationXP},
+				};
 		}
 		else
 		{
 			mapping =
-			{
-				{kButtonId_A, kButton1},
-				{kButtonId_B, kButton0},
-				{kButtonId_X, kButton3},
-				{kButtonId_Y, kButton2},
+				{
+					{kButtonId_A, kButton1},
+					{kButtonId_B, kButton0},
+					{kButtonId_X, kButton3},
+					{kButtonId_Y, kButton2},
 
-				{kButtonId_L, kButton9},
-				{kButtonId_R, kButton10},
-				{kButtonId_ZL, kTriggerXP},
-				{kButtonId_ZR, kTriggerYP},
+					{kButtonId_L, kButton9},
+					{kButtonId_R, kButton10},
+					{kButtonId_ZL, kTriggerXP},
+					{kButtonId_ZR, kTriggerYP},
 
-				{kButtonId_Plus, kButton6},
-				{kButtonId_Minus, kButton4},
+					{kButtonId_Plus, kButton6},
+					{kButtonId_Minus, kButton4},
 
-				{kButtonId_Up, kButton11},
-				{kButtonId_Down, kButton12},
-				{kButtonId_Left, kButton13},
-				{kButtonId_Right, kButton14},
+					{kButtonId_Up, kButton11},
+					{kButtonId_Down, kButton12},
+					{kButtonId_Left, kButton13},
+					{kButtonId_Right, kButton14},
 
-				{kButtonId_StickL, kButton7},
-				{kButtonId_StickR, kButton8},
+					{kButtonId_StickL, kButton7},
+					{kButtonId_StickR, kButton8},
 
-				{kButtonId_StickL_Up, kAxisYN},
-				{kButtonId_StickL_Down, kAxisYP},
-				{kButtonId_StickL_Left, kAxisXN},
-				{kButtonId_StickL_Right, kAxisXP},
+					{kButtonId_StickL_Up, kAxisYN},
+					{kButtonId_StickL_Down, kAxisYP},
+					{kButtonId_StickL_Left, kAxisXN},
+					{kButtonId_StickL_Right, kAxisXP},
 
-				{kButtonId_StickR_Up, kRotationYN},
-				{kButtonId_StickR_Down, kRotationYP},
-				{kButtonId_StickR_Left, kRotationXN},
-				{kButtonId_StickR_Right, kRotationXP},
-			};
+					{kButtonId_StickR_Up, kRotationYN},
+					{kButtonId_StickR_Down, kRotationYP},
+					{kButtonId_StickR_Left, kRotationXN},
+					{kButtonId_StickR_Right, kRotationXP},
+				};
 		}
 		break;
 	}
@@ -640,52 +688,51 @@ bool VPADController::set_default_mapping(const std::shared_ptr<ControllerBase>& 
 	case InputAPI::XInput:
 	{
 		mapping =
-		{
-			{kButtonId_A, kButton13},
-			{kButtonId_B, kButton12},
-			{kButtonId_X, kButton15},
-			{kButtonId_Y, kButton14},
+			{
+				{kButtonId_A, kButton13},
+				{kButtonId_B, kButton12},
+				{kButtonId_X, kButton15},
+				{kButtonId_Y, kButton14},
 
-			{kButtonId_L, kButton8},
-			{kButtonId_R, kButton9},
-			{kButtonId_ZL, kTriggerXP},
-			{kButtonId_ZR, kTriggerYP},
+				{kButtonId_L, kButton8},
+				{kButtonId_R, kButton9},
+				{kButtonId_ZL, kTriggerXP},
+				{kButtonId_ZR, kTriggerYP},
 
-			{kButtonId_Plus, kButton4},
-			{kButtonId_Minus, kButton5},
+				{kButtonId_Plus, kButton4},
+				{kButtonId_Minus, kButton5},
 
-			{kButtonId_Up, kButton0},
-			{kButtonId_Down, kButton1},
-			{kButtonId_Left, kButton2},
-			{kButtonId_Right, kButton3},
+				{kButtonId_Up, kButton0},
+				{kButtonId_Down, kButton1},
+				{kButtonId_Left, kButton2},
+				{kButtonId_Right, kButton3},
 
-			{kButtonId_StickL, kButton6},
-			{kButtonId_StickR, kButton7},
+				{kButtonId_StickL, kButton6},
+				{kButtonId_StickR, kButton7},
 
-			{kButtonId_StickL_Up, kAxisYP},
-			{kButtonId_StickL_Down, kAxisYN},
-			{kButtonId_StickL_Left, kAxisXN},
-			{kButtonId_StickL_Right, kAxisXP},
+				{kButtonId_StickL_Up, kAxisYP},
+				{kButtonId_StickL_Down, kAxisYN},
+				{kButtonId_StickL_Left, kAxisXN},
+				{kButtonId_StickL_Right, kAxisXP},
 
-			{kButtonId_StickR_Up, kRotationYP},
-			{kButtonId_StickR_Down, kRotationYN},
-			{kButtonId_StickR_Left, kRotationXN},
-			{kButtonId_StickR_Right, kRotationXP},
-		};
-		
+				{kButtonId_StickR_Up, kRotationYP},
+				{kButtonId_StickR_Down, kRotationYN},
+				{kButtonId_StickR_Left, kRotationXN},
+				{kButtonId_StickR_Right, kRotationXP},
+			};
+
 		break;
 	}
 	}
 
 	bool mapping_updated = false;
-	std::for_each(mapping.cbegin(), mapping.cend(), [this, &controller, &mapping_updated](const auto& m)
+	std::for_each(mapping.cbegin(), mapping.cend(), [this, &controller, &mapping_updated](const auto& m) {
+		if (m_mappings.find(m.first) == m_mappings.cend())
 		{
-			if (m_mappings.find(m.first) == m_mappings.cend())
-			{
-				set_mapping(m.first, controller, m.second);
-				mapping_updated = true;
-			}
-		});
+			set_mapping(m.first, controller, m.second);
+			mapping_updated = true;
+		}
+	});
 
 	return mapping_updated;
 }

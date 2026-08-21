@@ -70,7 +70,7 @@ namespace Application
 		[[nodiscard]] explicit operator bool() const
 		{
 			return validAccount && otp == AccountFileState::Ok &&
-				seeprom == AccountFileState::Ok && missingFiles.empty();
+				   seeprom == AccountFileState::Ok && missingFiles.empty();
 		}
 	};
 
@@ -163,7 +163,7 @@ namespace Application
 
 	class IAccountService
 	{
-	public:
+	  public:
 		virtual ~IAccountService() = default;
 		[[nodiscard]] virtual std::vector<AccountInfo> ListAccounts() const = 0;
 		[[nodiscard]] virtual std::optional<AccountInfo> GetAccount(
@@ -188,4 +188,4 @@ namespace Application
 		[[nodiscard]] virtual AccountOperationResult DeleteAccount(
 			std::uint32_t persistentId) = 0;
 	};
-}
+} // namespace Application

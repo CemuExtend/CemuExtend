@@ -16,4 +16,4 @@ namespace WxDebuggerAdapters
 	void EnsureGdbStub(std::uint16_t port);
 	void ToggleGdbStub(std::uint16_t port);
 	bool IsGdbStubEnabled();
-}
+} // namespace WxDebuggerAdapters

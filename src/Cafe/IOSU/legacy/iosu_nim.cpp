@@ -24,7 +24,7 @@ namespace iosu
 			uint32 version;
 		};
 
-#define PACKAGE_TYPE_UPDATE		(1)
+#define PACKAGE_TYPE_UPDATE (1)
 
 		struct NIMPackage
 		{
@@ -108,7 +108,7 @@ namespace iosu
 
 		void nim_buildDownloadList()
 		{
-			if(nim_CheckDownloadsDisabled())
+			if (nim_CheckDownloadsDisabled())
 			{
 				cemuLog_logDebug(LogType::Force, "nim_buildDownloadList: Downloads are disabled for this title");
 				g_nim.packages.clear();
@@ -130,15 +130,15 @@ namespace iosu
 			// check for game updates
 			for (sint32 i = 0; i < titleCount; i++)
 			{
-				if( titleList[i].titleIdHigh != 0x00050000 )
+				if (titleList[i].titleIdHigh != 0x00050000)
 					continue;
 				// find update title in title version list
 				uint64 titleId = (0x0005000EULL << 32) | ((uint64)(uint32)titleList[i].titleIdLow);
 				NIMTitleLatestVersion* latestVersionInfo = nim_findTitleLatestVersion(titleId);
-				if(latestVersionInfo == nullptr)
+				if (latestVersionInfo == nullptr)
 					continue;
 				// compare version
-				if(latestVersionInfo->version <= (uint32)titleList[i].titleVersion )
+				if (latestVersionInfo->version <= (uint32)titleList[i].titleVersion)
 					continue; // already on latest version
 				// add to packages
 				NIMPackage nimPackage{};
@@ -153,8 +153,8 @@ namespace iosu
 
 		void nim_getPackagesInfo(uint64* titleIdList, sint32 count, titlePackageInfo_t* packageInfoList)
 		{
-			memset(packageInfoList, 0, sizeof(titlePackageInfo_t)*count);
-			if(nim_CheckDownloadsDisabled())
+			memset(packageInfoList, 0, sizeof(titlePackageInfo_t) * count);
+			if (nim_CheckDownloadsDisabled())
 				return;
 			for (sint32 i = 0; i < count; i++)
 			{
@@ -167,12 +167,10 @@ namespace iosu
 
 				// pending
 				packageInfo->ukn48 = 0; // with 0 there is no progress bar, with 3 there is a progress bar
-				packageInfo->ukn40 = (5 << 20) | (0 << 27) | (1<<31) | (0x30000<<0);
+				packageInfo->ukn40 = (5 << 20) | (0 << 27) | (1 << 31) | (0x30000 << 0);
 
 				packageInfo->ukn0F = 1;
-
 			}
-
 		}
 
 		struct idbeIconCacheEntry_t
@@ -191,7 +189,7 @@ namespace iosu
 
 			uint64 titleId;
 			uint32 lastRequestTime;
-			bool hasIconData{ false };
+			bool hasIconData{false};
 			NAPI::IDBEIconDataV0 iconData{};
 		};
 
@@ -221,7 +219,7 @@ namespace iosu
 			{
 				if (entry.titleId == titleId)
 				{
-					if( entry.hasIconData )
+					if (entry.hasIconData)
 						memcpy(idbeIconOutput, &entry.iconData, sizeof(NAPI::IDBEIconDataV0));
 					else
 						memset(idbeIconOutput, 0, sizeof(NAPI::IDBEIconDataV0));
@@ -272,7 +270,6 @@ namespace iosu
 			while (g_nim.packageListReady == false)
 				std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		}
-
 
 		void iosuNim_thread()
 		{
@@ -343,6 +340,5 @@ namespace iosu
 			g_nim.isInitialized = true;
 		}
 
-	}
-}
-
+	} // namespace nim
+} // namespace iosu

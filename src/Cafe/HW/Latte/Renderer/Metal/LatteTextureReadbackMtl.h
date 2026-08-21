@@ -5,7 +5,7 @@
 
 class LatteTextureReadbackInfoMtl : public LatteTextureReadbackInfo
 {
-public:
+  public:
 	LatteTextureReadbackInfoMtl(class MetalRenderer* mtlRenderer, LatteTextureView* textureView, uint32 bufferOffset) : LatteTextureReadbackInfo(textureView), m_mtlr{mtlRenderer}, m_bufferOffset{bufferOffset} {}
 	~LatteTextureReadbackInfoMtl();
 
@@ -16,7 +16,7 @@ public:
 
 	uint8* GetData() override;
 
-private:
+  private:
 	class MetalRenderer* m_mtlr;
 
 	MTL::CommandBuffer* m_commandBuffer = nullptr;

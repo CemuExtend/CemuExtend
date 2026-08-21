@@ -14,9 +14,9 @@ class L2CapWiimote : public WiimoteDevice
 
 	static void AddCandidateAddress(bdaddr_t addr);
 	static std::vector<WiimoteDevicePtr> get_devices();
+
   private:
 	int m_controlFd;
 	int m_dataFd;
 	bdaddr_t m_addr;
 };
-

@@ -20,17 +20,13 @@ std::vector<std::shared_ptr<ControllerBase>> DirectInputControllerProvider::get_
 {
 	std::vector<std::shared_ptr<ControllerBase>> result;
 
-	m_dinput8->EnumDevices(DI8DEVCLASS_GAMECTRL,
-		[](LPCDIDEVICEINSTANCEW lpddi, LPVOID pvRef) -> BOOL
-		{
+	m_dinput8->EnumDevices(DI8DEVCLASS_GAMECTRL, [](LPCDIDEVICEINSTANCEW lpddi, LPVOID pvRef) -> BOOL {
 			auto* controllers = (decltype(&result))pvRef;
 
 			std::string display_name = boost::nowide::narrow(lpddi->tszProductName);
 			controllers->emplace_back(std::make_shared<DirectInputController>(lpddi->guidInstance, display_name));
 
-			return DIENUM_CONTINUE;
-		}, &result, DIEDFL_ALLDEVICES);
-	
+			return DIENUM_CONTINUE; }, &result, DIEDFL_ALLDEVICES);
 
 	return result;
 }

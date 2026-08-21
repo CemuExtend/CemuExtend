@@ -34,11 +34,11 @@ namespace
 	}
 
 	[[nodiscard]] bool Contains(std::uint32_t base, std::uint32_t rangeSize,
-		std::uint32_t address, std::uint32_t size)
+								std::uint32_t address, std::uint32_t size)
 	{
 		return size != 0 && address >= base &&
-			address - base <= rangeSize &&
-			size <= rangeSize - (address - base);
+			   address - base <= rangeSize &&
+			   size <= rangeSize - (address - base);
 	}
 
 	struct CallableRecord
@@ -89,11 +89,11 @@ namespace
 		if (!record)
 		{
 			cemuLog_log(LogType::Force,
-				fmt::format("WUPS: rejected unknown/revoked host export stub 0x{:08x}",
-					cpu->instructionPointer));
+						fmt::format("WUPS: rejected unknown/revoked host export stub 0x{:08x}",
+									cpu->instructionPointer));
 			osLib_returnFromFunction(cpu,
-				static_cast<std::uint32_t>(static_cast<std::int32_t>(
-					WupsServiceStatus::StaleGeneration)));
+									 static_cast<std::uint32_t>(static_cast<std::int32_t>(
+										 WupsServiceStatus::StaleGeneration)));
 			return;
 		}
 
@@ -102,18 +102,17 @@ namespace
 			if (record->revoked)
 			{
 				osLib_returnFromFunction(cpu,
-					static_cast<std::uint32_t>(static_cast<std::int32_t>(
-						WupsServiceStatus::StaleGeneration)));
+										 static_cast<std::uint32_t>(static_cast<std::int32_t>(
+											 WupsServiceStatus::StaleGeneration)));
 				return;
 			}
 			const auto scopedOwner = WupsGuestOwnerScope::Current();
 			const auto mappedOwner = MappedWupsCaller(*cpu);
 			const std::optional<WupsOwnerToken> contextOwner =
-				cpu->modExecutionContext ?
-					std::optional<WupsOwnerToken>{WupsOwnerToken{
-						cpu->modExecutionContext->AddressSpaceId(),
-						cpu->modExecutionContext->Generation()}} :
-					std::nullopt;
+				cpu->modExecutionContext ? std::optional<WupsOwnerToken>{WupsOwnerToken{
+											   cpu->modExecutionContext->AddressSpaceId(),
+											   cpu->modExecutionContext->Generation()}}
+										 : std::nullopt;
 			const bool hasProvenance = scopedOwner || mappedOwner || contextOwner;
 			if (!hasProvenance ||
 				(scopedOwner && *scopedOwner != record->owner) ||
@@ -121,7 +120,7 @@ namespace
 				(contextOwner && *contextOwner != record->owner))
 			{
 				osLib_returnFromFunction(cpu,
-					static_cast<std::uint32_t>(record->authenticationFailureResult));
+										 static_cast<std::uint32_t>(record->authenticationFailureResult));
 				return;
 			}
 			++record->executing;
@@ -134,9 +133,9 @@ namespace
 		std::size_t argumentCount = 8;
 		if ((stack & 0xfU) == 0 &&
 			stack <= std::numeric_limits<std::uint32_t>::max() -
-				static_cast<std::uint32_t>(kMaximumAbiWords * 4) &&
+						 static_cast<std::uint32_t>(kMaximumAbiWords * 4) &&
 			memory_isAddressRangeAccessible(stack + 8,
-				static_cast<std::uint32_t>((kMaximumAbiWords - 8) * 4)))
+											static_cast<std::uint32_t>((kMaximumAbiWords - 8) * 4)))
 		{
 			argumentCount = arguments.size();
 			for (std::size_t index = 8; index < arguments.size(); ++index)
@@ -153,8 +152,7 @@ namespace
 		{
 			result = record->handler(
 				std::span<const std::uint32_t>(arguments).first(argumentCount), error);
-		}
-		catch (...)
+		} catch (...)
 		{
 			error = "WUPS host export threw an unexpected host exception";
 			result = static_cast<std::int32_t>(WupsServiceStatus::InternalError);
@@ -162,8 +160,8 @@ namespace
 		s_dispatchOwner = previousOwner;
 		if (!error.empty())
 			cemuLog_log(LogType::Force,
-				fmt::format("WUPS owner {} generation {} export failed: {}",
-					record->owner.owner, record->owner.generation, error));
+						fmt::format("WUPS owner {} generation {} export failed: {}",
+									record->owner.owner, record->owner.generation, error));
 
 		{
 			std::lock_guard lock(record->mutex);
@@ -188,14 +186,14 @@ namespace
 
 	class CemuWupsPlatform final : public IWupsPlatform
 	{
-	public:
+	  public:
 		CemuWupsPlatform(
 			std::shared_ptr<WupsGuestMemoryOwnershipRegistry> ownershipRegistry,
 			std::shared_ptr<WupsOwnerScopedHeapTracker> heapTracker,
 			std::shared_ptr<WupsPluginHeap> pluginHeap)
 			: m_ownershipRegistry(std::move(ownershipRegistry)),
-				m_heapTracker(std::move(heapTracker)),
-				m_pluginHeap(std::move(pluginHeap))
+			  m_heapTracker(std::move(heapTracker)),
+			  m_pluginHeap(std::move(pluginHeap))
 		{
 		}
 
@@ -241,54 +239,52 @@ namespace
 				{
 					std::lock_guard lock(m_mutex);
 					const auto found = m_allocations.find(address);
-					if (found != m_allocations.end()) owner = found->second.owner;
+					if (found != m_allocations.end())
+						owner = found->second.owner;
 				}
-				if (owner) FreeGuestData(*owner, address);
+				if (owner)
+					FreeGuestData(*owner, address);
 			}
 		}
 
 		bool ValidateGuestRange(std::uint32_t address, std::uint32_t size,
-			WupsGuestAccess access) const override
+								WupsGuestAccess access) const override
 		{
 			return ValidateGuestRangeForOwner(
 				s_dispatchOwner.value_or(WupsOwnerToken{}), address, size, access);
 		}
 
 		bool ValidateGuestRangeForOwner(WupsOwnerToken scopedOwner,
-			std::uint32_t address, std::uint32_t size,
-			WupsGuestAccess access) const override
+										std::uint32_t address, std::uint32_t size,
+										WupsGuestAccess access) const override
 		{
 			const auto hasScopedOwner = scopedOwner.owner != 0 &&
-				scopedOwner.generation != 0;
+										scopedOwner.generation != 0;
 			if (address == 0 || size == 0 ||
 				address > std::numeric_limits<std::uint32_t>::max() - (size - 1) ||
 				(access != WupsGuestAccess::Execute &&
-					!memory_isAddressRangeAccessible(address, size)))
+				 !memory_isAddressRangeAccessible(address, size)))
 				return false;
 			// Consult the unified ownership registry first: it authoritatively
 			// covers tracked heap allocations, owner-created heap backings and
 			// (in Phase 2) mapped-memory ranges, all owner/generation scoped.
 			if (hasScopedOwner && m_ownershipRegistry)
 			{
-				const auto policy = access == WupsGuestAccess::Execute ?
-					WupsGuestPointerPolicy::ExecutableCallback :
-					access == WupsGuestAccess::Write ?
-						WupsGuestPointerPolicy::WritableOwnedMemory :
-						WupsGuestPointerPolicy::AnyOwnedMemory;
+				const auto policy = access == WupsGuestAccess::Execute ? WupsGuestPointerPolicy::ExecutableCallback : access == WupsGuestAccess::Write ? WupsGuestPointerPolicy::WritableOwnedMemory
+																																					   : WupsGuestPointerPolicy::AnyOwnedMemory;
 				if (m_ownershipRegistry->BelongsTo(scopedOwner, address, size,
-					access, policy))
+												   access, policy))
 					return true;
 			}
 			{
 				std::lock_guard lock(m_mutex);
 				for (const auto& [base, allocation] : m_allocations)
 				{
-					if (!Contains(base, allocation.size, address, size)) continue;
+					if (!Contains(base, allocation.size, address, size))
+						continue;
 					if (hasScopedOwner && allocation.owner != scopedOwner)
 						return false;
-					return access == WupsGuestAccess::Execute ?
-						allocation.kind == AllocationKind::Callable :
-						allocation.kind == AllocationKind::Data;
+					return access == WupsGuestAccess::Execute ? allocation.kind == AllocationKind::Callable : allocation.kind == AllocationKind::Data;
 				}
 			}
 			if (hasScopedOwner && access != WupsGuestAccess::Execute)
@@ -298,15 +294,16 @@ namespace
 					const auto lower = thread->stackEnd.GetMPTR();
 					const auto upper = thread->stackBase.GetMPTR();
 					if (upper > lower && Contains(
-						lower, upper - lower, address, size))
+											 lower, upper - lower, address, size))
 						return true;
 				}
 			}
 			RPLMappedAddressInfo info;
-			if (!RPLLoader_QueryMappedAddress(address, size, info)) return false;
+			if (!RPLLoader_QueryMappedAddress(address, size, info))
+				return false;
 			if (hasScopedOwner && info.external &&
 				(info.owner != scopedOwner.owner ||
-					info.generation != scopedOwner.generation))
+				 info.generation != scopedOwner.generation))
 				return false;
 			if (access == WupsGuestAccess::Execute)
 				return (info.sectionFlags & 4U) != 0;
@@ -316,10 +313,10 @@ namespace
 		}
 
 		bool ReadGuest(std::uint32_t address,
-			std::span<std::byte> output) const override
+					   std::span<std::byte> output) const override
 		{
 			if (output.empty() || output.size() >
-				std::numeric_limits<std::uint32_t>::max())
+									  std::numeric_limits<std::uint32_t>::max())
 				return false;
 			const auto size = static_cast<std::uint32_t>(output.size());
 			std::optional<WupsGuestRangeLease> lease;
@@ -327,21 +324,21 @@ namespace
 			{
 				std::string ignored;
 				lease = m_ownershipRegistry->PinRange(*s_dispatchOwner, address, size,
-					WupsGuestAccess::Read, WupsGuestPointerPolicy::AnyOwnedMemory,
-					ignored);
+													  WupsGuestAccess::Read, WupsGuestPointerPolicy::AnyOwnedMemory,
+													  ignored);
 			}
 			if (!lease && !ValidateGuestRange(address, size, WupsGuestAccess::Read))
 				return false;
 			std::memcpy(output.data(), memory_getPointerFromVirtualOffset(address),
-				output.size());
+						output.size());
 			return true;
 		}
 
 		bool WriteGuest(std::uint32_t address,
-			std::span<const std::byte> input) override
+						std::span<const std::byte> input) override
 		{
 			if (input.empty() || input.size() >
-				std::numeric_limits<std::uint32_t>::max())
+									 std::numeric_limits<std::uint32_t>::max())
 				return false;
 			const auto size = static_cast<std::uint32_t>(input.size());
 			std::optional<WupsGuestRangeLease> lease;
@@ -349,19 +346,19 @@ namespace
 			{
 				std::string ignored;
 				lease = m_ownershipRegistry->PinRange(*s_dispatchOwner, address, size,
-					WupsGuestAccess::Write,
-					WupsGuestPointerPolicy::WritableOwnedMemory, ignored);
+													  WupsGuestAccess::Write,
+													  WupsGuestPointerPolicy::WritableOwnedMemory, ignored);
 			}
 			if (!lease && !ValidateGuestRange(address, size, WupsGuestAccess::Write))
 				return false;
 			std::memcpy(memory_getPointerFromVirtualOffset(address), input.data(),
-				input.size());
+						input.size());
 			return true;
 		}
 
 		std::optional<std::uint32_t> AllocateGuestData(WupsOwnerToken owner,
-			std::uint32_t size, std::uint32_t alignment,
-			std::string& error) override
+													   std::uint32_t size, std::uint32_t alignment,
+													   std::string& error) override
 		{
 			error.clear();
 			if (!PPCInterpreter_getCurrentInstance())
@@ -373,7 +370,8 @@ namespace
 				size > kMaximumDataAllocation || !IsPowerOfTwo(alignment) ||
 				alignment > kMaximumAlignment)
 			{
-				if (error.empty()) error = "invalid WUPS guest data allocation";
+				if (error.empty())
+					error = "invalid WUPS guest data allocation";
 				return std::nullopt;
 			}
 			const auto memory = RPLLoader_AllocateCodeCaveMem(alignment, size);
@@ -386,7 +384,8 @@ namespace
 			{
 				std::lock_guard lock(m_mutex);
 				if (!m_allocations.emplace(address,
-					Allocation{owner, size, AllocationKind::Data}).second)
+										   Allocation{owner, size, AllocationKind::Data})
+						 .second)
 				{
 					RPLLoader_ReleaseCodeCaveMem(memory);
 					error = "Cemu returned a duplicate guest allocation";
@@ -410,12 +409,13 @@ namespace
 					release = true;
 				}
 			}
-			if (release) RPLLoader_ReleaseCodeCaveMem(MEMPTR<void>{address});
+			if (release)
+				RPLLoader_ReleaseCodeCaveMem(MEMPTR<void>{address});
 		}
 
 		std::optional<std::uint32_t> RegisterFunction(WupsOwnerToken owner,
-			std::string_view moduleName, std::string_view symbolName,
-			WupsHostExportHandler handler, std::string& error) override
+													  std::string_view moduleName, std::string_view symbolName,
+													  WupsHostExportHandler handler, std::string& error) override
 		{
 			error.clear();
 			if (!PPCInterpreter_getCurrentInstance())
@@ -426,7 +426,8 @@ namespace
 			if (!ValidOwner(owner, error) || moduleName.empty() || symbolName.empty() ||
 				!handler)
 			{
-				if (error.empty()) error = "invalid WUPS host export registration";
+				if (error.empty())
+					error = "invalid WUPS host export registration";
 				return std::nullopt;
 			}
 			const auto memory = RPLLoader_AllocateCodeCaveMem(4, kCallableStubSize);
@@ -446,16 +447,17 @@ namespace
 			// rejection would be interpreted as a valid non-null value by guest code
 			// and can turn an authorization failure into an invalid memory access.
 			if ((moduleName == "__cemu_wups_data" &&
-					(symbolName == "MEMAllocFromDefaultHeap" ||
-						symbolName == "MEMAllocFromDefaultHeapEx")) ||
+				 (symbolName == "MEMAllocFromDefaultHeap" ||
+				  symbolName == "MEMAllocFromDefaultHeapEx")) ||
 				(moduleName == "homebrew_wupsbackend" &&
-					(symbolName == "ReentGet" || symbolName == "ReentAdd")))
+				 (symbolName == "ReentGet" || symbolName == "ReentAdd")))
 				record->authenticationFailureResult = 0;
 			{
 				std::scoped_lock lock(m_mutex, s_callableMutex);
 				if (!m_allocations.emplace(address,
-					Allocation{owner, kCallableStubSize,
-						AllocationKind::Callable}).second ||
+										   Allocation{owner, kCallableStubSize,
+													  AllocationKind::Callable})
+						 .second ||
 					!s_callableRecords.emplace(address, record).second)
 				{
 					m_allocations.erase(address);
@@ -476,11 +478,12 @@ namespace
 		void ReleaseOwnerExports(WupsOwnerToken owner) override
 		{
 			std::vector<std::pair<std::uint32_t,
-				std::shared_ptr<CallableRecord>>> records;
+								  std::shared_ptr<CallableRecord>>>
+				records;
 			{
 				std::scoped_lock lock(m_mutex, s_callableMutex);
 				for (auto iterator = m_allocations.begin();
-					iterator != m_allocations.end();)
+					 iterator != m_allocations.end();)
 				{
 					if (iterator->second.owner != owner ||
 						iterator->second.kind != AllocationKind::Callable)
@@ -504,7 +507,7 @@ namespace
 				record->idle.wait(lock, [&] { return record->executing == 0; });
 				lock.unlock();
 				PPCRecompiler_invalidateRange(address,
-					address + kCallableStubSize);
+											  address + kCallableStubSize);
 				RPLLoader_ReleaseCodeCaveMem(MEMPTR<void>{address});
 			}
 			// Drop this owner's heap bookkeeping and owned ranges. Ranges are hidden
@@ -522,17 +525,20 @@ namespace
 		std::uint64_t CurrentGuestThreadId() const override
 		{
 			const auto* cpu = PPCInterpreter_getCurrentInstance();
-			if (!cpu) return 0;
+			if (!cpu)
+				return 0;
 			auto* thread = coreinit::OSGetCurrentThread();
 			return thread ? static_cast<std::uint64_t>(
-				memory_getVirtualOffsetFromPointer(thread)) : 0;
+								memory_getVirtualOffsetFromPointer(thread))
+						  : 0;
 		}
 
 		bool QueueCpuTask(WupsOwnerToken owner, std::function<void()> task,
-			std::string& error) override
+						  std::string& error) override
 		{
 			error.clear();
-			if (!ValidOwner(owner, error)) return false;
+			if (!ValidOwner(owner, error))
+				return false;
 			if (!PPCInterpreter_getCurrentInstance())
 			{
 				error = "Cemu has no cross-thread WUPS CPU task queue; callback rejected";
@@ -572,7 +578,7 @@ namespace
 		}
 
 		std::uint32_t AllocatePluginHeapMemory(WupsOwnerToken owner,
-			std::uint32_t size, std::int32_t alignment) override
+											   std::uint32_t size, std::int32_t alignment) override
 		{
 			if (!m_pluginHeap)
 				return 0;
@@ -580,7 +586,7 @@ namespace
 		}
 
 		void FreePluginHeapMemory(WupsOwnerToken owner,
-			std::uint32_t address) override
+								  std::uint32_t address) override
 		{
 			if (m_pluginHeap)
 				m_pluginHeap->Free(owner, address);
@@ -596,11 +602,12 @@ namespace
 				!IsPowerOfTwo(alignment) || alignment > 1024U * 1024U ||
 				!m_ownershipRegistry)
 			{
-				if (error.empty()) error = "invalid WUPS mapped-memory allocation";
+				if (error.empty())
+					error = "invalid WUPS mapped-memory allocation";
 				return std::nullopt;
 			}
 			auto backing = memory_allocateMappedMemory(size, alignment, writable,
-				error);
+													   error);
 			if (!backing)
 				return std::nullopt;
 			WupsMappedMemoryInfo info{
@@ -615,8 +622,7 @@ namespace
 			ownedRange.owner = owner;
 			ownedRange.base = info.address;
 			ownedRange.size = info.size;
-			ownedRange.kind = purpose == WupsMappedMemoryPurpose::Gx2 ?
-				WupsOwnedRangeKind::MappedGx2 : WupsOwnedRangeKind::MappedCpu;
+			ownedRange.kind = purpose == WupsMappedMemoryPurpose::Gx2 ? WupsOwnedRangeKind::MappedGx2 : WupsOwnedRangeKind::MappedCpu;
 			ownedRange.readable = true;
 			ownedRange.writable = writable;
 			ownedRange.executable = false;
@@ -640,7 +646,8 @@ namespace
 			{
 				std::lock_guard lock(m_mutex);
 				if (!m_mappedAllocations.emplace(info.address,
-					MappedAllocation{owner, info, *rangeId}).second)
+												 MappedAllocation{owner, info, *rangeId})
+						 .second)
 				{
 					std::string ignored;
 					(void)m_ownershipRegistry->RetireRangeAndWait(*rangeId, ignored);
@@ -653,7 +660,7 @@ namespace
 		}
 
 		bool FreeMappedMemory(WupsOwnerToken owner,
-			const WupsMappedMemoryInfo& allocation, std::string& error) override
+							  const WupsMappedMemoryInfo& allocation, std::string& error) override
 		{
 			error.clear();
 			std::uint64_t rangeId{};
@@ -714,27 +721,31 @@ namespace
 		}
 
 		void ShowNotification(WupsOwnerToken owner,
-			const WupsNotificationModel& notification) override
+							  const WupsNotificationModel& notification) override
 		{
 			cemuLog_log(LogType::Force,
-				fmt::format("WUPS notification owner {} generation {}: {}",
-					owner.owner, owner.generation, notification.text));
+						fmt::format("WUPS notification owner {} generation {}: {}",
+									owner.owner, owner.generation, notification.text));
 		}
 
 		void Log(WupsOwnerToken owner, WupsLogLevel level,
-			std::string_view moduleName, std::string_view source,
-			std::string_view message) override
+				 std::string_view moduleName, std::string_view source,
+				 std::string_view message) override
 		{
 			static constexpr std::array levels{"error", "warning", "info", "verbose"};
 			const auto index = std::min<std::size_t>(static_cast<std::size_t>(level),
-				levels.size() - 1);
+													 levels.size() - 1);
 			cemuLog_log(LogType::Force,
-				fmt::format("WUPS [{}] owner {}:{} {} {}: {}", levels[index],
-					owner.owner, owner.generation, moduleName, source, message));
+						fmt::format("WUPS [{}] owner {}:{} {} {}: {}", levels[index],
+									owner.owner, owner.generation, moduleName, source, message));
 		}
 
-	private:
-		enum class AllocationKind : std::uint8_t { Data, Callable };
+	  private:
+		enum class AllocationKind : std::uint8_t
+		{
+			Data,
+			Callable
+		};
 		struct Allocation
 		{
 			WupsOwnerToken owner;
@@ -765,12 +776,12 @@ namespace
 				if (owner.generation > found->second)
 				{
 					const bool hasOldAllocations = std::ranges::any_of(
-						m_allocations, [&](const auto& entry) {
-							return entry.second.owner.owner == owner.owner;
-						}) || std::ranges::any_of(m_mappedAllocations,
-							[&](const auto& entry) {
-								return entry.second.owner.owner == owner.owner;
-							});
+													   m_allocations, [&](const auto& entry) {
+														   return entry.second.owner.owner == owner.owner;
+													   }) ||
+												   std::ranges::any_of(m_mappedAllocations, [&](const auto& entry) {
+													   return entry.second.owner.owner == owner.owner;
+												   });
 					if (hasOldAllocations)
 					{
 						error = "WUPS owner has live resources from an older generation";
@@ -796,7 +807,7 @@ namespace
 		std::shared_ptr<WupsOwnerScopedHeapTracker> m_heapTracker;
 		std::shared_ptr<WupsPluginHeap> m_pluginHeap;
 	};
-}
+} // namespace
 
 std::shared_ptr<IWupsPlatform> CreateCemuWupsPlatform()
 {
@@ -815,5 +826,5 @@ std::shared_ptr<IWupsPlatform> CreateCemuWupsPlatform()
 	auto pluginHeap = std::make_shared<WupsPluginHeap>(heapTracker);
 	cafe::wups::SetActivePluginHeap(pluginHeap);
 	return std::make_shared<CemuWupsPlatform>(std::move(registry),
-		std::move(heapTracker), std::move(pluginHeap));
+											  std::move(heapTracker), std::move(pluginHeap));
 }

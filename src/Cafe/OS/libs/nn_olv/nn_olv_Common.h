@@ -92,7 +92,6 @@ namespace nn
 
 		static sint32 CheckOliveResponse(pugi::xml_document& doc)
 		{
-
 			/*
 				<result>
 					<has_error>1</has_error>
@@ -124,7 +123,6 @@ namespace nn
 					return OLV_RESULT_STATUS(codeVal + 4000);
 				}
 				return OLV_RESULT_STATUS(codeVal + 5000);
-
 			}
 
 			if (version.compare("1") != 0)
@@ -163,14 +161,12 @@ namespace nn
 			CHECK_100x100_200x200 = 2
 		};
 
-
 		bool CheckTGA(const uint8* pTgaFile, uint32 pTgaFileLen, TGACheckType checkType);
 		sint32 DecodeTGA(uint8* pInBuffer, uint32 inSize, uint8* pOutBuffer, uint32 outSize, TGACheckType checkType);
 		sint32 EncodeTGA(uint8* pInBuffer, uint32 inSize, uint8* pOutBuffer, uint32 outSize, TGACheckType checkTyp);
-		
+
 		bool CompressTGA(uint8* pOutBuffer, uint32* pOutSize, uint8* pInBuffer, uint32 inSize);
 		bool DecompressTGA(uint8* pOutBuffer, uint32* pOutSize, uint8* pInBuffer, uint32 inSize);
-
 
 		bool GetCommunityIdFromCode(uint32* pOutId, const char* pCode);
 		bool FormatCommunityCode(char* pOutCode, uint32* outLen, uint32 communityId);
@@ -179,15 +175,15 @@ namespace nn
 
 		// convert and copy utf8 string into UC2 big-endian array
 		template<size_t TLength>
-		uint32 SetStringUC2(uint16be(&str)[TLength], std::string_view sv, bool unescape = false)
+		uint32 SetStringUC2(uint16be (&str)[TLength], std::string_view sv, bool unescape = false)
 		{
-			if(unescape)
+			if (unescape)
 			{
 				// todo
 			}
 			std::wstring ws = boost::nowide::widen(sv);
-			size_t copyLen = std::min<size_t>(TLength-1, ws.size());
-			for(size_t i=0; i<copyLen; i++)
+			size_t copyLen = std::min<size_t>(TLength - 1, ws.size());
+			for (size_t i = 0; i < copyLen; i++)
 				str[i] = ws[i];
 			str[copyLen] = '\0';
 			return copyLen;
@@ -195,12 +191,12 @@ namespace nn
 
 		// safely copy null-terminated UC2 big-endian string into UC2 big-endian array
 		template<size_t TLength>
-		uint32 SetStringUC2(uint16be(&str)[TLength], const uint16be* strIn)
+		uint32 SetStringUC2(uint16be (&str)[TLength], const uint16be* strIn)
 		{
-			size_t copyLen = TLength-1;
-			for(size_t i=0; i<copyLen; i++)
+			size_t copyLen = TLength - 1;
+			for (size_t i = 0; i < copyLen; i++)
 			{
-				if(strIn[i] == 0)
+				if (strIn[i] == 0)
 				{
 					str[i] = 0;
 					return i;
@@ -210,5 +206,5 @@ namespace nn
 			str[copyLen] = '\0';
 			return copyLen;
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

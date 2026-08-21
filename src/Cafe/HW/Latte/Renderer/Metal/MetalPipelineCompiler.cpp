@@ -57,7 +57,7 @@ static void rectsEmulationGS_outputGeneratedVertex(std::string& gsSrc, const Lat
 
 static void rectsEmulationGS_outputVerticesCode(std::string& gsSrc, const LatteDecompilerShader* vertexShader, LatteShaderPSInputTable& psInputTable, sint32 p0, sint32 p1, sint32 p2, sint32 p3, const char* variant, const LatteContextRegister& latteRegister)
 {
-	sint32 pList[4] = { p0, p1, p2, p3 };
+	sint32 pList[4] = {p0, p1, p2, p3};
 	for (sint32 i = 0; i < 4; i++)
 	{
 		if (pList[i] == 3)
@@ -105,12 +105,12 @@ static RendererShaderMtl* rectsEmulationGS_generate(MetalRenderer* metalRenderer
 		// GeometryOut
 		geometryOutDefinition += fmt::format("float4 passParameterSem{}", vsSemanticId);
 
-        geometryOutDefinition += fmt::format(" [[user(locn{})]]", psInputTable.getPSImportLocationBySemanticId(vsSemanticId));
-        if (psImport->isFlat)
-            geometryOutDefinition += " [[flat]]";
-        if (psImport->isNoPerspective)
+		geometryOutDefinition += fmt::format(" [[user(locn{})]]", psInputTable.getPSImportLocationBySemanticId(vsSemanticId));
+		if (psImport->isFlat)
+			geometryOutDefinition += " [[flat]]";
+		if (psImport->isNoPerspective)
 			geometryOutDefinition += " [[center_no_perspective]]";
-        geometryOutDefinition += ";\r\n";
+		geometryOutDefinition += ";\r\n";
 	}
 	vertexOutDefinition += "};\r\n";
 	geometryOutDefinition += "};\r\n";
@@ -193,21 +193,21 @@ template<typename T>
 void SetFragmentState(T* desc, const MetalAttachmentsInfo& lastUsedAttachmentsInfo, const MetalAttachmentsInfo& activeAttachmentsInfo, bool rasterizationEnabled, const LatteContextRegister& lcr)
 {
 	// TODO: check if the pixel shader is valid as well?
-	if (!rasterizationEnabled/* || !pixelShaderMtl*/)
+	if (!rasterizationEnabled /* || !pixelShaderMtl*/)
 	{
-	    desc->setRasterizationEnabled(false);
+		desc->setRasterizationEnabled(false);
 		return;
 	}
 
-    // Color attachments
+	// Color attachments
 	const Latte::LATTE_CB_COLOR_CONTROL& colorControlReg = lcr.CB_COLOR_CONTROL;
 	uint32 blendEnableMask = colorControlReg.get_BLEND_MASK();
 	uint32 renderTargetMask = lcr.CB_TARGET_MASK.get_MASK();
 	for (uint8 i = 0; i < LATTE_NUM_COLOR_TARGET; i++)
 	{
-	    Latte::E_GX2SURFFMT format = lastUsedAttachmentsInfo.colorFormats[i];
+		Latte::E_GX2SURFFMT format = lastUsedAttachmentsInfo.colorFormats[i];
 		if (format == Latte::E_GX2SURFFMT::INVALID_FORMAT)
-		    continue;
+			continue;
 
 		MTL::PixelFormat pixelFormat = GetMtlPixelFormat(format, false);
 		auto colorAttachment = desc->colorAttachments()->object(i);
@@ -215,10 +215,10 @@ void SetFragmentState(T* desc, const MetalAttachmentsInfo& lastUsedAttachmentsIn
 
 		// Disable writes if not in the active FBO
 		if (activeAttachmentsInfo.colorFormats[i] == Latte::E_GX2SURFFMT::INVALID_FORMAT)
-        {
-            colorAttachment->setWriteMask(MTL::ColorWriteMaskNone);
-            continue;
-        }
+		{
+			colorAttachment->setWriteMask(MTL::ColorWriteMaskNone);
+			continue;
+		}
 
 		colorAttachment->setWriteMask(GetMtlColorWriteMask((renderTargetMask >> (i * 4)) & 0xF));
 
@@ -227,97 +227,97 @@ void SetFragmentState(T* desc, const MetalAttachmentsInfo& lastUsedAttachmentsIn
 		// Only float data type is blendable
 		if (blendEnabled && GetMtlPixelFormatInfo(format, false).dataType == MetalDataType::FLOAT)
 		{
-       		colorAttachment->setBlendingEnabled(true);
+			colorAttachment->setBlendingEnabled(true);
 
-       		const auto& blendControlReg = lcr.CB_BLENDN_CONTROL[i];
+			const auto& blendControlReg = lcr.CB_BLENDN_CONTROL[i];
 
-       		auto rgbBlendOp = GetMtlBlendOp(blendControlReg.get_COLOR_COMB_FCN());
-       		auto srcRgbBlendFactor = GetMtlBlendFactor(blendControlReg.get_COLOR_SRCBLEND());
-       		auto dstRgbBlendFactor = GetMtlBlendFactor(blendControlReg.get_COLOR_DSTBLEND());
+			auto rgbBlendOp = GetMtlBlendOp(blendControlReg.get_COLOR_COMB_FCN());
+			auto srcRgbBlendFactor = GetMtlBlendFactor(blendControlReg.get_COLOR_SRCBLEND());
+			auto dstRgbBlendFactor = GetMtlBlendFactor(blendControlReg.get_COLOR_DSTBLEND());
 
-       		colorAttachment->setRgbBlendOperation(rgbBlendOp);
-       		colorAttachment->setSourceRGBBlendFactor(srcRgbBlendFactor);
-       		colorAttachment->setDestinationRGBBlendFactor(dstRgbBlendFactor);
-       		if (blendControlReg.get_SEPARATE_ALPHA_BLEND())
-       		{
-       			colorAttachment->setAlphaBlendOperation(GetMtlBlendOp(blendControlReg.get_ALPHA_COMB_FCN()));
-      		    colorAttachment->setSourceAlphaBlendFactor(GetMtlBlendFactor(blendControlReg.get_ALPHA_SRCBLEND()));
-      		    colorAttachment->setDestinationAlphaBlendFactor(GetMtlBlendFactor(blendControlReg.get_ALPHA_DSTBLEND()));
-       		}
-       		else
-       		{
-           		colorAttachment->setAlphaBlendOperation(rgbBlendOp);
-           		colorAttachment->setSourceAlphaBlendFactor(srcRgbBlendFactor);
-           		colorAttachment->setDestinationAlphaBlendFactor(dstRgbBlendFactor);
-       		}
+			colorAttachment->setRgbBlendOperation(rgbBlendOp);
+			colorAttachment->setSourceRGBBlendFactor(srcRgbBlendFactor);
+			colorAttachment->setDestinationRGBBlendFactor(dstRgbBlendFactor);
+			if (blendControlReg.get_SEPARATE_ALPHA_BLEND())
+			{
+				colorAttachment->setAlphaBlendOperation(GetMtlBlendOp(blendControlReg.get_ALPHA_COMB_FCN()));
+				colorAttachment->setSourceAlphaBlendFactor(GetMtlBlendFactor(blendControlReg.get_ALPHA_SRCBLEND()));
+				colorAttachment->setDestinationAlphaBlendFactor(GetMtlBlendFactor(blendControlReg.get_ALPHA_DSTBLEND()));
+			}
+			else
+			{
+				colorAttachment->setAlphaBlendOperation(rgbBlendOp);
+				colorAttachment->setSourceAlphaBlendFactor(srcRgbBlendFactor);
+				colorAttachment->setDestinationAlphaBlendFactor(dstRgbBlendFactor);
+			}
 		}
 	}
 
 	// Depth stencil attachment
 	if (lastUsedAttachmentsInfo.depthFormat != Latte::E_GX2SURFFMT::INVALID_FORMAT)
 	{
-	    MTL::PixelFormat pixelFormat = GetMtlPixelFormat(lastUsedAttachmentsInfo.depthFormat, true);
-        desc->setDepthAttachmentPixelFormat(pixelFormat);
-        if (lastUsedAttachmentsInfo.hasStencil)
-            desc->setStencilAttachmentPixelFormat(pixelFormat);
+		MTL::PixelFormat pixelFormat = GetMtlPixelFormat(lastUsedAttachmentsInfo.depthFormat, true);
+		desc->setDepthAttachmentPixelFormat(pixelFormat);
+		if (lastUsedAttachmentsInfo.hasStencil)
+			desc->setStencilAttachmentPixelFormat(pixelFormat);
 	}
 }
 
 MetalPipelineCompiler::~MetalPipelineCompiler()
 {
-    /*
-    for (auto& pair : m_pipelineCache)
-    {
-        pair.second->release();
-    }
-    m_pipelineCache.clear();
+	/*
+	for (auto& pair : m_pipelineCache)
+	{
+		pair.second->release();
+	}
+	m_pipelineCache.clear();
 
-    NS::Error* error = nullptr;
-    m_binaryArchive->serializeToURL(m_binaryArchiveURL, &error);
-    if (error)
-    {
-        cemuLog_log(LogType::Force, "error serializing binary archive: {}", error->localizedDescription()->utf8String());
-        error->release();
-    }
-    m_binaryArchive->release();
+	NS::Error* error = nullptr;
+	m_binaryArchive->serializeToURL(m_binaryArchiveURL, &error);
+	if (error)
+	{
+		cemuLog_log(LogType::Force, "error serializing binary archive: {}", error->localizedDescription()->utf8String());
+		error->release();
+	}
+	m_binaryArchive->release();
 
-    m_binaryArchiveURL->release();
-    */
-    if (m_pipelineDescriptor)
-        m_pipelineDescriptor->release();
+	m_binaryArchiveURL->release();
+	*/
+	if (m_pipelineDescriptor)
+		m_pipelineDescriptor->release();
 }
 
 void MetalPipelineCompiler::InitFromState(const LatteFetchShader* fetchShader, const LatteDecompilerShader* vertexShader, const LatteDecompilerShader* geometryShader, const LatteDecompilerShader* pixelShader, const MetalAttachmentsInfo& lastUsedAttachmentsInfo, const MetalAttachmentsInfo& activeAttachmentsInfo, const LatteContextRegister& lcr)
 {
-    m_usesGeometryShader = UseGeometryShader(lcr, geometryShader != nullptr);
-    if (m_usesGeometryShader && !m_mtlr->SupportsMeshShaders())
-        return;
+	m_usesGeometryShader = UseGeometryShader(lcr, geometryShader != nullptr);
+	if (m_usesGeometryShader && !m_mtlr->SupportsMeshShaders())
+		return;
 
-    // Rasterization
+	// Rasterization
 	m_rasterizationEnabled = lcr.IsRasterizationEnabled();
 
-    // Shaders
-    m_vertexShaderMtl = static_cast<RendererShaderMtl*>(vertexShader->shader);
-    if (geometryShader)
-        m_geometryShaderMtl = static_cast<RendererShaderMtl*>(geometryShader->shader);
-    else if (UseRectEmulation(lcr))
-        m_geometryShaderMtl = rectsEmulationGS_generate(m_mtlr, vertexShader, lcr);
-    else
-        m_geometryShaderMtl = nullptr;
-    m_pixelShaderMtl = static_cast<RendererShaderMtl*>(pixelShader->shader);
+	// Shaders
+	m_vertexShaderMtl = static_cast<RendererShaderMtl*>(vertexShader->shader);
+	if (geometryShader)
+		m_geometryShaderMtl = static_cast<RendererShaderMtl*>(geometryShader->shader);
+	else if (UseRectEmulation(lcr))
+		m_geometryShaderMtl = rectsEmulationGS_generate(m_mtlr, vertexShader, lcr);
+	else
+		m_geometryShaderMtl = nullptr;
+	m_pixelShaderMtl = static_cast<RendererShaderMtl*>(pixelShader->shader);
 
-    if (m_usesGeometryShader)
-        InitFromStateMesh(fetchShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
-    else
-        InitFromStateRender(fetchShader, vertexShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
+	if (m_usesGeometryShader)
+		InitFromStateMesh(fetchShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
+	else
+		InitFromStateRender(fetchShader, vertexShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
 }
 
 bool MetalPipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool showInOverlay)
 {
-    if (m_usesGeometryShader && !m_mtlr->SupportsMeshShaders())
-        return false;
+	if (m_usesGeometryShader && !m_mtlr->SupportsMeshShaders())
+		return false;
 
-    if (forceCompile)
+	if (forceCompile)
 	{
 		// if some shader stages are not compiled yet, compile them now
 		if (m_vertexShaderMtl && !m_vertexShaderMtl->IsCompiled())
@@ -329,7 +329,7 @@ bool MetalPipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool
 	}
 	else
 	{
-	    // fail early if some shader stages are not compiled
+		// fail early if some shader stages are not compiled
 		if (m_vertexShaderMtl && !m_vertexShaderMtl->IsCompiled())
 			return false;
 		if (m_geometryShaderMtl && !m_geometryShaderMtl->IsCompiled())
@@ -339,49 +339,49 @@ bool MetalPipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool
 	}
 
 	// Compile
-    MTL::RenderPipelineState* pipeline = nullptr;
-    NS::Error* error = nullptr;
+	MTL::RenderPipelineState* pipeline = nullptr;
+	NS::Error* error = nullptr;
 
-    auto start = std::chrono::high_resolution_clock::now();
-    if (m_usesGeometryShader)
-    {
-        auto desc = static_cast<MTL::MeshRenderPipelineDescriptor*>(m_pipelineDescriptor);
+	auto start = std::chrono::high_resolution_clock::now();
+	if (m_usesGeometryShader)
+	{
+		auto desc = static_cast<MTL::MeshRenderPipelineDescriptor*>(m_pipelineDescriptor);
 
-        // Shaders
-        desc->setObjectFunction(m_vertexShaderMtl->GetFunction());
-        desc->setMeshFunction(m_geometryShaderMtl->GetFunction());
-        if (m_rasterizationEnabled)
-            desc->setFragmentFunction(m_pixelShaderMtl->GetFunction());
-
-#ifdef CEMU_DEBUG_ASSERT
-        desc->setLabel(GetLabel("Mesh render pipeline state", desc));
-#endif
-       	pipeline = m_mtlr->GetDevice()->newRenderPipelineState(desc, MTL::PipelineOptionNone, nullptr, &error);
-    }
-    else
-    {
-        auto desc = static_cast<MTL::RenderPipelineDescriptor*>(m_pipelineDescriptor);
-
-        // Shaders
-        desc->setVertexFunction(m_vertexShaderMtl->GetFunction());
-        if (m_rasterizationEnabled)
-            desc->setFragmentFunction(m_pixelShaderMtl->GetFunction());
+		// Shaders
+		desc->setObjectFunction(m_vertexShaderMtl->GetFunction());
+		desc->setMeshFunction(m_geometryShaderMtl->GetFunction());
+		if (m_rasterizationEnabled)
+			desc->setFragmentFunction(m_pixelShaderMtl->GetFunction());
 
 #ifdef CEMU_DEBUG_ASSERT
-        desc->setLabel(GetLabel("Render pipeline state", desc));
+		desc->setLabel(GetLabel("Mesh render pipeline state", desc));
 #endif
-       	pipeline = m_mtlr->GetDevice()->newRenderPipelineState(desc, MTL::PipelineOptionNone, nullptr, &error);
-    }
-    auto end = std::chrono::high_resolution_clock::now();
+		pipeline = m_mtlr->GetDevice()->newRenderPipelineState(desc, MTL::PipelineOptionNone, nullptr, &error);
+	}
+	else
+	{
+		auto desc = static_cast<MTL::RenderPipelineDescriptor*>(m_pipelineDescriptor);
 
-    auto creationDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+		// Shaders
+		desc->setVertexFunction(m_vertexShaderMtl->GetFunction());
+		if (m_rasterizationEnabled)
+			desc->setFragmentFunction(m_pixelShaderMtl->GetFunction());
 
-   	if (error)
-   	{
-       	cemuLog_log(LogType::Force, "error creating render pipeline state: {}", error->localizedDescription()->utf8String());
-   	}
+#ifdef CEMU_DEBUG_ASSERT
+		desc->setLabel(GetLabel("Render pipeline state", desc));
+#endif
+		pipeline = m_mtlr->GetDevice()->newRenderPipelineState(desc, MTL::PipelineOptionNone, nullptr, &error);
+	}
+	auto end = std::chrono::high_resolution_clock::now();
 
-    if (showInOverlay)
+	auto creationDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+
+	if (error)
+	{
+		cemuLog_log(LogType::Force, "error creating render pipeline state: {}", error->localizedDescription()->utf8String());
+	}
+
+	if (showInOverlay)
 	{
 		if (isRenderThread)
 			g_compiling_pipelines_syncTimeSum += creationDuration;
@@ -400,73 +400,73 @@ void MetalPipelineCompiler::InitFromStateRender(const LatteFetchShader* fetchSha
 	// Render pipeline state
 	MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
 
-    // Vertex descriptor
-    if (!fetchShader->mtlFetchVertexManually)
-    {
-    	NS_STACK_SCOPED MTL::VertexDescriptor* vertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    	for (auto& bufferGroup : fetchShader->bufferGroups)
-    	{
-    		std::optional<LatteConst::VertexFetchType2> fetchType;
+	// Vertex descriptor
+	if (!fetchShader->mtlFetchVertexManually)
+	{
+		NS_STACK_SCOPED MTL::VertexDescriptor* vertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+		for (auto& bufferGroup : fetchShader->bufferGroups)
+		{
+			std::optional<LatteConst::VertexFetchType2> fetchType;
 
-    		uint32 minBufferStride = 0;
-    		for (sint32 j = 0; j < bufferGroup.attribCount; ++j)
-    		{
-    			auto& attr = bufferGroup.attrib[j];
+			uint32 minBufferStride = 0;
+			for (sint32 j = 0; j < bufferGroup.attribCount; ++j)
+			{
+				auto& attr = bufferGroup.attrib[j];
 
-    			uint32 semanticId = vertexShader->resourceMapping.attributeMapping[attr.semanticId];
-    			if (semanticId == (uint32)-1)
-    				continue; // attribute not used?
+				uint32 semanticId = vertexShader->resourceMapping.attributeMapping[attr.semanticId];
+				if (semanticId == (uint32)-1)
+					continue; // attribute not used?
 
-    			auto attribute = vertexDescriptor->attributes()->object(semanticId);
-    			attribute->setOffset(attr.offset);
-    			attribute->setBufferIndex(GET_MTL_VERTEX_BUFFER_INDEX(attr.attributeBufferIndex));
-    			attribute->setFormat(GetMtlVertexFormat(attr.format));
+				auto attribute = vertexDescriptor->attributes()->object(semanticId);
+				attribute->setOffset(attr.offset);
+				attribute->setBufferIndex(GET_MTL_VERTEX_BUFFER_INDEX(attr.attributeBufferIndex));
+				attribute->setFormat(GetMtlVertexFormat(attr.format));
 
-    			minBufferStride = std::max(minBufferStride, attr.offset + GetMtlVertexFormatSize(attr.format));
+				minBufferStride = std::max(minBufferStride, attr.offset + GetMtlVertexFormatSize(attr.format));
 
-    			if (fetchType.has_value())
-    				cemu_assert_debug(fetchType == attr.fetchType);
-    			else
-    				fetchType = attr.fetchType;
+				if (fetchType.has_value())
+					cemu_assert_debug(fetchType == attr.fetchType);
+				else
+					fetchType = attr.fetchType;
 
-    			if (attr.fetchType == LatteConst::INSTANCE_DATA)
-    			{
-    				cemu_assert_debug(attr.aluDivisor == 1); // other divisor not yet supported
-    			}
-    		}
+				if (attr.fetchType == LatteConst::INSTANCE_DATA)
+				{
+					cemu_assert_debug(attr.aluDivisor == 1); // other divisor not yet supported
+				}
+			}
 
-    		uint32 bufferIndex = bufferGroup.attributeBufferIndex;
-    		uint32 bufferBaseRegisterIndex = mmSQ_VTX_ATTRIBUTE_BLOCK_START + bufferIndex * 7;
-    		uint32 bufferStride = (lcr.GetRawView()[bufferBaseRegisterIndex + 2] >> 11) & 0xFFFF;
+			uint32 bufferIndex = bufferGroup.attributeBufferIndex;
+			uint32 bufferBaseRegisterIndex = mmSQ_VTX_ATTRIBUTE_BLOCK_START + bufferIndex * 7;
+			uint32 bufferStride = (lcr.GetRawView()[bufferBaseRegisterIndex + 2] >> 11) & 0xFFFF;
 
-    		auto layout = vertexDescriptor->layouts()->object(GET_MTL_VERTEX_BUFFER_INDEX(bufferIndex));
-    		if (bufferStride == 0)
-    		{
-    		    // Buffer stride cannot be zero, let's use the minimum stride
-    			bufferStride = minBufferStride;
+			auto layout = vertexDescriptor->layouts()->object(GET_MTL_VERTEX_BUFFER_INDEX(bufferIndex));
+			if (bufferStride == 0)
+			{
+				// Buffer stride cannot be zero, let's use the minimum stride
+				bufferStride = minBufferStride;
 
-    			// Additionally, constant vertex function must be used
-    			layout->setStepFunction(MTL::VertexStepFunctionConstant);
-    			layout->setStepRate(0);
-    		}
-    		else
-    		{
-      		if (!fetchType.has_value() || fetchType == LatteConst::VertexFetchType2::VERTEX_DATA)
-     			layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-      		else if (fetchType == LatteConst::VertexFetchType2::INSTANCE_DATA)
-     			layout->setStepFunction(MTL::VertexStepFunctionPerInstance);
-      		else
-      		{
-      		    cemuLog_log(LogType::Force, "unimplemented vertex fetch type {}", (uint32)fetchType.value());
-     			cemu_assert(false);
-      		}
-    		}
-    		bufferStride = Align(bufferStride, 4);
-    		layout->setStride(bufferStride);
-    	}
+				// Additionally, constant vertex function must be used
+				layout->setStepFunction(MTL::VertexStepFunctionConstant);
+				layout->setStepRate(0);
+			}
+			else
+			{
+				if (!fetchType.has_value() || fetchType == LatteConst::VertexFetchType2::VERTEX_DATA)
+					layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+				else if (fetchType == LatteConst::VertexFetchType2::INSTANCE_DATA)
+					layout->setStepFunction(MTL::VertexStepFunctionPerInstance);
+				else
+				{
+					cemuLog_log(LogType::Force, "unimplemented vertex fetch type {}", (uint32)fetchType.value());
+					cemu_assert(false);
+				}
+			}
+			bufferStride = Align(bufferStride, 4);
+			layout->setStride(bufferStride);
+		}
 
-    	desc->setVertexDescriptor(vertexDescriptor);
-    }
+		desc->setVertexDescriptor(vertexDescriptor);
+	}
 
 	SetFragmentState(desc, lastUsedAttachmentsInfo, activeAttachmentsInfo, m_rasterizationEnabled, lcr);
 

@@ -9,4 +9,4 @@ namespace coreinit
 	sint32 __gh_get_errno();
 
 	void InitializeGHS();
-};
+}; // namespace coreinit

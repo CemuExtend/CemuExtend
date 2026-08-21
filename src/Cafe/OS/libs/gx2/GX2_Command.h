@@ -13,7 +13,7 @@ namespace GX2
 	};
 
 	extern GX2PerCoreCBState s_perCoreCBState[Espresso::CORE_COUNT];
-};
+}; // namespace GX2
 
 void gx2WriteGather_submitU32AsBE(uint32 v);
 void gx2WriteGather_submitU32AsLE(uint32 v);
@@ -22,14 +22,14 @@ void gx2WriteGather_submitU32AsLEArray(uint32* v, uint32 numValues);
 uint32 PPCInterpreter_getCurrentCoreIndex();
 
 // gx2WriteGather_submit functions
-template <typename ...Targs>
+template<typename... Targs>
 inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr)
 {
 	GX2::s_perCoreCBState[coreIndex].currentWritePtr = writePtr;
 	cemu_assert_debug(GX2::s_perCoreCBState[coreIndex].currentWritePtr <= (GX2::s_perCoreCBState[coreIndex].bufferPtr + GX2::s_perCoreCBState[coreIndex].bufferSizeInU32s));
 }
 
-template <typename T, typename ...Targs>
+template<typename T, typename... Targs>
 inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const betype<T>& arg, Targs... args)
 {
 	static_assert(sizeof(betype<T>) == sizeof(uint32be));
@@ -38,10 +38,9 @@ inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const b
 	gx2WriteGather_submit_(coreIndex, writePtr, args...);
 }
 
-template <typename T, typename ...Targs>
+template<typename T, typename... Targs>
 	requires std::is_floating_point_v<T>
-inline
-void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
+inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
 {
 	static_assert(sizeof(T) == sizeof(uint32));
 	*writePtr = *(uint32*)&arg;
@@ -49,10 +48,9 @@ void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, 
 	gx2WriteGather_submit_(coreIndex, writePtr, args...);
 }
 
-template <typename T, typename ...Targs>
+template<typename T, typename... Targs>
 	requires std::is_base_of_v<Latte::LATTEREG, T>
-inline
-void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
+inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
 {
 	static_assert(sizeof(Latte::LATTEREG) == sizeof(uint32be));
 	*writePtr = arg.getRawValue();
@@ -60,17 +58,16 @@ void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, 
 	gx2WriteGather_submit_(coreIndex, writePtr, args...);
 }
 
-template <typename T, typename ...Targs>
-	requires (!std::is_base_of_v<Latte::LATTEREG, T>) && (!std::is_floating_point_v<T>)
-inline
-void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
+template<typename T, typename... Targs>
+	requires(!std::is_base_of_v<Latte::LATTEREG, T>) && (!std::is_floating_point_v<T>)
+inline void gx2WriteGather_submit_(uint32 coreIndex, uint32be* writePtr, const T& arg, Targs... args)
 {
 	*writePtr = arg;
 	writePtr++;
 	gx2WriteGather_submit_(coreIndex, writePtr, args...);
 }
 
-template <typename ...Targs>
+template<typename... Targs>
 inline void gx2WriteGather_submit(Targs... args)
 {
 	uint32 coreIndex = PPCInterpreter_getCurrentCoreIndex();
@@ -101,8 +98,8 @@ namespace GX2
 
 	bool GX2GetDisplayListWriteStatus();
 
-    void GX2CommandInit();
+	void GX2CommandInit();
 	void GX2Init_commandBufferPool(void* bufferBase, uint32 bufferSize);
 	void GX2Shutdown_commandBufferPool();
-    void GX2CommandResetToDefaultState();
-}
+	void GX2CommandResetToDefaultState();
+} // namespace GX2

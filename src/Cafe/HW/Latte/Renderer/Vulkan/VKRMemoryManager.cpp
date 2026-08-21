@@ -6,7 +6,7 @@
 
 VKRSynchronizedRingAllocator::~VKRSynchronizedRingAllocator()
 {
-	for(auto& buf : m_buffers)
+	for (auto& buf : m_buffers)
 	{
 		m_vkrMemMgr->DeleteBuffer(buf.vk_buffer, buf.vk_mem);
 	}
@@ -225,7 +225,7 @@ void VKRSynchronizedHeapAllocator::CleanupBuffer(uint64 latestFinishedCommandBuf
 		if (it->first <= latestFinishedCommandBufferId)
 		{
 			// release allocations
-			for(auto& addr : it->second)
+			for (auto& addr : it->second)
 				m_chunkedHeap.free(addr);
 			it = m_releaseQueue.erase(it);
 			continue;
@@ -369,9 +369,9 @@ uint32 VkBufferChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumAl
 {
 	size_t allocationSize = std::max<size_t>(m_minimumBufferAllocationSize, minimumAllocationSize);
 	VKRBuffer* buffer = VKRBuffer::Create(m_bufferType, allocationSize, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	if(!buffer)
+	if (!buffer)
 		buffer = VKRBuffer::Create(m_bufferType, allocationSize, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-	if(!buffer)
+	if (!buffer)
 		VulkanRenderer::GetInstance()->UnrecoverableError("Failed to allocate buffer memory for VkBufferChunkedHeap");
 	cemu_assert_debug(buffer);
 	cemu_assert_debug(m_chunkBuffers.size() == chunkIndex);

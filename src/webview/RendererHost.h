@@ -8,7 +8,7 @@ namespace WebFrontend
 {
 	class IRendererHost
 	{
-	public:
+	  public:
 		virtual ~IRendererHost() = default;
 		virtual void InitializeMain(Host::IRenderRegion& region) = 0;
 		virtual void AbandonMainInitialization() = 0;
@@ -21,4 +21,4 @@ namespace WebFrontend
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
 		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
-}
+} // namespace WebFrontend

@@ -70,21 +70,51 @@ enum X86Cond : u8
 };
 class x86Assembler64
 {
-private:
+  private:
 	std::vector<u8> m_buffer;
 
-public:
-	u8* GetBufferPtr() { return m_buffer.data(); };
-	std::span<u8> GetBuffer() { return m_buffer; };
-	u32 GetWriteIndex() { return (u32)m_buffer.size(); };
-	void _emitU8(u8 v) { m_buffer.emplace_back(v); };
-	void _emitU16(u16 v) { size_t writeIdx = m_buffer.size(); m_buffer.resize(writeIdx + 2); *(u16*)(m_buffer.data() + writeIdx) = v; };
-	void _emitU32(u32 v) { size_t writeIdx = m_buffer.size(); m_buffer.resize(writeIdx + 4); *(u32*)(m_buffer.data() + writeIdx) = v; };
-	void _emitU64(u64 v) { size_t writeIdx = m_buffer.size(); m_buffer.resize(writeIdx + 8); *(u64*)(m_buffer.data() + writeIdx) = v; };
+  public:
+	u8* GetBufferPtr()
+	{
+		return m_buffer.data();
+	};
+	std::span<u8> GetBuffer()
+	{
+		return m_buffer;
+	};
+	u32 GetWriteIndex()
+	{
+		return (u32)m_buffer.size();
+	};
+	void _emitU8(u8 v)
+	{
+		m_buffer.emplace_back(v);
+	};
+	void _emitU16(u16 v)
+	{
+		size_t writeIdx = m_buffer.size();
+		m_buffer.resize(writeIdx + 2);
+		*(u16*)(m_buffer.data() + writeIdx) = v;
+	};
+	void _emitU32(u32 v)
+	{
+		size_t writeIdx = m_buffer.size();
+		m_buffer.resize(writeIdx + 4);
+		*(u32*)(m_buffer.data() + writeIdx) = v;
+	};
+	void _emitU64(u64 v)
+	{
+		size_t writeIdx = m_buffer.size();
+		m_buffer.resize(writeIdx + 8);
+		*(u64*)(m_buffer.data() + writeIdx) = v;
+	};
 	using GPR64 = X86Reg;
 	using GPR32 = X86Reg;
 	using GPR8_REX = X86Reg;
-	void LockPrefix() { _emitU8(0xF0); };
+	void LockPrefix()
+	{
+		_emitU8(0xF0);
+	};
 	void ADD_bb(GPR8_REX dst, GPR8_REX src)
 	{
 		if ((src >= 4) || (dst >= 4))
@@ -97,9 +127,12 @@ public:
 	void ADD_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -123,15 +156,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -155,8 +193,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_dd(GPR32 dst, GPR32 src)
 	{
@@ -176,9 +216,12 @@ public:
 	void ADD_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -202,15 +245,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -232,15 +280,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -264,15 +317,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -294,8 +352,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -309,9 +369,12 @@ public:
 	void OR_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -335,15 +398,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -367,8 +435,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_dd(GPR32 dst, GPR32 src)
 	{
@@ -388,9 +458,12 @@ public:
 	void OR_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -414,15 +487,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -444,15 +522,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -476,15 +559,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void OR_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -506,8 +594,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -521,9 +611,12 @@ public:
 	void ADC_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -547,15 +640,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -579,8 +677,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_dd(GPR32 dst, GPR32 src)
 	{
@@ -600,9 +700,12 @@ public:
 	void ADC_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -626,15 +729,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -656,15 +764,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -688,15 +801,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADC_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -718,8 +836,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -733,9 +853,12 @@ public:
 	void SBB_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -759,15 +882,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -791,8 +919,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_dd(GPR32 dst, GPR32 src)
 	{
@@ -812,9 +942,12 @@ public:
 	void SBB_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -838,15 +971,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -868,15 +1006,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -900,15 +1043,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SBB_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -930,8 +1078,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -945,9 +1095,12 @@ public:
 	void AND_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -971,15 +1124,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1003,8 +1161,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_dd(GPR32 dst, GPR32 src)
 	{
@@ -1024,9 +1184,12 @@ public:
 	void AND_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1050,15 +1213,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1080,15 +1248,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1112,15 +1285,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void AND_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1142,8 +1320,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -1157,9 +1337,12 @@ public:
 	void SUB_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1183,15 +1366,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1215,8 +1403,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_dd(GPR32 dst, GPR32 src)
 	{
@@ -1236,9 +1426,12 @@ public:
 	void SUB_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1262,15 +1455,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1292,15 +1490,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1324,15 +1527,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SUB_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1354,8 +1562,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -1369,9 +1579,12 @@ public:
 	void XOR_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1395,15 +1608,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1427,8 +1645,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_dd(GPR32 dst, GPR32 src)
 	{
@@ -1448,9 +1668,12 @@ public:
 	void XOR_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1474,15 +1697,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1504,15 +1732,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1536,15 +1769,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XOR_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1566,8 +1804,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -1581,9 +1821,12 @@ public:
 	void CMP_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1607,15 +1850,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1639,8 +1887,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_dd(GPR32 dst, GPR32 src)
 	{
@@ -1660,9 +1910,12 @@ public:
 	void CMP_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1686,15 +1939,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1716,15 +1974,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1748,15 +2011,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMP_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1778,8 +2046,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void ADD_di32(GPR32 dst, s32 imm)
 	{
@@ -1801,9 +2071,12 @@ public:
 	void ADD_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1827,16 +2100,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void ADD_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1858,8 +2136,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void OR_di32(GPR32 dst, s32 imm)
@@ -1882,9 +2162,12 @@ public:
 	void OR_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1908,16 +2191,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void OR_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1939,8 +2227,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void ADC_di32(GPR32 dst, s32 imm)
@@ -1963,9 +2253,12 @@ public:
 	void ADC_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -1989,16 +2282,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void ADC_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2020,8 +2318,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void SBB_di32(GPR32 dst, s32 imm)
@@ -2044,9 +2344,12 @@ public:
 	void SBB_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2070,16 +2373,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void SBB_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2101,8 +2409,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void AND_di32(GPR32 dst, s32 imm)
@@ -2125,9 +2435,12 @@ public:
 	void AND_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2151,16 +2464,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void AND_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2182,8 +2500,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void SUB_di32(GPR32 dst, s32 imm)
@@ -2206,9 +2526,12 @@ public:
 	void SUB_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2232,16 +2555,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void SUB_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2263,8 +2591,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void XOR_di32(GPR32 dst, s32 imm)
@@ -2287,9 +2617,12 @@ public:
 	void XOR_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2313,16 +2646,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void XOR_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2344,8 +2682,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void CMP_di32(GPR32 dst, s32 imm)
@@ -2368,9 +2708,12 @@ public:
 	void CMP_di32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2394,16 +2737,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void CMP_qi32_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2425,8 +2773,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void ADD_di8(GPR32 dst, s8 imm)
@@ -2449,9 +2799,12 @@ public:
 	void ADD_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2475,16 +2828,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void ADD_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2506,8 +2864,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void OR_di8(GPR32 dst, s8 imm)
@@ -2530,9 +2890,12 @@ public:
 	void OR_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2556,16 +2919,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void OR_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2587,8 +2955,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void ADC_di8(GPR32 dst, s8 imm)
@@ -2611,9 +2981,12 @@ public:
 	void ADC_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2637,16 +3010,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void ADC_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2668,8 +3046,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void SBB_di8(GPR32 dst, s8 imm)
@@ -2692,9 +3072,12 @@ public:
 	void SBB_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2718,16 +3101,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void SBB_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2749,8 +3137,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void AND_di8(GPR32 dst, s8 imm)
@@ -2773,9 +3163,12 @@ public:
 	void AND_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2799,16 +3192,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void AND_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2830,8 +3228,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void SUB_di8(GPR32 dst, s8 imm)
@@ -2854,9 +3254,12 @@ public:
 	void SUB_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2880,16 +3283,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void SUB_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2911,8 +3319,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void XOR_di8(GPR32 dst, s8 imm)
@@ -2935,9 +3345,12 @@ public:
 	void XOR_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2961,16 +3374,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void XOR_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -2992,8 +3410,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void CMP_di8(GPR32 dst, s8 imm)
@@ -3016,9 +3436,12 @@ public:
 	void CMP_di8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3042,16 +3465,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void CMP_qi8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3073,8 +3501,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void TEST_bb(GPR8_REX dst, GPR8_REX src)
@@ -3089,9 +3519,12 @@ public:
 	void TEST_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3115,8 +3548,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void TEST_dd(GPR32 dst, GPR32 src)
 	{
@@ -3136,9 +3571,12 @@ public:
 	void TEST_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3162,15 +3600,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void TEST_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3192,8 +3635,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XCHG_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -3207,9 +3652,12 @@ public:
 	void XCHG_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3233,8 +3681,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XCHG_dd(GPR32 dst, GPR32 src)
 	{
@@ -3254,9 +3704,12 @@ public:
 	void XCHG_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3280,15 +3733,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void XCHG_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3310,8 +3768,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_bb(GPR8_REX dst, GPR8_REX src)
 	{
@@ -3325,9 +3785,12 @@ public:
 	void MOV_bb_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR8_REX src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3351,15 +3814,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_bb_r(GPR8_REX dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3383,8 +3851,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_dd(GPR32 dst, GPR32 src)
 	{
@@ -3404,9 +3874,12 @@ public:
 	void MOV_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3430,15 +3903,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3460,15 +3938,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_dd_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3492,15 +3975,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_qq_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3522,8 +4010,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void MOV_di32(GPR32 dst, s32 imm)
 	{
@@ -3552,9 +4042,12 @@ public:
 	void CALL_q_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3578,8 +4071,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void IMUL_ddi32(GPR32 dst, GPR32 src, s32 imm)
 	{
@@ -3601,9 +4096,12 @@ public:
 	void IMUL_ddi32_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3627,16 +4125,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void IMUL_qqi32_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s32 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3658,8 +4161,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU32((u32)imm);
 	}
 	void IMUL_ddi8(GPR32 dst, GPR32 src, s8 imm)
@@ -3682,9 +4187,12 @@ public:
 	void IMUL_ddi8_r(GPR32 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3708,16 +4216,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void IMUL_qqi8_r(GPR64 dst, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, s8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3739,8 +4252,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void SHL_b_CL(GPR8_REX dst)
@@ -3755,9 +4270,12 @@ public:
 	void SHL_b_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3781,8 +4299,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SHR_b_CL(GPR8_REX dst)
 	{
@@ -3796,9 +4316,12 @@ public:
 	void SHR_b_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3822,8 +4345,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SAR_b_CL(GPR8_REX dst)
 	{
@@ -3837,9 +4362,12 @@ public:
 	void SAR_b_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3863,8 +4391,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SHL_d_CL(GPR32 dst)
 	{
@@ -3884,9 +4414,12 @@ public:
 	void SHL_d_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3910,15 +4443,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SHL_q_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3940,8 +4478,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SHR_d_CL(GPR32 dst)
 	{
@@ -3961,9 +4501,12 @@ public:
 	void SHR_d_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -3987,15 +4530,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SHR_q_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4017,8 +4565,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SAR_d_CL(GPR32 dst)
 	{
@@ -4038,9 +4588,12 @@ public:
 	void SAR_d_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4064,15 +4617,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void SAR_q_CL_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4094,8 +4652,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void JMP_j32(s32 imm)
 	{
@@ -4121,9 +4681,12 @@ public:
 	void SETcc_b_l(X86Cond cond, GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4148,8 +4711,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMPXCHG_dd(GPR32 dst, GPR32 src)
 	{
@@ -4171,9 +4736,12 @@ public:
 	void CMPXCHG_dd_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR32 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4198,15 +4766,20 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void CMPXCHG_qq_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, GPR64 src)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4229,8 +4802,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 	}
 	void BSWAP_d(GPR32 dst)
 	{
@@ -4269,9 +4844,12 @@ public:
 	void BT_du8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, u8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4296,16 +4874,21 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 	void BT_qu8_l(GPR64 memReg, sint32 offset, GPR64 index, uint8 scaler, u8 imm)
 	{
 		uint8 mod;
-		if (offset == 0 && (memReg & 7) != 5) mod = 0;
-		else if (offset == (s32)(s8)offset) mod = 1;
-		else mod = 2;
+		if (offset == 0 && (memReg & 7) != 5)
+			mod = 0;
+		else if (offset == (s32)(s8)offset)
+			mod = 1;
+		else
+			mod = 2;
 		bool sib_use = (scaler != 0 && index != X86_REG_NONE);
 		if ((memReg & 7) == 4)
 		{
@@ -4328,8 +4911,10 @@ public:
 		{
 			_emitU8((0 << 6) | ((memReg & 7)) | ((index & 7) << 3));
 		}
-		if (mod == 1) _emitU8((u8)offset);
-		else if (mod == 2) _emitU32((u32)offset);
+		if (mod == 1)
+			_emitU8((u8)offset);
+		else if (mod == 2)
+			_emitU32((u32)offset);
 		_emitU8((u8)imm);
 	}
 };

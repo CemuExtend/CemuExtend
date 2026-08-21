@@ -57,7 +57,7 @@ uint32 LatteTextureVk_AdjustTextureCompSel(Latte::E_GX2SURFFMT format, uint32 co
 LatteTextureViewVk::LatteTextureViewVk(VkDevice device, LatteTextureVk* texture, Latte::E_DIM dim, Latte::E_GX2SURFFMT format, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount)
 	: LatteTextureView(texture, firstMip, mipCount, firstSlice, sliceCount, dim, format), m_device(device)
 {
-	if(texture->overwriteInfo.hasFormatOverwrite)
+	if (texture->overwriteInfo.hasFormatOverwrite)
 	{
 		cemu_assert_debug(format == texture->format); // if format overwrite is used, the texture is no longer taking part in aliasing and the format of any view has to match
 		m_format = texture->GetFormat();
@@ -127,16 +127,15 @@ VKRObjectTextureView* LatteTextureViewVk::CreateView(uint32 gpuSamplerSwizzle)
 	}
 
 	static const VkComponentSwizzle swizzle[] =
-	{
-		VK_COMPONENT_SWIZZLE_R,
-		VK_COMPONENT_SWIZZLE_G,
-		VK_COMPONENT_SWIZZLE_B,
-		VK_COMPONENT_SWIZZLE_A,
-		VK_COMPONENT_SWIZZLE_ZERO,
-		VK_COMPONENT_SWIZZLE_ONE,
-		VK_COMPONENT_SWIZZLE_ZERO,
-		VK_COMPONENT_SWIZZLE_ZERO
-	};
+		{
+			VK_COMPONENT_SWIZZLE_R,
+			VK_COMPONENT_SWIZZLE_G,
+			VK_COMPONENT_SWIZZLE_B,
+			VK_COMPONENT_SWIZZLE_A,
+			VK_COMPONENT_SWIZZLE_ZERO,
+			VK_COMPONENT_SWIZZLE_ONE,
+			VK_COMPONENT_SWIZZLE_ZERO,
+			VK_COMPONENT_SWIZZLE_ZERO};
 
 	viewInfo.components.r = swizzle[compSelR];
 	viewInfo.components.g = swizzle[compSelG];
@@ -151,7 +150,7 @@ VKRObjectTextureView* LatteTextureViewVk::CreateView(uint32 gpuSamplerSwizzle)
 }
 
 VKRObjectTextureView* LatteTextureViewVk::GetViewRGBA()
-{ 
+{
 	return GetSamplerView(0x06880000); // RGBA swizzle
 }
 

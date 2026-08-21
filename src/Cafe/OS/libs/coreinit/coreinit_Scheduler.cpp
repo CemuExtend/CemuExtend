@@ -122,4 +122,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSEnableInterrupts, LogType::CoreinitThread);
 		cafeExportRegister("coreinit", OSRestoreInterrupts, LogType::CoreinitThread);
 	}
-};
+}; // namespace coreinit

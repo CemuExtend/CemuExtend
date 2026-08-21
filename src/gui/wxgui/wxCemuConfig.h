@@ -74,9 +74,9 @@ struct fmt::formatter<sHotkeyCfg> : formatter<string_view>
 struct wxCemuConfig
 {
 	ConfigValue<sint32> language{wxLANGUAGE_DEFAULT};
-	ConfigValue<int> msw_theme { static_cast<int>(MSWThemeOption::kAuto) };
+	ConfigValue<int> msw_theme{static_cast<int>(MSWThemeOption::kAuto)};
 	ConfigValue<bool> use_discord_presence{true};
-	ConfigValue<bool> fullscreen{ false };
+	ConfigValue<bool> fullscreen{false};
 	ConfigValue<bool> fullscreen_menubar{false};
 	ConfigValue<bool> feral_gamemode{false};
 
@@ -143,9 +143,9 @@ void SyncWxHotkeysToFrontend();
 void SyncWxFrontendSettingsToNeutral();
 
 class XMLWxCemuConfig_t final : public XMLChildConfig<wxCemuConfig,
-	&wxCemuConfig::Load, &wxCemuConfig::Save>
+													  &wxCemuConfig::Load, &wxCemuConfig::Save>
 {
-public:
+  public:
 	using Base = XMLChildConfig<wxCemuConfig, &wxCemuConfig::Load, &wxCemuConfig::Save>;
 	using Base::Base;
 

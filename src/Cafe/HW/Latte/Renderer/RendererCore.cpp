@@ -48,7 +48,7 @@ void LatteDraw_handleSpecialState8_clearAsDepth()
 		// hacky way to get clear color
 		float* regClearColor = (float*)(LatteGPUState.contextRegister + 0xC000 + 0); // REG_BASE_ALU_CONST
 
-		uint8 clearColor[4] = { 0 };
+		uint8 clearColor[4] = {0};
 		clearColor[0] = (uint8)(regClearColor[0] * 255.0f);
 		clearColor[1] = (uint8)(regClearColor[1] * 255.0f);
 		clearColor[2] = (uint8)(regClearColor[2] * 255.0f);
@@ -62,7 +62,7 @@ void LatteDraw_handleSpecialState8_clearAsDepth()
 #ifdef ENABLE_OPENGL
 		case RendererAPI::OpenGL:
 		{
-			//cemu_assert_debug(false); // implement g_renderer->texture_clearColorSlice properly for OpenGL renderer
+			// cemu_assert_debug(false); // implement g_renderer->texture_clearColorSlice properly for OpenGL renderer
 			if (glClearTexSubImage)
 				glClearTexSubImage(((LatteTextureViewGL*)view)->glTexId, mipIndex, 0, 0, 0, effectiveClearWidth, effectiveClearHeight, 1, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 			break;
@@ -121,7 +121,7 @@ void rectsEmulationGS_outputGeneratedVertex(std::string& gsSrc, LatteDecompilerS
 
 void rectsEmulationGS_outputVerticesCode(std::string& gsSrc, LatteDecompilerShader* vertexShader, LatteShaderPSInputTable* psInputTable, sint32 p0, sint32 p1, sint32 p2, sint32 p3, const char* variant, const LatteContextRegister& latteRegister)
 {
-	sint32 pList[4] = { p0, p1, p2, p3 };
+	sint32 pList[4] = {p0, p1, p2, p3};
 	for (sint32 i = 0; i < 4; i++)
 	{
 		if (pList[i] == 3)

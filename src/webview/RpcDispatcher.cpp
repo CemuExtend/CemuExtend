@@ -19,13 +19,13 @@ namespace WebFrontend
 		}
 
 		void AddString(rapidjson::Value& object, const char* name,
-			std::string_view value, rapidjson::Document::AllocatorType& allocator)
+					   std::string_view value, rapidjson::Document::AllocatorType& allocator)
 		{
 			object.AddMember(rapidjson::StringRef(name),
-				rapidjson::Value(value.data(), static_cast<rapidjson::SizeType>(value.size()), allocator),
-				allocator);
+							 rapidjson::Value(value.data(), static_cast<rapidjson::SizeType>(value.size()), allocator),
+							 allocator);
 		}
-	}
+	} // namespace
 
 	void RpcDispatcher::Register(std::string method, Handler handler)
 	{
@@ -102,16 +102,13 @@ namespace WebFrontend
 			if (validation.HasParseError())
 				return Error(requestId, "internal_error", "RPC handler produced invalid JSON");
 			return Success(requestId, result);
-		}
-		catch (const std::invalid_argument& exception)
+		} catch (const std::invalid_argument& exception)
 		{
 			return Error(requestId, "invalid_params", exception.what());
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			return Error(requestId, "operation_failed", exception.what());
-		}
-		catch (...)
+		} catch (...)
 		{
 			return Error(requestId, "internal_error", "unknown native exception");
 		}
@@ -130,7 +127,7 @@ namespace WebFrontend
 	}
 
 	std::string RpcDispatcher::Error(std::string_view id, std::string_view code,
-		std::string_view message)
+									 std::string_view message)
 	{
 		rapidjson::Document document(rapidjson::kObjectType);
 		auto& allocator = document.GetAllocator();
@@ -156,4 +153,4 @@ namespace WebFrontend
 		document.AddMember("result", value, allocator);
 		return Serialize(document);
 	}
-}
+} // namespace WebFrontend

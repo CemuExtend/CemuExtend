@@ -14,39 +14,42 @@
 #include <wx/textctrl.h>
 
 struct curlDownloadFileState_t;
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 class DownloadCustomGraphicPackWindow : public wxDialog
 {
-public:
-    DownloadCustomGraphicPackWindow(wxWindow* parent,
-        std::shared_ptr<Host::IPathProvider> pathProvider);
-    ~DownloadCustomGraphicPackWindow() override;
-    
-    int ShowModal() override;
-    void OnClose(wxCloseEvent& event);
-    void OnUpdate(const wxTimerEvent& event);
-    void OnCancelButton(const wxCommandEvent& event);
-    void OnDownloadButton(const wxCommandEvent& event);
+  public:
+	DownloadCustomGraphicPackWindow(wxWindow* parent,
+									std::shared_ptr<Host::IPathProvider> pathProvider);
+	~DownloadCustomGraphicPackWindow() override;
 
-public:
-    struct curlDownloadFileState_t
-    {
-    	std::vector<uint8> fileData;
-    	std::atomic<double> progress = 0.0;
-        std::atomic<bool> isCanceled = false;
-    };
-    
-private:
+	int ShowModal() override;
+	void OnClose(wxCloseEvent& event);
+	void OnUpdate(const wxTimerEvent& event);
+	void OnCancelButton(const wxCommandEvent& event);
+	void OnDownloadButton(const wxCommandEvent& event);
+
+  public:
+	struct curlDownloadFileState_t
+	{
+		std::vector<uint8> fileData;
+		std::atomic<double> progress = 0.0;
+		std::atomic<bool> isCanceled = false;
+	};
+
+  private:
 	void UpdateThread(std::string downloadUrl, std::string folderName);
-	
+
 	enum DownloadStage_t
 	{
 		StageDownloading,
 		StageExtracting,
 		StageVerifying,
 		StageDone,
-		
+
 		// Error stages
 		StageErrConnectFailed,
 		StageErrSourceFailed,
@@ -54,17 +57,17 @@ private:
 		StageErrOpenFailed,
 		StageErrConflict,
 	};
-    
+
 	std::unique_ptr<curlDownloadFileState_t> m_downloadState;
 	std::atomic<DownloadStage_t> m_stage;
 	DownloadStage_t m_currentStage;
 	std::atomic<double> m_extractionProgress;
-    
-    wxTimer* m_timer;
-    wxTextCtrl* m_urlField;
-    wxGauge* m_processBar;
-    wxStaticText* m_statusText;
-    wxButton* m_downloadButton;
-    std::thread m_thread;
+
+	wxTimer* m_timer;
+	wxTextCtrl* m_urlField;
+	wxGauge* m_processBar;
+	wxStaticText* m_statusText;
+	wxButton* m_downloadButton;
+	std::thread m_thread;
 	std::shared_ptr<Host::IPathProvider> m_pathProvider;
 };

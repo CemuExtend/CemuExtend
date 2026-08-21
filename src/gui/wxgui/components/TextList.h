@@ -7,14 +7,13 @@
 #include <unordered_map>
 #include <sstream>
 
-
 class TextList : public wxControl, public wxScrollHelper
 {
-public:
+  public:
 	virtual ~TextList();
 	TextList(wxWindow* parent, wxWindowID id,
-		const wxPoint& pos = wxDefaultPosition,
-		const wxSize& size = wxDefaultSize, long style = 0);
+			 const wxPoint& pos = wxDefaultPosition,
+			 const wxSize& size = wxDefaultSize, long style = 0);
 
 	void RefreshControl(const wxRect* update_region = nullptr);
 	void RefreshLine(std::uint32_t line);
@@ -28,8 +27,8 @@ public:
 	bool SetElementCount(size_t element_count);
 	std::uint32_t GetElementCount() const;
 	bool IsKeyDown(std::int32_t keycode);
-	
-protected:
+
+  protected:
 	void WriteText(wxDC& dc, const wxString& text, wxPoint& position) const;
 	void WriteText(wxDC& dc, const wxString& text, wxPoint& position, const wxColour& color) const;
 	void NextLine(wxPoint& position, const wxPoint* start_position = nullptr) const;
@@ -55,7 +54,7 @@ protected:
 	wxRect m_selection;
 	wxPanel* m_tooltip_window;
 
-private:
+  private:
 	void OnPaintEvent(wxPaintEvent& event);
 	void OnMouseMoveEvent(wxMouseEvent& event);
 	void OnKeyDownEvent(wxKeyEvent& event);
@@ -69,7 +68,7 @@ private:
 	std::unordered_map<std::int32_t, bool> m_key_states;
 
 	wxFont m_font;
-	
+
 	wxTimer* m_tooltip_timer;
 	wxPoint m_mouse_position;
 };

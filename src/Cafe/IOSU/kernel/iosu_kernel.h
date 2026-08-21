@@ -24,5 +24,5 @@ namespace iosu
 		void IPCSubmitFromCOS(uint32 ppcCoreIndex, IPCCommandBody* cmd);
 
 		IOSUModule* GetModule();
-	}
-}
+	} // namespace kernel
+} // namespace iosu

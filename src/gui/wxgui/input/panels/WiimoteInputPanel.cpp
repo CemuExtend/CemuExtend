@@ -14,37 +14,34 @@
 #include "wxgui/components/wxInputDraw.h"
 
 constexpr WiimoteController::ButtonId g_kFirstColumnItems[] =
-{
-	WiimoteController::kButtonId_A, WiimoteController::kButtonId_B, WiimoteController::kButtonId_1, WiimoteController::kButtonId_2, WiimoteController::kButtonId_Plus, WiimoteController::kButtonId_Minus, WiimoteController::kButtonId_Home
-};
+	{
+		WiimoteController::kButtonId_A, WiimoteController::kButtonId_B, WiimoteController::kButtonId_1, WiimoteController::kButtonId_2, WiimoteController::kButtonId_Plus, WiimoteController::kButtonId_Minus, WiimoteController::kButtonId_Home};
 
 constexpr WiimoteController::ButtonId g_kSecondColumnItems[] =
-{
-	WiimoteController::kButtonId_Up, WiimoteController::kButtonId_Down, WiimoteController::kButtonId_Left, WiimoteController::kButtonId_Right
-};
+	{
+		WiimoteController::kButtonId_Up, WiimoteController::kButtonId_Down, WiimoteController::kButtonId_Left, WiimoteController::kButtonId_Right};
 
 constexpr WiimoteController::ButtonId g_kThirdColumnItems[] =
-{
-	WiimoteController::kButtonId_Nunchuck_C, WiimoteController::kButtonId_Nunchuck_Z,
-	WiimoteController::kButtonId_None,
-	WiimoteController::kButtonId_Nunchuck_Up,WiimoteController::kButtonId_Nunchuck_Down,WiimoteController::kButtonId_Nunchuck_Left,WiimoteController::kButtonId_Nunchuck_Right
-};
+	{
+		WiimoteController::kButtonId_Nunchuck_C, WiimoteController::kButtonId_Nunchuck_Z,
+		WiimoteController::kButtonId_None,
+		WiimoteController::kButtonId_Nunchuck_Up, WiimoteController::kButtonId_Nunchuck_Down, WiimoteController::kButtonId_Nunchuck_Left, WiimoteController::kButtonId_Nunchuck_Right};
 
 WiimoteInputPanel::WiimoteInputPanel(wxWindow* parent,
-	std::function<bool()> escapeDown)
+									 std::function<bool()> escapeDown)
 	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
 	bold_font.MakeBold();
 
 	auto* main_sizer = new wxBoxSizer(wxVERTICAL);
-    auto* horiz_main_sizer = new wxBoxSizer(wxHORIZONTAL);
+	auto* horiz_main_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-    auto* extensions_sizer = new wxBoxSizer(wxHORIZONTAL);
-    horiz_main_sizer->Add(extensions_sizer, wxSizerFlags(0).Align(wxALIGN_CENTER_VERTICAL));
+	auto* extensions_sizer = new wxBoxSizer(wxHORIZONTAL);
+	horiz_main_sizer->Add(extensions_sizer, wxSizerFlags(0).Align(wxALIGN_CENTER_VERTICAL));
 
-    extensions_sizer->Add(new wxStaticText(this, wxID_ANY, _("Extensions:")));
-    extensions_sizer->AddSpacer(10);
+	extensions_sizer->Add(new wxStaticText(this, wxID_ANY, _("Extensions:")));
+	extensions_sizer->AddSpacer(10);
 
 	m_motion_plus = new wxCheckBox(this, wxID_ANY, _("MotionPlus"));
 	m_motion_plus->Bind(wxEVT_CHECKBOX, &WiimoteInputPanel::on_extension_change, this);
@@ -140,9 +137,8 @@ WiimoteInputPanel::WiimoteInputPanel(wxWindow* parent,
 		m_nunchuck_items.push_back(text_ctrl);
 	}
 
-
 	// input drawer
-	m_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	m_draw->Enable(m_nunchuck->GetValue());
 	m_item_sizer->Add(5, 0, wxGBPosition(3, column + 3), wxDefaultSpan, wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 	m_item_sizer->Add(m_draw, wxGBPosition(3, column + 4), wxGBSpan(4, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
@@ -152,12 +148,13 @@ WiimoteInputPanel::WiimoteInputPanel(wxWindow* parent,
 	//////////////////////////////////////////////////////////////////
 
 	main_sizer->Add(m_item_sizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 5);
-	
+
 	SetSizer(main_sizer);
 	Layout();
 }
 
-void WiimoteInputPanel::add_button_row(sint32 row, sint32 column, const WiimoteController::ButtonId &button_id) {
+void WiimoteInputPanel::add_button_row(sint32 row, sint32 column, const WiimoteController::ButtonId& button_id)
+{
 	m_item_sizer->Add(
 		new wxStaticText(this, wxID_ANY, wxGetTranslation(wxString::FromUTF8(WiimoteController::get_button_name(button_id)))),
 		wxGBPosition(row, column),
@@ -178,9 +175,9 @@ void WiimoteInputPanel::set_active_device_type(WPADDeviceType type)
 	m_device_type = type;
 
 	m_motion_plus->SetValue(type == kWAPDevMPLS || type == kWAPDevMPLSFreeStyle || type == kWAPDevMPLSClassic);
-	switch(type)
+	switch (type)
 	{
-	case kWAPDevFreestyle: 
+	case kWAPDevFreestyle:
 	case kWAPDevMPLSFreeStyle:
 		m_nunchuck->SetValue(true);
 		m_classic->SetValue(false);
@@ -190,7 +187,7 @@ void WiimoteInputPanel::set_active_device_type(WPADDeviceType type)
 		}
 		break;
 
-	case kWAPDevClassic: 
+	case kWAPDevClassic:
 	case kWAPDevMPLSClassic:
 		m_nunchuck->SetValue(false);
 		m_classic->SetValue(true);
@@ -216,9 +213,9 @@ void WiimoteInputPanel::on_volume_change(wxCommandEvent& event)
 
 void WiimoteInputPanel::on_extension_change(wxCommandEvent& event)
 {
-	if(m_motion_plus->GetValue() && m_nunchuck->GetValue())
+	if (m_motion_plus->GetValue() && m_nunchuck->GetValue())
 		set_active_device_type(kWAPDevMPLSFreeStyle);
-	else if(m_motion_plus->GetValue() && m_classic->GetValue())
+	else if (m_motion_plus->GetValue() && m_classic->GetValue())
 		set_active_device_type(kWAPDevMPLSClassic);
 	else if (m_motion_plus->GetValue())
 		set_active_device_type(kWAPDevMPLS);
@@ -226,7 +223,7 @@ void WiimoteInputPanel::on_extension_change(wxCommandEvent& event)
 		set_active_device_type(kWAPDevFreestyle);
 	else if (m_classic->GetValue())
 		set_active_device_type(kWAPDevClassic);
-	else 
+	else
 		set_active_device_type(kWAPDevCore);
 }
 
@@ -253,7 +250,8 @@ void WiimoteInputPanel::load_controller(const EmulatedControllerPtr& emulated_co
 {
 	InputPanel::load_controller(emulated_controller);
 
-	if (emulated_controller) {
+	if (emulated_controller)
+	{
 		const auto wiimote = std::dynamic_pointer_cast<WiimoteController>(emulated_controller);
 		wxASSERT(wiimote);
 		set_active_device_type(wiimote->get_device_type());

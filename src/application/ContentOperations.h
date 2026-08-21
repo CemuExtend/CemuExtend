@@ -105,7 +105,7 @@ namespace Application
 
 	class IContentOperations
 	{
-	public:
+	  public:
 		virtual ~IContentOperations() = default;
 		[[nodiscard]] virtual std::optional<WuaConversionPlan> PlanWuaConversion(
 			std::uint64_t titleId, std::uint64_t preferredLocationUid) const = 0;
@@ -118,4 +118,4 @@ namespace Application
 			std::uint64_t locationUid, ContentProgressHandler progress,
 			ContentCancellationCheck cancelled) = 0;
 	};
-}
+} // namespace Application

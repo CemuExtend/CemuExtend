@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "generate": "bun run scripts/generate-contracts.ts && bun run scripts/convert-translations.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "bun test",
@@ -27,6 +29,7 @@
     "eslint-plugin-react-hooks": "5.2.0",
     "eslint-plugin-react-refresh": "0.4.20",
     "globals": "16.3.0",
+    "prettier": "3.9.6",
     "typescript-eslint": "8.40.0"
   }
 }

@@ -108,8 +108,7 @@ bool DSUControllerProvider::connect()
 
 		// restart threads
 		return true;
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "dsu client connect error: {}", ex.what());
 		return false;
@@ -163,7 +162,7 @@ std::array<bool, DSUControllerProvider::kMaxClients> DSUControllerProvider::wait
 		if (std::all_of(result.cbegin(), result.cend(), [](const bool& v) { return v == true; }))
 			break;
 
-		//std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		std::this_thread::yield();
 	}
 	while (std::chrono::steady_clock::now() < end);
@@ -182,10 +181,9 @@ bool DSUControllerProvider::wait_update(uint8_t index, uint32_t packet_index, si
 		return true;
 
 	const auto result = m_wait_cond[index].wait_for(lock, std::chrono::milliseconds(timeout),
-	                                                [this, index, packet_index]()
-	                                                {
-		                                                return packet_index < m_state[index].packet_index;
-	                                                });
+													[this, index, packet_index]() {
+														return packet_index < m_state[index].packet_index;
+													});
 
 	return result;
 }
@@ -240,7 +238,6 @@ MotionSample DSUControllerProvider::get_motion_sample(uint8_t index) const
 	return m_state[index].motion_sample;
 }
 
-
 void DSUControllerProvider::reader_thread()
 {
 	SetThreadName("DSU-reader");
@@ -248,7 +245,7 @@ void DSUControllerProvider::reader_thread()
 	while (m_running.load(std::memory_order_relaxed))
 	{
 		ServerMessage* msg;
-		//try
+		// try
 		//{
 		std::array<char, 100> recv_buf; // NOLINT(cppcoreguidelines-pro-type-member-init, hicpp-member-init)
 		boost::asio::ip::udp::endpoint sender_endpoint;
@@ -258,9 +255,8 @@ void DSUControllerProvider::reader_thread()
 			break;
 		if (ec)
 		{
-
 #ifdef DEBUG_DSU_CLIENT
-				printf(" DSUControllerProvider::ReaderThread: exception %s\n", ec.what());
+			printf(" DSUControllerProvider::ReaderThread: exception %s\n", ec.what());
 #endif
 
 			// there's probably no server listening on the given address:port
@@ -275,7 +271,7 @@ void DSUControllerProvider::reader_thread()
 		}
 
 #ifdef DEBUG_DSU_CLIENT
-			printf(" DSUControllerProvider::ReaderThread: received message with len: 0x%llx\n", len);
+		printf(" DSUControllerProvider::ReaderThread: received message with len: 0x%llx\n", len);
 #endif
 
 		if (len < sizeof(ServerMessage)) // cant be a valid message
@@ -285,9 +281,9 @@ void DSUControllerProvider::reader_thread()
 		//		}
 		//		catch (const std::exception&)
 		//		{
-		//#ifdef DEBUG_DSU_CLIENT
+		// #ifdef DEBUG_DSU_CLIENT
 		//			printf(" DSUControllerProvider::ReaderThread: exception %s\n", ex.what());
-		//#endif
+		// #endif
 		//
 		//			// there's probably no server listening on the given address:port
 		//			if (first_read) // workaroud: first read always fails?
@@ -304,74 +300,74 @@ void DSUControllerProvider::reader_thread()
 		switch (msg->GetMessageType())
 		{
 		case MessageType::Version:
+		{
+			const auto rsp = (VersionResponse*)msg;
+			if (!rsp->IsValid())
 			{
-				const auto rsp = (VersionResponse*)msg;
-				if (!rsp->IsValid())
-				{
 #ifdef DEBUG_DSU_CLIENT
 				printf(" DSUControllerProvider::ReaderThread: VersionResponse is invalid!\n");
 #endif
-					continue;
-				}
+				continue;
+			}
 
 #ifdef DEBUG_DSU_CLIENT
 			printf(" DSUControllerProvider::ReaderThread: server version is: 0x%x\n", rsp->GetVersion());
 #endif
 
-				m_server_version = rsp->GetVersion();
-				// wdc
-				break;
-			}
+			m_server_version = rsp->GetVersion();
+			// wdc
+			break;
+		}
 		case MessageType::Information:
+		{
+			const auto info = (PortInfo*)msg;
+			if (!info->IsValid())
 			{
-				const auto info = (PortInfo*)msg;
-				if (!info->IsValid())
-				{
 #ifdef DEBUG_DSU_CLIENT
 				printf(" DSUControllerProvider::ReaderThread: PortInfo is invalid!\n");
 #endif
-					continue;
-				}
+				continue;
+			}
 
-				index = info->GetIndex();
-				cemu_assert(index < kMaxClients);
+			index = info->GetIndex();
+			cemu_assert(index < kMaxClients);
 #ifdef DEBUG_DSU_CLIENT
 			printf(" DSUControllerProvider::ReaderThread: received PortInfo for index %d\n", index);
 #endif
 
-				auto& mutex = m_mutex[index];
-				std::scoped_lock lock(mutex);
-				m_prev_state[index] = m_state[index];
-				m_state[index] = *info;
-				m_wait_cond[index].notify_all();
-				break;
-			}
+			auto& mutex = m_mutex[index];
+			std::scoped_lock lock(mutex);
+			m_prev_state[index] = m_state[index];
+			m_state[index] = *info;
+			m_wait_cond[index].notify_all();
+			break;
+		}
 		case MessageType::Data:
+		{
+			const auto rsp = (DataResponse*)msg;
+			if (!rsp->IsValid())
 			{
-				const auto rsp = (DataResponse*)msg;
-				if (!rsp->IsValid())
-				{
 #ifdef DEBUG_DSU_CLIENT
 				printf(" DSUControllerProvider::ReaderThread: DataResponse is invalid!\n");
 #endif
-					continue;
-				}
+				continue;
+			}
 
-				index = rsp->GetIndex();
-				cemu_assert(index < kMaxClients);
+			index = rsp->GetIndex();
+			cemu_assert(index < kMaxClients);
 #ifdef DEBUG_DSU_CLIENT
 			printf(" DSUControllerProvider::ReaderThread: received DataResponse for index %d\n", index);
 #endif
 
-				auto& mutex = m_mutex[index];
-				std::scoped_lock lock(mutex);
-				m_prev_state[index] = m_state[index];
-				m_state[index] = *rsp;
-				m_wait_cond[index].notify_all();
-				// update motion info immediately, guaranteeing that we dont drop packets
-				integrate_motion(index, *rsp);
-				break;
-			}
+			auto& mutex = m_mutex[index];
+			std::scoped_lock lock(mutex);
+			m_prev_state[index] = m_state[index];
+			m_state[index] = *rsp;
+			m_wait_cond[index].notify_all();
+			// update motion info immediately, guaranteeing that we dont drop packets
+			integrate_motion(index, *rsp);
+			break;
+		}
 		}
 
 		if (index != 0xFF)
@@ -394,8 +390,7 @@ void DSUControllerProvider::writer_thread()
 		try
 		{
 			m_socket.send_to(boost::asio::buffer(msg.get(), msg->GetSize()), m_receiver_endpoint);
-		}
-		catch (const std::exception& ec)
+		} catch (const std::exception& ec)
 		{
 #ifdef DEBUG_DSU_CLIENT
 			printf(" DSUControllerProvider::WriterThread: exception %s\n", ec.what());
@@ -423,12 +418,12 @@ void DSUControllerProvider::integrate_motion(uint8_t index, const DataResponse& 
 	const auto& gyro = data_response.GetGyro();
 
 	m_motion_handler[index].processMotionSample((float)elapsedTimeD,
-	                                            gyro.x * 0.0174533f,
-	                                            gyro.y * 0.0174533f,
-	                                            gyro.z * 0.0174533f,
-	                                            acc.x,
-	                                            -acc.y,
-	                                            -acc.z);
+												gyro.x * 0.0174533f,
+												gyro.y * 0.0174533f,
+												gyro.z * 0.0174533f,
+												acc.x,
+												-acc.y,
+												-acc.z);
 
 	m_state[index].motion_sample = m_motion_handler[index].getMotionSample();
 }

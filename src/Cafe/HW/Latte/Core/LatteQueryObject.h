@@ -2,7 +2,7 @@
 
 class LatteQueryObject
 {
-public:
+  public:
 	virtual bool getResult(uint64& numSamplesPassed) = 0;
 	virtual void begin() = 0;
 	virtual void end() = 0;

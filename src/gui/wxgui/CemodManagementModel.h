@@ -65,7 +65,7 @@ struct CemodGuiButtonComboValue
 };
 
 using CemodGuiConfigValue = std::variant<bool, std::int64_t, std::string,
-	CemodGuiConfigChoice, CemodGuiButtonComboValue>;
+										 CemodGuiConfigChoice, CemodGuiButtonComboValue>;
 
 struct CemodGuiConfigItem
 {
@@ -107,13 +107,13 @@ struct CemodGuiNotification
 // owned value objects and never calls guest code through this interface.
 class ICemodRuntimeGuiAdapter
 {
-public:
+  public:
 	virtual ~ICemodRuntimeGuiAdapter() = default;
 	[[nodiscard]] virtual CemodGuiRuntimeAvailability Availability() const = 0;
 	[[nodiscard]] virtual std::vector<CemodGuiConfigCategory> ConfigCategories(
 		std::string_view pluginIdentity) const = 0;
 	virtual bool SetConfigValue(std::string_view pluginIdentity, std::string_view itemId,
-		const CemodGuiConfigValue& value, std::string& error) = 0;
+								const CemodGuiConfigValue& value, std::string& error) = 0;
 	[[nodiscard]] virtual std::vector<CemodGuiNotification> Notifications(
 		std::string_view pluginIdentity) const = 0;
 };
@@ -162,19 +162,19 @@ struct CemodPluginView
 
 class CemodGuiAdapter final
 {
-public:
+  public:
 	[[nodiscard]] static std::string MakeApprovalKey(std::string_view modIdentity,
-		std::string_view packageDigest);
+													 std::string_view packageDigest);
 	[[nodiscard]] static std::string CalculatePackageDigest(const std::filesystem::path& path,
-		std::string& error);
+															std::string& error);
 	[[nodiscard]] static std::uint64_t PermissionBit(CemodGuiPermission permission);
 	[[nodiscard]] static std::string PermissionName(CemodGuiPermission permission);
 	[[nodiscard]] static std::uint64_t DefaultGrantedPermissions(std::uint64_t requested);
 	[[nodiscard]] static CemodGuiApprovalState EvaluateApproval(std::uint64_t requested,
-		const std::optional<CemuExtend::CemodApproval>& approval, bool headless);
+																const std::optional<CemuExtend::CemodApproval>& approval, bool headless);
 	[[nodiscard]] static CemodPluginView InspectPlugin(const CemodGuiPackageInfo& info,
-		std::uint64_t titleId, const std::optional<CemuExtend::CemodApproval>& approval,
-		bool headless = false);
+													   std::uint64_t titleId, const std::optional<CemuExtend::CemodApproval>& approval,
+													   bool headless = false);
 
 	// These methods intentionally do not manufacture runtime state. A later runtime adapter
 	// can replace the unavailable model without changing the wxGUI data contract.

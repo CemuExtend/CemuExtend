@@ -9,4 +9,4 @@ namespace Espresso
 	constexpr inline uint64 TIMER_CLOCK = BUS_CLOCK / 4;
 
 	constexpr inline uint32 MEM_PAGE_SIZE = 0x20000;
-};
+}; // namespace Espresso

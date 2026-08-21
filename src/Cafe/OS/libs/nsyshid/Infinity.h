@@ -9,7 +9,8 @@
 
 namespace nsyshid
 {
-	class InfinityBaseDevice final : public Device {
+	class InfinityBaseDevice final : public Device
+	{
 	  public:
 		InfinityBaseDevice();
 		~InfinityBaseDevice() = default;
@@ -46,7 +47,8 @@ namespace nsyshid
 	constexpr uint16 INF_BLOCK_SIZE = 0x10;
 	constexpr uint16 INF_FIGURE_SIZE = INF_BLOCK_COUNT * INF_BLOCK_SIZE;
 	constexpr uint8 MAX_FIGURES = 9;
-	class InfinityUSB {
+	class InfinityUSB
+	{
 	  public:
 		struct InfinityFigure final
 		{

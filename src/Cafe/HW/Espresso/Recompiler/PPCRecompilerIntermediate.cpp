@@ -11,7 +11,7 @@ void PPCRecompilerIML_isolateEnterableSegments(ppcImlGenContext_t* ppcImlGenCont
 		{
 			// spawn new segment at end
 			PPCRecompilerIml_insertSegments(ppcImlGenContext, ppcImlGenContext->segmentList2.size(), 1);
-			IMLSegment* entrySegment = ppcImlGenContext->segmentList2[ppcImlGenContext->segmentList2.size()-1];
+			IMLSegment* entrySegment = ppcImlGenContext->segmentList2[ppcImlGenContext->segmentList2.size() - 1];
 			entrySegment->isEnterable = true;
 			entrySegment->enterPPCAddress = imlSegment->enterPPCAddress;
 			// create jump instruction

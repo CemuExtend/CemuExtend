@@ -39,48 +39,59 @@ namespace Application
 
 		class CafeMemoryDiagnosticBackend final : public IMemoryDiagnosticBackend
 		{
-		public:
-			bool IsEmulationRunning() const override { return CafeSystem::IsTitleRunning(); }
+		  public:
+			bool IsEmulationRunning() const override
+			{
+				return CafeSystem::IsTitleRunning();
+			}
 
 			MemoryMapSnapshot SnapshotMemoryMap() const override
 			{
 				MemoryMapSnapshot snapshot;
-				if (!IsEmulationRunning()) return snapshot;
+				if (!IsEmulationRunning())
+					return snapshot;
 				for (const auto* range : memory_getMMURanges())
 				{
-					if (!range->isMapped() || range->getSize() == 0) continue;
+					if (!range->isMapped() || range->getSize() == 0)
+						continue;
 					snapshot.regions.push_back({range->getBase(), range->getSize(),
-						std::string(range->getName())});
+												std::string(range->getName())});
 				}
 				snapshot.generation = MapGeneration(snapshot.regions);
 				return snapshot;
 			}
 
 			bool ReadCopy(std::uint64_t generation, std::uint32_t address,
-				std::span<std::byte> destination) const override
+						  std::span<std::byte> destination) const override
 			{
-				if (!IsEmulationRunning() || destination.empty()) return false;
+				if (!IsEmulationRunning() || destination.empty())
+					return false;
 				const auto snapshot = SnapshotMemoryMap();
-				if (snapshot.generation != generation) return false;
+				if (snapshot.generation != generation)
+					return false;
 				const auto end = static_cast<std::uint64_t>(address) + destination.size();
 				const auto found = std::ranges::find_if(snapshot.regions,
-					[address, end](const MemoryRegion& region) {
-						return address >= region.base && end <=
-							static_cast<std::uint64_t>(region.base) + region.size;
-					});
+														[address, end](const MemoryRegion& region) {
+															return address >= region.base && end <=
+																								 static_cast<std::uint64_t>(region.base) + region.size;
+														});
 				if (found == snapshot.regions.end() ||
 					!memory_isAddressRangeAccessible(address,
-						static_cast<std::uint32_t>(destination.size()))) return false;
+													 static_cast<std::uint32_t>(destination.size())))
+					return false;
 				const auto* source = memory_getPointerFromVirtualOffsetAllowNull(address);
-				if (!source) return false;
+				if (!source)
+					return false;
 				std::memcpy(destination.data(), source, destination.size());
 				return true;
 			}
 		};
 
-		template<typename T> T ByteswapIfNeeded(T value)
+		template<typename T>
+		T ByteswapIfNeeded(T value)
 		{
-			if constexpr (sizeof(T) == 1) return value;
+			if constexpr (sizeof(T) == 1)
+				return value;
 			else
 			{
 				auto bits = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
@@ -90,21 +101,24 @@ namespace Application
 			}
 		}
 
-		template<typename T> std::vector<std::byte> EncodeScalar(T value)
+		template<typename T>
+		std::vector<std::byte> EncodeScalar(T value)
 		{
 			value = ByteswapIfNeeded(value);
 			auto bytes = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
 			return {bytes.begin(), bytes.end()};
 		}
 
-		template<typename T> T DecodeScalar(std::span<const std::byte> bytes)
+		template<typename T>
+		T DecodeScalar(std::span<const std::byte> bytes)
 		{
-			if (bytes.size() != sizeof(T)) throw std::logic_error("invalid scalar width");
+			if (bytes.size() != sizeof(T))
+				throw std::logic_error("invalid scalar width");
 			std::array<std::byte, sizeof(T)> copy{};
 			std::ranges::copy(bytes, copy.begin());
 			return ByteswapIfNeeded(std::bit_cast<T>(copy));
 		}
-	}
+	} // namespace
 
 	struct MemorySearchFacade::Session
 	{
@@ -128,10 +142,14 @@ namespace Application
 	MemorySearchFacade::MemorySearchFacade(std::unique_ptr<IMemoryDiagnosticBackend> backend)
 		: m_backend(std::move(backend))
 	{
-		if (!m_backend) throw std::invalid_argument("memory diagnostic backend is required");
+		if (!m_backend)
+			throw std::invalid_argument("memory diagnostic backend is required");
 	}
 
-	MemorySearchFacade::~MemorySearchFacade() { BeginShutdown(); }
+	MemorySearchFacade::~MemorySearchFacade()
+	{
+		BeginShutdown();
+	}
 
 	std::string MemorySearchFacade::NewToken()
 	{
@@ -143,7 +161,8 @@ namespace Application
 		}
 		std::ostringstream stream;
 		stream << std::hex << std::setfill('0');
-		for (const auto word : words) stream << std::setw(16) << word;
+		for (const auto word : words)
+			stream << std::setw(16) << word;
 		return stream.str();
 	}
 
@@ -151,10 +170,16 @@ namespace Application
 	{
 		switch (type)
 		{
-		case MemoryValueType::Int8: return 1;
-		case MemoryValueType::Int16: return 2;
-		case MemoryValueType::Int32: case MemoryValueType::Float32: return 4;
-		case MemoryValueType::Int64: case MemoryValueType::Float64: return 8;
+		case MemoryValueType::Int8:
+			return 1;
+		case MemoryValueType::Int16:
+			return 2;
+		case MemoryValueType::Int32:
+		case MemoryValueType::Float32:
+			return 4;
+		case MemoryValueType::Int64:
+		case MemoryValueType::Float64:
+			return 8;
 		}
 		throw std::invalid_argument("unsupported memory value type");
 	}
@@ -163,27 +188,39 @@ namespace Application
 	{
 		switch (value.type)
 		{
-		case MemoryValueType::Int8: return EncodeScalar(std::get<std::int8_t>(value.value));
-		case MemoryValueType::Int16: return EncodeScalar(std::get<std::int16_t>(value.value));
-		case MemoryValueType::Int32: return EncodeScalar(std::get<std::int32_t>(value.value));
-		case MemoryValueType::Int64: return EncodeScalar(std::get<std::int64_t>(value.value));
-		case MemoryValueType::Float32: return EncodeScalar(std::get<float>(value.value));
-		case MemoryValueType::Float64: return EncodeScalar(std::get<double>(value.value));
+		case MemoryValueType::Int8:
+			return EncodeScalar(std::get<std::int8_t>(value.value));
+		case MemoryValueType::Int16:
+			return EncodeScalar(std::get<std::int16_t>(value.value));
+		case MemoryValueType::Int32:
+			return EncodeScalar(std::get<std::int32_t>(value.value));
+		case MemoryValueType::Int64:
+			return EncodeScalar(std::get<std::int64_t>(value.value));
+		case MemoryValueType::Float32:
+			return EncodeScalar(std::get<float>(value.value));
+		case MemoryValueType::Float64:
+			return EncodeScalar(std::get<double>(value.value));
 		}
 		throw std::invalid_argument("memory value does not match its type");
 	}
 
 	MemorySearchValue MemorySearchFacade::Decode(MemoryValueType type,
-		std::span<const std::byte> bytes)
+												 std::span<const std::byte> bytes)
 	{
 		switch (type)
 		{
-		case MemoryValueType::Int8: return {type, DecodeScalar<std::int8_t>(bytes)};
-		case MemoryValueType::Int16: return {type, DecodeScalar<std::int16_t>(bytes)};
-		case MemoryValueType::Int32: return {type, DecodeScalar<std::int32_t>(bytes)};
-		case MemoryValueType::Int64: return {type, DecodeScalar<std::int64_t>(bytes)};
-		case MemoryValueType::Float32: return {type, DecodeScalar<float>(bytes)};
-		case MemoryValueType::Float64: return {type, DecodeScalar<double>(bytes)};
+		case MemoryValueType::Int8:
+			return {type, DecodeScalar<std::int8_t>(bytes)};
+		case MemoryValueType::Int16:
+			return {type, DecodeScalar<std::int16_t>(bytes)};
+		case MemoryValueType::Int32:
+			return {type, DecodeScalar<std::int32_t>(bytes)};
+		case MemoryValueType::Int64:
+			return {type, DecodeScalar<std::int64_t>(bytes)};
+		case MemoryValueType::Float32:
+			return {type, DecodeScalar<float>(bytes)};
+		case MemoryValueType::Float64:
+			return {type, DecodeScalar<double>(bytes)};
 		}
 		throw std::invalid_argument("unsupported memory value type");
 	}
@@ -198,16 +235,18 @@ namespace Application
 	}
 
 	MemorySearchSessionInfo MemorySearchFacade::Start(std::uint64_t ownerWindow,
-		const MemorySearchRequest& request)
+													  const MemorySearchRequest& request)
 	{
-		if (ownerWindow == 0) throw std::invalid_argument("memory search requires a tool window");
+		if (ownerWindow == 0)
+			throw std::invalid_argument("memory search requires a tool window");
 		const auto needle = Encode(request.value);
 		if (request.maximumBytes == 0 || request.maximumBytes > MaximumScanBytes)
 			throw std::invalid_argument("maximumBytes is outside the supported range");
 		if (!m_backend->IsEmulationRunning())
 			throw std::runtime_error("memory search requires a running title");
 		auto map = m_backend->SnapshotMemoryMap();
-		if (map.regions.empty()) throw std::runtime_error("no emulated memory is mapped");
+		if (map.regions.empty())
+			throw std::runtime_error("no emulated memory is mapped");
 		if (map.regions.size() > MaximumRegions)
 			throw std::runtime_error("emulated memory map exceeds the diagnostic range cap");
 
@@ -217,9 +256,9 @@ namespace Application
 		session->mapGeneration = map.generation;
 		session->type = request.value.type;
 		const auto availableBytes = std::accumulate(map.regions.begin(), map.regions.end(),
-			std::uint64_t{}, [](std::uint64_t total, const MemoryRegion& region) {
-				return total + region.size;
-			});
+													std::uint64_t{}, [](std::uint64_t total, const MemoryRegion& region) {
+														return total + region.size;
+													});
 		std::uint64_t remaining = request.maximumBytes;
 		for (auto& region : map.regions)
 		{
@@ -227,15 +266,18 @@ namespace Application
 			region.size = static_cast<std::uint32_t>(accepted);
 			session->bytesTotal += accepted;
 			remaining -= accepted;
-			if (remaining == 0) break;
+			if (remaining == 0)
+				break;
 		}
 		map.regions.erase(std::remove_if(map.regions.begin(), map.regions.end(),
-			[](const MemoryRegion& region) { return region.size == 0; }), map.regions.end());
+										 [](const MemoryRegion& region) { return region.size == 0; }),
+						  map.regions.end());
 		session->scanCapReached = availableBytes > request.maximumBytes;
 		std::vector<std::shared_ptr<Session>> replaced;
 		{
 			std::scoped_lock lock(m_mutex);
-			if (m_shuttingDown) throw std::runtime_error("memory diagnostics are shutting down");
+			if (m_shuttingDown)
+				throw std::runtime_error("memory diagnostics are shutting down");
 			for (auto it = m_sessions.begin(); it != m_sessions.end();)
 			{
 				if (it->second->ownerWindow == ownerWindow)
@@ -244,7 +286,8 @@ namespace Application
 					replaced.push_back(it->second);
 					it = m_sessions.erase(it);
 				}
-				else ++it;
+				else
+					++it;
 			}
 			m_sessions.emplace(session->token, session);
 		}
@@ -255,23 +298,24 @@ namespace Application
 				previous->revoked = true;
 			}
 			previous->worker.request_stop();
-			if (previous->worker.joinable()) previous->worker.join();
+			if (previous->worker.joinable())
+				previous->worker.join();
 		}
 		{
 			std::scoped_lock lock(m_mutex);
 			if (m_shuttingDown || !m_sessions.contains(session->token))
 				throw std::runtime_error("memory diagnostics are shutting down");
 			session->worker = std::jthread([this, session, map = std::move(map),
-				needle](std::stop_token stopToken) mutable {
+											needle](std::stop_token stopToken) mutable {
 				RunInitial(session, stopToken, std::move(map), needle);
 			});
 		}
 		return {session->token, session->generation, session->mapGeneration,
-			session->bytesTotal};
+				session->bytesTotal};
 	}
 
 	void MemorySearchFacade::RunInitial(const std::shared_ptr<Session>& session,
-		std::stop_token stopToken, MemoryMapSnapshot map, std::vector<std::byte> needle)
+										std::stop_token stopToken, MemoryMapSnapshot map, std::vector<std::byte> needle)
 	{
 		try
 		{
@@ -290,7 +334,7 @@ namespace Application
 						kReadChunk, region.size - offset));
 					std::vector<std::byte> bytes(payload);
 					if (!m_backend->ReadCopy(map.generation,
-						region.base + static_cast<std::uint32_t>(offset), bytes))
+											 region.base + static_cast<std::uint32_t>(offset), bytes))
 						throw std::runtime_error("emulation stopped or its memory map changed");
 					for (std::size_t local = 0; local + width <= bytes.size(); local += width)
 					{
@@ -304,20 +348,20 @@ namespace Application
 								return;
 							}
 							session->results.push_back({region.base +
-								static_cast<std::uint32_t>(offset + local), needle});
+															static_cast<std::uint32_t>(offset + local),
+														needle});
 						}
 					}
 					offset += payload - (payload % width);
 					std::scoped_lock lock(session->mutex);
 					session->bytesScanned = std::min(session->bytesTotal,
-						session->bytesScanned + payload);
+													 session->bytesScanned + payload);
 				}
 			}
 			std::scoped_lock lock(session->mutex);
 			session->bytesScanned = session->bytesTotal;
 			session->state = MemorySearchState::Complete;
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			std::scoped_lock lock(session->mutex);
 			session->state = MemorySearchState::Failed;
@@ -326,14 +370,15 @@ namespace Application
 	}
 
 	MemorySearchSessionInfo MemorySearchFacade::Filter(std::uint64_t ownerWindow,
-		std::string_view token, std::uint64_t expectedGeneration,
-		const MemorySearchValue& value)
+													   std::string_view token, std::uint64_t expectedGeneration,
+													   const MemorySearchValue& value)
 	{
 		const auto needle = Encode(value);
 		std::shared_ptr<Session> session;
 		{
 			std::scoped_lock lock(m_mutex);
-			if (m_shuttingDown) throw std::runtime_error("memory diagnostics are shutting down");
+			if (m_shuttingDown)
+				throw std::runtime_error("memory diagnostics are shutting down");
 			session = FindSessionLocked(ownerWindow, token);
 		}
 		std::vector<StoredResult> candidates;
@@ -363,17 +408,17 @@ namespace Application
 			if (m_shuttingDown || session->revoked || !m_sessions.contains(session->token))
 				throw std::runtime_error("memory search session has been closed");
 			session->worker = std::jthread([this, session,
-				candidates = std::move(candidates), needle](std::stop_token stopToken) mutable {
+											candidates = std::move(candidates), needle](std::stop_token stopToken) mutable {
 				RunFilter(session, stopToken, std::move(candidates), needle);
 			});
 		}
 		return {session->token, session->generation, session->mapGeneration,
-			session->bytesTotal};
+				session->bytesTotal};
 	}
 
 	void MemorySearchFacade::RunFilter(const std::shared_ptr<Session>& session,
-		std::stop_token stopToken, std::vector<StoredResult> candidates,
-		std::vector<std::byte> needle)
+									   std::stop_token stopToken, std::vector<StoredResult> candidates,
+									   std::vector<std::byte> needle)
 	{
 		try
 		{
@@ -389,13 +434,13 @@ namespace Application
 				if (!m_backend->ReadCopy(session->mapGeneration, candidate.address, current))
 					throw std::runtime_error("emulation stopped or its memory map changed");
 				std::scoped_lock lock(session->mutex);
-				if (current == needle) session->results.push_back({candidate.address, current});
+				if (current == needle)
+					session->results.push_back({candidate.address, current});
 				session->bytesScanned += needle.size();
 			}
 			std::scoped_lock lock(session->mutex);
 			session->state = MemorySearchState::Complete;
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			std::scoped_lock lock(session->mutex);
 			session->state = MemorySearchState::Failed;
@@ -404,7 +449,7 @@ namespace Application
 	}
 
 	MemorySearchStatus MemorySearchFacade::Status(std::uint64_t ownerWindow,
-		std::string_view token) const
+												  std::string_view token) const
 	{
 		std::shared_ptr<Session> session;
 		{
@@ -415,13 +460,13 @@ namespace Application
 		if (session->revoked)
 			throw std::invalid_argument("memory search session has been revoked");
 		return {session->generation, session->state, session->bytesScanned,
-			session->bytesTotal, static_cast<std::uint32_t>(session->results.size()),
-			session->resultCapReached, session->scanCapReached, session->diagnostic};
+				session->bytesTotal, static_cast<std::uint32_t>(session->results.size()),
+				session->resultCapReached, session->scanCapReached, session->diagnostic};
 	}
 
 	MemorySearchPage MemorySearchFacade::Page(std::uint64_t ownerWindow,
-		std::string_view token, std::uint64_t expectedGeneration,
-		std::uint32_t offset, std::uint32_t limit) const
+											  std::string_view token, std::uint64_t expectedGeneration,
+											  std::uint32_t offset, std::uint32_t limit) const
 	{
 		if (limit == 0 || limit > MaximumPageSize)
 			throw std::invalid_argument("page limit is outside the supported range");
@@ -437,19 +482,19 @@ namespace Application
 			throw std::invalid_argument("memory search generation is stale");
 		if (session->state == MemorySearchState::Scanning)
 			throw std::runtime_error("memory search results are not ready");
-		MemorySearchPage page{session->generation, offset,
-			static_cast<std::uint32_t>(session->results.size()), {}};
-		if (offset >= session->results.size()) return page;
+		MemorySearchPage page{session->generation, offset, static_cast<std::uint32_t>(session->results.size()), {}};
+		if (offset >= session->results.size())
+			return page;
 		const auto end = std::min<std::size_t>(session->results.size(), offset + limit);
 		page.results.reserve(end - offset);
 		for (std::size_t index = offset; index < end; ++index)
 			page.results.push_back({{session->results[index].address},
-				Decode(session->type, session->results[index].bytes)});
+									Decode(session->type, session->results[index].bytes)});
 		return page;
 	}
 
 	void MemorySearchFacade::Cancel(std::uint64_t ownerWindow, std::string_view token,
-		std::uint64_t expectedGeneration)
+									std::uint64_t expectedGeneration)
 	{
 		std::shared_ptr<Session> session;
 		{
@@ -476,7 +521,8 @@ namespace Application
 					removed.push_back(it->second);
 					it = m_sessions.erase(it);
 				}
-				else ++it;
+				else
+					++it;
 			}
 		}
 		for (const auto& session : removed)
@@ -486,7 +532,8 @@ namespace Application
 				session->revoked = true;
 			}
 			session->worker.request_stop();
-			if (session->worker.joinable()) session->worker.join();
+			if (session->worker.joinable())
+				session->worker.join();
 		}
 	}
 
@@ -495,7 +542,8 @@ namespace Application
 		std::unordered_map<std::string, std::shared_ptr<Session>> sessions;
 		{
 			std::scoped_lock lock(m_mutex);
-			if (std::exchange(m_shuttingDown, true)) return;
+			if (std::exchange(m_shuttingDown, true))
+				return;
 			sessions.swap(m_sessions);
 		}
 		for (const auto& [token, session] : sessions)
@@ -506,7 +554,8 @@ namespace Application
 				session->revoked = true;
 			}
 			session->worker.request_stop();
-			if (session->worker.joinable()) session->worker.join();
+			if (session->worker.joinable())
+				session->worker.join();
 		}
 	}
 
@@ -514,4 +563,4 @@ namespace Application
 	{
 		return std::make_unique<CafeMemoryDiagnosticBackend>();
 	}
-}
+} // namespace Application

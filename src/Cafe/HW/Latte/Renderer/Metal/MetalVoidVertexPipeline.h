@@ -5,12 +5,15 @@
 
 class MetalVoidVertexPipeline
 {
-public:
-    MetalVoidVertexPipeline(class MetalRenderer* mtlRenderer, MTL::Library* library, const std::string& vertexFunctionName);
-    ~MetalVoidVertexPipeline();
+  public:
+	MetalVoidVertexPipeline(class MetalRenderer* mtlRenderer, MTL::Library* library, const std::string& vertexFunctionName);
+	~MetalVoidVertexPipeline();
 
-    MTL::RenderPipelineState* GetRenderPipelineState() const { return m_renderPipelineState; }
+	MTL::RenderPipelineState* GetRenderPipelineState() const
+	{
+		return m_renderPipelineState;
+	}
 
-private:
-    MTL::RenderPipelineState* m_renderPipelineState;
+  private:
+	MTL::RenderPipelineState* m_renderPipelineState;
 };

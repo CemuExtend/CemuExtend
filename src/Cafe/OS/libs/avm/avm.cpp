@@ -26,12 +26,12 @@ namespace avm
 
 	bool AVMSetAnalogContentsProtectionEnable(sint32 newState)
 	{
-		return true;  // returns 1 (true) if new state was applied successfully?
+		return true; // returns 1 (true) if new state was applied successfully?
 	}
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "avm";
@@ -45,10 +45,10 @@ namespace avm
 			cafeExportRegister("avm", AVMIsAnalogContentsProtectionOn, LogType::Placeholder);
 			cafeExportRegister("avm", AVMSetAnalogContentsProtectionEnable, LogType::Placeholder);
 		};
-	}s_COSavmModule;
+	} s_COSavmModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSavmModule;
 	}
-}
+} // namespace avm

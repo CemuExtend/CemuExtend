@@ -3,7 +3,7 @@
 
 class FileStream
 {
- public:
+  public:
 	static FileStream* openFile(std::string_view path);
 	static FileStream* openFile(const wchar_t* path, bool allowWrite = false);
 	static FileStream* openFile2(const fs::path& path, bool allowWrite = false);
@@ -45,7 +45,7 @@ class FileStream
 	~FileStream();
 	FileStream() = default;
 
- private:
+  private:
 	FileStream(HANDLE hFile);
 
 	bool m_isValid{};

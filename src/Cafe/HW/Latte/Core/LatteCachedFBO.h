@@ -5,7 +5,7 @@
 
 class LatteCachedFBO
 {
-public:
+  public:
 	LatteCachedFBO(uint64 key);
 
 	uint32 calculateNumColorBuffers()
@@ -29,7 +29,7 @@ public:
 
 	virtual ~LatteCachedFBO() {};
 
-private:
+  private:
 	void calculateEffectiveRenderAreaSize()
 	{
 		Vector2i rtEffectiveSize;
@@ -39,7 +39,7 @@ private:
 		// derive extent from color buffers
 		for (sint32 i = 0; i < 8; i++)
 		{
-			if(colorBuffer[i].texture == nullptr)
+			if (colorBuffer[i].texture == nullptr)
 				continue;
 			sint32 effectiveWidth, effectiveHeight;
 			colorBuffer[i].texture->baseTexture->GetEffectiveSize(effectiveWidth, effectiveHeight, colorBuffer[i].texture->firstMip);
@@ -93,19 +93,19 @@ private:
 		m_size = rtEffectiveSize;
 	}
 
-public:
+  public:
 	uint64 key;
 	Vector2i m_size;
 
 	struct
 	{
 		LatteTextureView* texture{};
-	}colorBuffer[8]{};
+	} colorBuffer[8]{};
 	struct
 	{
 		LatteTextureView* texture{};
 		bool hasStencil{};
-	}depthBuffer{};
+	} depthBuffer{};
 	uint32 drawBuffersMask{};
 
 	std::vector<LatteTexture*> m_referencedTextures; // color and depth views combined
@@ -113,7 +113,7 @@ public:
 
 class LatteMRT
 {
-public:
+  public:
 	static void NotifyTextureDeletion(LatteTexture* texture);
 
 	// GPU state
@@ -143,6 +143,6 @@ public:
 	// todo - move this into FBO destructor (?)
 	static void DeleteCachedFBO(LatteCachedFBO* cfbo);
 
-private:
+  private:
 	static LatteCachedFBO* CreateCachedFBO(uint64 key);
 };

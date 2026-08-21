@@ -7,4 +7,4 @@ namespace coreinit
 	bool codeGenShouldAvoid();
 
 	void InitializeCodeGen();
-}
+} // namespace coreinit

@@ -20,12 +20,12 @@ namespace iosu
 			uint32be ukn20;
 			uint32be ukn24;
 			// ukn sint64 value (uknDA)
-			//uint32be ukn28_h;
-			//uint32be ukn2C_l;
+			// uint32be ukn28_h;
+			// uint32be ukn2C_l;
 			uint64 ukn28DLProgressRelatedMax_u64be;
 			// ukn sint64 value (uknDB)
-			//uint32be ukn30_h;
-			//uint32be ukn34_l;
+			// uint32be ukn30_h;
+			// uint32be ukn34_l;
 			uint64 ukn30DLProgressRelatedCur_u64be;
 			// ukn sint64 value (uknDC)
 			uint32be ukn38DLProgressRelatedMax;
@@ -57,19 +57,19 @@ namespace iosu
 				struct
 				{
 					uint32 u32;
-				}resultU32;
+				} resultU32;
 			};
 		};
 
-		// custom dev/nim protocol (Cemu only)
-		#define IOSU_NIM_REQUEST_CEMU									(0xEE)
+// custom dev/nim protocol (Cemu only)
+#define IOSU_NIM_REQUEST_CEMU (0xEE)
 
-		// NIM request Cemu subcodes
-		#define IOSU_NIM_GET_ICON_DATABASE_ENTRY						0x01
-		#define IOSU_NIM_GET_PACKAGE_COUNT								0x02
-		#define IOSU_NIM_GET_PACKAGES_INFO								0x03
-		#define IOSU_NIM_GET_PACKAGES_TITLEID							0x04
+// NIM request Cemu subcodes
+#define IOSU_NIM_GET_ICON_DATABASE_ENTRY 0x01
+#define IOSU_NIM_GET_PACKAGE_COUNT 0x02
+#define IOSU_NIM_GET_PACKAGES_INFO 0x03
+#define IOSU_NIM_GET_PACKAGES_TITLEID 0x04
 
 		void Initialize();
-	}
-}
+	} // namespace nim
+} // namespace iosu

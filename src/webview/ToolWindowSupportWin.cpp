@@ -16,17 +16,17 @@ namespace WebFrontend
 
 		class WinToolWindowSupport final : public IToolWindowSupport
 		{
-		public:
+		  public:
 			WinToolWindowSupport(HWND parent, bool modal,
-				std::function<void()> closeHandler)
+								 std::function<void()> closeHandler)
 				: m_parent(parent), m_modal(modal), m_closeHandler(std::move(closeHandler))
 			{
 				if (!IsWindow(m_parent))
 					throw std::invalid_argument("parent must be a valid HWND");
 				RegisterWindowClass();
 				m_window = CreateWindowExW(WS_EX_APPWINDOW, ToolWindowClass, L"",
-					WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
-					m_parent, nullptr, GetModuleHandleW(nullptr), this);
+										   WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+										   m_parent, nullptr, GetModuleHandleW(nullptr), this);
 				if (!m_window)
 					throw std::runtime_error("failed to create the native tool window");
 			}
@@ -34,11 +34,15 @@ namespace WebFrontend
 			~WinToolWindowSupport() override
 			{
 				m_closeHandler = {};
-				if (IsWindow(m_window)) DestroyWindow(m_window);
+				if (IsWindow(m_window))
+					DestroyWindow(m_window);
 				RestoreParent();
 			}
 
-			void* GetWindow() const override { return m_window; }
+			void* GetWindow() const override
+			{
+				return m_window;
+			}
 
 			void Show() override
 			{
@@ -54,7 +58,8 @@ namespace WebFrontend
 
 			void Focus() override
 			{
-				if (!IsWindow(m_window)) return;
+				if (!IsWindow(m_window))
+					return;
 				ShowWindow(m_window, SW_RESTORE);
 				SetForegroundWindow(m_window);
 				SetActiveWindow(m_window);
@@ -64,24 +69,29 @@ namespace WebFrontend
 			{
 				IFileOpenDialog* dialog{};
 				const auto created = CoCreateInstance(CLSID_FileOpenDialog, nullptr,
-					CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
-				if (FAILED(created)) throw std::runtime_error("failed to create the folder picker");
+													  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+				if (FAILED(created))
+					throw std::runtime_error("failed to create the folder picker");
 				auto releaseDialog = std::unique_ptr<IFileOpenDialog, decltype([](IFileOpenDialog* value) {
-					if (value) value->Release();
-				})>(dialog);
+														 if (value)
+															 value->Release();
+													 })>(dialog);
 				DWORD options{};
 				if (FAILED(dialog->GetOptions(&options)) || FAILED(dialog->SetOptions(
-					options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)))
+																options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST)))
 					throw std::runtime_error("failed to configure the folder picker");
 				const auto shown = dialog->Show(m_window);
-				if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED)) return std::nullopt;
-				if (FAILED(shown)) throw std::runtime_error("folder picker failed");
+				if (shown == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+					return std::nullopt;
+				if (FAILED(shown))
+					throw std::runtime_error("folder picker failed");
 				IShellItem* item{};
 				if (FAILED(dialog->GetResult(&item)) || !item)
 					throw std::runtime_error("folder picker returned no selection");
 				auto releaseItem = std::unique_ptr<IShellItem, decltype([](IShellItem* value) {
-					if (value) value->Release();
-				})>(item);
+													   if (value)
+														   value->Release();
+												   })>(item);
 				PWSTR path{};
 				if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)) || !path)
 					throw std::runtime_error("selected folder has no filesystem path");
@@ -90,7 +100,7 @@ namespace WebFrontend
 				return result;
 			}
 
-		private:
+		  private:
 			static void RegisterWindowClass()
 			{
 				static std::once_flag flag;
@@ -108,7 +118,7 @@ namespace WebFrontend
 			}
 
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message,
-				WPARAM wparam, LPARAM lparam)
+											   WPARAM wparam, LPARAM lparam)
 			{
 				WinToolWindowSupport* self{};
 				if (message == WM_NCCREATE)
@@ -121,11 +131,13 @@ namespace WebFrontend
 				else
 					self = reinterpret_cast<WinToolWindowSupport*>(
 						GetWindowLongPtrW(window, GWLP_USERDATA));
-				if (!self) return DefWindowProcW(window, message, wparam, lparam);
+				if (!self)
+					return DefWindowProcW(window, message, wparam, lparam);
 				switch (message)
 				{
 				case WM_CLOSE:
-					if (self->m_closeHandler) self->m_closeHandler();
+					if (self->m_closeHandler)
+						self->m_closeHandler();
 					return 0;
 				case WM_SIZE:
 					if (const auto child = GetWindow(window, GW_CHILD))
@@ -136,7 +148,8 @@ namespace WebFrontend
 					self->m_window = nullptr;
 					self->RestoreParent();
 					break;
-				default: break;
+				default:
+					break;
 				}
 				return DefWindowProcW(window, message, wparam, lparam);
 			}
@@ -156,14 +169,14 @@ namespace WebFrontend
 			bool m_parentDisabled{};
 			std::function<void()> m_closeHandler;
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<IToolWindowSupport> CreateToolWindowSupport(
 		void* parent, bool modal, std::function<void()> closeHandler)
 	{
 		return std::make_unique<WinToolWindowSupport>(static_cast<HWND>(parent),
-			modal, std::move(closeHandler));
+													  modal, std::move(closeHandler));
 	}
-}
+} // namespace WebFrontend
 
 #endif

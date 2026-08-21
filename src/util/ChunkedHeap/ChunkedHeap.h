@@ -11,8 +11,14 @@ struct CHAddr
 	CHAddr(uint32 _offset, uint32 _chunkIndex, void* internal = nullptr) : offset(_offset), chunkIndex(_chunkIndex), internal(internal) {};
 	CHAddr() : offset(0xFFFFFFFF), chunkIndex(0xFFFFFFFF) {};
 
-	bool isValid() { return chunkIndex != 0xFFFFFFFF; };
-	static CHAddr getInvalid() { return CHAddr(0xFFFFFFFF, 0xFFFFFFFF); };
+	bool isValid()
+	{
+		return chunkIndex != 0xFFFFFFFF;
+	};
+	static CHAddr getInvalid()
+	{
+		return CHAddr(0xFFFFFFFF, 0xFFFFFFFF);
+	};
 };
 
 template<uint32 TMinimumAlignment = 32>
@@ -36,7 +42,7 @@ class ChunkedHeap
 		uint32 size;
 	};
 
-public:
+  public:
 	ChunkedHeap()
 	{
 	}
@@ -53,7 +59,7 @@ public:
 
 	virtual uint32 allocateNewChunk(uint32 chunkIndex, uint32 minimumAllocationSize) = 0;
 
-private:
+  private:
 	unsigned ulog2(uint32 v)
 	{
 		cemu_assert_debug(v != 0);
@@ -99,7 +105,7 @@ private:
 		uint32 chunkIndex = (uint32)m_chunks.size();
 		m_chunks.emplace_back();
 		uint32 chunkSize = allocateNewChunk(chunkIndex, minimumAllocationSize);
-		cemu_assert_debug((chunkSize%TMinimumAlignment) == 0); // chunk size should be a multiple of the minimum alignment
+		cemu_assert_debug((chunkSize % TMinimumAlignment) == 0); // chunk size should be a multiple of the minimum alignment
 		if (chunkSize == 0)
 			return false;
 		cemu_assert_debug(chunkSize < 0x80000000u); // chunk size must be below 2GB
@@ -148,9 +154,9 @@ private:
 
 	CHAddr _alloc(uint32 size, uint32 alignment)
 	{
-		cemu_assert_debug(size <= (0x7FFFFFFFu-TMinimumAlignment));
+		cemu_assert_debug(size <= (0x7FFFFFFFu - TMinimumAlignment));
 		// make sure size is not zero and align it
-		if(size == 0) [[unlikely]]
+		if (size == 0) [[unlikely]]
 			size = TMinimumAlignment;
 		else
 			size = (size + (TMinimumAlignment - 1)) & ~(TMinimumAlignment - 1);
@@ -158,10 +164,10 @@ private:
 		uint32 alignmentM1 = alignment - 1;
 		uint32 bucketIndex = ulog2(size);
 		// check if the bucket is available
-		if( !(m_bucketUseMask & (1u << bucketIndex)) )
+		if (!(m_bucketUseMask & (1u << bucketIndex)))
 		{
 			// skip to next non-empty bucket
-			uint32 nextIndex = BSF(m_bucketUseMask>>bucketIndex);
+			uint32 nextIndex = BSF(m_bucketUseMask >> bucketIndex);
 			bucketIndex += nextIndex;
 		}
 		while (bucketIndex < 31)
@@ -174,7 +180,7 @@ private:
 					// verify if aligned allocation fits
 					uint32 alignedOffset = (range->offset + alignmentM1) & ~alignmentM1;
 					uint32 endOffset = alignedOffset + size;
-					if((range->offset+range->size) >= endOffset)
+					if ((range->offset + range->size) >= endOffset)
 					{
 						_allocFrom(range, bucketIndex, alignedOffset, size);
 						m_numAllocatedBytes += size;
@@ -185,10 +191,10 @@ private:
 			}
 			// check next non-empty bucket or skip to end
 			bucketIndex++;
-			uint32 emptyBuckets = BSF(m_bucketUseMask>>bucketIndex);
+			uint32 emptyBuckets = BSF(m_bucketUseMask >> bucketIndex);
 			bucketIndex += emptyBuckets;
 		}
-		if(m_allocationLimitReached)
+		if (m_allocationLimitReached)
 			return CHAddr(0xFFFFFFFF, 0xFFFFFFFF);
 		if (!allocateChunk(size))
 		{
@@ -200,7 +206,7 @@ private:
 
 	void _free(CHAddr addr)
 	{
-		if(!addr.internal)
+		if (!addr.internal)
 		{
 			cemuLog_log(LogType::Force, "Internal heap error. {:08x} {:08x}", addr.chunkIndex, addr.offset);
 			return;
@@ -292,17 +298,16 @@ private:
 				ar = ar->nextFree;
 			}
 		}
-
 	}
 
-private:
+  private:
 	std::vector<Chunk> m_chunks;
-	uint32 m_bucketUseMask{0x80000000}; // bitmask indicating non-empty buckets. MSB always set to provide an upper bound for BSF instruction
+	uint32 m_bucketUseMask{0x80000000};	 // bitmask indicating non-empty buckets. MSB always set to provide an upper bound for BSF instruction
 	AllocRange* m_bucketFreeRange[32]{}; // we are only using 31 entries since the MSB is reserved (thus chunks equal or larger than 2^31 are not allowed)
 	bool m_allocationLimitReached = false;
 	MemoryPool<AllocRange> m_allocEntriesPool{64};
 
-public:
+  public:
 	// statistics
 	uint32 m_numHeapBytes{}; // total size of the heap
 	uint32 m_numAllocatedBytes{};
@@ -310,7 +315,7 @@ public:
 
 class VGenericHeap
 {
-public:
+  public:
 	virtual void* alloc(uint32 size, uint32 alignment) = 0;
 	virtual void free(void* addr) = 0;
 };
@@ -334,7 +339,7 @@ class VHeap : public VGenericHeap
 		std::unordered_map<uint32, allocRange_t*> map_allocatedRange;
 	};
 
-public:
+  public:
 	VHeap(void* heapBase, uint32 heapSize) : m_heapBase((uint8*)heapBase), m_heapSize(heapSize)
 	{
 		allocRange_t* range = new allocRange_t(0, heapSize, true);
@@ -411,14 +416,13 @@ public:
 		allocNum = (uint32)map_allocatedRange.size();
 	}
 
-private:
+  private:
 	unsigned ulog2(uint32 v)
 	{
 		static const unsigned MUL_DE_BRUIJN_BIT[] =
-		{
-		   0,  9,  1, 10, 13, 21,  2, 29, 11, 14, 16, 18, 22, 25,  3, 30,
-		   8, 12, 20, 28, 15, 17, 24,  7, 19, 27, 23,  6, 26,  5,  4, 31
-		};
+			{
+				0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
+				8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31};
 
 		v |= v >> 1;
 		v |= v >> 2;
@@ -497,7 +501,7 @@ private:
 
 	bool _alloc(uint32 size, uint32 alignment, uint32& allocOffsetOut)
 	{
-		if(size == 0)
+		if (size == 0)
 		{
 			size = 1; // zero-sized allocations are not supported
 			cemu_assert_suspicious();
@@ -591,18 +595,18 @@ private:
 		}
 	}
 
-private:
+  private:
 	allocRange_t* bucketFreeRange[32]{};
 	std::unordered_map<uint32, allocRange_t*> map_allocatedRange;
 	uint8* m_heapBase;
 	const uint32 m_heapSize;
-	uint32 m_statsMemAllocated{ 0 };
+	uint32 m_statsMemAllocated{0};
 };
 
 template<uint32 TChunkSize>
 class ChunkedFlatAllocator
 {
-public:
+  public:
 	void setBaseAllocator(VGenericHeap* baseHeap)
 	{
 		m_currentBaseAllocator = baseHeap;
@@ -613,7 +617,7 @@ public:
 		if (m_currentBlockPtr)
 		{
 			m_currentBlockOffset = (m_currentBlockOffset + alignment - 1) & ~(alignment - 1);
-			if ((m_currentBlockOffset+size) <= TChunkSize)
+			if ((m_currentBlockOffset + size) <= TChunkSize)
 			{
 				void* allocPtr = m_currentBlockPtr + m_currentBlockOffset;
 				m_currentBlockOffset += size;
@@ -633,16 +637,22 @@ public:
 		m_currentBlockOffset = 0;
 	}
 
-	void forEachBlock(void(*funcCb)(void* mem, uint32 size))
+	void forEachBlock(void (*funcCb)(void* mem, uint32 size))
 	{
 		for (auto it : m_allocatedBlocks)
 			funcCb(it, TChunkSize);
 	}
 
-	uint32 getCurrentBlockOffset() const { return m_currentBlockOffset; }
-	uint8* getCurrentBlockPtr() const { return m_currentBlockPtr; }
+	uint32 getCurrentBlockOffset() const
+	{
+		return m_currentBlockOffset;
+	}
+	uint8* getCurrentBlockPtr() const
+	{
+		return m_currentBlockPtr;
+	}
 
-private:
+  private:
 	void allocateAdditionalChunk()
 	{
 		m_currentBlockPtr = (uint8*)m_currentBaseAllocator->alloc(TChunkSize, 256);

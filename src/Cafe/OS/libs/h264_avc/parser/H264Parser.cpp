@@ -107,17 +107,15 @@ bool parseNAL_seq_parameter_set_rbsp(h264ParserState_t* h264ParserState, h264Par
 	memset(&h264ParserState->sps, 0, sizeof(h264State_seq_parameter_set_t));
 
 	h264ParserState->sps.profile_idc = nalStream.readU8(); // 0x64 = high profile
-	h264ParserState->sps.constraint = nalStream.readU8(); // 6 flags + 2 reserved bits
-	h264ParserState->sps.level_idc = nalStream.readU8(); // 0x29 = level 4.1
+	h264ParserState->sps.constraint = nalStream.readU8();  // 6 flags + 2 reserved bits
+	h264ParserState->sps.level_idc = nalStream.readU8();   // 0x29 = level 4.1
 
 	// some default values in case flags are not set
 	h264ParserState->sps.separate_colour_plane_flag = 0;
 	h264ParserState->sps.chroma_format_idc = 1; // Spec 7.4.2.1.1
 	h264ParserState->sps.qpprime_y_zero_transform_bypass_flag = 0;
 	h264ParserState->sps.seq_scaling_matrix_present_flag = 0;
-	//h264ParserState->sps.mb_adaptive_frame_field_flag = 0;
-
-
+	// h264ParserState->sps.mb_adaptive_frame_field_flag = 0;
 
 	uint32 seq_parameter_set_id = nalStream.readUV_E();
 	if (h264ParserState->sps.profile_idc == 100 || h264ParserState->sps.profile_idc == 110 || h264ParserState->sps.profile_idc == 122 ||
@@ -260,7 +258,7 @@ bool parseNAL_seq_parameter_set_rbsp(h264ParserState_t* h264ParserState, h264Par
 		nalValid = false;
 	if (nalValid)
 	{
-		if(output)
+		if (output)
 			output->hasSPS = true;
 		h264ParserState->hasSPS = true;
 	}
@@ -312,7 +310,7 @@ bool parseNAL_pic_parameter_set_rbsp(h264ParserState_t* h264ParserState, h264Par
 		nalValid = false;
 	if (nalValid)
 	{
-		if(output)
+		if (output)
 			output->hasPPS = true;
 		h264ParserState->hasPPS = true;
 	}
@@ -324,7 +322,7 @@ bool h264Parser_ParseSPS(uint8* data, uint32 length, h264State_seq_parameter_set
 	h264ParserState_t parserState;
 	RBSPInputBitstream nalStream(data, length);
 	bool r = parseNAL_seq_parameter_set_rbsp(&parserState, nullptr, nalStream);
-	if(!r || !parserState.hasSPS)
+	if (!r || !parserState.hasSPS)
 		return false;
 	sps = parserState.sps;
 	return true;
@@ -339,7 +337,7 @@ void parseNAL_ref_pic_list_modification(const h264State_seq_parameter_set_t& sps
 		{
 			sliceHeader->pic_list_modification0Count = 0;
 			uint32 modType;
-			while(true)
+			while (true)
 			{
 				if (sliceHeader->pic_list_modification0Count >= 32)
 				{
@@ -393,7 +391,7 @@ void parseNAL_ref_pic_list_modification(const h264State_seq_parameter_set_t& sps
 				{
 					sliceHeader->pic_list_modification1Array[sliceHeader->pic_list_modification1Count].long_term_pic_num = nalStream.readUV_E();
 				}
-				else if(modType == 3)
+				else if (modType == 3)
 				{
 					break;
 				}
@@ -483,7 +481,7 @@ void parseNAL_pred_weight_table(const h264State_seq_parameter_set_t& sps, const 
 	for (uint32 i = 0; i <= sliceHeader->num_ref_idx_l0_active_minus1; i++)
 	{
 		uint8 luma_weight_l0_flag = nalStream.readBit();
-		if (luma_weight_l0_flag) 
+		if (luma_weight_l0_flag)
 		{
 			uint32 luma_weight_l0 = nalStream.readSV_E();
 			uint32 luma_offset_l0 = nalStream.readSV_E();
@@ -509,21 +507,21 @@ void parseNAL_pred_weight_table(const h264State_seq_parameter_set_t& sps, const 
 			if (luma_weight_l1_flag)
 			{
 				cemu_assert_debug(false);
-				//luma_weight_l1[i]
-				//luma_offset_l1[i]
+				// luma_weight_l1[i]
+				// luma_offset_l1[i]
 			}
 			if (ChromaArrayType != 0)
 			{
 				cemu_assert_debug(false);
-				//chroma_weight_l1_flag
-				//if (chroma_weight_l1_flag)
+				// chroma_weight_l1_flag
+				// if (chroma_weight_l1_flag)
 				//{
 				//	for (j = 0; j < 2; j++)
 				//	{
 				//		chroma_weight_l1[i][j]
 				//			chroma_offset_l1[i][j]
 				//	}
-				//}
+				// }
 			}
 		}
 	}
@@ -537,7 +535,7 @@ void parseNAL_slice_header(const h264State_seq_parameter_set_t& sps, const h264S
 	sliceHeader->nal_ref_idc = nal_ref_idc;
 	sliceHeader->nal_unit_type = nal_unit_type;
 	sliceHeader->first_mb_in_slice = nalStream.readUV_E(); // address of first macroblock in slice
-	sliceHeader->slice_type = { nalStream.readUV_E() };
+	sliceHeader->slice_type = {nalStream.readUV_E()};
 	sliceHeader->pic_parameter_set_id = nalStream.readUV_E();
 
 	if (sps.separate_colour_plane_flag == 1)
@@ -557,7 +555,7 @@ void parseNAL_slice_header(const h264State_seq_parameter_set_t& sps, const h264S
 		}
 	}
 
-	sliceHeader->IdrPicFlag = IdrPicFlag?1:0;
+	sliceHeader->IdrPicFlag = IdrPicFlag ? 1 : 0;
 
 	if (IdrPicFlag)
 	{
@@ -663,7 +661,6 @@ void _calculateFrameOrder(h264ParserState_t* h264ParserState, const h264State_se
 
 			prevPicOrderCntMsb = 0;
 			prevPicOrderCntLsb = 0;
-
 		}
 		else
 		{
@@ -672,7 +669,6 @@ void _calculateFrameOrder(h264ParserState_t* h264ParserState, const h264State_se
 
 			prevPicOrderCntMsb = prevRefPic_PicOrderCntMsb;
 			prevPicOrderCntLsb = prevRefPic_pic_order_cnt_lsb;
-
 		}
 
 		uint32 MaxPicOrderCntLsb = 1 << (sps.log2_max_pic_order_cnt_lsb_minus4 + 4); // todo - verify
@@ -930,10 +926,10 @@ sint32 h264GetUnitLength(h264ParserState_t* h264ParserState, uint8* data, uint32
 		case 5:
 		{
 			// note: We cant parse the slice data because we dont have SPS and PPS data reliably available
-			// 
+			//
 			// currently we just assume there is 1 slice per unit
 			return (sint32)((rbspStream.getBasePtr() + rbspStream.getBaseLength()) - data) + startCodeOffset;
-			
+
 			break;
 		}
 		case 6:
@@ -962,44 +958,40 @@ sint32 h264GetUnitLength(h264ParserState_t* h264ParserState, uint8* data, uint32
 }
 
 static const unsigned char h264_default_4x4_Intra[16] =
-{
-	6, 13, 13, 20,
-	20, 20, 28, 28,
-	28, 28, 32, 32,
-	32, 37, 37, 42
-};
+	{
+		6, 13, 13, 20,
+		20, 20, 28, 28,
+		28, 28, 32, 32,
+		32, 37, 37, 42};
 
 static const unsigned char h264_default_4x4_Inter[16] =
-{
-	10, 14, 14, 20,
-	20, 20, 24, 24,
-	24, 24, 27, 27,
-	27, 30, 30, 34
-};
+	{
+		10, 14, 14, 20,
+		20, 20, 24, 24,
+		24, 24, 27, 27,
+		27, 30, 30, 34};
 
 static const unsigned char h264_default_8x8_Intra[64] =
-{
-	6, 10, 10, 13, 11, 13, 16, 16,
-	16, 16, 18, 18, 18, 18, 18, 23,
-	23, 23, 23, 23, 23, 25, 25, 25,
-	25, 25, 25, 25, 27, 27, 27, 27,
-	27, 27, 27, 27, 29, 29, 29, 29,
-	29, 29, 29, 31, 31, 31, 31, 31,
-	31, 33, 33, 33, 33, 33, 36, 36,
-	36, 36, 38, 38, 38, 40, 40, 42
-};
+	{
+		6, 10, 10, 13, 11, 13, 16, 16,
+		16, 16, 18, 18, 18, 18, 18, 23,
+		23, 23, 23, 23, 23, 25, 25, 25,
+		25, 25, 25, 25, 27, 27, 27, 27,
+		27, 27, 27, 27, 29, 29, 29, 29,
+		29, 29, 29, 31, 31, 31, 31, 31,
+		31, 33, 33, 33, 33, 33, 36, 36,
+		36, 36, 38, 38, 38, 40, 40, 42};
 
 static const unsigned char h264_default_8x8_Inter[64] =
-{
-	9, 13, 13, 15, 13, 15, 17, 17,
-	17, 17, 19, 19, 19, 19, 19, 21,
-	21, 21, 21, 21, 21, 22, 22, 22,
-	22, 22, 22, 22, 24, 24, 24, 24,
-	24, 24, 24, 24, 25, 25, 25, 25,
-	25, 25, 25, 27, 27, 27, 27, 27,
-	27, 28, 28, 28, 28, 28, 30, 30,
-	30, 30, 32, 32, 32, 33, 33, 35
-};
+	{
+		9, 13, 13, 15, 13, 15, 17, 17,
+		17, 17, 19, 19, 19, 19, 19, 21,
+		21, 21, 21, 21, 21, 22, 22, 22,
+		22, 22, 22, 22, 24, 24, 24, 24,
+		24, 24, 24, 24, 25, 25, 25, 25,
+		25, 25, 25, 27, 27, 27, 27, 27,
+		27, 28, 28, 28, 28, 28, 30, 30,
+		30, 30, 32, 32, 32, 33, 33, 35};
 
 void h264Parser_getScalingMatrix4x4(h264State_seq_parameter_set_t* sps, h264State_pic_parameter_set_t* pps, nal_slice_header_t* sliceHeader, sint32 index, uint8* matrix4x4)
 {
@@ -1053,7 +1045,7 @@ void h264Parser_getScalingMatrix8x8(h264State_seq_parameter_set_t* sps, h264Stat
 		}
 		else
 		{
-			if ((index&1) == 0)
+			if ((index & 1) == 0)
 				memcpy(matrix8x8, h264_default_8x8_Intra, 8 * 8 * sizeof(uint8));
 			else
 				memcpy(matrix8x8, h264_default_8x8_Inter, 8 * 8 * sizeof(uint8));

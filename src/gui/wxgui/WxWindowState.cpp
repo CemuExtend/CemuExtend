@@ -7,12 +7,12 @@ namespace
 	struct NativeHandleLease
 	{
 		NativeHandleLease(std::shared_ptr<const WxWindowState> state,
-			std::shared_mutex& mutex)
+						  std::shared_mutex& mutex)
 			: state(std::move(state)), lock(mutex) {}
 		std::shared_ptr<const WxWindowState> state;
 		std::shared_lock<std::shared_mutex> lock;
 	};
-}
+} // namespace
 
 void WxWindowState::SetKeyState(std::uint32_t keycode, bool state)
 {
@@ -107,7 +107,7 @@ void WxWindowState::ClearPadWindow(Host::NativeSurfacePublication publication)
 }
 
 Host::NativeSurfacePublication WxWindowState::PublishCanvas(bool mainWindow,
-	Host::NativeWindowHandle handle)
+															Host::NativeWindowHandle handle)
 {
 	std::unique_lock lock(m_nativeMutex);
 	auto& current = mainWindow ? m_mainCanvas : m_padCanvas;
@@ -117,18 +117,17 @@ Host::NativeSurfacePublication WxWindowState::PublishCanvas(bool mainWindow,
 }
 
 void WxWindowState::ClearCanvas(bool mainWindow,
-	Host::NativeSurfacePublication publication)
+								Host::NativeSurfacePublication publication)
 {
 	std::unique_lock lock(m_nativeMutex);
 	auto& current = mainWindow ? m_mainCanvas : m_padCanvas;
-	const auto currentPublication = mainWindow ?
-		m_mainCanvasPublication : m_padCanvasPublication;
+	const auto currentPublication = mainWindow ? m_mainCanvasPublication : m_padCanvasPublication;
 	if (currentPublication == publication)
 		current = {};
 }
 
 void WxMainWindowRegistry::Register(MainWindow& window,
-	std::weak_ptr<std::atomic_bool> lifetime)
+									std::weak_ptr<std::atomic_bool> lifetime)
 {
 	std::scoped_lock lock(m_mutex);
 	m_window = &window;

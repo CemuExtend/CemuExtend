@@ -40,7 +40,6 @@ BOOL CALLBACK MyMiniDumpCallback(PVOID pParam, const PMINIDUMP_CALLBACK_INPUT pI
 	}
 
 	return FALSE;
-
 }
 
 bool CreateMiniDump(CrashDump dump, EXCEPTION_POINTERS* pep)
@@ -78,11 +77,11 @@ bool CreateMiniDump(CrashDump dump, EXCEPTION_POINTERS* pep)
 	if (dump == CrashDump::Full)
 	{
 		mdt = (MINIDUMP_TYPE)(MiniDumpWithPrivateReadWriteMemory |
-			MiniDumpWithDataSegs |
-			MiniDumpWithHandleData |
-			MiniDumpWithFullMemoryInfo |
-			MiniDumpWithThreadInfo |
-			MiniDumpWithUnloadedModules);
+							  MiniDumpWithDataSegs |
+							  MiniDumpWithHandleData |
+							  MiniDumpWithFullMemoryInfo |
+							  MiniDumpWithThreadInfo |
+							  MiniDumpWithUnloadedModules);
 	}
 	else
 	{
@@ -107,7 +106,7 @@ void DumpThreadStackTrace()
 	symbol->MaxNameLen = 255;
 	symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 
-    CrashLog_WriteHeader("Stack trace");
+	CrashLog_WriteHeader("Stack trace");
 	for (unsigned int i = 0; i < frames; i++)
 	{
 		DWORD64 stackTraceOffset = (DWORD64)stack[i];
@@ -155,8 +154,8 @@ void DumpThreadStackTrace()
 
 void createCrashlog(EXCEPTION_POINTERS* e, PCONTEXT context)
 {
-    if(!CrashLog_Create())
-        return; // give up if crashlog was already created
+	if (!CrashLog_Create())
+		return; // give up if crashlog was already created
 
 	const auto crash_dump = GetConfig().crash_dump.GetValue();
 	const auto dump_written = CreateMiniDump(crash_dump, e);
@@ -202,7 +201,6 @@ void createCrashlog(EXCEPTION_POINTERS* e, PCONTEXT context)
 			sprintf(dumpLine, "Exception 0x%08x at 0x%I64x\n", (uint32)e->ExceptionRecord->ExceptionCode, (uint64)e->ExceptionRecord->ExceptionAddress);
 			cemuLog_writePlainToLog(dumpLine);
 		}
-
 	}
 	sprintf(dumpLine, "cemu.exe at 0x%I64x\n", (uint64)GetModuleHandle(NULL));
 	cemuLog_writePlainToLog(dumpLine);
@@ -218,9 +216,9 @@ void createCrashlog(EXCEPTION_POINTERS* e, PCONTEXT context)
 	sprintf(dumpLine, "R12=%016I64x R13=%016I64x R14=%016I64x R15=%016I64x\n", context->R12, context->R13, context->R14, context->R15);
 	cemuLog_writePlainToLog(dumpLine);
 
-    CrashLog_SetOutputChannels(false, true);
-    ExceptionHandler_LogGeneralInfo();
-    CrashLog_SetOutputChannels(true, true);
+	CrashLog_SetOutputChannels(false, true);
+	ExceptionHandler_LogGeneralInfo();
+	CrashLog_SetOutputChannels(true, true);
 
 	cemuLog_waitForFlush();
 
@@ -254,7 +252,6 @@ int crashlogThread(void* exceptionInfoRawPtr)
 }
 
 void debugger_handleSingleStepException(uint64 dr6);
-
 
 LONG WINAPI VectoredExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo)
 {

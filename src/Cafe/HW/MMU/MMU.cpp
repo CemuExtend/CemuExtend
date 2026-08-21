@@ -26,7 +26,7 @@ namespace
 
 	static_assert(MEMORY_DATA_AREA_ADDR + MEMORY_DATA_AREA_SIZE < MEMORY_MAPPED_AREA_ADDR);
 	static_assert(static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) + MEMORY_MAPPED_AREA_SIZE ==
-		MEMORY_OVERLAY_AREA_OFFSET);
+				  MEMORY_OVERLAY_AREA_OFFSET);
 
 	[[nodiscard]] uint64 AlignUp(uint64 value, uint64 alignment)
 	{
@@ -44,7 +44,7 @@ namespace
 		s_guestMappedMemory.clear();
 		s_guestMappedMemoryReady = false;
 		const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
-			MEMORY_MAPPED_AREA_SIZE;
+								MEMORY_MAPPED_AREA_SIZE;
 		if (!memory_base)
 		{
 			cemuLog_log(LogType::Force, "WUPS mapped-memory arena has no guest base");
@@ -56,7 +56,7 @@ namespace
 				arenaEnd > range->getBase())
 			{
 				cemuLog_log(LogType::Force,
-					"WUPS mapped-memory arena overlaps active range {}", range->getName());
+							"WUPS mapped-memory arena overlaps active range {}", range->getName());
 				return;
 			}
 		}
@@ -67,7 +67,7 @@ namespace
 			memory_base + MEMORY_MAPPED_AREA_ADDR, MEMORY_MAPPED_AREA_SIZE, true);
 		if (!s_guestMappedMemoryReady)
 			cemuLog_log(LogType::Force,
-				"Unable to decommit the WUPS mapped-memory arena");
+						"Unable to decommit the WUPS mapped-memory arena");
 	}
 
 	void ReleaseGuestMappedMemoryForTitle()
@@ -77,15 +77,15 @@ namespace
 		s_guestMappedMemoryReady = false;
 		if (memory_base)
 			(void)MemMapper::FreeMemory(memory_base + MEMORY_MAPPED_AREA_ADDR,
-				MEMORY_MAPPED_AREA_SIZE, true);
+										MEMORY_MAPPED_AREA_SIZE, true);
 	}
 
 	[[nodiscard]] bool IsGuestMappedMemoryRangeAccessible(uint32 address,
-		uint32 size)
+														  uint32 size)
 	{
 		const uint64 end = static_cast<uint64>(address) + size;
 		const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
-			MEMORY_MAPPED_AREA_SIZE;
+								MEMORY_MAPPED_AREA_SIZE;
 		if (size == 0 || address < MEMORY_MAPPED_AREA_ADDR || end > arenaEnd)
 			return false;
 		std::lock_guard lock(s_guestMappedMemoryMutex);
@@ -96,10 +96,10 @@ namespace
 			return false;
 		--found;
 		const uint64 allocationEnd = static_cast<uint64>(found->first) +
-			found->second.requestedSize;
+									 found->second.requestedSize;
 		return address >= found->first && end <= allocationEnd;
 	}
-}
+} // namespace
 
 void checkMemAlloc(void* result)
 {
@@ -129,32 +129,31 @@ void memory_initPhysicalLayout()
 {
 	assert_dbg();
 	// todo - rewrite this using new MemMapper and MMU tables
-	//memory_base = (uint8*)VirtualAlloc(NULL, 0x100000000ULL, MEM_RESERVE, PAGE_READWRITE);
-	//VirtualFree(memory_base, 0, MEM_RELEASE);
+	// memory_base = (uint8*)VirtualAlloc(NULL, 0x100000000ULL, MEM_RESERVE, PAGE_READWRITE);
+	// VirtualFree(memory_base, 0, MEM_RELEASE);
 
 	//// todo - figure out all the ranges and allocate them properly
 
 	//// allocate memory for the kernel
 	////checkMemAlloc(VirtualAlloc(memory_base + 0x08000000, 1024*1024*2, MEM_COMMIT, PAGE_READWRITE));
 	//// allocate memory for bootrom
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x00000000, 1024*16, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE));
-
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x00000000, 1024*16, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE));
 
 	//// allocate memory at 0x016FFFFC (is this some sort of register interface or maybe just temporary storage?)
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x016FF000, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x016FF000, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	//// temporary storage for bootrom copy
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x016c0000, 0x4000 + 0x4000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x016c0000, 0x4000 + 0x4000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 	//// 0x016c0000
 
 	//// L2
-	//checkMemAlloc(VirtualAlloc(memory_base + 0xE0000000, 1024 * 16, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0xE0000000, 1024 * 16, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	//// kernel memory
 	//// currently it is unknown if this is it's own physical memory region or if this is mapped somehow
-	//// considering the ancast is never copied here and no memory mapping is setup it seems like a hardwired mirror to 0x08000000? 
+	//// considering the ancast is never copied here and no memory mapping is setup it seems like a hardwired mirror to 0x08000000?
 	////checkMemAlloc(VirtualAlloc(memory_base + 0xFFE00000, 0x180000, MEM_COMMIT, PAGE_READWRITE));
-	//HANDLE hKernelMem = CreateFileMappingA(
+	// HANDLE hKernelMem = CreateFileMappingA(
 	//	INVALID_HANDLE_VALUE,    // use paging file
 	//	NULL,                    // default security
 	//	PAGE_READWRITE,          // read/write access
@@ -162,17 +161,17 @@ void memory_initPhysicalLayout()
 	//	1024 * 1024 * 2,         // maximum object size (low-order DWORD)
 	//	"kernelMem08000000");    // name of mapping object
 	//
-	//checkMemAlloc(MapViewOfFileEx(hKernelMem, FILE_MAP_ALL_ACCESS, 0, 0, 1024 * 1024 * 2, memory_base + 0x08000000));
-	//checkMemAlloc(MapViewOfFileEx(hKernelMem, FILE_MAP_ALL_ACCESS, 0, 0, 1024 * 1024 * 2, memory_base + 0xFFE00000));
+	// checkMemAlloc(MapViewOfFileEx(hKernelMem, FILE_MAP_ALL_ACCESS, 0, 0, 1024 * 1024 * 2, memory_base + 0x08000000));
+	// checkMemAlloc(MapViewOfFileEx(hKernelMem, FILE_MAP_ALL_ACCESS, 0, 0, 1024 * 1024 * 2, memory_base + 0xFFE00000));
 
 	//// IOSU->PPC bootParamBlock
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x01FFF000, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x01FFF000, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	//// used as dynamic kernel memory?
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x1C000000, 0x01000000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x1C000000, 0x01000000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	//// mapped by kernel to FF200000 (loader.elf?)
-	//checkMemAlloc(VirtualAlloc(memory_base + 0x1B800000, 0x00800000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	// checkMemAlloc(VirtualAlloc(memory_base + 0x1B800000, 0x00800000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 }
 
 std::vector<struct MMURange*> g_mmuRanges;
@@ -204,13 +203,13 @@ void MMURange::mapMem()
 	{
 		std::string errorMsg = _tr("Unable to allocate {} memory", name);
 		CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
-			.diagnosticCode = CafeSystem::DiagnosticCode::MemoryAllocationFailed,
-			.diagnostic = errorMsg});
-		#if BOOST_OS_WINDOWS
+							   .diagnosticCode = CafeSystem::DiagnosticCode::MemoryAllocationFailed,
+							   .diagnostic = errorMsg});
+#if BOOST_OS_WINDOWS
 		ExitProcess(-1);
-		#else
+#else
 		exit(-1);
-		#endif
+#endif
 	}
 	m_isMapped = true;
 }
@@ -221,41 +220,41 @@ void MMURange::unmapMem()
 	m_isMapped = false;
 }
 
-MMURange mmuRange_LOW0					{ 0x00010000, 0x000F0000, MMU_MEM_AREA_ID::CODE_LOW0, "CODE_LOW0" }; // code cave (Cemuhook)
-MMURange mmuRange_TRAMPOLINE_AREA		{ 0x00E00000, 0x00200000, MMU_MEM_AREA_ID::CODE_TRAMPOLINE, "TRAMPOLINE_AREA" }; // code area for trampolines and imports
+MMURange mmuRange_LOW0{0x00010000, 0x000F0000, MMU_MEM_AREA_ID::CODE_LOW0, "CODE_LOW0"};						// code cave (Cemuhook)
+MMURange mmuRange_TRAMPOLINE_AREA{0x00E00000, 0x00200000, MMU_MEM_AREA_ID::CODE_TRAMPOLINE, "TRAMPOLINE_AREA"}; // code area for trampolines and imports
 // Real Cafe OS occupies this low-memory window. Legacy Wii U homebrew can use
 // fixed firmware entrypoints, writable OS globals and a code-handler area in
 // it instead of importing/allocating each address. Cemu implements the OS as
 // HLE, so retain a zero-initialized compatibility window and populate the
 // known HLE entrypoint aliases after linking.
-MMURange mmuRange_LEGACY_OS				{ MEMORY_LEGACY_OS_AREA_ADDR, MEMORY_LEGACY_OS_AREA_SIZE, MMU_MEM_AREA_ID::CODE_LEGACY_OS, "LEGACY_OS" };
-MMURange mmuRange_CODECAVE				{ MEMORY_CODECAVEAREA_ADDR, MEMORY_CODECAVEAREA_SIZE, MMU_MEM_AREA_ID::CODE_CAVE, "CODECAVE" }; // shared trusted cemod code cave
-MMURange mmuRange_TEXT_AREA				{ 0x02000000, 0x0C000000, MMU_MEM_AREA_ID::CODE_MAIN, "TEXT_AREA" }; // module text sections go here (0x02000000 to 0x10000000, 224MiB)
-MMURange mmuRange_CEMU_AREA				{ 0x0E000000, 0x02000000, MMU_MEM_AREA_ID::CEMU_PRIVATE, "CEMU_AREA", MMURange::MFLAG::FLAG_MAP_EARLY }; // Cemu-only, 32MiB. Should be allocated early for SysAllocator
-MMURange mmuRange_MEM2					{ 0x10000000, 0x40000000, MMU_MEM_AREA_ID::MEM2_DATA, "MEM2" }; // main memory area (1GB)
-MMURange mmuRange_OVERLAY_AREA			{ 0xA0000000, 0x1C000000, MMU_MEM_AREA_ID::OVERLAY, "OVERLAY_AREA", MMURange::MFLAG::FLAG_OPTIONAL }; // has to be requested, 448MiB
-MMURange mmuRange_FGBUCKET				{ 0xE0000000, 0x04000000, MMU_MEM_AREA_ID::FGBUCKET, "FGBUCKET" }; // foreground bucket (64MiB)
-MMURange mmuRange_TILINGAPERTURE		{ 0xE8000000, 0x02000000, MMU_MEM_AREA_ID::TILING_APERATURE, "TILINGAPERTURE" }; // tiling aperture
-MMURange mmuRange_MEM1					{ 0xF4000000, 0x02000000, MMU_MEM_AREA_ID::MEM1, "MEM1" }; // 32MiB
-MMURange mmuRange_RPLLOADER				{ 0xF6000000, 0x02000000, MMU_MEM_AREA_ID::RPLLOADER, "RPLLOADER_AREA" }; // shared with RPLLoader
-MMURange mmuRange_SHARED_AREA			{ 0xF8000000, 0x02000000, MMU_MEM_AREA_ID::SHAREDDATA, "SHARED_AREA", MMURange::MFLAG::FLAG_MAP_EARLY }; // 32MiB, Cemuhook accesses this memory region at boot
-MMURange mmuRange_CORE0_LC				{ 0xFFC00000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC0, "CORE0_LC" }; // locked L2 cache of core 0
-MMURange mmuRange_CORE1_LC				{ 0xFFC40000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC1, "CORE1_LC" }; // locked L2 cache of core 1
-MMURange mmuRange_CORE2_LC				{ 0xFFC80000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC2, "CORE2_LC" }; // locked L2 cache of core 2
-MMURange mmuRange_HIGHMEM				{ 0xFFFFF000, 0x00001000, MMU_MEM_AREA_ID::CPU_PER_CORE, "PER-CORE" }; // per-core memory? Used by coreinit and PPC kernel to store core context specific data (like current thread ptr). We dont use it but Project Zero has a bug where it writes a byte at 0xfffffffe thus this memory range needs to be writable
+MMURange mmuRange_LEGACY_OS{MEMORY_LEGACY_OS_AREA_ADDR, MEMORY_LEGACY_OS_AREA_SIZE, MMU_MEM_AREA_ID::CODE_LEGACY_OS, "LEGACY_OS"};
+MMURange mmuRange_CODECAVE{MEMORY_CODECAVEAREA_ADDR, MEMORY_CODECAVEAREA_SIZE, MMU_MEM_AREA_ID::CODE_CAVE, "CODECAVE"};				// shared trusted cemod code cave
+MMURange mmuRange_TEXT_AREA{0x02000000, 0x0C000000, MMU_MEM_AREA_ID::CODE_MAIN, "TEXT_AREA"};										// module text sections go here (0x02000000 to 0x10000000, 224MiB)
+MMURange mmuRange_CEMU_AREA{0x0E000000, 0x02000000, MMU_MEM_AREA_ID::CEMU_PRIVATE, "CEMU_AREA", MMURange::MFLAG::FLAG_MAP_EARLY};	// Cemu-only, 32MiB. Should be allocated early for SysAllocator
+MMURange mmuRange_MEM2{0x10000000, 0x40000000, MMU_MEM_AREA_ID::MEM2_DATA, "MEM2"};													// main memory area (1GB)
+MMURange mmuRange_OVERLAY_AREA{0xA0000000, 0x1C000000, MMU_MEM_AREA_ID::OVERLAY, "OVERLAY_AREA", MMURange::MFLAG::FLAG_OPTIONAL};	// has to be requested, 448MiB
+MMURange mmuRange_FGBUCKET{0xE0000000, 0x04000000, MMU_MEM_AREA_ID::FGBUCKET, "FGBUCKET"};											// foreground bucket (64MiB)
+MMURange mmuRange_TILINGAPERTURE{0xE8000000, 0x02000000, MMU_MEM_AREA_ID::TILING_APERATURE, "TILINGAPERTURE"};						// tiling aperture
+MMURange mmuRange_MEM1{0xF4000000, 0x02000000, MMU_MEM_AREA_ID::MEM1, "MEM1"};														// 32MiB
+MMURange mmuRange_RPLLOADER{0xF6000000, 0x02000000, MMU_MEM_AREA_ID::RPLLOADER, "RPLLOADER_AREA"};									// shared with RPLLoader
+MMURange mmuRange_SHARED_AREA{0xF8000000, 0x02000000, MMU_MEM_AREA_ID::SHAREDDATA, "SHARED_AREA", MMURange::MFLAG::FLAG_MAP_EARLY}; // 32MiB, Cemuhook accesses this memory region at boot
+MMURange mmuRange_CORE0_LC{0xFFC00000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC0, "CORE0_LC"};											// locked L2 cache of core 0
+MMURange mmuRange_CORE1_LC{0xFFC40000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC1, "CORE1_LC"};											// locked L2 cache of core 1
+MMURange mmuRange_CORE2_LC{0xFFC80000, 0x00005000, MMU_MEM_AREA_ID::CPU_LC2, "CORE2_LC"};											// locked L2 cache of core 2
+MMURange mmuRange_HIGHMEM{0xFFFFF000, 0x00001000, MMU_MEM_AREA_ID::CPU_PER_CORE, "PER-CORE"};										// per-core memory? Used by coreinit and PPC kernel to store core context specific data (like current thread ptr). We dont use it but Project Zero has a bug where it writes a byte at 0xfffffffe thus this memory range needs to be writable
 
 void memory_init()
 {
 	// reserve a continous range of 4GB
-	if(!memory_base)
+	if (!memory_base)
 		memory_base = (uint8*)MemMapper::ReserveMemory(nullptr, (size_t)0x100000000, MemMapper::PAGE_PERMISSION::P_RW);
-	if( !memory_base )
+	if (!memory_base)
 	{
 		debug_printf("memory_init(): Unable to reserve 4GB of memory\n");
 		debugBreakpoint();
 		CafeSystem::EmitEvent({.type = CafeSystem::EventType::Diagnostic,
-			.diagnosticCode = CafeSystem::DiagnosticCode::MemoryReservationFailed,
-			.diagnostic = "Unable to reserve 4GB of memory"});
+							   .diagnosticCode = CafeSystem::DiagnosticCode::MemoryReservationFailed,
+							   .diagnostic = "Unable to reserve 4GB of memory"});
 		exit(-1);
 	}
 	for (auto& itr : g_mmuRanges)
@@ -268,7 +267,7 @@ void memory_init()
 void memory_mapForCurrentTitle()
 {
 	for (auto& itr : g_mmuRanges)
-		if(!itr->isMapped())
+		if (!itr->isMapped())
 			itr->resetConfig();
 	// expand ranges
 	auto gfxPackMappings = GraphicPack2::GetActiveRAMMappings();
@@ -305,7 +304,7 @@ void memory_mapForCurrentTitle()
 			cemuLog_log(LogType::Force, fmt::format("Graphic pack error: Unable to apply modified RAM mapping {:08x}-{:08x}. Start address must match one of the existing MMU ranges:", mapping.first, mapping.second));
 			for (auto& itr : g_mmuRanges)
 			{
-				if(itr->isMapped())
+				if (itr->isMapped())
 					continue;
 				cemuLog_log(LogType::Force, fmt::format("{:08x}-{:08x} ({:})", itr->getBase(), itr->getEnd(), itr->getName()));
 			}
@@ -315,7 +314,7 @@ void memory_mapForCurrentTitle()
 		bool isOverlapping = false;
 		for (auto& itr : g_mmuRanges)
 		{
-			if(itr == mmuRange)
+			if (itr == mmuRange)
 				continue;
 			if (mapping.first < itr->getEnd() && mapping.second > itr->getBase())
 			{
@@ -323,7 +322,7 @@ void memory_mapForCurrentTitle()
 				isOverlapping = true;
 			}
 		}
-		if(isOverlapping)
+		if (isOverlapping)
 			continue;
 		mmuRange->setEnd(mapping.second);
 	}
@@ -395,16 +394,16 @@ void memory_enableHBLELFCodeArea()
 bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size)
 {
 	if (size == 0 || static_cast<uint64>(virtualAddress) + size >
-		std::numeric_limits<uint32>::max() + uint64{1})
+						 std::numeric_limits<uint32>::max() + uint64{1})
 		return false;
 	const uint64 rangeEnd = static_cast<uint64>(virtualAddress) + size;
 	const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
-		MEMORY_MAPPED_AREA_SIZE;
+							MEMORY_MAPPED_AREA_SIZE;
 	if (virtualAddress < arenaEnd && rangeEnd > MEMORY_MAPPED_AREA_ADDR)
 		return IsGuestMappedMemoryRangeAccessible(virtualAddress, size);
 	for (auto& itr : g_mmuRanges)
 	{
-		if(!itr->isMapped())
+		if (!itr->isMapped())
 			continue;
 		if (virtualAddress >= itr->getBase() && virtualAddress < itr->getEnd())
 		{
@@ -447,13 +446,13 @@ std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 	}
 	uint64 candidate = AlignUp(MEMORY_MAPPED_AREA_ADDR, effectiveAlignment);
 	const uint64 arenaEnd = static_cast<uint64>(MEMORY_MAPPED_AREA_ADDR) +
-		MEMORY_MAPPED_AREA_SIZE;
+							MEMORY_MAPPED_AREA_SIZE;
 	for (const auto& [address, record] : s_guestMappedMemory)
 	{
 		if (candidate + committedSize <= address)
 			break;
 		candidate = AlignUp(static_cast<uint64>(address) + record.committedSize,
-			effectiveAlignment);
+							effectiveAlignment);
 	}
 	if (candidate + committedSize > arenaEnd)
 	{
@@ -463,14 +462,14 @@ std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 
 	auto* hostAddress = memory_base + static_cast<uint32>(candidate);
 	if (!MemMapper::AllocateMemory(hostAddress, committedSize,
-		MemMapper::PAGE_PERMISSION::P_RW, true))
+								   MemMapper::PAGE_PERMISSION::P_RW, true))
 	{
 		error = "unable to commit mapped-memory backing pages";
 		return std::nullopt;
 	}
 	std::memset(hostAddress, 0, committedSize);
 	if (!writable && !MemMapper::SetMemoryPermission(hostAddress, committedSize,
-		MemMapper::PAGE_PERMISSION::P_READ))
+													 MemMapper::PAGE_PERMISSION::P_READ))
 	{
 		(void)MemMapper::FreeMemory(hostAddress, committedSize, true);
 		error = "unable to protect read-only mapped-memory pages";
@@ -478,8 +477,8 @@ std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 	}
 	const auto address = static_cast<uint32>(candidate);
 	const bool inserted = s_guestMappedMemory.emplace(address,
-		GuestMappedMemoryRecord{size, static_cast<uint32>(committedSize), writable})
-		.second;
+													  GuestMappedMemoryRecord{size, static_cast<uint32>(committedSize), writable})
+							  .second;
 	if (!inserted)
 	{
 		(void)MemMapper::FreeMemory(hostAddress, committedSize, true);
@@ -487,11 +486,11 @@ std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 		return std::nullopt;
 	}
 	return GuestMappedMemoryAllocation{address, memory_virtualToPhysical(address),
-		size};
+									   size};
 }
 
 bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
-	std::string& error)
+							 std::string& error)
 {
 	error.clear();
 	std::lock_guard lock(s_guestMappedMemoryMutex);
@@ -506,7 +505,7 @@ bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
 	auto* hostAddress = memory_base + allocation.address;
 	if (!found->second.writable &&
 		!MemMapper::SetMemoryPermission(hostAddress, found->second.committedSize,
-			MemMapper::PAGE_PERMISSION::P_RW))
+										MemMapper::PAGE_PERMISSION::P_RW))
 	{
 		error = "unable to make mapped-memory pages writable for zeroing";
 		return false;
@@ -516,7 +515,7 @@ bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
 	{
 		if (!found->second.writable)
 			(void)MemMapper::SetMemoryPermission(hostAddress,
-				found->second.committedSize, MemMapper::PAGE_PERMISSION::P_READ);
+												 found->second.committedSize, MemMapper::PAGE_PERMISSION::P_READ);
 		error = "unable to decommit mapped-memory backing pages";
 		return false;
 	}
@@ -543,19 +542,19 @@ uint8* memory_getPointerFromPhysicalOffset(uint32 physicalOffset)
 
 uint32 memory_getVirtualOffsetFromPointer(void* ptr)
 {
-	if( !ptr )
+	if (!ptr)
 		return MPTR_NULL;
 	return (uint32)((uint8*)ptr - (uint8*)memory_base);
 }
 
 uint8* memory_getPointerFromVirtualOffset(uint32 virtualOffset)
-{	
+{
 	return memory_base + virtualOffset;
 }
 
 uint8* memory_getPointerFromVirtualOffsetAllowNull(uint32 virtualOffset)
-{	
-	if( virtualOffset == MPTR_NULL )
+{
+	if (virtualOffset == MPTR_NULL)
 		return nullptr;
 	return memory_getPointerFromVirtualOffset(virtualOffset);
 }
@@ -564,11 +563,11 @@ uint8* memory_getPointerFromVirtualOffsetAllowNull(uint32 virtualOffset)
 void memory_writeDouble(uint32 address, double vf)
 {
 	uint64 v = *(uint64*)&vf;
-	uint32 v1 = v&0xFFFFFFFF;
-	uint32 v2 = v>>32;
+	uint32 v1 = v & 0xFFFFFFFF;
+	uint32 v2 = v >> 32;
 	uint8* ptr = memory_getPointerFromVirtualOffset(address);
-	*(uint32*)(ptr+4) = CPU_swapEndianU32(v1);
-	*(uint32*)(ptr+0) = CPU_swapEndianU32(v2);
+	*(uint32*)(ptr + 4) = CPU_swapEndianU32(v1);
+	*(uint32*)(ptr + 0) = CPU_swapEndianU32(v2);
 }
 
 void memory_writeFloat(uint32 address, float vf)
@@ -603,7 +602,7 @@ double memory_readDouble(uint32 address)
 {
 	uint32 v[2];
 	v[1] = *(uint32*)(memory_getPointerFromVirtualOffset(address));
-	v[0] = *(uint32*)(memory_getPointerFromVirtualOffset(address)+4);
+	v[0] = *(uint32*)(memory_getPointerFromVirtualOffset(address) + 4);
 	v[0] = CPU_swapEndianU32(v[0]);
 	v[1] = CPU_swapEndianU32(v[1]);
 	return *(double*)v;
@@ -664,7 +663,7 @@ void memory_createDump()
 
 	for (auto& itr : g_mmuRanges)
 	{
-		if(!itr->isMapped())
+		if (!itr->isMapped())
 			continue;
 		memory_writeDumpFile(itr->getBase(), itr->getSize(), path);
 	}
@@ -737,7 +736,7 @@ namespace MMU
 		auto itr = g_mmioHandlerW32->find(address);
 		if (itr == g_mmioHandlerW32->end())
 		{
-			//cemuLog_logDebug(LogType::Force, "[MMU] MMIO write u32 0x{:08x} from unhandled address 0x{:08x}", value, address);
+			// cemuLog_logDebug(LogType::Force, "[MMU] MMIO write u32 0x{:08x} from unhandled address 0x{:08x}", value, address);
 			return;
 		}
 		return itr->second(address, value);
@@ -749,12 +748,11 @@ namespace MMU
 		auto itr = g_mmioHandlerW16->find(address);
 		if (itr == g_mmioHandlerW16->end())
 		{
-			//cemuLog_logDebug(LogType::Force, "[MMU] MMIO write u16 0x{:04x} from unhandled address 0x{:08x}", (uint32)value, address);
+			// cemuLog_logDebug(LogType::Force, "[MMU] MMIO write u16 0x{:04x} from unhandled address 0x{:08x}", (uint32)value, address);
 			return;
 		}
 		return itr->second(address, value);
 	}
-
 
 	// todo - instead of passing the physical address to Read/WriteMMIO we should pass an interface id and a relative address? This would allow remapping the hardware address (tho we can just unregister + register at different addresses)
 
@@ -762,9 +760,9 @@ namespace MMU
 	{
 		cemu_assert_debug((address & 0x3) == 0);
 		auto itr = g_mmioHandlerR32->find(address);
-		if(itr == g_mmioHandlerR32->end())
+		if (itr == g_mmioHandlerR32->end())
 		{
-			//cemuLog_logDebug(LogType::Force, "[MMU] MMIO read u32 from unhandled address 0x{:08x}", address);
+			// cemuLog_logDebug(LogType::Force, "[MMU] MMIO read u32 from unhandled address 0x{:08x}", address);
 			return 0;
 		}
 		return itr->second(address);
@@ -776,11 +774,10 @@ namespace MMU
 		auto itr = g_mmioHandlerR16->find(address);
 		if (itr == g_mmioHandlerR16->end())
 		{
-			//cemuLog_logDebug(LogType::Force, "[MMU] MMIO read u16 from unhandled address 0x{:08x}", address);
+			// cemuLog_logDebug(LogType::Force, "[MMU] MMIO read u16 from unhandled address 0x{:08x}", address);
 			return 0;
 		}
 		return itr->second(address);
 	}
 
-
-}
+} // namespace MMU

@@ -108,30 +108,30 @@ namespace iosu
 					if ((input.size() - idx) >= 3 && input[idx + 1] == '.' && input[idx + 2] == '/')
 					{
 						// "../"
-                        while(!tmp.empty())
-                        {
-                            if(tmp.back() == '/')
-                            {
-                                tmp.pop_back();
-                                break;
-                            }
-                            tmp.pop_back();
-                        }
+						while (!tmp.empty())
+						{
+							if (tmp.back() == '/')
+							{
+								tmp.pop_back();
+								break;
+							}
+							tmp.pop_back();
+						}
 						idx += 3;
 						continue;
 					}
 					else if ((input.size() - idx) == 2 && input[idx + 1] == '.')
 					{
 						// ".." at the end
-                        while(!tmp.empty())
-                        {
-                            if(tmp.back() == '/')
-                            {
-                                tmp.pop_back();
-                                break;
-                            }
-                            tmp.pop_back();
-                        }
+						while (!tmp.empty())
+						{
+							if (tmp.back() == '/')
+							{
+								tmp.pop_back();
+								break;
+							}
+							tmp.pop_back();
+						}
 						idx += 2;
 						continue;
 					}
@@ -168,7 +168,8 @@ namespace iosu
 			return fsc_open(translatedPath.c_str(), accessFlags, &fscStatus);
 		}
 
-		class _FSAHandleTable {
+		class _FSAHandleTable
+		{
 			struct _FSAHandleResource
 			{
 				bool isAllocated{false};
@@ -176,7 +177,7 @@ namespace iosu
 				uint16 handleCheckValue;
 			};
 
-		public:
+		  public:
 			FSA_RESULT AllocateHandle(FSResHandle& handleOut, FSCVirtualFile* fscFile)
 			{
 				for (size_t i = 0; i < m_handleTable.size(); i++)
@@ -227,7 +228,7 @@ namespace iosu
 				return it.fscFile;
 			}
 
-		private:
+		  private:
 			uint32 m_currentCounter = 1;
 			std::array<_FSAHandleResource, 0x3C0> m_handleTable;
 		};
@@ -382,7 +383,7 @@ namespace iosu
 			else if (fsc_isFile(fscFile))
 			{
 				fsStatOut->size = fsc_getFileSize(fscFile);
-                statFlag |= FSFlag::IS_FILE;
+				statFlag |= FSFlag::IS_FILE;
 			}
 			else
 			{

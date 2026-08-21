@@ -29,7 +29,12 @@ namespace TcpGecko::GuestJobs
 
 		constexpr auto kJobTimeout = std::chrono::seconds(2);
 
-		enum class JobKind { None, Rpc, ExecuteOnce };
+		enum class JobKind
+		{
+			None,
+			Rpc,
+			ExecuteOnce
+		};
 
 		std::mutex s_mutex;
 		std::condition_variable s_cv;
@@ -61,8 +66,8 @@ namespace TcpGecko::GuestJobs
 		{
 			PPCInterpreter_t* hCPU = PPCInterpreter_getCurrentInstance();
 			const uint32_t r3 = PPCCoreCallback((MPTR)s_rpcFunction,
-				s_rpcArgs[0], s_rpcArgs[1], s_rpcArgs[2], s_rpcArgs[3],
-				s_rpcArgs[4], s_rpcArgs[5], s_rpcArgs[6], s_rpcArgs[7]);
+												s_rpcArgs[0], s_rpcArgs[1], s_rpcArgs[2], s_rpcArgs[3],
+												s_rpcArgs[4], s_rpcArgs[5], s_rpcArgs[6], s_rpcArgs[7]);
 			const uint32_t r4 = hCPU ? hCPU->gpr[4] : 0;
 			s_rpcResult = (static_cast<uint64_t>(r3) << 32) | r4;
 		}
@@ -74,7 +79,7 @@ namespace TcpGecko::GuestJobs
 			PPCCoreCallback((MPTR)address);
 			ClearScratch(address, (uint32_t)s_executeOnceBlob.size());
 		}
-	}
+	} // namespace
 
 	bool CallRemoteProcedure(uint32_t function, const std::array<uint32_t, 8>& args, uint64_t& result)
 	{
@@ -130,4 +135,4 @@ namespace TcpGecko::GuestJobs
 		s_jobDone = true;
 		s_cv.notify_all();
 	}
-}
+} // namespace TcpGecko::GuestJobs

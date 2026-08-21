@@ -5,7 +5,7 @@
 #include "Cafe/HW/Latte/Core/LatteQueryObject.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 
-#define GPU7_QUERY_TYPE_OCCLUSION	(1)
+#define GPU7_QUERY_TYPE_OCCLUSION (1)
 
 uint64 queryEventCounter = 1;
 
@@ -66,11 +66,11 @@ void LatteQuery_finishGX2Query(LatteGX2QueryInformation* gx2Query)
 void LatteQuery_UpdateFinishedQueries()
 {
 	g_renderer->occlusionQuery_updateState();
-	for(uint32 i=0; i<list_queriesInFlight.size(); i++)
+	for (uint32 i = 0; i < list_queriesInFlight.size(); i++)
 	{
 		LatteQueryObject* queryObject = list_queriesInFlight[i];
 		cemu_assert_debug(queryObject->queryEnded);
-		if( queryObject->queryEnded == false )
+		if (queryObject->queryEnded == false)
 			continue;
 		// check if result is available
 		uint64 numSamplesPassed;
@@ -141,7 +141,7 @@ void LatteQuery_BeginOcclusionQuery(MPTR queryMPTR)
 		checkQueriesCounter = 0;
 	}
 
-	for(auto& it : list_activeGX2Queries2)
+	for (auto& it : list_activeGX2Queries2)
 	{
 		if (it->queryMPTR == queryMPTR)
 		{
@@ -170,7 +170,7 @@ void LatteQuery_EndOcclusionQuery(MPTR queryMPTR)
 		return;
 	uint64 currentEventId = LatteQuery_getNextEventId();
 	// mark query binding as ended
-	for(auto& it : list_activeGX2Queries2)
+	for (auto& it : list_activeGX2Queries2)
 	{
 		if (it->queryMPTR == queryMPTR)
 		{

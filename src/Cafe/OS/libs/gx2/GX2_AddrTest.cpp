@@ -30,7 +30,7 @@ namespace GX2
 		/* +0x40 */ uint32be ukn40;
 	};
 
-	struct AddrCreate_OUTPUT 
+	struct AddrCreate_OUTPUT
 	{
 		uint32be structSize;
 		MEMPTR<void> addrLibPtr;
@@ -39,7 +39,7 @@ namespace GX2
 	static_assert(sizeof(AddrCreate_INPUT) == 0x44);
 	static_assert(sizeof(AddrCreate_OUTPUT) == 8);
 
-	struct ADDRAllocParam 
+	struct ADDRAllocParam
 	{
 		uint32be ukn00; // alignment?
 		uint32be ukn04;
@@ -74,20 +74,26 @@ namespace GX2
 
 		void SetFlagCube(bool f)
 		{
-			if (f) _flags |= FLAG_BIT_CUBE;
-			else _flags &= ~FLAG_BIT_CUBE;
+			if (f)
+				_flags |= FLAG_BIT_CUBE;
+			else
+				_flags &= ~FLAG_BIT_CUBE;
 		}
 
 		void SetFlagVolume(bool f)
 		{
-			if (f) _flags |= FLAG_BIT_VOLUME;
-			else _flags &= ~FLAG_BIT_VOLUME;
+			if (f)
+				_flags |= FLAG_BIT_VOLUME;
+			else
+				_flags &= ~FLAG_BIT_VOLUME;
 		}
 
 		void SetFlagOpt4Space(bool f)
 		{
-			if (f) _flags |= FLAG_BIT_OPT4SPACE;
-			else _flags &= ~FLAG_BIT_OPT4SPACE;
+			if (f)
+				_flags |= FLAG_BIT_OPT4SPACE;
+			else
+				_flags &= ~FLAG_BIT_OPT4SPACE;
 		}
 	};
 
@@ -189,7 +195,7 @@ namespace GX2
 		Latte::E_HWSURFFMT hwFormat = GetHWFormat(surfaceFormat);
 		if (surfaceTileMode == Latte::E_GX2TILEMODE::TM_LINEAR_SPECIAL)
 		{
-			uint32 numSamples = 1 << surfaceAA;			
+			uint32 numSamples = 1 << surfaceAA;
 			uint32 blockSize = IsCompressedFormat(surfaceFormat) ? 4 : 1;
 			uint32 width = ((surfaceWidth >> level) + blockSize - 1) & ~(blockSize - 1);
 			paramOut->bpp = GetFormatBits(hwFormat);
@@ -234,7 +240,8 @@ namespace GX2
 			paramOut->pixelPitch = ((surfaceWidth >> level) + blockSize - 1) & ~(blockSize - 1);
 			paramOut->pixelPitch = std::max<uint32>(paramOut->pixelPitch, blockSize);
 			paramOut->pixelHeight = ((surfaceHeight >> level) + blockSize - 1) & ~(blockSize - 1);
-			paramOut->pixelHeight = std::max<uint32>(paramOut->pixelHeight, blockSize);;
+			paramOut->pixelHeight = std::max<uint32>(paramOut->pixelHeight, blockSize);
+			;
 			paramOut->pitch = std::max<uint32>(paramOut->pitch, 1);
 			paramOut->height = std::max<uint32>(paramOut->height, 1);
 			paramOut->surfSize = paramOut->bpp * numSamples * paramOut->depth * paramOut->height * paramOut->pitch >> 3;
@@ -339,8 +346,7 @@ namespace GX2
 			Latte::E_DIM::DIM_1D_ARRAY,
 			Latte::E_DIM::DIM_2D_ARRAY,
 			Latte::E_DIM::DIM_2D_MSAA,
-			Latte::E_DIM::DIM_2D_ARRAY_MSAA
-		};
+			Latte::E_DIM::DIM_2D_ARRAY_MSAA};
 
 		std::vector<Latte::E_GX2TILEMODE> tilemodeList = {
 			// linear
@@ -368,16 +374,14 @@ namespace GX2
 		};
 
 		std::vector<Latte::E_GX2SURFFMT> formatList = {
-			Latte::E_GX2SURFFMT::HWFMT_8, Latte::E_GX2SURFFMT::HWFMT_8_8, Latte::E_GX2SURFFMT::HWFMT_8_8_8_8, // 8, 16, 32
+			Latte::E_GX2SURFFMT::HWFMT_8, Latte::E_GX2SURFFMT::HWFMT_8_8, Latte::E_GX2SURFFMT::HWFMT_8_8_8_8,			 // 8, 16, 32
 			Latte::E_GX2SURFFMT::R32_UINT, Latte::E_GX2SURFFMT::R32_G32_UINT, Latte::E_GX2SURFFMT::R32_G32_B32_A32_UINT, // 32, 64, 128
-			Latte::E_GX2SURFFMT::HWFMT_BC1, Latte::E_GX2SURFFMT::HWFMT_BC2, Latte::E_GX2SURFFMT::HWFMT_BC3, Latte::E_GX2SURFFMT::HWFMT_BC4, Latte::E_GX2SURFFMT::HWFMT_BC5
-		};
+			Latte::E_GX2SURFFMT::HWFMT_BC1, Latte::E_GX2SURFFMT::HWFMT_BC2, Latte::E_GX2SURFFMT::HWFMT_BC3, Latte::E_GX2SURFFMT::HWFMT_BC4, Latte::E_GX2SURFFMT::HWFMT_BC5};
 
 		std::vector<uint32> resXYList = {
 			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17,
 			31, 32, 33, 50, 63, 64, 65, 127, 128, 129, 200, 253, 254, 255, 256, 257,
-			511, 512, 513, 1023, 1024, 1025, 2047, 2048, 2049, 4095, 4096, 4097
-		};
+			511, 512, 513, 1023, 1024, 1025, 2047, 2048, 2049, 4095, 4096, 4097};
 
 		debug_printf("Running AddrLib test...\n");
 
@@ -419,4 +423,4 @@ namespace GX2
 		_TestAddrLib_Init();
 		_TestAddrLib_Run();
 	}
-}
+} // namespace GX2

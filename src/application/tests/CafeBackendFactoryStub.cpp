@@ -6,4 +6,4 @@ namespace Application
 	{
 		return {};
 	}
-}
+} // namespace Application

@@ -679,7 +679,7 @@ void prudpClient::HandleIncomingPacket(std::unique_ptr<prudpIncomingPacket> inco
 			// other side is asking for ping ack
 			cemuLog_log(LogType::PRUDP, "[PRUDP] Received ping packet with NEED_ACK set. Sending ACK back");
 			prudpPacket ackPacket(&m_streamSettings, m_srcVPort, m_dstVPort, prudpPacket::TYPE_PING, prudpPacket::FLAG_ACK, this->m_clientSessionId, incomingPacket->sequenceId, 0);
-			if(!incomingPacket->packetData.empty())
+			if (!incomingPacket->packetData.empty())
 				ackPacket.setData(incomingPacket->packetData.data(), incomingPacket->packetData.size());
 			DirectSendPacket(&ackPacket);
 		}
@@ -739,7 +739,7 @@ void prudpClient::HandleIncomingPacket(std::unique_ptr<prudpIncomingPacket> inco
 		if (incomingPacket->flags & prudpPacket::FLAG_ACK)
 		{
 			AcknowledgePacket(incomingPacket->sequenceId);
-			if(!incomingPacket->packetData.empty())
+			if (!incomingPacket->packetData.empty())
 				cemuLog_log(LogType::PRUDP, "[PRUDP] Received ACK data packet with payload");
 			return;
 		}
@@ -928,7 +928,7 @@ void prudpClient::QueuePacket(prudpPacket* packet)
 
 void prudpClient::SendDatagram(uint8* input, sint32 length, bool reliable)
 {
-	cemu_assert_debug(reliable); // non-reliable packets require correct sequenceId handling and testing
+	cemu_assert_debug(reliable);				   // non-reliable packets require correct sequenceId handling and testing
 	cemu_assert_debug(m_hasSynAck && m_hasConAck); // cant send data packets before we are connected
 	if (length >= 0x300)
 	{

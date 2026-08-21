@@ -105,10 +105,10 @@ MetalSynchronizedRingAllocator::AllocatorReservation_t MetalSynchronizedRingAllo
 
 void MetalSynchronizedRingAllocator::FlushReservation(AllocatorReservation_t& uploadReservation)
 {
-    if (RequiresFlush())
-    {
-        uploadReservation.mtlBuffer->didModifyRange(NS::Range(uploadReservation.bufferOffset, uploadReservation.size));
-    }
+	if (RequiresFlush())
+	{
+		uploadReservation.mtlBuffer->didModifyRange(NS::Range(uploadReservation.bufferOffset, uploadReservation.size));
+	}
 }
 
 void MetalSynchronizedRingAllocator::CleanupBuffer(MTL::CommandBuffer* latestFinishedCommandBuffer)
@@ -195,17 +195,17 @@ void MetalSynchronizedHeapAllocator::FlushReservation(AllocatorReservation* uplo
 {
 	if (m_chunkedHeap.RequiresFlush())
 	{
-	    uploadReservation->mtlBuffer->didModifyRange(NS::Range(uploadReservation->bufferOffset, uploadReservation->size));
+		uploadReservation->mtlBuffer->didModifyRange(NS::Range(uploadReservation->bufferOffset, uploadReservation->size));
 	}
 }
 
 void MetalSynchronizedHeapAllocator::CleanupBuffer(MTL::CommandBuffer* latestFinishedCommandBuffer)
 {
-    auto it = m_releaseQueue.find(latestFinishedCommandBuffer);
-    if (it == m_releaseQueue.end())
-        return;
+	auto it = m_releaseQueue.find(latestFinishedCommandBuffer);
+	if (it == m_releaseQueue.end())
+		return;
 
-    // release allocations
+	// release allocations
 	for (auto& addr : it->second)
 		m_chunkedHeap.free(addr);
 	m_releaseQueue.erase(it);
