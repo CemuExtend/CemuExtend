@@ -68,7 +68,7 @@ if(BUILD_TESTING)
   add_test(NAME application_events_tests COMMAND application_events_tests)
 
   add_executable(application_logging_facade_tests tests/LoggingFacadeTests.cpp)
-  target_link_libraries(application_logging_facade_tests PRIVATE CemuApplication)
+  target_link_libraries(application_logging_facade_tests PRIVATE CemuApplication CemuCommon)
   add_test(NAME application_logging_facade_tests COMMAND application_logging_facade_tests)
 
   add_executable(emulated_usb_facade_tests tests/EmulatedUsbFacadeTests.cpp)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Cemu/Logging/CemuLogging.h"
+#include "Cemu/Logging/LoggingCallbacks.h"
 
 #include <cstddef>
 #include <cstdint>

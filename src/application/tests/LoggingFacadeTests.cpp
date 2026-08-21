@@ -1,4 +1,6 @@
+#include "Common/precompiled.h"
 #include "application/LoggingFacade.h"
+#include "Cemu/Logging/CemuLogging.h"
 
 #include <atomic>
 #include <cstdlib>
