@@ -1250,6 +1250,7 @@ void MainWindow::OnDebugLoggingToggleFlagGeneric(wxCommandEvent& event)
 void MainWindow::OnPPCInfoToggle(wxCommandEvent& event)
 {
 	GetConfig().advanced_ppc_logging = !GetConfig().advanced_ppc_logging.GetValue();
+	cemuLog_setAdvancedPPCLoggingEnabled(GetConfig().advanced_ppc_logging.GetValue());
 	GetConfigHandle().Save();
 }
 

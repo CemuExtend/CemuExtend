@@ -1,9 +1,11 @@
 #include "wxgui/DownloadCustomGraphicPackWindow.h"
-#include "Common/FileStream.h"
 #include "host/contracts/HostContracts.h"
 
 #include <cstring>
+#include <cctype>
 #include <filesystem>
+#include <fstream>
+#include <set>
 #include <string>
 
 #include <wx/event.h>
@@ -17,11 +19,63 @@
 #include <curl/curl.h>
 #include <zip.h>
 
+namespace
+{
+	constexpr std::size_t kMaximumCustomPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumCustomPackEntries = 20000;
+	constexpr zip_uint64_t kMaximumCustomPackFileSize = 128ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumCustomPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumCustomPackCompressionRatio = 1000;
+
+	std::optional<fs::path> NormalizeCustomPackArchivePath(std::string_view name)
+	{
+		if (name.empty() || name.front() == '/' || name.front() == '\\')
+			return std::nullopt;
+		std::string portableName(name);
+		std::replace(portableName.begin(), portableName.end(), '\\', '/');
+		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
+			portableName[1] == ':')
+			return std::nullopt;
+		const auto normalized = _utf8ToPath(portableName).lexically_normal();
+		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
+			normalized.has_root_name() || normalized.has_root_directory())
+			return std::nullopt;
+		for (const auto& component : normalized)
+			if (component == "..")
+				return std::nullopt;
+		return normalized;
+	}
+
+	bool IsCustomPackArchiveSymlink(zip_t* archive, zip_uint64_t index)
+	{
+		zip_uint8_t operatingSystem{};
+		zip_uint32_t attributes{};
+		if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem, &attributes) != 0)
+			return true;
+		return operatingSystem == ZIP_OPSYS_UNIX && ((attributes >> 16U) & 0170000U) == 0120000U;
+	}
+
+	fs::path UniqueCustomPackSibling(const fs::path& target)
+	{
+		const auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
+		for (std::uint32_t attempt = 0; attempt < 1000; ++attempt)
+		{
+			const auto candidate = target.parent_path() /
+				fmt::format(".{}.staging.{}.{}", _pathToUtf8(target.filename()), seed, attempt);
+			std::error_code error;
+			if (!fs::exists(candidate, error) && !error)
+				return candidate;
+		}
+		throw std::runtime_error("Unable to allocate custom graphic-pack transaction path");
+	}
+}
+
 static size_t curlDownloadFile_writeData(void *ptr, size_t size, size_t nmemb, DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState)
 {
 	const size_t writeSize = size * nmemb;
 	const size_t currentSize = downloadState->fileData.size();
-	const size_t newSize = currentSize + writeSize;
+	if (writeSize > kMaximumCustomPackDownloadSize - std::min(currentSize, kMaximumCustomPackDownloadSize))
+		return 0;
 	auto* bytePtr = static_cast<const uint8*>(ptr);
 	downloadState->fileData.insert(downloadState->fileData.end(), bytePtr, bytePtr + writeSize);
 	return writeSize;
@@ -55,7 +109,11 @@ static bool curlDownloadFile(const char *url, DownloadCustomGraphicPackWindow::c
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 15L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 15L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
 	downloadState->fileData.resize(0);
 	const CURLcode res = curl_easy_perform(curl);
@@ -259,159 +317,229 @@ void DownloadCustomGraphicPackWindow::OnDownloadButton(const wxCommandEvent& eve
     if (m_thread.joinable())
         m_thread.join();
     
-	m_thread = std::thread(&DownloadCustomGraphicPackWindow::UpdateThread, this,
-		std::move(downloadUrl), std::move(folderName));
+	m_thread = std::thread([this, downloadUrl = std::move(downloadUrl),
+		folderName = std::move(folderName)]() mutable {
+		try
+		{
+			UpdateThread(std::move(downloadUrl), std::move(folderName));
+		}
+		catch (const std::exception& error)
+		{
+			cemuLog_log(LogType::Force, "Custom graphic-pack worker failed: {}", error.what());
+			if (!m_downloadState->isCanceled)
+				m_stage = StageErrInvalidPack;
+		}
+		catch (...)
+		{
+			cemuLog_log(LogType::Force, "Custom graphic-pack worker failed with an unknown error");
+			if (!m_downloadState->isCanceled)
+				m_stage = StageErrInvalidPack;
+		}
+	});
 }
 
 void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std::string folderName)
 {
-    m_stage = StageDownloading;
-    if (curlDownloadFile(downloadUrl.c_str(), m_downloadState.get()) == false)
-    {
-        m_stage = StageErrConnectFailed;
-		return;
-    }
-    
-    m_extractionProgress = 0.0;
-    m_stage = StageExtracting;
-    
-    zip_source_t *src;
-    zip_t *za;
-    zip_error_t error;
-    
-    // init zip source
-	zip_error_init(&error);
-	if ((src = zip_source_buffer_create(m_downloadState->fileData.data(), m_downloadState->fileData.size(), 0, &error)) == NULL)
+	m_stage = StageDownloading;
+	if (!curlDownloadFile(downloadUrl.c_str(), m_downloadState.get()))
 	{
-		zip_error_fini(&error);
+		if (!m_downloadState->isCanceled)
+			m_stage = StageErrConnectFailed;
+		return;
+	}
+	if (m_downloadState->isCanceled)
+		return;
+
+	m_extractionProgress = 0.0;
+	m_stage = StageExtracting;
+
+	zip_error_t zipError;
+	zip_error_init(&zipError);
+	zip_source_t* source = zip_source_buffer_create(m_downloadState->fileData.data(),
+		m_downloadState->fileData.size(), 0, &zipError);
+	if (!source)
+	{
+		zip_error_fini(&zipError);
 		m_stage = StageErrSourceFailed;
 		return;
 	}
-
-	// open zip from source
-	if ((za = zip_open_from_source(src, 0, &error)) == NULL)
+	zip_t* rawArchive = zip_open_from_source(source, ZIP_RDONLY, &zipError);
+	if (!rawArchive)
 	{
-		zip_source_free(src);
-		zip_error_fini(&error);
+		zip_source_free(source);
+		zip_error_fini(&zipError);
 		m_stage = StageErrOpenFailed;
 		return;
 	}
-    
-    auto path = m_pathProvider->GetUserDataPath("graphicPacks/customGraphicPacks");
-    fs::create_directories(path);
-    
-    // check if zip root directly contains a rules.txt
-    zip_stat_t zs;
-    zip_stat_init(&zs);
-    bool hasRootRulesTxt = (zip_stat(za, "rules.txt", 0, &zs) == 0);
+	std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
+	zip_error_fini(&zipError);
 
-    fs::path extractionRoot = path;
+	const auto normalizedFolder = NormalizeCustomPackArchivePath(folderName);
+	if (!normalizedFolder || normalizedFolder->has_parent_path())
+	{
+		m_stage = StageErrInvalidPack;
+		return;
+	}
+	zip_stat_t rulesStat{};
+	if (zip_stat(archive.get(), "rules.txt", 0, &rulesStat) != 0)
+	{
+		m_stage = StageErrInvalidPack;
+		return;
+	}
 
-    if (hasRootRulesTxt)
-    {
-        // make a folder and extract into that
-        extractionRoot = path / folderName;
-        fs::create_directories(extractionRoot);
-    }
-    else
-    {
-        // not a gfxpack
-        m_stage = StageErrInvalidPack;
-        zip_close(za);
-        return;
-    }
+	struct PlannedEntry
+	{
+		zip_uint64_t index{};
+		fs::path relativePath;
+		zip_uint64_t size{};
+		bool directory{};
+	};
+	std::vector<PlannedEntry> plan;
+	std::set<fs::path> paths;
+	zip_uint64_t totalSize{};
+	const auto entryCount = zip_get_num_entries(archive.get(), 0);
+	if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) > kMaximumCustomPackEntries)
+	{
+		m_stage = StageErrInvalidPack;
+		return;
+	}
+	plan.reserve(static_cast<std::size_t>(entryCount));
+	for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(entryCount); ++index)
+	{
+		zip_stat_t stat{};
+		if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || !stat.name ||
+			IsCustomPackArchiveSymlink(archive.get(), index))
+		{
+			m_stage = StageErrInvalidPack;
+			return;
+		}
+		auto relativePath = NormalizeCustomPackArchivePath(stat.name);
+		if (!relativePath || !paths.emplace(*relativePath).second)
+		{
+			m_stage = StageErrInvalidPack;
+			return;
+		}
+		const auto nameLength = std::strlen(stat.name);
+		const bool directory = nameLength > 0 &&
+			(stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
+		if (!directory)
+		{
+			if (stat.size > kMaximumCustomPackFileSize ||
+				totalSize > kMaximumCustomPackTotalSize - stat.size ||
+				(stat.comp_size > 0 && stat.size / stat.comp_size > kMaximumCustomPackCompressionRatio))
+			{
+				m_stage = StageErrInvalidPack;
+				return;
+			}
+			totalSize += stat.size;
+		}
+		plan.push_back({index, std::move(*relativePath), stat.size, directory});
+	}
 
-    // extract
-    bool err = false;
-    zip_int64_t numEntries = zip_get_num_entries(za, 0);
-    for (zip_int64_t i = 0; i < numEntries; i++) 
-    {
-        m_extractionProgress = (double)i / (double)numEntries;
-        
-        if (m_downloadState->isCanceled)
-        {
-            err = true;
-        }
-        
-        if (err)
-        {
-            break;
-        }
-        
-        zip_stat_t sb = { 0 };
-        zip_stat_init(&sb);
-        if (zip_stat_index(za, i, 0, &sb) != 0)
-        {
-            assert_dbg();
-            continue;
-        }
-        
-        std::string fileName = sb.name;
-        if (std::strstr(sb.name, "../") != nullptr ||
-            std::strstr(sb.name, "..\\") != nullptr ||
-            (!fileName.empty() && (fileName[0] == '/' || fileName[0] == '\\')))
-        {
-            // bad path, CommunityGraphicPacks silently continues
-            // but this is a low-trust environment, so we halt
-            m_stage = StageErrInvalidPack;
-            err = true;
-            break;
-        }
-        
-        fs::path targetDest = extractionRoot / fileName;
+	const auto customRoot = m_pathProvider->GetUserDataPath("graphicPacks/customGraphicPacks");
+	const auto target = customRoot / *normalizedFolder;
+	std::error_code filesystemError;
+	fs::create_directories(customRoot, filesystemError);
+	if (filesystemError)
+	{
+		m_stage = StageErrInvalidPack;
+		return;
+	}
+	if (fs::exists(target, filesystemError) || filesystemError)
+	{
+		m_stage = StageErrConflict;
+		return;
+	}
+	const auto staging = UniqueCustomPackSibling(target);
+	fs::create_directories(staging, filesystemError);
+	if (filesystemError)
+	{
+		m_stage = StageErrInvalidPack;
+		return;
+	}
+	auto cleanupStaging = [&] {
+		std::error_code cleanupError;
+		fs::remove_all(staging, cleanupError);
+	};
 
-        if (!fileName.empty() && fileName.back() == '/') 
-        {
-            fs::create_directories(targetDest);
-            continue;
-        }
-        
-        if (fs::exists(targetDest) && fs::is_regular_file(targetDest))
-        {
-            m_stage = StageErrConflict;
-            err = true;
-            break;
-        }
-
-        fs::create_directories(targetDest.parent_path());
-
-        zip_file_t* zf = zip_fopen_index(za, i, 0);
-        if (!zf)
-        {
-            continue;
-        }
-        
-        if (sb.size > 1000000000) // 1GB suspicious limit per file
-        {
-            m_stage = StageErrInvalidPack;
-            err = true;
-            break;
-        }
-
-        std::vector<uint8> fileBuffer(sb.size);
-        
-        if (zip_fread(zf, fileBuffer.data(), sb.size) == sb.size)
-        {
-            std::unique_ptr<FileStream> fs(FileStream::createFile2(targetDest));
-            if (fs)
-            {
-                fs->writeData(fileBuffer.data(), sb.size);
-            }
-        }
-        else
-        {
-            err = true;
-            m_stage = StageErrInvalidPack;
-        }
-        
-        zip_fclose(zf);
-    }
-
-    zip_discard(za);
-    zip_error_fini(&error);
-    
-    if (!err)
-    {
-        m_stage = StageDone;
-    }
+	bool failed = false;
+	std::array<char, 1024 * 1024> buffer{};
+	for (std::size_t planIndex = 0; planIndex < plan.size(); ++planIndex)
+	{
+		if (m_downloadState->isCanceled)
+		{
+			failed = true;
+			break;
+		}
+		m_extractionProgress = plan.empty() ? 1.0 :
+			static_cast<double>(planIndex) / static_cast<double>(plan.size());
+		const auto& entry = plan[planIndex];
+		const auto destination = staging / entry.relativePath;
+		if (entry.directory)
+		{
+			fs::create_directories(destination, filesystemError);
+			if (filesystemError)
+			{
+				failed = true;
+				break;
+			}
+			continue;
+		}
+		fs::create_directories(destination.parent_path(), filesystemError);
+		if (filesystemError)
+		{
+			failed = true;
+			break;
+		}
+		std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
+			zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
+		std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+		if (!file || !output)
+		{
+			failed = true;
+			break;
+		}
+		zip_uint64_t remaining = entry.size;
+		while (remaining > 0)
+		{
+			if (m_downloadState->isCanceled)
+			{
+				failed = true;
+				break;
+			}
+			const auto request = static_cast<zip_uint64_t>(
+				std::min<zip_uint64_t>(buffer.size(), remaining));
+			const auto read = zip_fread(file.get(), buffer.data(), request);
+			if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining)
+			{
+				failed = true;
+				break;
+			}
+			output.write(buffer.data(), static_cast<std::streamsize>(read));
+			if (!output)
+			{
+				failed = true;
+				break;
+			}
+			remaining -= static_cast<zip_uint64_t>(read);
+		}
+		if (failed)
+			break;
+	}
+	if (failed || m_downloadState->isCanceled)
+	{
+		cleanupStaging();
+		if (!m_downloadState->isCanceled)
+			m_stage = StageErrInvalidPack;
+		return;
+	}
+	fs::rename(staging, target, filesystemError);
+	if (filesystemError)
+	{
+		cleanupStaging();
+		m_stage = fs::exists(target) ? StageErrConflict : StageErrInvalidPack;
+		return;
+	}
+	m_extractionProgress = 1.0;
+	m_stage = StageDone;
 }

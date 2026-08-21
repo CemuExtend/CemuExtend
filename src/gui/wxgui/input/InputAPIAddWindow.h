@@ -9,6 +9,7 @@
 #include <thread>
 #include <wx/dialog.h>
 #include <wx/panel.h>
+#include <wx/timer.h>
 
 #include "wxgui/helpers/wxCustomData.h"
 #include "input/api/Controller.h"
@@ -42,6 +43,7 @@ private:
 	void on_controller_dropdown(wxCommandEvent& event);
 	void on_controller_selected(wxCommandEvent& event);
 	void on_controllers_refreshed(wxCommandEvent& event);
+	void on_search_timer(wxTimerEvent& event);
 
 	void discard_thread_result();
 
@@ -59,10 +61,7 @@ private:
 	std::atomic_bool m_search_running = false;
 	std::uint64_t m_search_generation{};
 	std::thread m_search_thread;
-	struct AsyncThreadData
-	{
-		bool discardResult = false;
-		std::mutex mutex;
-	};
+	struct AsyncThreadData;
 	std::shared_ptr<AsyncThreadData> m_search_thread_data;
+	wxTimer m_search_timer;
 };

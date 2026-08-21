@@ -621,7 +621,7 @@ void wxGameList::OnKeyDown(wxListEvent& event)
 	}
 }
 
-enum ContextMenuEntries
+enum GameListContextMenuEntries
 {
 	kContextMenuRefreshGames = wxID_HIGHEST + 1,
 

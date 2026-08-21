@@ -255,7 +255,7 @@ void GameProfileWindow::OnControllerProfileDropdown(wxCommandEvent& event)
 	cb->Clear();
 	cb->Append(wxEmptyString);
 
-	auto profiles = InputManager::get_profiles();
+	auto profiles = InputManager::instance().get_profiles();
 	for (const auto& profile : profiles)
 	{
 		cb->Append(wxString::FromUTF8(profile));
@@ -306,7 +306,7 @@ void GameProfileWindow::ApplyProfile()
 	//m_disable_audio->Set3StateValue(GetCheckboxState(m_game_profile.disableAudio));
 
 	// controller
-	auto profiles = InputManager::get_profiles();
+	auto profiles = InputManager::instance().get_profiles();
 
 	for (const auto& cb : m_controller_profile)
 	{

@@ -432,6 +432,7 @@ struct fmt::formatter<CrashDump> : formatter<string_view> {
 
 struct CemuConfig
 {
+	static constexpr uint32 kMinimumAccountPersistentId = 0x80000001;
 	CemuConfig()
 	{
 

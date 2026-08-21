@@ -32,6 +32,7 @@ public:
 private:
 	void UpdateThread();
 	void DownloadAndInstall();
+	void StartWorker(void (DownloadGraphicPacksWindow::*worker)());
 
 	enum ThreadState_t
 	{

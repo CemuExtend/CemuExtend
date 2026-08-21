@@ -554,6 +554,33 @@ add_library(CemuCafe
   TitleList/TitleList.h
 )
 
+# Cafe-integrated network, crypto, assembler, and online-service code is owned
+# by the Cafe target. Keeping these sources in the generic CemuComponents
+# archive hid reverse Cafe dependencies and produced a false target DAG.
+target_sources(CemuCafe PRIVATE
+  ../Cemu/napi/napi_act.cpp
+  ../Cemu/napi/napi_ec.cpp
+  ../Cemu/napi/napi.cpp
+  ../Cemu/napi/napi.h
+  ../Cemu/napi/napi_helper.cpp
+  ../Cemu/napi/napi_helper.h
+  ../Cemu/napi/napi_idbe.cpp
+  ../Cemu/napi/napi_version.cpp
+  ../Cemu/ncrypto/ncrypto.cpp
+  ../Cemu/ncrypto/ncrypto.h
+  ../Cemu/nex/nex.cpp
+  ../Cemu/nex/nexFriends.cpp
+  ../Cemu/nex/nexFriends.h
+  ../Cemu/nex/nex.h
+  ../Cemu/nex/nexThread.cpp
+  ../Cemu/nex/nexThread.h
+  ../Cemu/nex/nexTypes.h
+  ../Cemu/nex/prudp.cpp
+  ../Cemu/nex/prudp.h
+  ../Cemu/PPCAssembler/ppcAssembler.cpp
+  ../Cemu/PPCAssembler/ppcAssembler.h
+)
+
 if (ENABLE_OPENGL)
   target_sources(CemuCafe PRIVATE
     HW/Latte/Renderer/OpenGL/CachedFBOGL.h
@@ -710,9 +737,12 @@ endif()
 
 target_link_libraries(CemuCafe PRIVATE
 	CemuCommon
+  CemuComponents
+  CemuConfig
   CemuHostContracts
   CemuInput
   CemuExtendDomain
+  CemuUtil
   cemuextend::wire
   ZArchive::zarchive
   imguiImpl

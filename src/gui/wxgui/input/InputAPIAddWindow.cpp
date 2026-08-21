@@ -16,8 +16,6 @@
 
 #include "input/ControllerFactory.h"
 
-wxDEFINE_EVENT(wxControllersRefreshed, wxCommandEvent);
-
 using wxTypeData = wxCustomData<InputAPI::Type>;
 using wxControllerData = wxCustomData<ControllerPtr>;
 
@@ -32,9 +30,19 @@ namespace
 	};
 }
 
+struct InputAPIAddWindow::AsyncThreadData
+{
+	std::mutex mutex;
+	bool complete{};
+	bool canceled{};
+	std::optional<AsyncSearchResult> result;
+	std::string error;
+};
+
 InputAPIAddWindow::InputAPIAddWindow(wxWindow* parent, const wxPoint& position,
                                      const std::vector<ControllerPtr>& controllers)
-	: wxDialog(parent, wxID_ANY, "Add input API", position, wxDefaultSize, wxCAPTION), m_controllers(controllers)
+	: wxDialog(parent, wxID_ANY, "Add input API", position, wxDefaultSize, wxCAPTION),
+	  m_controllers(controllers), m_search_timer(this)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -122,13 +130,14 @@ InputAPIAddWindow::InputAPIAddWindow(wxWindow* parent, const wxPoint& position,
 	this->Layout();
 	sizer->Fit(this);
 
-	this->Bind(wxControllersRefreshed, &InputAPIAddWindow::on_controllers_refreshed, this);
+	this->Bind(wxEVT_TIMER, &InputAPIAddWindow::on_search_timer, this, m_search_timer.GetId());
+	m_search_timer.Start(50);
 }
 
 InputAPIAddWindow::~InputAPIAddWindow()
 {
 	discard_thread_result();
-	DeletePendingEvents();
+	m_search_timer.Stop();
 }
 
 void InputAPIAddWindow::on_add_button(wxCommandEvent& event)
@@ -260,20 +269,30 @@ void InputAPIAddWindow::on_controller_dropdown(wxCommandEvent& event)
 	m_controller_list->SetSelection(wxNOT_FOUND);
 
 	m_search_thread_data = std::make_unique<AsyncThreadData>();
-	m_search_thread = std::thread([this, provider, selected_uuid, generation](std::shared_ptr<AsyncThreadData> data)
+	m_search_thread = std::thread([provider, selected_uuid, generation](std::shared_ptr<AsyncThreadData> data)
 	{
-		auto available_controllers = provider->get_controllers();
-
+		try
+		{
+			auto availableControllers = provider->get_controllers();
+			std::lock_guard lock{data->mutex};
+			if (!data->canceled)
+				data->result = AsyncSearchResult{generation, provider->api(), selected_uuid,
+					std::move(availableControllers)};
+			data->complete = true;
+		}
+		catch (const std::exception& error)
 		{
 			std::lock_guard lock{data->mutex};
-			if(!data->discardResult)
-			{
-				wxCommandEvent event(wxControllersRefreshed);
-				event.SetClientObject(new wxCustomData(AsyncSearchResult{
-					generation, provider->api(), selected_uuid,
-					std::move(available_controllers)}));
-				wxPostEvent(this, event);
-			}
+			if (!data->canceled)
+				data->error = error.what();
+			data->complete = true;
+		}
+		catch (...)
+		{
+			std::lock_guard lock{data->mutex};
+			if (!data->canceled)
+				data->error = "Unknown controller enumeration error";
+			data->complete = true;
 		}
 	}, m_search_thread_data);
 }
@@ -327,6 +346,37 @@ void InputAPIAddWindow::on_controllers_refreshed(wxCommandEvent& event)
 	}
 }
 
+void InputAPIAddWindow::on_search_timer(wxTimerEvent& event)
+{
+	if (!m_search_thread_data)
+		return;
+	std::optional<AsyncSearchResult> result;
+	std::string error;
+	{
+		std::lock_guard lock{m_search_thread_data->mutex};
+		if (!m_search_thread_data->complete)
+			return;
+		result = std::move(m_search_thread_data->result);
+		error = std::move(m_search_thread_data->error);
+	}
+	if (m_search_thread.joinable())
+		m_search_thread.join();
+	m_search_thread_data.reset();
+	m_search_running = false;
+	if (!error.empty())
+	{
+		cemuLog_log(LogType::Force, "Controller enumeration failed: {}", error);
+		m_controller_list->Clear();
+		m_controller_list->Append(_("Controller search failed"), (wxClientData*)nullptr);
+		return;
+	}
+	if (!result || result->generation != m_search_generation)
+		return;
+	wxCommandEvent refreshed;
+	refreshed.SetClientObject(new wxCustomData<AsyncSearchResult>(std::move(*result)));
+	on_controllers_refreshed(refreshed);
+}
+
 void InputAPIAddWindow::discard_thread_result()
 {
 	m_search_running = false;
@@ -334,9 +384,20 @@ void InputAPIAddWindow::discard_thread_result()
 	if(m_search_thread_data)
 	{
 		std::lock_guard lock{m_search_thread_data->mutex};
-		m_search_thread_data->discardResult = true;
+		m_search_thread_data->canceled = true;
 	}
 	if (m_search_thread.joinable())
-		m_search_thread.join();
+	{
+		bool complete = false;
+		if (m_search_thread_data)
+		{
+			std::lock_guard lock{m_search_thread_data->mutex};
+			complete = m_search_thread_data->complete;
+		}
+		if (complete)
+			m_search_thread.join();
+		else
+			m_search_thread.detach();
+	}
 	m_search_thread_data.reset();
 }

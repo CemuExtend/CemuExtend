@@ -1,9 +1,6 @@
 #include "CemuLogging.h"
 #include "Common/precompiled.h"
 #include "util/helpers/helpers.h"
-#include "config/CemuConfig.h"
-#include "config/ActiveSettings.h"
-#include "config/LaunchSettings.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -12,6 +9,14 @@
 #include <fmt/printf.h>
 
 uint64 s_loggingFlagMask = cemuLog_getFlag(LogType::Force);
+
+namespace
+{
+	std::atomic_bool s_advancedPpcLogging{};
+	std::atomic_bool s_verboseLogging{};
+	std::shared_mutex s_logPathMutex;
+	fs::path s_logFilePath = "log.txt";
+}
 
 class LoggingDispatcher
 {
@@ -122,7 +127,7 @@ const std::map<LogType, std::string> g_logging_window_mapping
 
 bool cemuLog_advancedPPCLoggingEnabled()
 {
-	return GetConfig().advanced_ppc_logging;
+	return s_advancedPpcLogging.load(std::memory_order_acquire);
 }
 
 void cemuLog_thread()
@@ -151,7 +156,8 @@ void cemuLog_thread()
 
 fs::path cemuLog_GetLogFilePath()
 {
-    return ActiveSettings::GetUserDataPath("log.txt");
+	std::shared_lock lock(s_logPathMutex);
+	return s_logFilePath;
 }
 
 void cemuLog_createLogFile(bool triggeredByCrash)
@@ -203,7 +209,7 @@ bool cemuLog_log(LogType type, std::string_view text)
 	if (!cemuLog_isLoggingEnabled(type))
 		return false;
 
-	if (LaunchSettings::Verbose())
+	if (s_verboseLogging.load(std::memory_order_acquire))
 		std::cout << text << std::endl;
 
 	cemuLog_writeLineToLog(text);
@@ -264,4 +270,19 @@ std::unique_lock<decltype(LogContext.log_mutex)> cemuLog_acquire()
 void cemuLog_setActiveLoggingFlags(uint64 flagMask)
 {
 	s_loggingFlagMask = flagMask | cemuLog_getFlag(LogType::Force);
+}
+
+void cemuLog_configureRuntime(fs::path logFilePath, bool advancedPpcLogging, bool verbose)
+{
+	{
+		std::unique_lock lock(s_logPathMutex);
+		s_logFilePath = std::move(logFilePath);
+	}
+	s_advancedPpcLogging.store(advancedPpcLogging, std::memory_order_release);
+	s_verboseLogging.store(verbose, std::memory_order_release);
+}
+
+void cemuLog_setAdvancedPPCLoggingEnabled(bool enabled)
+{
+	s_advancedPpcLogging.store(enabled, std::memory_order_release);
 }

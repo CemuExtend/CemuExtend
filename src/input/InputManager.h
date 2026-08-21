@@ -47,6 +47,7 @@ public:
 
 	void Shutdown(); 
 	void Start();
+	void ConfigureProfileDirectory(fs::path profileDirectory);
 	void ConfigureHost(Host::IKeyboardState& keyboard, Host::IWindowMetrics& windowMetrics,
 		Host::INativeSurfaceProvider& nativeSurfaces, Input::IControllerStateObserver& observer);
 	void ClearHost();
@@ -86,7 +87,8 @@ public:
 		return m_api_available;
 	}
 
-	void apply_game_profile();
+	using ControllerProfileSelection = std::array<std::optional<std::string>, kMaxController>;
+	void apply_game_profile(const ControllerProfileSelection& profiles);
 	void on_device_changed();
 	void UpdateHostMousePosition(Host::PointerSurface surface,
 		Host::PointerPosition position);
@@ -98,7 +100,7 @@ public:
 	[[nodiscard]] float ConsumeHostMouseWheel();
 
 
-	static std::vector<std::string> get_profiles();
+	std::vector<std::string> get_profiles() const;
 	static bool is_valid_profilename(const std::string& name);
 
 	glm::ivec2 get_mouse_position(bool pad_window) const;
@@ -135,6 +137,7 @@ private:
 	std::array<EmulatedControllerPtr, kMaxWPADControllers> m_wpad;
 
 	std::array<bool, kMaxController> m_is_gameprofile_set{};
+	fs::path m_profileDirectory;
 
 	mutable std::shared_mutex m_host_mutex;
 	Host::IKeyboardState* m_keyboard_host{};

@@ -128,14 +128,19 @@ void CemuCommonInit()
 	PPCTimer_init();
 
 	WindowsInitCwd();
+	cemuLog_configureRuntime(ActiveSettings::GetUserDataPath("log.txt"),
+		GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
     ExceptionHandler_Init();
 	// read config
 	GetConfigHandle().Load();
+	cemuLog_configureRuntime(ActiveSettings::GetUserDataPath("log.txt"),
+		GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
 	if (NetworkConfig::XMLExists())
 		n_config.Load();
 	// parallelize expensive init code
 	std::future<int> futureInitAudioAPI = std::async(std::launch::async, []{ IAudioAPI::InitializeStatic(); IAudioInputAPI::InitializeStatic(); return 0; });
 	std::future<int> futureInitGraphicPacks = std::async(std::launch::async, []{ GraphicPack2::LoadAll(); return 0; });
+	InputManager::instance().ConfigureProfileDirectory(ActiveSettings::GetConfigPath("controllerProfiles"));
 	InputManager::instance().Start();
 	InputManager::instance().load();
 	futureInitAudioAPI.wait();

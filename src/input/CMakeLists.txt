@@ -103,6 +103,7 @@ target_include_directories(CemuInput PUBLIC "../")
 target_link_libraries(CemuInput PRIVATE
 	CemuCommon
 	CemuHostContracts
+	CemuUtil
 )
 
 if (ENABLE_BLUEZ)

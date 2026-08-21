@@ -1,10 +1,6 @@
 #include "LaunchSettings.h"
 
 #include "util/helpers/helpers.h"
-#include "Cafe/Account/Account.h"
-
-#include "Cafe/OS/libs/coreinit/coreinit.h"
-
 #include "boost/program_options.hpp"
 
 #include "config/ActiveSettings.h"
@@ -172,7 +168,7 @@ bool LaunchSettings::HandleCommandline(const std::vector<std::wstring>& args)
 		if (vm.count("account"))
 		{
 			const auto id = ConvertString<uint32>(vm["account"].as<std::string>(), 16);
-			if (id >= Account::kMinPersistendId)
+			if (id >= CemuConfig::kMinimumAccountPersistentId)
 				s_persistent_id = id;
 		}
 		

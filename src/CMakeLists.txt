@@ -136,14 +136,29 @@ endfunction()
 # these assertions reject the reverse edges that would form architecture cycles.
 cemu_assert_target_has_no_edge(CemuHostContracts CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuComponents CemuCafe CemuConfig CemuInput CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
-cemu_assert_target_has_no_edge(CemuWxGui CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+# The normal GUI owns calls to the neutral adapter facades, so those direct
+# static-library edges must be explicit.  Adapter implementations may depend on
+# Cafe, but must never depend back on the normal GUI archive.
+cemu_assert_target_has_direct_edges(CemuWxGui
+	CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
 cemu_assert_target_has_no_edge(CemuWxGuiCommon CemuCafe CemuApplication CemuWxGui CemuWxDebuggerAdapters)
 cemu_assert_target_has_no_edge(CemuWxRendererAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDebuggerAdapters CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuWxDeviceAdapters CemuApplication CemuWxGui CemuWxDebuggerAdapters CemuWxRendererAdapters)
-cemu_assert_target_has_direct_edges(CemuWxGui CemuAudio CemuConfig CemuInput CemuUtil)
+cemu_assert_target_has_direct_edges(CemuWxGui
+	CemuAudio CemuConfig CemuDownloadManager CemuInput CemuUtil)
+cemu_assert_target_has_direct_edges(CemuCafe CemuComponents CemuConfig CemuInput CemuUtil)
+cemu_assert_target_has_direct_edges(CemuConfig CemuComponents)
+cemu_assert_target_has_direct_edges(CemuDownloadManager
+	CemuCafe CemuComponents CemuConfig CemuUtil)
+cemu_assert_target_has_direct_edges(CemuInput CemuUtil)
+cemu_assert_target_has_no_sources(CemuComponents
+	napi.cpp napi_act.cpp napi_ec.cpp napi_helper.cpp napi_idbe.cpp napi_version.cpp
+	ncrypto.cpp nex.cpp nexFriends.cpp nexThread.cpp prudp.cpp ppcAssembler.cpp
+	DownloadManager.cpp DownloadManager.h)
 cemu_assert_target_has_no_sources(CemuWxGui
 	AudioDebuggerWindow.cpp
 	AudioDebuggerWindow.h
@@ -196,6 +211,11 @@ if(BUILD_TESTING)
 		COMMAND ${CMAKE_COMMAND}
 			-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}
 			-P ${CMAKE_SOURCE_DIR}/cmake/CheckArchitecture.cmake)
+	add_test(NAME architecture_guards_negative_input
+		COMMAND ${CMAKE_COMMAND}
+			-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}/cmake/tests/architecture_negative
+			-P ${CMAKE_SOURCE_DIR}/cmake/CheckArchitecture.cmake)
+	set_tests_properties(architecture_guards_negative_input PROPERTIES WILL_FAIL TRUE)
 endif()
 
 add_executable(CemuBin
@@ -361,21 +381,14 @@ target_link_libraries(CemuBin PRIVATE
 	CemuCommon
 	CemuComponents
 	CemuConfig
+	CemuDownloadManager
 	CemuInput
 	CemuResource
 	CemuUtil
 )
 
 if(ENABLE_WXWIDGETS)
-	# The executable is the composition root for the normal frontend and its
-	# backend-specific renderer adapters.  CemuWxGui only references the neutral
-	# adapter API; it does not own or link the implementation target.
-	target_link_libraries(CemuBin PRIVATE
-		CemuWxGui
-		CemuWxRendererAdapters
-		CemuWxDebuggerAdapters
-		CemuWxDeviceAdapters
-	)
+	target_link_libraries(CemuBin PRIVATE CemuWxGui)
 endif()
 
 if(UNIX AND NOT APPLE)

@@ -3,6 +3,8 @@
 
 #include <cctype>
 #include <filesystem>
+#include <fstream>
+#include <set>
 #include <curl/curl.h>
 #include <zip.h>
 #include <rapidjson/document.h>
@@ -12,6 +14,57 @@
 
 #include "application/EmulationController.h"
 #include "host/contracts/HostContracts.h"
+
+namespace
+{
+	constexpr std::size_t kMaximumGraphicPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumGraphicPackEntries = 20000;
+	constexpr zip_uint64_t kMaximumGraphicPackFileSize = 128ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumGraphicPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumGraphicPackCompressionRatio = 1000;
+
+	std::optional<fs::path> NormalizeGraphicPackArchivePath(std::string_view name)
+	{
+		if (name.empty() || name.front() == '/' || name.front() == '\\')
+			return std::nullopt;
+		std::string portableName(name);
+		std::replace(portableName.begin(), portableName.end(), '\\', '/');
+		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
+			portableName[1] == ':')
+			return std::nullopt;
+		const auto normalized = _utf8ToPath(portableName).lexically_normal();
+		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
+			normalized.has_root_name() || normalized.has_root_directory())
+			return std::nullopt;
+		for (const auto& component : normalized)
+			if (component == "..")
+				return std::nullopt;
+		return normalized;
+	}
+
+	bool IsGraphicPackArchiveSymlink(zip_t* archive, zip_uint64_t index)
+	{
+		zip_uint8_t operatingSystem{};
+		zip_uint32_t attributes{};
+		if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem, &attributes) != 0)
+			return true;
+		return operatingSystem == ZIP_OPSYS_UNIX && ((attributes >> 16U) & 0170000U) == 0120000U;
+	}
+
+	fs::path UniqueGraphicPackSibling(const fs::path& target, std::string_view suffix)
+	{
+		const auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
+		for (std::uint32_t attempt = 0; attempt < 1000; ++attempt)
+		{
+			auto candidate = target.parent_path() /
+				fmt::format(".{}.{}.{}.{}", _pathToUtf8(target.filename()), suffix, seed, attempt);
+			std::error_code error;
+			if (!fs::exists(candidate, error) && !error)
+				return candidate;
+		}
+		throw std::runtime_error("Unable to allocate graphic-pack transaction path");
+	}
+}
 
 struct DownloadGraphicPacksWindow::curlDownloadFileState_t
 {
@@ -24,6 +77,8 @@ size_t DownloadGraphicPacksWindow::curlDownloadFile_writeData(void *ptr, size_t 
 {
 	const size_t writeSize = size * nmemb;
 	const size_t currentSize = downloadState->fileData.size();
+	if (writeSize > kMaximumGraphicPackDownloadSize - std::min(currentSize, kMaximumGraphicPackDownloadSize))
+		return 0;
 	const size_t newSize = currentSize + writeSize;
 	downloadState->fileData.resize(newSize);
 	memcpy(downloadState->fileData.data() + currentSize, ptr, writeSize);
@@ -61,6 +116,8 @@ bool DownloadGraphicPacksWindow::curlDownloadFile(const char *url, curlDownloadF
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 15L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
 	downloadState->fileData.resize(0);
@@ -84,41 +141,6 @@ bool checkGraphicPackDownloadedVersion(const Host::IPathProvider& pathProvider,
 		return boost::iequals(versionInFile, nameVersion);
 	}
 	return false;
-}
-
-void createGraphicPackDownloadedVersionFile(const Host::IPathProvider& pathProvider,
-	const char* nameVersion)
-{
-	const auto path = pathProvider.GetUserDataPath(
-		"graphicPacks/downloadedGraphicPacks/version.txt");
-	std::unique_ptr<FileStream> file(FileStream::createFile2(path));
-	if (file)
-		file->writeString(nameVersion);
-	else
-	{
-		cemuLog_log(LogType::Force, "Failed to write graphic pack version.txt");
-	}
-}
-
-void deleteDownloadedGraphicPacks(const Host::IPathProvider& pathProvider)
-{
-	const auto path = pathProvider.GetUserDataPath(
-		"graphicPacks/downloadedGraphicPacks");
-	std::error_code er;
-	if (!fs::exists(path, er))
-		return;
-	try
-	{
-		for (auto& p : fs::directory_iterator(path))
-		{
-			fs::remove_all(p.path(), er);
-		}
-	}
-	catch (std::filesystem::filesystem_error& e)
-	{
-		cemuLog_log(LogType::Force, "Error in deleteDownloadedGraphicPacks():");
-		cemuLog_log(LogType::Force, e.what());
-	}
 }
 
 void DownloadGraphicPacksWindow::UpdateThread()
@@ -216,14 +238,14 @@ void DownloadGraphicPacksWindow::UpdateThread()
 
 void DownloadGraphicPacksWindow::DownloadAndInstall()
 {
-	// download zip
 	m_stage = StageDownloading;
-	if (curlDownloadFile(m_browserDownloadUrl.c_str(), m_downloadState.get()) == false)
+	if (!curlDownloadFile(m_browserDownloadUrl.c_str(), m_downloadState.get()))
 	{
-		if (m_downloadState->isCanceled)
-			return;
-		m_notification = NotificationConnectionFailed;
-		SetThreadResult(ThreadError);
+		if (!m_downloadState->isCanceled)
+		{
+			m_notification = NotificationConnectionFailed;
+			SetThreadResult(ThreadError);
+		}
 		return;
 	}
 	if (m_downloadState->isCanceled)
@@ -232,133 +254,218 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 	m_extractionProgress = 0.0;
 	m_stage = StageExtracting;
 
-	zip_source_t *src;
-	zip_t *za;
-	zip_error_t error;
-
-	// init zip source
-	zip_error_init(&error);
-	if ((src = zip_source_buffer_create(m_downloadState->fileData.data(), m_downloadState->fileData.size(), 0, &error)) == NULL)
+	zip_error_t zipError;
+	zip_error_init(&zipError);
+	zip_source_t* source = zip_source_buffer_create(m_downloadState->fileData.data(),
+		m_downloadState->fileData.size(), 0, &zipError);
+	if (!source)
 	{
-		zip_error_fini(&error);
+		zip_error_fini(&zipError);
 		SetThreadResult(ThreadError);
 		return;
 	}
-
-	// open zip from source
-	if ((za = zip_open_from_source(src, 0, &error)) == NULL)
+	zip_t* rawArchive = zip_open_from_source(source, ZIP_RDONLY, &zipError);
+	if (!rawArchive)
 	{
-		zip_source_free(src);
-		zip_error_fini(&error);
+		zip_source_free(source);
+		zip_error_fini(&zipError);
 		SetThreadResult(ThreadError);
 		return;
 	}
+	std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
+	zip_error_fini(&zipError);
 
-	const auto extractionRoot = m_pathProvider->GetUserDataPath(
-		"graphicPacks/downloadedGraphicPacks");
-	if (m_downloadState->isCanceled)
+	struct PlannedEntry
 	{
-		zip_discard(za);
-		zip_error_fini(&error);
+		zip_uint64_t index{};
+		fs::path relativePath;
+		zip_uint64_t size{};
+		bool directory{};
+	};
+	std::vector<PlannedEntry> plan;
+	std::set<fs::path> paths;
+	zip_uint64_t totalSize{};
+	const auto entryCount = zip_get_num_entries(archive.get(), 0);
+	if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) > kMaximumGraphicPackEntries)
+	{
+		SetThreadResult(ThreadError);
 		return;
 	}
-	auto path = extractionRoot;
-	std::error_code er;
-	//fs::remove_all(path, er); -> Don't delete the whole folder and recreate it immediately afterwards because sometimes it just fails
-	deleteDownloadedGraphicPacks(*m_pathProvider);
-	if (m_downloadState->isCanceled)
+	plan.reserve(static_cast<std::size_t>(entryCount));
+	for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(entryCount); ++index)
 	{
-		zip_discard(za);
-		zip_error_fini(&error);
+		zip_stat_t stat{};
+		if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || !stat.name ||
+			IsGraphicPackArchiveSymlink(archive.get(), index))
+		{
+			SetThreadResult(ThreadError);
+			return;
+		}
+		auto relativePath = NormalizeGraphicPackArchivePath(stat.name);
+		if (!relativePath || !paths.emplace(*relativePath).second)
+		{
+			SetThreadResult(ThreadError);
+			return;
+		}
+		const auto nameLength = std::strlen(stat.name);
+		const bool directory = nameLength > 0 &&
+			(stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
+		if (!directory)
+		{
+			if (stat.size > kMaximumGraphicPackFileSize ||
+				totalSize > kMaximumGraphicPackTotalSize - stat.size ||
+				(stat.comp_size > 0 && stat.size / stat.comp_size > kMaximumGraphicPackCompressionRatio))
+			{
+				SetThreadResult(ThreadError);
+				return;
+			}
+			totalSize += stat.size;
+		}
+		plan.push_back({index, std::move(*relativePath), stat.size, directory});
+	}
+
+	const auto target = m_pathProvider->GetUserDataPath("graphicPacks/downloadedGraphicPacks");
+	const auto staging = UniqueGraphicPackSibling(target, "staging");
+	const auto backup = UniqueGraphicPackSibling(target, "backup");
+	std::error_code filesystemError;
+	fs::create_directories(staging, filesystemError);
+	if (filesystemError)
+	{
+		SetThreadResult(ThreadError);
 		return;
 	}
-	fs::create_directories(path, er); // make sure downloadedGraphicPacks folder exists
+	auto cleanupStaging = [&] {
+		std::error_code cleanupError;
+		fs::remove_all(staging, cleanupError);
+	};
 
-	sint32 numEntries = zip_get_num_entries(za, 0);
 	bool extractionFailed = false;
-	if (numEntries < 0)
-		extractionFailed = true;
-	for (sint32 i = 0; i < numEntries; i++)
+	std::array<char, 1024 * 1024> buffer{};
+	for (std::size_t planIndex = 0; planIndex < plan.size(); ++planIndex)
 	{
 		if (m_downloadState->isCanceled)
-			break;
-
-		m_extractionProgress = (double)i / (double)numEntries;
-		zip_stat_t sb = { 0 };
-		if (zip_stat_index(za, i, 0, &sb) != 0)
-		{
-			assert_dbg();
-			extractionFailed = true;
-			break;
-		}
-
-		if (sb.name == nullptr)
 		{
 			extractionFailed = true;
 			break;
 		}
-
-		const std::string_view entryName(sb.name);
-		const fs::path entryPath = _utf8ToPath(entryName);
-		const bool hasDrivePrefix = entryName.size() >= 2 &&
-			std::isalpha(static_cast<unsigned char>(entryName[0])) && entryName[1] == ':';
-		bool hasParentTraversal = false;
-		for (const auto& component : entryPath)
-			hasParentTraversal |= component == "..";
-		if (entryName.empty() || entryName.front() == '/' || entryName.front() == '\\' ||
-			hasDrivePrefix || entryPath.is_absolute() || entryPath.has_root_name() ||
-			entryPath.has_root_directory() || hasParentTraversal ||
-			std::strstr(sb.name, "..\\") != nullptr)
+		m_extractionProgress = plan.empty() ? 1.0 :
+			static_cast<double>(planIndex) / static_cast<double>(plan.size());
+		const auto& entry = plan[planIndex];
+		const auto destination = staging / entry.relativePath;
+		if (entry.directory)
 		{
-			extractionFailed = true;
-			break;
-		}
-
-		path = extractionRoot / entryPath;
-
-		size_t sbNameLen = strlen(sb.name);
-		if(sbNameLen == 0)
-			continue;
-		if (sb.name[sbNameLen - 1] == '/')
-		{
-			fs::create_directories(path, er);
-			continue;
-		}
-		if(sb.size == 0)
-			continue;
-		if (sb.size > (1024 * 1024 * 128))
-			continue; // skip unusually huge files
-
-		zip_file_t* zipFile = zip_fopen_index(za, i, 0);
-		if (zipFile == nullptr)
-			continue;
-
-		uint8* fileBuffer = new uint8[sb.size];
-
-		if (zip_fread(zipFile, fileBuffer, sb.size) == sb.size)
-		{
-			FileStream* fs = FileStream::createFile2(path);
-			if (fs)
+			fs::create_directories(destination, filesystemError);
+			if (filesystemError)
 			{
-				fs->writeData(fileBuffer, sb.size);
-				delete fs;
+				extractionFailed = true;
+				break;
 			}
+			continue;
 		}
-
-		delete [] fileBuffer;
-		zip_fclose(zipFile);
+		fs::create_directories(destination.parent_path(), filesystemError);
+		if (filesystemError)
+		{
+			extractionFailed = true;
+			break;
+		}
+		std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
+			zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
+		std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+		if (!file || !output)
+		{
+			extractionFailed = true;
+			break;
+		}
+		zip_uint64_t remaining = entry.size;
+		while (remaining > 0)
+		{
+			if (m_downloadState->isCanceled)
+			{
+				extractionFailed = true;
+				break;
+			}
+			const auto request = static_cast<zip_uint64_t>(
+				std::min<zip_uint64_t>(buffer.size(), remaining));
+			const auto read = zip_fread(file.get(), buffer.data(), request);
+			if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining)
+			{
+				extractionFailed = true;
+				break;
+			}
+			output.write(buffer.data(), static_cast<std::streamsize>(read));
+			if (!output)
+			{
+				extractionFailed = true;
+				break;
+			}
+			remaining -= static_cast<zip_uint64_t>(read);
+		}
+		if (extractionFailed)
+			break;
+	}
+	if (extractionFailed || m_downloadState->isCanceled)
+	{
+		cleanupStaging();
+		if (!m_downloadState->isCanceled)
+			SetThreadResult(ThreadError);
+		return;
 	}
 
-	zip_discard(za);
-	zip_error_fini(&error);
-	if (m_downloadState->isCanceled)
-		return;
-	if (extractionFailed)
 	{
+		std::ofstream versionFile(staging / "version.txt", std::ios::binary | std::ios::trunc);
+		versionFile << m_assetName;
+		if (!versionFile)
+		{
+			cleanupStaging();
+			SetThreadResult(ThreadError);
+			return;
+		}
+	}
+	if (m_downloadState->isCanceled)
+	{
+		cleanupStaging();
+		return;
+	}
+
+	const bool hadTarget = fs::exists(target, filesystemError);
+	if (filesystemError)
+	{
+		cleanupStaging();
 		SetThreadResult(ThreadError);
 		return;
 	}
-	createGraphicPackDownloadedVersionFile(*m_pathProvider, m_assetName.c_str());
+	if (hadTarget)
+	{
+		fs::rename(target, backup, filesystemError);
+		if (filesystemError)
+		{
+			cleanupStaging();
+			SetThreadResult(ThreadError);
+			return;
+		}
+	}
+	fs::rename(staging, target, filesystemError);
+	if (filesystemError)
+	{
+		if (hadTarget)
+		{
+			std::error_code rollbackError;
+			fs::rename(backup, target, rollbackError);
+			if (rollbackError)
+				cemuLog_log(LogType::Force, "Graphic-pack rollback failed: {}", rollbackError.message());
+		}
+		cleanupStaging();
+		SetThreadResult(ThreadError);
+		return;
+	}
+	if (hadTarget)
+	{
+		std::error_code cleanupError;
+		fs::remove_all(backup, cleanupError);
+		if (cleanupError)
+			cemuLog_log(LogType::Force, "Unable to remove old graphic-pack backup: {}", cleanupError.message());
+	}
+	m_extractionProgress = 1.0;
 	SetThreadResult(ThreadFinished);
 }
 
@@ -416,6 +523,28 @@ const std::string& DownloadGraphicPacksWindow::GetException() const
 	return m_threadException;
 }
 
+void DownloadGraphicPacksWindow::StartWorker(void (DownloadGraphicPacksWindow::*worker)())
+{
+	m_thread = std::thread([this, worker] {
+		try
+		{
+			(this->*worker)();
+		}
+		catch (const std::exception& error)
+		{
+			m_threadException = error.what();
+			if (!m_downloadState->isCanceled)
+				SetThreadResult(ThreadError);
+		}
+		catch (...)
+		{
+			m_threadException = "Unknown graphic-pack worker error";
+			if (!m_downloadState->isCanceled)
+				SetThreadResult(ThreadError);
+		}
+	});
+}
+
 int DownloadGraphicPacksWindow::ShowModal()
 {
 	if(m_emulationController.IsTitleRunning())
@@ -424,7 +553,7 @@ int DownloadGraphicPacksWindow::ShowModal()
 		return wxID_CANCEL;
 	}
 	m_downloadState->isCanceled = false;
-	m_thread = std::thread(&DownloadGraphicPacksWindow::UpdateThread, this);
+	StartWorker(&DownloadGraphicPacksWindow::UpdateThread);
 	wxDialog::ShowModal();
 	return m_threadState == ThreadCanceled ? wxID_CANCEL : wxID_OK;
 }
@@ -464,7 +593,7 @@ void DownloadGraphicPacksWindow::OnUpdate(const wxTimerEvent& event)
 		if (answer == wxYES)
 		{
 			m_threadState = ThreadRunning;
-			m_thread = std::thread(&DownloadGraphicPacksWindow::DownloadAndInstall, this);
+			StartWorker(&DownloadGraphicPacksWindow::DownloadAndInstall);
 			m_timer->Start(250);
 		}
 		else
@@ -479,6 +608,14 @@ void DownloadGraphicPacksWindow::OnUpdate(const wxTimerEvent& event)
 	if (threadState != ThreadRunning)
 	{
 		m_timer->Stop();
+		if (threadState == ThreadError)
+		{
+			const auto details = m_threadException.empty() ?
+				_("The downloaded graphic-pack archive could not be installed safely.") :
+				wxString::FromUTF8(m_threadException);
+			wxMessageBox(details, _("Graphic pack update failed"),
+				wxOK | wxCENTRE | wxICON_ERROR, this);
+		}
 		switch (m_notification.exchange(NotificationNone))
 		{
 		case NotificationConnectionFailed:

@@ -44,7 +44,6 @@ private:
 	enum class WorkerOrder
 	{
 		Idle,
-		Exit,
 		CheckVersion,
 		UpdateVersion,
 	};
@@ -61,7 +60,8 @@ private:
 	};
 	std::mutex m_mutex;
 	std::condition_variable m_condition;
-	std::atomic<WorkerOrder> m_order{WorkerOrder::CheckVersion};
+	WorkerOrder m_order{WorkerOrder::CheckVersion};
+	std::atomic_bool m_stopRequested{false};
 	void WorkerThread();
 
 	std::string m_downloadUrl, m_changelogUrl;

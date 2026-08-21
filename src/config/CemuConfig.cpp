@@ -1,7 +1,6 @@
 #include "config/CemuConfig.h"
 #include "util/helpers/helpers.h"
 #include "config/ActiveSettings.h"
-#include "Cafe/Account/Account.h"
 
 std::optional<CemuExtendTitleGrant> CemuConfig::GetCemuExtendGrant(uint64 titleId) const
 {
@@ -110,7 +109,6 @@ void CemuConfig::SetMLCPath(fs::path path, bool save)
 	mlc_path.SetValue(_pathToUtf8(path));
 	if(save)
 		GetConfigHandle().Save();
-	Account::RefreshAccounts();
 }
 
 XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
@@ -420,7 +418,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 		uint32 persistentId = element.get_attribute<uint32>("PersistentId", 0);
 		sint32 serviceIndex = element.get_attribute<sint32>("Service", 0);
 		NetworkService networkService = static_cast<NetworkService>(serviceIndex);
-		if (persistentId < Account::kMinPersistendId)
+		if (persistentId < CemuConfig::kMinimumAccountPersistentId)
 			continue;
 		if(networkService == NetworkService::Offline || networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom || networkService == NetworkService::Plasma)
 			account.service_select.emplace(persistentId, networkService);

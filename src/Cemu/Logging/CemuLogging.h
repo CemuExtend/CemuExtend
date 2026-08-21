@@ -64,6 +64,8 @@ void cemuLog_writeLineToLog(std::string_view text, bool date = true, bool new_li
 inline void cemuLog_writePlainToLog(std::string_view text) { cemuLog_writeLineToLog(text, false, false); }
 
 void cemuLog_setActiveLoggingFlags(uint64 flagMask);
+void cemuLog_configureRuntime(fs::path logFilePath, bool advancedPpcLogging, bool verbose);
+void cemuLog_setAdvancedPPCLoggingEnabled(bool enabled);
 
 inline uint64 cemuLog_getFlag(LogType type)
 {

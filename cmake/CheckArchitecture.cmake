@@ -33,6 +33,8 @@ set(wx_native_handle_violations "")
 set(wx_window_state_violations "")
 set(text_input_callback_violations "")
 set(input_host_event_violations "")
+set(input_profile_layer_violations "")
+set(normal_wx_cafe_include_violations "")
 
 foreach(source IN LISTS architecture_sources)
 	file(READ "${source}" content)
@@ -51,6 +53,23 @@ foreach(source IN LISTS architecture_sources)
 
 	if(source MATCHES "/src/Cafe/" AND content MATCHES "#include[ \t]*[<\"]wx/|#include[ \t]*[<\"]wx")
 		list(APPEND cafe_ui_violations "${source}")
+	endif()
+
+	# Input profile selection and persistence are host-layer concerns. Cafe owns
+	# the current game profile and passes copied names into InputManager.
+	if(source MATCHES "/src/input/")
+		if(content MATCHES "config/ActiveSettings|Cafe/GameProfile|g_current_game_profile")
+			list(APPEND input_profile_layer_violations "${source}")
+		endif()
+	endif()
+
+	# All direct Cafe includes in wx live in the explicit adapter archives. The
+	# normal GUI archive must remain on neutral Application/Host/Input contracts.
+	if(source MATCHES "/src/gui/wxgui/.*\.(h|cpp)$" AND
+		content MATCHES "#include[ \t]*[<\"]Cafe/")
+		if(NOT source MATCHES "/src/gui/wxgui/(canvas/|debugger/|EmulatedUSBDevices/|windows/PPCThreadsViewer/|windows/TextureRelationViewer/|AudioDebuggerWindow\.(h|cpp)$|MemorySearcherTool\.(h|cpp)$)")
+			list(APPEND normal_wx_cafe_include_violations "${source}")
+		endif()
 	endif()
 
 	# These normal frontend files have moved behind Application::ITitleCatalog.
@@ -313,6 +332,14 @@ endif()
 if(cafe_ui_violations)
 	list(JOIN cafe_ui_violations "\n  " formatted)
 	message(FATAL_ERROR "Cafe must not include wx headers:\n  ${formatted}")
+endif()
+if(input_profile_layer_violations)
+	list(JOIN input_profile_layer_violations "\n  " formatted)
+	message(FATAL_ERROR "Input must not read Cafe game profiles or global config paths:\n  ${formatted}")
+endif()
+if(normal_wx_cafe_include_violations)
+	list(JOIN normal_wx_cafe_include_violations "\n  " formatted)
+	message(FATAL_ERROR "Normal wx sources must not include Cafe implementation headers:\n  ${formatted}")
 endif()
 if(title_ui_violations)
 	list(JOIN title_ui_violations "\n  " formatted)

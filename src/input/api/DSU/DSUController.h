@@ -2,10 +2,6 @@
 
 #include "input/api/Controller.h"
 #include "input/api/DSU/DSUControllerProvider.h"
-#include "Cafe/HW/AI/AI.h"
-#include "Cafe/HW/AI/AI.h"
-#include "Cafe/HW/AI/AI.h"
-#include "Cafe/HW/AI/AI.h"
 
 class DSUController : public Controller<DSUControllerProvider>
 {
@@ -42,4 +38,3 @@ protected:
 private:
 	uint32 m_index;
 };
-

@@ -262,8 +262,12 @@ target_link_libraries(CemuWxGui PRIVATE
   CemuInput
   CemuResource
   CemuUtil
+  CemuWxRendererAdapters
+  CemuWxDebuggerAdapters
+  CemuWxDeviceAdapters
   libzip::zip
   CemuComponents
+  CemuDownloadManager
   PUBLIC
   CURL::libcurl
 )

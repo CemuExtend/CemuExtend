@@ -21,6 +21,8 @@
 #include <curl/curl.h>
 #include <zip.h>
 #include <boost/tokenizer.hpp>
+#include <cctype>
+#include <fstream>
 
 
 wxDECLARE_EVENT(wxEVT_RESULT, wxCommandEvent);
@@ -28,6 +30,43 @@ wxDEFINE_EVENT(wxEVT_RESULT, wxCommandEvent);
 
 wxDECLARE_EVENT(wxEVT_PROGRESS, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_PROGRESS, wxCommandEvent);
+
+namespace
+{
+	constexpr zip_uint64_t kMaximumUpdateEntries = 20000;
+	constexpr zip_uint64_t kMaximumUpdateFileSize = 1024ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumUpdateTotalSize = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+	constexpr zip_uint64_t kMaximumCompressionRatio = 1000;
+	constexpr curl_off_t kMaximumUpdateDownloadSize = 2LL * 1024LL * 1024LL * 1024LL;
+
+	std::optional<fs::path> NormalizeUpdateArchivePath(std::string_view name)
+	{
+		if (name.empty() || name.front() == '/' || name.front() == '\\')
+			return std::nullopt;
+		std::string portableName(name);
+		std::replace(portableName.begin(), portableName.end(), '\\', '/');
+		if (portableName.size() >= 2 && std::isalpha(static_cast<unsigned char>(portableName[0])) &&
+			portableName[1] == ':')
+			return std::nullopt;
+		const fs::path normalized = _utf8ToPath(portableName).lexically_normal();
+		if (normalized.empty() || normalized == "." || normalized.is_absolute() ||
+			normalized.has_root_name() || normalized.has_root_directory())
+			return std::nullopt;
+		for (const auto& component : normalized)
+			if (component == "..")
+				return std::nullopt;
+		return normalized;
+	}
+
+	bool IsZipSymlink(zip_t* archive, zip_uint64_t index)
+	{
+		zip_uint8_t operatingSystem{};
+		zip_uint32_t attributes{};
+		if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem, &attributes) != 0)
+			return true;
+		return operatingSystem == ZIP_OPSYS_UNIX && ((attributes >> 16U) & 0170000U) == 0120000U;
+	}
+}
 
 CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
 	std::shared_ptr<Host::IPathProvider> pathProvider)
@@ -80,7 +119,7 @@ CemuUpdateWindow::CemuUpdateWindow(wxWindow* parent,
 
 CemuUpdateWindow::~CemuUpdateWindow()
 {
-	m_order.store(WorkerOrder::Exit, std::memory_order_release);
+	m_stopRequested.store(true, std::memory_order_release);
 	m_condition.notify_all();
 	if (m_thread.joinable())
 		m_thread.join();
@@ -113,8 +152,10 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 {
 	std::string buffer;
 	std::string urlStr("https://cemu.info/api2/version.php?v=");
-	auto* curl = curl_easy_init();
-	urlStr.append(_curlUrlEscape(curl, BUILD_VERSION_STRING));
+	std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+	if (!curl)
+		return false;
+	urlStr.append(_curlUrlEscape(curl.get(), BUILD_VERSION_STRING));
 #if BOOST_OS_LINUX || BOOST_OS_BSD // dummy placeholder on BSD for now
 	urlStr.append("&platform=linux_appimage");
 #elif BOOST_OS_WINDOWS
@@ -139,19 +180,23 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 	if(config.receive_untested_updates)
 		urlStr.append("&allowNewUpdates=1");
 
-	curl_easy_setopt(curl, CURLOPT_URL, urlStr.c_str());
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteStringCallback);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+	curl_easy_setopt(curl.get(), CURLOPT_URL, urlStr.c_str());
+	curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &buffer);
+	curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, WriteStringCallback);
+	curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(curl.get(), CURLOPT_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl.get(), CURLOPT_REDIR_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 10L);
+	curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 30L);
 
 	bool result = false;
-	CURLcode cr = curl_easy_perform(curl);
+	CURLcode cr = curl_easy_perform(curl.get());
 	if (cr == CURLE_OK)
 	{
 		long http_code = 0;
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+		curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
 		if (http_code != 0 && http_code != 200)
 		{
 			cemuLog_log(LogType::Force, "Update check failed (http code: {})", http_code);
@@ -170,8 +215,8 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 			// second token: Download URL
 			// third token: Changelog URL
 			// we allow more tokens in case we ever want to add extra information for future releases
-			downloadUrlOut = _curlUrlUnescape(curl, tokens[1]);
-			changelogUrlOut = _curlUrlUnescape(curl, tokens[2]);
+			downloadUrlOut = _curlUrlUnescape(curl.get(), tokens[1]);
+			changelogUrlOut = _curlUrlUnescape(curl.get(), tokens[2]);
 			if (!downloadUrlOut.empty() && !changelogUrlOut.empty())
 				result = true;
 		}
@@ -182,7 +227,6 @@ bool CemuUpdateWindow::QueryUpdateInfo(std::string& downloadUrlOut, std::string&
 		cemu_assert_debug(false);
 	}
 
-	curl_easy_cleanup(curl);
 	return result;
 }
 
@@ -202,7 +246,8 @@ int CemuUpdateWindow::ProgressCallback(void* clientp, curl_off_t dltotal, curl_o
 	curl_off_t ulnow)
 {
 	auto* thisptr = (CemuUpdateWindow*)clientp;
-	if (thisptr->m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+	if (thisptr->m_stopRequested.load(std::memory_order_acquire) ||
+		dlnow > kMaximumUpdateDownloadSize || dltotal > kMaximumUpdateDownloadSize)
 		return 1;
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS);
 	event->SetInt((int)dlnow);
@@ -212,31 +257,39 @@ int CemuUpdateWindow::ProgressCallback(void* clientp, curl_off_t dltotal, curl_o
 
 bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& filename)
 {
-	FileStream* fsUpdateFile = FileStream::createFile2(filename);
+	std::unique_ptr<FileStream> fsUpdateFile(FileStream::createFile2(filename));
 	if (!fsUpdateFile)
 		return false;
 
 	bool result = false;
-	auto* curl = curl_easy_init();
-	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-	curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	auto r = curl_easy_perform(curl);
+	std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+	if (!curl)
+		return false;
+	curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+	curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
+	curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(curl.get(), CURLOPT_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl.get(), CURLOPT_REDIR_PROTOCOLS_STR, "https");
+	curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 10L);
+	curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 30L);
+	curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, 15L);
+	auto r = curl_easy_perform(curl.get());
 	if (r == CURLE_OK)
 	{
 		long http_code = 0;
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+		curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
 		if (http_code != 0 && http_code != 200)
 		{
 			cemuLog_log(LogType::Force, "Unable to download cemu update zip file from {} (http error: {})", url, http_code);
-			curl_easy_cleanup(curl);
 			return false;
 		}
 
-		curl_off_t update_size;
-		if (curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &update_size) == CURLE_OK)
+		curl_off_t update_size{};
+		if (curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &update_size) == CURLE_OK &&
+			update_size > 0 && update_size <= std::numeric_limits<int>::max())
 			m_gaugeMaxValue.store((int)update_size, std::memory_order_release);
 
 
@@ -248,27 +301,18 @@ bool CemuUpdateWindow::DownloadCemuZip(const std::string& url, const fs::path& f
 			return writeSize;
 		};
 
-		curl_easy_setopt(curl, CURLOPT_NOBODY, 0);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _curlWriteData);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, fsUpdateFile);
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
-		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
-		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, this);
+		curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 0L);
+		curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, _curlWriteData);
+		curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, fsUpdateFile.get());
+		curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
+		curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, ProgressCallback);
+		curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, this);
 
-		auto curl_result = std::async(std::launch::async, [](CURL* curl, long* http_code)
-			{
-				const auto r = curl_easy_perform(curl);
-				curl_easy_cleanup(curl);
-				return r;
-			}, curl, &http_code);
-		result = curl_result.get() == CURLE_OK;
-
-		delete fsUpdateFile;
+		result = curl_easy_perform(curl.get()) == CURLE_OK;
 	}
 	else
 	{
 		cemuLog_log(LogType::Force, "Cemu zip download failed with error {}", r);
-		curl_easy_cleanup(curl);
 	}
 
 	if (!result && fs::exists(filename))
@@ -290,101 +334,113 @@ bool CemuUpdateWindow::ExtractUpdate(const fs::path& zipname, const fs::path& ta
 	cemuFolderName.clear();
 	// open downloaded zip
 	int err;
-	auto* za = zip_open(zipname.string().c_str(), ZIP_RDONLY, &err);
-	if (za == nullptr)
+	auto* rawArchive = zip_open(zipname.string().c_str(), ZIP_RDONLY, &err);
+	if (rawArchive == nullptr)
 	{
 		cemuLog_log(LogType::Force, "Cannot open zip file: {}", zipname.string());
 		return false;
 	}
+	std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
 
-	const auto count = zip_get_num_entries(za, 0);
-	m_gaugeMaxValue.store((int)count, std::memory_order_release);
-	for (auto i = 0; i < count; i++)
+	const auto count = zip_get_num_entries(archive.get(), 0);
+	if (count < 0 || static_cast<zip_uint64_t>(count) > kMaximumUpdateEntries)
+		return false;
+
+	struct PlannedEntry
 	{
-		if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+		zip_uint64_t index{};
+		fs::path relativePath;
+		zip_uint64_t size{};
+		bool directory{};
+	};
+	std::vector<PlannedEntry> plan;
+	plan.reserve(static_cast<std::size_t>(count));
+	zip_uint64_t totalSize{};
+	std::optional<fs::path> rootDirectory;
+	for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(count); ++index)
+	{
+		zip_stat_t stat{};
+		if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || stat.name == nullptr ||
+			IsZipSymlink(archive.get(), index))
 			return false;
-
-		zip_stat_t sb{};
-		if (zip_stat_index(za, i, 0, &sb) == 0)
+		const auto relativePath = NormalizeUpdateArchivePath(stat.name);
+		if (!relativePath)
+			return false;
+		const bool directory = stat.name[std::strlen(stat.name) - 1] == '/' ||
+			stat.name[std::strlen(stat.name) - 1] == '\\';
+		if (!directory)
 		{
-			fs::path fname = targetpath;
-			fname /= sb.name;
-
-			const auto len = strlen(sb.name);
-			if (strcmp(sb.name, ".") == 0 || strcmp(sb.name, "..") == 0)
-			{
-				// protection
-				continue;
-			}
-			if (sb.name[len - 1] == '/' || sb.name[len - 1] == '\\')
-			{
-				// directory
-				try
-				{
-					if (!exists(fname))
-						create_directory(fname);
-				}
-				catch (const std::exception& ex)
-				{
-					SystemException sys(ex);
-					cemuLog_log(LogType::Force, "can't create folder \"{}\" for update: {}", sb.name, sys.what());
-				}
-				// the root should have only one Cemu_... directory, we track it here
-				if ((std::count(sb.name, sb.name + len, '/') + std::count(sb.name, sb.name + len, '\\')) == 1)
-				{
-					if (!cemuFolderName.empty())
-						cemuLog_log(LogType::Force, "update zip has multiple folders in root");
-					cemuFolderName.assign(sb.name, len - 1);
-				}
-				continue;
-			}
-
-			// file
-			auto* zf = zip_fopen_index(za, i, 0);
-			if (!zf)
-			{
-				cemuLog_log(LogType::Force, "can't open zip file \"{}\"", sb.name);
-				zip_close(za);
+			if (stat.size > kMaximumUpdateFileSize || totalSize > kMaximumUpdateTotalSize - stat.size)
 				return false;
-			}
-
-			std::vector<char> buffer(sb.size);
-			const auto read = zip_fread(zf, buffer.data(), sb.size);
-			if (read != (sint64)sb.size)
-			{
-				cemuLog_log(LogType::Force, "could only read 0x{:x} of 0x{:x} bytes from zip file \"{}\"", read, sb.size, sb.name);
-				zip_close(za);
+			if (stat.comp_size > 0 && stat.size / stat.comp_size > kMaximumCompressionRatio)
 				return false;
-			}
+			totalSize += stat.size;
+		}
+		const auto firstComponent = *relativePath->begin();
+		if (!rootDirectory)
+			rootDirectory = firstComponent;
+		else if (*rootDirectory != firstComponent)
+			return false;
+		plan.push_back({index, *relativePath, stat.size, directory});
+	}
+	if (!rootDirectory)
+		return false;
+	cemuFolderName = _pathToUtf8(*rootDirectory);
 
-			auto* file = fopen(fname.string().c_str(), "wb");
-			if (file == nullptr)
-			{
-				cemuLog_log(LogType::Force, "can't create update file \"{}\"", sb.name);
-				zip_close(za);
+	m_gaugeMaxValue.store((int)count, std::memory_order_release);
+	for (std::size_t planIndex = 0; planIndex < plan.size(); ++planIndex)
+	{
+		if (m_stopRequested.load(std::memory_order_acquire))
+			return false;
+		const auto& entry = plan[planIndex];
+		const fs::path destination = targetpath / entry.relativePath;
+		std::error_code filesystemError;
+		if (entry.directory)
+		{
+			fs::create_directories(destination, filesystemError);
+			if (filesystemError)
 				return false;
-			}
-
-			fwrite(buffer.data(), 1, buffer.size(), file);
-			fflush(file);
-			fclose(file);
-
-			zip_fclose(zf);
-
-			if ((i / 10) * 10 == i)
-			{
-				auto* event = new wxCommandEvent(wxEVT_PROGRESS);
-				event->SetInt(i);
-				wxQueueEvent(this, event);
-			}
+			continue;
+		}
+		fs::create_directories(destination.parent_path(), filesystemError);
+		if (filesystemError)
+			return false;
+		std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
+			zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
+		if (!file)
+			return false;
+		std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+		if (!output)
+			return false;
+		std::array<char, 1024 * 1024> buffer{};
+		zip_uint64_t remaining = entry.size;
+		while (remaining > 0)
+		{
+			if (m_stopRequested.load(std::memory_order_acquire))
+				return false;
+			const auto request = static_cast<zip_uint64_t>(std::min<std::size_t>(buffer.size(), remaining));
+			const auto read = zip_fread(file.get(), buffer.data(), request);
+			if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining)
+				return false;
+			output.write(buffer.data(), read);
+			if (!output)
+				return false;
+			remaining -= static_cast<zip_uint64_t>(read);
+		}
+		output.close();
+		if (!output)
+			return false;
+		if ((planIndex % 10) == 0)
+		{
+			auto* event = new wxCommandEvent(wxEVT_PROGRESS);
+			event->SetInt(static_cast<int>(planIndex));
+			wxQueueEvent(this, event);
 		}
 	}
 
 	auto* event = new wxCommandEvent(wxEVT_PROGRESS);
 	event->SetInt(m_gaugeMaxValue.load(std::memory_order_acquire));
 	wxQueueEvent(this, event);
-
-	zip_close(za);
 
 	return true;
 }
@@ -399,18 +455,23 @@ void CemuUpdateWindow::WorkerThread()
 
 	while (true)
 	{
+		WorkerOrder order;
 		std::unique_lock lock(m_mutex);
 		m_condition.wait(lock, [this] {
-			return m_order.load(std::memory_order_acquire) != WorkerOrder::Idle;
+			return m_stopRequested.load(std::memory_order_acquire) || m_order != WorkerOrder::Idle;
 		});
 
-		if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+		if (m_stopRequested.load(std::memory_order_acquire))
 			break;
+		order = std::exchange(m_order, WorkerOrder::Idle);
+		lock.unlock();
 
 		try
 		{
-			if (m_order.load(std::memory_order_acquire) == WorkerOrder::CheckVersion)
+			if (order == WorkerOrder::CheckVersion)
 			{
+				if (m_stopRequested.load(std::memory_order_acquire))
+					break;
 				auto* event = new wxCommandEvent(wxEVT_RESULT);
 				if (QueryUpdateInfo(m_downloadUrl, m_changelogUrl))
 					event->SetInt((int)Result::UpdateAvailable);
@@ -419,7 +480,7 @@ void CemuUpdateWindow::WorkerThread()
 
 				wxQueueEvent(this, event);
 			}
-			else if (m_order.load(std::memory_order_acquire) == WorkerOrder::UpdateVersion)
+			else if (order == WorkerOrder::UpdateVersion)
 			{
 				// download update
 				const std::string url = m_downloadUrl;
@@ -441,13 +502,14 @@ void CemuUpdateWindow::WorkerThread()
 				}
 				else
 				{
+					if (m_stopRequested.load(std::memory_order_acquire))
+						break;
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
 					event->SetInt((int)Result::UpdateDownloadError);
 					wxQueueEvent(this, event);
-					m_order.store(WorkerOrder::Idle, std::memory_order_release);
 					continue;
 				}
-				if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+				if (m_stopRequested.load(std::memory_order_acquire))
 					break;
 
 				// extract
@@ -456,16 +518,24 @@ void CemuUpdateWindow::WorkerThread()
 				if (!ExtractUpdate(update_file, tmppath, cemuFolderName))
 				{
 					cemuLog_log(LogType::Force, "Extracting Cemu zip failed");
-					break;
+					if (m_stopRequested.load(std::memory_order_acquire))
+						break;
+					auto* event = new wxCommandEvent(wxEVT_RESULT);
+					event->SetInt((int)Result::ExtractError);
+					wxQueueEvent(this, event);
+					continue;
 				}
 				if (cemuFolderName.empty())
 				{
 					cemuLog_log(LogType::Force, "Cemu folder not found in zip");
-					break;
+					auto* event = new wxCommandEvent(wxEVT_RESULT);
+					event->SetInt((int)Result::ExtractError);
+					wxQueueEvent(this, event);
+					continue;
 				}
 #endif
 				const auto expected_path = tmppath / cemuFolderName;
-				if (exists(expected_path))
+				if (exists(expected_path) && (!BOOST_OS_WINDOWS || is_directory(expected_path)))
 				{
 					auto* event = new wxCommandEvent(wxEVT_RESULT);
 					event->SetInt((int)Result::ExtractSuccess);
@@ -493,7 +563,7 @@ void CemuUpdateWindow::WorkerThread()
 					continue;
 				}
 
-				if (m_order.load(std::memory_order_acquire) == WorkerOrder::Exit)
+				if (m_stopRequested.load(std::memory_order_acquire))
 					break;
 
 				// apply update
@@ -573,12 +643,14 @@ void CemuUpdateWindow::WorkerThread()
 			if (exists(tmppath))
 				remove_all(tmppath, ec);
 
-			auto* result_event = new wxCommandEvent(wxEVT_RESULT);
-			result_event->SetInt((int)Result::Error);
-			wxQueueEvent(this, result_event);
+			if (!m_stopRequested.load(std::memory_order_acquire))
+			{
+				auto* result_event = new wxCommandEvent(wxEVT_RESULT);
+				result_event->SetInt((int)Result::Error);
+				wxQueueEvent(this, result_event);
+			}
 		}
 
-		m_order.store(WorkerOrder::Idle, std::memory_order_release);
 	}
 }
 
@@ -691,7 +763,10 @@ void CemuUpdateWindow::OnGaugeUpdate(wxCommandEvent& event)
 void CemuUpdateWindow::OnUpdateButton(const wxCommandEvent& event)
 {
 	std::unique_lock lock(m_mutex);
-	m_order.store(WorkerOrder::UpdateVersion, std::memory_order_release);
+	if (m_stopRequested.load(std::memory_order_acquire))
+		return;
+	m_order = WorkerOrder::UpdateVersion;
+	lock.unlock();
 
 	m_condition.notify_all();
 

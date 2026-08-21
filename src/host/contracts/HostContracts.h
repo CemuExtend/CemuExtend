@@ -13,6 +13,7 @@ namespace Host
 	using NativeSurfacePublication = std::uint64_t;
 	enum class NativeWindowBackend : std::uint8_t
 	{
+		Unknown,
 		X11,
 		Wayland,
 		Cocoa,
@@ -22,7 +23,7 @@ namespace Host
 	struct NativeWindowHandle
 	{
 		using Backend = NativeWindowBackend;
-		NativeWindowBackend backend{NativeWindowBackend::X11};
+		NativeWindowBackend backend{NativeWindowBackend::Unknown};
 		void* display{};
 		void* surface{};
 

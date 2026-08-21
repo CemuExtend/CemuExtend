@@ -1,9 +1,8 @@
 #include "input/InputManager.h"
-#include "config/ActiveSettings.h"
+#include "Common/FileStream.h"
 #include "input/ControllerFactory.h"
 #include <boost/property_tree/ini_parser.hpp>
 #include <pugixml.hpp>
-#include "Cafe/GameProfile/GameProfile.h"
 #include "util/EventService.h"
 
 InputManager::InputManager()
@@ -60,6 +59,12 @@ void InputManager::Start()
 		return;
 	m_update_thread_shutdown.store(false, std::memory_order_release);
 	m_update_thread = std::thread(&InputManager::update_thread, this);
+}
+
+void InputManager::ConfigureProfileDirectory(fs::path profileDirectory)
+{
+	cemu_assert(!profileDirectory.empty());
+	m_profileDirectory = std::move(profileDirectory);
 }
 
 void InputManager::ConfigureHost(Host::IKeyboardState& keyboard,
@@ -186,11 +191,13 @@ void InputManager::load() noexcept
 
 bool InputManager::load(size_t player_index, std::string_view filename)
 {
+	if (m_profileDirectory.empty())
+		return false;
 	fs::path file_path;
 	if (filename.empty())
-		file_path = ActiveSettings::GetConfigPath("controllerProfiles/controller{}", player_index);
+		file_path = m_profileDirectory / fmt::format("controller{}", player_index);
 	else
-		file_path = ActiveSettings::GetConfigPath("controllerProfiles/{}", filename);
+		file_path = m_profileDirectory / _utf8ToPath(filename);
 
 	auto old_file = file_path;
 	old_file.replace_extension(".txt"); // test .txt extension
@@ -563,7 +570,9 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 	if (!emulated_controller)
 		return false;
 
-	fs::path file_path = ActiveSettings::GetConfigPath("controllerProfiles");
+	fs::path file_path = m_profileDirectory;
+	if (file_path.empty())
+		return false;
 	fs::create_directories(file_path);
 
 	const auto is_default_file = filename.empty();
@@ -776,8 +785,8 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 			if(delete_profile)
 			{
 				std::error_code ec{};
-				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
-				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
+				fs::remove(m_profileDirectory / fmt::format("controller{}.xml", player_index), ec);
+				fs::remove(m_profileDirectory / fmt::format("controller{}.txt", player_index), ec);
 			}
 
 			return result;
@@ -792,8 +801,8 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 			controller = {};
 
 			std::error_code ec{};
-			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
-			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
+			fs::remove(m_profileDirectory / fmt::format("controller{}.xml", player_index), ec);
+			fs::remove(m_profileDirectory / fmt::format("controller{}.txt", player_index), ec);
 
 			return result;
 		}
@@ -872,9 +881,8 @@ ControllerProviderPtr InputManager::get_api_provider(InputAPI::Type api, const C
 	return result;
 }
 
-void InputManager::apply_game_profile()
+void InputManager::apply_game_profile(const ControllerProfileSelection& profiles)
 {
-	const auto& profiles = g_current_game_profile->GetControllerProfile();
 	for (int i = 0; i < kMaxController; ++i)
 	{
 		if (profiles[i] && !profiles[i]->empty())
@@ -892,9 +900,9 @@ void InputManager::apply_game_profile()
 	}
 }
 
-std::vector<std::string> InputManager::get_profiles()
+std::vector<std::string> InputManager::get_profiles() const
 {
-	const auto path = ActiveSettings::GetConfigPath("controllerProfiles");
+	const auto& path = m_profileDirectory;
 	if (!exists(path))
 		return {};
 
@@ -1004,7 +1012,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 		*is_pad = false;
 
 	{
-		std::shared_lock lock(m_main_mouse.m_mutex);
+		std::unique_lock lock(m_main_mouse.m_mutex);
 		if (std::exchange(m_main_mouse.left_down_toggle, false))
 			return m_main_mouse.position;
 
@@ -1013,7 +1021,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::shared_lock lock(m_main_touch.m_mutex);
+		std::unique_lock lock(m_main_touch.m_mutex);
 		if (std::exchange(m_main_touch.left_down_toggle, false))
 			return m_main_touch.position;
 
@@ -1025,7 +1033,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 		*is_pad = true;
 
 	{
-		std::shared_lock lock(m_pad_mouse.m_mutex);
+		std::unique_lock lock(m_pad_mouse.m_mutex);
 		if (std::exchange(m_pad_mouse.left_down_toggle, false))
 			return m_pad_mouse.position;
 
@@ -1034,7 +1042,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::shared_lock lock(m_pad_touch.m_mutex);
+		std::unique_lock lock(m_pad_touch.m_mutex);
 		if (std::exchange(m_pad_touch.left_down_toggle, false))
 			return m_pad_touch.position;
 
@@ -1051,7 +1059,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 		*is_pad = false;
 
 	{
-		std::shared_lock lock(m_main_mouse.m_mutex);
+		std::unique_lock lock(m_main_mouse.m_mutex);
 		if (std::exchange(m_main_mouse.right_down_toggle, false))
 			return m_main_mouse.position;
 
@@ -1060,7 +1068,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::shared_lock lock(m_main_touch.m_mutex);
+		std::unique_lock lock(m_main_touch.m_mutex);
 		if (std::exchange(m_main_touch.right_down_toggle, false))
 			return m_main_touch.position;
 
@@ -1072,7 +1080,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 		*is_pad = true;
 
 	{
-		std::shared_lock lock(m_pad_mouse.m_mutex);
+		std::unique_lock lock(m_pad_mouse.m_mutex);
 		if (std::exchange(m_pad_mouse.right_down_toggle, false))
 			return m_pad_mouse.position;
 
@@ -1081,7 +1089,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::shared_lock lock(m_pad_touch.m_mutex);
+		std::unique_lock lock(m_pad_touch.m_mutex);
 		if (std::exchange(m_pad_touch.right_down_toggle, false))
 			return m_pad_touch.position;
 

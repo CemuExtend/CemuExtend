@@ -1,5 +1,4 @@
 #include "input/api/Controller.h"
-#include "config/CemuConfig.h"
 #include "input/InputManager.h"
 
 ControllerBase::ControllerBase(std::string_view uuid, std::string_view display_name)

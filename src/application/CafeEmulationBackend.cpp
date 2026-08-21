@@ -62,8 +62,24 @@ namespace Application
 			translated.processStatus = event.processStatus;
 			translated.framesPerSecond = event.framesPerSecond;
 			translated.diagnostic = event.diagnostic;
-			translated.type = static_cast<EventType>(event.type);
-			translated.diagnosticCode = static_cast<DiagnosticCode>(event.diagnosticCode);
+			switch (event.type)
+			{
+			case CafeSystem::EventType::LoadingStarted: translated.type = EventType::LoadingStarted; break;
+			case CafeSystem::EventType::GameLoaded: translated.type = EventType::GameLoaded; break;
+			case CafeSystem::EventType::GameExited: translated.type = EventType::GameExited; break;
+			case CafeSystem::EventType::PpcProcessExited: translated.type = EventType::PpcProcessExited; break;
+			case CafeSystem::EventType::PerformanceUpdated: translated.type = EventType::PerformanceUpdated; break;
+			case CafeSystem::EventType::Diagnostic: translated.type = EventType::Diagnostic; break;
+			}
+			switch (event.diagnosticCode)
+			{
+			case CafeSystem::DiagnosticCode::DamagedExecutable: translated.diagnosticCode = DiagnosticCode::DamagedExecutable; break;
+			case CafeSystem::DiagnosticCode::KeyFileCreateFailed: translated.diagnosticCode = DiagnosticCode::KeyFileCreateFailed; break;
+			case CafeSystem::DiagnosticCode::KeyFileInvalidLine: translated.diagnosticCode = DiagnosticCode::KeyFileInvalidLine; break;
+			case CafeSystem::DiagnosticCode::GraphicPackInvalid: translated.diagnosticCode = DiagnosticCode::GraphicPackInvalid; break;
+			case CafeSystem::DiagnosticCode::MemoryAllocationFailed: translated.diagnosticCode = DiagnosticCode::MemoryAllocationFailed; break;
+			case CafeSystem::DiagnosticCode::MemoryReservationFailed: translated.diagnosticCode = DiagnosticCode::MemoryReservationFailed; break;
+			}
 			return translated;
 		}
 

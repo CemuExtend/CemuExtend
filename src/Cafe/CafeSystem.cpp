@@ -387,7 +387,7 @@ void cemu_initForGame()
 	CafeSystem::EmitEvent({.type = CafeSystem::EventType::LoadingStarted});
 	cemuLog_createLogFile(false);
 	// input manager apply game profile
-	InputManager::instance().apply_game_profile();
+	InputManager::instance().apply_game_profile(g_current_game_profile->GetControllerProfile());
 	// determine cycle offset since 1.1.2000
 	uint64 secondsSince2000_UTC = (uint64)(time(NULL) - 946684800);
 	ppcCyclesSince2000_UTC = secondsSince2000_UTC * (uint64)ESPRESSO_CORE_CLOCK;

@@ -561,7 +561,7 @@ void InputSettings2::on_profile_dropdown(wxCommandEvent& event)
 	const auto selected_value = profile_names->GetStringSelection();
 	profile_names->Clear();
 
-	for(const auto& profile : InputManager::get_profiles())
+	for(const auto& profile : InputManager::instance().get_profiles())
 	{
 		profile_names->Append(wxString::FromUTF8(profile));
 	}
