@@ -162,6 +162,16 @@ export type FrontendSettingsApplyResult = {
   diagnostic: string;
 };
 
+export type EmulatedControllerType = "disabled" | "gamePad" | "proController" | "classicController" | "wiimote";
+export type ControllerAxisSettings = { deadzone: number; range: number };
+export type PhysicalControllerSettings = { axis: ControllerAxisSettings; rotation: ControllerAxisSettings; trigger: ControllerAxisSettings; rumble: number; motion: boolean; packetDelay?: number };
+export type PhysicalController = { token: number; api: string; displayName: string; connected: boolean; hasBattery: boolean; lowBattery: boolean; hasMotion: boolean; hasRumble: boolean; wiimoteExtension?: "none" | "nunchuck" | "classic" | "motionPlus"; settings: PhysicalControllerSettings };
+export type CapturedInputButton = { id: number; label: string };
+export type InputMapping = { mappingId: number; label: string; binding: string; controllerToken?: number };
+export type InputPlayer = { player: number; type: EmulatedControllerType; gameProfileLocked: boolean; profileName: string; controllers: PhysicalController[]; mappings: InputMapping[] };
+export type InputSettingsModel = { generation: number; players: InputPlayer[]; profiles: string[]; availableApis: string[] };
+export type InputDeviceCandidate = { token: number; api: string; displayName: string; connected: boolean };
+
 declare global {
   interface Window {
     cemuInvoke?: (requestJson: string) => Promise<string>;

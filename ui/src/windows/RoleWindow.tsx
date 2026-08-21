@@ -3,6 +3,7 @@ import { AboutWindow } from "./AboutWindow";
 import { AccountManagerWindow } from "./AccountManagerWindow";
 import { GraphicPacksWindow } from "./GraphicPacksWindow";
 import { GettingStartedWindow } from "./GettingStartedWindow";
+import { InputSettingsWindow } from "./InputSettingsWindow";
 
 export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: number; context?: { titleId?: string } }) {
   switch (role) {
@@ -10,5 +11,6 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "account-manager": return <AccountManagerWindow />;
     case "graphic-packs": return <GraphicPacksWindow windowId={windowId} initialTitleId={context?.titleId} />;
     case "getting-started": return <GettingStartedWindow />;
+    case "input-settings": return <InputSettingsWindow />;
   }
 }

@@ -24,6 +24,13 @@
 #include "config/CemuConfig.h"
 #include "config/LaunchSettings.h"
 #include "input/InputManager.h"
+#include "input/api/Controller.h"
+#include "input/emulated/ClassicController.h"
+#include "input/emulated/ProController.h"
+#include "input/emulated/WiimoteController.h"
+#ifdef SUPPORTS_WIIMOTE
+#include "input/api/Wiimote/NativeWiimoteController.h"
+#endif
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "Common/FileStream.h"
@@ -545,6 +552,54 @@ namespace Application
 				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
 					"unable to remove the MLC write test"};
 			return {FrontendSettingsError::None, std::move(snapshot), {}};
+		}
+
+		EmulatedControllerType TranslateEmulatedControllerType(EmulatedController::Type type)
+		{
+			switch (type)
+			{
+			case EmulatedController::VPAD: return EmulatedControllerType::GamePad;
+			case EmulatedController::Pro: return EmulatedControllerType::ProController;
+			case EmulatedController::Classic: return EmulatedControllerType::ClassicController;
+			case EmulatedController::Wiimote: return EmulatedControllerType::Wiimote;
+			default: return EmulatedControllerType::Disabled;
+			}
+		}
+
+		std::optional<EmulatedController::Type> TranslateEmulatedControllerType(
+			EmulatedControllerType type)
+		{
+			switch (type)
+			{
+			case EmulatedControllerType::GamePad: return EmulatedController::VPAD;
+			case EmulatedControllerType::ProController: return EmulatedController::Pro;
+			case EmulatedControllerType::ClassicController: return EmulatedController::Classic;
+			case EmulatedControllerType::Wiimote: return EmulatedController::Wiimote;
+			default: return std::nullopt;
+			}
+		}
+
+		std::string InputMappingLabel(const EmulatedController& controller,
+			std::uint64_t mapping)
+		{
+			switch (controller.type())
+			{
+			case EmulatedController::VPAD:
+				if (mapping == VPADController::kButtonId_Mic) return "Blow microphone";
+				if (mapping == VPADController::kButtonId_Screen) return "Show screen";
+				return std::string(VPADController::get_button_name(
+					static_cast<VPADController::ButtonId>(mapping)));
+			case EmulatedController::Pro:
+				return std::string(ProController::get_button_name(
+					static_cast<ProController::ButtonId>(mapping)));
+			case EmulatedController::Classic:
+				return std::string(ClassicController::get_button_name(
+					static_cast<ClassicController::ButtonId>(mapping)));
+			case EmulatedController::Wiimote:
+				return std::string(WiimoteController::get_button_name(
+					static_cast<WiimoteController::ButtonId>(mapping)));
+			default: return fmt::format("Mapping {}", mapping);
+			}
 		}
 
 		constexpr std::size_t kMaximumGraphicPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
@@ -2120,6 +2175,530 @@ namespace Application
 						"unknown error while applying frontend settings"};
 				}
 				return {FrontendSettingsError::None, GetFrontendSettings(), {}};
+			}
+
+			InputSettingsModel GetInputSettings() const override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsModel model;
+				InputManager::instance().RunOnInputThread([this, &model] {
+					model.profiles = InputManager::instance().get_profiles();
+					for (const auto api : {InputAPI::Keyboard, InputAPI::SDLController,
+#if BOOST_OS_WINDOWS
+						InputAPI::XInput, InputAPI::DirectInput,
+#endif
+						InputAPI::DSUClient, InputAPI::GameCube,
+#ifdef SUPPORTS_WIIMOTE
+						InputAPI::Wiimote,
+#endif
+					})
+						if (InputManager::instance().is_api_available(api))
+							model.availableApis.emplace_back(InputAPI::to_string(api));
+					for (std::uint32_t player = 0; player < InputManager::kMaxController; ++player)
+					{
+						InputPlayerInfo info;
+						info.player = player;
+						info.gameProfileLocked = InputManager::instance().is_gameprofile_set(player);
+						auto emulated = InputManager::instance().get_controller(player);
+						if (!emulated)
+						{
+							model.players.emplace_back(std::move(info));
+							continue;
+						}
+						info.type = TranslateEmulatedControllerType(emulated->type());
+						info.profileName = emulated->get_profile_name();
+						for (const auto& controller : emulated->copy_controllers())
+						{
+							const auto token = TokenForInputController(controller);
+							const auto settings = controller->get_settings();
+							PhysicalControllerInfo physical{
+								.token = token,
+								.api = std::string(controller->api_name()),
+								.displayName = controller->display_name(),
+								.connected = controller->is_connected(),
+								.hasBattery = controller->has_battery(),
+								.lowBattery = controller->has_low_battery(),
+								.hasMotion = controller->has_motion(),
+								.hasRumble = controller->has_rumble(),
+								.settings = {
+									.axis = {settings.axis.deadzone, settings.axis.range},
+									.rotation = {settings.rotation.deadzone, settings.rotation.range},
+									.trigger = {settings.trigger.deadzone, settings.trigger.range},
+									.rumble = settings.rumble, .motion = settings.motion,
+								},
+							};
+#ifdef SUPPORTS_WIIMOTE
+							if (const auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller))
+							{
+								physical.settings.packetDelay = wiimote->get_packet_delay();
+								switch (wiimote->get_extension())
+								{
+								case NativeWiimoteController::Nunchuck: physical.wiimoteExtension = "nunchuck"; break;
+								case NativeWiimoteController::Classic: physical.wiimoteExtension = "classic"; break;
+								case NativeWiimoteController::MotionPlus: physical.wiimoteExtension = "motionPlus"; break;
+								default: physical.wiimoteExtension = "none"; break;
+								}
+							}
+#endif
+							info.controllers.emplace_back(std::move(physical));
+						}
+						for (std::uint64_t mapping = 1;
+							mapping < emulated->get_highest_mapping_id(); ++mapping)
+						{
+							auto controller = emulated->get_mapping_controller(mapping);
+							info.mappings.push_back({
+								.mappingId = mapping,
+								.label = InputMappingLabel(*emulated, mapping),
+								.binding = emulated->get_mapping_name(mapping),
+								.controllerToken = controller ?
+									std::optional<std::uint64_t>(TokenForInputController(controller)) :
+									std::nullopt,
+							});
+						}
+						model.players.emplace_back(std::move(info));
+					}
+				});
+				std::string fingerprint;
+				for (const auto& player : model.players)
+				{
+					fingerprint += fmt::format("{}:{}:{}:{}|", player.player,
+						static_cast<unsigned>(player.type), player.gameProfileLocked,
+						player.profileName);
+					for (const auto& controller : player.controllers)
+						fingerprint += fmt::format("{}:{}:{}:{}:{}:{}|", controller.token,
+							controller.connected, controller.settings.axis.deadzone,
+							controller.settings.axis.range, controller.settings.rumble,
+							controller.settings.motion);
+					for (const auto& mapping : player.mappings)
+						fingerprint += fmt::format("{}:{}:{}|", mapping.mappingId,
+							mapping.controllerToken.value_or(0), mapping.binding);
+				}
+				for (const auto& profile : model.profiles) fingerprint += "p:" + profile + "|";
+				if (m_inputSettingsFingerprint.empty())
+				{
+					m_inputSettingsFingerprint = fingerprint;
+					m_inputSettingsFingerprintGeneration = m_inputSettingsGeneration;
+				}
+				else if (m_inputSettingsFingerprint != fingerprint)
+				{
+					if (m_inputSettingsFingerprintGeneration == m_inputSettingsGeneration)
+						++m_inputSettingsGeneration;
+					m_inputSettingsFingerprint = std::move(fingerprint);
+					m_inputSettingsFingerprintGeneration = m_inputSettingsGeneration;
+				}
+				model.generation = m_inputSettingsGeneration;
+				return model;
+			}
+
+			InputDeviceEnumerationResult EnumerateInputDevices(
+				std::string_view apiName) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputDeviceEnumerationResult result;
+				InputManager::instance().RunOnInputThread([this, &result, apiName = std::string(apiName)] {
+					PruneUnassignedInputTokens();
+					InputAPI::Type api;
+					try { api = InputAPI::from_string(apiName); }
+					catch (...)
+					{
+						result.error = InputSettingsError::UnsupportedApi;
+						result.diagnostic = "input API is unknown";
+						return;
+					}
+					if (api == InputAPI::WGIGamepad || api == InputAPI::WGIRawController ||
+						!InputManager::instance().is_api_available(api))
+					{
+						result.error = InputSettingsError::UnsupportedApi;
+						result.diagnostic = "input API is unavailable";
+						return;
+					}
+					auto provider = InputManager::instance().get_api_provider(api);
+					if (!provider)
+					{
+						result.error = InputSettingsError::OperationFailed;
+						result.diagnostic = "input provider is unavailable";
+						return;
+					}
+					for (auto& controller : provider->get_controllers())
+						if (controller)
+							result.devices.push_back({TokenForInputController(controller),
+								std::string(controller->api_name()), controller->display_name(),
+								controller->is_connected()});
+				});
+				return result;
+			}
+
+			InputSettingsResult SetEmulatedController(std::uint32_t player,
+				EmulatedControllerType type, bool preserveDevices) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+					{
+						result = {InputSettingsError::ProfileLocked,
+							"this player is controlled by the running game's profile"};
+						return;
+					}
+					if (type == EmulatedControllerType::Disabled)
+					{
+						InputManager::instance().delete_controller(player, false);
+						++m_inputSettingsGeneration;
+						return;
+					}
+					const auto nativeType = TranslateEmulatedControllerType(type);
+					if (!nativeType)
+					{
+						result = {InputSettingsError::UnsupportedType,
+							"emulated controller type is unsupported"};
+						return;
+					}
+					const auto existing = InputManager::instance().get_controller(player);
+					const auto [vpadCount, wpadCount] = InputManager::instance().get_controller_count();
+					if ((*nativeType == EmulatedController::VPAD &&
+						(!existing || existing->type() != EmulatedController::VPAD) &&
+						vpadCount >= InputManager::kMaxVPADControllers) ||
+						(*nativeType != EmulatedController::VPAD &&
+						(!existing || existing->type() == EmulatedController::VPAD) &&
+						wpadCount >= InputManager::kMaxWPADControllers))
+					{
+						result = {InputSettingsError::UnsupportedType,
+							"all slots for this emulated controller type are already in use"};
+						return;
+					}
+					if (!preserveDevices) InputManager::instance().delete_controller(player, false);
+					if (!InputManager::instance().set_controller(player, *nativeType))
+						result = {InputSettingsError::UnsupportedType,
+							"the requested emulated controller slot is unavailable"};
+					else ++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult AddInputDevice(std::uint32_t player,
+				std::uint64_t token) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(token);
+					if (!emulated || !controller)
+					{
+						result = {InputSettingsError::DeviceNotFound,
+							"emulated controller or physical device was not found"};
+						return;
+					}
+					const auto controllers = emulated->copy_controllers();
+					if (std::ranges::find(controllers, controller) == controllers.end())
+					{
+						emulated->add_controller(controller);
+						emulated->set_default_mapping(controller);
+						++m_inputSettingsGeneration;
+					}
+				});
+				return result;
+			}
+
+			InputSettingsResult RemoveInputDevice(std::uint32_t player,
+				std::uint64_t token) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(token);
+					const auto controllers = emulated ? emulated->copy_controllers() :
+						std::vector<std::shared_ptr<ControllerBase>>{};
+					if (!emulated || !controller ||
+						std::ranges::find(controllers, controller) == controllers.end())
+					{
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device is not assigned to this player"};
+						return;
+					}
+					emulated->remove_controller(controller);
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult ConnectInputDevice(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device was not found"};
+					else if (!controller->connect())
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device could not be connected"};
+					else ++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			std::optional<CapturedInputButton> CaptureInputButton(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				std::optional<CapturedInputButton> captured;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller) return;
+					const auto state = controller->raw_state();
+					const auto buttons = state.buttons.GetButtonList();
+					std::optional<CapturedInputButton> active;
+					if (!buttons.empty())
+					{
+						active = CapturedInputButton{buttons.front(),
+							controller->get_button_name(buttons.front())};
+					}
+					auto axisValue = [&state](std::uint64_t button) {
+						switch (button)
+						{
+						case kAxisXP: return state.axis.x;
+						case kAxisXN: return -state.axis.x;
+						case kAxisYP: return state.axis.y;
+						case kAxisYN: return -state.axis.y;
+						case kRotationXP: return state.rotation.x;
+						case kRotationXN: return -state.rotation.x;
+						case kRotationYP: return state.rotation.y;
+						case kRotationYN: return -state.rotation.y;
+						case kTriggerXP: return state.trigger.x;
+						case kTriggerXN: return -state.trigger.x;
+						case kTriggerYP: return state.trigger.y;
+						case kTriggerYN: return -state.trigger.y;
+						default: return 0.0F;
+						}
+					};
+					for (std::uint64_t button = kButtonAxisStart;
+						!active && button < kButtonMAX; ++button)
+						if (axisValue(button) >= 0.33F)
+						{
+							active = CapturedInputButton{button,
+								controller->get_button_name(button)};
+						}
+					if (!active)
+					{
+						m_armedInputCaptures.emplace(token);
+						return;
+					}
+					if (m_armedInputCaptures.erase(token)) captured = std::move(active);
+				});
+				return captured;
+			}
+
+			InputSettingsResult SetInputMapping(std::uint32_t player,
+				std::uint64_t mappingId, std::uint64_t controllerToken,
+				std::uint64_t buttonId) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				if (buttonId >= kButtonMAX)
+					return {InputSettingsError::InvalidMapping, "physical button is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(controllerToken);
+					const auto controllers = emulated ? emulated->copy_controllers() :
+						std::vector<std::shared_ptr<ControllerBase>>{};
+					if (!emulated || !controller ||
+						std::ranges::find(controllers, controller) == controllers.end())
+					{
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device is not assigned to this player"};
+						return;
+					}
+					if (mappingId == 0 || mappingId >= emulated->get_highest_mapping_id())
+					{
+						result = {InputSettingsError::InvalidMapping,
+							"emulated mapping is out of range"};
+						return;
+					}
+					emulated->set_mapping(mappingId, controller, buttonId);
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult ClearInputMapping(std::uint32_t player,
+				std::optional<std::uint64_t> mappingId) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					if (!emulated)
+					{
+						result = {InputSettingsError::InvalidPlayer,
+							"player has no emulated controller"};
+						return;
+					}
+					if (mappingId)
+					{
+						if (*mappingId == 0 || *mappingId >= emulated->get_highest_mapping_id())
+						{
+							result = {InputSettingsError::InvalidMapping,
+								"emulated mapping is out of range"};
+							return;
+						}
+						emulated->delete_mapping(*mappingId);
+					}
+					else emulated->clear_mappings();
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult SetPhysicalControllerSettings(std::uint64_t token,
+				const PhysicalControllerSettings& requested) override
+			{
+				auto validAxis = [](const ControllerAxisSettings& value) {
+					return std::isfinite(value.deadzone) && std::isfinite(value.range) &&
+						value.deadzone >= 0.0F && value.deadzone <= 1.0F &&
+						value.range >= 0.5F && value.range <= 2.0F;
+				};
+				if (!validAxis(requested.axis) || !validAxis(requested.rotation) ||
+					!validAxis(requested.trigger) || !std::isfinite(requested.rumble) ||
+					requested.rumble < 0.0F || requested.rumble > 1.0F ||
+					(requested.packetDelay && (*requested.packetDelay < 1 || *requested.packetDelay > 100)))
+					return {InputSettingsError::InvalidSettings,
+						"controller settings are outside their supported range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+					{
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device was not found"};
+						return;
+					}
+					if ((requested.motion && !controller->has_motion()) ||
+						(requested.rumble > 0.0F && !controller->has_rumble()))
+					{
+						result = {InputSettingsError::InvalidSettings,
+							"the physical device does not support the requested feature"};
+						return;
+					}
+#ifdef SUPPORTS_WIIMOTE
+					auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller);
+					if (requested.packetDelay && !wiimote)
+					{
+						result = {InputSettingsError::InvalidSettings,
+							"packet delay is only supported by native Wiimotes"};
+						return;
+					}
+#else
+					if (requested.packetDelay)
+					{
+						result = {InputSettingsError::InvalidSettings,
+							"native Wiimotes are unavailable in this build"};
+						return;
+					}
+#endif
+					ControllerBase::Settings settings;
+					settings.axis.deadzone = requested.axis.deadzone;
+					settings.axis.range = requested.axis.range;
+					settings.rotation.deadzone = requested.rotation.deadzone;
+					settings.rotation.range = requested.rotation.range;
+					settings.trigger.deadzone = requested.trigger.deadzone;
+					settings.trigger.range = requested.trigger.range;
+					settings.rumble = requested.rumble;
+					settings.motion = requested.motion;
+					controller->set_settings(settings);
+#ifdef SUPPORTS_WIIMOTE
+					if (requested.packetDelay)
+						wiimote->set_packet_delay(*requested.packetDelay);
+#endif
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult CalibrateInputDevice(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+						result = {InputSettingsError::DeviceNotFound,
+							"physical device was not found"};
+					else controller->calibrate();
+				});
+				return result;
+			}
+
+			InputSettingsResult LoadInputProfile(std::uint32_t player,
+				std::string_view profile) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+						result = {InputSettingsError::ProfileLocked,
+							"this player is controlled by the running game's profile"};
+					else if (!InputManager::instance().load(player, name))
+						result = {InputSettingsError::PersistenceFailed,
+							"input profile could not be loaded"};
+					else ++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult SaveInputProfile(std::uint32_t player,
+				std::string_view profile) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+						result = {InputSettingsError::ProfileLocked,
+							"this player is controlled by the running game's profile"};
+					else if (!InputManager::instance().save(player, name))
+						result = {InputSettingsError::PersistenceFailed,
+							"input profile could not be saved"};
+					else ++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult DeleteInputProfile(std::string_view profile) override
+			{
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (!InputManager::instance().delete_profile(name))
+						result = {InputSettingsError::PersistenceFailed,
+							"input profile could not be deleted"};
+					else ++m_inputSettingsGeneration;
+				});
+				return result;
 			}
 
 			std::optional<std::uint64_t> RunningTitleId() const override
@@ -4311,6 +4890,41 @@ namespace Application
 			}
 
 		private:
+			std::uint64_t TokenForInputController(
+				const std::shared_ptr<ControllerBase>& controller) const
+			{
+				if (!controller) return 0;
+				if (const auto found = m_inputTokensByPointer.find(controller.get());
+					found != m_inputTokensByPointer.end())
+					return found->second;
+				const auto token = ++m_nextInputDeviceToken;
+				m_inputDeviceTokens.emplace(token, controller);
+				m_inputTokensByPointer.emplace(controller.get(), token);
+				return token;
+			}
+
+			std::shared_ptr<ControllerBase> InputControllerForToken(
+				std::uint64_t token) const
+			{
+				const auto found = m_inputDeviceTokens.find(token);
+				if (found == m_inputDeviceTokens.end()) return {};
+				return found->second;
+			}
+
+			void PruneUnassignedInputTokens() const
+			{
+				for (auto it = m_inputDeviceTokens.begin(); it != m_inputDeviceTokens.end();)
+				{
+					if (it->second.use_count() == 1)
+					{
+						m_inputTokensByPointer.erase(it->second.get());
+						m_armedInputCaptures.erase(it->first);
+						it = m_inputDeviceTokens.erase(it);
+					}
+					else ++it;
+				}
+			}
+
 			ApplicationEvents& m_events;
 			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
 			mutable std::shared_mutex m_inputLifecycleMutex;
@@ -4318,6 +4932,16 @@ namespace Application
 			mutable std::recursive_mutex m_frontendSettingsTransactionMutex;
 			mutable std::string m_frontendSettingsFingerprint;
 			mutable std::uint64_t m_frontendSettingsRevision{1};
+			mutable std::recursive_mutex m_inputSettingsMutex;
+			mutable std::unordered_map<std::uint64_t, std::shared_ptr<ControllerBase>>
+				m_inputDeviceTokens;
+			mutable std::unordered_map<const ControllerBase*, std::uint64_t>
+				m_inputTokensByPointer;
+			mutable std::uint64_t m_nextInputDeviceToken{};
+			mutable std::uint64_t m_inputSettingsGeneration{1};
+			mutable std::uint64_t m_inputSettingsFingerprintGeneration{};
+			mutable std::string m_inputSettingsFingerprint;
+			mutable std::unordered_set<std::uint64_t> m_armedInputCaptures;
 			bool m_inputAvailable{};
 		};
 	}

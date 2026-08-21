@@ -326,6 +326,99 @@ namespace Application
 		return m_backend->ApplyFrontendSettings(update);
 	}
 
+	InputSettingsModel EmulationController::GetInputSettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetInputSettings();
+	}
+
+	InputDeviceEnumerationResult EmulationController::EnumerateInputDevices(
+		std::string_view api)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->EnumerateInputDevices(api);
+	}
+
+	InputSettingsResult EmulationController::SetEmulatedController(std::uint32_t player,
+		EmulatedControllerType type, bool preserveDevices)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetEmulatedController(player, type, preserveDevices);
+	}
+
+	InputSettingsResult EmulationController::AddInputDevice(
+		std::uint32_t player, std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->AddInputDevice(player, token);
+	}
+
+	InputSettingsResult EmulationController::RemoveInputDevice(
+		std::uint32_t player, std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->RemoveInputDevice(player, token);
+	}
+
+	InputSettingsResult EmulationController::ConnectInputDevice(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ConnectInputDevice(token);
+	}
+
+	std::optional<CapturedInputButton> EmulationController::CaptureInputButton(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->CaptureInputButton(token);
+	}
+
+	InputSettingsResult EmulationController::SetInputMapping(std::uint32_t player,
+		std::uint64_t mappingId, std::uint64_t controllerToken, std::uint64_t buttonId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetInputMapping(player, mappingId, controllerToken, buttonId);
+	}
+
+	InputSettingsResult EmulationController::ClearInputMapping(std::uint32_t player,
+		std::optional<std::uint64_t> mappingId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ClearInputMapping(player, mappingId);
+	}
+
+	InputSettingsResult EmulationController::SetPhysicalControllerSettings(
+		std::uint64_t token, const PhysicalControllerSettings& settings)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetPhysicalControllerSettings(token, settings);
+	}
+
+	InputSettingsResult EmulationController::CalibrateInputDevice(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->CalibrateInputDevice(token);
+	}
+
+	InputSettingsResult EmulationController::LoadInputProfile(
+		std::uint32_t player, std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->LoadInputProfile(player, profile);
+	}
+
+	InputSettingsResult EmulationController::SaveInputProfile(
+		std::uint32_t player, std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SaveInputProfile(player, profile);
+	}
+
+	InputSettingsResult EmulationController::DeleteInputProfile(std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteInputProfile(profile);
+	}
+
 	std::vector<TitleSummary> EmulationController::ListTitles() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

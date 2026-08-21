@@ -47,6 +47,7 @@ public:
 
 	void Shutdown(); 
 	void Start();
+	void RunOnInputThread(std::function<void()> action);
 	void ConfigureProfileDirectory(fs::path profileDirectory);
 	void ConfigureHost(Host::IKeyboardState& keyboard, Host::IWindowMetrics& windowMetrics,
 		Host::INativeSurfaceProvider& nativeSurfaces, Input::IControllerStateObserver& observer);
@@ -101,6 +102,7 @@ public:
 
 
 	std::vector<std::string> get_profiles() const;
+	bool delete_profile(std::string_view filename);
 	static bool is_valid_profilename(const std::string& name);
 
 	glm::ivec2 get_mouse_position(bool pad_window) const;
@@ -128,7 +130,18 @@ private:
 	void update_thread();
 
 	std::thread m_update_thread;
+	std::mutex m_input_lifecycle_mutex;
 	std::atomic<bool> m_update_thread_shutdown{false};
+	std::thread::id m_update_thread_id{};
+	struct InputThreadCommand
+	{
+		std::function<void()> action;
+		std::shared_ptr<std::promise<void>> completion;
+	};
+	std::mutex m_input_command_mutex;
+	std::condition_variable m_input_command_cv;
+	bool m_input_commands_accepting{};
+	std::deque<InputThreadCommand> m_input_commands;
 
 	std::array<std::vector<ControllerProviderPtr>, InputAPI::MAX> m_api_available{ };
 

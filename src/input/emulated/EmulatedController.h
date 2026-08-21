@@ -75,6 +75,7 @@ public:
 	void remove_controller(const std::shared_ptr<ControllerBase>& controller);
 	void clear_controllers();
 	const std::vector<std::shared_ptr<ControllerBase>>& get_controllers() const { return m_controllers; }
+	[[nodiscard]] std::vector<std::shared_ptr<ControllerBase>> copy_controllers() const;
 	void copy_unique_controllers(std::span<std::shared_ptr<ControllerBase>> output,
 							 std::size_t& count) const;
 

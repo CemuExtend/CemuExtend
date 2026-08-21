@@ -87,6 +87,12 @@ void EmulatedController::copy_unique_controllers(
 	}
 }
 
+std::vector<std::shared_ptr<ControllerBase>> EmulatedController::copy_controllers() const
+{
+	std::shared_lock lock(m_mutex);
+	return m_controllers;
+}
+
 void EmulatedController::start_rumble()
 {
 	m_rumble = true;

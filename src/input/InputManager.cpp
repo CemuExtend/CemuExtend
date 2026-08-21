@@ -55,10 +55,15 @@ InputManager::~InputManager()
 
 void InputManager::Start()
 {
-	if (m_update_thread.joinable())
+	std::scoped_lock lifecycleLock(m_input_lifecycle_mutex);
+	std::unique_lock commandLock(m_input_command_mutex);
+	if (m_input_commands_accepting)
 		return;
+	if (m_update_thread.joinable())
+		throw std::logic_error("input update thread is still stopping");
 	m_update_thread_shutdown.store(false, std::memory_order_release);
 	m_update_thread = std::thread(&InputManager::update_thread, this);
+	m_input_command_cv.wait(commandLock, [this] { return m_input_commands_accepting; });
 }
 
 void InputManager::ConfigureProfileDirectory(fs::path profileDirectory)
@@ -661,14 +666,49 @@ bool InputManager::save(size_t player_index, std::string_view filename)
 			}
 		}
 	}
-	FileStream* fs = FileStream::createFile2(file_path);
-	if (!fs)
-		return false;
 	std::stringstream xmlData;
 	doc.save(xmlData);
 	std::string xmlStr = xmlData.str();
-	fs->writeData(xmlStr.data(), xmlStr.size());
-	delete fs;
+	auto temporary = file_path;
+	temporary += fmt::format(".{}.tmp",
+		std::chrono::steady_clock::now().time_since_epoch().count());
+	{
+		std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+		output.write(xmlStr.data(), static_cast<std::streamsize>(xmlStr.size()));
+		output.flush();
+		if (!output)
+		{
+			std::error_code removeError;
+			fs::remove(temporary, removeError);
+			return false;
+		}
+	}
+	std::error_code ec;
+#if BOOST_OS_WINDOWS
+	// Windows rename cannot replace an existing destination. Keep the old file
+	// recoverable until the replacement is in place.
+	auto backup = file_path;
+	backup += ".backup";
+	fs::remove(backup, ec);
+	ec.clear();
+	if (fs::exists(file_path, ec) && !ec)
+	{
+		fs::rename(file_path, backup, ec);
+		if (ec) { fs::remove(temporary, ec); return false; }
+	}
+	fs::rename(temporary, file_path, ec);
+	if (ec)
+	{
+		std::error_code restoreError;
+		fs::rename(backup, file_path, restoreError);
+		fs::remove(temporary, restoreError);
+		return false;
+	}
+	fs::remove(backup, ec);
+#else
+	fs::rename(temporary, file_path, ec);
+	if (ec) { fs::remove(temporary, ec); return false; }
+#endif
 	return true;
 }
 
@@ -883,21 +923,23 @@ ControllerProviderPtr InputManager::get_api_provider(InputAPI::Type api, const C
 
 void InputManager::apply_game_profile(const ControllerProfileSelection& profiles)
 {
-	for (int i = 0; i < kMaxController; ++i)
-	{
-		if (profiles[i] && !profiles[i]->empty())
+	RunOnInputThread([this, profiles] {
+		for (int i = 0; i < kMaxController; ++i)
 		{
-			if (load(i, profiles[i].value()))
+			if (profiles[i] && !profiles[i]->empty())
 			{
-				m_is_gameprofile_set[i] = true;
-				if (const auto controller = get_controller(i))
+				if (load(i, profiles[i].value()))
 				{
-					if (!controller->has_profile_name())
-						controller->m_profile_name = profiles[i].value();
+					m_is_gameprofile_set[i] = true;
+					if (const auto controller = get_controller(i))
+					{
+						if (!controller->has_profile_name())
+							controller->m_profile_name = profiles[i].value();
+					}
 				}
 			}
 		}
-	}
+	});
 }
 
 std::vector<std::string> InputManager::get_profiles() const
@@ -939,6 +981,24 @@ bool InputManager::is_valid_profilename(const std::string& name)
 	}
 
 	return true;
+}
+
+bool InputManager::delete_profile(std::string_view filename)
+{
+	const std::string ownedName(filename);
+	if (m_profileDirectory.empty() || !is_valid_profilename(ownedName))
+		return false;
+	auto path = m_profileDirectory / _utf8ToPath(ownedName);
+	bool removed = false;
+	for (const auto extension : {".xml", ".txt"})
+	{
+		auto candidate = path;
+		candidate.replace_extension(extension);
+		std::error_code ec;
+		removed = fs::remove(candidate, ec) || removed;
+		if (ec) return false;
+	}
+	return removed;
 }
 
 void InputManager::UpdateHostMousePosition(Host::PointerSurface surface,
@@ -1103,8 +1163,33 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 void InputManager::update_thread()
 {
 	SetThreadName("Input_update");
-	while (!m_update_thread_shutdown.load(std::memory_order::relaxed))
 	{
+		std::scoped_lock commandLock(m_input_command_mutex);
+		m_update_thread_id = std::this_thread::get_id();
+		m_input_commands_accepting = true;
+	}
+	m_input_command_cv.notify_all();
+	while (true)
+	{
+		std::deque<InputThreadCommand> commands;
+		{
+			std::scoped_lock commandLock(m_input_command_mutex);
+			commands.swap(m_input_commands);
+		}
+		for (auto& command : commands)
+		{
+			try
+			{
+				command.action();
+				command.completion->set_value();
+			}
+			catch (...)
+			{
+				command.completion->set_exception(std::current_exception());
+			}
+		}
+		if (m_update_thread_shutdown.load(std::memory_order_acquire))
+			break;
 		std::shared_lock lock(m_mutex);
 		for (auto& pad : m_vpad)
 		{
@@ -1122,16 +1207,51 @@ void InputManager::update_thread()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		std::this_thread::yield();
 	}
+	{
+		std::scoped_lock commandLock(m_input_command_mutex);
+		m_input_commands_accepting = false;
+		m_update_thread_id = {};
+	}
+	m_input_command_cv.notify_all();
+}
+
+void InputManager::RunOnInputThread(std::function<void()> action)
+{
+	if (!action) return;
+	bool runInline = false;
+	{
+		std::scoped_lock commandLock(m_input_command_mutex);
+		runInline = std::this_thread::get_id() == m_update_thread_id;
+	}
+	if (runInline)
+	{
+		action();
+		return;
+	}
+	auto completion = std::make_shared<std::promise<void>>();
+	auto future = completion->get_future();
+	{
+		std::scoped_lock commandLock(m_input_command_mutex);
+		if (!m_input_commands_accepting)
+			throw std::runtime_error("input update thread is not available");
+		m_input_commands.push_back({std::move(action), completion});
+	}
+	future.get();
 }
 
 void InputManager::Shutdown()
 {
-    m_update_thread_shutdown = true;
+	std::scoped_lock lifecycleLock(m_input_lifecycle_mutex);
+	{
+		std::scoped_lock commandLock(m_input_command_mutex);
+		if (std::this_thread::get_id() == m_update_thread_id)
+			throw std::logic_error("input update thread cannot shut itself down");
+		m_input_commands_accepting = false;
+		m_update_thread_shutdown.store(true, std::memory_order_release);
+	}
 
-    if (m_update_thread.joinable())
-    {
-        m_update_thread.join();
-    }
+	if (m_update_thread.joinable())
+		m_update_thread.join();
 
     for (auto& pad : m_vpad) pad.reset();
 	for (auto& pad : m_wpad) pad.reset();

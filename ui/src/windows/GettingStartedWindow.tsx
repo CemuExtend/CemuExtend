@@ -105,6 +105,7 @@ export function GettingStartedWindow() {
       <label className="check-row"><input type="checkbox" checked={openPad} onChange={(event) => setOpenPad(event.target.checked)} />Open the separate GamePad view when a game starts</label>
       <label className="check-row"><input type="checkbox" checked={checkUpdates} disabled={!model.updateChecksSupported} onChange={(event) => setCheckUpdates(event.target.checked)} />Automatically check for updates</label>
       {!model.updateChecksSupported && <p className="muted">Automatic update checks are managed by this Linux package.</p>}
+      <div className="card"><h3>Controller setup</h3><p>Configure each player's emulated controller, devices, profiles, and mappings before launching a game.</p><button onClick={() => void openWindow("input-settings").catch((reason: unknown) => setError(String(reason)))}>Open Input Settings</button></div>
     </section>}
 
     <footer className="actions">

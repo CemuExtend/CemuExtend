@@ -12,6 +12,7 @@ add_library(CemuApplication STATIC
   EmulationController.h
   EmulationPresentation.h
   FrontendSettingsFacade.h
+  InputSettingsFacade.h
   GameProfileFacade.h
   GraphicPackFacade.h
 	NfcFacade.h

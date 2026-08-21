@@ -369,6 +369,14 @@ namespace
 		return value.GetBool();
 	}
 
+	double RequiredDouble(const rapidjson::Value& object, const char* name)
+	{
+		const auto& value = RequiredMember(object, name);
+		if (!value.IsNumber() || !std::isfinite(value.GetDouble()))
+			throw std::invalid_argument(std::string(name) + " must be a finite number");
+		return value.GetDouble();
+	}
+
 	struct WindowDescriptor
 	{
 		std::string_view role;
@@ -380,7 +388,7 @@ namespace
 
 	constexpr std::array WindowDescriptors{
 		WindowDescriptor{"general-settings", "General Settings", 900, 680, true},
-		WindowDescriptor{"input-settings", "Input Settings", 980, 720, true},
+		WindowDescriptor{"input-settings", "Input Settings", 980, 720, false},
 		WindowDescriptor{"hotkey-settings", "Hotkey Settings", 860, 620, false},
 		WindowDescriptor{"graphic-packs", "Graphic Packs", 1040, 760, false},
 		WindowDescriptor{"title-manager", "Title Manager", 1100, 720, false},
@@ -1801,6 +1809,90 @@ namespace
 			return {buffer.GetString(), buffer.GetSize()};
 		}
 
+		std::string InputSettingsJson() const
+		{
+			const auto model = m_controller.GetInputSettings();
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			auto typeName = [](Application::EmulatedControllerType type) {
+				switch (type)
+				{
+				case Application::EmulatedControllerType::GamePad: return "gamePad";
+				case Application::EmulatedControllerType::ProController: return "proController";
+				case Application::EmulatedControllerType::ClassicController: return "classicController";
+				case Application::EmulatedControllerType::Wiimote: return "wiimote";
+				default: return "disabled";
+				}
+			};
+			auto writeAxis = [&writer](const Application::ControllerAxisSettings& value) {
+				writer.StartObject(); writer.Key("deadzone"); writer.Double(value.deadzone);
+				writer.Key("range"); writer.Double(value.range); writer.EndObject();
+			};
+			writer.StartObject(); writer.Key("generation"); writer.Uint64(model.generation);
+			writer.Key("profiles"); writer.StartArray();
+			for (const auto& profile : model.profiles) writer.String(profile.data(), profile.size());
+			writer.EndArray(); writer.Key("availableApis"); writer.StartArray();
+			for (const auto& api : model.availableApis) writer.String(api.data(), api.size());
+			writer.EndArray(); writer.Key("players"); writer.StartArray();
+			for (const auto& player : model.players)
+			{
+				writer.StartObject(); writer.Key("player"); writer.Uint(player.player);
+				writer.Key("type"); writer.String(typeName(player.type));
+				writer.Key("gameProfileLocked"); writer.Bool(player.gameProfileLocked);
+				writer.Key("profileName"); writer.String(player.profileName.data(), player.profileName.size());
+				writer.Key("controllers"); writer.StartArray();
+				for (const auto& controller : player.controllers)
+				{
+					writer.StartObject(); writer.Key("token"); writer.Uint64(controller.token);
+					writer.Key("api"); writer.String(controller.api.data(), controller.api.size());
+					writer.Key("displayName"); writer.String(controller.displayName.data(), controller.displayName.size());
+					writer.Key("connected"); writer.Bool(controller.connected);
+					writer.Key("hasBattery"); writer.Bool(controller.hasBattery);
+					writer.Key("lowBattery"); writer.Bool(controller.lowBattery);
+					writer.Key("hasMotion"); writer.Bool(controller.hasMotion);
+					writer.Key("hasRumble"); writer.Bool(controller.hasRumble);
+					if (controller.wiimoteExtension) { writer.Key("wiimoteExtension"); writer.String(controller.wiimoteExtension->data(), controller.wiimoteExtension->size()); }
+					writer.Key("settings"); writer.StartObject(); writer.Key("axis"); writeAxis(controller.settings.axis);
+					writer.Key("rotation"); writeAxis(controller.settings.rotation); writer.Key("trigger"); writeAxis(controller.settings.trigger);
+					writer.Key("rumble"); writer.Double(controller.settings.rumble); writer.Key("motion"); writer.Bool(controller.settings.motion);
+					if (controller.settings.packetDelay) { writer.Key("packetDelay"); writer.Uint(*controller.settings.packetDelay); }
+					writer.EndObject();
+					writer.EndObject();
+				}
+				writer.EndArray(); writer.Key("mappings"); writer.StartArray();
+				for (const auto& mapping : player.mappings)
+				{
+					writer.StartObject(); writer.Key("mappingId"); writer.Uint64(mapping.mappingId);
+					writer.Key("label"); writer.String(mapping.label.data(), mapping.label.size());
+					writer.Key("binding"); writer.String(mapping.binding.data(), mapping.binding.size());
+					if (mapping.controllerToken) { writer.Key("controllerToken"); writer.Uint64(*mapping.controllerToken); }
+					writer.EndObject();
+				}
+				writer.EndArray(); writer.EndObject();
+			}
+			writer.EndArray(); writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		std::string InputMutationJson(const Application::InputSettingsResult& result) const
+		{
+			if (!result)
+				throw std::runtime_error(result.diagnostic.empty() ?
+					"input settings operation failed" : result.diagnostic);
+			return InputSettingsJson();
+		}
+
+		static Application::EmulatedControllerType ParseInputControllerType(
+			std::string_view value)
+		{
+			if (value == "disabled") return Application::EmulatedControllerType::Disabled;
+			if (value == "gamePad") return Application::EmulatedControllerType::GamePad;
+			if (value == "proController") return Application::EmulatedControllerType::ProController;
+			if (value == "classicController") return Application::EmulatedControllerType::ClassicController;
+			if (value == "wiimote") return Application::EmulatedControllerType::Wiimote;
+			throw std::invalid_argument("unknown emulated controller type");
+		}
+
 		void RegisterRpc()
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
@@ -2003,6 +2095,55 @@ namespace
 						"network service update failed" : result.diagnostic);
 				return std::string("{}");
 			});
+			m_rpc.Register("input.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"input-settings"}); return InputSettingsJson();
+			});
+			m_rpc.Register("input.enumerate", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"});
+				const auto result = m_controller.EnumerateInputDevices(RequiredString(params, "api"));
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "input device enumeration failed" : result.diagnostic);
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartArray();
+				for (const auto& device : result.devices) { writer.StartObject(); writer.Key("token"); writer.Uint64(device.token); writer.Key("api"); writer.String(device.api.data(), device.api.size()); writer.Key("displayName"); writer.String(device.displayName.data(), device.displayName.size()); writer.Key("connected"); writer.Bool(device.connected); writer.EndObject(); }
+				writer.EndArray(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("input.setType", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); return InputMutationJson(m_controller.SetEmulatedController(RequiredUint(params, "player"), ParseInputControllerType(RequiredString(params, "type")), RequiredBool(params, "preserveDevices")));
+			});
+			m_rpc.Register("input.addDevice", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); return InputMutationJson(m_controller.AddInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
+			});
+			m_rpc.Register("input.removeDevice", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); return InputMutationJson(m_controller.RemoveInputDevice(RequiredUint(params, "player"), RequiredUint64(params, "token")));
+			});
+			m_rpc.Register("input.connectDevice", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); return InputMutationJson(m_controller.ConnectInputDevice(RequiredUint64(params, "token")));
+			});
+			m_rpc.Register("input.captureButton", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"});
+				const auto captured = m_controller.CaptureInputButton(RequiredUint64(params, "token"));
+				if (!captured) return std::string("null");
+				return std::string(R"({"id":)") + std::to_string(captured->id) +
+					R"(,"label":)" + JsonString(captured->label) + "}";
+			});
+			m_rpc.Register("input.setMapping", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); return InputMutationJson(m_controller.SetInputMapping(RequiredUint(params, "player"), RequiredUint64(params, "mappingId"), RequiredUint64(params, "controllerToken"), RequiredUint64(params, "buttonId")));
+			});
+			m_rpc.Register("input.clearMapping", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); std::optional<std::uint64_t> mapping;
+				if (params.IsObject()) if (const auto found = params.FindMember("mappingId"); found != params.MemberEnd()) { if (!found->value.IsUint64()) throw std::invalid_argument("mappingId must be an unsigned integer"); mapping = found->value.GetUint64(); }
+				return InputMutationJson(m_controller.ClearInputMapping(RequiredUint(params, "player"), mapping));
+			});
+			m_rpc.Register("input.setDeviceSettings", [this](const rapidjson::Value& params) {
+				RequireRole({"input-settings"}); const auto& value = RequiredMember(params, "settings");
+				auto axis = [](const rapidjson::Value& object) { return Application::ControllerAxisSettings{static_cast<float>(RequiredDouble(object, "deadzone")), static_cast<float>(RequiredDouble(object, "range"))}; };
+				Application::PhysicalControllerSettings settings{axis(RequiredMember(value, "axis")), axis(RequiredMember(value, "rotation")), axis(RequiredMember(value, "trigger")), static_cast<float>(RequiredDouble(value, "rumble")), RequiredBool(value, "motion")};
+				if (const auto found = value.FindMember("packetDelay"); found != value.MemberEnd()) { if (!found->value.IsUint()) throw std::invalid_argument("packetDelay must be an unsigned integer"); settings.packetDelay = found->value.GetUint(); }
+				return InputMutationJson(m_controller.SetPhysicalControllerSettings(RequiredUint64(params, "token"), settings));
+			});
+			m_rpc.Register("input.calibrate", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.CalibrateInputDevice(RequiredUint64(params, "token"))); });
+			m_rpc.Register("input.profileLoad", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.LoadInputProfile(RequiredUint(params, "player"), RequiredString(params, "profile"))); });
+			m_rpc.Register("input.profileSave", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.SaveInputProfile(RequiredUint(params, "player"), RequiredString(params, "profile"))); });
+			m_rpc.Register("input.profileDelete", [this](const rapidjson::Value& params) { RequireRole({"input-settings"}); return InputMutationJson(m_controller.DeleteInputProfile(RequiredString(params, "profile"))); });
 			m_rpc.Register("graphicPacks.list", [this](const rapidjson::Value&) {
 				RequireRole({"graphic-packs"});
 				return GraphicPacksJson();

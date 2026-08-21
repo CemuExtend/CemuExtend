@@ -442,6 +442,36 @@ namespace
 			return {};
 		}
 		void SaveGraphicPackState() override { ++graphicPackSaves; }
+		Application::InputSettingsModel GetInputSettings() const override { return {}; }
+		Application::InputDeviceEnumerationResult EnumerateInputDevices(
+			std::string_view) override { return {}; }
+		Application::InputSettingsResult SetEmulatedController(std::uint32_t,
+			Application::EmulatedControllerType, bool) override { return {}; }
+		Application::InputSettingsResult AddInputDevice(std::uint32_t,
+			std::uint64_t) override { return {}; }
+		Application::InputSettingsResult RemoveInputDevice(std::uint32_t,
+			std::uint64_t) override { return {}; }
+		Application::InputSettingsResult ConnectInputDevice(std::uint64_t) override { return {}; }
+		std::optional<Application::CapturedInputButton> CaptureInputButton(
+			std::uint64_t) override { return {}; }
+		Application::InputSettingsResult SetInputMapping(std::uint32_t, std::uint64_t,
+			std::uint64_t, std::uint64_t) override { return {}; }
+		Application::InputSettingsResult ClearInputMapping(std::uint32_t,
+			std::optional<std::uint64_t>) override { return {}; }
+		Application::InputSettingsResult SetPhysicalControllerSettings(std::uint64_t,
+			const Application::PhysicalControllerSettings&) override { return {}; }
+		Application::InputSettingsResult CalibrateInputDevice(std::uint64_t) override
+		{
+			return {};
+		}
+		Application::InputSettingsResult LoadInputProfile(std::uint32_t,
+			std::string_view) override { return {}; }
+		Application::InputSettingsResult SaveInputProfile(std::uint32_t,
+			std::string_view) override { return {}; }
+		Application::InputSettingsResult DeleteInputProfile(std::string_view) override
+		{
+			return {};
+		}
 	};
 
 	void VerifyFailure(Application::LaunchError error)

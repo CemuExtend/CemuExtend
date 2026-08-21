@@ -16,6 +16,7 @@
 #include "application/ContentOperations.h"
 #include "application/EmulationPresentation.h"
 #include "application/FrontendSettingsFacade.h"
+#include "application/InputSettingsFacade.h"
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/NfcFacade.h"
@@ -168,7 +169,7 @@ namespace Application
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
 		public ITitleInstallService, public IAccountService, public ISaveService,
-		public IFrontendSettingsService
+		public IFrontendSettingsService, public IInputSettingsService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -258,6 +259,29 @@ namespace Application
 		[[nodiscard]] FrontendSettingsSnapshot GetFrontendSettings() const;
 		[[nodiscard]] FrontendSettingsResult ApplyFrontendSettings(
 			const FrontendSettingsUpdate& update);
+		[[nodiscard]] InputSettingsModel GetInputSettings() const;
+		[[nodiscard]] InputDeviceEnumerationResult EnumerateInputDevices(
+			std::string_view api);
+		[[nodiscard]] InputSettingsResult SetEmulatedController(
+			std::uint32_t player, EmulatedControllerType type, bool preserveDevices);
+		[[nodiscard]] InputSettingsResult AddInputDevice(
+			std::uint32_t player, std::uint64_t token);
+		[[nodiscard]] InputSettingsResult RemoveInputDevice(
+			std::uint32_t player, std::uint64_t token);
+		[[nodiscard]] InputSettingsResult ConnectInputDevice(std::uint64_t token);
+		[[nodiscard]] std::optional<CapturedInputButton> CaptureInputButton(std::uint64_t token);
+		[[nodiscard]] InputSettingsResult SetInputMapping(std::uint32_t player,
+			std::uint64_t mappingId, std::uint64_t controllerToken, std::uint64_t buttonId);
+		[[nodiscard]] InputSettingsResult ClearInputMapping(std::uint32_t player,
+			std::optional<std::uint64_t> mappingId);
+		[[nodiscard]] InputSettingsResult SetPhysicalControllerSettings(
+			std::uint64_t token, const PhysicalControllerSettings& settings);
+		[[nodiscard]] InputSettingsResult CalibrateInputDevice(std::uint64_t token);
+		[[nodiscard]] InputSettingsResult LoadInputProfile(
+			std::uint32_t player, std::string_view profile);
+		[[nodiscard]] InputSettingsResult SaveInputProfile(
+			std::uint32_t player, std::string_view profile);
+		[[nodiscard]] InputSettingsResult DeleteInputProfile(std::string_view profile);
 		[[nodiscard]] std::vector<TitleSummary> ListTitles() const;
 		[[nodiscard]] std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const;
