@@ -46,7 +46,7 @@
     { "name": "titleManager.refresh", "params": "undefined", "result": "EmptyResult" },
     { "name": "titleManager.launch", "params": "{ locationUid: string }", "result": "{ titleId: string }" },
     { "name": "logging.getSnapshot", "params": "undefined", "result": "LoggingSnapshot" },
-    { "name": "logging.clear", "params": "undefined", "result": "{ clearedThroughSequence: number }" },
+    { "name": "logging.clear", "params": "undefined", "result": "{ clearedThroughSequence: string }" },
     { "name": "checksum.getModel", "params": "undefined", "result": "ChecksumModel" },
     { "name": "checksum.start", "params": "{ locationUid: string }", "result": "{ jobId: string }" },
     { "name": "cemod.discover", "params": "{ titleId?: string }", "result": "{ jobId: string }" },

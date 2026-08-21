@@ -56,17 +56,17 @@ export type Title = {
 export type NativeEvent = { type: string; sequence: string; payload: unknown };
 
 export type LoggingLevel = "info" | "warning" | "error";
-export type LoggingEntry = { sequence: number; level: LoggingLevel; category: string; message: string };
+export type LoggingEntry = { sequence: string; level: LoggingLevel; category: string; message: string };
 export type LoggingSnapshot = {
   entries: LoggingEntry[];
-  firstAvailableSequence: number;
-  nextSequence: number;
-  droppedEntries: number;
-  retainedBytes: number;
+  firstAvailableSequence: string;
+  nextSequence: string;
+  droppedEntries: string;
+  retainedBytes: string;
   truncated: boolean;
 };
 export type LoggingEntriesEvent = NativeEvent & { type: "logging.entries"; payload: LoggingSnapshot };
-export type LoggingClearedEvent = NativeEvent & { type: "logging.cleared"; payload: { clearedThroughSequence: number } };
+export type LoggingClearedEvent = NativeEvent & { type: "logging.cleared"; payload: { clearedThroughSequence: string } };
 
 export type UsbDeviceDescriptor = { id: string; vendorId: number; productId: number; interfaceIndex: number; interfaceSubClass: number; protocol: number; maxPacketSizeRx: number; maxPacketSizeTx: number; opened: boolean };
 export type EmulatedUsbDeviceId = "skylanders" | "infinity" | "dimensions";

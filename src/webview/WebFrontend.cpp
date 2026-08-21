@@ -2257,7 +2257,7 @@ namespace
 			for (const auto& entry : snapshot.entries)
 			{
 				writer.StartObject();
-				writer.Key("sequence"); writer.Uint64(entry.sequence);
+				writer.Key("sequence"); writer.String(std::to_string(entry.sequence).c_str());
 				writer.Key("level"); writer.String(LoggingLevelName(entry.level).data());
 				writer.Key("category"); writer.String(entry.category.data(),
 					static_cast<rapidjson::SizeType>(entry.category.size()));
@@ -2266,10 +2266,10 @@ namespace
 				writer.EndObject();
 			}
 			writer.EndArray();
-			writer.Key("firstAvailableSequence"); writer.Uint64(snapshot.firstAvailableSequence);
-			writer.Key("nextSequence"); writer.Uint64(snapshot.nextSequence);
-			writer.Key("droppedEntries"); writer.Uint64(snapshot.droppedEntries);
-			writer.Key("retainedBytes"); writer.Uint64(snapshot.retainedBytes);
+			writer.Key("firstAvailableSequence"); writer.String(std::to_string(snapshot.firstAvailableSequence).c_str());
+			writer.Key("nextSequence"); writer.String(std::to_string(snapshot.nextSequence).c_str());
+			writer.Key("droppedEntries"); writer.String(std::to_string(snapshot.droppedEntries).c_str());
+			writer.Key("retainedBytes"); writer.String(std::to_string(snapshot.retainedBytes).c_str());
 			writer.Key("truncated"); writer.Bool(snapshot.truncated);
 			writer.EndObject();
 			return {buffer.GetString(), buffer.GetSize()};
@@ -3034,9 +3034,9 @@ namespace
 					clearedThroughSequence);
 				EmitToWindow(m_invokingWindow, "logging.cleared",
 					std::string(R"({"clearedThroughSequence":)") +
-					std::to_string(clearedThroughSequence) + "}");
+					JsonString(std::to_string(clearedThroughSequence)) + "}");
 				return std::string(R"({"clearedThroughSequence":)") +
-					std::to_string(clearedThroughSequence) + "}";
+					JsonString(std::to_string(clearedThroughSequence)) + "}";
 			});
 			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"checksum-tool", "title-manager"});

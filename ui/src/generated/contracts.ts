@@ -46,7 +46,7 @@ export type RpcContract = {
   "titleManager.refresh": { params: undefined; result: EmptyResult };
   "titleManager.launch": { params: { locationUid: string }; result: { titleId: string } };
   "logging.getSnapshot": { params: undefined; result: LoggingSnapshot };
-  "logging.clear": { params: undefined; result: { clearedThroughSequence: number } };
+  "logging.clear": { params: undefined; result: { clearedThroughSequence: string } };
   "checksum.getModel": { params: undefined; result: ChecksumModel };
   "checksum.start": { params: { locationUid: string }; result: { jobId: string } };
   "cemod.discover": { params: { titleId?: string }; result: { jobId: string } };
