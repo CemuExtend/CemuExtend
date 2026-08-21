@@ -43,6 +43,7 @@
           ./dependencies/gamemode
           ./dependencies/ih264d
           (lib.fileset.maybeMissing ./dependencies/libcemuextend)
+          (lib.fileset.maybeMissing ./dependencies/webview)
           ./dist
           ./src
         ];
