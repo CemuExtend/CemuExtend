@@ -123,3 +123,34 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     && cp bin/Cemu_release /Cemu_release
 
 CMD ["bash"]
+
+# Runnable desktop image. The build stage intentionally remains separate so
+# CI can keep extracting the bare binary, while this stage supplies the GTK,
+# WebKitGTK, graphics, input, and audio runtime required to launch it.
+FROM cemu-extend-base AS runtime
+
+ARG CEMU_FRONTEND=webview
+
+COPY --from=build /Cemu_release /opt/cemu/Cemu_release
+COPY bin/resources /opt/cemu/resources
+COPY bin/gameProfiles /opt/cemu/gameProfiles
+COPY dist/network_services.xml /opt/cemu/network_services.xml
+
+RUN mkdir -p \
+        /home/cemu/.cache/Cemu \
+        /home/cemu/.config/Cemu \
+        /home/cemu/.local/share/Cemu \
+        /tmp/cemu-runtime \
+    && chmod 1777 /tmp/cemu-runtime
+
+ENV HOME=/home/cemu \
+    XDG_CACHE_HOME=/home/cemu/.cache \
+    XDG_CONFIG_HOME=/home/cemu/.config \
+    XDG_DATA_HOME=/home/cemu/.local/share \
+    XDG_RUNTIME_DIR=/tmp/cemu-runtime \
+    MESA_SHADER_CACHE_DIR=/home/cemu/.cache/Cemu/mesa_shader_cache \
+    WEBKIT_DISABLE_DMABUF_RENDERER=1 \
+    GDK_BACKEND=wayland,x11
+
+WORKDIR /opt/cemu
+ENTRYPOINT ["/opt/cemu/Cemu_release"]

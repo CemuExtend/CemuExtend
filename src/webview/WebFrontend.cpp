@@ -4557,6 +4557,17 @@ namespace
 
 void Frontend::Run()
 {
+#if BOOST_OS_LINUX
+	// steam-run exposes its host /etc at this path. Its FHS Wayland stack can
+	// conflict with Nix-linked WebKitGTK, while the forwarded X11 socket stays
+	// ABI-isolated and reliable. Keep native Wayland for ordinary launches.
+	std::error_code steamRuntimeError;
+	if (std::getenv("DISPLAY") &&
+		std::filesystem::exists("/.host-etc", steamRuntimeError))
+	{
+		setenv("GDK_BACKEND", "x11", 1);
+	}
+#endif
 	Application::InitializePaths();
 	CemuCommonInit();
 #if BOOST_OS_WINDOWS

@@ -18,6 +18,7 @@
 
 build/
 /result/
+/result-nix
 cmake-build-*/
 out/
 .cache/

@@ -145,7 +145,21 @@ cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DA
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. To build a packaged Nix output instead, use `nix build .#cemu-extend-webview`, `nix build .#cemu-extend-wx`, or `nix build .#cemu-extend-headless`; the executable is available as `result/bin/cemu`.
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. To produce a Nix-linked Release executable directly at `bin/Cemu_release`, configure a Release build inside the development shell:
+
+```bash
+nix develop --command cmake -S . -B build/nix-release -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF \
+  -DCEMU_FRONTEND=webview
+nix develop --command cmake --build build/nix-release --parallel
+steam-run ./bin/Cemu_release
+```
+
+Unlike the Ubuntu artifact emitted by Docker, this executable records the Nix
+GTK/WebKitGTK runtime paths in its ELF RUNPATH and can therefore be launched
+directly by `steam-run`. To build a packaged Nix output instead, use `nix build
+.#cemu-extend-webview`, `nix build .#cemu-extend-wx`, or `nix build
+.#cemu-extend-headless`; the executable is available as `result/bin/cemu`.
 
 ## Docker
 
@@ -158,6 +172,23 @@ docker run --rm -it cemu-extend:build
 ```
 
 The default image performs a WebView Release build. Use `--build-arg CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another frontend, and `--build-arg BUILD_TYPE=Debug` for a Debug build. The `docker-build.sh` wrapper accepts the same selection through the `CEMU_FRONTEND` environment variable. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
+
+To build and launch the desktop frontend with its GTK/WebKitGTK runtime, use:
+
+```bash
+./docker-run.sh
+```
+
+The launcher forwards the current Wayland/X11 display, PulseAudio socket, and
+`/dev/dri`. It persists data in dedicated `Cemu-Docker` XDG directories so a
+container never rewrites the native frontend's settings. Override
+`CEMU_DOCKER_DATA_DIR`, `CEMU_DOCKER_CONFIG_DIR`, or `CEMU_DOCKER_CACHE_DIR`
+when another location is desired. Set `CEMU_FRONTEND=wx` to run the wxWidgets
+frontend instead.
+
+The Docker image is self-contained, while the bare executable extracted by
+`docker-build.sh` targets an Ubuntu runtime. On NixOS, use the Nix-linked build
+described above when launching `bin/Cemu_release` through `steam-run`.
 
 
 ##### Building Errors
