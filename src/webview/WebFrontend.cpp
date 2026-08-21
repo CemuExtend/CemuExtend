@@ -14,6 +14,7 @@
 #include "input/InputManager.h"
 #include "webview/MainWindowState.h"
 #include "webview/NativeWindowHost.h"
+#include "webview/NativeFileDialog.h"
 #include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
 #include "webview/ToolWindowSupport.h"
@@ -622,6 +623,57 @@ namespace
 		return value;
 	}
 
+	std::uint32_t ParsePersistentId(const rapidjson::Value& params,
+		const char* field = "persistentId")
+	{
+		const auto text = RequiredString(params, field);
+		if (text.size() != 8)
+			throw std::invalid_argument(std::string(field) + " must contain exactly 8 hexadecimal digits");
+		std::uint32_t value{};
+		const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+		if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() ||
+			value < Application::kMinimumPersistentId)
+			throw std::invalid_argument(std::string(field) + " is not a supported persistent id");
+		return value;
+	}
+
+	std::string PersistentIdString(std::uint32_t persistentId)
+	{
+		std::array<char, 9> text{};
+		std::snprintf(text.data(), text.size(), "%08x", persistentId);
+		return text.data();
+	}
+
+	std::string_view SaveStateName(Application::SaveEntryState state)
+	{
+		switch (state)
+		{
+		case Application::SaveEntryState::Directory: return "directory";
+		case Application::SaveEntryState::NonDirectory: return "nonDirectory";
+		default: return "missing";
+		}
+	}
+
+	std::string_view SaveErrorName(Application::SaveOperationError error)
+	{
+		switch (error)
+		{
+		case Application::SaveOperationError::None: return "none";
+		case Application::SaveOperationError::InvalidPersistentId: return "invalidPersistentId";
+		case Application::SaveOperationError::TitleRunning: return "titleRunning";
+		case Application::SaveOperationError::Scanning: return "scanning";
+		case Application::SaveOperationError::NotFound: return "notFound";
+		case Application::SaveOperationError::TargetExists: return "targetExists";
+		case Application::SaveOperationError::InvalidTarget: return "invalidTarget";
+		case Application::SaveOperationError::ArchiveInvalid: return "archiveInvalid";
+		case Application::SaveOperationError::PathUnsafe: return "pathUnsafe";
+		case Application::SaveOperationError::Cancelled: return "cancelled";
+		case Application::SaveOperationError::IoFailure: return "ioFailure";
+		case Application::SaveOperationError::MetadataFailure: return "metadataFailure";
+		default: return "backendFailure";
+		}
+	}
+
 	std::uint16_t UsbHidUsage(std::uint32_t key)
 	{
 		if (key >= 'A' && key <= 'Z') return static_cast<std::uint16_t>(0x04 + key - 'A');
@@ -908,6 +960,18 @@ namespace
 			std::string type;
 			std::string payload;
 			bool final{};
+		};
+
+		enum class SaveTicketKind { Import, Export, Delete, Transfer };
+		struct SaveTicket
+		{
+			std::uint64_t ownerWindow{};
+			SaveTicketKind kind{};
+			std::filesystem::path archivePath;
+			std::uint64_t titleId{};
+			std::uint32_t sourcePersistentId{};
+			std::uint32_t targetPersistentId{};
+			bool overwrite{};
 		};
 
 		static void DispatchToolCloseAfterReply(webview_t, void* context)
@@ -1198,6 +1262,90 @@ namespace
 			return id;
 		}
 
+		std::string IssueSaveTicket(SaveTicket ticket)
+		{
+			if (m_saveTickets.size() >= 32)
+				throw std::runtime_error("too many pending save confirmations");
+			const auto token = std::string("save-") + std::to_string(++m_nextSaveTicketId);
+			m_saveTickets.emplace(token, std::move(ticket));
+			return token;
+		}
+
+		SaveTicket TakeSaveTicket(std::string_view token, SaveTicketKind expected)
+		{
+			const auto found = m_saveTickets.find(std::string(token));
+			if (found == m_saveTickets.end() || found->second.ownerWindow != m_invokingWindow ||
+				found->second.kind != expected)
+				throw std::invalid_argument("save confirmation token is invalid or expired");
+			auto ticket = std::move(found->second);
+			m_saveTickets.erase(found);
+			return ticket;
+		}
+
+		std::uint64_t StartSaveArchiveJob(SaveTicket ticket)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			if (m_backgroundJobs.size() >= 4)
+				throw std::runtime_error("too many background operations are in progress");
+			if (m_nextBackgroundJobId >= 9007199254740991ULL)
+				throw std::runtime_error("background job identifier space is exhausted");
+			const auto id = ++m_nextBackgroundJobId;
+			const auto owner = m_invokingWindow;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id; job->ownerWindow = owner;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner,
+						ticket = std::move(ticket)](std::stop_token stopToken) mutable {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+						};
+						auto progress = [gate, id, owner](const Application::SaveOperationProgress& value) {
+							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+								R"(,"phase":"archive","filesCompleted":)" + std::to_string(value.filesCompleted) +
+								R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+								R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+						};
+						Application::SaveOperationResult result;
+						try
+						{
+							if (ticket.kind == SaveTicketKind::Import)
+								result = controller->ImportSave(ticket.archivePath, ticket.titleId,
+									ticket.targetPersistentId, ticket.overwrite, progress, isCancelled);
+							else
+								result = controller->ExportSave(ticket.titleId, ticket.sourcePersistentId,
+									ticket.archivePath, ticket.overwrite, progress, isCancelled);
+						}
+						catch (const std::exception& error)
+						{ result = {Application::SaveOperationError::BackendFailure, error.what()}; }
+						catch (...) { result = {Application::SaveOperationError::BackendFailure, "save worker failed"}; }
+						rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
+						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
+						writer.Key("ok"); writer.Bool(static_cast<bool>(result)); writer.Key("operation");
+						writer.String(ticket.kind == SaveTicketKind::Import ? "import" : "export");
+						writer.Key("error"); writer.String(SaveErrorName(result.error).data());
+						writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size());
+						writer.EndObject();
+						PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
+							{buffer.GetString(), buffer.GetSize()}, true);
+					});
+			}
+			catch (...) { m_backgroundJobs.erase(id); throw; }
+			return id;
+		}
+
 		void CancelBackgroundJobsForWindow(std::uint64_t owner) noexcept
 		{
 			for (auto& [id, job] : m_backgroundJobs)
@@ -1454,6 +1602,9 @@ namespace
 			if (found == m_toolWindows.end()) return;
 			auto window = std::move(found->second);
 			CancelBackgroundJobsForWindow(id);
+			std::erase_if(m_saveTickets, [id](const auto& item) {
+				return item.second.ownerWindow == id;
+			});
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
 			RefreshInputConfigurationFocus();
@@ -2990,6 +3141,121 @@ namespace
 				const auto jobId = StartGraphicPackInstallJob(std::move(request));
 				return std::string(R"({"jobId":)") + JsonString(std::to_string(jobId)) + "}";
 			});
+			m_rpc.Register("save.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"save-manager"});
+				const auto content = m_controller.ListManagedContent();
+				const auto accounts = m_controller.ListAccounts();
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+				writer.Key("scanning"); writer.Bool(m_controller.IsTitleScanning());
+				writer.Key("accounts"); writer.StartArray();
+				for (const auto& account : accounts) { writer.StartObject();
+					writer.Key("persistentId"); writer.String(PersistentIdString(account.persistentId).c_str());
+					const auto name = boost::nowide::narrow(account.miiName); writer.Key("name"); writer.String(name.data(), name.size()); writer.EndObject(); }
+				writer.EndArray(); writer.Key("titles"); writer.StartArray();
+				for (const auto& entry : content)
+				{
+					if (entry.type != Application::ManagedContentType::Save) continue;
+					writer.StartObject(); writer.Key("titleId"); writer.String(TitleIdString(entry.titleId).c_str());
+					writer.Key("name"); writer.String(entry.name.data(), entry.name.size()); writer.Key("saves"); writer.StartArray();
+					for (const auto persistentId : m_controller.ListSavePersistentIds(entry.titleId))
+					{
+						const auto location = m_controller.InspectSaveEntry(entry.titleId, persistentId);
+						writer.StartObject(); writer.Key("persistentId"); writer.String(PersistentIdString(persistentId).c_str());
+						writer.Key("state"); writer.String(SaveStateName(location.state).data());
+						const auto account = std::ranges::find(accounts, persistentId, &Application::AccountInfo::persistentId);
+						writer.Key("accountName");
+						if (account == accounts.end()) writer.String(""); else { const auto name = boost::nowide::narrow(account->miiName); writer.String(name.data(), name.size()); }
+						writer.EndObject();
+					}
+					writer.EndArray(); writer.EndObject();
+				}
+				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("save.inspect", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				const auto persistentId = ParsePersistentId(params);
+				const auto location = m_controller.InspectSaveEntry(titleId, persistentId);
+				return std::string(R"({"state":)") + JsonString(SaveStateName(location.state)) + "}";
+			});
+			m_rpc.Register("save.delete.prepare", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				const auto persistentId = ParsePersistentId(params);
+				if (m_controller.InspectSaveEntry(titleId, persistentId).state != Application::SaveEntryState::Directory)
+					throw std::invalid_argument("the selected save no longer exists");
+				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Delete, {}, titleId, persistentId});
+				return std::string(R"({"confirmationToken":)") + JsonString(token) + "}";
+			});
+			m_rpc.Register("save.delete", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Delete);
+				const auto result = m_controller.DeleteSave(ticket.titleId, ticket.sourcePersistentId);
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
+				return std::string("{}");
+			});
+			m_rpc.Register("save.transfer.inspect", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				const auto source = ParsePersistentId(params, "sourcePersistentId"); const auto target = ParsePersistentId(params, "targetPersistentId");
+				if (source == target) throw std::invalid_argument("source and target persistent ids must differ");
+				if (m_controller.InspectSaveEntry(titleId, source).state != Application::SaveEntryState::Directory)
+					throw std::invalid_argument("the source save no longer exists");
+				const auto targetLocation = m_controller.InspectSaveEntry(titleId, target);
+				if (targetLocation.state == Application::SaveEntryState::NonDirectory)
+					throw std::invalid_argument("a non-directory entry blocks the target save");
+				const bool overwrite = targetLocation.state == Application::SaveEntryState::Directory;
+				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Transfer, {}, titleId, source, target, overwrite});
+				return std::string(R"({"targetState":)") + JsonString(SaveStateName(targetLocation.state)) +
+					R"(,"confirmationToken":)" + JsonString(token) + "}";
+			});
+			m_rpc.Register("save.transfer", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Transfer);
+				const auto result = m_controller.TransferSave(ticket.titleId, ticket.sourcePersistentId, ticket.targetPersistentId, ticket.overwrite);
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? std::string(SaveErrorName(result.error)) : result.diagnostic);
+				return std::string("{}");
+			});
+			m_rpc.Register("save.import.pick", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params);
+				const auto window = m_toolWindows.find(m_invokingWindow);
+				if (window == m_toolWindows.end()) throw std::runtime_error("save window is closing");
+				const auto selected = WebFrontend::SelectArchiveToOpen(window->second->nativeSupport->GetWindow(), "Select a zipped save file");
+				if (!selected) return std::string(R"({"selected":false})");
+				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Import, *selected, titleId});
+				return std::string(R"({"selected":true,"fileToken":)") + JsonString(token) + R"(,"name":)" + JsonString(_pathToUtf8(selected->filename())) + "}";
+			});
+			m_rpc.Register("save.import.inspect", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto token = std::string(RequiredString(params, "fileToken"));
+				const auto found = m_saveTickets.find(token);
+				if (found == m_saveTickets.end() || found->second.ownerWindow != m_invokingWindow || found->second.kind != SaveTicketKind::Import)
+					throw std::invalid_argument("import file token is invalid or expired");
+				const auto titleId = ParseTitleId(params); const auto persistentId = ParsePersistentId(params);
+				if (titleId != found->second.titleId) throw std::invalid_argument("titleId does not match the native file selection");
+				const auto inspection = m_controller.InspectSaveImport(found->second.archivePath, titleId, persistentId);
+				if (!inspection) throw std::runtime_error(inspection.diagnostic.empty() ? std::string(SaveErrorName(inspection.error)) : inspection.diagnostic);
+				if (inspection.target.state == Application::SaveEntryState::NonDirectory) throw std::invalid_argument("a non-directory entry blocks the target save");
+				found->second.targetPersistentId = persistentId; found->second.overwrite = inspection.target.state == Application::SaveEntryState::Directory;
+				const bool mismatch = inspection.sourceTitleId && *inspection.sourceTitleId != 0 && *inspection.sourceTitleId != titleId;
+				return std::string(R"({"confirmationToken":)") + JsonString(token) + R"(,"targetState":)" + JsonString(SaveStateName(inspection.target.state)) +
+					R"(,"sourceTitleId":)" + (inspection.sourceTitleId ? JsonString(TitleIdString(*inspection.sourceTitleId)) : "null") +
+					R"(,"titleMismatch":)" + (mismatch ? "true" : "false") + "}";
+			});
+			m_rpc.Register("save.import.start", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Import);
+				if (!ticket.targetPersistentId) throw std::invalid_argument("import archive has not been inspected");
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartSaveArchiveJob(std::move(ticket)))) + "}";
+			});
+			m_rpc.Register("save.export.pick", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); const auto titleId = ParseTitleId(params); const auto persistentId = ParsePersistentId(params);
+				if (m_controller.InspectSaveEntry(titleId, persistentId).state != Application::SaveEntryState::Directory)
+					throw std::invalid_argument("the selected save no longer exists");
+				const auto window = m_toolWindows.find(m_invokingWindow); if (window == m_toolWindows.end()) throw std::runtime_error("save window is closing");
+				const auto name = TitleIdString(titleId) + "-" + PersistentIdString(persistentId) + ".zip";
+				const auto selected = WebFrontend::SelectArchiveToSave(window->second->nativeSupport->GetWindow(), "Export save archive", name);
+				if (!selected) return std::string(R"({"selected":false})");
+				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Export, *selected, titleId, persistentId, 0, true});
+				return std::string(R"({"selected":true,"confirmationToken":)") + JsonString(token) + R"(,"name":)" + JsonString(_pathToUtf8(selected->filename())) + "}";
+			});
+			m_rpc.Register("save.export.start", [this](const rapidjson::Value& params) {
+				RequireRole({"save-manager"}); auto ticket = TakeSaveTicket(RequiredString(params, "confirmationToken"), SaveTicketKind::Export);
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartSaveArchiveJob(std::move(ticket)))) + "}";
+			});
 			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
@@ -3231,8 +3497,10 @@ namespace
 		std::unordered_map<std::string, std::string> m_pendingPackageContexts;
 		std::unordered_map<std::string, std::optional<std::uint64_t>> m_pendingGenerationContexts;
 		std::unordered_map<std::uint64_t, std::unique_ptr<BackgroundJob>> m_backgroundJobs;
+		std::unordered_map<std::string, SaveTicket> m_saveTickets;
 		std::uint64_t m_nextWindowId{};
 		std::uint64_t m_nextBackgroundJobId{};
+		std::uint64_t m_nextSaveTicketId{};
 		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;

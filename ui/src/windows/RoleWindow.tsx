@@ -12,6 +12,7 @@ import { CemodManagerWindow } from "./CemodManagerWindow";
 import { CemodPermissionsWindow } from "./CemodPermissionsWindow";
 import { LoggingWindow } from "./LoggingWindow";
 import { EmulatedUsbDevicesWindow } from "./EmulatedUsbDevicesWindow";
+import { SaveManagerWindow } from "./SaveManagerWindow";
 
 export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: string; context?: { titleId?: string; packageKey?: string; generation?: string } }) {
   switch (role) {
@@ -28,5 +29,6 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "cemod-permissions": return <CemodPermissionsWindow windowId={windowId} context={context} />;
     case "logging": return <LoggingWindow />;
     case "emulated-usb-devices": return <EmulatedUsbDevicesWindow />;
+    case "save-manager": return <SaveManagerWindow windowId={windowId} />;
   }
 }

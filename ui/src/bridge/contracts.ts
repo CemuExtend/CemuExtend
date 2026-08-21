@@ -42,6 +42,14 @@ export type ChecksumModel = { entries: ChecksumContent[] };
 export type TitleManagerEntry = Omit<ChecksumContent, "type"> & { type: ChecksumContent["type"] | "save"; path: string; canLaunch: boolean; canVerify: boolean };
 export type TitleManagerModel = { scanning: boolean; entries: TitleManagerEntry[] };
 
+export type SaveEntryState = "missing" | "directory" | "nonDirectory";
+export type SaveIdentity = { titleId: string; persistentId: string };
+export type SaveAccount = { persistentId: string; name: string };
+export type SaveLocation = SaveIdentity & { state: SaveEntryState; accountName: string };
+export type SaveTitle = { titleId: string; name: string; saves: Array<Omit<SaveLocation, "titleId">> };
+export type SaveManagerModel = { scanning: boolean; accounts: SaveAccount[]; titles: SaveTitle[] };
+export type SaveImportInspection = { confirmationToken: string; targetState: SaveEntryState; sourceTitleId: string | null; titleMismatch: boolean };
+
 export type Title = {
   titleId: string;
   name: string;
