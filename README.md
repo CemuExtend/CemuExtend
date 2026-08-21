@@ -93,8 +93,8 @@ CemuExtend/result/bin/Cemu_release
 | `src/Cafe/HW/Espresso/ModExecutionContext*` | isolated memory・CPU・principal |
 | `src/Cafe/HW/Espresso/TrustedCemodRuntime*` | ET_DYN relocation、CMB1 bootstrap、codecave lifecycle |
 | `src/Cafe/OS/libs/cemuextend/` | CEX2 owner、session、service、storage |
-| `src/gui/wxgui/GeneralSettings2.cpp` | package承認、実行モード・署名・権限表示 |
-| `src/gui/wxgui/CemodPermissionDialog.cpp` | ゲーム起動前のMod権限確認 |
+| `src/application/CemodManagerFacade.h` | package承認、実行モード・署名・権限contract |
+| `src/webview/WebFrontend.cpp` | CemuMod管理、起動前のexact権限transaction |
 | `dependencies/libcemuextend/` | ABI 2 SDKとwire schema |
 | `src/Cafe/HW/Espresso/TcpGecko/` | TCPGecko互換server、code handler、guest job marshaling (GPLv3) |
 

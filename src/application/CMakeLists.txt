@@ -34,6 +34,7 @@ add_library(CemuApplication STATIC
 	SaveFacade.h
   TitleCatalog.h
   TitleInstallFacade.h
+	UpdateWorkerMailbox.h
 )
 
 target_include_directories(CemuApplication PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")

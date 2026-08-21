@@ -27,6 +27,7 @@ add_library(CemuComponents
   Logging/CemuDebugLogging.h
   Logging/CemuLogging.cpp
   Logging/CemuLogging.h
+  Logging/LoggingCallbacks.h
 )
 
 add_library(CemuDownloadManager STATIC

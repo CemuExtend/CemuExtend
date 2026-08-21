@@ -1,3 +1,4 @@
+#include "Common/precompiled.h"
 #include "application/LoggingFacade.h"
 
 #include <algorithm>
