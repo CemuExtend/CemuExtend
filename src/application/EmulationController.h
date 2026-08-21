@@ -266,6 +266,8 @@ namespace Application
 			std::string_view principal, std::string& error);
 		[[nodiscard]] CemodManagerSnapshot GetCemodManagerSnapshot(
 			std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {});
+		[[nodiscard]] CemodLaunchPreflight GetCemodLaunchPreflight(
+			std::uint64_t titleId);
 		[[nodiscard]] CemodManagerResult SaveCemodApproval(
 			const CemodApprovalUpdate& update);
 		[[nodiscard]] CemodManagerResult ImportLegacyCemodPackageData(

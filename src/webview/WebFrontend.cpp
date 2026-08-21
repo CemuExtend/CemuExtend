@@ -1204,6 +1204,18 @@ namespace
 		struct InstallPlanRecord { std::uint64_t owner{}; Application::TitleInstallPlan plan; };
 		struct DeletePlanRecord { std::uint64_t owner{}; Application::ManagedContentDeletePlan plan; };
 		struct NativePathRecord { std::uint64_t owner{}; fs::path path; };
+		struct PendingLaunch
+		{
+			fs::path path;
+			std::uint64_t titleId{};
+			std::uint64_t ownerWindow{};
+			std::uint64_t ownerGeneration{};
+			std::uint64_t permissionWindow{};
+			std::string packageKey;
+			std::uint64_t generation{};
+			bool decisionSaved{};
+			bool approved{};
+		};
 
 		static void DispatchToolCloseAfterReply(webview_t, void* context)
 		{
@@ -1792,7 +1804,8 @@ namespace
 		std::uint64_t QueueToolWindow(std::string_view role, std::string requestId,
 			std::optional<std::uint64_t> titleContext = std::nullopt,
 			std::string packageContext = {},
-			std::optional<std::uint64_t> generationContext = std::nullopt)
+			std::optional<std::uint64_t> generationContext = std::nullopt,
+			bool launchContinuation = false)
 		{
 			if (m_rpc.IsShuttingDown())
 				throw std::runtime_error("the application is shutting down");
@@ -1843,13 +1856,19 @@ namespace
 			}
 			if (m_nextWindowId >= 9007199254740991ULL) throw std::runtime_error("tool window identifier space is exhausted");
 			const auto id = ++m_nextWindowId;
+			if (launchContinuation)
+			{
+				if (!m_pendingLaunch)
+					throw std::runtime_error("the pending title launch is no longer active");
+				m_pendingLaunch->permissionWindow = id;
+			}
 			m_pendingWindowRoles.emplace(ownedRole, id);
 			m_pendingWindowContexts[ownedRole] = titleContext;
 			m_pendingPackageContexts[ownedRole] = std::move(packageContext);
 			m_pendingGenerationContexts[ownedRole] = generationContext;
 			if (!requestId.empty())
 				m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
-			if (!PostToUi([this, role = ownedRole, id] {
+			if (!PostToUi([this, role = ownedRole, id, launchContinuation] {
 				auto notify = [this, &role, id](std::string_view event,
 					std::string_view message = {}) {
 					const auto requests = m_pendingWindowRequests.extract(role);
@@ -1863,6 +1882,15 @@ namespace
 						Emit(event, payload + "}");
 					}
 				};
+				if (launchContinuation && (!m_pendingLaunch ||
+					m_pendingLaunch->permissionWindow != id))
+				{
+					m_pendingWindowRoles.erase(role);
+					m_pendingWindowContexts.erase(role);
+					m_pendingPackageContexts.erase(role);
+					m_pendingGenerationContexts.erase(role);
+					return;
+				}
 				if (m_rpc.IsShuttingDown())
 				{
 					m_pendingWindowRoles.erase(role);
@@ -1870,6 +1898,8 @@ namespace
 					m_pendingPackageContexts.erase(role);
 					m_pendingGenerationContexts.erase(role);
 					notify("window.openFailed", "the application is shutting down");
+					HandleLaunchPermissionOpenFailure(id,
+						"Application shutdown prevented the approval dialog from opening.");
 					return;
 				}
 				try
@@ -1893,6 +1923,7 @@ namespace
 					m_pendingPackageContexts.erase(role);
 					m_pendingGenerationContexts.erase(role);
 					notify("window.openFailed", error.what());
+					HandleLaunchPermissionOpenFailure(id, error.what());
 				}
 			}))
 			{
@@ -1995,6 +2026,14 @@ namespace
 			const auto found = m_toolWindows.find(id);
 			if (found == m_toolWindows.end()) return;
 			auto window = std::move(found->second);
+			const bool launchPermissionWindow = m_pendingLaunch &&
+				m_pendingLaunch->permissionWindow == id;
+			const bool launchOwnerWindow = m_pendingLaunch &&
+				m_pendingLaunch->ownerWindow == id;
+			const auto launchPermissionWindowId = launchOwnerWindow ?
+				m_pendingLaunch->permissionWindow : 0;
+			const bool continueLaunch = launchPermissionWindow &&
+				m_pendingLaunch->decisionSaved && m_pendingLaunch->approved;
 			window->lifetime->store(false, std::memory_order_release);
 			m_updatePlans.RevokeOwner(id, window->generation);
 			m_memorySearch.CloseOwner(id);
@@ -2014,6 +2053,41 @@ namespace
 			if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
 			webview_destroy(window->webview);
 			window->nativeSupport.reset();
+			if (launchOwnerWindow)
+			{
+				CancelPendingLaunch("cancelled",
+					"Closing the launch owner cancelled the pending title launch.");
+				if (m_toolWindows.contains(launchPermissionWindowId))
+					RequestToolWindowClose(launchPermissionWindowId);
+			}
+			else if (launchPermissionWindow)
+			{
+				if (continueLaunch)
+				{
+					try
+					{
+						if (!PostToUi([this, id] {
+							if (m_pendingLaunch &&
+								m_pendingLaunch->permissionWindow == id &&
+								m_pendingLaunch->decisionSaved &&
+								m_pendingLaunch->approved)
+								ResumePendingLaunchNoexcept();
+						}))
+							CancelPendingLaunch("shutdown",
+								"The UI dispatcher stopped before title launch could resume.");
+					}
+					catch (...)
+					{
+						CancelPendingLaunch("failed",
+							"Title launch continuation could not be queued.");
+					}
+				}
+				else
+					CancelPendingLaunch(m_pendingLaunch->decisionSaved ? "permissionDenied" : "cancelled",
+						m_pendingLaunch->decisionSaved ?
+							"The exact package approval was denied." :
+							"The exact package approval was cancelled.");
+			}
 			MaybeTerminateAfterShutdown();
 		}
 
@@ -2083,6 +2157,8 @@ namespace
 			m_eventStopping->store(true, std::memory_order_release);
 			m_memorySearch.BeginShutdown();
 			m_ppcDebugger.BeginShutdown();
+			CancelPendingLaunch("shutdown",
+				"Application shutdown cancelled the pending title launch.");
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
 			{
@@ -2149,6 +2225,8 @@ namespace
 		{
 			if (m_rpc.IsShuttingDown())
 				return true;
+			CancelPendingLaunch("shutdown",
+				"Application shutdown cancelled the pending title launch.");
 			if (!TryShutdownApplication())
 			{
 				Emit("system.diagnostic",
@@ -3831,7 +3909,7 @@ namespace
 				const auto entry = std::ranges::find(entries, uid, &Application::ManagedContentEntry::locationUid);
 				if (entry == entries.end() || entry->type != Application::ManagedContentType::Base)
 					throw std::invalid_argument("the selected base installation is no longer available");
-				return Launch(entry->path);
+				return Launch(entry->path, entry->titleId);
 			});
 			m_rpc.Register("logging.getSnapshot", [this](const rapidjson::Value&) {
 				RequireRole({"logging"});
@@ -4010,7 +4088,18 @@ namespace
 				if (update.titleId != *found->second->titleContext || update.generation != *found->second->generationContext || update.packageKey != found->second->packageContext)
 					throw std::runtime_error("approval target does not match the exact modal context");
 				const auto result = m_controller.SaveCemodApproval(update);
-				if (result) Emit("cemod.changed", R"({"reason":"approval"})");
+				if (result)
+				{
+					Emit("cemod.changed", R"({"reason":"approval"})");
+					if (m_pendingLaunch && m_pendingLaunch->permissionWindow == m_invokingWindow &&
+						m_pendingLaunch->titleId == update.titleId &&
+						m_pendingLaunch->generation == update.generation &&
+						m_pendingLaunch->packageKey == update.packageKey)
+					{
+						m_pendingLaunch->decisionSaved = true;
+						m_pendingLaunch->approved = update.approved;
+					}
+				}
 				return CemodResultJson(result);
 			});
 			m_rpc.Register("cemod.importLegacy", [this](const rapidjson::Value& params) {
@@ -4219,7 +4308,7 @@ namespace
 				const auto game = m_controller.GetGame(ParseTitleId(params));
 				if (!game)
 					throw std::invalid_argument("titleId is not present in the game library");
-				return Launch(game->basePath);
+				return Launch(game->basePath, game->titleId);
 			});
 			m_rpc.Register("emulation.stop", [this](const rapidjson::Value&) {
 				const auto result = m_controller.Stop();
@@ -4234,10 +4323,62 @@ namespace
 			m_rpc.VerifyMethods(WebFrontend::Generated::RpcMethods);
 		}
 
-		std::string Launch(const fs::path& path)
+		std::string Launch(const fs::path& path, std::uint64_t titleId)
 		{
+			if (m_pendingLaunch)
+				throw std::runtime_error(
+					"another title launch is awaiting an exact package approval");
+			std::uint64_t ownerGeneration{};
+			if (m_invokingWindow != 0)
+			{
+				const auto owner = m_toolWindows.find(m_invokingWindow);
+				if (owner == m_toolWindows.end())
+					throw std::runtime_error("the launch owner is no longer active");
+				ownerGeneration = owner->second->generation;
+			}
 			if (!m_windowState->BeginLaunch())
 				throw std::runtime_error("main window is not ready to launch a title");
+			m_pendingLaunch = PendingLaunch{path, titleId, m_invokingWindow, ownerGeneration};
+			try { return ContinuePendingLaunch(); }
+			catch (...)
+			{
+				CancelPendingLaunch("failed", "Title launch preflight failed.");
+				throw;
+			}
+		}
+
+		std::string ContinuePendingLaunch()
+		{
+			if (!m_pendingLaunch || m_rpc.IsShuttingDown())
+				return R"({"status":"cancelled"})";
+			if (m_pendingLaunch->ownerWindow != 0)
+			{
+				const auto owner = m_toolWindows.find(m_pendingLaunch->ownerWindow);
+				if (owner == m_toolWindows.end() ||
+					owner->second->generation != m_pendingLaunch->ownerGeneration)
+					throw std::runtime_error("the launch owner is no longer active");
+			}
+			const auto preflight = m_controller.GetCemodLaunchPreflight(
+				m_pendingLaunch->titleId);
+			if (!preflight.pendingApprovals.empty())
+			{
+				const auto& approval = preflight.pendingApprovals.front();
+				m_pendingLaunch->generation = approval.generation;
+				m_pendingLaunch->packageKey = approval.packageKey;
+				m_pendingLaunch->decisionSaved = false;
+				m_pendingLaunch->approved = false;
+				(void)QueueToolWindow("cemod-permissions", {}, approval.titleId,
+					approval.packageKey, approval.generation, true);
+				Emit("titles.launchState", std::string(
+					R"({"status":"awaitingPermission","titleId":)") +
+					JsonString(TitleIdString(approval.titleId)) + R"(,"packageKey":)" +
+					JsonString(approval.packageKey) + "}");
+				return std::string(R"({"status":"awaitingPermission","titleId":)") +
+					JsonString(TitleIdString(approval.titleId)) + "}";
+			}
+
+			const auto path = m_pendingLaunch->path;
+			const auto expectedTitleId = m_pendingLaunch->titleId;
 			const auto frontendSettings = m_controller.GetFrontendSettings();
 			const bool launchFullscreen = frontendSettings.fullscreenOverride.value_or(
 				frontendSettings.startFullscreen);
@@ -4269,6 +4410,7 @@ namespace
 				});
 			if (!result)
 			{
+				m_pendingLaunch.reset();
 				if (m_controller.State() == Application::EmulationState::Running)
 				{
 					(void)m_nativeWindow->CreateMainRenderRegion();
@@ -4281,11 +4423,60 @@ namespace
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->RollbackLaunch();
 				}
-				throw std::runtime_error(result.diagnostic.empty() ? "title launch failed" : result.diagnostic);
+				const auto diagnostic = result.diagnostic.empty() ?
+					"title launch failed" : result.diagnostic;
+				Emit("titles.launchState", std::string(R"({"status":"failed","titleId":)") +
+					JsonString(TitleIdString(expectedTitleId)) + R"(,"diagnostic":)" +
+					JsonString(diagnostic) + "}");
+				throw std::runtime_error(diagnostic);
 			}
+			m_pendingLaunch.reset();
 			if (frontendSettings.openPad && !m_nativeWindow->IsPadRenderRegionOpen())
 				TogglePadRenderRegion();
-			return std::string(R"({"titleId":")") + TitleIdString(result.titleId) + "\"}";
+			Emit("titles.launchState", std::string(R"({"status":"started","titleId":)") +
+				JsonString(TitleIdString(result.titleId)) + "}");
+			return std::string(R"({"status":"started","titleId":)") +
+				JsonString(TitleIdString(result.titleId)) + "}";
+		}
+
+		void CancelPendingLaunch(std::string_view status,
+			std::string_view diagnostic) noexcept
+		{
+			if (!m_pendingLaunch) return;
+			const auto titleId = m_pendingLaunch->titleId;
+			m_pendingLaunch.reset();
+			if (m_windowState && m_windowState->Snapshot().mode ==
+				WebFrontend::MainWindowContentMode::LaunchPending)
+				(void)m_windowState->RollbackLaunch();
+			try
+			{
+				if (!m_rpc.IsShuttingDown())
+					Emit("titles.launchState", std::string(R"({"status":)") +
+						JsonString(status) + R"(,"titleId":)" +
+						JsonString(TitleIdString(titleId)) + R"(,"diagnostic":)" +
+						JsonString(diagnostic) + "}");
+			}
+			catch (...) {}
+		}
+
+		void HandleLaunchPermissionOpenFailure(std::uint64_t windowId,
+			std::string_view diagnostic) noexcept
+		{
+			if (m_pendingLaunch && m_pendingLaunch->permissionWindow == windowId)
+				CancelPendingLaunch("failed", diagnostic);
+		}
+
+		void ResumePendingLaunchNoexcept() noexcept
+		{
+			try { (void)ContinuePendingLaunch(); }
+			catch (const std::exception& error)
+			{
+				CancelPendingLaunch("failed", error.what());
+			}
+			catch (...)
+			{
+				CancelPendingLaunch("failed", "Unknown title launch continuation failure.");
+			}
 		}
 
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
@@ -4313,6 +4504,7 @@ namespace
 		std::uint64_t m_nextSaveTicketId{};
 		WebFrontend::UpdatePlanRegistry m_updatePlans;
 		std::uint64_t m_nextOperationToken{};
+		std::optional<PendingLaunch> m_pendingLaunch;
 		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;

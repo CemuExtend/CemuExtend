@@ -109,6 +109,23 @@ export type Title = {
   iconDataUrl?: string;
 };
 
+export type TitleLaunchResult = {
+  status: "started" | "awaitingPermission";
+  titleId: string;
+};
+
+export type TitleLaunchState = {
+  status: "awaitingPermission" | "started" | "permissionDenied" | "cancelled" | "failed" | "shutdown";
+  titleId: string;
+  packageKey?: string;
+  diagnostic?: string;
+};
+
+export type TitleLaunchStateEvent = NativeEvent & {
+  type: "titles.launchState";
+  payload: TitleLaunchState;
+};
+
 export type NativeEvent = { type: string; sequence: string; payload: unknown };
 
 export type LoggingLevel = "info" | "warning" | "error";

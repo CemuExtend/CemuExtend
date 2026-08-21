@@ -84,6 +84,23 @@ namespace Application
 		[[nodiscard]] explicit operator bool() const { return error == CemodManagerError::None; }
 	};
 
+	struct CemodLaunchApproval
+	{
+		std::uint64_t generation{};
+		std::uint64_t titleId{};
+		std::string packageKey;
+		std::string packageDigest;
+		std::string modIdentity;
+		std::uint64_t requestedPermissions{};
+	};
+
+	struct CemodLaunchPreflight
+	{
+		std::uint64_t generation{};
+		std::uint64_t titleId{};
+		std::vector<CemodLaunchApproval> pendingApprovals;
+	};
+
 	class ICemodManagerService
 	{
 	public:

@@ -533,7 +533,9 @@ namespace cemuextend_hle
 		{
 			aggregate.request.grantedPermissions = aggregate.request.requestedPermissions &
 				~aggregate.missingPermissions;
-			if (aggregate.needsApproval || aggregate.missingPermissions != 0)
+			// An exact approval may intentionally deny requested capabilities.  The
+			// approval decision, rather than a legacy broad grant, is the launch gate.
+			if (aggregate.needsApproval)
 				result.push_back(std::move(aggregate.request));
 		}
 		std::ranges::sort(result, [](const auto& left, const auto& right) {

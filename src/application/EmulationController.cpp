@@ -1,6 +1,8 @@
 #include "application/EmulationController.h"
 
+#include <algorithm>
 #include <exception>
+#include <ranges>
 #include <utility>
 
 namespace Application
@@ -105,6 +107,24 @@ namespace Application
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Running;
+		}
+		return result;
+	}
+
+	CemodLaunchPreflight EmulationController::GetCemodLaunchPreflight(
+		std::uint64_t titleId)
+	{
+		const auto snapshot = m_backend->GetCemodManagerSnapshot(titleId);
+		CemodLaunchPreflight result{snapshot.generation, titleId, {}};
+		for (const auto& package : snapshot.packages)
+		{
+			if (!package.valid || package.approved || package.packageDigest.empty() ||
+				package.modIdentity.empty() ||
+				std::ranges::find(package.titleIds, titleId) == package.titleIds.end())
+				continue;
+			result.pendingApprovals.push_back({snapshot.generation, titleId,
+				package.packageKey, package.packageDigest, package.modIdentity,
+				package.requestedPermissions});
 		}
 		return result;
 	}

@@ -49,7 +49,7 @@
     { "name": "diagnostics.getAudioVoices", "params": "DiagnosticPageRequest & { activeOnly: boolean }", "result": "AudioVoiceDiagnosticPage" },
     { "name": "titleManager.getModel", "params": "undefined", "result": "TitleManagerModel" },
     { "name": "titleManager.refresh", "params": "undefined", "result": "EmptyResult" },
-    { "name": "titleManager.launch", "params": "{ locationUid: string }", "result": "{ titleId: string }" },
+    { "name": "titleManager.launch", "params": "{ locationUid: string }", "result": "TitleLaunchResult" },
     { "name": "logging.getSnapshot", "params": "undefined", "result": "LoggingSnapshot" },
     { "name": "logging.clear", "params": "undefined", "result": "{ clearedThroughSequence: string }" },
     { "name": "save.getModel", "params": "undefined", "result": "SaveManagerModel" },
@@ -92,7 +92,7 @@
     { "name": "jobs.cancel", "params": "{ jobId: string }", "result": "EmptyResult" },
     { "name": "titles.list", "params": "undefined", "result": "Title[]" },
     { "name": "titles.refresh", "params": "undefined", "result": "EmptyResult" },
-    { "name": "titles.launch", "params": "{ titleId: string }", "result": "{ titleId: string }" },
+    { "name": "titles.launch", "params": "{ titleId: string }", "result": "TitleLaunchResult" },
     { "name": "emulation.stop", "params": "undefined", "result": "EmptyResult" }
   ]
 }

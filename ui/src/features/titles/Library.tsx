@@ -25,6 +25,15 @@ export function Library() {
   };
   useEffect(() => { void load(); return subscribe((event) => {
     if (event.type === "titles.changed") void load();
+    else if (event.type === "titles.launchState" && typeof event.payload === "object" &&
+      event.payload && "status" in event.payload && "titleId" in event.payload) {
+      const state = event.payload as { status: string; titleId: string; diagnostic?: string };
+      if (state.status === "failed" || state.status === "cancelled" ||
+        state.status === "permissionDenied") {
+        setSelected(state.titleId);
+        setError(state.diagnostic || "Title launch was cancelled.");
+      }
+    }
     else if ((event.type === "system.diagnostic" || event.type === "window.openFailed") && typeof event.payload === "object" && event.payload && "message" in event.payload && typeof event.payload.message === "string") setError(event.payload.message);
   }); }, []);
 
