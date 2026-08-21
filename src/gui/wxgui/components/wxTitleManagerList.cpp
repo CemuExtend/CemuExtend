@@ -314,11 +314,6 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	if (saveDialog.ShowModal() == wxID_CANCEL || saveDialog.GetPath().IsEmpty())
 		return;
 
-	std::vector<std::uint64_t> locationUids;
-	locationUids.reserve(plan->items.size());
-	for (const auto& item : plan->items)
-		locationUids.push_back(item.locationUid);
-
 	struct SharedProgress
 	{
 		std::mutex mutex;
@@ -327,9 +322,9 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	const auto outputPath = wxHelper::MakeFSPath(saveDialog.GetPath());
 	auto* controller = &m_emulationController;
 	m_conversionWorker = std::async(std::launch::async,
-		[controller, locationUids = std::move(locationUids), outputPath, &sharedProgress,
+		[controller, plan = *plan, outputPath, &sharedProgress,
 			cancelled = &m_conversionCancelled] {
-			return controller->ConvertToWua(locationUids, outputPath,
+			return controller->ConvertToWua(plan, outputPath,
 				[&sharedProgress](const auto& progress) {
 					std::scoped_lock lock(sharedProgress.mutex);
 					sharedProgress.value = progress;

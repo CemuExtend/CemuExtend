@@ -801,6 +801,47 @@ namespace WebFrontend
 				return success;
 			}
 
+			std::optional<std::string> PickTitleInstallSource() override
+			{
+				GtkWidget* dialog = gtk_file_chooser_dialog_new("Select title to install",
+					GTK_WINDOW(m_window), GTK_FILE_CHOOSER_ACTION_OPEN, "Cancel",
+					GTK_RESPONSE_CANCEL, "Open", GTK_RESPONSE_ACCEPT, nullptr);
+				auto* filter = gtk_file_filter_new();
+				gtk_file_filter_set_name(filter, "Wii U title metadata (meta.xml)");
+				gtk_file_filter_add_pattern(filter, "meta.xml");
+				gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+				std::optional<std::string> result;
+				if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+				{
+					char* path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+					if (path) { result = path; g_free(path); }
+				}
+				gtk_widget_destroy(dialog);
+				return result;
+			}
+
+			std::optional<std::string> PickWuaDestination(
+				std::string suggestedFileName) override
+			{
+				GtkWidget* dialog = gtk_file_chooser_dialog_new("Save Wii U game archive",
+					GTK_WINDOW(m_window), GTK_FILE_CHOOSER_ACTION_SAVE, "Cancel",
+					GTK_RESPONSE_CANCEL, "Save", GTK_RESPONSE_ACCEPT, nullptr);
+				gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
+				gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog), suggestedFileName.c_str());
+				auto* filter = gtk_file_filter_new();
+				gtk_file_filter_set_name(filter, "Wii U archives (*.wua)");
+				gtk_file_filter_add_pattern(filter, "*.wua");
+				gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+				std::optional<std::string> result;
+				if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+				{
+					char* path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+					if (path) { result = path; g_free(path); }
+				}
+				gtk_widget_destroy(dialog);
+				return result;
+			}
+
 		private:
 			void ReleasePointerGrab()
 			{

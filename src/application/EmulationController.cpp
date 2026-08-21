@@ -558,12 +558,12 @@ namespace Application
 	}
 
 	ContentOperationResult EmulationController::ConvertToWua(
-		std::span<const std::uint64_t> locationUids,
+		const WuaConversionPlan& plan,
 		const std::filesystem::path& outputPath, ContentProgressHandler progress,
 		ContentCancellationCheck cancelled)
 	{
 		std::scoped_lock operationLock(m_operationMutex);
-		return m_backend->ConvertToWua(locationUids, outputPath,
+		return m_backend->ConvertToWua(plan, outputPath,
 			std::move(progress), std::move(cancelled));
 	}
 
@@ -603,6 +603,20 @@ namespace Application
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->InstallTitle(plan, decision, std::move(progress),
 			std::move(cancelled));
+	}
+
+	ManagedContentDeletePlanResult EmulationController::PlanManagedContentDelete(
+		std::uint64_t locationUid) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->PlanManagedContentDelete(locationUid);
+	}
+
+	ManagedContentDeleteResult EmulationController::DeleteManagedContent(
+		const ManagedContentDeletePlan& plan)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteManagedContent(plan);
 	}
 
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const

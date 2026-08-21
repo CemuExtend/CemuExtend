@@ -602,6 +602,29 @@ namespace WebFrontend
 				NSURL* target = value ? [NSURL URLWithString:value] : nil;
 				return target && [[NSWorkspace sharedWorkspace] openURL:target] == YES;
 			}
+			std::optional<std::string> PickTitleInstallSource() override
+			{
+				NSOpenPanel* panel = [NSOpenPanel openPanel];
+				[panel setCanChooseFiles:YES]; [panel setCanChooseDirectories:NO];
+				[panel setAllowsMultipleSelection:NO]; [panel setAllowedFileTypes:@[@"xml"]];
+				[panel setTitle:@"Select title to install"];
+				if ([panel runModal] != NSModalResponseOK) return std::nullopt;
+				const char* path = [[[panel URL] path] UTF8String];
+				return path ? std::optional<std::string>{path} : std::nullopt;
+			}
+			std::optional<std::string> PickWuaDestination(
+				std::string suggestedFileName) override
+			{
+				NSSavePanel* panel = [NSSavePanel savePanel];
+				[panel setAllowedFileTypes:@[@"wua"]]; [panel setCanCreateDirectories:YES];
+				NSString* name = [[[NSString alloc] initWithBytes:suggestedFileName.data()
+					length:suggestedFileName.size() encoding:NSUTF8StringEncoding] autorelease];
+				if (name) [panel setNameFieldStringValue:name];
+				[panel setTitle:@"Save Wii U game archive"];
+				if ([panel runModal] != NSModalResponseOK) return std::nullopt;
+				const char* path = [[[panel URL] path] UTF8String];
+				return path ? std::optional<std::string>{path} : std::nullopt;
+			}
 			void DispatchTextComposition()
 			{
 				if (!m_textInput || m_textInputUpdating || !m_inputHandler || !m_textInputSequence)

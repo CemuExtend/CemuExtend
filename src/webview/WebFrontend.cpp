@@ -1003,6 +1003,16 @@ namespace
 			std::uint32_t targetPersistentId{};
 			bool overwrite{};
 		};
+		struct WuaPlanRecord
+		{
+			std::uint64_t owner{};
+			std::uint64_t titleId{};
+			std::uint64_t preferredLocationUid{};
+			Application::WuaConversionPlan plan;
+		};
+		struct InstallPlanRecord { std::uint64_t owner{}; Application::TitleInstallPlan plan; };
+		struct DeletePlanRecord { std::uint64_t owner{}; Application::ManagedContentDeletePlan plan; };
+		struct NativePathRecord { std::uint64_t owner{}; fs::path path; };
 
 		static void DispatchToolCloseAfterReply(webview_t, void* context)
 		{
@@ -1163,6 +1173,61 @@ namespace
 				m_backgroundJobs.erase(id);
 				throw;
 			}
+			return id;
+		}
+
+		std::uint64_t StartWuaConversionJob(Application::WuaConversionPlan plan,
+			fs::path outputPath)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			if (m_backgroundJobs.size() >= 4)
+				throw std::runtime_error("too many background operations are in progress");
+			const auto id = ++m_nextBackgroundJobId;
+			const auto owner = m_invokingWindow;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id; job->ownerWindow = owner;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			try
+			{
+				m_backgroundJobs.at(id)->worker = std::jthread(
+					[controller, gate = std::move(gate), cancelled, id, owner,
+						plan = std::move(plan), outputPath = std::move(outputPath)]
+					(std::stop_token stopToken) mutable {
+						auto isCancelled = [cancelled, stopToken] {
+							return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+						};
+						auto progress = [gate, id, owner](const Application::ContentOperationProgress& value) {
+							static constexpr std::array phases{"counting", "collecting", "converting", "hashing", "finalizing"};
+							const auto index = std::min<std::size_t>(static_cast<std::size_t>(value.phase), phases.size() - 1);
+							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
+								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
+								R"(,"operation":"wuaConversion","phase":)" + JsonString(phases[index]) +
+								R"(,"filesCompleted":)" + std::to_string(value.filesCompleted) +
+								R"(,"filesTotal":)" + std::to_string(value.filesTotal) +
+								R"(,"bytesCompleted":)" + std::to_string(value.bytesCompleted) +
+								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+						};
+						Application::ContentOperationResult result;
+						try { result = controller->ConvertToWua(plan, outputPath, progress, isCancelled); }
+						catch (const std::exception& error) { result = {Application::ContentOperationError::ReadFailure, error.what()}; }
+						catch (...) { result = {Application::ContentOperationError::ReadFailure, "WUA conversion worker failed"}; }
+						rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
+						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
+						writer.Key("operation"); writer.String("wuaConversion"); writer.Key("ok"); writer.Bool(static_cast<bool>(result));
+						writer.Key("error"); writer.Uint(static_cast<unsigned>(result.error));
+						writer.Key("diagnostic"); writer.String(result.diagnostic.data(), result.diagnostic.size()); writer.EndObject();
+						PostBackgroundJobEvent(gate, id, owner, "jobs.completed", {buffer.GetString(), buffer.GetSize()}, true);
+					});
+			}
+			catch (...) { m_backgroundJobs.erase(id); throw; }
 			return id;
 		}
 
@@ -1351,12 +1416,15 @@ namespace
 						};
 						auto progress = [gate, id, owner](
 							const Application::TitleInstallProgress& value) {
+							const auto currentPath = _pathToUtf8(value.currentPath);
 							PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
 								std::string(R"({"jobId":)") + JsonString(std::to_string(id)) +
 								R"(,"windowId":)" + JsonString(std::to_string(owner)) +
-								R"(,"phase":"installing","bytesCompleted":)" +
+								R"(,"operation":"titleInstall","phase":"copying","bytesCompleted":)" +
 								std::to_string(value.bytesCompleted) +
-								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) + "}", false);
+								R"(,"bytesTotal":)" + std::to_string(value.bytesTotal) +
+								R"(,"filesCompleted":0,"filesTotal":0,"currentPath":)" +
+								JsonString(currentPath) + "}", false);
 						};
 						Application::TitleInstallResult result;
 						try
@@ -1378,6 +1446,7 @@ namespace
 						writer.StartObject();
 						writer.Key("jobId"); writer.String(std::to_string(id).c_str());
 						writer.Key("windowId"); writer.String(std::to_string(owner).c_str());
+						writer.Key("operation"); writer.String("titleInstall");
 						writer.Key("ok"); writer.Bool(static_cast<bool>(result));
 						writer.Key("error"); writer.Uint(static_cast<unsigned>(result.error));
 						writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
@@ -1741,6 +1810,11 @@ namespace
 			std::erase_if(m_saveTickets, [id](const auto& item) {
 				return item.second.ownerWindow == id;
 			});
+			std::erase_if(m_wuaPlans, [id](const auto& item) { return item.second.owner == id; });
+			std::erase_if(m_installPlans, [id](const auto& item) { return item.second.owner == id; });
+			std::erase_if(m_deletePlans, [id](const auto& item) { return item.second.owner == id; });
+			std::erase_if(m_installSources, [id](const auto& item) { return item.second.owner == id; });
+			std::erase_if(m_wuaDestinations, [id](const auto& item) { return item.second.owner == id; });
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
 			RefreshInputConfigurationFocus();
@@ -3487,7 +3561,9 @@ namespace
 					writer.Key("version"); writer.Uint(entry.version); writer.Key("region"); writer.String(entry.regionName.data(), entry.regionName.size());
 					writer.Key("type"); writer.String(typeName(entry.type)); writer.Key("format"); writer.String(formatName(entry.format));
 					writer.Key("canLaunch"); writer.Bool(entry.type == Application::ManagedContentType::Base);
-					writer.Key("canVerify"); writer.Bool(entry.type != Application::ManagedContentType::Save); writer.EndObject();
+					writer.Key("canVerify"); writer.Bool(entry.type != Application::ManagedContentType::Save);
+					writer.Key("canConvert"); writer.Bool(entry.type != Application::ManagedContentType::Save && entry.format != Application::ManagedContentFormat::Wua);
+					writer.Key("canDelete"); writer.Bool(Application::IsManagedContentDeletionSupported(entry.type) && !m_controller.IsTitleScanning() && !m_controller.IsTitleRunning()); writer.EndObject();
 				}
 				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
 			});
@@ -3516,6 +3592,118 @@ namespace
 					JsonString(std::to_string(clearedThroughSequence)) + "}");
 				return std::string(R"({"clearedThroughSequence":)") +
 					JsonString(std::to_string(clearedThroughSequence)) + "}";
+			});
+			m_rpc.Register("titleManager.pickInstallSource", [this](const rapidjson::Value&) {
+				RequireRole({"title-manager"});
+				const auto selected = m_nativeWindow->PickTitleInstallSource();
+				if (!selected) return std::string(R"({"cancelled":true})");
+				std::error_code pathError;
+				auto metadata = fs::canonical(_utf8ToPath(*selected), pathError);
+				if (pathError || metadata.filename() != "meta.xml" ||
+					metadata.parent_path().filename() != "meta" || !fs::is_regular_file(metadata, pathError) || pathError)
+					throw std::invalid_argument("the selected file must be meta/meta.xml");
+				auto source = metadata.parent_path().parent_path();
+				const auto token = ++m_nextOperationToken;
+				m_installSources.emplace(token, NativePathRecord{m_invokingWindow, std::move(source)});
+				return std::string(R"({"cancelled":false,"sourceToken":)") + JsonString(std::to_string(token)) +
+					R"(,"displayName":)" + JsonString(_pathToUtf8(metadata.parent_path().parent_path().filename())) + "}";
+			});
+			m_rpc.Register("titleManager.planInstall", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto sourceToken = ParseDecimalUint64(
+					RequiredString(params, "sourceToken"), "sourceToken");
+				const auto source = m_installSources.find(sourceToken);
+				if (source == m_installSources.end() || source->second.owner != m_invokingWindow)
+					throw std::invalid_argument("install source token is invalid or expired");
+				const auto path = source->second.path; m_installSources.erase(source);
+				const auto result = m_controller.PlanTitleInstall(path);
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "unable to plan title installation" : result.diagnostic);
+				const auto token = ++m_nextOperationToken;
+				m_installPlans.emplace(token, InstallPlanRecord{m_invokingWindow, *result.plan});
+				auto kindName = [](Application::TitleInstallKind kind) { switch (kind) {
+					case Application::TitleInstallKind::Base: return "base"; case Application::TitleInstallKind::Demo: return "demo";
+					case Application::TitleInstallKind::Update: return "update"; case Application::TitleInstallKind::Dlc: return "dlc";
+					case Application::TitleInstallKind::SystemTitle: return "systemTitle"; case Application::TitleInstallKind::SystemData: return "systemData";
+					default: return "unknown"; }};
+				auto conflictName = [](Application::TitleInstallConflict conflict) { switch (conflict) {
+					case Application::TitleInstallConflict::DifferentType: return "differentType"; case Application::TitleInstallConflict::SameVersion: return "sameVersion";
+					case Application::TitleInstallConflict::NewerVersionInstalled: return "newerVersionInstalled"; default: return "none"; }};
+				const auto& plan = *result.plan; rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+				writer.Key("planToken"); writer.String(std::to_string(token).c_str()); writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str());
+				writer.Key("titleName"); writer.String(plan.titleName.data(), plan.titleName.size()); writer.Key("version"); writer.Uint(plan.version);
+				writer.Key("kind"); writer.String(kindName(plan.kind)); writer.Key("conflict"); writer.String(conflictName(plan.conflict));
+				writer.Key("requiredBytes"); writer.Uint64(plan.requiredBytes); writer.Key("availableBytes"); writer.Uint64(plan.availableBytes); writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("titleManager.startInstall", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto token = ParseDecimalUint64(
+					RequiredString(params, "planToken"), "planToken");
+				const auto found = m_installPlans.find(token);
+				if (found == m_installPlans.end() || found->second.owner != m_invokingWindow)
+					throw std::invalid_argument("install plan token is invalid or expired");
+				auto plan = std::move(found->second.plan); m_installPlans.erase(found);
+				const auto decisionText = RequiredString(params, "decision");
+				const auto decision = decisionText == "acceptConflict" ? Application::TitleInstallDecision::AcceptConflict : Application::TitleInstallDecision::Proceed;
+				if (decisionText != "proceed" && decisionText != "acceptConflict") throw std::invalid_argument("unknown install decision");
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartTitleInstallJob(std::move(plan), decision))) + "}";
+			});
+			m_rpc.Register("titleManager.planWua", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto uid = ParseOpaqueUid(params);
+				const auto entries = m_controller.ListManagedContent();
+				const auto entry = std::ranges::find(entries, uid, &Application::ManagedContentEntry::locationUid);
+				if (entry == entries.end() || entry->type == Application::ManagedContentType::Save)
+					throw std::invalid_argument("the selected installation is no longer convertible");
+				auto plan = m_controller.PlanWuaConversion(entry->titleId, uid);
+				if (!plan || plan->items.empty()) throw std::runtime_error("no installed content was found for conversion");
+				const auto token = ++m_nextOperationToken; const auto suggested = plan->suggestedFileName;
+				m_wuaPlans.emplace(token, WuaPlanRecord{m_invokingWindow, entry->titleId, uid, *plan});
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("planToken"); writer.String(std::to_string(token).c_str());
+				writer.Key("suggestedFileName"); writer.String(suggested.data(), suggested.size()); writer.Key("items"); writer.StartArray();
+				for (const auto& item : plan->items) { writer.StartObject(); writer.Key("titleId"); writer.String(TitleIdString(item.titleId).c_str()); writer.Key("version"); writer.Uint(item.version);
+					writer.Key("role"); writer.String(item.role == Application::ContentRole::Update ? "update" : item.role == Application::ContentRole::Dlc ? "dlc" : "base");
+					writer.Key("displayPath"); writer.String(item.displayPath.data(), item.displayPath.size()); writer.EndObject(); }
+				writer.EndArray(); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("titleManager.pickWuaDestination", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); auto suggested = RequiredString(params, "suggestedFileName");
+				const auto selected = m_nativeWindow->PickWuaDestination(std::string(suggested));
+				if (!selected) return std::string(R"({"cancelled":true})");
+				auto path = _utf8ToPath(*selected); if (path.extension() != ".wua") path += ".wua";
+				const auto token = ++m_nextOperationToken; m_wuaDestinations.emplace(token, NativePathRecord{m_invokingWindow, std::move(path)});
+				return std::string(R"({"cancelled":false,"destinationToken":)") + JsonString(std::to_string(token)) + "}";
+			});
+			m_rpc.Register("titleManager.startWua", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"});
+				const auto planToken = ParseDecimalUint64(RequiredString(params, "planToken"), "planToken");
+				const auto destinationToken = ParseDecimalUint64(RequiredString(params, "destinationToken"), "destinationToken");
+				const auto stored = m_wuaPlans.find(planToken); const auto destination = m_wuaDestinations.find(destinationToken);
+				if (stored == m_wuaPlans.end() || destination == m_wuaDestinations.end() || stored->second.owner != m_invokingWindow || destination->second.owner != m_invokingWindow)
+					throw std::invalid_argument("WUA plan or destination token is invalid or expired");
+				auto record = std::move(stored->second); auto output = std::move(destination->second.path); m_wuaPlans.erase(stored); m_wuaDestinations.erase(destination);
+				const auto current = m_controller.PlanWuaConversion(record.titleId, record.preferredLocationUid);
+				auto same = [](const Application::WuaConversionPlan& left, const Application::WuaConversionPlan& right) {
+					if (left.items.size() != right.items.size()) return false;
+					for (std::size_t i = 0; i < left.items.size(); ++i) { const auto& a = left.items[i]; const auto& b = right.items[i];
+						if (a.locationUid != b.locationUid || a.titleId != b.titleId || a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role || a.displayPath != b.displayPath) return false; }
+					return true;
+				};
+				if (!current || !same(record.plan, *current)) throw std::runtime_error("WUA conversion plan is stale; review the current installed content again");
+				return std::string(R"({"jobId":)") + JsonString(std::to_string(StartWuaConversionJob(std::move(*current), std::move(output)))) + "}";
+			});
+			m_rpc.Register("titleManager.planDelete", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto result = m_controller.PlanManagedContentDelete(ParseOpaqueUid(params));
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "unable to plan managed-content deletion" : result.diagnostic);
+				const auto token = ++m_nextOperationToken; m_deletePlans.emplace(token, DeletePlanRecord{m_invokingWindow, *result.plan});
+				const auto& plan = *result.plan; rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject(); writer.Key("planToken"); writer.String(std::to_string(token).c_str());
+				writer.Key("titleId"); writer.String(TitleIdString(plan.titleId).c_str()); writer.Key("name"); writer.String(plan.name.data(), plan.name.size());
+				writer.Key("displayPath"); writer.String(plan.displayPath.data(), plan.displayPath.size()); writer.EndObject(); return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("titleManager.delete", [this](const rapidjson::Value& params) {
+				RequireRole({"title-manager"}); const auto token = ParseDecimalUint64(
+					RequiredString(params, "planToken"), "planToken"); const auto found = m_deletePlans.find(token);
+				if (found == m_deletePlans.end() || found->second.owner != m_invokingWindow) throw std::invalid_argument("delete plan token is invalid or expired");
+				auto plan = std::move(found->second.plan); m_deletePlans.erase(found); const auto result = m_controller.DeleteManagedContent(plan);
+				if (!result) throw std::runtime_error(result.diagnostic.empty() ? "managed-content deletion failed" : result.diagnostic);
+				return std::string("{}");
 			});
 			m_rpc.Register("checksum.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"checksum-tool", "title-manager"});
@@ -3790,11 +3978,17 @@ namespace
 		std::unordered_map<std::string, std::optional<std::uint64_t>> m_pendingGenerationContexts;
 		std::unordered_map<std::uint64_t, std::unique_ptr<BackgroundJob>> m_backgroundJobs;
 		std::unordered_map<std::string, SaveTicket> m_saveTickets;
+		std::unordered_map<std::uint64_t, WuaPlanRecord> m_wuaPlans;
+		std::unordered_map<std::uint64_t, InstallPlanRecord> m_installPlans;
+		std::unordered_map<std::uint64_t, DeletePlanRecord> m_deletePlans;
+		std::unordered_map<std::uint64_t, NativePathRecord> m_installSources;
+		std::unordered_map<std::uint64_t, NativePathRecord> m_wuaDestinations;
 		std::uint64_t m_nextWindowId{};
 		std::uint64_t m_nextWindowGeneration{};
 		std::uint64_t m_nextBackgroundJobId{};
 		std::uint64_t m_nextSaveTicketId{};
 		WebFrontend::UpdatePlanRegistry m_updatePlans;
+		std::uint64_t m_nextOperationToken{};
 		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;

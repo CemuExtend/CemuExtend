@@ -39,8 +39,13 @@ export type CemodApprovalUpdate = { generation: string; titleId: string; package
 
 export type ChecksumContent = { locationUid: string; titleId: string; name: string; version: number; region: string; type: "base" | "update" | "dlc" | "system"; format: "folder" | "wud" | "nus" | "wua" | "wuhb" };
 export type ChecksumModel = { entries: ChecksumContent[] };
-export type TitleManagerEntry = Omit<ChecksumContent, "type"> & { type: ChecksumContent["type"] | "save"; path: string; canLaunch: boolean; canVerify: boolean };
+export type TitleManagerEntry = Omit<ChecksumContent, "type"> & { type: ChecksumContent["type"] | "save"; path: string; canLaunch: boolean; canVerify: boolean; canConvert: boolean; canDelete: boolean };
 export type TitleManagerModel = { scanning: boolean; entries: TitleManagerEntry[] };
+export type NativeSelection = { cancelled: true } | { cancelled: false; sourceToken: string; displayName: string };
+export type NativeDestination = { cancelled: true } | { cancelled: false; destinationToken: string };
+export type TitleInstallPlanView = { planToken: string; titleId: string; titleName: string; version: number; kind: "unknown" | "base" | "demo" | "update" | "dlc" | "systemTitle" | "systemData"; conflict: "none" | "differentType" | "sameVersion" | "newerVersionInstalled"; requiredBytes: number; availableBytes: number };
+export type WuaConversionPlanView = { planToken: string; suggestedFileName: string; items: Array<{ titleId: string; version: number; role: "base" | "update" | "dlc"; displayPath: string }> };
+export type ManagedContentDeletePlanView = { planToken: string; titleId: string; name: string; displayPath: string };
 
 export type SaveEntryState = "missing" | "directory" | "nonDirectory";
 export type SaveIdentity = { titleId: string; persistentId: string };

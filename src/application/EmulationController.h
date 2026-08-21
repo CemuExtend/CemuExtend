@@ -16,6 +16,7 @@
 #include "application/ContentOperations.h"
 #include "application/CemodManagerFacade.h"
 #include "application/DiagnosticsFacade.h"
+#include "application/ManagedContentFacade.h"
 #include "application/EmulationPresentation.h"
 #include "application/FrontendSettingsFacade.h"
 #include "application/HotkeySettingsFacade.h"
@@ -172,7 +173,8 @@ namespace Application
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
-		public ITitleInstallService, public IAccountService, public ISaveService,
+		public ITitleInstallService, public IManagedContentService,
+		public IAccountService, public ISaveService,
 		public IFrontendSettingsService, public IInputSettingsService,
 		public IHotkeySettingsService, public ICemodManagerService,
 		public IDiagnosticsService
@@ -318,7 +320,7 @@ namespace Application
 		[[nodiscard]] std::optional<WuaConversionPlan> PlanWuaConversion(
 			std::uint64_t titleId, std::uint64_t preferredLocationUid) const;
 		[[nodiscard]] ContentOperationResult ConvertToWua(
-			std::span<const std::uint64_t> locationUids,
+			const WuaConversionPlan& plan,
 			const std::filesystem::path& outputPath,
 			ContentProgressHandler progress,
 			ContentCancellationCheck cancelled);
@@ -333,6 +335,10 @@ namespace Application
 		[[nodiscard]] TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
 			TitleInstallDecision decision, TitleInstallProgressHandler progress,
 			TitleInstallCancellationCheck cancelled);
+		[[nodiscard]] ManagedContentDeletePlanResult PlanManagedContentDelete(
+			std::uint64_t locationUid) const;
+		[[nodiscard]] ManagedContentDeleteResult DeleteManagedContent(
+			const ManagedContentDeletePlan& plan);
 		[[nodiscard]] std::vector<GraphicPackInfo> ListGraphicPacks() const;
 		[[nodiscard]] GraphicPackResult SetGraphicPackEnabled(
 			std::string_view key, bool enabled);

@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -128,6 +129,11 @@ namespace WebFrontend
 		[[nodiscard]] virtual bool SetClipboardImage(std::span<const std::uint8_t> rgb,
 			std::int32_t width, std::int32_t height) = 0;
 		[[nodiscard]] virtual bool OpenExternalUrl(std::string url) = 0;
+		// File-system paths remain native-only. Callers expose short-lived opaque
+		// tokens to web content instead of returning either path across the bridge.
+		[[nodiscard]] virtual std::optional<std::string> PickTitleInstallSource() = 0;
+		[[nodiscard]] virtual std::optional<std::string> PickWuaDestination(
+			std::string suggestedFileName) = 0;
 	};
 
 	[[nodiscard]] std::unique_ptr<INativeWindowHost> CreateNativeWindowHost();

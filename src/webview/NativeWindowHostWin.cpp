@@ -21,6 +21,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <dbt.h>
+#include <commdlg.h>
 #include <imm.h>
 #include <shellapi.h>
 
@@ -751,6 +752,33 @@ namespace WebFrontend
 				const auto wide = Wide(url);
 				return reinterpret_cast<std::intptr_t>(ShellExecuteW(m_window, L"open", wide.c_str(),
 					nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+			}
+			std::optional<std::string> PickTitleInstallSource() override
+			{
+				std::array<wchar_t, 32768> path{};
+				OPENFILENAMEW dialog{}; dialog.lStructSize = sizeof(dialog);
+				dialog.hwndOwner = m_window;
+				dialog.lpstrFilter = L"Wii U title metadata (meta.xml)\0meta.xml\0\0";
+				dialog.lpstrFile = path.data(); dialog.nMaxFile = static_cast<DWORD>(path.size());
+				dialog.lpstrTitle = L"Select title to install";
+				dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+				if (!GetOpenFileNameW(&dialog)) return std::nullopt;
+				return Utf8(path.data());
+			}
+			std::optional<std::string> PickWuaDestination(
+				std::string suggestedFileName) override
+			{
+				std::array<wchar_t, 32768> path{};
+				const auto suggested = Wide(suggestedFileName);
+				std::copy_n(suggested.data(), std::min(suggested.size(), path.size() - 1), path.data());
+				OPENFILENAMEW dialog{}; dialog.lStructSize = sizeof(dialog);
+				dialog.hwndOwner = m_window;
+				dialog.lpstrFilter = L"Wii U archives (*.wua)\0*.wua\0\0";
+				dialog.lpstrFile = path.data(); dialog.nMaxFile = static_cast<DWORD>(path.size());
+				dialog.lpstrDefExt = L"wua"; dialog.lpstrTitle = L"Save Wii U game archive";
+				dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+				if (!GetSaveFileNameW(&dialog)) return std::nullopt;
+				return Utf8(path.data());
 			}
 
 			private:

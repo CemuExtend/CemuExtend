@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <array>
+#include <chrono>
 #include <ranges>
 #include <stdexcept>
 
@@ -183,13 +184,13 @@ namespace
 			std::uint64_t titleId, std::uint64_t preferredLocationUid) const override
 		{
 			return Application::WuaConversionPlan{
-				.items = {{preferredLocationUid, titleId, 1,
+				.items = {{preferredLocationUid, titleId, 1, 55,
 					Application::ContentRole::Base, "base-path"}},
 				.suggestedFileName = "Test title.wua",
 			};
 		}
 		Application::ContentOperationResult ConvertToWua(
-			std::span<const std::uint64_t>, const std::filesystem::path&,
+			const Application::WuaConversionPlan&, const std::filesystem::path&,
 			Application::ContentProgressHandler progress,
 			Application::ContentCancellationCheck cancelled) override
 		{
@@ -254,6 +255,21 @@ namespace
 			if (progress)
 				progress({plan.requiredBytes, plan.requiredBytes, "meta/meta.xml"});
 			return {Application::TitleInstallError::None, {}, plan.targetPath};
+		}
+		Application::ManagedContentDeletePlan deletePlan{
+			.locationUid = 42, .titleId = 0x1234, .fingerprint = 99,
+			.name = "Test", .displayPath = "managed-title"};
+		int managedContentDeletes{};
+		Application::ManagedContentDeletePlanResult PlanManagedContentDelete(
+			std::uint64_t) const override
+		{
+			return {Application::ManagedContentDeleteError::None, {}, deletePlan};
+		}
+		Application::ManagedContentDeleteResult DeleteManagedContent(
+			const Application::ManagedContentDeletePlan&) override
+		{
+			++managedContentDeletes;
+			return {};
 		}
 		std::vector<Application::AccountInfo> accounts{{
 			.persistentId = Application::kMinimumPersistentId,
@@ -552,10 +568,39 @@ namespace
 			update.bindings.push_back({.action = Application::HotkeyAction::EndEmulation});
 		return update;
 	}
+
+	void VerifyManagedContentPathValidation()
+	{
+		namespace fs = std::filesystem;
+		const auto unique = std::to_string(std::chrono::steady_clock::now()
+			.time_since_epoch().count());
+		const auto root = fs::temp_directory_path() / ("cemu-managed-content-test-" + unique);
+		const auto managed = root / "games" / "title";
+		const auto outside = root / "outside";
+		std::error_code error;
+		fs::create_directories(managed, error); assert(!error);
+		fs::create_directories(outside, error); assert(!error);
+		const std::array<fs::path, 1> roots{root / "games"};
+		static_assert(Application::IsManagedContentDeletionSupported(
+			Application::ManagedContentType::Base));
+		static_assert(!Application::IsManagedContentDeletionSupported(
+			Application::ManagedContentType::Save));
+		static_assert(!Application::IsManagedContentDeletionSupported(
+			Application::ManagedContentType::System));
+		assert(Application::ValidateManagedContentPath(managed, roots));
+		assert(!Application::ValidateManagedContentPath(roots.front(), roots));
+		assert(!Application::ValidateManagedContentPath(outside, roots));
+		const auto linked = root / "games" / "linked";
+		fs::create_directory_symlink(outside, linked, error);
+		if (!error)
+			assert(!Application::ValidateManagedContentPath(linked, roots));
+		error.clear(); fs::remove_all(root, error);
+	}
 }
 
 int main()
 {
+	VerifyManagedContentPathValidation();
 	{
 		std::string diagnostic;
 		auto release = ValidHotkeyUpdate(false);
@@ -664,8 +709,7 @@ int main()
 	const auto conversionPlan = controller.PlanWuaConversion(0x1234, 17);
 	assert(conversionPlan && conversionPlan->items.front().locationUid == 17);
 	Application::ContentOperationProgress conversionProgress;
-	const std::array<std::uint64_t, 1> conversionItems{17};
-	assert(controller.ConvertToWua(conversionItems, "test.wua",
+	assert(controller.ConvertToWua(*conversionPlan, "test.wua",
 		[&](const auto& progress) { conversionProgress = progress; }, [] { return false; }));
 	assert(conversionProgress.phase == Application::ContentOperationPhase::Finalizing);
 	const auto checksum = controller.ComputeTitleChecksum(17,
@@ -712,6 +756,11 @@ int main()
 		Application::TitleInstallDecision::Proceed, {}, [] { return true; });
 	assert(!cancelledInstall &&
 		cancelledInstall.error == Application::TitleInstallError::Cancelled);
+	const auto deletePlan = controller.PlanManagedContentDelete(42);
+	assert(deletePlan && deletePlan.plan->locationUid == 42 &&
+		deletePlan.plan->fingerprint == 99);
+	assert(controller.DeleteManagedContent(*deletePlan.plan));
+	assert(backend.managedContentDeletes == 1);
 	backend.graphicPacks.push_back({.key = "pack-key", .name = "Pack"});
 	assert(controller.ListGraphicPacks().front().key == "pack-key");
 	assert(controller.SetGraphicPackEnabled("pack-key", true).changed);

@@ -22,7 +22,8 @@ add_library(CemuApplication STATIC
 	LoggingFacade.cpp
   InputSettingsFacade.h
   GameProfileFacade.h
-  GraphicPackFacade.h
+	GraphicPackFacade.h
+	ManagedContentFacade.h
 	NfcFacade.h
 	SaveFacade.h
   TitleCatalog.h

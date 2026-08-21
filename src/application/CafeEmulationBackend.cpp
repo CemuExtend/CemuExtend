@@ -1294,6 +1294,81 @@ namespace Application
 			return result;
 		}
 
+		std::uint64_t ManagedContentFingerprint(const ManagedContentEntry& entry,
+			const fs::path* identityPath = nullptr)
+		{
+			auto mix = [](std::uint64_t seed, std::uint64_t value) {
+				return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
+			};
+			std::uint64_t result = std::hash<std::string>{}(
+				_pathToUtf8(identityPath ? *identityPath : entry.path));
+			result = mix(result, entry.locationUid);
+			result = mix(result, entry.titleId);
+			result = mix(result, entry.version);
+			result = mix(result, static_cast<std::uint64_t>(entry.type));
+			result = mix(result, static_cast<std::uint64_t>(entry.format));
+			std::error_code error;
+			const auto status = fs::symlink_status(entry.path, error);
+			if (!error)
+				result = mix(result, static_cast<std::uint64_t>(status.type()));
+			error.clear();
+			const auto timestamp = fs::last_write_time(entry.path, error);
+			if (!error)
+				result = mix(result, static_cast<std::uint64_t>(timestamp.time_since_epoch().count()));
+			error.clear();
+			if (fs::is_regular_file(entry.path, error) && !error)
+			{
+				const auto size = fs::file_size(entry.path, error);
+				if (!error)
+					result = mix(result, size);
+			}
+			error.clear();
+			if (fs::is_directory(entry.path, error) && !error)
+			{
+				std::vector<std::string> identities;
+				fs::recursive_directory_iterator iterator(entry.path,
+					fs::directory_options::skip_permission_denied, error), end;
+				while (!error && iterator != end)
+				{
+					const auto relative = fs::relative(iterator->path(), entry.path, error);
+					if (error) break;
+					const auto status = iterator->symlink_status(error);
+					if (error) break;
+					std::string identity = _pathToUtf8(relative);
+					identity.append("|").append(std::to_string(static_cast<unsigned>(status.type())));
+					const auto modified = fs::last_write_time(iterator->path(), error);
+					if (error) break;
+					identity.append("|").append(std::to_string(modified.time_since_epoch().count()));
+					if (status.type() == fs::file_type::regular)
+					{
+						const auto size = fs::file_size(iterator->path(), error);
+						if (error) break;
+						identity.append("|").append(std::to_string(size));
+					}
+					identities.push_back(std::move(identity));
+					iterator.increment(error);
+				}
+				if (error)
+					result = mix(result, std::numeric_limits<std::uint64_t>::max());
+				else
+				{
+					std::ranges::sort(identities);
+					for (const auto& identity : identities)
+						result = mix(result, std::hash<std::string>{}(identity));
+				}
+			}
+			return result;
+		}
+
+		ManagedContentPathValidation ValidateCatalogDeletePath(const fs::path& path)
+		{
+			std::vector<fs::path> roots{ActiveSettings::GetMlcPath()};
+			roots.reserve(GetConfig().game_paths.size() + 1);
+			for (const auto& root : GetConfig().game_paths)
+				roots.push_back(_utf8ToPath(root));
+			return ValidateManagedContentPath(path, roots);
+		}
+
 		std::optional<ManagedContentEntry> TranslateManagedSave(SaveInfo& save)
 		{
 			auto* meta = save.GetMetaInfo();
@@ -1361,6 +1436,7 @@ namespace Application
 					.locationUid = title->GetUID(),
 					.titleId = title->GetAppTitleId(),
 					.version = title->GetAppTitleVersion(),
+					.fingerprint = ManagedContentFingerprint(TranslateManagedTitle(*title, false)),
 					.role = role,
 					.displayPath = title->GetPrintPath(),
 				});
@@ -3585,25 +3661,42 @@ namespace Application
 			}
 
 			ContentOperationResult ConvertToWua(
-				std::span<const std::uint64_t> locationUids,
+				const WuaConversionPlan& plan,
 				const std::filesystem::path& outputPath,
 				ContentProgressHandler progress,
 				ContentCancellationCheck cancelled) override
 			{
-				if (locationUids.empty())
+				if (plan.items.empty())
 					return {ContentOperationError::NotFound, "No title content selected"};
 				if (outputPath.empty())
 					return {ContentOperationError::UnableToCreateOutput,
 						"Archive output path is empty"};
 
+				const auto current = BuildWuaConversionPlan(plan.items.front().titleId,
+					plan.items.front().locationUid);
+				auto samePlan = [](const WuaConversionPlan& left, const WuaConversionPlan& right) {
+					if (left.items.size() != right.items.size()) return false;
+					for (std::size_t index = 0; index < left.items.size(); ++index)
+					{
+						const auto& a = left.items[index]; const auto& b = right.items[index];
+						if (a.locationUid != b.locationUid || a.titleId != b.titleId ||
+							a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role)
+							return false;
+					}
+					return true;
+				};
+				if (!current || !samePlan(plan, *current))
+					return {ContentOperationError::VerificationFailure,
+						"Installed content changed after the WUA conversion was confirmed"};
+
 				std::vector<TitleInfo> titles;
-				titles.reserve(locationUids.size());
-				for (const auto uid : locationUids)
+				titles.reserve(plan.items.size());
+				for (const auto& item : plan.items)
 				{
-					auto title = CafeTitleList::GetTitleInfoByUID(uid);
+					auto title = CafeTitleList::GetTitleInfoByUID(item.locationUid);
 					if (!title.IsValid())
 						return {ContentOperationError::NotFound,
-							fmt::format("Title content {:016x} is no longer available", uid)};
+							fmt::format("Title content {:016x} is no longer available", item.locationUid)};
 					titles.push_back(std::move(title));
 				}
 
@@ -3655,6 +3748,15 @@ namespace Application
 								wasCancelled ? "Conversion cancelled" :
 								"Unable to read title files"};
 						}
+					}
+					const auto afterRead = BuildWuaConversionPlan(plan.items.front().titleId,
+						plan.items.front().locationUid);
+					if (!afterRead || !samePlan(plan, *afterRead))
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::VerificationFailure,
+							"Installed content changed while the WUA archive was being created"};
 					}
 					if (!context.valid)
 					{
@@ -4328,6 +4430,100 @@ namespace Application
 					return {TitleInstallError::CopyFailure,
 						"Unknown title installation failure", {}};
 				}
+			}
+
+			ManagedContentDeletePlanResult PlanManagedContentDelete(
+				std::uint64_t locationUid) const override
+			{
+				if (IsTitleRunning())
+					return {ManagedContentDeleteError::TitleRunning,
+						"Managed content cannot be deleted while a title is running", std::nullopt};
+				if (CafeTitleList::IsScanning())
+					return {ManagedContentDeleteError::Scanning,
+						"Managed content cannot be deleted while the title catalog is scanning", std::nullopt};
+				const auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
+				if (!title.IsValid())
+					return {ManagedContentDeleteError::NotFound,
+						"The selected managed-content installation is no longer available", std::nullopt};
+				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), true);
+				if (!IsManagedContentDeletionSupported(entry.type))
+					return {ManagedContentDeleteError::Unsupported,
+						"System titles cannot be deleted from Title Manager", std::nullopt};
+				if (entry.path.empty())
+					return {ManagedContentDeleteError::Unsupported,
+						"The selected installation does not have a deletable catalog location", std::nullopt};
+				const auto safePath = ValidateCatalogDeletePath(entry.path);
+				if (!safePath)
+					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic, std::nullopt};
+				entry.path = safePath.canonicalPath;
+				return {ManagedContentDeleteError::None, {}, ManagedContentDeletePlan{
+					.locationUid = entry.locationUid,
+					.titleId = entry.titleId,
+					.fingerprint = ManagedContentFingerprint(entry),
+					.name = entry.name,
+					.displayPath = _pathToUtf8(entry.path),
+					.type = entry.type,
+					.format = entry.format,
+				}};
+			}
+
+			ManagedContentDeleteResult DeleteManagedContent(
+				const ManagedContentDeletePlan& plan) override
+			{
+				if (IsTitleRunning())
+					return {ManagedContentDeleteError::TitleRunning,
+						"Managed content cannot be deleted while a title is running"};
+				if (CafeTitleList::IsScanning())
+					return {ManagedContentDeleteError::Scanning,
+						"Managed content cannot be deleted while the title catalog is scanning"};
+				const auto title = CafeTitleList::GetTitleInfoByUID(plan.locationUid);
+				if (!title.IsValid())
+					return {ManagedContentDeleteError::NotFound,
+						"The selected managed-content installation is no longer available"};
+				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), false);
+				if (!IsManagedContentDeletionSupported(entry.type))
+					return {ManagedContentDeleteError::Unsupported,
+						"System titles cannot be deleted from Title Manager"};
+				const auto safePath = ValidateCatalogDeletePath(entry.path);
+				if (!safePath)
+					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic};
+				entry.path = safePath.canonicalPath;
+				if (entry.titleId != plan.titleId || entry.type != plan.type ||
+					entry.format != plan.format || ManagedContentFingerprint(entry) != plan.fingerprint)
+					return {ManagedContentDeleteError::StalePlan,
+						"The selected installation changed after deletion was confirmed"};
+				std::error_code error;
+				const auto status = fs::symlink_status(entry.path, error);
+				if (error || status.type() == fs::file_type::not_found)
+					return {ManagedContentDeleteError::NotFound,
+						error ? error.message() : "The selected installation no longer exists"};
+				if (status.type() == fs::file_type::symlink)
+					return {ManagedContentDeleteError::Unsupported,
+						"Managed-content catalog roots may not be symbolic links"};
+				const auto quarantine = UniqueInstallSibling(entry.path, "deleting");
+				if (quarantine.empty())
+					return {ManagedContentDeleteError::DeleteFailure,
+						"Unable to reserve a deletion quarantine path"};
+				fs::rename(entry.path, quarantine, error);
+				if (error)
+					return {ManagedContentDeleteError::DeleteFailure, error.message()};
+				auto moved = entry; moved.path = quarantine;
+				if (ManagedContentFingerprint(moved, &entry.path) != plan.fingerprint)
+				{
+					std::error_code restoreError;
+					fs::rename(quarantine, entry.path, restoreError);
+					return {ManagedContentDeleteError::StalePlan, restoreError ?
+						fmt::format("The selected installation changed; it was quarantined at {} because restore failed: {}",
+							_pathToUtf8(quarantine), restoreError.message()) :
+						"The selected installation changed while deletion was starting"};
+				}
+				fs::remove_all(quarantine, error);
+				if (error)
+					return {ManagedContentDeleteError::DeleteFailure,
+						fmt::format("Content was quarantined at {}, but deletion failed: {}",
+							_pathToUtf8(quarantine), error.message())};
+				CafeTitleList::Refresh();
+				return {};
 			}
 
 			std::vector<AccountInfo> ListAccounts() const override

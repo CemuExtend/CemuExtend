@@ -22,6 +22,7 @@ namespace Application
 		std::uint64_t locationUid{};
 		std::uint64_t titleId{};
 		std::uint32_t version{};
+		std::uint64_t fingerprint{};
 		ContentRole role{ContentRole::Base};
 		std::string displayPath;
 	};
@@ -109,7 +110,7 @@ namespace Application
 		[[nodiscard]] virtual std::optional<WuaConversionPlan> PlanWuaConversion(
 			std::uint64_t titleId, std::uint64_t preferredLocationUid) const = 0;
 		[[nodiscard]] virtual ContentOperationResult ConvertToWua(
-			std::span<const std::uint64_t> locationUids,
+			const WuaConversionPlan& plan,
 			const std::filesystem::path& outputPath,
 			ContentProgressHandler progress,
 			ContentCancellationCheck cancelled) = 0;
