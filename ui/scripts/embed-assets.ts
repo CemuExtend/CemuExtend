@@ -15,7 +15,16 @@ const css = await Bun.file(new URL(style[1].replace(/^\.\//, ""), root)).text();
 const embeddedJs = js.replaceAll("</script>", "<\\/script>");
 html = html
   .replace(style[0], () => `<style>${css}</style>`)
-  .replace(script[0], () => `<script>${embeddedJs}</script>`);
+  .replace(script[0], "");
+if (!html.includes("</body>"))
+  throw new Error("Vite output did not contain a body element");
+// Vite places its module script in <head>, where it is deferred automatically.
+// Once inlined as a classic script it would execute immediately, before #root
+// has been parsed, so keep the self-contained bundle at the end of <body>.
+html = html.replace(
+  "</body>",
+  () => `<script>${embeddedJs}</script>\n  </body>`,
+);
 const scriptHash = new Bun.CryptoHasher("sha256")
   .update(embeddedJs)
   .digest("base64");

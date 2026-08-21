@@ -186,9 +186,13 @@ container never rewrites the native frontend's settings. Override
 when another location is desired. Set `CEMU_FRONTEND=wx` to run the wxWidgets
 frontend instead.
 
-The Docker image is self-contained, while the bare executable extracted by
-`docker-build.sh` targets an Ubuntu runtime. On NixOS, use the Nix-linked build
-described above when launching `bin/Cemu_release` through `steam-run`.
+`docker-build.sh` extracts a relocatable Linux runtime beside `Cemu_release`.
+The launcher uses only paths relative to that output directory, so the result
+can also be started on NixOS without using a Nix-built Cemu binary:
+
+```bash
+steam-run ./bin/Cemu_release
+```
 
 
 ##### Building Errors

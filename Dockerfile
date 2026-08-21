@@ -120,7 +120,12 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
         cmake --build build/docker --parallel; \
     fi \
     && ctest --test-dir build/docker --output-on-failure \
-    && cp bin/Cemu_release /Cemu_release
+    && if [ "${CEMU_FRONTEND}" = "headless" ]; then \
+        mkdir -p /Cemu_release.bundle \
+        && cp bin/Cemu_release /Cemu_release.bundle/Cemu_release; \
+    else \
+        tools/bundle-linux-runtime.sh bin/Cemu_release /Cemu_release.bundle; \
+    fi
 
 CMD ["bash"]
 
@@ -131,7 +136,7 @@ FROM cemu-extend-base AS runtime
 
 ARG CEMU_FRONTEND=webview
 
-COPY --from=build /Cemu_release /opt/cemu/Cemu_release
+COPY --from=build /Cemu_release.bundle /opt/cemu
 COPY bin/resources /opt/cemu/resources
 COPY bin/gameProfiles /opt/cemu/gameProfiles
 COPY dist/network_services.xml /opt/cemu/network_services.xml

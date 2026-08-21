@@ -12,7 +12,6 @@ case "${frontend}" in
 		;;
 esac
 artifact_dir="${project_dir}/result/bin"
-temporary_name=".Cemu_release.$$.tmp"
 artifact_name="Cemu_release"
 if [[ "${frontend}" == "headless" ]]; then
 	artifact_name="Cemu_headless"
@@ -43,8 +42,10 @@ mkdir -p "${artifact_dir}"
 docker run --rm --user "$(id -u):$(id -g)" \
 	-v "${artifact_dir}:/artifacts" \
 	"${image_name}" \
-	cp /Cemu_release "/artifacts/${temporary_name}"
-mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/${artifact_name}"
+	cp -a /Cemu_release.bundle/. /artifacts/
+if [[ "${artifact_name}" != "Cemu_release" ]]; then
+	mv -f "${artifact_dir}/Cemu_release" "${artifact_dir}/${artifact_name}"
+fi
 
 printf 'Docker release build: %s\n' "${artifact_dir}/${artifact_name}"
 sha256sum "${artifact_dir}/${artifact_name}"

@@ -32,6 +32,8 @@ bin/log.txt
 bin/Cemu_*.pdb
 bin/Cemu_*.ilk
 bin/Cemu.exe.backup
+bin/.Cemu_release.bin
+bin/.cemu-runtime/
 bin/mlc01/*
 bin/settings.xml
 bin/network_services.xml
