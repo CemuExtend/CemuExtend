@@ -6,6 +6,7 @@
 #include "application/EmulationController.h"
 #include "application/LoggingFacade.h"
 #include "application/EmulatedUsbFacade.h"
+#include "application/DiagnosticFacade.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
@@ -2967,6 +2968,52 @@ namespace
 				R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 		}
 
+		std::string TextureDiagnosticJson(const Application::TextureDiagnosticPage& page) const
+		{
+			rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+			writer.Key("generation"); writer.String(std::to_string(page.generation).c_str());
+			writer.Key("offset"); writer.Uint64(page.offset); writer.Key("total"); writer.Uint64(page.total);
+			writer.Key("truncated"); writer.Bool(page.truncated); writer.Key("available"); writer.Bool(page.available);
+			writer.Key("diagnostic"); writer.String(page.diagnostic.data(), page.diagnostic.size());
+			writer.Key("rows"); writer.StartArray();
+			for (const auto& row : page.rows)
+			{
+				writer.StartObject(); writer.Key("id"); writer.String(row.id.data(), row.id.size());
+				if (!row.parentId.empty()) { writer.Key("parentId"); writer.String(row.parentId.data(), row.parentId.size()); }
+				writer.Key("kind"); writer.String(row.view ? "view" : "texture");
+				writer.Key("active"); writer.Bool(row.active); writer.Key("updatedOnGpu"); writer.Bool(row.updatedOnGpu);
+				writer.Key("depthFormat"); writer.Bool(row.depthFormat); writer.Key("dimension"); writer.String(row.dimension.data(), row.dimension.size());
+				writer.Key("format"); writer.String(row.format.data(), row.format.size());
+				writer.Key("width"); writer.Uint(row.width); writer.Key("height"); writer.Uint(row.height); writer.Key("depth"); writer.Uint(row.depth);
+				writer.Key("pitch"); writer.Uint(row.pitch); writer.Key("tileMode"); writer.Uint(row.tileMode);
+				writer.Key("firstSlice"); writer.Uint(row.firstSlice); writer.Key("sliceCount"); writer.Uint(row.sliceCount);
+				writer.Key("firstMip"); writer.Uint(row.firstMip); writer.Key("mipCount"); writer.Uint(row.mipCount);
+				writer.Key("ageMilliseconds"); writer.Uint(row.ageMilliseconds); writer.Key("alternativeViewCount"); writer.Uint(row.alternativeViewCount);
+				writer.Key("resolutionOverridden"); writer.Bool(row.resolutionOverridden);
+				writer.Key("effectiveWidth"); writer.Uint(row.effectiveWidth); writer.Key("effectiveHeight"); writer.Uint(row.effectiveHeight); writer.Key("effectiveDepth"); writer.Uint(row.effectiveDepth);
+				writer.EndObject();
+			}
+			writer.EndArray(); writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		std::string AudioDiagnosticJson(const Application::AudioVoiceDiagnosticPage& page) const
+		{
+			rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+			writer.Key("generation"); writer.String(std::to_string(page.generation).c_str()); writer.Key("offset"); writer.Uint64(page.offset);
+			writer.Key("total"); writer.Uint64(page.total); writer.Key("available"); writer.Bool(page.available);
+			writer.Key("diagnostic"); writer.String(page.diagnostic.data(), page.diagnostic.size()); writer.Key("rows"); writer.StartArray();
+			for (const auto& row : page.rows)
+			{
+				writer.StartObject(); writer.Key("id"); writer.String(row.id.data(), row.id.size()); writer.Key("index"); writer.Uint(row.index);
+				writer.Key("format"); writer.String(row.format.data(), row.format.size()); writer.Key("currentOffset"); writer.Uint(row.currentOffset);
+				writer.Key("loopOffset"); writer.Uint(row.loopOffset); writer.Key("endOffset"); writer.Uint(row.endOffset); writer.Key("looping"); writer.Bool(row.looping);
+				writer.Key("volume"); writer.Uint(row.volume); writer.Key("volumeDelta"); writer.Int(row.volumeDelta); writer.Key("sourceRatio"); writer.Uint(row.sourceRatio);
+				writer.Key("lowPassEnabled"); writer.Bool(row.lowPassEnabled); writer.Key("biquadEnabled"); writer.Bool(row.biquadEnabled);
+				writer.Key("deviceMix"); writer.String(row.deviceMix.data(), row.deviceMix.size()); writer.EndObject();
+			}
+			writer.EndArray(); writer.EndObject(); return {buffer.GetString(), buffer.GetSize()};
+		}
+
 		static Application::EmulatedControllerType ParseInputControllerType(
 			std::string_view value)
 		{
@@ -3543,6 +3590,20 @@ namespace
 				return std::string(R"({"jobId":)") +
 					JsonString(std::to_string(StartTitleInstallJob(std::move(*plan), decision))) + "}";
 			});
+			m_rpc.Register("diagnostics.getTextureRelations", [this](const rapidjson::Value& params) {
+				RequireRole({"texture-relations"});
+				return TextureDiagnosticJson(m_diagnostics.GetTexturePage(
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"), RequiredUint(params, "offset"),
+					RequiredBoundedUint(params, "limit", 1, Application::DiagnosticFacade::MaximumPageSize),
+					RequiredBool(params, "activeOnly"), RequiredBool(params, "includeViews")));
+			});
+			m_rpc.Register("diagnostics.getAudioVoices", [this](const rapidjson::Value& params) {
+				RequireRole({"audio-debugger"});
+				return AudioDiagnosticJson(m_diagnostics.GetAudioVoicePage(
+					ParseDecimalUint64(RequiredString(params, "generation"), "generation"), RequiredUint(params, "offset"),
+					RequiredBoundedUint(params, "limit", 1, Application::DiagnosticFacade::MaximumPageSize),
+					RequiredBool(params, "activeOnly")));
+			});
 			m_rpc.Register("titleManager.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"title-manager"});
 				auto typeName = [](Application::ManagedContentType type) {
@@ -3996,6 +4057,7 @@ namespace
 		Application::EmulationController m_controller;
 		Application::LoggingFacade m_logging;
 		Application::EmulatedUsbFacade m_emulatedUsb{Application::CreateEmulatedUsbBackend()};
+		Application::DiagnosticFacade m_diagnostics;
 		std::unique_ptr<MainWindowState> m_windowState;
 		std::shared_ptr<RuntimeCallbackGate> m_callbackGate{std::make_shared<RuntimeCallbackGate>()};
 		Application::EventSubscription m_applicationEvents;

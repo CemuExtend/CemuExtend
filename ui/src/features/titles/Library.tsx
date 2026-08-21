@@ -52,6 +52,8 @@ export function Library() {
       <button onClick={() => reportOpen(openNativeWindow("cemod-manager"))}>CemuMods</button>
       <button onClick={() => reportOpen(openNativeWindow("update-manager"))}>Updates</button>
       <button onClick={() => reportOpen(openNativeWindow("account-manager"))}>Accounts</button>
+      <button onClick={() => reportOpen(openNativeWindow("texture-relations"))}>Texture cache</button>
+      <button onClick={() => reportOpen(openNativeWindow("audio-debugger"))}>AX voices</button>
       <button onClick={() => reportOpen(openNativeWindow("about"))}>About</button>
     </section>
     {error && <div className="notice error" role="alert">{error}<button onClick={() => setError("")}>Dismiss</button></div>}

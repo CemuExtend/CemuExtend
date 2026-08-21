@@ -7,6 +7,8 @@ add_library(CemuApplication STATIC
 	ContentOperations.h
 	CemodManagerFacade.h
 	DiagnosticsFacade.h
+	DiagnosticFacade.cpp
+	DiagnosticFacade.h
   ApplicationEvents.cpp
   ApplicationEvents.h
   CafeEmulationBackend.cpp
@@ -70,4 +72,8 @@ if(BUILD_TESTING)
   add_executable(emulated_usb_facade_tests tests/EmulatedUsbFacadeTests.cpp)
   target_link_libraries(emulated_usb_facade_tests PRIVATE CemuApplication)
   add_test(NAME emulated_usb_facade_tests COMMAND emulated_usb_facade_tests)
+
+  add_executable(diagnostic_facade_tests tests/DiagnosticFacadeTests.cpp)
+  target_link_libraries(diagnostic_facade_tests PRIVATE CemuApplication)
+  add_test(NAME diagnostic_facade_tests COMMAND diagnostic_facade_tests)
 endif()

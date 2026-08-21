@@ -273,6 +273,29 @@ export type HotkeySettingsModel = { revision: number; controllerModifier: number
 export type HotkeySettingsUpdate = { revision: number; controllerModifier: number | null; bindings: Array<Omit<HotkeyBinding, "controllerLabel">> };
 export type HotkeySettingsApplyResult = { ok: boolean; error: "none" | "conflict" | "invalidBinding" | "duplicateBinding" | "saveFailed"; snapshot: HotkeySettingsModel; diagnostic: string };
 
+export type DiagnosticPageRequest = { generation: string; offset: number; limit: number };
+export type TextureDiagnosticRow = {
+  id: string; parentId?: string; kind: "texture" | "view"; active: boolean;
+  updatedOnGpu: boolean; depthFormat: boolean; dimension: string; format: string;
+  width: number; height: number; depth: number; pitch: number; tileMode: number;
+  firstSlice: number; sliceCount: number; firstMip: number; mipCount: number;
+  ageMilliseconds: number; alternativeViewCount: number; resolutionOverridden: boolean;
+  effectiveWidth: number; effectiveHeight: number; effectiveDepth: number;
+};
+export type TextureDiagnosticPage = {
+  generation: string; offset: number; total: number; truncated: boolean;
+  available: boolean; diagnostic: string; rows: TextureDiagnosticRow[];
+};
+export type AudioVoiceDiagnosticRow = {
+  id: string; index: number; format: string; currentOffset: number; loopOffset: number;
+  endOffset: number; looping: boolean; volume: number; volumeDelta: number;
+  sourceRatio: number; lowPassEnabled: boolean; biquadEnabled: boolean; deviceMix: string;
+};
+export type AudioVoiceDiagnosticPage = {
+  generation: string; offset: number; total: number; available: boolean;
+  diagnostic: string; rows: AudioVoiceDiagnosticRow[];
+};
+
 declare global {
   interface Window {
     cemuInvoke?: (requestJson: string) => Promise<string>;

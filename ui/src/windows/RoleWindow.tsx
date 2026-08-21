@@ -15,6 +15,8 @@ import { EmulatedUsbDevicesWindow } from "./EmulatedUsbDevicesWindow";
 import { SaveManagerWindow } from "./SaveManagerWindow";
 import { UpdateManagerWindow } from "./UpdateManagerWindow";
 import { PpcThreadsWindow } from "./PpcThreadsWindow";
+import { TextureRelationsWindow } from "./TextureRelationsWindow";
+import { AudioDebuggerWindow } from "./AudioDebuggerWindow";
 
 export function RoleWindow({ role, windowId, context }: { role: ImplementedToolWindowRole; windowId: string; context?: { titleId?: string; packageKey?: string; generation?: string } }) {
   switch (role) {
@@ -34,5 +36,7 @@ export function RoleWindow({ role, windowId, context }: { role: ImplementedToolW
     case "save-manager": return <SaveManagerWindow windowId={windowId} />;
     case "update-manager": return <UpdateManagerWindow windowId={windowId} />;
     case "ppc-threads": return <PpcThreadsWindow />;
+    case "texture-relations": return <TextureRelationsWindow />;
+    case "audio-debugger": return <AudioDebuggerWindow />;
   }
 }

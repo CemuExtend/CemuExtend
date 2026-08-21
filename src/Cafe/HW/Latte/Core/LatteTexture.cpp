@@ -10,6 +10,8 @@
 
 #include <boost/container/small_vector.hpp>
 
+#include <mutex>
+
 struct TexMemOccupancyEntry
 {
 	uint32 addrStart;
@@ -26,16 +28,21 @@ std::vector<TexMemOccupancyEntry> list_texMemOccupancyBucket[TEX_OCCUPANCY_BUCKE
 
 std::atomic_bool s_refreshTextureQueryList;
 std::vector<LatteTextureInformation> s_cacheInfoList;
+std::mutex s_cacheInfoQueryMutex;
 
 std::vector<LatteTextureInformation> LatteTexture_QueryCacheInfo()
 {
+	// Multiple diagnostic frontends can request snapshots concurrently. Keep the
+	// request/renderer-publish/copy handshake single-owner so the renderer cannot
+	// swap s_cacheInfoList while another caller is copying it.
+	std::scoped_lock queryLock(s_cacheInfoQueryMutex);
 	// raise request flag to refresh cache
-	s_refreshTextureQueryList.store(true);
+	s_refreshTextureQueryList.store(true, std::memory_order_release);
 	// wait until cleared or until timeout occurred
 	auto begin = std::chrono::high_resolution_clock::now();
 	while (true)
 	{
-		if (!s_refreshTextureQueryList)
+		if (!s_refreshTextureQueryList.load(std::memory_order_acquire))
 			break;
 		auto dur = std::chrono::high_resolution_clock::now() - begin;
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
