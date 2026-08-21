@@ -19,6 +19,8 @@
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Scheduler.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "config/ActiveSettings.h"
@@ -2032,6 +2034,170 @@ namespace Application
 				return m_inputAvailable && CafeSystem::IsTitleRunning();
 			}
 
+			PpcThreadsSnapshot CapturePpcThreads() override
+			{
+				struct SchedulerLock
+				{
+					SchedulerLock() { __OSLockScheduler(); }
+					~SchedulerLock() { __OSUnlockScheduler(); }
+				} schedulerLock;
+				struct ActiveListLock
+				{
+					ActiveListLock() { srwlock_activeThreadList.LockWrite(); }
+					~ActiveListLock() { srwlock_activeThreadList.UnlockWrite(); }
+				} activeListLock;
+
+				PpcThreadsSnapshot result;
+				result.available = true;
+				std::vector<std::pair<std::uint32_t, std::uint64_t>> currentThreads;
+				currentThreads.reserve(static_cast<std::size_t>(
+					std::max<sint32>(activeThreadCount, 0)));
+				for (sint32 index = 0; index < activeThreadCount; ++index)
+				{
+					const auto address = activeThread[index];
+					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address)) continue;
+					const auto* thread = MEMPTR<OSThread_t>{address}.GetPtr();
+					if (thread) currentThreads.emplace_back(address, PpcThreadIdentity(*thread));
+				}
+				if (currentThreads != m_diagnosticsThreads)
+				{
+					m_diagnosticsThreads = currentThreads;
+					m_diagnosticsGeneration.fetch_add(1, std::memory_order_acq_rel);
+				}
+				std::erase_if(m_diagnosticsSuspensions, [&currentThreads](const auto& entry) {
+					return std::ranges::none_of(currentThreads, [&entry](const auto& active) {
+						return active.first == entry.first && active.second == entry.second.identity;
+					});
+				});
+				result.generation = m_diagnosticsGeneration.load(std::memory_order_acquire);
+				result.threads.reserve(static_cast<std::size_t>(
+					std::max<sint32>(activeThreadCount, 0)));
+				for (sint32 index = 0; index < activeThreadCount; ++index)
+				{
+					const auto address = activeThread[index];
+					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address))
+						continue;
+					auto* thread = MEMPTR<OSThread_t>{address}.GetPtr();
+					if (!thread)
+						continue;
+
+					PpcThreadSnapshot item;
+					item.address = address;
+					item.identity = PpcThreadIdentity(*thread);
+					item.entryPoint = thread->entrypoint.GetMPTR();
+					item.stackLow = thread->stackEnd.GetMPTR();
+					item.stackHigh = thread->stackBase.GetMPTR();
+					item.instructionPointer = thread->context.srr0;
+					item.linkRegister = _swapEndianU32(thread->context.lr);
+					if (thread->suspendCounter != 0)
+						item.state = PpcThreadState::Suspended;
+					else
+					{
+						switch (thread->state)
+						{
+						case OSThread_t::THREAD_STATE::STATE_NONE: item.state = PpcThreadState::None; break;
+						case OSThread_t::THREAD_STATE::STATE_READY: item.state = PpcThreadState::Ready; break;
+						case OSThread_t::THREAD_STATE::STATE_RUNNING: item.state = PpcThreadState::Running; break;
+						case OSThread_t::THREAD_STATE::STATE_WAITING: item.state = PpcThreadState::Waiting; break;
+						case OSThread_t::THREAD_STATE::STATE_MORIBUND: item.state = PpcThreadState::Moribund; break;
+						default: item.state = PpcThreadState::Unknown; break;
+						}
+					}
+					item.requestedAffinity = thread->attr & 7;
+					item.effectiveAffinity = thread->context.affinity;
+					item.basePriority = thread->basePriority;
+					item.effectivePriority = thread->effectivePriority;
+					item.wakeUpTime = thread->wakeUpTime;
+					item.totalCycles = thread->totalCycles;
+					if (!thread->threadName.IsNull())
+					{
+						const char* name = thread->threadName.GetPtr();
+						if (name)
+						{
+							std::size_t length{};
+							while (length < 128 && name[length] != '\0') ++length;
+							item.name.assign(name, length);
+						}
+					}
+					item.gpr3 = _swapEndianU32(thread->context.gpr[3]);
+					item.gpr4 = _swapEndianU32(thread->context.gpr[4]);
+					item.gpr5 = _swapEndianU32(thread->context.gpr[5]);
+					item.gpr6 = _swapEndianU32(thread->context.gpr[6]);
+					item.gpr7 = _swapEndianU32(thread->context.gpr[7]);
+					item.cancelRequested = thread->requestFlags & OSThread_t::REQUEST_FLAG_CANCEL;
+					if (const auto owned = m_diagnosticsSuspensions.find(address);
+						owned != m_diagnosticsSuspensions.end() && owned->second.identity == item.identity &&
+						owned->second.expectedCounter == static_cast<std::int32_t>(thread->suspendCounter))
+						item.suspensionOwnedByFacade = true;
+					if (coreinit::OSMutex* mutex = thread->waitingForMutex)
+					{
+						item.waitingMutex = memory_getVirtualOffsetFromPointer(mutex);
+						item.mutexOwner = mutex->owner.GetMPTR();
+						item.mutexLockCount = mutex->lockCount;
+					}
+					result.threads.emplace_back(std::move(item));
+				}
+				return result;
+			}
+
+			PpcThreadCommandResult ExecutePpcThreadCommand(
+				const PpcThreadCommandRequest& request) override
+			{
+				if (request.generation == 0 ||
+					request.generation != m_diagnosticsGeneration.load(std::memory_order_acquire))
+					return {false, "the PPC thread snapshot is stale; refresh before retrying"};
+				if (std::ranges::none_of(m_diagnosticsThreads, [&request](const auto& active) {
+					return active.first == request.threadAddress && active.second == request.threadIdentity;
+				}))
+					return {false, "the selected PPC thread was not part of this diagnostic snapshot"};
+				if (request.command == PpcThreadCommand::AdjustPriority &&
+					(request.priorityDelta < -5 || request.priorityDelta > 5 ||
+					 request.priorityDelta == 0))
+					return {false, "priorityDelta must be between -5 and 5 and cannot be zero"};
+
+				struct SchedulerLock
+				{
+					SchedulerLock() { __OSLockScheduler(); }
+					~SchedulerLock() { __OSUnlockScheduler(); }
+				} schedulerLock;
+				if (!coreinit::OSThreadQueue_IsThreadPointerValid(request.threadAddress))
+					return {false, "the selected PPC thread address is no longer valid"};
+				auto* thread = MEMPTR<OSThread_t>{request.threadAddress}.GetPtr();
+				if (!thread || !coreinit::__OSIsThreadActive(thread) ||
+					PpcThreadIdentity(*thread) != request.threadIdentity ||
+					thread->state == OSThread_t::THREAD_STATE::STATE_NONE ||
+					thread->state == OSThread_t::THREAD_STATE::STATE_MORIBUND)
+					return {false, "the selected PPC thread is no longer active"};
+
+				switch (request.command)
+				{
+				case PpcThreadCommand::Suspend:
+					if (thread->suspendCounter > 0)
+						return {false, "the selected PPC thread is already suspended"};
+					coreinit::__OSSuspendThreadNolock(thread);
+					m_diagnosticsSuspensions[request.threadAddress] = {
+						request.threadIdentity, static_cast<std::int32_t>(thread->suspendCounter)};
+					break;
+				case PpcThreadCommand::Resume:
+				{
+					const auto owned = m_diagnosticsSuspensions.find(request.threadAddress);
+					if (owned == m_diagnosticsSuspensions.end() ||
+						owned->second.identity != request.threadIdentity ||
+						owned->second.expectedCounter != static_cast<std::int32_t>(thread->suspendCounter))
+						return {false, "this window does not own the selected thread suspension"};
+					coreinit::__OSResumeThreadInternal(thread, 1);
+					m_diagnosticsSuspensions.erase(owned);
+					break;
+				}
+				case PpcThreadCommand::AdjustPriority:
+					thread->basePriority = std::clamp<std::int32_t>(
+						static_cast<std::int32_t>(thread->basePriority) + request.priorityDelta, 0, 31);
+					coreinit::__OSUpdateThreadEffectivePriority(thread);
+					break;
+				}
+				return {true, {}};
+			}
+
 			FrontendSettingsSnapshot GetFrontendSettings() const override
 			{
 				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
@@ -3006,6 +3172,9 @@ namespace Application
 				std::unique_lock lock(m_inputLifecycleMutex);
 				CafeSystem::LaunchForegroundTitle();
 				m_inputAvailable = true;
+				m_diagnosticsThreads.clear();
+				m_diagnosticsSuspensions.clear();
+				m_diagnosticsGeneration.fetch_add(1, std::memory_order_acq_rel);
 			}
 			bool AbortPrepared() override
 			{
@@ -5213,6 +5382,21 @@ namespace Application
 			}
 
 		private:
+			struct DiagnosticSuspension
+			{
+				std::uint64_t identity{};
+				std::int32_t expectedCounter{};
+			};
+
+			static std::uint64_t PpcThreadIdentity(const OSThread_t& thread)
+			{
+				std::uint64_t value = thread.entrypoint.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.stackEnd.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.stackBase.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.threadName.GetMPTR();
+				return value == 0 ? 1 : value;
+			}
+
 			std::uint64_t TokenForInputController(
 				const std::shared_ptr<ControllerBase>& controller) const
 			{
@@ -5265,6 +5449,9 @@ namespace Application
 			mutable std::uint64_t m_nextInputDeviceToken{};
 			mutable std::uint64_t m_inputSettingsGeneration{1};
 			mutable std::uint64_t m_inputSettingsFingerprintGeneration{};
+			std::atomic_uint64_t m_diagnosticsGeneration{};
+			std::vector<std::pair<std::uint32_t, std::uint64_t>> m_diagnosticsThreads;
+			std::unordered_map<std::uint32_t, DiagnosticSuspension> m_diagnosticsSuspensions;
 			mutable std::string m_inputSettingsFingerprint;
 			mutable std::unordered_set<std::uint64_t> m_armedInputCaptures;
 			bool m_inputAvailable{};

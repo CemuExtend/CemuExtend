@@ -6,6 +6,7 @@ add_library(CemuApplication STATIC
 	AccountFacade.h
 	ContentOperations.h
 	CemodManagerFacade.h
+	DiagnosticsFacade.h
   ApplicationEvents.cpp
   ApplicationEvents.h
   CafeEmulationBackend.cpp

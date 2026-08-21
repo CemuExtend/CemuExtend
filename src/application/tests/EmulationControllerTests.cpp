@@ -104,6 +104,19 @@ namespace
 		{
 			return {Application::CemodManagerError::None, {}, cemodManagerSnapshot};
 		}
+		Application::PpcThreadsSnapshot diagnosticsSnapshot;
+		Application::PpcThreadCommandRequest lastDiagnosticCommand;
+		Application::PpcThreadCommandResult diagnosticCommandResult{true, {}};
+		Application::PpcThreadsSnapshot CapturePpcThreads() override
+		{
+			return diagnosticsSnapshot;
+		}
+		Application::PpcThreadCommandResult ExecutePpcThreadCommand(
+			const Application::PpcThreadCommandRequest& request) override
+		{
+			lastDiagnosticCommand = request;
+			return diagnosticCommandResult;
+		}
 		std::vector<Application::TitleSummary> titles;
 		std::vector<Application::ManagedContentEntry> managedContent;
 		std::vector<Application::GameSummary> games;
@@ -791,10 +804,28 @@ int main()
 		Application::kMinimumPersistentId, false, {}, [] { return true; }));
 	assert(backend.saveDeletes == 1 && backend.saveTransfers == 1 &&
 		backend.saveImports == 2 && backend.saveExports == 1);
+	backend.diagnosticsSnapshot = {
+		.generation = 9,
+		.available = true,
+		.threads = {{.address = 0x1000, .name = "test-thread"}},
+	};
+	const auto diagnostics = controller.CapturePpcThreads();
+	assert(diagnostics.available && diagnostics.generation == 9 &&
+		diagnostics.threads.front().name == "test-thread");
+	const Application::PpcThreadCommandRequest diagnosticCommand{
+		.generation = diagnostics.generation,
+		.threadAddress = diagnostics.threads.front().address,
+		.threadIdentity = diagnostics.threads.front().identity,
+		.command = Application::PpcThreadCommand::Suspend,
+	};
+	assert(controller.ExecutePpcThreadCommand(diagnosticCommand).applied);
+	assert(backend.lastDiagnosticCommand.threadAddress == 0x1000);
 	const auto stop = controller.Stop();
 	assert(stop.stopped);
 	assert(controller.State() == Application::EmulationState::Idle);
 	assert(backend.stops == 1);
+	assert(!controller.CapturePpcThreads().available);
+	assert(!controller.ExecutePpcThreadCommand(diagnosticCommand).applied);
 
 	VerifyFailure(Application::LaunchError::InvalidExecutable);
 	VerifyFailure(Application::LaunchError::PermissionRequired);

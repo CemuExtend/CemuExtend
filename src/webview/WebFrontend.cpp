@@ -535,6 +535,30 @@ namespace
 		return value.GetUint64();
 	}
 
+	std::uint32_t RequiredHexAddress(const rapidjson::Value& object, const char* name)
+	{
+		const auto text = RequiredString(object, name);
+		if (text.size() != 8)
+			throw std::invalid_argument(std::string(name) + " must be an 8-digit hexadecimal address");
+		std::uint32_t value{};
+		const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+		if (error != std::errc{} || end != text.data() + text.size())
+			throw std::invalid_argument(std::string(name) + " must be an 8-digit hexadecimal address");
+		return value;
+	}
+
+	std::uint64_t RequiredHexIdentity(const rapidjson::Value& object, const char* name)
+	{
+		const auto text = RequiredString(object, name);
+		if (text.size() != 16)
+			throw std::invalid_argument(std::string(name) + " must be a 16-digit hexadecimal identity");
+		std::uint64_t value{};
+		const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+		if (error != std::errc{} || end != text.data() + text.size())
+			throw std::invalid_argument(std::string(name) + " must be a 16-digit hexadecimal identity");
+		return value;
+	}
+
 	std::uint32_t RequiredBoundedUint(const rapidjson::Value& object, const char* name,
 		std::uint32_t minimum, std::uint32_t maximum)
 	{
@@ -3554,6 +3578,85 @@ namespace
 					ParseTitleId(params), RequiredString(params, "packageKey"));
 				if (result) Emit("cemod.changed", R"({"reason":"legacyImport"})");
 				return CemodResultJson(result);
+			});
+			m_rpc.Register("diagnostics.ppcThreadsSnapshot", [this](const rapidjson::Value&) {
+				RequireRole({"ppc-threads"});
+				const auto snapshot = m_controller.CapturePpcThreads();
+				auto stateName = [](Application::PpcThreadState state) -> const char* {
+					switch (state)
+					{
+					case Application::PpcThreadState::None: return "none";
+					case Application::PpcThreadState::Ready: return "ready";
+					case Application::PpcThreadState::Running: return "running";
+					case Application::PpcThreadState::Waiting: return "waiting";
+					case Application::PpcThreadState::Moribund: return "moribund";
+					case Application::PpcThreadState::Suspended: return "suspended";
+					default: return "unknown";
+					}
+				};
+				auto hex = [](std::uint32_t value) { return fmt::format("{:08X}", value); };
+				rapidjson::StringBuffer buffer; JsonWriter writer(buffer); writer.StartObject();
+				writer.Key("generation"); writer.String(std::to_string(snapshot.generation).c_str());
+				writer.Key("available"); writer.Bool(snapshot.available);
+				writer.Key("diagnostic"); writer.String(snapshot.diagnostic.data(), snapshot.diagnostic.size());
+				writer.Key("threads"); writer.StartArray();
+				for (const auto& thread : snapshot.threads)
+				{
+					writer.StartObject();
+					const auto address = hex(thread.address); writer.Key("address"); writer.String(address.c_str());
+					const auto identity = fmt::format("{:016X}", thread.identity); writer.Key("identity"); writer.String(identity.c_str());
+					const auto entry = hex(thread.entryPoint); writer.Key("entryPoint"); writer.String(entry.c_str());
+					const auto stackLow = hex(thread.stackLow); writer.Key("stackLow"); writer.String(stackLow.c_str());
+					const auto stackHigh = hex(thread.stackHigh); writer.Key("stackHigh"); writer.String(stackHigh.c_str());
+					const auto pc = hex(thread.instructionPointer); writer.Key("instructionPointer"); writer.String(pc.c_str());
+					const auto lr = hex(thread.linkRegister); writer.Key("linkRegister"); writer.String(lr.c_str());
+					writer.Key("state"); writer.String(stateName(thread.state));
+					writer.Key("requestedAffinity"); writer.Uint(thread.requestedAffinity);
+					writer.Key("effectiveAffinity"); writer.Uint(thread.effectiveAffinity);
+					writer.Key("basePriority"); writer.Int(thread.basePriority);
+					writer.Key("effectivePriority"); writer.Int(thread.effectivePriority);
+					const auto wake = std::to_string(thread.wakeUpTime); writer.Key("wakeUpTime"); writer.String(wake.c_str());
+					const auto cycles = std::to_string(thread.totalCycles); writer.Key("totalCycles"); writer.String(cycles.c_str());
+					writer.Key("name"); writer.String(thread.name.data(), thread.name.size());
+					writer.Key("gpr"); writer.StartArray();
+					for (const auto value : {thread.gpr3, thread.gpr4, thread.gpr5, thread.gpr6, thread.gpr7})
+					{ const auto formatted = hex(value); writer.String(formatted.c_str()); }
+					writer.EndArray(); writer.Key("cancelRequested"); writer.Bool(thread.cancelRequested);
+					writer.Key("suspensionOwnedByFacade"); writer.Bool(thread.suspensionOwnedByFacade);
+					if (thread.waitingMutex != 0)
+					{
+						writer.Key("waitingMutex"); writer.StartObject();
+						const auto mutex = hex(thread.waitingMutex); writer.Key("address"); writer.String(mutex.c_str());
+						const auto owner = hex(thread.mutexOwner); writer.Key("owner"); writer.String(owner.c_str());
+						writer.Key("lockCount"); writer.Uint(thread.mutexLockCount); writer.EndObject();
+					}
+					writer.EndObject();
+				}
+				writer.EndArray(); writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("diagnostics.ppcThreadCommand", [this](const rapidjson::Value& params) {
+				RequireRole({"ppc-threads"});
+				Application::PpcThreadCommandRequest request;
+				request.generation = ParseDecimalUint64(
+					RequiredString(params, "generation"), "generation");
+				request.threadAddress = RequiredHexAddress(params, "threadAddress");
+				request.threadIdentity = RequiredHexIdentity(params, "threadIdentity");
+				const auto command = RequiredString(params, "command");
+				if (command == "suspend") request.command = Application::PpcThreadCommand::Suspend;
+				else if (command == "resume") request.command = Application::PpcThreadCommand::Resume;
+				else
+				{
+					request.command = Application::PpcThreadCommand::AdjustPriority;
+					if (command == "boost1") request.priorityDelta = -1;
+					else if (command == "boost5") request.priorityDelta = -5;
+					else if (command == "decrease1") request.priorityDelta = 1;
+					else if (command == "decrease5") request.priorityDelta = 5;
+					else throw std::invalid_argument("unknown PPC thread command");
+				}
+				const auto result = m_controller.ExecutePpcThreadCommand(request);
+				return std::string(R"({"applied":)") + (result.applied ? "true" : "false") +
+					R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
 			});
 			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
 				const auto jobId = ParseDecimalUint64(RequiredString(params, "jobId"), "jobId");

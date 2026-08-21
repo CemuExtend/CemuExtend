@@ -15,6 +15,7 @@
 #include "application/AccountFacade.h"
 #include "application/ContentOperations.h"
 #include "application/CemodManagerFacade.h"
+#include "application/DiagnosticsFacade.h"
 #include "application/EmulationPresentation.h"
 #include "application/FrontendSettingsFacade.h"
 #include "application/HotkeySettingsFacade.h"
@@ -173,7 +174,8 @@ namespace Application
 		public IContentOperations, public IGameProfileService,
 		public ITitleInstallService, public IAccountService, public ISaveService,
 		public IFrontendSettingsService, public IInputSettingsService,
-		public IHotkeySettingsService, public ICemodManagerService
+		public IHotkeySettingsService, public ICemodManagerService,
+		public IDiagnosticsService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -267,6 +269,9 @@ namespace Application
 		[[nodiscard]] CemodManagerResult ImportLegacyCemodPackageData(
 			std::uint64_t generation, std::uint64_t titleId,
 			std::string_view packageKey);
+		[[nodiscard]] PpcThreadsSnapshot CapturePpcThreads();
+		[[nodiscard]] PpcThreadCommandResult ExecutePpcThreadCommand(
+			const PpcThreadCommandRequest& request);
 		[[nodiscard]] FrontendSettingsSnapshot GetFrontendSettings() const;
 		[[nodiscard]] FrontendSettingsResult ApplyFrontendSettings(
 			const FrontendSettingsUpdate& update);

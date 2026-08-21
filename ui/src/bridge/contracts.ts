@@ -50,6 +50,37 @@ export type SaveTitle = { titleId: string; name: string; saves: Array<Omit<SaveL
 export type SaveManagerModel = { scanning: boolean; accounts: SaveAccount[]; titles: SaveTitle[] };
 export type SaveImportInspection = { confirmationToken: string; targetState: SaveEntryState; sourceTitleId: string | null; titleMismatch: boolean };
 
+export type PpcThreadState = "none" | "ready" | "running" | "waiting" | "moribund" | "suspended" | "unknown";
+export type PpcThread = {
+  address: string;
+  identity: string;
+  entryPoint: string;
+  stackLow: string;
+  stackHigh: string;
+  instructionPointer: string;
+  linkRegister: string;
+  state: PpcThreadState;
+  requestedAffinity: number;
+  effectiveAffinity: number;
+  basePriority: number;
+  effectivePriority: number;
+  wakeUpTime: string;
+  totalCycles: string;
+  name: string;
+  gpr: [string, string, string, string, string];
+  cancelRequested: boolean;
+  suspensionOwnedByFacade: boolean;
+  waitingMutex?: { address: string; owner: string; lockCount: number };
+};
+export type PpcThreadsModel = {
+  generation: string;
+  available: boolean;
+  diagnostic: string;
+  threads: PpcThread[];
+};
+export type PpcThreadCommand = "suspend" | "resume" | "boost1" | "boost5" | "decrease1" | "decrease5";
+export type PpcThreadCommandResult = { applied: boolean; diagnostic: string };
+
 export type Title = {
   titleId: string;
   name: string;

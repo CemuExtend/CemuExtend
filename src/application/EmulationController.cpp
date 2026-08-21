@@ -203,6 +203,33 @@ namespace Application
 		return m_backend->IsTitleRunning();
 	}
 
+	PpcThreadsSnapshot EmulationController::CapturePpcThreads()
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_state != EmulationState::Running)
+				return {.diagnostic = "PPC threads are available only while emulation is running"};
+		}
+		if (!m_backend->IsTitleRunning())
+			return {.diagnostic = "the emulated title is not running"};
+		return m_backend->CapturePpcThreads();
+	}
+
+	PpcThreadCommandResult EmulationController::ExecutePpcThreadCommand(
+		const PpcThreadCommandRequest& request)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_state != EmulationState::Running)
+				return {false, "PPC thread commands require running emulation"};
+		}
+		if (!m_backend->IsTitleRunning())
+			return {false, "the emulated title is not running"};
+		return m_backend->ExecutePpcThreadCommand(request);
+	}
+
 	std::optional<std::uint64_t> EmulationController::RunningTitleId() const
 	{
 		return m_backend->RunningTitleId();
