@@ -436,14 +436,25 @@ public:
 		if(error != 0)
 			cemuLog_logDebug(LogType::Force, "XMLConfig::Save > SaveFile {}", error);
 
-		fflush(file);
-		fclose(file);
+		const bool flushed = fflush(file) == 0;
+		const bool closed = fclose(file) == 0;
+		if (!flushed || !closed)
+		{
+			fs::remove(tmp_name, err);
+			return false;
+		}
+		if (!success)
+		{
+			fs::remove(tmp_name, err);
+			return false;
+		}
 
 		fs::rename(tmp_name, filename, err);
 		if(err)
 		{
 			cemuLog_log(LogType::Force, "Unable to save settings to file: {}", err.message().c_str());
 			fs::remove(tmp_name, err);
+			return false;
 		}
 
 		return success;

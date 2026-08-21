@@ -461,6 +461,14 @@ struct CemuConfig
 #undef DISABLE_SCREENSAVER_DEFAULT
 	ConfigValue<bool> play_boot_sound{false};
 
+	struct
+	{
+		ConfigValue<bool> start_fullscreen{false};
+		ConfigValue<bool> open_pad{false};
+		ConfigValue<bool> check_updates{true};
+		ConfigValue<bool> setup_completed{false};
+	} frontend;
+
 	std::vector<std::string> game_paths;
 	std::mutex game_cache_entries_mutex;
 	std::vector<GameEntry> game_cache_entries;

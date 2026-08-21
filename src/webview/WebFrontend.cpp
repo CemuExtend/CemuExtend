@@ -265,6 +265,58 @@ namespace
 		}
 	}
 
+	std::string FrontendSettingsJson(
+		const Application::FrontendSettingsSnapshot& snapshot)
+	{
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		writer.StartObject();
+		writer.Key("revision"); writer.Uint64(snapshot.revision);
+		writer.Key("gamePaths"); writer.StartArray();
+		for (const auto& path : snapshot.gamePaths)
+		{
+			const auto value = _pathToUtf8(path);
+			writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
+		}
+		writer.EndArray();
+		writer.Key("startFullscreen"); writer.Bool(snapshot.startFullscreen);
+		writer.Key("openPad"); writer.Bool(snapshot.openPad);
+		writer.Key("checkUpdates"); writer.Bool(snapshot.checkUpdates);
+		writer.Key("updateChecksSupported"); writer.Bool(snapshot.updateChecksSupported);
+		writer.Key("portableMode"); writer.Bool(snapshot.portableMode);
+		writer.Key("titleRunning"); writer.Bool(snapshot.titleRunning);
+		writer.Key("setupCompleted"); writer.Bool(snapshot.setupCompleted);
+		writer.Key("fullscreenOverride");
+		if (snapshot.fullscreenOverride) writer.Bool(*snapshot.fullscreenOverride);
+		else writer.Null();
+		writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	std::string_view FrontendSettingsErrorName(Application::FrontendSettingsError error)
+	{
+		switch (error)
+		{
+		case Application::FrontendSettingsError::Conflict: return "conflict";
+		case Application::FrontendSettingsError::TitleRunning: return "titleRunning";
+		case Application::FrontendSettingsError::FullscreenOverride: return "fullscreenOverride";
+		case Application::FrontendSettingsError::UpdateUnsupported: return "updateUnsupported";
+		case Application::FrontendSettingsError::InvalidPath: return "invalidPath";
+		case Application::FrontendSettingsError::StorageFailed: return "storageFailed";
+		case Application::FrontendSettingsError::SaveFailed: return "saveFailed";
+		default: return "none";
+		}
+	}
+
+	std::string FrontendSettingsResultJson(
+		const Application::FrontendSettingsResult& result)
+	{
+		return std::string(R"({"ok":)") + (result ? "true" : "false") +
+			R"(,"error":)" + JsonString(FrontendSettingsErrorName(result.error)) +
+			R"(,"snapshot":)" + FrontendSettingsJson(result.snapshot) +
+			R"(,"diagnostic":)" + JsonString(result.diagnostic) + "}";
+	}
+
 	const rapidjson::Value& RequiredMember(const rapidjson::Value& object,
 		const char* name)
 	{
@@ -290,6 +342,14 @@ namespace
 		if (!value.IsUint())
 			throw std::invalid_argument(std::string(name) + " must be an unsigned integer");
 		return value.GetUint();
+	}
+
+	std::uint64_t RequiredUint64(const rapidjson::Value& object, const char* name)
+	{
+		const auto& value = RequiredMember(object, name);
+		if (!value.IsUint64())
+			throw std::invalid_argument(std::string(name) + " must be an unsigned integer");
+		return value.GetUint64();
 	}
 
 	std::uint32_t RequiredBoundedUint(const rapidjson::Value& object, const char* name,
@@ -1765,6 +1825,11 @@ namespace
 				}
 				result += R"(,"theme":"system","shuttingDown":)";
 				result += m_rpc.IsShuttingDown() ? "true}" : "false}";
+				if (m_invokingWindow == 0 &&
+					!m_controller.GetFrontendSettings().setupCompleted &&
+					!m_windowByRole.contains("getting-started") &&
+					!m_pendingWindowRoles.contains("getting-started"))
+					(void)QueueToolWindow("getting-started", "automatic-getting-started");
 				return result;
 			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
@@ -1845,6 +1910,31 @@ namespace
 					R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
 					R"({"label":"CemuExtend source","url":"https://github.com/PinkDiamondTeam/CemuExtend"},)"
 					R"({"label":"Cemu project","url":"https://cemu.info/"}]})";
+			});
+			m_rpc.Register("settings.getFrontend", [this](const rapidjson::Value&) {
+				RequireRole({"getting-started", "general-settings"});
+				return FrontendSettingsJson(m_controller.GetFrontendSettings());
+			});
+			m_rpc.Register("settings.applyFrontend", [this](const rapidjson::Value& params) {
+				RequireRole({"getting-started", "general-settings"});
+				Application::FrontendSettingsUpdate update;
+				update.expectedRevision = RequiredUint64(params, "revision");
+				update.startFullscreen = RequiredBool(params, "startFullscreen");
+				update.openPad = RequiredBool(params, "openPad");
+				update.checkUpdates = RequiredBool(params, "checkUpdates");
+				update.completeSetup = RequiredBool(params, "completeSetup");
+				const auto& paths = RequiredMember(params, "gamePaths");
+				if (!paths.IsArray())
+					throw std::invalid_argument("gamePaths must be an array");
+				for (const auto& path : paths.GetArray())
+				{
+					if (!path.IsString() || path.GetStringLength() == 0 ||
+						path.GetStringLength() > 4096)
+						throw std::invalid_argument("each game path must be a non-empty path string");
+					update.gamePaths.emplace_back(_utf8ToPath(std::string_view(
+						path.GetString(), path.GetStringLength())));
+				}
+				return FrontendSettingsResultJson(m_controller.ApplyFrontendSettings(update));
 			});
 			m_rpc.Register("accounts.getModel", [this](const rapidjson::Value&) {
 				RequireRole({"account-manager", "general-settings"});
@@ -2044,8 +2134,17 @@ namespace
 		{
 			if (!m_windowState->BeginLaunch())
 				throw std::runtime_error("main window is not ready to launch a title");
+			const auto frontendSettings = m_controller.GetFrontendSettings();
+			const bool launchFullscreen = frontendSettings.fullscreenOverride.value_or(
+				frontendSettings.startFullscreen);
+			const bool previousFullscreen = m_fullscreen;
 			const auto result = m_controller.Launch({path},
-				[this](const Application::LaunchResult&) {
+				[this, launchFullscreen](const Application::LaunchResult&) {
+					if (m_fullscreen != launchFullscreen)
+					{
+						m_fullscreen = launchFullscreen;
+						m_nativeWindow->SetFullscreen(m_fullscreen);
+					}
 					auto& region = m_nativeWindow->CreateMainRenderRegion();
 					m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 					m_rendererHost->InitializeMain(region);
@@ -2053,11 +2152,16 @@ namespace
 						throw std::runtime_error("main window content transition failed");
 					m_nativeWindow->ShowRenderRegion();
 				},
-				[this] {
+				[this, previousFullscreen] {
 					m_rendererHost->AbandonMainInitialization();
 					DestroyMainRenderRegion();
 					m_nativeWindow->ShowLibrary();
 					(void)m_windowState->RollbackLaunch();
+					if (m_fullscreen != previousFullscreen)
+					{
+						m_fullscreen = previousFullscreen;
+						m_nativeWindow->SetFullscreen(previousFullscreen);
+					}
 				});
 			if (!result)
 			{
@@ -2075,6 +2179,8 @@ namespace
 				}
 				throw std::runtime_error(result.diagnostic.empty() ? "title launch failed" : result.diagnostic);
 			}
+			if (frontendSettings.openPad && !m_nativeWindow->IsPadRenderRegionOpen())
+				TogglePadRenderRegion();
 			return std::string(R"({"titleId":")") + TitleIdString(result.titleId) + "\"}";
 		}
 

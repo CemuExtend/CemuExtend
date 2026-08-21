@@ -313,6 +313,19 @@ namespace Application
 		return m_backend->ImportLegacyCemodData(titleId, principal, error);
 	}
 
+	FrontendSettingsSnapshot EmulationController::GetFrontendSettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetFrontendSettings();
+	}
+
+	FrontendSettingsResult EmulationController::ApplyFrontendSettings(
+		const FrontendSettingsUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ApplyFrontendSettings(update);
+	}
+
 	std::vector<TitleSummary> EmulationController::ListTitles() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);

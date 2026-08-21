@@ -137,6 +137,31 @@ export type GraphicPackInstallRequest = {
   replaceExisting: boolean;
 };
 
+export type FrontendSettings = {
+  revision: number;
+  gamePaths: string[];
+  startFullscreen: boolean;
+  openPad: boolean;
+  checkUpdates: boolean;
+  updateChecksSupported: boolean;
+  portableMode: boolean;
+  titleRunning: boolean;
+  setupCompleted: boolean;
+  fullscreenOverride: boolean | null;
+};
+
+export type FrontendSettingsUpdate = Pick<FrontendSettings,
+  "revision" | "gamePaths" | "startFullscreen" | "openPad" | "checkUpdates"> & {
+  completeSetup: boolean;
+};
+
+export type FrontendSettingsApplyResult = {
+  ok: boolean;
+  error: "none" | "conflict" | "titleRunning" | "fullscreenOverride" | "updateUnsupported" | "invalidPath" | "storageFailed" | "saveFailed";
+  snapshot: FrontendSettings;
+  diagnostic: string;
+};
+
 declare global {
   interface Window {
     cemuInvoke?: (requestJson: string) => Promise<string>;

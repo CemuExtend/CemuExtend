@@ -30,13 +30,13 @@ void wxCemuConfig::Load(XMLConfigParser& parser)
 	use_discord_presence = parser.get("use_discord_presence", true);
 	fullscreen_menubar = parser.get("fullscreen_menubar", false);
 	feral_gamemode = parser.get("feral_gamemode", false);
-	check_update = parser.get("check_update", check_update);
+	check_update = GetConfig().frontend.check_updates.GetValue();
 	receive_untested_updates = parser.get("receive_untested_updates", receive_untested_updates);
 	save_screenshot = parser.get("save_screenshot", save_screenshot);
 	did_show_vulkan_warning = parser.get("vk_warning", did_show_vulkan_warning);
 	did_show_graphic_pack_download = parser.get("gp_download", did_show_graphic_pack_download);
 	did_show_macos_disclaimer = parser.get("macos_disclaimer", did_show_macos_disclaimer);
-	fullscreen = parser.get("fullscreen", fullscreen);
+	fullscreen = GetConfig().frontend.start_fullscreen.GetValue();
 
 	window_position.x = parser.get("window_position").get("x", -1);
 	window_position.y = parser.get("window_position").get("y", -1);
@@ -45,7 +45,7 @@ void wxCemuConfig::Load(XMLConfigParser& parser)
 	window_size.y = parser.get("window_size").get("y", -1);
 	window_maximized = parser.get("window_maximized", false);
 
-	pad_open = parser.get("open_pad", false);
+	pad_open = GetConfig().frontend.open_pad.GetValue();
 	pad_position.x = parser.get("pad_position").get("x", -1);
 	pad_position.y = parser.get("pad_position").get("y", -1);
 
@@ -123,6 +123,12 @@ void wxCemuConfig::Load(XMLConfigParser& parser)
 
 void wxCemuConfig::Save(XMLConfigParser& config)
 {
+	// Keep the legacy wx values mirrored into the frontend-neutral source of truth
+	// while the optional wx frontend remains buildable during migration.
+	auto& frontendSettings = GetConfig().frontend;
+	frontendSettings.start_fullscreen = fullscreen.GetValue();
+	frontendSettings.open_pad = pad_open.GetValue();
+	frontendSettings.check_updates = check_update.GetValue();
 	// general settings
 	config.set<sint32>("language", language);
 	config.set<sint32>("msw_theme", msw_theme);

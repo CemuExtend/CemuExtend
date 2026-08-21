@@ -1,6 +1,6 @@
 {
   "windowRoles": ["main-library", "general-settings", "input-settings", "hotkey-settings", "graphic-packs", "title-manager", "cemod-manager", "cemod-permissions", "account-manager", "save-manager", "update-manager", "logging", "memory-searcher", "ppc-debugger", "audio-debugger", "texture-relations", "ppc-threads", "emulated-usb-devices", "checksum-tool", "getting-started", "about"],
-  "implementedWindowRoles": ["graphic-packs", "account-manager", "about"],
+  "implementedWindowRoles": ["graphic-packs", "account-manager", "getting-started", "about"],
   "methods": [
     { "name": "system.bootstrap", "params": "undefined", "result": "Bootstrap" },
     { "name": "system.quit", "params": "undefined", "result": "EmptyResult" },
@@ -9,6 +9,8 @@
     { "name": "window.focus", "params": "undefined", "result": "EmptyResult" },
     { "name": "system.openExternalUrl", "params": "{ url: string }", "result": "EmptyResult" },
     { "name": "about.get", "params": "undefined", "result": "AboutInfo" },
+    { "name": "settings.getFrontend", "params": "undefined", "result": "FrontendSettings" },
+    { "name": "settings.applyFrontend", "params": "FrontendSettingsUpdate", "result": "FrontendSettingsApplyResult" },
     { "name": "accounts.getModel", "params": "undefined", "result": "AccountManagerModel" },
     { "name": "accounts.create", "params": "{ persistentId: number; miiName: string }", "result": "Account" },
     { "name": "accounts.update", "params": "AccountUpdate", "result": "Account" },

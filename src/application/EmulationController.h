@@ -15,6 +15,7 @@
 #include "application/AccountFacade.h"
 #include "application/ContentOperations.h"
 #include "application/EmulationPresentation.h"
+#include "application/FrontendSettingsFacade.h"
 #include "application/GameProfileFacade.h"
 #include "application/GraphicPackFacade.h"
 #include "application/NfcFacade.h"
@@ -166,7 +167,8 @@ namespace Application
 
 	class IEmulationBackend : public ITitleCatalog, public IGraphicPackService,
 		public IContentOperations, public IGameProfileService,
-		public ITitleInstallService, public IAccountService, public ISaveService
+		public ITitleInstallService, public IAccountService, public ISaveService,
+		public IFrontendSettingsService
 	{
 	public:
 		virtual ~IEmulationBackend() = default;
@@ -253,6 +255,9 @@ namespace Application
 		[[nodiscard]] CemuExtendServiceGrantDefaults ServiceGrantDefaults() const;
 		[[nodiscard]] bool ImportLegacyCemodData(std::uint64_t titleId,
 			std::string_view principal, std::string& error);
+		[[nodiscard]] FrontendSettingsSnapshot GetFrontendSettings() const;
+		[[nodiscard]] FrontendSettingsResult ApplyFrontendSettings(
+			const FrontendSettingsUpdate& update);
 		[[nodiscard]] std::vector<TitleSummary> ListTitles() const;
 		[[nodiscard]] std::optional<TitleSummary> ResolveBaseTitle(
 			std::uint64_t titleId) const;

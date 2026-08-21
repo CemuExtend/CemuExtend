@@ -23,7 +23,10 @@ export function Library() {
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void load(); return subscribe((event) => { if (event.type === "titles.changed") void load(); else if (event.type === "system.diagnostic" && typeof event.payload === "object" && event.payload && "message" in event.payload && typeof event.payload.message === "string") setError(event.payload.message); }); }, []);
+  useEffect(() => { void load(); return subscribe((event) => {
+    if (event.type === "titles.changed") void load();
+    else if ((event.type === "system.diagnostic" || event.type === "window.openFailed") && typeof event.payload === "object" && event.payload && "message" in event.payload && typeof event.payload.message === "string") setError(event.payload.message);
+  }); }, []);
 
   const visible = useMemo(() => titles
     .filter((title) => region === "all" || title.region === region)

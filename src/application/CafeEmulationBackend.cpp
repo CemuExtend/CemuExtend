@@ -22,6 +22,7 @@
 #include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
+#include "config/LaunchSettings.h"
 #include "input/InputManager.h"
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "Cemu/ncrypto/ncrypto.h"
@@ -467,6 +468,83 @@ namespace Application
 				return;
 			std::error_code ec;
 			fs::remove_all(path, ec);
+		}
+
+		FrontendSettingsResult EnsureDefaultMlcFiles(const fs::path& mlc,
+			std::span<const AccountCountry> countries, FrontendSettingsSnapshot snapshot)
+		{
+			const std::array directories{
+				mlc, mlc / "sys", mlc / "usr", mlc / "usr/title/00050000",
+				mlc / "usr/title/0005000c", mlc / "usr/title/0005000e",
+				mlc / "usr/save/00050010/1004a000/user/common/db",
+				mlc / "usr/save/00050010/1004a100/user/common/db",
+				mlc / "usr/save/00050010/1004a200/user/common/db",
+				mlc / "sys/title/0005001b/1005c000/content",
+			};
+			std::error_code ec;
+			for (const auto& directory : directories)
+			{
+				fs::create_directories(directory, ec);
+				if (ec || !fs::is_directory(directory, ec) || ec)
+					return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+						fmt::format("unable to create MLC directory {}: {}", _pathToUtf8(directory),
+							ec ? ec.message() : "path is not a directory")};
+			}
+			const auto content = mlc / "sys/title/0005001b/1005c000/content";
+			auto writeIfMissing = [&](const fs::path& path, std::string_view data) -> bool {
+				if (fs::exists(path, ec)) return !ec && fs::is_regular_file(path, ec) && !ec;
+				if (ec) return false;
+				auto temporary = path;
+				temporary += fmt::format(".{}.tmp",
+					std::chrono::steady_clock::now().time_since_epoch().count());
+				{
+					std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+					output.write(data.data(), static_cast<std::streamsize>(data.size()));
+					output.flush();
+					if (!output) { RemovePathQuietly(temporary); return false; }
+				}
+				fs::rename(temporary, path, ec);
+				if (ec) { RemovePathQuietly(temporary); return false; }
+				return true;
+			};
+			constexpr std::string_view languages =
+				R"("ja",
+"en",
+"fr",
+"de",
+"it",
+"es",
+"zh",
+"ko",
+"nl",
+"pt",
+"ru",
+"zh",
+)";
+			if (!writeIfMissing(content / "language.txt", languages))
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+					"unable to initialize the MLC language table"};
+			std::string countryTable;
+			for (const auto& country : countries)
+				countryTable += boost::iequals(country.name, "NN") ? "NULL,\n" :
+					fmt::format("\"{}\",\n", country.name);
+			if (!writeIfMissing(content / "country.txt", countryTable))
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+					"unable to initialize the MLC country table"};
+			const auto writeTest = mlc / fmt::format(".cemu-write-test-{}",
+				std::chrono::steady_clock::now().time_since_epoch().count());
+			{
+				std::ofstream output(writeTest, std::ios::binary | std::ios::trunc);
+				output << "ok";
+				if (!output) { RemovePathQuietly(writeTest); return {
+					FrontendSettingsError::StorageFailed, std::move(snapshot),
+					"the MLC directory is not writable"}; }
+			}
+			fs::remove(writeTest, ec);
+			if (ec)
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+					"unable to remove the MLC write test"};
+			return {FrontendSettingsError::None, std::move(snapshot), {}};
 		}
 
 		constexpr std::size_t kMaximumGraphicPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
@@ -1870,6 +1948,180 @@ namespace Application
 				return m_inputAvailable && CafeSystem::IsTitleRunning();
 			}
 
+			FrontendSettingsSnapshot GetFrontendSettings() const override
+			{
+				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
+				FrontendSettingsSnapshot snapshot;
+				std::string fingerprint;
+				for (const auto& path : GetConfig().game_paths)
+				{
+					auto displayPath = _utf8ToPath(path);
+					std::error_code pathError;
+					if (displayPath.is_relative())
+						displayPath = fs::absolute(displayPath, pathError);
+					if (!pathError && fs::exists(displayPath, pathError) && !pathError)
+					{
+						auto canonical = fs::canonical(displayPath, pathError);
+						if (!pathError) displayPath = std::move(canonical);
+					}
+					snapshot.gamePaths.emplace_back(std::move(displayPath));
+					fingerprint.append(path).push_back('\0');
+				}
+				snapshot.startFullscreen = GetConfig().frontend.start_fullscreen.GetValue();
+				snapshot.openPad = GetConfig().frontend.open_pad.GetValue();
+				snapshot.checkUpdates = GetConfig().frontend.check_updates.GetValue();
+#if BOOST_OS_LINUX
+				snapshot.updateChecksSupported = std::getenv("APPIMAGE") != nullptr;
+#else
+				snapshot.updateChecksSupported = true;
+#endif
+				snapshot.portableMode = ActiveSettings::IsPortableMode();
+				snapshot.titleRunning = IsTitleRunning();
+				snapshot.setupCompleted = GetConfig().frontend.setup_completed.GetValue();
+				snapshot.fullscreenOverride = LaunchSettings::FullscreenEnabled();
+				fingerprint.append(snapshot.startFullscreen ? "1" : "0");
+				fingerprint.append(snapshot.openPad ? "1" : "0");
+				fingerprint.append(snapshot.checkUpdates ? "1" : "0");
+				fingerprint.append(snapshot.setupCompleted ? "1" : "0");
+				{
+					std::scoped_lock stateLock(m_frontendSettingsStateMutex);
+					if (m_frontendSettingsFingerprint.empty())
+						m_frontendSettingsFingerprint = fingerprint;
+					else if (m_frontendSettingsFingerprint != fingerprint)
+					{
+						m_frontendSettingsFingerprint = fingerprint;
+						++m_frontendSettingsRevision;
+					}
+					snapshot.revision = m_frontendSettingsRevision;
+				}
+				return snapshot;
+			}
+
+			FrontendSettingsResult ApplyFrontendSettings(
+				const FrontendSettingsUpdate& update) override
+			{
+				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
+				auto current = GetFrontendSettings();
+				if (current.titleRunning)
+					return {FrontendSettingsError::TitleRunning, std::move(current),
+						"frontend settings cannot be changed while a title is running"};
+				if (update.expectedRevision != current.revision)
+					return {FrontendSettingsError::Conflict, std::move(current),
+						"frontend settings changed in another window"};
+				if (current.fullscreenOverride && update.startFullscreen != current.startFullscreen)
+					return {FrontendSettingsError::FullscreenOverride, std::move(current),
+						"fullscreen startup is controlled by the command line"};
+				if (!current.updateChecksSupported && update.checkUpdates != current.checkUpdates)
+					return {FrontendSettingsError::UpdateUnsupported, std::move(current),
+						"automatic update checks are unavailable in this package"};
+				if (update.gamePaths.size() > 64)
+					return {FrontendSettingsError::InvalidPath, std::move(current),
+						"at most 64 game paths are supported"};
+
+				std::vector<fs::path> normalizedPaths;
+				std::set<std::string> normalizedKeys;
+				std::set<std::string> existingPathKeys;
+				for (const auto& path : current.gamePaths)
+				{
+					auto key = _pathToUtf8(path.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(key);
+#endif
+					existingPathKeys.emplace(std::move(key));
+				}
+				for (const auto& path : update.gamePaths)
+				{
+					if (!path.is_absolute() || _pathToUtf8(path).find('\0') != std::string::npos)
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+							"game paths must be absolute paths"};
+					std::error_code ec;
+					auto requestedKey = _pathToUtf8(path.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(requestedKey);
+#endif
+					auto normalized = fs::canonical(path, ec);
+					if (ec || !fs::is_directory(normalized, ec) || ec)
+					{
+						if (existingPathKeys.contains(requestedKey))
+						{
+							if (normalizedKeys.emplace(std::move(requestedKey)).second)
+								normalizedPaths.emplace_back(path.lexically_normal());
+							continue;
+						}
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+							fmt::format("game path is not an accessible directory: {}", _pathToUtf8(path))};
+					}
+					fs::directory_iterator readable(normalized, ec);
+					if (ec)
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+							fmt::format("game path cannot be read: {}", _pathToUtf8(path))};
+					auto key = _pathToUtf8(normalized.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(key);
+#endif
+					if (normalizedKeys.emplace(std::move(key)).second)
+						normalizedPaths.emplace_back(std::move(normalized));
+				}
+				if (update.completeSetup && !current.setupCompleted)
+				{
+					auto storage = EnsureDefaultMlcFiles(ActiveSettings::GetMlcPath(),
+						ListAccountCountries(), current);
+					if (!storage) return storage;
+				}
+
+				auto& config = GetConfig();
+				const auto oldPaths = config.game_paths;
+				const bool oldFullscreen = config.frontend.start_fullscreen.GetValue();
+				const bool oldPad = config.frontend.open_pad.GetValue();
+				const bool oldUpdates = config.frontend.check_updates.GetValue();
+				const bool oldSetup = config.frontend.setup_completed.GetValue();
+				auto restore = [&] {
+					config.game_paths = oldPaths;
+					config.frontend.start_fullscreen = oldFullscreen;
+					config.frontend.open_pad = oldPad;
+					config.frontend.check_updates = oldUpdates;
+					config.frontend.setup_completed = oldSetup;
+					CafeTitleList::ClearScanPaths();
+					for (const auto& path : oldPaths)
+						CafeTitleList::AddScanPath(_utf8ToPath(path));
+					(void)GetConfigHandle().Save();
+				};
+
+				try
+				{
+					config.game_paths.clear();
+					for (const auto& path : normalizedPaths)
+						config.game_paths.emplace_back(_pathToUtf8(path));
+					config.frontend.start_fullscreen = update.startFullscreen;
+					config.frontend.open_pad = update.openPad;
+					config.frontend.check_updates = update.checkUpdates;
+					if (update.completeSetup)
+						config.frontend.setup_completed = true;
+					CafeTitleList::ClearScanPaths();
+					for (const auto& path : normalizedPaths)
+						CafeTitleList::AddScanPath(path);
+					if (!GetConfigHandle().Save())
+					{
+						restore();
+						return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
+							"unable to save frontend settings"};
+					}
+					CafeTitleList::Refresh();
+				}
+				catch (const std::exception& error)
+				{
+					restore();
+					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(), error.what()};
+				}
+				catch (...)
+				{
+					restore();
+					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
+						"unknown error while applying frontend settings"};
+				}
+				return {FrontendSettingsError::None, GetFrontendSettings(), {}};
+			}
+
 			std::optional<std::uint64_t> RunningTitleId() const override
 			{
 				std::shared_lock lock(m_inputLifecycleMutex);
@@ -3037,8 +3289,7 @@ namespace Application
 			std::vector<AccountCountry> ListAccountCountries() const override
 			{
 				std::vector<AccountCountry> result;
-				for (std::uint32_t index = 0;
-					index < static_cast<std::uint32_t>(NCrypto::GetCountryCount()); ++index)
+				for (std::uint32_t index = 0; index <= std::numeric_limits<std::uint8_t>::max(); ++index)
 				{
 					const char* country = NCrypto::GetCountryAsString(index);
 					if (country && (index == 0 || !boost::equals(country, "NN")))
@@ -3212,8 +3463,7 @@ namespace Application
 					update.birthDay > 31 || update.gender > 2 || update.email.size() > 320)
 					return {AccountOperationError::BackendFailure,
 						"account profile fields are outside the supported range"};
-				const auto countryCount = static_cast<std::uint32_t>(NCrypto::GetCountryCount());
-				const char* country = update.country < countryCount ?
+				const char* country = update.country <= std::numeric_limits<std::uint8_t>::max() ?
 					NCrypto::GetCountryAsString(update.country) : nullptr;
 				if (!country || (update.country != 0 && boost::equals(country, "NN")))
 					return {AccountOperationError::BackendFailure,
@@ -4064,6 +4314,10 @@ namespace Application
 			ApplicationEvents& m_events;
 			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
 			mutable std::shared_mutex m_inputLifecycleMutex;
+			mutable std::mutex m_frontendSettingsStateMutex;
+			mutable std::recursive_mutex m_frontendSettingsTransactionMutex;
+			mutable std::string m_frontendSettingsFingerprint;
+			mutable std::uint64_t m_frontendSettingsRevision{1};
 			bool m_inputAvailable{};
 		};
 	}

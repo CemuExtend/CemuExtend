@@ -267,6 +267,25 @@ namespace
 				.nextPersistentId = NextPersistentId(),
 				.hasFreeSlots = HasFreeAccountSlots()};
 		}
+		Application::FrontendSettingsSnapshot frontendSettings{.revision = 1};
+		Application::FrontendSettingsSnapshot GetFrontendSettings() const override
+		{
+			return frontendSettings;
+		}
+		Application::FrontendSettingsResult ApplyFrontendSettings(
+			const Application::FrontendSettingsUpdate& update) override
+		{
+			if (update.expectedRevision != frontendSettings.revision)
+				return {Application::FrontendSettingsError::Conflict, frontendSettings,
+					"revision conflict"};
+			frontendSettings.gamePaths = update.gamePaths;
+			frontendSettings.startFullscreen = update.startFullscreen;
+			frontendSettings.openPad = update.openPad;
+			frontendSettings.checkUpdates = update.checkUpdates;
+			frontendSettings.setupCompleted |= update.completeSetup;
+			++frontendSettings.revision;
+			return {Application::FrontendSettingsError::None, frontendSettings, {}};
+		}
 		Application::AccountOperationResult SetActiveAccount(
 			std::uint32_t persistentId) override
 		{
@@ -603,6 +622,23 @@ int main()
 	assert(controller.SetActiveAccount(Application::kMinimumPersistentId));
 	assert(controller.SetAccountNetworkService(Application::kMinimumPersistentId,
 		Application::AccountNetworkService::Pretendo));
+	const auto frontendSettings = controller.GetFrontendSettings();
+	const auto frontendUpdate = controller.ApplyFrontendSettings({
+		.expectedRevision = frontendSettings.revision,
+		.gamePaths = {"/games"},
+		.startFullscreen = true,
+		.openPad = true,
+		.checkUpdates = false,
+		.completeSetup = true,
+	});
+	assert(frontendUpdate && frontendUpdate.snapshot.revision ==
+		frontendSettings.revision + 1 && frontendUpdate.snapshot.setupCompleted &&
+		frontendUpdate.snapshot.gamePaths == std::vector<fs::path>{"/games"});
+	const auto staleFrontendUpdate = controller.ApplyFrontendSettings({
+		.expectedRevision = frontendSettings.revision,
+	});
+	assert(!staleFrontendUpdate && staleFrontendUpdate.error ==
+		Application::FrontendSettingsError::Conflict);
 	backend.downloadAccountContext = {.accountName = "test-account", .region = 2};
 	const auto downloadContext = controller.GetDownloadAccountContext(
 		Application::kMinimumPersistentId);

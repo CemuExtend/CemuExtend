@@ -113,9 +113,19 @@ void CemuConfig::SetMLCPath(fs::path path, bool save)
 
 XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 {
+	// These keys were historically owned by wxCemuConfig at the document root.
+	// Keep them as migration defaults while storing frontend-neutral values below.
+	bool legacyFullscreen = parser.get("fullscreen", false);
+	bool legacyOpenPad = parser.get("open_pad", false);
+	bool legacyCheckUpdates = parser.get("check_update", true);
 	auto new_parser = parser.get("content");
 	if (new_parser.valid())
+	{
 		parser = new_parser;
+		legacyFullscreen = parser.get("fullscreen", legacyFullscreen);
+		legacyOpenPad = parser.get("open_pad", legacyOpenPad);
+		legacyCheckUpdates = parser.get("check_update", legacyCheckUpdates);
+	}
 
 	// general settings
 	log_flag = parser.get("logflag", log_flag.GetInitValue());
@@ -130,6 +140,16 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	proxy_server = parser.get("proxy_server", "");
 	disable_screensaver = parser.get("disable_screensaver", disable_screensaver);
 	play_boot_sound = parser.get("play_boot_sound", play_boot_sound);
+	auto frontendNode = parser.get("Frontend");
+	frontend.start_fullscreen = parser.get("fullscreen",
+		frontendNode.get("StartFullscreen", legacyFullscreen));
+	frontend.open_pad = parser.get("open_pad",
+		frontendNode.get("OpenPad", legacyOpenPad));
+	frontend.check_updates = parser.get("check_update",
+		frontendNode.get("CheckUpdates", legacyCheckUpdates));
+	// Load is only called for an existing configuration. Treat old configurations
+	// as already onboarded unless the new frontend explicitly persisted otherwise.
+	frontend.setup_completed = frontendNode.get("SetupCompleted", true);
 	console_language = parser.get("console_language", console_language.GetInitValue());
 
 	game_paths.clear();
@@ -468,6 +488,11 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	config.set<bool>("permanent_storage", permanent_storage);
 	config.set("proxy_server", proxy_server.GetValue().c_str());
 	config.set<bool>("play_boot_sound", play_boot_sound);
+	auto frontendNode = config.set("Frontend");
+	frontendNode.set("StartFullscreen", frontend.start_fullscreen.GetValue());
+	frontendNode.set("OpenPad", frontend.open_pad.GetValue());
+	frontendNode.set("CheckUpdates", frontend.check_updates.GetValue());
+	frontendNode.set("SetupCompleted", frontend.setup_completed.GetValue());
 
 	// config.set("cpu_mode", cpu_mode.GetValue());
 	//config.set("console_region", console_region.GetValue());
