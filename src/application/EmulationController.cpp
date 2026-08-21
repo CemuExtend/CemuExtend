@@ -464,6 +464,16 @@ namespace Application
 		return m_backend->RefreshGraphicPacks();
 	}
 
+	GraphicPackInstallResult EmulationController::InstallGraphicPacks(
+		const GraphicPackInstallRequest& request,
+		GraphicPackInstallProgressHandler progress,
+		GraphicPackInstallCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->InstallGraphicPacks(request, std::move(progress),
+			std::move(cancelled));
+	}
+
 	void EmulationController::SaveGraphicPackState()
 	{
 		std::scoped_lock operationLock(m_operationMutex);
@@ -505,6 +515,26 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->GetOnlineEnvironmentStatus();
+	}
+
+	AccountManagerSnapshot EmulationController::GetAccountManagerSnapshot() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetAccountManagerSnapshot();
+	}
+
+	AccountOperationResult EmulationController::SetActiveAccount(
+		std::uint32_t persistentId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetActiveAccount(persistentId);
+	}
+
+	AccountOperationResult EmulationController::SetAccountNetworkService(
+		std::uint32_t persistentId, AccountNetworkService service)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetAccountNetworkService(persistentId, service);
 	}
 
 	DownloadAccountContext EmulationController::GetDownloadAccountContext(

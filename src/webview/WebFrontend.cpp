@@ -1,4 +1,5 @@
 #include "Common/precompiled.h"
+#include "Common/version.h"
 
 #include "application/ApplicationRuntime.h"
 #include "application/ApplicationHost.h"
@@ -16,6 +17,7 @@
 #include "webview/WebHostServices.h"
 #include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
+#include "webview/generated/WindowRoles.h"
 #include "util/helpers/helpers.h"
 
 #include <array>
@@ -92,6 +94,219 @@ namespace
 		std::snprintf(text.data(), text.size(), "%016llx",
 			static_cast<unsigned long long>(titleId));
 		return text.data();
+	}
+
+	using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
+
+	void WriteAccount(JsonWriter& writer, const Application::AccountInfo& account)
+	{
+		writer.StartObject();
+		writer.Key("persistentId"); writer.Uint(account.persistentId);
+		writer.Key("persistentIdHex");
+		std::array<char, 9> persistentId{};
+		std::snprintf(persistentId.data(), persistentId.size(), "%08x", account.persistentId);
+		writer.String(persistentId.data());
+		writer.Key("miiName");
+		const auto miiName = boost::nowide::narrow(account.miiName);
+		writer.String(miiName.data(), static_cast<rapidjson::SizeType>(miiName.size()));
+		writer.Key("birthYear"); writer.Uint(account.birthYear);
+		writer.Key("birthMonth"); writer.Uint(account.birthMonth);
+		writer.Key("birthDay"); writer.Uint(account.birthDay);
+		writer.Key("gender"); writer.Uint(account.gender);
+		writer.Key("email"); writer.String(account.email.data(),
+			static_cast<rapidjson::SizeType>(account.email.size()));
+		writer.Key("country"); writer.Uint(account.country);
+		writer.Key("validOnlineAccount"); writer.Bool(account.validOnlineAccount);
+		writer.EndObject();
+	}
+
+	std::string_view AccountNetworkServiceName(Application::AccountNetworkService service)
+	{
+		switch (service)
+		{
+		case Application::AccountNetworkService::Nintendo: return "nintendo";
+		case Application::AccountNetworkService::Pretendo: return "pretendo";
+		case Application::AccountNetworkService::Custom: return "custom";
+		case Application::AccountNetworkService::Plasma: return "plasma";
+		default: return "offline";
+		}
+	}
+
+	Application::AccountNetworkService ParseAccountNetworkService(std::string_view service)
+	{
+		if (service == "offline") return Application::AccountNetworkService::Offline;
+		if (service == "nintendo") return Application::AccountNetworkService::Nintendo;
+		if (service == "pretendo") return Application::AccountNetworkService::Pretendo;
+		if (service == "custom") return Application::AccountNetworkService::Custom;
+		if (service == "plasma") return Application::AccountNetworkService::Plasma;
+		throw std::invalid_argument("unknown account network service");
+	}
+
+	std::string_view AccountFileStateName(Application::AccountFileState state)
+	{
+		switch (state)
+		{
+		case Application::AccountFileState::Corrupted: return "corrupted";
+		case Application::AccountFileState::Ok: return "ok";
+		default: return "missing";
+		}
+	}
+
+	std::string_view AccountOnlineErrorName(Application::AccountOnlineError error)
+	{
+		switch (error)
+		{
+		case Application::AccountOnlineError::NoAccountId: return "noAccountId";
+		case Application::AccountOnlineError::NoPasswordCached: return "noPasswordCached";
+		case Application::AccountOnlineError::PasswordCacheEmpty: return "passwordCacheEmpty";
+		case Application::AccountOnlineError::NoPrincipalId: return "noPrincipalId";
+		default: return "none";
+		}
+	}
+
+	std::string AccountJson(const Application::AccountInfo& account)
+	{
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		WriteAccount(writer, account);
+		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	void WriteGraphicPack(JsonWriter& writer, const Application::GraphicPackInfo& pack)
+	{
+		writer.StartObject();
+		auto string = [&writer](const char* key, const std::string& value) {
+			writer.Key(key); writer.String(value.data(),
+				static_cast<rapidjson::SizeType>(value.size()));
+		};
+		string("key", pack.key); string("virtualPath", pack.virtualPath);
+		string("name", pack.name); string("description", pack.description);
+		writer.Key("version"); writer.Int(pack.version);
+		writer.Key("universal"); writer.Bool(pack.universal);
+		writer.Key("enabled"); writer.Bool(pack.enabled);
+		writer.Key("activated"); writer.Bool(pack.activated);
+		writer.Key("defaultEnabled"); writer.Bool(pack.defaultEnabled);
+		writer.Key("hasShaders"); writer.Bool(pack.hasShaders);
+		writer.Key("hasPatches"); writer.Bool(pack.hasPatches);
+		writer.Key("hasCustomVsync"); writer.Bool(pack.hasCustomVsync);
+		writer.Key("supportedVersion"); writer.Bool(pack.supportedVersion);
+		writer.Key("titleIds"); writer.StartArray();
+		for (const auto titleId : pack.titleIds)
+		{
+			const auto value = TitleIdString(titleId);
+			writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
+		}
+		writer.EndArray();
+		writer.Key("presetOrder"); writer.StartArray();
+		for (const auto& category : pack.presetOrder)
+			writer.String(category.data(), static_cast<rapidjson::SizeType>(category.size()));
+		writer.EndArray();
+		writer.Key("presets"); writer.StartArray();
+		for (const auto& preset : pack.presets)
+		{
+			writer.StartObject();
+			string("category", preset.category); string("name", preset.name);
+			writer.Key("active"); writer.Bool(preset.active);
+			writer.Key("visible"); writer.Bool(preset.visible);
+			writer.EndObject();
+		}
+		writer.EndArray();
+		writer.EndObject();
+	}
+
+	std::string GraphicPackMutationJson(const Application::GraphicPackResult& result)
+	{
+		if (!result)
+			throw std::runtime_error(result.diagnostic.empty() ?
+				"graphic pack operation failed" : result.diagnostic);
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		writer.StartObject();
+		writer.Key("changed"); writer.Bool(result.changed);
+		writer.Key("titleRunning"); writer.Bool(result.titleRunning);
+		writer.Key("requiresRestart"); writer.Bool(result.requiresRestart);
+		writer.Key("applied"); writer.Bool(result.applied);
+		writer.Key("reloaded"); writer.Bool(result.reloaded);
+		writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
+			static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+		if (result.info)
+		{
+			writer.Key("info"); WriteGraphicPack(writer, *result.info);
+		}
+		writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	std::string_view GraphicPackInstallPhaseName(
+		Application::GraphicPackInstallPhase phase)
+	{
+		switch (phase)
+		{
+		case Application::GraphicPackInstallPhase::Downloading: return "downloading";
+		case Application::GraphicPackInstallPhase::Extracting: return "extracting";
+		case Application::GraphicPackInstallPhase::Refreshing: return "refreshing";
+		default: return "checking";
+		}
+	}
+
+	std::string_view GraphicPackInstallErrorName(
+		Application::GraphicPackInstallError error)
+	{
+		switch (error)
+		{
+		case Application::GraphicPackInstallError::ConfirmationRequired: return "confirmationRequired";
+		case Application::GraphicPackInstallError::Cancelled: return "cancelled";
+		case Application::GraphicPackInstallError::InvalidUrl: return "invalidUrl";
+		case Application::GraphicPackInstallError::ConnectionFailed: return "connectionFailed";
+		case Application::GraphicPackInstallError::InvalidArchive: return "invalidArchive";
+		case Application::GraphicPackInstallError::Conflict: return "conflict";
+		case Application::GraphicPackInstallError::IoFailure: return "ioFailure";
+		default: return "none";
+		}
+	}
+
+	const rapidjson::Value& RequiredMember(const rapidjson::Value& object,
+		const char* name)
+	{
+		if (!object.IsObject())
+			throw std::invalid_argument("RPC parameters must be an object");
+		const auto member = object.FindMember(name);
+		if (member == object.MemberEnd())
+			throw std::invalid_argument(std::string(name) + " is required");
+		return member->value;
+	}
+
+	std::string_view RequiredString(const rapidjson::Value& object, const char* name)
+	{
+		const auto& value = RequiredMember(object, name);
+		if (!value.IsString())
+			throw std::invalid_argument(std::string(name) + " must be a string");
+		return {value.GetString(), value.GetStringLength()};
+	}
+
+	std::uint32_t RequiredUint(const rapidjson::Value& object, const char* name)
+	{
+		const auto& value = RequiredMember(object, name);
+		if (!value.IsUint())
+			throw std::invalid_argument(std::string(name) + " must be an unsigned integer");
+		return value.GetUint();
+	}
+
+	std::uint32_t RequiredBoundedUint(const rapidjson::Value& object, const char* name,
+		std::uint32_t minimum, std::uint32_t maximum)
+	{
+		const auto value = RequiredUint(object, name);
+		if (value < minimum || value > maximum)
+			throw std::invalid_argument(std::string(name) + " is outside the supported range");
+		return value;
+	}
+
+	bool RequiredBool(const rapidjson::Value& object, const char* name)
+	{
+		const auto& value = RequiredMember(object, name);
+		if (!value.IsBool())
+			throw std::invalid_argument(std::string(name) + " must be a boolean");
+		return value.GetBool();
 	}
 
 	struct WindowDescriptor
@@ -346,6 +561,7 @@ namespace
 		{
 			std::uint64_t id{};
 			std::string role;
+			std::optional<std::uint64_t> titleContext;
 			webview_t webview{};
 			RpcBinding binding;
 			std::unique_ptr<IToolWindowSupport> nativeSupport;
@@ -363,6 +579,24 @@ namespace
 		struct DeferredMainTermination
 		{
 			std::shared_ptr<RuntimeCallbackGate> gate;
+		};
+
+		struct BackgroundJob
+		{
+			std::uint64_t id{};
+			std::uint64_t ownerWindow{};
+			std::shared_ptr<std::atomic_bool> cancelled;
+			std::jthread worker;
+		};
+
+		struct BackgroundJobEvent
+		{
+			std::shared_ptr<RuntimeCallbackGate> gate;
+			std::uint64_t jobId{};
+			std::uint64_t ownerWindow{};
+			std::string type;
+			std::string payload;
+			bool final{};
 		};
 
 		static void DispatchToolCloseAfterReply(webview_t, void* context)
@@ -403,6 +637,130 @@ namespace
 			}
 		}
 
+		static void PostBackgroundJobEvent(std::shared_ptr<RuntimeCallbackGate> gate,
+			std::uint64_t jobId, std::uint64_t ownerWindow, std::string type,
+			std::string payload, bool final)
+		{
+			auto event = std::make_shared<BackgroundJobEvent>(BackgroundJobEvent{
+				std::move(gate), jobId, ownerWindow, std::move(type), std::move(payload), final});
+			std::scoped_lock lock(event->gate->mutex);
+			if (!event->gate->target)
+				return;
+			auto* runtime = event->gate->target;
+			(void)runtime->PostToUi([event] {
+				std::scoped_lock callbackLock(event->gate->mutex);
+				if (event->gate->target)
+					event->gate->target->DeliverBackgroundJobEvent(*event);
+			});
+		}
+
+		void DeliverBackgroundJobEvent(const BackgroundJobEvent& event)
+		{
+			const auto job = m_backgroundJobs.find(event.jobId);
+			if (job == m_backgroundJobs.end() || job->second->ownerWindow != event.ownerWindow)
+				return;
+			const bool ownerAlive = event.ownerWindow == 0 ||
+				m_toolWindows.contains(event.ownerWindow);
+			if (ownerAlive)
+				EmitToWindow(event.ownerWindow, event.type, event.payload);
+			if (event.final)
+				m_backgroundJobs.erase(job);
+		}
+
+		std::uint64_t StartGraphicPackInstallJob(
+			Application::GraphicPackInstallRequest request)
+		{
+			if (std::ranges::any_of(m_backgroundJobs,
+				[this](const auto& entry) { return entry.second->ownerWindow == m_invokingWindow; }))
+				throw std::runtime_error("this window already has a background operation in progress");
+			constexpr std::size_t kMaximumBackgroundJobs = 4;
+			if (m_backgroundJobs.size() >= kMaximumBackgroundJobs)
+				throw std::runtime_error("too many background operations are in progress");
+			const auto id = ++m_nextBackgroundJobId;
+			const auto owner = m_invokingWindow;
+			auto job = std::make_unique<BackgroundJob>();
+			job->id = id;
+			job->ownerWindow = owner;
+			job->cancelled = std::make_shared<std::atomic_bool>();
+			auto cancelled = job->cancelled;
+			auto gate = m_callbackGate;
+			auto* controller = &m_controller;
+			m_backgroundJobs.emplace(id, std::move(job));
+			m_backgroundJobs.at(id)->worker = std::jthread(
+				[controller, gate = std::move(gate), cancelled, id, owner,
+					request = std::move(request)](std::stop_token stopToken) mutable {
+					auto isCancelled = [cancelled, stopToken] {
+						return cancelled->load(std::memory_order_acquire) || stopToken.stop_requested();
+					};
+					auto progress = [gate, id, owner](
+						const Application::GraphicPackInstallProgress& value) {
+						PostBackgroundJobEvent(gate, id, owner, "jobs.progress",
+							std::string(R"({"jobId":)") + std::to_string(id) +
+							R"(,"windowId":)" + std::to_string(owner) +
+							R"(,"phase":)" + JsonString(GraphicPackInstallPhaseName(value.phase)) +
+							R"(,"completed":)" + std::to_string(value.completed) +
+							R"(,"total":)" + std::to_string(value.total) +
+							R"(,"currentPath":)" + JsonString(value.currentPath) + "}", false);
+					};
+					Application::GraphicPackInstallResult result;
+					try
+					{
+						result = controller->InstallGraphicPacks(request, std::move(progress),
+							std::move(isCancelled));
+					}
+					catch (const std::exception& error)
+					{
+						result = {Application::GraphicPackInstallError::IoFailure, error.what()};
+					}
+					catch (...)
+					{
+						result = {Application::GraphicPackInstallError::IoFailure,
+							"graphic-pack worker failed with an unknown error"};
+					}
+					rapidjson::StringBuffer buffer;
+					JsonWriter writer(buffer);
+					writer.StartObject();
+					writer.Key("jobId"); writer.Uint64(id);
+					writer.Key("windowId"); writer.Uint64(owner);
+					writer.Key("ok"); writer.Bool(static_cast<bool>(result));
+					writer.Key("error"); writer.String(GraphicPackInstallErrorName(result.error).data());
+					writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
+						static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+					writer.Key("upToDate"); writer.Bool(result.upToDate);
+					writer.Key("removedEnabledPaths"); writer.StartArray();
+					for (const auto& path : result.removedEnabledPaths)
+						writer.String(path.data(), static_cast<rapidjson::SizeType>(path.size()));
+					writer.EndArray(); writer.EndObject();
+					PostBackgroundJobEvent(gate, id, owner, "jobs.completed",
+						{buffer.GetString(), buffer.GetSize()}, true);
+				});
+			return id;
+		}
+
+		void CancelBackgroundJobsForWindow(std::uint64_t owner) noexcept
+		{
+			for (auto& [id, job] : m_backgroundJobs)
+			{
+				(void)id;
+				if (job->ownerWindow == owner)
+				{
+					job->cancelled->store(true, std::memory_order_release);
+					job->worker.request_stop();
+				}
+			}
+		}
+
+		void StopAllBackgroundJobs() noexcept
+		{
+			for (auto& [id, job] : m_backgroundJobs)
+			{
+				(void)id;
+				job->cancelled->store(true, std::memory_order_release);
+				job->worker.request_stop();
+			}
+			m_backgroundJobs.clear();
+		}
+
 		void LoadWebView(webview_t webview)
 		{
 			if (const char* devUrl = std::getenv("CEMU_WEB_UI_DEV_URL"); devUrl && *devUrl)
@@ -429,56 +787,100 @@ namespace
 			return found->second->role;
 		}
 
-		std::uint64_t QueueToolWindow(std::string_view role)
+		std::uint64_t QueueToolWindow(std::string_view role, std::string requestId,
+			std::optional<std::uint64_t> titleContext = std::nullopt)
 		{
 			if (m_rpc.IsShuttingDown())
 				throw std::runtime_error("the application is shutting down");
 			(void)DescribeWindow(role);
+			if (std::ranges::find(WebFrontend::Generated::ImplementedWindowRoles, role) ==
+				WebFrontend::Generated::ImplementedWindowRoles.end())
+				throw std::runtime_error("the requested window has not been migrated yet");
 			const std::string ownedRole(role);
 			if (const auto existing = m_windowByRole.find(ownedRole);
 				existing != m_windowByRole.end())
 			{
 				const auto id = existing->second;
+				if (const auto found = m_toolWindows.find(id); found != m_toolWindows.end())
+				{
+					found->second->titleContext = titleContext;
+					Emit("window.contextChanged", std::string(R"({"windowId":)") +
+						std::to_string(id) + R"(,"titleId":)" +
+						(titleContext ? JsonString(TitleIdString(*titleContext)) : "null") + "}");
+				}
 				(void)PostToUi([this, id] {
 					if (const auto found = m_toolWindows.find(id);
 						found != m_toolWindows.end() && found->second->nativeSupport)
 						found->second->nativeSupport->Focus();
 				});
+				if (!requestId.empty())
+					Emit("window.opened", std::string(R"({"requestId":)") +
+						JsonString(requestId) + R"(,"windowId":)" + std::to_string(id) +
+						R"(,"role":)" + JsonString(ownedRole) + "}");
 				return id;
 			}
 			if (const auto pending = m_pendingWindowRoles.find(ownedRole);
 				pending != m_pendingWindowRoles.end())
+			{
+				if (const auto context = m_pendingWindowContexts.find(ownedRole);
+					context != m_pendingWindowContexts.end() && context->second != titleContext)
+					throw std::runtime_error(
+						"the window is already opening with a different title context");
+				if (!requestId.empty())
+					m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 				return pending->second;
+			}
 			const auto id = ++m_nextWindowId;
 			m_pendingWindowRoles.emplace(ownedRole, id);
+			m_pendingWindowContexts[ownedRole] = titleContext;
+			if (!requestId.empty())
+				m_pendingWindowRequests[ownedRole].push_back(std::move(requestId));
 			if (!PostToUi([this, role = ownedRole, id] {
+				auto notify = [this, &role, id](std::string_view event,
+					std::string_view message = {}) {
+					const auto requests = m_pendingWindowRequests.extract(role);
+					if (requests.empty()) return;
+					for (const auto& requestId : requests.mapped())
+					{
+						auto payload = std::string(R"({"requestId":)") + JsonString(requestId) +
+							R"(,"windowId":)" + std::to_string(id) + R"(,"role":)" +
+							JsonString(role);
+						if (!message.empty()) payload += R"(,"message":)" + JsonString(message);
+						Emit(event, payload + "}");
+					}
+				};
 				if (m_rpc.IsShuttingDown())
 				{
 					m_pendingWindowRoles.erase(role);
+					notify("window.openFailed", "the application is shutting down");
 					return;
 				}
 				try
 				{
-					CreateToolWindow(role, id);
-					Emit("window.opened", std::string(R"({"windowId":)") +
-						std::to_string(id) + R"(,"role":)" + JsonString(role) + "}");
+					const auto context = m_pendingWindowContexts.contains(role) ?
+						m_pendingWindowContexts.at(role) : std::optional<std::uint64_t>{};
+					CreateToolWindow(role, id, context);
+					m_pendingWindowContexts.erase(role);
+					notify("window.opened");
 				}
 				catch (const std::exception& error)
 				{
 					m_pendingWindowRoles.erase(role);
-					Emit("window.openFailed", std::string(R"({"windowId":)") +
-						std::to_string(id) + R"(,"role":)" + JsonString(role) +
-						R"(,"message":)" + JsonString(error.what()) + "}");
+					m_pendingWindowContexts.erase(role);
+					notify("window.openFailed", error.what());
 				}
 			}))
 			{
 				m_pendingWindowRoles.erase(ownedRole);
+				m_pendingWindowRequests.erase(ownedRole);
+				m_pendingWindowContexts.erase(ownedRole);
 				throw std::runtime_error("the UI dispatcher is shutting down");
 			}
 			return id;
 		}
 
-		void CreateToolWindow(std::string_view role, std::uint64_t id)
+		void CreateToolWindow(std::string_view role, std::uint64_t id,
+			std::optional<std::uint64_t> titleContext)
 		{
 			const auto& descriptor = DescribeWindow(role);
 			if (const auto existing = m_windowByRole.find(std::string(role));
@@ -506,6 +908,7 @@ namespace
 			auto window = std::make_unique<ToolWindow>();
 			window->id = id;
 			window->role = role;
+			window->titleContext = titleContext;
 			window->nativeSupport = CreateToolWindowSupport(
 				m_nativeWindow->GetNativeWindow(), descriptor.modal, [this, id] {
 					(void)PostToUi([this, id] { RequestToolWindowClose(id); });
@@ -560,6 +963,7 @@ namespace
 			const auto found = m_toolWindows.find(id);
 			if (found == m_toolWindows.end()) return;
 			auto window = std::move(found->second);
+			CancelBackgroundJobsForWindow(id);
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
 			if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
@@ -624,6 +1028,7 @@ namespace
 				return;
 			m_stopping.store(true, std::memory_order_release);
 			m_eventStopping->store(true, std::memory_order_release);
+			StopAllBackgroundJobs();
 			{
 				std::scoped_lock lock(m_callbackGate->mutex);
 				m_callbackGate->target = nullptr;
@@ -1051,22 +1456,30 @@ namespace
 
 		void HandleMenu(MenuCommand command)
 		{
-			switch (command)
+			try
 			{
-			case MenuCommand::EndEmulation: StopEmulation(); break;
-			case MenuCommand::Exit: (void)RequestShutdown(); break;
-			case MenuCommand::ToggleFullscreen:
-				m_fullscreen = !m_fullscreen;
-				m_nativeWindow->SetFullscreen(m_fullscreen);
-				break;
-			case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
-			case MenuCommand::TogglePadView: TogglePadRenderRegion(); break;
-			case MenuCommand::GeneralSettings: (void)QueueToolWindow("general-settings"); break;
-			case MenuCommand::InputSettings: (void)QueueToolWindow("input-settings"); break;
-			case MenuCommand::GraphicPacks: (void)QueueToolWindow("graphic-packs"); break;
-			case MenuCommand::TitleManager: (void)QueueToolWindow("title-manager"); break;
-			case MenuCommand::Logging: (void)QueueToolWindow("logging"); break;
-			case MenuCommand::About: (void)QueueToolWindow("about"); break;
+				switch (command)
+				{
+				case MenuCommand::EndEmulation: StopEmulation(); break;
+				case MenuCommand::Exit: (void)RequestShutdown(); break;
+				case MenuCommand::ToggleFullscreen:
+					m_fullscreen = !m_fullscreen;
+					m_nativeWindow->SetFullscreen(m_fullscreen);
+					break;
+				case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
+				case MenuCommand::TogglePadView: TogglePadRenderRegion(); break;
+				case MenuCommand::GeneralSettings: (void)QueueToolWindow("general-settings", {}); break;
+				case MenuCommand::InputSettings: (void)QueueToolWindow("input-settings", {}); break;
+				case MenuCommand::GraphicPacks: (void)QueueToolWindow("graphic-packs", {}); break;
+				case MenuCommand::TitleManager: (void)QueueToolWindow("title-manager", {}); break;
+				case MenuCommand::Logging: (void)QueueToolWindow("logging", {}); break;
+				case MenuCommand::About: (void)QueueToolWindow("about", {}); break;
+				}
+			}
+			catch (const std::exception& error)
+			{
+				Emit("system.diagnostic", std::string(R"({"message":)") +
+					JsonString(error.what()) + "}");
 			}
 		}
 
@@ -1125,6 +1538,34 @@ namespace
 					(void)id;
 					if (window->webview) webview_eval(window->webview, script.c_str());
 				}
+			};
+			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
+				pending.release();
+		}
+
+		void EmitToWindow(std::uint64_t windowId, std::string_view type,
+			std::string_view payloadJson)
+		{
+			std::scoped_lock eventLock(m_eventMutex);
+			if (m_stopping.load(std::memory_order_acquire))
+				return;
+			const auto sequence = ++m_eventSequence;
+			const auto event = std::string(R"({"type":)") + JsonString(type) +
+				R"(,"sequence":)" + std::to_string(sequence) + R"(,"payload":)" +
+				std::string(payloadJson) + "}";
+			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
+				Base64(event) + "'),c=>c.charCodeAt(0)))));";
+			auto pending = std::make_unique<PendingEvent>();
+			pending->stopping = m_eventStopping;
+			pending->beforeDispatch = [this, windowId, script] {
+				if (windowId == 0)
+				{
+					webview_eval(m_webview, script.c_str());
+					return;
+				}
+				const auto found = m_toolWindows.find(windowId);
+				if (found != m_toolWindows.end() && found->second->webview)
+					webview_eval(found->second->webview, script.c_str());
 			};
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
 				pending.release();
@@ -1223,11 +1664,90 @@ namespace
 			}
 		}
 
+		void RequireRole(std::initializer_list<std::string_view> roles) const
+		{
+			const auto role = RoleForWindow(m_invokingWindow);
+			if (std::ranges::find(roles, role) == roles.end())
+				throw std::runtime_error("this RPC method is not available to the current window role");
+		}
+
+		std::string AccountManagerJson() const
+		{
+			const auto snapshot = m_controller.GetAccountManagerSnapshot();
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartObject();
+			writer.Key("accounts"); writer.StartArray();
+			for (const auto& account : snapshot.accounts)
+				WriteAccount(writer, account);
+			writer.EndArray();
+			writer.Key("countries"); writer.StartArray();
+			for (const auto& country : snapshot.countries)
+			{
+				writer.StartObject();
+				writer.Key("code"); writer.Uint(country.code);
+				writer.Key("name"); writer.String(country.name.data(),
+					static_cast<rapidjson::SizeType>(country.name.size()));
+				writer.EndObject();
+			}
+			writer.EndArray();
+			writer.Key("nextPersistentId"); writer.Uint(snapshot.nextPersistentId);
+			writer.Key("hasFreeSlots"); writer.Bool(snapshot.hasFreeSlots);
+			writer.Key("activePersistentId"); writer.Uint(snapshot.activePersistentId);
+			writer.Key("titleRunning"); writer.Bool(snapshot.titleRunning);
+			writer.Key("networkSettings"); writer.StartArray();
+			for (const auto& setting : snapshot.networkSettings)
+			{
+				writer.StartObject();
+				writer.Key("persistentId"); writer.Uint(setting.persistentId);
+				writer.Key("service"); writer.String(AccountNetworkServiceName(setting.service).data());
+				writer.Key("validation"); writer.StartObject();
+				writer.Key("validAccount"); writer.Bool(setting.validation.validAccount);
+				writer.Key("otp"); writer.String(AccountFileStateName(setting.validation.otp).data());
+				writer.Key("seeprom"); writer.String(AccountFileStateName(setting.validation.seeprom).data());
+				writer.Key("missingFiles"); writer.StartArray();
+				for (const auto& file : setting.validation.missingFiles)
+				{
+					const auto value = boost::nowide::narrow(file);
+					writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
+				}
+				writer.EndArray();
+				writer.Key("accountError");
+				writer.String(AccountOnlineErrorName(setting.validation.accountError).data());
+				writer.EndObject();
+				writer.EndObject();
+			}
+			writer.EndArray();
+			const auto& environment = snapshot.onlineEnvironment;
+			writer.Key("onlineEnvironment"); writer.StartObject();
+			writer.Key("requiredFilesAvailable"); writer.Bool(environment.requiredFilesAvailable);
+			writer.Key("otpPresent"); writer.Bool(environment.otpPresent);
+			writer.Key("seepromPresent"); writer.Bool(environment.seepromPresent);
+			writer.Key("consoleCertificateAvailable");
+			writer.Bool(environment.consoleCertificateAvailable);
+			writer.EndObject();
+			writer.EndObject();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
+		std::string GraphicPacksJson() const
+		{
+			rapidjson::StringBuffer buffer;
+			JsonWriter writer(buffer);
+			writer.StartArray();
+			for (const auto& pack : m_controller.ListGraphicPacks())
+				WriteGraphicPack(writer, pack);
+			writer.EndArray();
+			return {buffer.GetString(), buffer.GetSize()};
+		}
+
 		void RegisterRpc()
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
-				return std::string(R"({"windowRole":)") + JsonString(RoleForWindow(m_invokingWindow)) +
-					R"(,"appVersion":"2.0","platform":")" +
+				auto result = std::string(R"({"windowId":)") +
+					std::to_string(m_invokingWindow) + R"(,"windowRole":)" +
+					JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
+					JsonString(BUILD_VERSION_STRING) + R"(,"platform":")" +
 #if BOOST_OS_WINDOWS
 					"windows"
 #elif BOOST_OS_MACOS
@@ -1235,8 +1755,17 @@ namespace
 #else
 					"linux"
 #endif
-					+ R"(","theme":"system","shuttingDown":)" +
-					(m_rpc.IsShuttingDown() ? "true}" : "false}");
+					+ "\"";
+				if (m_invokingWindow != 0)
+				{
+					const auto found = m_toolWindows.find(m_invokingWindow);
+					if (found != m_toolWindows.end() && found->second->titleContext)
+						result += R"(,"context":{"titleId":)" +
+							JsonString(TitleIdString(*found->second->titleContext)) + "}";
+				}
+				result += R"(,"theme":"system","shuttingDown":)";
+				result += m_rpc.IsShuttingDown() ? "true}" : "false}";
+				return result;
 			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
 				if (m_invokingWindow != 0)
@@ -1259,10 +1788,25 @@ namespace
 				return std::string("{}");
 			});
 			m_rpc.Register("window.open", [this](const rapidjson::Value& params) {
+				if (m_invokingWindow != 0)
+					throw std::runtime_error("only the main library window may open tool windows");
 				const auto role = params.FindMember("role");
 				if (role == params.MemberEnd() || !role->value.IsString())
 					throw std::invalid_argument("role is required");
-				const auto id = QueueToolWindow({role->value.GetString(), role->value.GetStringLength()});
+				const std::string_view roleName(role->value.GetString(),
+					role->value.GetStringLength());
+				const auto requestId = RequiredString(params, "requestId");
+				if (requestId.empty() || requestId.size() > 128)
+					throw std::invalid_argument("requestId must contain between 1 and 128 characters");
+				std::optional<std::uint64_t> titleContext;
+				if (const auto context = params.FindMember("context"); context != params.MemberEnd())
+				{
+					if (roleName != "graphic-packs" || !context->value.IsObject())
+						throw std::invalid_argument("context is not supported for this window role");
+					if (context->value.HasMember("titleId"))
+						titleContext = ParseTitleId(context->value);
+				}
+				const auto id = QueueToolWindow(roleName, std::string(requestId), titleContext);
 				return std::string(R"({"windowId":)") + std::to_string(id) + "}";
 			});
 			m_rpc.Register("window.focus", [this](const rapidjson::Value&) {
@@ -1273,15 +1817,174 @@ namespace
 					found->second->nativeSupport->Focus();
 				return std::string("{}");
 			});
-			m_rpc.Register("window.getModel", [this](const rapidjson::Value& params) {
-				const auto role = params.FindMember("role");
-				if (role == params.MemberEnd() || !role->value.IsString())
-					throw std::invalid_argument("role is required");
-				const auto state = m_windowState->Snapshot();
-				return std::string(R"({"role":)") +
-					JsonString({role->value.GetString(), role->value.GetStringLength()}) +
-					R"(,"emulationState":)" + std::to_string(static_cast<unsigned>(m_controller.State())) +
-					R"(,"mainWindowGeneration":)" + std::to_string(state.generation) + "}";
+			m_rpc.Register("system.openExternalUrl", [this](const rapidjson::Value& params) {
+				const auto url = RequiredString(params, "url");
+				constexpr std::array allowedOrigins{
+					std::string_view("https://github.com/"),
+					std::string_view("https://cemu.info/"),
+				};
+				if (std::ranges::none_of(allowedOrigins,
+					[url](std::string_view origin) { return url.starts_with(origin); }))
+					throw std::invalid_argument("the external URL origin is not allowed");
+				if (!m_nativeWindow->OpenExternalUrl(std::string(url)))
+					throw std::runtime_error("the operating system could not open the URL");
+				return std::string("{}");
+			});
+			m_rpc.Register("about.get", [this](const rapidjson::Value&) {
+				RequireRole({"about"});
+				return std::string(R"({"name":"CemuExtend","version":)") +
+					JsonString(BUILD_VERSION_STRING) + R"(,"commit":)" +
+					JsonString(CEMU_EXTEND_COMMIT_HASH) + R"(,"buildDate":)" +
+					JsonString(__DATE__ " " __TIME__) +
+					R"(,"frontend":"webview-react","webviewEngine":)" +
+					JsonString("webview/webview " WEBVIEW_VERSION_NUMBER) +
+					R"(,"originalAuthors":["Exzap","Petergov"],"libraries":[)"
+					R"({"name":"webview/webview","license":"MIT","url":"https://github.com/webview/webview"},)"
+					R"({"name":"React","license":"MIT","url":"https://github.com/facebook/react"},)"
+					R"({"name":"Bun","license":"MIT","url":"https://github.com/oven-sh/bun"},)"
+					R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
+					R"({"label":"CemuExtend source","url":"https://github.com/PinkDiamondTeam/CemuExtend"},)"
+					R"({"label":"Cemu project","url":"https://cemu.info/"}]})";
+			});
+			m_rpc.Register("accounts.getModel", [this](const rapidjson::Value&) {
+				RequireRole({"account-manager", "general-settings"});
+				return AccountManagerJson();
+			});
+			m_rpc.Register("accounts.create", [this](const rapidjson::Value& params) {
+				RequireRole({"account-manager", "general-settings"});
+				const auto result = m_controller.CreateAccount(RequiredUint(params, "persistentId"),
+					boost::nowide::widen(RequiredString(params, "miiName")));
+				if (!result || !result.account)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"account creation failed" : result.diagnostic);
+				return AccountJson(*result.account);
+			});
+			m_rpc.Register("accounts.update", [this](const rapidjson::Value& params) {
+				RequireRole({"account-manager", "general-settings"});
+				Application::AccountUpdate update;
+				update.miiName = boost::nowide::widen(RequiredString(params, "miiName"));
+				update.birthYear = static_cast<std::uint16_t>(
+					RequiredBoundedUint(params, "birthYear", 0, 2100));
+				update.birthMonth = static_cast<std::uint8_t>(
+					RequiredBoundedUint(params, "birthMonth", 0, 12));
+				update.birthDay = static_cast<std::uint8_t>(
+					RequiredBoundedUint(params, "birthDay", 0, 31));
+				update.gender = static_cast<std::uint8_t>(
+					RequiredBoundedUint(params, "gender", 0, 2));
+				update.email = RequiredString(params, "email");
+				update.country = RequiredUint(params, "country");
+				const auto countries = m_controller.ListAccountCountries();
+				if (std::ranges::none_of(countries,
+					[&update](const Application::AccountCountry& country) {
+						return country.code == update.country;
+					}))
+					throw std::invalid_argument("country is not supported");
+				const auto result = m_controller.UpdateAccount(
+					RequiredUint(params, "persistentId"), update);
+				if (!result || !result.account)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"account update failed" : result.diagnostic);
+				return AccountJson(*result.account);
+			});
+			m_rpc.Register("accounts.delete", [this](const rapidjson::Value& params) {
+				RequireRole({"account-manager", "general-settings"});
+				const auto result = m_controller.DeleteAccount(RequiredUint(params, "persistentId"));
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"account deletion failed" : result.diagnostic);
+				return std::string("{}");
+			});
+			m_rpc.Register("accounts.setActive", [this](const rapidjson::Value& params) {
+				RequireRole({"account-manager", "general-settings"});
+				const auto result = m_controller.SetActiveAccount(
+					RequiredUint(params, "persistentId"));
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"active account update failed" : result.diagnostic);
+				return std::string("{}");
+			});
+			m_rpc.Register("accounts.setNetworkService", [this](const rapidjson::Value& params) {
+				RequireRole({"account-manager", "general-settings"});
+				const auto result = m_controller.SetAccountNetworkService(
+					RequiredUint(params, "persistentId"),
+					ParseAccountNetworkService(RequiredString(params, "service")));
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"network service update failed" : result.diagnostic);
+				return std::string("{}");
+			});
+			m_rpc.Register("graphicPacks.list", [this](const rapidjson::Value&) {
+				RequireRole({"graphic-packs"});
+				return GraphicPacksJson();
+			});
+			m_rpc.Register("graphicPacks.setEnabled", [this](const rapidjson::Value& params) {
+				RequireRole({"graphic-packs"});
+				const auto result = m_controller.SetGraphicPackEnabled(
+					RequiredString(params, "key"), RequiredBool(params, "enabled"));
+				if (result) m_controller.SaveGraphicPackState();
+				return GraphicPackMutationJson(result);
+			});
+			m_rpc.Register("graphicPacks.setPreset", [this](const rapidjson::Value& params) {
+				RequireRole({"graphic-packs"});
+				const auto result = m_controller.SetGraphicPackPreset(
+					RequiredString(params, "key"), RequiredString(params, "category"),
+					RequiredString(params, "preset"));
+				if (result) m_controller.SaveGraphicPackState();
+				return GraphicPackMutationJson(result);
+			});
+			m_rpc.Register("graphicPacks.reload", [this](const rapidjson::Value& params) {
+				RequireRole({"graphic-packs"});
+				return GraphicPackMutationJson(
+					m_controller.ReloadGraphicPack(RequiredString(params, "key")));
+			});
+			m_rpc.Register("graphicPacks.refresh", [this](const rapidjson::Value&) {
+				RequireRole({"graphic-packs"});
+				const auto result = m_controller.RefreshGraphicPacks();
+				if (!result)
+					throw std::runtime_error(result.diagnostic.empty() ?
+						"graphic pack refresh failed" : result.diagnostic);
+				rapidjson::StringBuffer buffer;
+				JsonWriter writer(buffer);
+				writer.StartObject();
+				writer.Key("removedEnabledPaths"); writer.StartArray();
+				for (const auto& path : result.removedEnabledPaths)
+					writer.String(path.data(), static_cast<rapidjson::SizeType>(path.size()));
+				writer.EndArray();
+				writer.Key("diagnostic"); writer.String(result.diagnostic.data(),
+					static_cast<rapidjson::SizeType>(result.diagnostic.size()));
+				writer.EndObject();
+				return std::string(buffer.GetString(), buffer.GetSize());
+			});
+			m_rpc.Register("graphicPacks.save", [this](const rapidjson::Value&) {
+				RequireRole({"graphic-packs"});
+				m_controller.SaveGraphicPackState();
+				return std::string("{}");
+			});
+			m_rpc.Register("graphicPacks.install", [this](const rapidjson::Value& params) {
+				RequireRole({"graphic-packs"});
+				Application::GraphicPackInstallRequest request;
+				const auto kind = RequiredString(params, "kind");
+				if (kind == "community")
+					request.kind = Application::GraphicPackInstallKind::Community;
+				else if (kind == "customUrl")
+				{
+					request.kind = Application::GraphicPackInstallKind::CustomUrl;
+					request.url = RequiredString(params, "url");
+				}
+				else
+					throw std::invalid_argument("unknown graphic-pack install kind");
+				request.replaceExisting = RequiredBool(params, "replaceExisting");
+				const auto jobId = StartGraphicPackInstallJob(std::move(request));
+				return std::string(R"({"jobId":)") + std::to_string(jobId) + "}";
+			});
+			m_rpc.Register("jobs.cancel", [this](const rapidjson::Value& params) {
+				const auto jobId = static_cast<std::uint64_t>(RequiredUint(params, "jobId"));
+				const auto job = m_backgroundJobs.find(jobId);
+				if (job == m_backgroundJobs.end() || job->second->ownerWindow != m_invokingWindow)
+					throw std::runtime_error("background job was not found for this window");
+				job->second->cancelled->store(true, std::memory_order_release);
+				job->second->worker.request_stop();
+				return std::string("{}");
 			});
 			m_rpc.Register("titles.list", [this](const rapidjson::Value&) {
 				rapidjson::Document document(rapidjson::kArrayType);
@@ -1383,7 +2086,11 @@ namespace
 		std::unordered_map<std::uint64_t, std::unique_ptr<ToolWindow>> m_toolWindows;
 		std::unordered_map<std::string, std::uint64_t> m_windowByRole;
 		std::unordered_map<std::string, std::uint64_t> m_pendingWindowRoles;
+		std::unordered_map<std::string, std::vector<std::string>> m_pendingWindowRequests;
+		std::unordered_map<std::string, std::optional<std::uint64_t>> m_pendingWindowContexts;
+		std::unordered_map<std::uint64_t, std::unique_ptr<BackgroundJob>> m_backgroundJobs;
 		std::uint64_t m_nextWindowId{};
+		std::uint64_t m_nextBackgroundJobId{};
 		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;

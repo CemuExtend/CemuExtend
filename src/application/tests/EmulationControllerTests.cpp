@@ -256,6 +256,29 @@ namespace
 			return {.requiredFilesAvailable = true, .otpPresent = true,
 				.seepromPresent = true, .consoleCertificateAvailable = true};
 		}
+		Application::AccountManagerSnapshot GetAccountManagerSnapshot() const override
+		{
+			return {.accounts = accounts, .countries = ListAccountCountries(),
+				.networkSettings = {{accounts.front().persistentId,
+					Application::AccountNetworkService::Offline,
+					ValidateOnlineAccount(accounts.front().persistentId)}},
+				.onlineEnvironment = GetOnlineEnvironmentStatus(),
+				.activePersistentId = accounts.front().persistentId,
+				.nextPersistentId = NextPersistentId(),
+				.hasFreeSlots = HasFreeAccountSlots()};
+		}
+		Application::AccountOperationResult SetActiveAccount(
+			std::uint32_t persistentId) override
+		{
+			const auto account = GetAccount(persistentId);
+			return account ? Application::AccountOperationResult{.account = account} :
+				Application::AccountOperationResult{Application::AccountOperationError::NotFound};
+		}
+		Application::AccountOperationResult SetAccountNetworkService(
+			std::uint32_t persistentId, Application::AccountNetworkService) override
+		{
+			return SetActiveAccount(persistentId);
+		}
 		Application::DownloadAccountContext GetDownloadAccountContext(
 			std::optional<std::uint32_t>) const override
 		{
@@ -359,6 +382,7 @@ namespace
 		std::vector<Application::GraphicPackInfo> graphicPacks;
 		int graphicPackRefreshes{};
 		int graphicPackSaves{};
+		int graphicPackInstalls{};
 		std::vector<Application::GraphicPackInfo> ListGraphicPacks() const override
 		{
 			return graphicPacks;
@@ -384,6 +408,18 @@ namespace
 		Application::GraphicPackRefreshResult RefreshGraphicPacks() override
 		{
 			++graphicPackRefreshes;
+			return {};
+		}
+		Application::GraphicPackInstallResult InstallGraphicPacks(
+			const Application::GraphicPackInstallRequest&,
+			Application::GraphicPackInstallProgressHandler progress,
+			Application::GraphicPackInstallCancellationCheck cancelled) override
+		{
+			++graphicPackInstalls;
+			if (cancelled && cancelled())
+				return {Application::GraphicPackInstallError::Cancelled, "cancelled"};
+			if (progress)
+				progress({Application::GraphicPackInstallPhase::Downloading, 5, 10, {}});
 			return {};
 		}
 		void SaveGraphicPackState() override { ++graphicPackSaves; }
@@ -541,6 +577,12 @@ int main()
 	assert(controller.RefreshGraphicPacks());
 	controller.SaveGraphicPackState();
 	assert(backend.graphicPackRefreshes == 1 && backend.graphicPackSaves == 1);
+	Application::GraphicPackInstallProgress packInstallProgress;
+	assert(controller.InstallGraphicPacks(
+		{.kind = Application::GraphicPackInstallKind::Community},
+		[&packInstallProgress](const auto& value) { packInstallProgress = value; },
+		[] { return false; }));
+	assert(backend.graphicPackInstalls == 1 && packInstallProgress.completed == 5);
 	const auto accounts = controller.ListAccounts();
 	assert(accounts.size() == 1 &&
 		accounts.front().persistentId == Application::kMinimumPersistentId &&
@@ -554,6 +596,13 @@ int main()
 	assert(onlineEnvironment.requiredFilesAvailable && onlineEnvironment.otpPresent &&
 		onlineEnvironment.seepromPresent &&
 		onlineEnvironment.consoleCertificateAvailable);
+	const auto accountSnapshot = controller.GetAccountManagerSnapshot();
+	assert(accountSnapshot.activePersistentId == Application::kMinimumPersistentId &&
+		accountSnapshot.accounts.size() == 1 &&
+		accountSnapshot.networkSettings.size() == 1);
+	assert(controller.SetActiveAccount(Application::kMinimumPersistentId));
+	assert(controller.SetAccountNetworkService(Application::kMinimumPersistentId,
+		Application::AccountNetworkService::Pretendo));
 	backend.downloadAccountContext = {.accountName = "test-account", .region = 2};
 	const auto downloadContext = controller.GetDownloadAccountContext(
 		Application::kMinimumPersistentId);

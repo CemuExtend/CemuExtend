@@ -4,13 +4,28 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 10> RpcMethods{
+	inline constexpr std::array<std::string_view, 25> RpcMethods{
 		"system.bootstrap",
 		"system.quit",
 		"window.close",
 		"window.open",
 		"window.focus",
-		"window.getModel",
+		"system.openExternalUrl",
+		"about.get",
+		"accounts.getModel",
+		"accounts.create",
+		"accounts.update",
+		"accounts.delete",
+		"accounts.setActive",
+		"accounts.setNetworkService",
+		"graphicPacks.list",
+		"graphicPacks.setEnabled",
+		"graphicPacks.setPreset",
+		"graphicPacks.reload",
+		"graphicPacks.refresh",
+		"graphicPacks.save",
+		"graphicPacks.install",
+		"jobs.cancel",
 		"titles.list",
 		"titles.refresh",
 		"titles.launch",

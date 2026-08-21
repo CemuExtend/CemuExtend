@@ -58,6 +58,7 @@ add_library(CemuWebFrontend STATIC
 	WebHostState.cpp
 	WebHostState.h
   generated/RpcMethods.h
+  generated/WindowRoles.h
   generated/WebAssets.h
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

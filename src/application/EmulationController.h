@@ -291,6 +291,10 @@ namespace Application
 			std::string_view key, std::string_view category, std::string_view preset);
 		[[nodiscard]] GraphicPackResult ReloadGraphicPack(std::string_view key);
 		[[nodiscard]] GraphicPackRefreshResult RefreshGraphicPacks();
+		[[nodiscard]] GraphicPackInstallResult InstallGraphicPacks(
+			const GraphicPackInstallRequest& request,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled);
 		void SaveGraphicPackState();
 		[[nodiscard]] std::vector<AccountInfo> ListAccounts() const;
 		[[nodiscard]] std::optional<AccountInfo> GetAccount(
@@ -299,6 +303,11 @@ namespace Application
 		[[nodiscard]] bool HasFreeAccountSlots() const;
 		[[nodiscard]] std::vector<AccountCountry> ListAccountCountries() const;
 		[[nodiscard]] OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const;
+		[[nodiscard]] AccountManagerSnapshot GetAccountManagerSnapshot() const;
+		[[nodiscard]] AccountOperationResult SetActiveAccount(
+			std::uint32_t persistentId);
+		[[nodiscard]] AccountOperationResult SetAccountNetworkService(
+			std::uint32_t persistentId, AccountNetworkService service);
 		[[nodiscard]] DownloadAccountContext GetDownloadAccountContext(
 			std::optional<std::uint32_t> persistentId) const;
 		[[nodiscard]] AccountValidation ValidateOnlineAccount(

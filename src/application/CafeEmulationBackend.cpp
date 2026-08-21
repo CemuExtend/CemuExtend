@@ -26,6 +26,7 @@
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "Common/FileStream.h"
+#include "Common/socket.h"
 #include "util/helpers/helpers.h"
 
 #include <zarchive/zarchivereader.h>
@@ -35,6 +36,8 @@
 #include <openssl/sha.h>
 
 #include <pugixml.hpp>
+#include <curl/curl.h>
+#include <rapidjson/document.h>
 #include <zip.h>
 
 #include <condition_variable>
@@ -163,6 +166,30 @@ namespace Application
 			};
 		}
 
+		AccountNetworkService TranslateNetworkService(NetworkService service)
+		{
+			switch (service)
+			{
+			case NetworkService::Nintendo: return AccountNetworkService::Nintendo;
+			case NetworkService::Pretendo: return AccountNetworkService::Pretendo;
+			case NetworkService::Custom: return AccountNetworkService::Custom;
+			case NetworkService::Plasma: return AccountNetworkService::Plasma;
+			default: return AccountNetworkService::Offline;
+			}
+		}
+
+		NetworkService TranslateNetworkService(AccountNetworkService service)
+		{
+			switch (service)
+			{
+			case AccountNetworkService::Nintendo: return NetworkService::Nintendo;
+			case AccountNetworkService::Pretendo: return NetworkService::Pretendo;
+			case AccountNetworkService::Custom: return NetworkService::Custom;
+			case AccountNetworkService::Plasma: return NetworkService::Plasma;
+			default: return NetworkService::Offline;
+			}
+		}
+
 		const ::Account* FindAccount(std::uint32_t persistentId)
 		{
 			const auto& accounts = ::Account::GetAccounts();
@@ -275,6 +302,19 @@ namespace Application
 				return false;
 			const auto unixMode = attributes >> 16;
 			return (unixMode & S_IFMT) == S_IFLNK;
+		}
+
+		bool IsSafeGraphicPackZipEntry(zip_t* archive, zip_uint64_t index)
+		{
+			zip_uint8_t operatingSystem{};
+			zip_uint32_t attributes{};
+			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
+				&attributes) != 0)
+				return false;
+			if (operatingSystem != ZIP_OPSYS_UNIX)
+				return true;
+			const auto type = (attributes >> 16) & S_IFMT;
+			return type == 0 || type == S_IFREG || type == S_IFDIR;
 		}
 
 		SaveArchivePlan BuildSaveArchivePlan(const fs::path& archivePath)
@@ -427,6 +467,427 @@ namespace Application
 				return;
 			std::error_code ec;
 			fs::remove_all(path, ec);
+		}
+
+		constexpr std::size_t kMaximumGraphicPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackEntries = 20000;
+		constexpr zip_uint64_t kMaximumGraphicPackFileSize = 128ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackCompressionRatio = 1000;
+
+		struct GraphicPackInstallTransaction
+		{
+			fs::path target;
+			fs::path backup;
+			bool replacedExisting{};
+
+			void Commit() const { RemovePathQuietly(backup); }
+
+			GraphicPackInstallResult Rollback() const
+			{
+				RemovePathQuietly(target);
+				if (!replacedExisting)
+					return {};
+				std::error_code ec;
+				fs::rename(backup, target, ec);
+				return ec ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
+					fmt::format("graphic-pack rollback failed: {}", ec.message())} :
+					GraphicPackInstallResult{};
+			}
+		};
+
+		struct GraphicPackDownloadBuffer
+		{
+			std::vector<std::uint8_t> bytes;
+			GraphicPackInstallProgressHandler progress;
+			GraphicPackInstallCancellationCheck cancelled;
+			GraphicPackInstallPhase phase{GraphicPackInstallPhase::Checking};
+		};
+
+		bool IsPublicGraphicPackAddress(const sockaddr& address)
+		{
+			if (address.sa_family == AF_INET)
+			{
+				const auto& ipv4 = reinterpret_cast<const sockaddr_in&>(address);
+				const auto value = ntohl(ipv4.sin_addr.s_addr);
+				const auto first = value >> 24;
+				const auto second = (value >> 16) & 0xff;
+				if (first == 0 || first == 10 || first == 127 || first >= 224)
+					return false;
+				if (first == 100 && second >= 64 && second <= 127)
+					return false;
+				if (first == 169 && second == 254)
+					return false;
+				if (first == 172 && second >= 16 && second <= 31)
+					return false;
+				if (first == 192 && (second == 0 || second == 168))
+					return false;
+				if (first == 198 && (second == 18 || second == 19))
+					return false;
+				// Documentation networks are never valid download origins.
+				if ((first == 192 && second == 0 && ((value >> 8) & 0xff) == 2) ||
+					(first == 198 && second == 51 && ((value >> 8) & 0xff) == 100) ||
+					(first == 203 && second == 0 && ((value >> 8) & 0xff) == 113))
+					return false;
+				return true;
+			}
+			if (address.sa_family == AF_INET6)
+			{
+				const auto& ipv6 = reinterpret_cast<const sockaddr_in6&>(address);
+				const auto* bytes = ipv6.sin6_addr.s6_addr;
+				const bool allZeroPrefix = std::all_of(bytes, bytes + 12,
+					[](std::uint8_t byte) { return byte == 0; });
+				if (allZeroPrefix)
+					return false;
+				const bool mappedIpv4 = std::all_of(bytes, bytes + 10,
+					[](std::uint8_t byte) { return byte == 0; }) &&
+					bytes[10] == 0xff && bytes[11] == 0xff;
+				if (mappedIpv4)
+				{
+					sockaddr_in mapped{};
+					mapped.sin_family = AF_INET;
+					std::memcpy(&mapped.sin_addr.s_addr, bytes + 12, sizeof(mapped.sin_addr.s_addr));
+					return IsPublicGraphicPackAddress(reinterpret_cast<const sockaddr&>(mapped));
+				}
+				if ((bytes[0] & 0xfe) == 0xfc ||
+					(bytes[0] == 0xfe && ((bytes[1] & 0xc0) == 0x80 ||
+						(bytes[1] & 0xc0) == 0xc0)) || bytes[0] == 0xff)
+					return false;
+				if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8)
+					return false;
+				// Reject transition mechanisms that can hide an IPv4 destination from
+				// the socket address policy (Teredo, NAT64, and 6to4).
+				if ((bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0 && bytes[3] == 0) ||
+					(bytes[0] == 0 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b) ||
+					(bytes[0] == 0x20 && bytes[1] == 0x02))
+					return false;
+				return true;
+			}
+			return false;
+		}
+
+		curl_socket_t OpenPublicGraphicPackSocket(void*, curlsocktype purpose,
+			curl_sockaddr* address)
+		{
+			if (purpose != CURLSOCKTYPE_IPCXN || !address ||
+				!IsPublicGraphicPackAddress(address->addr))
+				return CURL_SOCKET_BAD;
+			return ::socket(address->family, address->socktype, address->protocol);
+		}
+
+		bool IsValidGraphicPackHttpsUrl(std::string_view url)
+		{
+			if (url.empty() || url.size() > 4096)
+				return false;
+			std::unique_ptr<CURLU, decltype(&curl_url_cleanup)> parsed(curl_url(), &curl_url_cleanup);
+			if (!parsed || curl_url_set(parsed.get(), CURLUPART_URL, std::string(url).c_str(), 0) != CURLUE_OK)
+				return false;
+			auto readPart = [&](CURLUPart part) -> std::optional<std::string> {
+				char* raw{};
+				if (curl_url_get(parsed.get(), part, &raw, 0) != CURLUE_OK)
+					return std::nullopt;
+				std::unique_ptr<char, decltype(&curl_free)> value(raw, &curl_free);
+				return std::string(value.get());
+			};
+			const auto scheme = readPart(CURLUPART_SCHEME);
+			const auto host = readPart(CURLUPART_HOST);
+			if (!scheme || !boost::iequals(*scheme, "https") || !host || host->empty())
+				return false;
+			if (boost::iequals(*host, "localhost") || boost::iends_with(*host, ".localhost"))
+				return false;
+			return !readPart(CURLUPART_USER) && !readPart(CURLUPART_PASSWORD);
+		}
+
+		size_t WriteGraphicPackDownload(void* data, size_t size, size_t count, void* context)
+		{
+			auto& buffer = *static_cast<GraphicPackDownloadBuffer*>(context);
+			if (size != 0 && count > std::numeric_limits<size_t>::max() / size)
+				return 0;
+			const auto byteCount = size * count;
+			if (buffer.cancelled && buffer.cancelled())
+				return 0;
+			if (byteCount > kMaximumGraphicPackDownloadSize -
+				std::min(buffer.bytes.size(), kMaximumGraphicPackDownloadSize))
+				return 0;
+			const auto* source = static_cast<const std::uint8_t*>(data);
+			buffer.bytes.insert(buffer.bytes.end(), source, source + byteCount);
+			return byteCount;
+		}
+
+		int ReportGraphicPackDownload(void* context, curl_off_t total, curl_off_t current,
+			curl_off_t, curl_off_t)
+		{
+			auto& buffer = *static_cast<GraphicPackDownloadBuffer*>(context);
+			if (buffer.cancelled && buffer.cancelled())
+				return 1;
+			if (buffer.progress)
+				buffer.progress({buffer.phase, static_cast<std::uint64_t>(std::max<curl_off_t>(0, current)),
+					static_cast<std::uint64_t>(std::max<curl_off_t>(0, total)), {}});
+			return 0;
+		}
+
+		GraphicPackInstallResult DownloadGraphicPackUrl(std::string_view url,
+			GraphicPackDownloadBuffer& buffer, GraphicPackInstallPhase phase)
+		{
+			if (!IsValidGraphicPackHttpsUrl(url))
+				return {GraphicPackInstallError::InvalidUrl, "graphic-pack URL must use HTTPS"};
+			if (buffer.cancelled && buffer.cancelled())
+				return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+			std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(),
+				&curl_easy_cleanup);
+			if (!curl)
+				return {GraphicPackInstallError::ConnectionFailed, "unable to initialize HTTPS client"};
+			buffer.bytes.clear();
+			buffer.phase = phase;
+			const std::string ownedUrl(url);
+			curl_easy_setopt(curl.get(), CURLOPT_URL, ownedUrl.c_str());
+			// Environment proxies would make the socket callback inspect the proxy
+			// rather than the ultimate URL target, bypassing the private-address ban.
+			curl_easy_setopt(curl.get(), CURLOPT_PROXY, "");
+			curl_easy_setopt(curl.get(), CURLOPT_NOPROXY, "*");
+			curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, &WriteGraphicPackDownload);
+			curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &buffer);
+			curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, &ReportGraphicPackDownload);
+			curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, &buffer);
+			curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
+			curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+			curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 5L);
+			curl_easy_setopt(curl.get(), CURLOPT_OPENSOCKETFUNCTION, &OpenPublicGraphicPackSocket);
+			curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 10L);
+			curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 900L);
+			curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 30L);
+			curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, 15L);
+			curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+			curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+			curl_easy_setopt(curl.get(), CURLOPT_PROTOCOLS_STR, "https");
+			curl_easy_setopt(curl.get(), CURLOPT_REDIR_PROTOCOLS_STR, "https");
+			curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
+			const auto code = curl_easy_perform(curl.get());
+			if (buffer.cancelled && buffer.cancelled())
+				return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+			if (code != CURLE_OK)
+				return {GraphicPackInstallError::ConnectionFailed, curl_easy_strerror(code)};
+			long status{};
+			curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
+			if (status < 200 || status >= 300)
+				return {GraphicPackInstallError::ConnectionFailed,
+					fmt::format("graphic-pack server returned HTTP {}", status)};
+			return {};
+		}
+
+		GraphicPackInstallResult ExtractGraphicPackArchive(
+			const std::vector<std::uint8_t>& bytes, const fs::path& target,
+			bool replaceExisting, bool requireRootRules, std::string_view version,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled,
+			GraphicPackInstallTransaction* transaction)
+		{
+			zip_error_t zipError;
+			zip_error_init(&zipError);
+			zip_source_t* source = zip_source_buffer_create(bytes.data(), bytes.size(), 0, &zipError);
+			if (!source)
+			{
+				zip_error_fini(&zipError);
+				return {GraphicPackInstallError::InvalidArchive, "unable to read graphic-pack archive"};
+			}
+			zip_t* rawArchive = zip_open_from_source(source, ZIP_RDONLY, &zipError);
+			if (!rawArchive)
+			{
+				zip_source_free(source);
+				zip_error_fini(&zipError);
+				return {GraphicPackInstallError::InvalidArchive, "download is not a valid ZIP archive"};
+			}
+			std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
+			zip_error_fini(&zipError);
+			if (requireRootRules)
+			{
+				zip_stat_t rules{};
+				if (zip_stat(archive.get(), "rules.txt", 0, &rules) != 0)
+					return {GraphicPackInstallError::InvalidArchive,
+						"custom graphic-pack archive must contain rules.txt at its root"};
+			}
+
+			struct Entry { zip_uint64_t index; fs::path path; zip_uint64_t size; bool directory; };
+			std::vector<Entry> entries;
+			std::set<std::string> names;
+			zip_uint64_t totalBytes{};
+			const auto entryCount = zip_get_num_entries(archive.get(), 0);
+			if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) > kMaximumGraphicPackEntries)
+				return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive has too many entries"};
+			for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(entryCount); ++index)
+			{
+				zip_stat_t stat{};
+				if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || !stat.name ||
+					!IsSafeGraphicPackZipEntry(archive.get(), index))
+					return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive contains an invalid entry"};
+				auto relative = NormalizeSaveArchivePath(stat.name);
+				if (!relative || !names.emplace(relative->generic_string()).second)
+					return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive contains an unsafe or duplicate path"};
+				const std::string_view rawName(stat.name);
+				const bool directory = rawName.ends_with('/') || rawName.ends_with('\\');
+				if (!directory)
+				{
+					if (stat.size > kMaximumGraphicPackFileSize ||
+						totalBytes > kMaximumGraphicPackTotalSize - stat.size ||
+						(stat.comp_size > 0 && stat.size / stat.comp_size > kMaximumGraphicPackCompressionRatio))
+						return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive exceeds extraction limits"};
+					totalBytes += stat.size;
+				}
+				entries.push_back({index, std::move(*relative), stat.size, directory});
+			}
+
+			std::error_code ec;
+			const bool targetExists = fs::exists(target, ec);
+			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+			if (targetExists && !replaceExisting)
+				return {GraphicPackInstallError::ConfirmationRequired,
+					"existing graphic packs must be replaced to continue"};
+			fs::create_directories(target.parent_path(), ec);
+			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+			const auto staging = UniqueSiblingPath(target, "graphic-pack-staging");
+			const auto backup = targetExists ? UniqueSiblingPath(target, "graphic-pack-backup") : fs::path{};
+			if (staging.empty() || (targetExists && backup.empty()))
+				return {GraphicPackInstallError::IoFailure, "unable to reserve graphic-pack transaction paths"};
+			fs::create_directories(staging, ec);
+			if (ec) return {GraphicPackInstallError::IoFailure, ec.message()};
+
+			std::array<char, 1024 * 1024> copyBuffer{};
+			std::uint64_t completed{};
+			for (const auto& entry : entries)
+			{
+				if (cancelled && cancelled())
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+				}
+				const auto destination = staging / entry.path;
+				if (entry.directory)
+				{
+					fs::create_directories(destination, ec);
+					if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+					continue;
+				}
+				fs::create_directories(destination.parent_path(), ec);
+				if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+				std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
+					zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
+				std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+				if (!file || !output) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to create extracted graphic-pack file"}; }
+				zip_uint64_t remaining = entry.size;
+				while (remaining > 0)
+				{
+					if (cancelled && cancelled()) { RemovePathQuietly(staging); return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"}; }
+					const auto request = std::min<zip_uint64_t>(copyBuffer.size(), remaining);
+					const auto read = zip_fread(file.get(), copyBuffer.data(), request);
+					if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining) { RemovePathQuietly(staging); return {GraphicPackInstallError::InvalidArchive, "unable to extract graphic-pack archive"}; }
+					output.write(copyBuffer.data(), static_cast<std::streamsize>(read));
+					if (!output) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to write extracted graphic-pack file"}; }
+					remaining -= static_cast<zip_uint64_t>(read);
+					completed += static_cast<std::uint64_t>(read);
+					if (progress) progress({GraphicPackInstallPhase::Extracting, completed,
+						totalBytes, _pathToUtf8(entry.path)});
+				}
+			}
+			if (!version.empty())
+			{
+				std::ofstream versionFile(staging / "version.txt", std::ios::binary | std::ios::trunc);
+				versionFile << version;
+				if (!versionFile) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, "unable to write graphic-pack version"}; }
+			}
+			if (targetExists)
+			{
+				fs::rename(target, backup, ec);
+				if (ec) { RemovePathQuietly(staging); return {GraphicPackInstallError::IoFailure, ec.message()}; }
+			}
+			fs::rename(staging, target, ec);
+			if (ec)
+			{
+				if (targetExists)
+				{
+					std::error_code restoreError;
+					fs::rename(backup, target, restoreError);
+					if (restoreError) return {GraphicPackInstallError::IoFailure,
+						fmt::format("{}; rollback failed: {}", ec.message(), restoreError.message())};
+				}
+				RemovePathQuietly(staging);
+				return {GraphicPackInstallError::IoFailure, ec.message()};
+			}
+			if (transaction)
+				*transaction = {target, backup, targetExists};
+			else
+				RemovePathQuietly(backup);
+			return {};
+		}
+
+		GraphicPackInstallResult InstallGraphicPackFiles(
+			const GraphicPackInstallRequest& request,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled,
+			GraphicPackInstallTransaction* transaction)
+		{
+			GraphicPackDownloadBuffer download{{}, progress, cancelled};
+			if (progress) progress({GraphicPackInstallPhase::Checking, 0, 0, {}});
+			std::string archiveUrl = request.url;
+			std::string releaseName;
+			fs::path target;
+			bool rootRules{};
+			if (request.kind == GraphicPackInstallKind::Community)
+			{
+				auto result = DownloadGraphicPackUrl(
+					"https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest",
+					download, GraphicPackInstallPhase::Checking);
+				if (!result) return result;
+				rapidjson::Document document;
+				document.Parse(reinterpret_cast<const char*>(download.bytes.data()), download.bytes.size());
+				if (document.HasParseError() || !document.IsObject() ||
+					!document.HasMember("name") || !document["name"].IsString() ||
+					!document.HasMember("assets") || !document["assets"].IsArray())
+					return {GraphicPackInstallError::ConnectionFailed, "community graphic-pack metadata is invalid"};
+				releaseName = document["name"].GetString();
+				for (const auto& asset : document["assets"].GetArray())
+				{
+					if (asset.IsObject() && asset.HasMember("browser_download_url") &&
+						asset["browser_download_url"].IsString())
+					{
+						archiveUrl = asset["browser_download_url"].GetString();
+						if (archiveUrl.starts_with("https://")) break;
+						archiveUrl.clear();
+					}
+				}
+				if (archiveUrl.empty())
+					return {GraphicPackInstallError::ConnectionFailed, "community release has no HTTPS archive"};
+				target = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks");
+				std::ifstream versionFile(target / "version.txt", std::ios::binary);
+				std::string installedVersion;
+				std::getline(versionFile, installedVersion);
+				if (boost::iequals(installedVersion, releaseName))
+					return {GraphicPackInstallError::None, {}, true};
+				if (!installedVersion.empty() && !request.replaceExisting)
+					return {GraphicPackInstallError::ConfirmationRequired,
+						fmt::format("replace installed community packs {} with {}?", installedVersion, releaseName)};
+			}
+			else
+			{
+				if (!archiveUrl.starts_with("https://") || archiveUrl.size() > 4096)
+					return {GraphicPackInstallError::InvalidUrl, "custom graphic-pack URL must be a valid HTTPS URL"};
+				auto fileName = archiveUrl.substr(archiveUrl.find_last_of('/') + 1);
+				if (const auto query = fileName.find_first_of("?#"); query != std::string::npos)
+					fileName.resize(query);
+				if (const auto extension = fileName.find_last_of('.'); extension != std::string::npos)
+					fileName.resize(extension);
+				if (fileName.empty()) fileName = "NewCustomPack";
+				auto folder = NormalizeSaveArchivePath(fileName);
+				if (!folder || folder->has_parent_path())
+					return {GraphicPackInstallError::InvalidUrl, "custom graphic-pack URL has an unsafe file name"};
+				target = ActiveSettings::GetUserDataPath("graphicPacks/customGraphicPacks") / *folder;
+				rootRules = true;
+			}
+
+			auto result = DownloadGraphicPackUrl(archiveUrl, download,
+				GraphicPackInstallPhase::Downloading);
+			if (!result) return result;
+			return ExtractGraphicPackArchive(download.bytes, target, request.replaceExisting,
+				rootRules, releaseName, std::move(progress), std::move(cancelled), transaction);
 		}
 
 		struct SaveMetadataStage
@@ -2596,6 +3057,58 @@ namespace Application
 				};
 			}
 
+			AccountManagerSnapshot GetAccountManagerSnapshot() const override
+			{
+				AccountManagerSnapshot snapshot;
+				snapshot.accounts = ListAccounts();
+				snapshot.countries = ListAccountCountries();
+				snapshot.onlineEnvironment = GetOnlineEnvironmentStatus();
+				snapshot.activePersistentId = ActiveSettings::GetPersistentId();
+				snapshot.nextPersistentId = NextPersistentId();
+				snapshot.hasFreeSlots = HasFreeAccountSlots();
+				snapshot.titleRunning = IsTitleRunning();
+				snapshot.networkSettings.reserve(snapshot.accounts.size());
+				for (const auto& account : snapshot.accounts)
+				{
+					snapshot.networkSettings.push_back({account.persistentId,
+						TranslateNetworkService(
+							GetConfig().GetAccountNetworkService(account.persistentId)),
+						ValidateOnlineAccount(account.persistentId)});
+				}
+				return snapshot;
+			}
+
+			AccountOperationResult SetActiveAccount(std::uint32_t persistentId) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+						"the active account cannot be changed while a title is running"};
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				GetConfig().account.m_persistent_id = persistentId;
+				GetConfigHandle().Save();
+				return {AccountOperationError::None, {}, TranslateAccount(*account)};
+			}
+
+			AccountOperationResult SetAccountNetworkService(std::uint32_t persistentId,
+				AccountNetworkService service) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+						"network service cannot be changed while a title is running"};
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				if (service != AccountNetworkService::Offline && !account->IsValidOnlineAccount())
+					return {AccountOperationError::BackendFailure,
+						"online account files must be valid before enabling a network service"};
+				GetConfig().SetAccountSelectedService(persistentId,
+					TranslateNetworkService(service));
+				GetConfigHandle().Save();
+				return {AccountOperationError::None, {}, TranslateAccount(*account)};
+			}
+
 			DownloadAccountContext GetDownloadAccountContext(
 				std::optional<std::uint32_t> persistentId) const override
 			{
@@ -2659,9 +3172,9 @@ namespace Application
 				if (persistentId < kMinimumPersistentId)
 					return {AccountOperationError::InvalidPersistentId,
 						"persistent id is below the supported range"};
-				if (miiName.empty())
+				if (miiName.empty() || miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-						"account name may not be empty"};
+						"account name must contain between 1 and 10 characters"};
 				if (!::Account::HasFreeAccountSlots())
 					return {AccountOperationError::NoFreeSlots,
 						"all account slots are occupied"};
@@ -2692,9 +3205,19 @@ namespace Application
 				const auto* existing = FindAccount(persistentId);
 				if (!existing)
 					return {AccountOperationError::NotFound, "account no longer exists"};
-				if (update.miiName.empty())
+				if (update.miiName.empty() || update.miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-						"account name may not be empty"};
+						"account name must contain between 1 and 10 characters"};
+				if (update.birthYear > 2100 || update.birthMonth > 12 ||
+					update.birthDay > 31 || update.gender > 2 || update.email.size() > 320)
+					return {AccountOperationError::BackendFailure,
+						"account profile fields are outside the supported range"};
+				const auto countryCount = static_cast<std::uint32_t>(NCrypto::GetCountryCount());
+				const char* country = update.country < countryCount ?
+					NCrypto::GetCountryAsString(update.country) : nullptr;
+				if (!country || (update.country != 0 && boost::equals(country, "NN")))
+					return {AccountOperationError::BackendFailure,
+						"account country is not supported"};
 				try
 				{
 					::Account account = *existing;
@@ -2730,11 +3253,19 @@ namespace Application
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
+				const bool deletingActive =
+					GetConfig().account.m_persistent_id.GetValue() == persistentId;
 				std::error_code error;
 				fs::remove_all(account->GetFileName().parent_path(), error);
 				if (error)
 					return {AccountOperationError::IoFailure, error.message()};
-				::Account::RefreshAccounts();
+				const auto& remainingAccounts = ::Account::RefreshAccounts();
+				if (deletingActive && !remainingAccounts.empty())
+				{
+					GetConfig().account.m_persistent_id =
+						remainingAccounts.front().GetPersistentId();
+					GetConfigHandle().Save();
+				}
 				return {};
 			}
 
@@ -3453,6 +3984,58 @@ namespace Application
 				for (auto& [_, path] : previouslyEnabled)
 					result.removedEnabledPaths.push_back(std::move(path));
 				return result;
+			}
+
+			GraphicPackInstallResult InstallGraphicPacks(
+				const GraphicPackInstallRequest& request,
+				GraphicPackInstallProgressHandler progress,
+				GraphicPackInstallCancellationCheck cancelled) override
+			{
+				if (IsTitleRunning())
+					return {GraphicPackInstallError::Conflict,
+						"graphic packs cannot be installed while a title is running"};
+				GraphicPackInstallTransaction transaction;
+				auto result = InstallGraphicPackFiles(request, progress, cancelled, &transaction);
+				if (!result || result.upToDate)
+					return result;
+				try
+				{
+					if (cancelled && cancelled())
+					{
+						const auto rollback = transaction.Rollback();
+						return rollback ? GraphicPackInstallResult{GraphicPackInstallError::Cancelled,
+							"graphic-pack installation was cancelled"} : rollback;
+					}
+					if (progress)
+						progress({GraphicPackInstallPhase::Refreshing, 0, 0, {}});
+					const auto refresh = RefreshGraphicPacks();
+					if (!refresh)
+					{
+						const auto rollback = transaction.Rollback();
+						if (!rollback)
+							return rollback;
+						return {GraphicPackInstallError::IoFailure,
+							refresh.diagnostic.empty() ? "installed packs could not be refreshed" :
+							refresh.diagnostic};
+					}
+					transaction.Commit();
+					result.removedEnabledPaths = refresh.removedEnabledPaths;
+					return result;
+				}
+				catch (const std::exception& error)
+				{
+					const auto rollback = transaction.Rollback();
+					if (!rollback)
+						return rollback;
+					return {GraphicPackInstallError::IoFailure,
+						fmt::format("graphic-pack refresh failed and was rolled back: {}", error.what())};
+				}
+				catch (...)
+				{
+					const auto rollback = transaction.Rollback();
+					return rollback ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
+						"graphic-pack refresh failed and was rolled back"} : rollback;
+				}
 			}
 
 			void SaveGraphicPackState() override

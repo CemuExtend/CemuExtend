@@ -29,6 +29,7 @@ target_link_libraries(CemuApplication PRIVATE
 	CemuComponents
 	CemuDownloadManager
 	CemuUtil
+	CURL::libcurl
 	cemuextend::wire
 	ZArchive::zarchive
 	OpenSSL::Crypto

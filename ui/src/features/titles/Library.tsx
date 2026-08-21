@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "../../bridge/native";
 import { subscribe } from "../../bridge/events";
 import type { Title } from "../../bridge/contracts";
+import { openWindow as openNativeWindow } from "../../bridge/windows";
 
 type SortKey = "name" | "lastPlayed" | "playTime";
 
@@ -22,7 +23,7 @@ export function Library() {
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void load(); return subscribe((event) => { if (event.type === "titles.changed") void load(); }); }, []);
+  useEffect(() => { void load(); return subscribe((event) => { if (event.type === "titles.changed") void load(); else if (event.type === "system.diagnostic" && typeof event.payload === "object" && event.payload && "message" in event.payload && typeof event.payload.message === "string") setError(event.payload.message); }); }, []);
 
   const visible = useMemo(() => titles
     .filter((title) => region === "all" || title.region === region)
@@ -35,6 +36,7 @@ export function Library() {
     try { await invoke("titles.launch", { titleId: title.titleId }); }
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
   };
+  const reportOpen = (operation: Promise<number>) => { void operation.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason))); };
 
   return <main className="library">
     <section className="toolbar" aria-label="Game library controls">
@@ -43,6 +45,9 @@ export function Library() {
       <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="Sort"><option value="name">Name</option><option value="lastPlayed">Last played</option><option value="playTime">Play time</option></select>
       <div className="segmented"><button aria-pressed={view === "grid"} onClick={() => setView("grid")}>Grid</button><button aria-pressed={view === "list"} onClick={() => setView("list")}>List</button></div>
       <button onClick={() => void invoke("titles.refresh").then(load).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))}>Refresh</button>
+      <button onClick={() => reportOpen(openNativeWindow("graphic-packs"))}>Graphic packs</button>
+      <button onClick={() => reportOpen(openNativeWindow("account-manager"))}>Accounts</button>
+      <button onClick={() => reportOpen(openNativeWindow("about"))}>About</button>
     </section>
     {error && <div className="notice error" role="alert">{error}<button onClick={() => setError("")}>Dismiss</button></div>}
     <div className={`title-host ${view}`} ref={scrollHost} role="listbox" aria-busy={loading}>
@@ -50,7 +55,7 @@ export function Library() {
         <article key={title.titleId} className={selected === title.titleId ? "selected" : ""} role="option" aria-selected={selected === title.titleId} tabIndex={0} onClick={() => setSelected(title.titleId)} onDoubleClick={() => void launch(title)} onKeyDown={(event) => { if (event.key === "Enter") void launch(title); }}>
           {title.iconDataUrl ? <img src={title.iconDataUrl} alt="" /> : <div className="icon-fallback">{title.name.slice(0, 1)}</div>}
           <div className="title-info"><h2>{title.name}</h2><code>{title.titleId}</code><p>{title.region} · v{title.version} · {Math.round(title.playTimeMinutes / 60)}h played</p></div>
-          <button onClick={(event) => { event.stopPropagation(); void launch(title); }}>Play</button>
+          <div className="button-row"><button onClick={(event) => { event.stopPropagation(); reportOpen(openNativeWindow("graphic-packs", { titleId: title.titleId })); }}>Packs</button><button onClick={(event) => { event.stopPropagation(); void launch(title); }}>Play</button></div>
         </article>)}
     </div>
     <footer>{visible.length} of {titles.length} titles{selected ? ` · ${titles.find((title) => title.titleId === selected)?.name ?? ""}` : ""}</footer>
