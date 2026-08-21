@@ -141,11 +141,11 @@ From the CemuExtend directory:
 
 ```
 nix develop
-cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF
+cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=webview
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. To build the packaged Nix output instead, run `nix build .#cemu-extend`; the executable is available as `result/bin/cemu`.
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. To build a packaged Nix output instead, use `nix build .#cemu-extend-webview`, `nix build .#cemu-extend-wx`, or `nix build .#cemu-extend-headless`; the executable is available as `result/bin/cemu`.
 
 ## Docker
 
@@ -157,7 +157,7 @@ docker build -t cemu-extend:build .
 docker run --rm -it cemu-extend:build
 ```
 
-The default image performs a Release build. Use `--build-arg BUILD_TYPE=Debug` for a Debug build. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
+The default image performs a WebView Release build. Use `--build-arg CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another frontend, and `--build-arg BUILD_TYPE=Debug` for a Debug build. The `docker-build.sh` wrapper accepts the same selection through the `CEMU_FRONTEND` environment variable. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
 
 
 ##### Building Errors

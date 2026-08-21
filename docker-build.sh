@@ -4,6 +4,13 @@ set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build}"
 frontend="${CEMU_FRONTEND:-webview}"
+case "${frontend}" in
+	webview|wx|headless) ;;
+	*)
+		printf 'Unsupported CEMU_FRONTEND: %s (expected webview, wx, or headless)\n' "${frontend}" >&2
+		exit 2
+		;;
+esac
 artifact_dir="${project_dir}/result/bin"
 temporary_name=".Cemu_release.$$.tmp"
 artifact_name="Cemu_release"

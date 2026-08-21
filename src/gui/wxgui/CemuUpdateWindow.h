@@ -1,6 +1,6 @@
 #pragma once
 
-#include "wxgui/CemuUpdateWorker.h"
+#include "application/UpdateWorkerMailbox.h"
 
 #include <wx/dialog.h>
 #include <wx/stattext.h>

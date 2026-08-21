@@ -1,10 +1,12 @@
 #include "application/EmulationController.h"
 #include "application/ApplicationRuntime.h"
+#include "application/ApplicationPaths.h"
 #include "frontend/FrontendRuntime.h"
 #include "input/InputManager.h"
 
 void Frontend::Run()
 {
+	Application::InitializePaths();
 	// Headless composition root. Construct the Application boundary first so
 	// Cafe initialization has an event sink and injected input context.
 	Application::EmulationController emulation;

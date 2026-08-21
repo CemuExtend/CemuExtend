@@ -92,8 +92,8 @@ void CemuCommonInit()
 		GetConfigHandle().Load();
 		cemuLog_configureRuntime(ActiveSettings::GetUserDataPath("log.txt"),
 			GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
-		if (NetworkConfig::XMLExists())
-			n_config.Load();
+		NetworkConfig::LoadOnce();
+		ActiveSettings::Init();
 
 		auto audioInitialization = std::async(std::launch::async, [] {
 			IAudioAPI::InitializeStatic();

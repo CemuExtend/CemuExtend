@@ -56,8 +56,9 @@ endfunction()
 
 add_subdirectory(Common)
 add_subdirectory(frontend)
-add_subdirectory(gui)
-if(CEMU_FRONTEND STREQUAL "webview")
+if(CEMU_FRONTEND STREQUAL "wx")
+	add_subdirectory(gui)
+elseif(CEMU_FRONTEND STREQUAL "webview")
 	add_subdirectory(webview)
 endif()
 add_subdirectory(Cafe)
@@ -485,7 +486,7 @@ target_link_libraries(CemuBin PRIVATE
 	CemuUtil
 )
 
-if(ENABLE_WXWIDGETS)
+if(CEMU_FRONTEND STREQUAL "wx")
 	target_link_libraries(CemuBin PRIVATE CemuWxFrontend)
 elseif(CEMU_FRONTEND STREQUAL "webview")
 	target_link_libraries(CemuBin PRIVATE CemuWebFrontend)

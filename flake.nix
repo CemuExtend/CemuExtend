@@ -32,22 +32,38 @@
       # Keep the Nix source small and reproducible.  Dependencies that are
       # supplied by Nixpkgs are deliberately omitted and linked in
       # preConfigure below where Cemu expects a vendored source tree.
-      source = lib.fileset.toSource {
-        root = ./.;
-        fileset = lib.fileset.unions [
-          ./CMakeLists.txt
-          ./bin/gameProfiles/default
-          ./bin/resources
-          ./cmake
-          ./dependencies/DirectX_2010
-          ./dependencies/gamemode
-          ./dependencies/ih264d
-          (lib.fileset.maybeMissing ./dependencies/libcemuextend)
-          (lib.fileset.maybeMissing ./dependencies/webview)
-          ./dist
-          ./src
-        ];
-      };
+      commonSourceFiles = lib.fileset.difference ./src (
+        lib.fileset.unions [
+          ./src/gui/wxgui
+          ./src/webview
+        ]
+      );
+      sourceFor =
+        frontend:
+        lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions (
+            [
+              ./CMakeLists.txt
+              ./bin/gameProfiles/default
+              ./bin/resources
+              ./cmake
+              ./dependencies/DirectX_2010
+              ./dependencies/gamemode
+              ./dependencies/ih264d
+              (lib.fileset.maybeMissing ./dependencies/libcemuextend)
+              ./dist
+              commonSourceFiles
+            ]
+            ++ lib.optionals (frontend == "webview") [
+              (lib.fileset.maybeMissing ./dependencies/webview)
+              ./src/webview
+            ]
+            ++ lib.optionals (frontend == "wx") [
+              ./src/gui/wxgui
+            ]
+          );
+        };
 
       # glslang's CMake package refers to SPIRV-Tools-opt before it is
       # otherwise loaded.  This is the same initialization used by the
@@ -58,153 +74,169 @@
         endif()
       '';
 
-      cemu = pkgs.stdenv.mkDerivation {
-        pname = "cemu-extend";
-        version = "2.0-${self.shortRev or "dirty"}";
-        src = source;
+      makeCemu =
+        frontend:
+        pkgs.stdenv.mkDerivation {
+          pname = "cemu-extend-${frontend}";
+          version = "2.0-${self.shortRev or "dirty"}";
+          src = sourceFor frontend;
 
-        nativeBuildInputs = with pkgs; [
-          addDriverRunpath
-          cmake
-          nasm
-          ninja
-          pkg-config
-          wayland-scanner
-          wrapGAppsHook3
-          wxwidgets_3_3
-        ];
+          nativeBuildInputs =
+            with pkgs;
+            [
+              addDriverRunpath
+              cmake
+              nasm
+              ninja
+              pkg-config
+              wayland-scanner
+            ]
+            ++ lib.optionals (frontend != "headless") [
+              wrapGAppsHook3
+            ]
+            ++ lib.optionals (frontend == "wx") [
+              wxwidgets_3_3
+            ];
 
-        buildInputs = with pkgs; [
-          bluez
-          boost
-          cubeb
-          curl
-          fmt_12
-          glm
-          glslang
-          gtk3
-          hidapi
-          libGL
-          libGLU
-          libpng
-          libusb1
-          libxrender
-          libzip
-          openssl
-          pugixml
-          rapidjson
-          sdl3
-          spirv-tools
-          vulkan-headers
-          vulkan-loader
-          wayland
-          wayland-protocols
-          wxwidgets_3_3
-          libx11
-          libxrender
-          zarchive
-          zlib
-          zstd
-        ];
+          buildInputs =
+            with pkgs;
+            [
+              bluez
+              boost
+              cubeb
+              curl
+              fmt_12
+              glm
+              glslang
+              hidapi
+              libGL
+              libGLU
+              libpng
+              libusb1
+              libxrender
+              libzip
+              openssl
+              pugixml
+              rapidjson
+              sdl3
+              spirv-tools
+              vulkan-headers
+              vulkan-loader
+              wayland
+              wayland-protocols
+              libx11
+              libxrender
+              zarchive
+              zlib
+              zstd
+            ]
+            ++ lib.optionals (frontend != "headless") [
+              gtk3
+            ]
+            ++ lib.optionals (frontend == "webview") [
+              webkitgtk_4_1
+            ]
+            ++ lib.optionals (frontend == "wx") [
+              wxwidgets_3_3
+            ];
 
-        cmakeFlags = [
-          (lib.cmakeBool "ALLOW_PORTABLE" false)
-          (lib.cmakeBool "ENABLE_FERAL_GAMEMODE" true)
-          (lib.cmakeBool "ENABLE_VCPKG" false)
-          (lib.cmakeFeature "CMAKE_PROJECT_INCLUDE" (toString devCmakeInit))
-          (lib.cmakeFeature "EMULATOR_VERSION_MAJOR" "2")
-          (lib.cmakeFeature "EMULATOR_VERSION_MINOR" "0")
-        ];
+          cmakeFlags = [
+            (lib.cmakeBool "ALLOW_PORTABLE" false)
+            (lib.cmakeBool "ENABLE_FERAL_GAMEMODE" true)
+            (lib.cmakeBool "ENABLE_VCPKG" false)
+            (lib.cmakeFeature "CEMU_FRONTEND" frontend)
+            (lib.cmakeFeature "CMAKE_PROJECT_INCLUDE" (toString devCmakeInit))
+            (lib.cmakeFeature "EMULATOR_VERSION_MAJOR" "2")
+            (lib.cmakeFeature "EMULATOR_VERSION_MINOR" "0")
+          ];
 
-        postPatch = ''
-          # The Nixpkgs wxWidgets package exposes wx-config rather than the
-          # vcpkg wxWidgets::wxWidgets target.  The module already creates a
-          # complete wx::base interface target in this case, so provide the
-          # compatibility alias expected by CemuExtend.
-          substituteInPlace cmake/FindwxWidgets.cmake \
-            --replace-fail \
-              '	find_package_handle_standard_args(wxWidgets' \
-              '	if (NOT TARGET wxWidgets::wxWidgets AND TARGET wx::base)
-		add_library(wxWidgets::wxWidgets ALIAS wx::base)
-	endif()
+          preConfigure = ''
+            rm -rf dependencies/imgui dependencies/Vulkan-Headers
+            ln -s ${imgui-src} dependencies/imgui
+            ln -s ${pkgs.vulkan-headers} dependencies/Vulkan-Headers
 
-	find_package_handle_standard_args(wxWidgets'
-        '';
+            substituteInPlace dependencies/gamemode/lib/gamemode_client.h \
+              --replace-fail "libgamemode.so.0" \
+              "${pkgs.gamemode.lib}/lib/libgamemode.so.0"
+          '';
 
-        preConfigure = ''
-          rm -rf dependencies/imgui dependencies/Vulkan-Headers
-          ln -s ${imgui-src} dependencies/imgui
-          ln -s ${pkgs.vulkan-headers} dependencies/Vulkan-Headers
+          installPhase = ''
+            runHook preInstall
 
-          substituteInPlace dependencies/gamemode/lib/gamemode_client.h \
-            --replace-fail "libgamemode.so.0" \
-            "${pkgs.gamemode.lib}/lib/libgamemode.so.0"
-        '';
+            install -Dm755 ../bin/Cemu_release $out/bin/Cemu_release
+            ln -s Cemu_release $out/bin/cemu
 
-        installPhase = ''
-          runHook preInstall
+            install -d $out/share/Cemu
+            cp -r ../bin/resources ../bin/gameProfiles $out/share/Cemu/
 
-          install -Dm755 ../bin/Cemu_release $out/bin/Cemu_release
-          ln -s Cemu_release $out/bin/cemu
+            install -d $out/share/applications
+            substitute ../dist/linux/info.cemu.Cemu.desktop \
+              $out/share/applications/info.cemu.Cemu.desktop \
+              --replace-fail "Exec=Cemu" "Exec=$out/bin/cemu"
 
-          install -d $out/share/Cemu
-          cp -r ../bin/resources ../bin/gameProfiles $out/share/Cemu/
+            install -Dm644 ../dist/linux/info.cemu.Cemu.metainfo.xml \
+              $out/share/metainfo/info.cemu.Cemu.metainfo.xml
+            install -Dm644 ../src/resource/logo_icon.png \
+              $out/share/icons/hicolor/128x128/apps/info.cemu.Cemu.png
 
-          install -d $out/share/applications
-          substitute ../dist/linux/info.cemu.Cemu.desktop \
-            $out/share/applications/info.cemu.Cemu.desktop \
-            --replace-fail "Exec=Cemu" "Exec=$out/bin/cemu"
+            runHook postInstall
+          '';
 
-          install -Dm644 ../dist/linux/info.cemu.Cemu.metainfo.xml \
-            $out/share/metainfo/info.cemu.Cemu.metainfo.xml
-          install -Dm644 ../src/resource/logo_icon.png \
-            $out/share/icons/hicolor/128x128/apps/info.cemu.Cemu.png
+          preFixup = lib.optionalString (frontend != "headless") ''
+            gappsWrapperArgs+=(
+              --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.vulkan-loader ]}"
+            )
+          '';
 
-          runHook postInstall
-        '';
+          strictDeps = true;
+          enableParallelBuilding = true;
 
-        preFixup = ''
-          gappsWrapperArgs+=(
-            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.vulkan-loader ]}"
-          )
-        '';
-
-        strictDeps = true;
-        enableParallelBuilding = true;
-
-        meta = {
-          description = "CemuExtend Wii U emulator build for NixOS";
-          homepage = "https://github.com/PinkDiamondTeam/CemuExtend";
-          license = lib.licenses.mpl20;
-          mainProgram = "cemu";
-          platforms = [ system ];
+          meta = {
+            description = "CemuExtend Wii U emulator build for NixOS";
+            homepage = "https://github.com/PinkDiamondTeam/CemuExtend";
+            license = lib.licenses.mpl20;
+            mainProgram = "cemu";
+            platforms = [ system ];
+          };
         };
-      };
+      cemuWebview = makeCemu "webview";
+      cemuWx = makeCemu "wx";
+      cemuHeadless = makeCemu "headless";
     in
     {
       packages.${system} = {
-        default = cemu;
-        cemu-extend = cemu;
+        default = cemuWebview;
+        cemu-extend = cemuWebview;
+        cemu-extend-webview = cemuWebview;
+        cemu-extend-wx = cemuWx;
+        cemu-extend-headless = cemuHeadless;
       };
 
       apps.${system}.default = {
         type = "app";
-        program = lib.getExe cemu;
+        program = lib.getExe cemuWebview;
         meta.description = "Run CemuExtend";
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        inputsFrom = [ cemu ];
+        inputsFrom = [
+          cemuWebview
+          cemuWx
+        ];
         packages = [ pkgs.git ];
         CMAKE_PROJECT_INCLUDE = devCmakeInit;
 
         shellHook = ''
           echo "CemuExtend Nix development shell"
-          echo "Configure with: cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF"
+          echo "Configure with: cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=webview"
         '';
       };
 
-      checks.${system}.default = cemu;
+      checks.${system} = {
+        default = cemuWebview;
+        frontend-wx = cemuWx;
+        frontend-headless = cemuHeadless;
+      };
       formatter.${system} = pkgs.nixfmt;
     };
 }

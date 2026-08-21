@@ -2,6 +2,7 @@
 #include "Common/version.h"
 
 #include "application/ApplicationRuntime.h"
+#include "application/ApplicationPaths.h"
 #include "application/ApplicationHost.h"
 #include "application/EmulationController.h"
 #include "application/LoggingFacade.h"
@@ -4556,6 +4557,7 @@ namespace
 
 void Frontend::Run()
 {
+	Application::InitializePaths();
 	CemuCommonInit();
 #if BOOST_OS_WINDOWS
 	std::exception_ptr uiFailure;

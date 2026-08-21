@@ -1,6 +1,8 @@
 add_library(CemuApplication STATIC
 	ApplicationHost.cpp
 	ApplicationHost.h
+	ApplicationPaths.cpp
+	ApplicationPaths.h
 	ApplicationRuntime.cpp
 	ApplicationRuntime.h
 	AccountFacade.h
@@ -53,6 +55,13 @@ target_link_libraries(CemuApplication PRIVATE
 	libzip::zip
 	pugixml::pugixml
 )
+
+if(ALLOW_PORTABLE)
+	target_compile_definitions(CemuApplication PRIVATE CEMU_ALLOW_PORTABLE)
+endif()
+if(WIN32)
+	target_link_libraries(CemuApplication PRIVATE shell32)
+endif()
 
 if(BUILD_TESTING)
   add_executable(emulation_controller_tests

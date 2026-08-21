@@ -1,4 +1,4 @@
-#include "gui/wxgui/CemuUpdateWorker.h"
+#include "application/UpdateWorkerMailbox.h"
 
 #ifdef NDEBUG
 #undef NDEBUG

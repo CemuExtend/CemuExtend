@@ -23,10 +23,18 @@ jobs:
         include:
           - os: ubuntu-22.04
             arch: x64
+            frontend: webview
+          - os: ubuntu-22.04
+            arch: x64
+            frontend: wx
+          - os: ubuntu-22.04
+            arch: x64
+            frontend: headless
           - os: ubuntu-22.04-arm
             arch: arm
+            frontend: webview
             
-    name: build-ubuntu-${{ matrix.arch }}
+    name: build-ubuntu-${{ matrix.arch }}-${{ matrix.frontend }}
     runs-on: ${{ matrix.os }}
     steps:
     - name: "Checkout repo"
@@ -72,7 +80,7 @@ jobs:
         
     - name: "cmake"
       run: |
-        cmake -S . -B build ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=/usr/bin/clang-15 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 -G Ninja -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja
+        cmake -S . -B build ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DCEMU_FRONTEND=${{ matrix.frontend }} -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=/usr/bin/clang-15 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 -G Ninja -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja
 
     - name: "Build Cemu"
       run: |
@@ -82,9 +90,11 @@ jobs:
       run: ctest --test-dir build --output-on-failure
 
     - name: Prepare artifact
+      if: matrix.frontend == 'webview'
       run: mv bin/Cemu_release bin/Cemu
 
     - name: Upload artifact
+      if: matrix.frontend == 'webview'
       uses: actions/upload-artifact@v6
       with:
         name: cemu-bin-linux-${{ matrix.arch }}
@@ -178,7 +188,7 @@ jobs:
         cd build
         echo "[INFO] BUILD_FLAGS: ${{ env.BUILD_FLAGS }}"
         echo "[INFO] BUILD_MODE: ${{ env.BUILD_MODE }}"
-        cmake .. ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DVCPKG_INSTALL_OPTIONS="--clean-after-build"
+        cmake .. ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DCEMU_FRONTEND=webview -DVCPKG_INSTALL_OPTIONS="--clean-after-build"
 
     - name: "Build Cemu"
       run: |
@@ -274,6 +284,7 @@ jobs:
         cd build
         cmake .. ${{ env.BUILD_FLAGS }} \
         -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} \
+        -DCEMU_FRONTEND=webview \
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
         -DMACOS_BUNDLE=ON \
         -G Ninja

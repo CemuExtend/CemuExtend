@@ -9,9 +9,12 @@ XMLNetworkConfig_t n_config(L"network_services.xml");
 
 void NetworkConfig::LoadOnce() 
 {
-	n_config.SetFilename(ActiveSettings::GetConfigPath("network_services.xml").generic_wstring());
-	if (XMLExists())
-		n_config.Load();
+	static std::once_flag loaded;
+	std::call_once(loaded, [] {
+		n_config.SetFilename(ActiveSettings::GetConfigPath("network_services.xml").generic_wstring());
+		if (XMLExists())
+			n_config.Load();
+	});
 }
 
 void NetworkConfig::Load(XMLConfigParser& parser) 
