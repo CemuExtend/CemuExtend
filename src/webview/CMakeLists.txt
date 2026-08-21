@@ -51,6 +51,7 @@ target_include_directories(CemuWebRpc PUBLIC
 add_library(CemuWebFrontend STATIC
 	NativeWindowHost.h
 	RendererHost.h
+	ToolWindowSupport.h
 	WebFrontend.cpp
 	WebHostServices.cpp
 	WebHostServices.h
@@ -60,13 +61,13 @@ add_library(CemuWebFrontend STATIC
   generated/WebAssets.h
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp)
+  target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp ToolWindowSupportGtk.cpp)
 elseif(WIN32)
-  target_sources(CemuWebFrontend PRIVATE NativeWindowHostWin.cpp)
+  target_sources(CemuWebFrontend PRIVATE NativeWindowHostWin.cpp ToolWindowSupportWin.cpp)
   target_link_libraries(CemuWebFrontend PRIVATE imm32 shell32)
 elseif(APPLE)
   enable_language(OBJCXX)
-  target_sources(CemuWebFrontend PRIVATE NativeWindowHostCocoa.mm)
+  target_sources(CemuWebFrontend PRIVATE NativeWindowHostCocoa.mm ToolWindowSupportCocoa.mm)
   target_link_libraries(CemuWebFrontend PRIVATE "-framework Cocoa" "-framework CoreGraphics" "-framework QuartzCore")
 endif()
 if(TARGET cemu_web_assets)

@@ -4,10 +4,12 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 8> RpcMethods{
+	inline constexpr std::array<std::string_view, 10> RpcMethods{
 		"system.bootstrap",
 		"system.quit",
 		"window.close",
+		"window.open",
+		"window.focus",
 		"window.getModel",
 		"titles.list",
 		"titles.refresh",

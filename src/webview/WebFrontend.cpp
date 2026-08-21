@@ -11,6 +11,7 @@
 #include "webview/NativeWindowHost.h"
 #include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
+#include "webview/ToolWindowSupport.h"
 #include "webview/WebHostState.h"
 #include "webview/WebHostServices.h"
 #include "webview/generated/WebAssets.h"
@@ -23,6 +24,7 @@
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -38,9 +40,17 @@ namespace
 	using WebFrontend::MenuCommand;
 	using WebFrontend::CreateRendererHost;
 	using WebFrontend::IRendererHost;
+	using WebFrontend::IToolWindowSupport;
+	using WebFrontend::CreateToolWindowSupport;
 	using WebFrontend::WebHostState;
 	using WebFrontend::WebHostServices;
 	class Runtime;
+	struct RpcBinding
+	{
+		Runtime* runtime{};
+		webview_t webview{};
+		std::uint64_t windowId{};
+	};
 	struct RuntimeCallbackGate
 	{
 		std::mutex mutex;
@@ -82,6 +92,46 @@ namespace
 		std::snprintf(text.data(), text.size(), "%016llx",
 			static_cast<unsigned long long>(titleId));
 		return text.data();
+	}
+
+	struct WindowDescriptor
+	{
+		std::string_view role;
+		std::string_view title;
+		int width;
+		int height;
+		bool modal;
+	};
+
+	constexpr std::array WindowDescriptors{
+		WindowDescriptor{"general-settings", "General Settings", 900, 680, true},
+		WindowDescriptor{"input-settings", "Input Settings", 980, 720, true},
+		WindowDescriptor{"hotkey-settings", "Hotkey Settings", 860, 620, false},
+		WindowDescriptor{"graphic-packs", "Graphic Packs", 1040, 760, false},
+		WindowDescriptor{"title-manager", "Title Manager", 1100, 720, false},
+		WindowDescriptor{"cemod-manager", "CemuExtend Manager", 980, 680, false},
+		WindowDescriptor{"cemod-permissions", "CemuExtend Permissions", 760, 620, true},
+		WindowDescriptor{"account-manager", "Account Manager", 760, 620, true},
+		WindowDescriptor{"save-manager", "Save Manager", 920, 680, true},
+		WindowDescriptor{"update-manager", "Updates", 820, 620, true},
+		WindowDescriptor{"logging", "Logging", 980, 700, false},
+		WindowDescriptor{"memory-searcher", "Memory Searcher", 1080, 720, false},
+		WindowDescriptor{"ppc-debugger", "PPC Debugger", 1280, 800, false},
+		WindowDescriptor{"audio-debugger", "Audio Debugger", 980, 700, false},
+		WindowDescriptor{"texture-relations", "Texture Relations", 1100, 720, false},
+		WindowDescriptor{"ppc-threads", "PPC Threads", 940, 680, false},
+		WindowDescriptor{"emulated-usb-devices", "Emulated USB Devices", 820, 620, false},
+		WindowDescriptor{"checksum-tool", "Checksum Tool", 820, 620, false},
+		WindowDescriptor{"getting-started", "Getting Started", 900, 680, true},
+		WindowDescriptor{"about", "About CemuExtend", 680, 560, true},
+	};
+
+	const WindowDescriptor& DescribeWindow(std::string_view role)
+	{
+		const auto found = std::ranges::find(WindowDescriptors, role, &WindowDescriptor::role);
+		if (found == WindowDescriptors.end())
+			throw std::invalid_argument("unknown window role");
+		return *found;
 	}
 
 	std::uint64_t ParseTitleId(const rapidjson::Value& params)
@@ -217,6 +267,7 @@ namespace
 			{
 				if (!m_webview)
 					throw std::runtime_error("failed to create the native webview window");
+				m_mainBinding = {this, m_webview, 0};
 				m_webViewWidget = webview_get_native_handle(
 					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
 				if (!m_webViewWidget)
@@ -268,7 +319,7 @@ namespace
 						if (gate->target)
 							gate->target->Emit("titles.changed", "{}");
 					});
-				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, this) != WEBVIEW_ERROR_OK)
+				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, &m_mainBinding) != WEBVIEW_ERROR_OK)
 					throw std::runtime_error("failed to install the native RPC binding");
 				m_rpcBound = true;
 				webview_set_title(m_webview, "CemuExtend");
@@ -285,24 +336,288 @@ namespace
 
 		void Run()
 		{
-			if (const char* devUrl = std::getenv("CEMU_WEB_UI_DEV_URL"); devUrl && *devUrl)
-			{
-				const std::string_view url(devUrl);
-				if (!url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:"))
-					throw std::runtime_error("CEMU_WEB_UI_DEV_URL must use a loopback HTTP origin");
-				webview_navigate(m_webview, devUrl);
-			}
-			else
-			{
-				const std::string html(reinterpret_cast<const char*>(WebAssets::html),
-					WebAssets::htmlSize);
-				webview_set_html(m_webview, html.c_str());
-			}
+			LoadWebView(m_webview);
 			m_nativeWindow->Show();
 			webview_run(m_webview);
 		}
 
 	private:
+		struct ToolWindow
+		{
+			std::uint64_t id{};
+			std::string role;
+			webview_t webview{};
+			RpcBinding binding;
+			std::unique_ptr<IToolWindowSupport> nativeSupport;
+			bool rpcBound{};
+			bool closeRequested{};
+			bool closing{};
+		};
+
+		struct DeferredToolClose
+		{
+			std::shared_ptr<RuntimeCallbackGate> gate;
+			std::uint64_t windowId{};
+		};
+
+		struct DeferredMainTermination
+		{
+			std::shared_ptr<RuntimeCallbackGate> gate;
+		};
+
+		static void DispatchToolCloseAfterReply(webview_t, void* context)
+		{
+			std::unique_ptr<DeferredToolClose> pending(
+				static_cast<DeferredToolClose*>(context));
+			std::scoped_lock lock(pending->gate->mutex);
+			if (pending->gate->target)
+			{
+				auto* runtime = pending->gate->target;
+				const auto id = pending->windowId;
+				(void)runtime->PostToUi([runtime, id] { runtime->RequestToolWindowClose(id); });
+			}
+		}
+
+		static void DispatchToolCloseAfterDrain(webview_t, void* context)
+		{
+			std::unique_ptr<DeferredToolClose> pending(
+				static_cast<DeferredToolClose*>(context));
+			std::scoped_lock lock(pending->gate->mutex);
+			if (pending->gate->target)
+			{
+				auto* runtime = pending->gate->target;
+				const auto id = pending->windowId;
+				(void)runtime->PostToUi([runtime, id] { runtime->CloseToolWindow(id); });
+			}
+		}
+
+		static void DispatchMainTerminationAfterReply(webview_t, void* context)
+		{
+			std::unique_ptr<DeferredMainTermination> pending(
+				static_cast<DeferredMainTermination*>(context));
+			std::scoped_lock lock(pending->gate->mutex);
+			if (pending->gate->target)
+			{
+				pending->gate->target->m_mainReplyPending = false;
+				pending->gate->target->MaybeTerminateAfterShutdown();
+			}
+		}
+
+		void LoadWebView(webview_t webview)
+		{
+			if (const char* devUrl = std::getenv("CEMU_WEB_UI_DEV_URL"); devUrl && *devUrl)
+			{
+				const std::string_view url(devUrl);
+				if (!url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:"))
+					throw std::runtime_error("CEMU_WEB_UI_DEV_URL must use a loopback HTTP origin");
+				if (webview_navigate(webview, devUrl) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to navigate the webview to the development UI");
+				return;
+			}
+			const std::string html(reinterpret_cast<const char*>(WebAssets::html),
+				WebAssets::htmlSize);
+			if (webview_set_html(webview, html.c_str()) != WEBVIEW_ERROR_OK)
+				throw std::runtime_error("failed to load embedded web UI assets");
+		}
+
+		std::string_view RoleForWindow(std::uint64_t windowId) const
+		{
+			if (windowId == 0) return "main-library";
+			const auto found = m_toolWindows.find(windowId);
+			if (found == m_toolWindows.end())
+				throw std::runtime_error("the RPC caller window is no longer active");
+			return found->second->role;
+		}
+
+		std::uint64_t QueueToolWindow(std::string_view role)
+		{
+			if (m_rpc.IsShuttingDown())
+				throw std::runtime_error("the application is shutting down");
+			(void)DescribeWindow(role);
+			const std::string ownedRole(role);
+			if (const auto existing = m_windowByRole.find(ownedRole);
+				existing != m_windowByRole.end())
+			{
+				const auto id = existing->second;
+				(void)PostToUi([this, id] {
+					if (const auto found = m_toolWindows.find(id);
+						found != m_toolWindows.end() && found->second->nativeSupport)
+						found->second->nativeSupport->Focus();
+				});
+				return id;
+			}
+			if (const auto pending = m_pendingWindowRoles.find(ownedRole);
+				pending != m_pendingWindowRoles.end())
+				return pending->second;
+			const auto id = ++m_nextWindowId;
+			m_pendingWindowRoles.emplace(ownedRole, id);
+			if (!PostToUi([this, role = ownedRole, id] {
+				if (m_rpc.IsShuttingDown())
+				{
+					m_pendingWindowRoles.erase(role);
+					return;
+				}
+				try
+				{
+					CreateToolWindow(role, id);
+					Emit("window.opened", std::string(R"({"windowId":)") +
+						std::to_string(id) + R"(,"role":)" + JsonString(role) + "}");
+				}
+				catch (const std::exception& error)
+				{
+					m_pendingWindowRoles.erase(role);
+					Emit("window.openFailed", std::string(R"({"windowId":)") +
+						std::to_string(id) + R"(,"role":)" + JsonString(role) +
+						R"(,"message":)" + JsonString(error.what()) + "}");
+				}
+			}))
+			{
+				m_pendingWindowRoles.erase(ownedRole);
+				throw std::runtime_error("the UI dispatcher is shutting down");
+			}
+			return id;
+		}
+
+		void CreateToolWindow(std::string_view role, std::uint64_t id)
+		{
+			const auto& descriptor = DescribeWindow(role);
+			if (const auto existing = m_windowByRole.find(std::string(role));
+				existing != m_windowByRole.end())
+			{
+				const auto window = m_toolWindows.find(existing->second);
+				if (window != m_toolWindows.end() && window->second->nativeSupport)
+				{
+					window->second->nativeSupport->Focus();
+					m_pendingWindowRoles.erase(std::string(role));
+					return;
+				}
+				m_windowByRole.erase(existing);
+			}
+			if (descriptor.modal)
+			{
+				for (const auto& [id, window] : m_toolWindows)
+				{
+					(void)id;
+					if (DescribeWindow(window->role).modal)
+						throw std::runtime_error("another modal window is already open");
+				}
+			}
+
+			auto window = std::make_unique<ToolWindow>();
+			window->id = id;
+			window->role = role;
+			window->nativeSupport = CreateToolWindowSupport(
+				m_nativeWindow->GetNativeWindow(), descriptor.modal, [this, id] {
+					(void)PostToUi([this, id] { RequestToolWindowClose(id); });
+				});
+			window->webview = webview_create(
+#if defined(NDEBUG)
+				0,
+#else
+				1,
+#endif
+				window->nativeSupport->GetWindow());
+			if (!window->webview)
+				throw std::runtime_error("failed to create tool webview window");
+			try
+			{
+				window->binding = {this, window->webview, window->id};
+				if (webview_bind(window->webview, "cemuInvoke", &Runtime::Invoke,
+					&window->binding) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to bind tool window RPC");
+				window->rpcBound = true;
+				webview_set_title(window->webview, std::string(descriptor.title).c_str());
+				webview_set_size(window->webview, descriptor.width, descriptor.height,
+					WEBVIEW_HINT_NONE);
+				LoadWebView(window->webview);
+				m_windowByRole.emplace(window->role, id);
+				m_toolWindows.emplace(id, std::move(window));
+				m_toolWindows.at(id)->nativeSupport->Show();
+				m_pendingWindowRoles.erase(std::string(role));
+				return;
+			}
+			catch (...)
+			{
+				m_windowByRole.erase(std::string(role));
+				if (!window)
+				{
+					if (const auto inserted = m_toolWindows.find(id); inserted != m_toolWindows.end())
+					{
+						window = std::move(inserted->second);
+						m_toolWindows.erase(inserted);
+					}
+				}
+				if (!window) throw;
+				if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
+				if (window->webview) webview_destroy(window->webview);
+				window->nativeSupport.reset();
+				throw;
+			}
+		}
+
+		void CloseToolWindow(std::uint64_t id) noexcept
+		{
+			const auto found = m_toolWindows.find(id);
+			if (found == m_toolWindows.end()) return;
+			auto window = std::move(found->second);
+			m_toolWindows.erase(found);
+			m_windowByRole.erase(window->role);
+			if (window->rpcBound) webview_unbind(window->webview, "cemuInvoke");
+			webview_destroy(window->webview);
+			window->nativeSupport.reset();
+			MaybeTerminateAfterShutdown();
+		}
+
+		void MaybeTerminateAfterShutdown() noexcept
+		{
+			if (m_terminateWhenToolsClosed && !m_mainReplyPending &&
+				m_toolWindows.empty() && m_webview)
+				webview_terminate(m_webview);
+		}
+
+		void RequestToolWindowClose(std::uint64_t id) noexcept
+		{
+			const auto found = m_toolWindows.find(id);
+			if (found == m_toolWindows.end() || std::exchange(found->second->closing, true))
+				return;
+			auto& window = *found->second;
+			if (window.rpcBound)
+			{
+				webview_unbind(window.webview, "cemuInvoke");
+				window.rpcBound = false;
+			}
+			auto pending = std::make_unique<DeferredToolClose>();
+			pending->gate = m_callbackGate;
+			pending->windowId = id;
+			if (webview_dispatch(window.webview, &Runtime::DispatchToolCloseAfterDrain,
+				pending.get()) == WEBVIEW_ERROR_OK)
+			{
+				pending.release();
+				return;
+			}
+			window.closing = false;
+			cemuLog_log(LogType::Force,
+				"Failed to drain tool window {} before close; keeping it alive", id);
+		}
+
+		void RequestAllToolWindowsClose() noexcept
+		{
+			std::vector<std::uint64_t> ids;
+			ids.reserve(m_toolWindows.size());
+			for (const auto& [id, window] : m_toolWindows)
+			{
+				(void)window;
+				ids.push_back(id);
+			}
+			for (const auto id : ids) RequestToolWindowClose(id);
+		}
+
+		void CloseAllToolWindows() noexcept
+		{
+			m_pendingWindowRoles.clear();
+			while (!m_toolWindows.empty()) CloseToolWindow(m_toolWindows.begin()->first);
+		}
+
 		void Cleanup() noexcept
 		{
 			if (std::exchange(m_cleanedUp, true))
@@ -335,6 +650,7 @@ namespace
 			}
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
+			CloseAllToolWindows();
 			if (!m_webview)
 				return;
 			m_nativeWindow->SetCloseHandler({});
@@ -367,7 +683,7 @@ namespace
 			}
 		}
 
-		bool RequestShutdown()
+		bool RequestShutdown(bool deferMainReply = false)
 		{
 			if (m_rpc.IsShuttingDown())
 				return true;
@@ -384,7 +700,11 @@ namespace
 			(void)m_windowState->FinishEmulation();
 			m_rpc.BeginShutdown();
 			(void)m_windowState->BeginShutdown();
-			webview_terminate(m_webview);
+			m_terminateWhenToolsClosed = true;
+			m_mainReplyPending = deferMainReply;
+			if (!m_toolWindows.empty())
+				RequestAllToolWindowsClose();
+			MaybeTerminateAfterShutdown();
 			return true;
 		}
 
@@ -741,12 +1061,12 @@ namespace
 				break;
 			case MenuCommand::Load: Emit("menu.command", R"({"command":"load"})"); break;
 			case MenuCommand::TogglePadView: TogglePadRenderRegion(); break;
-			case MenuCommand::GeneralSettings: Emit("menu.command", R"({"command":"generalSettings"})"); break;
-			case MenuCommand::InputSettings: Emit("menu.command", R"({"command":"inputSettings"})"); break;
-			case MenuCommand::GraphicPacks: Emit("menu.command", R"({"command":"graphicPacks"})"); break;
-			case MenuCommand::TitleManager: Emit("menu.command", R"({"command":"titleManager"})"); break;
-			case MenuCommand::Logging: Emit("menu.command", R"({"command":"logging"})"); break;
-			case MenuCommand::About: Emit("menu.command", R"({"command":"about"})"); break;
+			case MenuCommand::GeneralSettings: (void)QueueToolWindow("general-settings"); break;
+			case MenuCommand::InputSettings: (void)QueueToolWindow("input-settings"); break;
+			case MenuCommand::GraphicPacks: (void)QueueToolWindow("graphic-packs"); break;
+			case MenuCommand::TitleManager: (void)QueueToolWindow("title-manager"); break;
+			case MenuCommand::Logging: (void)QueueToolWindow("logging"); break;
+			case MenuCommand::About: (void)QueueToolWindow("about"); break;
 			}
 		}
 
@@ -793,11 +1113,19 @@ namespace
 			const auto event = std::string(R"({"type":)") + JsonString(type) +
 				R"(,"sequence":)" + std::to_string(sequence) + R"(,"payload":)" +
 				std::string(payloadJson) + "}";
+			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
+				Base64(event) + "'),c=>c.charCodeAt(0)))));";
 			auto pending = std::make_unique<PendingEvent>();
 			pending->stopping = m_eventStopping;
-			pending->beforeDispatch = std::move(beforeDispatch);
-			pending->script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-				Base64(event) + "'),c=>c.charCodeAt(0)))));";
+			pending->beforeDispatch = [this, beforeDispatch = std::move(beforeDispatch), script] {
+				if (beforeDispatch) beforeDispatch();
+				webview_eval(m_webview, script.c_str());
+				for (const auto& [id, window] : m_toolWindows)
+				{
+					(void)id;
+					if (window->webview) webview_eval(window->webview, script.c_str());
+				}
+			};
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
 				pending.release();
 		}
@@ -844,23 +1172,62 @@ namespace
 
 		static void Invoke(const char* sequence, const char* arguments, void* context)
 		{
-			auto& self = *static_cast<Runtime*>(context);
+			auto& binding = *static_cast<RpcBinding*>(context);
+			auto& self = *binding.runtime;
 			rapidjson::Document array;
 			array.Parse(arguments);
 			std::string response;
 			if (!array.IsArray() || array.Size() != 1 || !array[0].IsString())
 				response = R"({"id":"","ok":false,"error":{"code":"invalid_binding_call","message":"cemuInvoke expects one JSON string"}})";
 			else
+			{
+				const auto previousWindow = std::exchange(self.m_invokingWindow, binding.windowId);
 				response = self.m_rpc.Dispatch(
 					std::string_view(array[0].GetString(), array[0].GetStringLength()));
+				self.m_invokingWindow = previousWindow;
+			}
 			const auto encoded = JsonString(response);
-			webview_return(self.m_webview, sequence, 0, encoded.c_str());
+			const auto returned = webview_return(binding.webview, sequence, 0, encoded.c_str());
+			if (binding.windowId == 0 && self.m_mainReplyPending)
+			{
+				auto pending = std::make_unique<DeferredMainTermination>();
+				pending->gate = self.m_callbackGate;
+				if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
+					&Runtime::DispatchMainTerminationAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
+					pending.release();
+				else
+				{
+					self.m_mainReplyPending = false;
+					self.MaybeTerminateAfterShutdown();
+				}
+			}
+			else if (binding.windowId != 0)
+			{
+				const auto found = self.m_toolWindows.find(binding.windowId);
+				if (found != self.m_toolWindows.end() &&
+					std::exchange(found->second->closeRequested, false))
+				{
+					auto pending = std::make_unique<DeferredToolClose>();
+					pending->gate = self.m_callbackGate;
+					pending->windowId = binding.windowId;
+					if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
+						&Runtime::DispatchToolCloseAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
+						pending.release();
+					else
+					{
+						const auto id = binding.windowId;
+						auto* runtime = &self;
+						(void)self.PostToUi([runtime, id] { runtime->RequestToolWindowClose(id); });
+					}
+				}
+			}
 		}
 
 		void RegisterRpc()
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
-				return std::string(R"({"windowRole":"main-library","appVersion":"2.0","platform":")") +
+				return std::string(R"({"windowRole":)") + JsonString(RoleForWindow(m_invokingWindow)) +
+					R"(,"appVersion":"2.0","platform":")" +
 #if BOOST_OS_WINDOWS
 					"windows"
 #elif BOOST_OS_MACOS
@@ -872,14 +1239,39 @@ namespace
 					(m_rpc.IsShuttingDown() ? "true}" : "false}");
 			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
-				if (!RequestShutdown())
+				if (m_invokingWindow != 0)
+					throw std::runtime_error("only the main window may quit the application");
+				if (!RequestShutdown(true))
 					throw std::runtime_error("the running title could not be stopped; shutdown was cancelled");
-				return "{}";
+				return std::string("{}");
 			});
 			m_rpc.Register("window.close", [this](const rapidjson::Value&) {
-				if (!RequestShutdown())
+				if (m_invokingWindow != 0)
+				{
+					const auto found = m_toolWindows.find(m_invokingWindow);
+					if (found == m_toolWindows.end())
+						throw std::runtime_error("the window is no longer active");
+					found->second->closeRequested = true;
+					return std::string("{}");
+				}
+				if (!RequestShutdown(true))
 					throw std::runtime_error("the running title could not be stopped; window close was cancelled");
-				return "{}";
+				return std::string("{}");
+			});
+			m_rpc.Register("window.open", [this](const rapidjson::Value& params) {
+				const auto role = params.FindMember("role");
+				if (role == params.MemberEnd() || !role->value.IsString())
+					throw std::invalid_argument("role is required");
+				const auto id = QueueToolWindow({role->value.GetString(), role->value.GetStringLength()});
+				return std::string(R"({"windowId":)") + std::to_string(id) + "}";
+			});
+			m_rpc.Register("window.focus", [this](const rapidjson::Value&) {
+				if (m_invokingWindow == 0)
+					m_nativeWindow->Show();
+				else if (const auto found = m_toolWindows.find(m_invokingWindow);
+					found != m_toolWindows.end() && found->second->nativeSupport)
+					found->second->nativeSupport->Focus();
+				return std::string("{}");
 			});
 			m_rpc.Register("window.getModel", [this](const rapidjson::Value& params) {
 				const auto role = params.FindMember("role");
@@ -986,7 +1378,13 @@ namespace
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
 		webview_t m_webview{};
 		void* m_webViewWidget{};
+		RpcBinding m_mainBinding;
 		RpcDispatcher m_rpc;
+		std::unordered_map<std::uint64_t, std::unique_ptr<ToolWindow>> m_toolWindows;
+		std::unordered_map<std::string, std::uint64_t> m_windowByRole;
+		std::unordered_map<std::string, std::uint64_t> m_pendingWindowRoles;
+		std::uint64_t m_nextWindowId{};
+		std::uint64_t m_invokingWindow{};
 		std::shared_ptr<WebHostState> m_hostState{std::make_shared<WebHostState>()};
 		std::shared_ptr<WebHostServices> m_hostServices;
 		std::unique_ptr<IRendererHost> m_rendererHost;
@@ -1016,6 +1414,8 @@ namespace
 		bool m_cleanedUp{};
 		bool m_applicationShutdown{};
 		bool m_hostConnected{};
+		bool m_terminateWhenToolsClosed{};
+		bool m_mainReplyPending{};
 		Host::NativeSurfacePublication m_mainWindowPublication{};
 	};
 }

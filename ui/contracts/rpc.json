@@ -3,6 +3,8 @@
     { "name": "system.bootstrap", "params": "undefined", "result": "Bootstrap" },
     { "name": "system.quit", "params": "undefined", "result": "EmptyResult" },
     { "name": "window.close", "params": "undefined", "result": "EmptyResult" },
+    { "name": "window.open", "params": "{ role: Exclude<WindowRole, \"main-library\"> }", "result": "{ windowId: number }" },
+    { "name": "window.focus", "params": "undefined", "result": "EmptyResult" },
     { "name": "window.getModel", "params": "{ role: WindowRole }", "result": "Record<string, unknown>" },
     { "name": "titles.list", "params": "undefined", "result": "Title[]" },
     { "name": "titles.refresh", "params": "undefined", "result": "EmptyResult" },

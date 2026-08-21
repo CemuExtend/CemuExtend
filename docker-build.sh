@@ -29,6 +29,7 @@ docker build --progress=plain --target build \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${commit_hash}" \
 	--build-arg "SOURCE_FINGERPRINT=${source_fingerprint}" \
 	--build-arg "CEMU_FRONTEND=${frontend}" \
+	--build-arg "CLEAN_BUILD=${CEMU_CLEAN_BUILD:-1}" \
 	-t "${image_name}" "${project_dir}"
 
 mkdir -p "${artifact_dir}"

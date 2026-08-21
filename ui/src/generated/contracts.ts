@@ -5,6 +5,8 @@ export type RpcContract = {
   "system.bootstrap": { params: undefined; result: Bootstrap };
   "system.quit": { params: undefined; result: EmptyResult };
   "window.close": { params: undefined; result: EmptyResult };
+  "window.open": { params: { role: Exclude<WindowRole, "main-library"> }; result: { windowId: number } };
+  "window.focus": { params: undefined; result: EmptyResult };
   "window.getModel": { params: { role: WindowRole }; result: Record<string, unknown> };
   "titles.list": { params: undefined; result: Title[] };
   "titles.refresh": { params: undefined; result: EmptyResult };
