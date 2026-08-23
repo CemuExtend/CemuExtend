@@ -1030,16 +1030,12 @@ namespace cemuextend_hle
 				Fd destinationParent = OpenParent(root.get(), *destination, true);
 				if (!destinationParent)
 					return {ErrnoStatus(errno)};
-#ifdef SYS_renameat2
-				if (::syscall(SYS_renameat2, parent.get(), name, destinationParent.get(), destination->back().c_str(), 1U) != 0)
+				// File rename is the commit step for guest-side atomic writes. Match
+				// normal rename semantics and replace an existing destination so a
+				// temporary file can update a previously saved configuration.
+				if (::renameat(parent.get(), name, destinationParent.get(),
+							   destination->back().c_str()) != 0)
 					return {ErrnoStatus(errno)};
-#elif defined(__APPLE__)
-				if (::renameatx_np(parent.get(), name, destinationParent.get(),
-								   destination->back().c_str(), RENAME_EXCL) != 0)
-					return {ErrnoStatus(errno)};
-#else
-				return {Status::NotSupported};
-#endif
 				return {Status::Ok};
 			}
 			return {Status::NotSupported};
@@ -1253,7 +1249,9 @@ namespace cemuextend_hle
 				const auto bytes = offsetof(FILE_RENAME_INFO, FileName) + wideName.size() * sizeof(wchar_t);
 				std::vector<std::byte> storage(bytes);
 				auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
-				rename->ReplaceIfExists = FALSE;
+				// Keep the Windows behavior aligned with renameat: callers use rename
+				// as the commit step after flushing a temporary file.
+				rename->ReplaceIfExists = TRUE;
 				rename->RootDirectory = destinationParent.get();
 				rename->FileNameLength = static_cast<DWORD>(wideName.size() * sizeof(wchar_t));
 				std::memcpy(rename->FileName, wideName.data(), rename->FileNameLength);

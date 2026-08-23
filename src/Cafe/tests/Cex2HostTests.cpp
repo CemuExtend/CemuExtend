@@ -311,6 +311,45 @@ namespace
 		CHECK(response.size() == sizeof(ResponseHeader) + data.size());
 		CHECK(std::memcmp(response.data() + sizeof(ResponseHeader), data.data(), data.size()) == 0);
 
+		// Aqua writes a complete temporary config and commits it by renaming
+		// over the live file. Repeated saves must replace the destination rather
+		// than failing after the first config has been created.
+		const std::array replacementData{std::byte{4}, std::byte{5}};
+		cemuextend::wire::Encoder replacementWrite;
+		CHECK(replacementWrite.String("folder/file.bin.tmp"));
+		replacementWrite.U64(0);
+		replacementWrite.Bytes(replacementData);
+		request = Request(100, static_cast<std::uint16_t>(cemuextend::wire::FileOperation::Write),
+						  replacementWrite.data(), cemuextend::wire::ServiceId::File);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+
+		cemuextend::wire::Encoder replace;
+		CHECK(replace.String("folder/file.bin.tmp"));
+		CHECK(replace.String("folder/file.bin"));
+		request = Request(101, static_cast<std::uint16_t>(cemuextend::wire::FileOperation::Rename),
+						  replace.data(), cemuextend::wire::ServiceId::File);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+
+		cemuextend::wire::Encoder replacementRead;
+		CHECK(replacementRead.String("folder/file.bin"));
+		replacementRead.U64(0);
+		replacementRead.U32(64 * 1024);
+		request = Request(102, static_cast<std::uint16_t>(cemuextend::wire::FileOperation::Read),
+						  replacementRead.data(), cemuextend::wire::ServiceId::File);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		CHECK(response.size() == sizeof(ResponseHeader) + replacementData.size());
+		CHECK(std::memcmp(response.data() + sizeof(ResponseHeader), replacementData.data(),
+					  replacementData.size()) == 0);
+
 		cemuextend::wire::Encoder invalidType;
 		CHECK(invalidType.String("invalid-bool"));
 		invalidType.U8(static_cast<std::uint8_t>(cemuextend::wire::ValueType::Boolean));

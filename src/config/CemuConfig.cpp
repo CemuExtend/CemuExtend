@@ -367,6 +367,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 										frontendNode.get("CheckUpdates", legacyCheckUpdates));
 	frontend.save_screenshots = parser.get("save_screenshot",
 										   frontendNode.get("SaveScreenshots", legacySaveScreenshots));
+	frontend.ui_language = frontendNode.get("UiLanguage", "system");
 	// Load is only called for an existing configuration. Treat old configurations
 	// as already onboarded unless the new frontend explicitly persisted otherwise.
 	frontend.setup_completed = frontendNode.get("SetupCompleted", true);
@@ -748,6 +749,7 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	frontendNode.set("CheckUpdates", frontend.check_updates.GetValue());
 	frontendNode.set("SaveScreenshots", frontend.save_screenshots.GetValue());
 	frontendNode.set("SetupCompleted", frontend.setup_completed.GetValue());
+	frontendNode.set("UiLanguage", frontend.ui_language.GetValue().c_str());
 	auto hotkeysNode = frontendNode.set("Hotkeys");
 	hotkeysNode.set("ControllerModifier", frontend.hotkeys.controller_modifier);
 	auto saveHotkey = [&hotkeysNode](const char* name,

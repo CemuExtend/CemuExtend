@@ -23,6 +23,7 @@
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
+#include "Cafe/OS/libs/erreula/erreula.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
 #include "config/LaunchSettings.h"
@@ -3525,6 +3526,25 @@ namespace Application
 					return false;
 				swkbd_keyInput(keyCode);
 				return true;
+			}
+
+			RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot() override
+			{
+				return RuntimeOverlay::Model::Instance().GetSnapshot();
+			}
+
+			bool SubmitRuntimeOverlayKeyboardKey(std::uint64_t generation,
+												 std::uint32_t keyCode) override
+			{
+				if (generation != swkbd_overlayGeneration())
+					return false;
+				return SubmitSoftwareKeyboardKey(keyCode);
+			}
+
+			bool SelectRuntimeOverlayErrorButton(std::uint64_t generation,
+												 bool rightButton) override
+			{
+				return nn::erreula::SelectRuntimeOverlayButton(generation, rightButton);
 			}
 
 			NfcTouchResult TouchNfcTagFromFile(

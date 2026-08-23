@@ -27,6 +27,7 @@
 #include "application/SaveFacade.h"
 #include "application/TitleCatalog.h"
 #include "application/TitleInstallFacade.h"
+#include "frontend/RuntimeOverlay.h"
 
 namespace Application
 {
@@ -194,6 +195,18 @@ namespace Application
 		virtual void KeyboardFocusLost() = 0;
 		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
 		virtual bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) = 0;
+		[[nodiscard]] virtual RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot()
+		{
+			return {};
+		}
+		virtual bool SubmitRuntimeOverlayKeyboardKey(std::uint64_t, std::uint32_t)
+		{
+			return false;
+		}
+		virtual bool SelectRuntimeOverlayErrorButton(std::uint64_t, bool)
+		{
+			return false;
+		}
 		virtual NfcTouchResult TouchNfcTagFromFile(
 			const std::filesystem::path& path) = 0;
 		virtual void PointerFocusChanged(bool focused) = 0;
@@ -244,6 +257,9 @@ namespace Application
 		void KeyboardFocusLost();
 		[[nodiscard]] bool SoftwareKeyboardActive() const;
 		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode);
+		[[nodiscard]] RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot();
+		bool SubmitRuntimeOverlayKeyboardKey(std::uint64_t generation, std::uint32_t keyCode);
+		bool SelectRuntimeOverlayErrorButton(std::uint64_t generation, bool rightButton);
 		NfcTouchResult TouchNfcTagFromFile(const std::filesystem::path& path);
 		void PointerFocusChanged(bool focused);
 		void SubmitMouse(const MouseInput& input);

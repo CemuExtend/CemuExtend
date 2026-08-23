@@ -20,8 +20,10 @@
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include "imgui/imgui_extension.h"
 #include "imgui/imgui_impl_vulkan.h"
+#endif
 
 #include "Cafe/TitleList/GameInfo.h"
 
@@ -880,8 +882,10 @@ VulkanRenderer::~VulkanRenderer()
 
 	vkDestroyDescriptorSetLayout(m_logicalDevice, m_swapchainDescriptorSetLayout, nullptr);
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// shut down imgui
 	ImGui_ImplVulkan_Shutdown();
+#endif
 
 	// delete null objects
 	DeleteNullObjects();
@@ -1804,6 +1808,7 @@ void VulkanRenderer::DeleteNullObjects()
 
 void VulkanRenderer::ImguiInit()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	VkRenderPass prevRenderPass = m_imguiRenderPass;
 
 	VkAttachmentDescription colorAttachment = {};
@@ -1849,6 +1854,7 @@ void VulkanRenderer::ImguiInit()
 
 	if (prevRenderPass != VK_NULL_HANDLE)
 		vkDestroyRenderPass(GetLogicalDevice(), prevRenderPass, nullptr);
+#endif
 }
 
 void VulkanRenderer::Initialize()
@@ -1856,7 +1862,9 @@ void VulkanRenderer::Initialize()
 	Renderer::Initialize();
 	InitFirstCommandBuffer();
 	CreatePipelineCache();
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImguiInit();
+#endif
 	CreateNullObjects();
 }
 
@@ -1868,13 +1876,17 @@ void VulkanRenderer::Shutdown()
 	RendererShaderVk::Shutdown();
 	PipelineCompiler::CompileThreadPool_Stop();
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	DeleteFontTextures();
+#endif
 	Renderer::Shutdown();
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (m_imguiRenderPass != VK_NULL_HANDLE)
 	{
 		vkDestroyRenderPass(m_logicalDevice, m_imguiRenderPass, nullptr);
 		m_imguiRenderPass = VK_NULL_HANDLE;
 	}
+#endif
 	RendererShaderVk::Shutdown();
 }
 
@@ -2041,6 +2053,7 @@ void VulkanRenderer::QueryAvailableFormats()
 
 bool VulkanRenderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (!Renderer::ImguiBegin(mainWindow))
 		return false;
 
@@ -2057,17 +2070,24 @@ bool VulkanRenderer::ImguiBegin(bool mainWindow)
 	ImGui_UpdateWindowInformation(mainWindow);
 	ImGui::NewFrame();
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 void VulkanRenderer::ImguiEnd()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_state.currentCommandBuffer);
 	vkCmdEndRenderPass(m_state.currentCommandBuffer);
+#endif
 }
 
 ImTextureID VulkanRenderer::GenerateTexture(const std::vector<uint8>& data, const Vector2i& size)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	try
 	{
 		std::vector<uint8> tmp(size.x * size.y * 4);
@@ -2084,18 +2104,29 @@ ImTextureID VulkanRenderer::GenerateTexture(const std::vector<uint8>& data, cons
 		cemuLog_log(LogType::Force, "can't generate imgui texture: {}", ex.what());
 		return nullptr;
 	}
+#else
+	(void)data;
+	(void)size;
+	return nullptr;
+#endif
 }
 
 void VulkanRenderer::DeleteTexture(ImTextureID id)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	WaitDeviceIdle();
 	ImGui_ImplVulkan_DeleteTexture(id);
+#else
+	(void)id;
+#endif
 }
 
 void VulkanRenderer::DeleteFontTextures()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	WaitDeviceIdle();
 	ImGui_ImplVulkan_DestroyFontsTexture();
+#endif
 }
 
 bool VulkanRenderer::BeginFrame(bool mainWindow)
@@ -2933,7 +2964,9 @@ void VulkanRenderer::RecreateSwapchain(bool mainWindow, bool skipCreate)
 	const auto window = GetWindowMetrics();
 	if (mainWindow)
 	{
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 		ImGui_ImplVulkan_Shutdown();
+#endif
 		size.x = window.physicalWidth;
 		size.y = window.physicalHeight;
 	}
@@ -2951,8 +2984,10 @@ void VulkanRenderer::RecreateSwapchain(bool mainWindow, bool skipCreate)
 		chainInfo.Create();
 	}
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (mainWindow)
 		ImguiInit();
+#endif
 }
 
 bool VulkanRenderer::UpdateSwapchainProperties(bool mainWindow)
@@ -3913,6 +3948,7 @@ void VulkanRenderer::bufferCache_copyStreamoutToMainBuffer(uint32 srcOffset, uin
 
 void VulkanRenderer::AppendOverlayDebugInfo()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui::Text("--- Vulkan debug info ---");
 	ImGui::Text("GfxPipelines   %u", performanceMonitor.vk.numGraphicPipelines.get());
 	ImGui::Text("DescriptorSets %u", performanceMonitor.vk.numDescriptorSets.get());
@@ -3957,6 +3993,7 @@ void VulkanRenderer::AppendOverlayDebugInfo()
 
 	ImGui::Text("--- Tex heaps ---");
 	memoryManager->appendOverlayHeapDebugInfo();
+#endif
 }
 
 void VKRDestructibleObject::flagForCurrentCommandBuffer()

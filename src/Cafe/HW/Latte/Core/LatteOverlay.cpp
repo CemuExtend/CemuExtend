@@ -4,10 +4,13 @@
 #include "Cafe/Account/Account.h"
 #include "config/CemuConfig.h"
 #include "config/ActiveSettings.h"
+#include "frontend/RuntimeOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "resource/IconsFontAwesome5.h"
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "input/InputManager.h"
 #include "util/SystemInfo/SystemInfo.h"
@@ -47,12 +50,32 @@ extern std::vector<std::pair<std::string, int>> g_friend_notifications;
 std::mutex g_notification_mutex;
 std::vector<std::pair<std::string, int>> g_notifications;
 
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+namespace
+{
+	std::chrono::steady_clock::time_point s_webLastUpdate;
+	std::chrono::steady_clock::time_point s_webLastShaderCompile;
+	std::chrono::steady_clock::time_point s_webLastPipelineCompile;
+	std::vector<std::uint32_t> s_webLowBatteryPlayers;
+	int s_webShaderCount{};
+	int s_webShaderAsyncCount{};
+	int s_webPipelineCount{};
+	int s_webPipelineAsyncCount{};
+	bool s_webStartupPublished{};
+} // namespace
+#endif
+
 void LatteOverlay_pushNotification(const std::string& text, sint32 duration)
 {
+	RuntimeOverlay::Model::Instance().PushNotice(RuntimeOverlay::NoticeKind::Message, text,
+												 std::chrono::milliseconds(std::max<sint32>(0, duration)));
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	std::unique_lock lock(g_notification_mutex);
 	g_notifications.emplace_back(text, duration);
+#endif
 }
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 struct OverlayList
 {
 	std::wstring text;
@@ -558,9 +581,201 @@ void LatteOverlay_render(bool pad_view)
 		LatteOverlay_RenderNotifications(position, pivot, direction, notificationsFontSize, pad_view);
 	}
 }
+#else
+void LatteOverlay_render(bool)
+{
+}
+#endif
+
+namespace
+{
+	RuntimeOverlay::Position ToOverlayPosition(ScreenPosition position)
+	{
+		switch (position)
+		{
+		case ScreenPosition::kTopLeft:
+			return RuntimeOverlay::Position::TopLeft;
+		case ScreenPosition::kTopCenter:
+			return RuntimeOverlay::Position::TopCenter;
+		case ScreenPosition::kTopRight:
+			return RuntimeOverlay::Position::TopRight;
+		case ScreenPosition::kBottomLeft:
+			return RuntimeOverlay::Position::BottomLeft;
+		case ScreenPosition::kBottomCenter:
+			return RuntimeOverlay::Position::BottomCenter;
+		case ScreenPosition::kBottomRight:
+			return RuntimeOverlay::Position::BottomRight;
+		default:
+			return RuntimeOverlay::Position::Disabled;
+		}
+	}
+
+	void PublishPresentation()
+	{
+		const auto& config = GetConfig();
+		RuntimeOverlay::Stats stats{
+			.fps = g_state.fps,
+			.drawCalls = g_state.draw_calls_per_frame,
+			.fastDrawCalls = g_state.fast_draw_calls_per_frame,
+			.cpuUsage = g_state.cpu_usage,
+			.ramUsageMb = g_state.ram_usage,
+			.vramUsageMb = g_state.vramUsage,
+			.vramTotalMb = g_state.vramTotal,
+		};
+		stats.cpuPerCore.reserve(g_state.cpu_per_core.size());
+		for (const auto usage : g_state.cpu_per_core)
+			stats.cpuPerCore.push_back(usage);
+		if (config.overlay.debug)
+		{
+			stats.debugLines.emplace_back(
+				"IndexUploadPerFrame",
+				fmt::format("{} KB", (performanceMonitor.stats.indexDataUploadPerFrame + 1023) / 1024));
+			stats.debugLines.emplace_back(
+				"SHCSets", fmt::format("{} / {}", g_shaderStateCacheSetCount.load(),
+									   g_shaderStateCacheSetAuxCount.load()));
+		}
+
+		RuntimeOverlay::Model::Instance().SetPresentation(
+			{ToOverlayPosition(config.overlay.position), config.overlay.text_color,
+			 static_cast<std::uint32_t>(std::max(1, config.overlay.text_scale))},
+			{ToOverlayPosition(config.notification.position), config.notification.text_color,
+			 static_cast<std::uint32_t>(std::max(1, config.notification.text_scale))},
+			{.fps = config.overlay.fps,
+			 .drawCalls = config.overlay.drawcalls,
+			 .cpuUsage = config.overlay.cpu_usage,
+			 .cpuPerCore = config.overlay.cpu_per_core_usage,
+			 .ramUsage = config.overlay.ram_usage,
+			 .vramUsage = config.overlay.vram_usage,
+			 .debug = config.overlay.debug},
+			std::move(stats));
+	}
+} // namespace
+
+void LatteOverlay_updateWebSnapshot()
+{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+	const auto now = std::chrono::steady_clock::now();
+	if (now - s_webLastUpdate < std::chrono::milliseconds(100))
+		return;
+	s_webLastUpdate = now;
+
+	PublishPresentation();
+	const auto& config = GetConfig();
+	auto& model = RuntimeOverlay::Model::Instance();
+	if (!s_webStartupPublished && config.notification.controller_profiles)
+	{
+		s_webStartupPublished = true;
+		const auto account = Account::GetAccount(ActiveSettings::GetPersistentId());
+		const std::wstring miiName{account.GetMiiName()};
+		if (!miiName.empty())
+			model.PushNotice(RuntimeOverlay::NoticeKind::Account,
+							 boost::nowide::narrow(miiName), std::chrono::seconds(5));
+		for (int index = 0; index < InputManager::kMaxController; ++index)
+		{
+			const auto controller = InputManager::instance().get_controller(index);
+			if (controller && !controller->get_profile_name().empty())
+				model.PushNotice(RuntimeOverlay::NoticeKind::Controller,
+								 fmt::format("Player {}: {}", index + 1, controller->get_profile_name()),
+								 std::chrono::seconds(5), static_cast<std::uint32_t>(index));
+		}
+	}
+
+	std::vector<std::uint32_t> lowBatteryPlayers;
+	if (config.notification.controller_battery)
+	{
+		for (int index = 0; index < InputManager::kMaxController; ++index)
+		{
+			const auto controller = InputManager::instance().get_controller(index);
+			if (controller && controller->is_battery_low())
+				lowBatteryPlayers.push_back(static_cast<std::uint32_t>(index));
+		}
+	}
+	if (lowBatteryPlayers != s_webLowBatteryPlayers)
+	{
+		s_webLowBatteryPlayers = lowBatteryPlayers;
+		std::vector<RuntimeOverlay::Notice> notices;
+		for (const auto player : lowBatteryPlayers)
+			notices.push_back({.kind = RuntimeOverlay::NoticeKind::Battery,
+							   .text = fmt::format("Player {} battery is low", player + 1),
+							   .player = player});
+		model.ReplaceNotices(RuntimeOverlay::NoticeKind::Battery, std::move(notices));
+	}
+
+	if (config.notification.friends)
+	{
+		std::vector<std::pair<std::string, int>> friends;
+		{
+			std::unique_lock lock(g_friend_notification_mutex);
+			friends.swap(g_friend_notifications);
+		}
+		for (auto& [text, duration] : friends)
+			model.PushNotice(RuntimeOverlay::NoticeKind::Friend, std::move(text),
+							 std::chrono::milliseconds(std::max(0, duration)));
+	}
+
+	if (config.notification.shader_compiling)
+	{
+		const auto newShaders = g_compiled_shaders_total.exchange(0);
+		const auto newAsyncShaders = g_compiled_shaders_async.exchange(0);
+		if (newShaders > 0)
+		{
+			if (now - s_webLastShaderCompile >= std::chrono::milliseconds(2500))
+			{
+				s_webShaderCount = 0;
+				s_webShaderAsyncCount = 0;
+			}
+			s_webShaderCount += newShaders;
+			s_webShaderAsyncCount += newAsyncShaders;
+			s_webLastShaderCompile = now;
+			const auto asyncText = s_webShaderAsyncCount > 0 && config.async_compile
+									   ? fmt::format(" ({} async)", s_webShaderAsyncCount)
+									   : std::string{};
+			model.ReplaceNotices(RuntimeOverlay::NoticeKind::Shader,
+								 {{.kind = RuntimeOverlay::NoticeKind::Shader,
+								   .text = fmt::format("Compiled {} new shader{}...{}", s_webShaderCount,
+													   s_webShaderCount == 1 ? "" : "s", asyncText),
+								   .expiresAt = now + std::chrono::milliseconds(2500)}});
+		}
+
+		const auto newPipelines = g_compiling_pipelines.exchange(0);
+		const auto newAsyncPipelines = g_compiling_pipelines_async.exchange(0);
+		if (newPipelines > 0)
+		{
+			if (now - s_webLastPipelineCompile >= std::chrono::milliseconds(2500))
+			{
+				s_webPipelineCount = 0;
+				s_webPipelineAsyncCount = 0;
+			}
+			s_webPipelineCount += newPipelines;
+			s_webPipelineAsyncCount += newAsyncPipelines;
+			s_webLastPipelineCompile = now;
+			const auto asyncText = s_webPipelineAsyncCount > 0
+									   ? fmt::format(" ({} async)", s_webPipelineAsyncCount)
+									   : std::string{};
+			model.ReplaceNotices(RuntimeOverlay::NoticeKind::Pipeline,
+								 {{.kind = RuntimeOverlay::NoticeKind::Pipeline,
+								   .text = fmt::format("Compiled {} new pipeline{}...{}", s_webPipelineCount,
+													   s_webPipelineCount == 1 ? "" : "s", asyncText),
+								   .expiresAt = now + std::chrono::milliseconds(2500)}});
+		}
+	}
+#endif
+}
 
 void LatteOverlay_init()
 {
+	RuntimeOverlay::Model::Instance().Reset();
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+	s_webLastUpdate = {};
+	s_webLastShaderCompile = {};
+	s_webLastPipelineCompile = {};
+	s_webLowBatteryPlayers.clear();
+	s_webShaderCount = 0;
+	s_webShaderAsyncCount = 0;
+	s_webPipelineCount = 0;
+	s_webPipelineAsyncCount = 0;
+	s_webStartupPublished = false;
+#endif
 	g_state.processor_count = GetProcessorCount();
 
 	g_state.processor_times.resize(g_state.processor_count);
@@ -609,4 +824,5 @@ void LatteOverlay_updateStats(double fps, sint32 drawcalls, sint32 fastDrawcalls
 
 	// update vram
 	g_renderer->GetVRAMInfo(g_state.vramUsage, g_state.vramTotal);
+	PublishPresentation();
 }

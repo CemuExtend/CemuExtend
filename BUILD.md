@@ -145,7 +145,18 @@ cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DA
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. To produce a Nix-linked Release executable directly at `bin/Cemu_release`, configure a Release build inside the development shell:
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. Desktop WebView builds use the WebView runtime overlay by default. Use `-DCEMU_OVERLAY_BACKEND=imgui` to build the source-compatible ImGui fallback, or set it to `webview` explicitly. The WebView overlay requires `CEMU_FRONTEND=webview`; wx builds default to ImGui.
+
+For example, to validate both desktop overlay implementations:
+
+```bash
+nix develop --command cmake -S . -B build/nix-webview -G Ninja \
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=webview
+nix develop --command cmake -S . -B build/nix-imgui -G Ninja \
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=imgui
+```
+
+To produce a Nix-linked Release executable directly at `bin/Cemu_release`, configure a Release build inside the development shell:
 
 ```bash
 nix develop --command cmake -S . -B build/nix-release -G Ninja \
@@ -171,7 +182,7 @@ docker build -t cemu-extend:build .
 docker run --rm -it cemu-extend:build
 ```
 
-The default image performs a WebView Release build. Use `--build-arg CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another frontend, and `--build-arg BUILD_TYPE=Debug` for a Debug build. The `docker-build.sh` wrapper accepts the same selection through the `CEMU_FRONTEND` environment variable. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
+The default image performs a WebView Release build. Use `--build-arg CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another frontend, `--build-arg CEMU_OVERLAY_BACKEND=imgui` to select the ImGui fallback for a WebView frontend build, and `--build-arg BUILD_TYPE=Debug` for a Debug build. The `docker-build.sh` wrapper accepts the same selections through `CEMU_FRONTEND` and `CEMU_OVERLAY_BACKEND`. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
 
 To build and launch the desktop frontend with its GTK/WebKitGTK runtime, use:
 

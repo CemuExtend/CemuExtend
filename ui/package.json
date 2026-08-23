@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "generate": "bun run scripts/generate-contracts.ts && bun run scripts/convert-translations.ts",
+    "translations:update": "bun run scripts/update-mo-translations.ts && bun run scripts/convert-translations.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",

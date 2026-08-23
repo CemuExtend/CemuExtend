@@ -68,8 +68,10 @@ add_subdirectory(config)
 add_subdirectory(input)
 add_subdirectory(audio)
 add_subdirectory(util)
-add_subdirectory(imgui)
 add_subdirectory(resource)
+if(NOT CEMU_FRONTEND STREQUAL "headless" AND CEMU_OVERLAY_BACKEND STREQUAL "imgui")
+	add_subdirectory(imgui)
+endif()
 
 function(cemu_collect_target_link_closure root_target out_var)
 	set(queue "${root_target}")
@@ -190,15 +192,16 @@ cemu_assert_target_internal_edges_allowed(CemuInput
 cemu_assert_target_internal_edges_allowed(CemuConfig
 	CemuCommon CemuComponents)
 cemu_assert_target_internal_edges_allowed(CemuCafe
-	CemuCommon CemuComponents CemuConfig CemuHostContracts CemuInput CemuExtendDomain CemuResource CemuUtil CemuWaylandProtocols)
+	CemuCommon CemuComponents CemuConfig CemuHostContracts CemuInput CemuExtendDomain CemuResource CemuRuntimeOverlay CemuUtil CemuWaylandProtocols)
 cemu_assert_target_internal_edges_allowed(CemuDownloadManager
 	CemuCafe CemuCommon CemuComponents CemuConfig CemuHostContracts CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuApplication
-	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuUtil)
+	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuRuntimeOverlay CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuWebRpc)
 cemu_assert_target_internal_edges_allowed(CemuWebFrontend
-	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuUtil CemuWebRpc
+	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuRuntimeOverlay CemuUtil CemuWebRpc
 	CemuWebRendererAdapters)
+cemu_assert_target_internal_edges_allowed(CemuRuntimeOverlay)
 cemu_assert_target_internal_edges_allowed(CemuWebRendererAdapters
 	CemuCafe CemuCommon CemuConfig CemuHostContracts)
 cemu_assert_target_internal_edges_allowed(CemuWxAdapterContracts CemuHostContracts)

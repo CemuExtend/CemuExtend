@@ -3,8 +3,10 @@
 #include "config/CemuConfig.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
+#endif
 #include <png.h>
 
 #include "config/ActiveSettings.h"
@@ -33,6 +35,7 @@ bool Renderer::GetVRAMInfo(int& usageInMB, int& totalInMB) const
 
 void Renderer::Initialize()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// imgui
 	imguiFontAtlas = new ImFontAtlas();
 	imguiFontAtlas->AddFontDefault();
@@ -48,19 +51,23 @@ void Renderer::Initialize()
 	imguiPadContext = ImGui::CreateContext(imguiFontAtlas);
 	setupContext(imguiTVContext);
 	setupContext(imguiPadContext);
+#endif
 }
 
 void Renderer::Shutdown()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// imgui
 	ImGui::DestroyContext(imguiTVContext);
 	ImGui::DestroyContext(imguiPadContext);
 	ImGui_ClearFonts();
 	delete imguiFontAtlas;
+#endif
 }
 
 bool Renderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	const auto window = GetWindowMetrics();
 	if (!mainWindow && !window.padOpen)
 		return false;
@@ -79,6 +86,10 @@ bool Renderer::ImguiBegin(bool mainWindow)
 
 	ImGui_PrecacheFonts();
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 uint8 Renderer::SRGBComponentToRGB(uint8 ci)

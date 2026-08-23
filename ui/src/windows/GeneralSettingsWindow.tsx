@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FrontendSettings } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
 import { openWindow } from "../bridge/windows";
+import { getUiLanguage, setUiLanguage, uiLanguages } from "../i18n/runtime";
 
 export function GeneralSettingsWindow() {
   const [model, setModel] = useState<FrontendSettings>();
@@ -11,6 +12,8 @@ export function GeneralSettingsWindow() {
   const [openPad, setOpenPad] = useState(false);
   const [checkUpdates, setCheckUpdates] = useState(false);
   const [saveScreenshots, setSaveScreenshots] = useState(true);
+  const [language, setLanguage] = useState(getUiLanguage());
+  const [savedLanguage, setSavedLanguage] = useState(getUiLanguage());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -22,10 +25,15 @@ export function GeneralSettingsWindow() {
     setCheckUpdates(snapshot.checkUpdates);
     setSaveScreenshots(snapshot.saveScreenshots);
   }, []);
-  const load = useCallback(
-    async () => install(await invoke("settings.getFrontend")),
-    [install],
-  );
+  const load = useCallback(async () => {
+    const [settings, languageState] = await Promise.all([
+      invoke("settings.getFrontend"),
+      invoke("language.get"),
+    ]);
+    install(settings);
+    setLanguage(languageState.language);
+    setSavedLanguage(languageState.language);
+  }, [install]);
   useEffect(() => {
     void load().catch((reason: unknown) => setError(String(reason)));
   }, [load]);
@@ -36,34 +44,44 @@ export function GeneralSettingsWindow() {
       !gamePaths.includes(normalizedCandidate),
     [gamePaths, normalizedCandidate],
   );
-  const dirty = model
+  const frontendDirty = model
     ? gamePaths.join("\0") !== model.gamePaths.join("\0") ||
       startFullscreen !== model.startFullscreen ||
       openPad !== model.openPad ||
       checkUpdates !== model.checkUpdates ||
       saveScreenshots !== model.saveScreenshots
     : false;
+  const languageDirty = language !== savedLanguage;
+  const dirty = frontendDirty || languageDirty;
   async function apply() {
     if (!model) return;
     setBusy(true);
     setError("");
     setSaved(false);
     try {
-      const result = await invoke("settings.applyFrontend", {
-        revision: model.revision,
-        gamePaths,
-        startFullscreen,
-        openPad,
-        checkUpdates,
-        saveScreenshots,
-        completeSetup: false,
-      });
-      if (!result.ok) {
+      if (frontendDirty) {
+        const result = await invoke("settings.applyFrontend", {
+          revision: model.revision,
+          gamePaths,
+          startFullscreen,
+          openPad,
+          checkUpdates,
+          saveScreenshots,
+          completeSetup: false,
+        });
+        if (!result.ok) {
+          install(result.snapshot);
+          setError(result.diagnostic || "Settings could not be applied.");
+          return;
+        }
         install(result.snapshot);
-        setError(result.diagnostic || "Settings could not be applied.");
-        return;
       }
-      install(result.snapshot);
+      if (languageDirty) {
+        const result = await invoke("language.set", { language });
+        setLanguage(result.language);
+        setSavedLanguage(result.language);
+        setUiLanguage(result.language);
+      }
       setSaved(true);
     } catch (reason) {
       setError(String(reason));
@@ -92,7 +110,7 @@ export function GeneralSettingsWindow() {
         </div>
         <div className="button-row">
           <button
-            disabled={busy || !dirty || model.titleRunning}
+            disabled={busy || !dirty || (model.titleRunning && frontendDirty)}
             onClick={() => void apply()}
           >
             Apply
@@ -115,6 +133,26 @@ export function GeneralSettingsWindow() {
           Stop the running title before changing these settings.
         </div>
       )}
+      <section className="editor-panel">
+        <h2>Interface</h2>
+        <label className="field-stack">
+          <span>Language</span>
+          <select
+            value={language}
+            disabled={busy}
+            onChange={(event) => setLanguage(event.target.value)}
+          >
+            {uiLanguages.map((entry) => (
+              <option key={entry.code} value={entry.code}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">
+          The interface language is shared by every CemuExtend window.
+        </p>
+      </section>
       <section className="editor-panel">
         <h2>Game paths</h2>
         <p>
@@ -254,7 +292,7 @@ export function GeneralSettingsWindow() {
       </section>
       <footer className="button-row">
         <button
-          disabled={busy || !dirty || model.titleRunning}
+          disabled={busy || !dirty || (model.titleRunning && frontendDirty)}
           onClick={() => void apply()}
         >
           Apply
@@ -263,6 +301,8 @@ export function GeneralSettingsWindow() {
           disabled={busy || !dirty}
           onClick={() => {
             install(model);
+            setLanguage(savedLanguage);
+            setUiLanguage(savedLanguage);
             setError("");
           }}
         >

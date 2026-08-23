@@ -5,6 +5,7 @@ import type {
   GraphicPackMutation,
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import { subscribe } from "../bridge/events";
 import { Modal } from "../components/Modal";
 
@@ -304,7 +305,7 @@ export function GraphicPacksWindow({
             </button>
           </>
         )}
-        <span>{filtered.length} packs</span>
+        <span>{translateFormat("{count} packs", { count: filtered.length })}</span>
       </div>
       {error && (
         <div className="notice error" role="alert">

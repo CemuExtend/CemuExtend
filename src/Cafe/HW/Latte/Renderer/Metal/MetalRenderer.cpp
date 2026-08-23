@@ -23,9 +23,11 @@
 #include "Cafe/HW/Latte/Core/LatteConst.h"
 #include "config/CemuConfig.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #define IMGUI_IMPL_METAL_CPP
 #include "imgui/imgui_extension.h"
 #include "imgui/imgui_impl_metal.h"
+#endif
 
 #define EVENT_VALUE_WRAP 4096
 
@@ -335,7 +337,9 @@ void MetalRenderer::Initialize()
 void MetalRenderer::Shutdown()
 {
 	// TODO: should shutdown both layers
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui_ImplMetal_Shutdown();
+#endif
 	CommitCommandBuffer();
 	Renderer::Shutdown();
 	RendererShaderMtl::Shutdown();
@@ -558,6 +562,7 @@ void MetalRenderer::NotifyLatteCommandProcessorIdle()
 
 bool MetalRenderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (!Renderer::ImguiBegin(mainWindow))
 		return false;
 
@@ -589,10 +594,15 @@ bool MetalRenderer::ImguiBegin(bool mainWindow)
 		GetTemporaryRenderCommandEncoder(renderPassDescriptor);
 
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 void MetalRenderer::ImguiEnd()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	EnsureImGuiBackend();
 
 	if (m_encoderType != MetalEncoderType::Render)
@@ -606,6 +616,7 @@ void MetalRenderer::ImguiEnd()
 	// ImGui::EndFrame();
 
 	EndEncoding();
+#endif
 }
 
 ImTextureID MetalRenderer::GenerateTexture(const std::vector<uint8>& data, const Vector2i& size)
@@ -644,20 +655,27 @@ ImTextureID MetalRenderer::GenerateTexture(const std::vector<uint8>& data, const
 
 void MetalRenderer::DeleteTexture(ImTextureID id)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	EnsureImGuiBackend();
 
 	((MTL::Texture*)id)->release();
+#else
+	(void)id;
+#endif
 }
 
 void MetalRenderer::DeleteFontTextures()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	EnsureImGuiBackend();
 
 	ImGui_ImplMetal_DestroyFontsTexture();
+#endif
 }
 
 void MetalRenderer::AppendOverlayDebugInfo()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui::Text("--- GPU info ---");
 	ImGui::Text("GPU                        %s", m_device->name()->utf8String());
 	ImGui::Text("Is Apple GPU               %s", (m_isAppleGPU ? "yes" : "no"));
@@ -694,6 +712,7 @@ void MetalRenderer::AppendOverlayDebugInfo()
 	ImGui::Text("Staging");
 	ImGui::SameLine(60.0f);
 	ImGui::Text("%06uKB / %06uKB Buffers: %u", ((uint32)(totalSize - freeSize) + 1023) / 1024, ((uint32)totalSize + 1023) / 1024, (uint32)numBuffers);
+#endif
 
 	m_memoryManager->GetIndexAllocator().GetStats(numBuffers, totalSize, freeSize);
 	ImGui::Text("Index");
@@ -2321,11 +2340,13 @@ void MetalRenderer::SwapBuffer(bool mainWindow)
 
 void MetalRenderer::EnsureImGuiBackend()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (!ImGui::GetIO().BackendRendererUserData)
 	{
 		ImGui_ImplMetal_Init(m_device);
 		// ImGui_ImplMetal_CreateFontsTexture(m_device);
 	}
+#endif
 }
 
 void MetalRenderer::StartCapture()

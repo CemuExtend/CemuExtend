@@ -87,6 +87,7 @@ target_link_libraries(CemuWebFrontend PRIVATE
   CemuFrontendModel
   CemuHostContracts
   CemuInput
+	CemuRuntimeOverlay
   CemuWebRpc
   CemuUtil
   CemuWebRendererAdapters

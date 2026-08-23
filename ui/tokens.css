@@ -1,0 +1,98 @@
+/* Hallmark · design-system: CemuExtend · palette: black / white only · theme: White + Dark */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-paper: oklch(100% 0 0);
+  --color-paper-2: oklch(100% 0 0);
+  --color-ink: oklch(0% 0 0);
+  --color-ink-2: oklch(0% 0 0);
+  --color-rule: oklch(0% 0 0);
+  --color-focus: oklch(0% 0 0);
+  --color-accent: oklch(0% 0 0);
+  --color-accent-ink: oklch(100% 0 0);
+  --color-danger: oklch(0% 0 0);
+
+  --font-display: ui-monospace, "Cascadia Mono", "Liberation Mono", monospace;
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Liberation Mono", monospace;
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5rem;
+  --text-xl: 2rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 120ms;
+  --dur-medium: 200ms;
+
+  --rule-thin: 0.0625rem;
+  --rule-strong: 0.125rem;
+  --rule-focus: 0.1875rem;
+  --radius-control: 0;
+  --radius-panel: 0;
+
+  --size-control: 2.75rem;
+  --size-topbar: 4rem;
+  --size-sidebar: 13.5rem;
+  --size-game-icon: 3.5rem;
+  --size-detail-pane: 24rem;
+  --measure-control: 24rem;
+  --size-content-max: 110rem;
+  --size-list-min: 18rem;
+  --size-check: 1rem;
+  --size-check-mark: 0.5rem;
+  --z-navigation: 20;
+  --z-popover: 40;
+  --z-runtime-overlay: 10000;
+
+  --bg: var(--color-paper);
+  --panel: var(--color-paper-2);
+  --text: var(--color-ink);
+  --muted: var(--color-ink-2);
+  --line: var(--color-rule);
+  --accent: var(--color-accent);
+  --accent-soft: var(--color-paper-2);
+  --danger: var(--color-danger);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: oklch(0% 0 0);
+  --color-paper-2: oklch(0% 0 0);
+  --color-ink: oklch(100% 0 0);
+  --color-ink-2: oklch(100% 0 0);
+  --color-rule: oklch(100% 0 0);
+  --color-focus: oklch(100% 0 0);
+  --color-accent: oklch(100% 0 0);
+  --color-accent-ink: oklch(0% 0 0);
+  --color-danger: oklch(100% 0 0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+    --color-paper: oklch(0% 0 0);
+    --color-paper-2: oklch(0% 0 0);
+    --color-ink: oklch(100% 0 0);
+    --color-ink-2: oklch(100% 0 0);
+    --color-rule: oklch(100% 0 0);
+    --color-focus: oklch(100% 0 0);
+    --color-accent: oklch(100% 0 0);
+    --color-accent-ink: oklch(0% 0 0);
+    --color-danger: oklch(100% 0 0);
+  }
+}

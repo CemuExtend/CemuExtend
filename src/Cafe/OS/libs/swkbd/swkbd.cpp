@@ -2,11 +2,14 @@
 #include "Cafe/OS/libs/coreinit/coreinit_FS.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "frontend/RuntimeOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
 #include "util/helpers/helpers.h"
 #include "resource/IconsFontAwesome5.h"
+#endif
 
 #define SWKBD_FORM_STRING_MAX_LENGTH (4096) // counted in 16-bit characters
 
@@ -86,8 +89,28 @@ typedef struct
 } swkbdInternalState_t;
 
 swkbdInternalState_t* swkbdInternalState = nullptr;
+std::uint64_t swkbdOverlayGeneration = 0;
 sint32 isNeedCalcSubThreadFont = 0;
 sint32 isNeedCalcSubThreadPredict = 0;
+
+namespace
+{
+	void PublishSoftwareKeyboard()
+	{
+		RuntimeOverlay::SoftwareKeyboard keyboard{.generation = swkbdOverlayGeneration};
+		if (swkbdInternalState)
+		{
+			keyboard.active = swkbdInternalState->isActive;
+			keyboard.keyboardOnly = swkbdInternalState->keyboardOnlyMode;
+			keyboard.shifted = swkbdInternalState->shiftActivated;
+			keyboard.maximumLength = static_cast<std::uint32_t>(
+				std::max<sint32>(0, swkbdInternalState->maxTextLength));
+			keyboard.text = boost::nowide::narrow(
+				fmt::format(L"{}", swkbdInternalState->formStringBuffer));
+		}
+		RuntimeOverlay::Model::Instance().SetSoftwareKeyboard(std::move(keyboard));
+	}
+} // namespace
 
 void SwkbdCreate(uint8* workMemory, uint32 regionType, uint32 unk, coreinit::FSClient_t* fsClient)
 {
@@ -192,6 +215,7 @@ static_assert(offsetof(swkbdAppearArg_t, cursorIndex) == 0xC4, "appearArg.cursor
 
 uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 {
+	++swkbdOverlayGeneration;
 	swkbdInternalState->formStringLength = 0;
 	swkbdInternalState->isActive = true;
 	swkbdInternalState->decideButtonWasPressed = false;
@@ -222,11 +246,13 @@ uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 		swkbdInternalState->formStringBuffer[0] = '\0';
 		swkbdInternalState->formStringLength = 0;
 	}
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
 uint32 SwkbdAppearKeyboard(const SwkbdKeyboardArg_t* keyboardArg)
 {
+	++swkbdOverlayGeneration;
 	// todo: Figure out what the difference between AppearInputForm and AppearKeyboard is?
 	uint32 argPtr = MEMPTR(keyboardArg).GetMPTR();
 	for (sint32 i = 0; i < 0x180; i += 4)
@@ -241,6 +267,7 @@ uint32 SwkbdAppearKeyboard(const SwkbdKeyboardArg_t* keyboardArg)
 	swkbdInternalState->formStringBuffer[0] = '\0';
 	swkbdInternalState->formStringLength = 0;
 	swkbdInternalState->keyboardArg = *keyboardArg;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
@@ -248,6 +275,7 @@ uint32 SwkbdDisappearInputForm()
 {
 	debug_printf("SwkbdDisappearInputForm__3RplFv\n");
 	swkbdInternalState->isActive = false;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
@@ -255,6 +283,7 @@ uint32 SwkbdDisappearKeyboard()
 {
 	debug_printf("SwkbdDisappearKeyboard__3RplFv\n");
 	swkbdInternalState->isActive = false;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
@@ -396,6 +425,7 @@ void SwkbdCalc(void* controllerInfo)
 }
 
 void swkbd_keyInput(uint32 keyCode);
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 void swkbd_render(bool mainWindow)
 {
 	// only render if active
@@ -554,10 +584,20 @@ void swkbd_render(bool mainWindow)
 	ImGui::PopFont();
 	ImGui::PopStyleColor();
 }
+#else
+void swkbd_render(bool)
+{
+}
+#endif
 
 bool swkbd_hasKeyboardInputHook()
 {
 	return swkbdInternalState != NULL && swkbdInternalState->isActive;
+}
+
+std::uint64_t swkbd_overlayGeneration()
+{
+	return swkbdOverlayGeneration;
 }
 
 void swkbd_finishInput()
@@ -616,11 +656,13 @@ void swkbd_keyInput(uint32 keyCode)
 			swkbdInternalState->formStringLength--;
 		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
 		swkbd_inputStringChanged();
+		PublishSoftwareKeyboard();
 		return;
 	}
 	else if (keyCode == 13) // return
 	{
 		swkbd_finishInput();
+		PublishSoftwareKeyboard();
 		return;
 	}
 	// check if allowed character
@@ -663,6 +705,7 @@ void swkbd_keyInput(uint32 keyCode)
 		swkbdInternalState->formStringLength++;
 		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
 		swkbd_inputStringChanged();
+		PublishSoftwareKeyboard();
 	}
 }
 

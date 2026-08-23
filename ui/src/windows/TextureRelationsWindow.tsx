@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../bridge/native";
+import { translate, translateFormat } from "../i18n/runtime";
 import type { TextureDiagnosticPage } from "../bridge/contracts";
 
 const pageSize = 100;
@@ -69,7 +70,10 @@ export function TextureRelationsWindow() {
         </label>
         <span>
           {page
-            ? `${page.total} copied rows · generation ${page.generation}`
+            ? translateFormat("{count} copied rows · generation {generation}", {
+                count: page.total,
+                generation: page.generation,
+              })
             : "Loading…"}
         </span>
       </div>
@@ -104,8 +108,8 @@ export function TextureRelationsWindow() {
               >
                 <td>
                   {row.kind === "view"
-                    ? "↳ View"
-                    : `Texture${row.alternativeViewCount ? ` (${row.alternativeViewCount + 1})` : ""}`}
+                    ? `↳ ${translate("View")}`
+                    : `${translate("Texture")}${row.alternativeViewCount ? ` (${row.alternativeViewCount + 1})` : ""}`}
                 </td>
                 <td>
                   {row.kind === "view"
@@ -114,7 +118,7 @@ export function TextureRelationsWindow() {
                 </td>
                 <td>
                   {row.format}
-                  {row.depthFormat ? " depth" : ""}
+                  {row.depthFormat ? ` ${translate("depth")}` : ""}
                 </td>
                 <td>{row.pitch || "—"}</td>
                 <td>
@@ -133,8 +137,8 @@ export function TextureRelationsWindow() {
                 <td>
                   {[
                     row.updatedOnGpu && "GPU",
-                    row.resolutionOverridden && "scaled",
-                    row.active && "active",
+                    row.resolutionOverridden && translate("scaled"),
+                    row.active && translate("active"),
                   ]
                     .filter(Boolean)
                     .join(", ") || "—"}
@@ -155,7 +159,11 @@ export function TextureRelationsWindow() {
         </button>
         <span>
           {page
-            ? `${offset + 1}–${Math.min(page.total, offset + page.rows.length)} of ${page.total}`
+            ? translateFormat("{first}–{last} of {total}", {
+                first: offset + 1,
+                last: Math.min(page.total, offset + page.rows.length),
+                total: page.total,
+              })
             : "—"}
         </span>
         <button

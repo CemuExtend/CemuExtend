@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LoggingEntry, LoggingLevel } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import { loggingSnapshotFromEvent, mergeLoggingEntries } from "./loggingEvents";
 
 export function LoggingWindow() {
@@ -174,7 +175,10 @@ export function LoggingWindow() {
         </label>
       </div>
       <div className="logging-status">
-        {visible.length} shown / {entries.length} retained
+        {translateFormat("{shown} shown / {retained} retained", {
+          shown: visible.length,
+          retained: entries.length,
+        })}
         {BigInt(dropped) > 0n ? ` · ${dropped} older entries discarded` : ""}
       </div>
       <section

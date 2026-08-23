@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PpcThreadCommand, PpcThreadsModel } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
+import { translate, translateFormat } from "../i18n/runtime";
 import { matchesPpcThread } from "./ppcThreadsModel";
 
 const affinity = (value: number) =>
@@ -118,7 +119,7 @@ export function PpcThreadsWindow() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span>{visible.length} threads</span>
+        <span>{translateFormat("{count} threads", { count: visible.length })}</span>
       </div>
       <div className="split-view ppc-thread-split">
         <div className="table-scroll">
@@ -147,7 +148,7 @@ export function PpcThreadsWindow() {
                     <code>{thread.address}</code>
                   </td>
                   <td>{thread.name || "(unnamed)"}</td>
-                  <td>{thread.state}</td>
+                  <td>{translate(thread.state)}</td>
                   <td>
                     <code>{thread.instructionPointer}</code>
                   </td>

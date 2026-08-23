@@ -8,6 +8,7 @@ import type {
 } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
+import { translate, translateFormat } from "../i18n/runtime";
 import { Modal } from "../components/Modal";
 import { activateJob, routeJobEvent } from "./checksumEvents";
 
@@ -303,7 +304,8 @@ export function TitleManagerWindow({ windowId }: { windowId: string }) {
           <option value="system">System</option>
         </select>
         <span>
-          {entries.length} installations{model.scanning ? " · scanning…" : ""}
+          {translateFormat("{count} installations", { count: entries.length })}
+          {model.scanning ? ` · ${translate("Scanning…")}` : ""}
         </span>
       </div>
       <div className="split-view">

@@ -13,9 +13,11 @@
 #include "audio/IAudioAPI.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
+#include "config/CemuConfig.h"
 #include "frontend/CemuExtendFrontendBridge.h"
 #include "frontend/FrontendRuntime.h"
 #include "input/InputManager.h"
+#include "input/emulated/EmulatedController.h"
 #include "webview/MainWindowState.h"
 #include "webview/NativeWindowHost.h"
 #include "webview/NativeFileDialog.h"
@@ -73,6 +75,7 @@ namespace
 		std::mutex mutex;
 		Runtime* target{};
 	};
+	constexpr std::uint64_t kPadOverlayWindowId = std::numeric_limits<std::uint64_t>::max();
 
 	std::string JsonString(std::string_view value)
 	{
@@ -80,6 +83,18 @@ namespace
 		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 		writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
 		return {buffer.GetString(), buffer.GetSize()};
+	}
+
+	constexpr std::array<std::string_view, 20> kSupportedUiLanguages{
+		"system", "en", "ar", "ca", "de", "es", "fr", "he", "hu", "it",
+		"ja", "ko", "nb", "nl", "pl", "pt", "ru", "sv", "tr", "uk"};
+
+	std::string NormalizeUiLanguage(std::string_view language)
+	{
+		if (language == "zh" || std::ranges::find(kSupportedUiLanguages, language) !=
+														 kSupportedUiLanguages.end())
+			return std::string(language);
+		return "system";
 	}
 
 	std::string Base64(std::string_view value)
@@ -1010,6 +1025,28 @@ namespace
 		bool modal;
 	};
 
+	enum class UiTheme
+	{
+		Light,
+		Dark,
+	};
+
+	constexpr std::string_view UiThemeName(UiTheme theme)
+	{
+		return theme == UiTheme::Dark ? "dark" : "light";
+	}
+
+	constexpr std::string_view PlatformName()
+	{
+#if BOOST_OS_WINDOWS
+		return "windows";
+#elif BOOST_OS_MACOS
+		return "macos";
+#else
+		return "linux";
+#endif
+	}
+
 	constexpr std::array WindowDescriptors{
 		WindowDescriptor{"general-settings", "General Settings", 900, 680, false},
 		WindowDescriptor{"input-settings", "Input Settings", 980, 720, false},
@@ -1589,12 +1626,181 @@ namespace
 		return result;
 	}
 
+	std::string RuntimeOverlayJson(const RuntimeOverlay::Snapshot& snapshot)
+	{
+		rapidjson::StringBuffer buffer;
+		JsonWriter writer(buffer);
+		const auto now = std::chrono::steady_clock::now();
+		auto writeStyle = [&writer](const RuntimeOverlay::TextStyle& style) {
+			writer.StartObject();
+			writer.Key("position");
+			writer.String(RuntimeOverlay::PositionName(style.position).data());
+			writer.Key("color");
+			writer.Uint(style.color);
+			writer.Key("scale");
+			writer.Uint(style.scale);
+			writer.EndObject();
+		};
+		writer.StartObject();
+		writer.Key("sequence");
+		writer.String(std::to_string(snapshot.sequence).c_str());
+		writer.Key("overlayStyle");
+		writeStyle(snapshot.overlayStyle);
+		writer.Key("notificationStyle");
+		writeStyle(snapshot.notificationStyle);
+		writer.Key("visibility");
+		writer.StartObject();
+		writer.Key("fps");
+		writer.Bool(snapshot.visibility.fps);
+		writer.Key("drawCalls");
+		writer.Bool(snapshot.visibility.drawCalls);
+		writer.Key("cpuUsage");
+		writer.Bool(snapshot.visibility.cpuUsage);
+		writer.Key("cpuPerCore");
+		writer.Bool(snapshot.visibility.cpuPerCore);
+		writer.Key("ramUsage");
+		writer.Bool(snapshot.visibility.ramUsage);
+		writer.Key("vramUsage");
+		writer.Bool(snapshot.visibility.vramUsage);
+		writer.Key("debug");
+		writer.Bool(snapshot.visibility.debug);
+		writer.EndObject();
+		writer.Key("stats");
+		writer.StartObject();
+		writer.Key("fps");
+		writer.Double(snapshot.stats.fps);
+		writer.Key("drawCalls");
+		writer.Uint(snapshot.stats.drawCalls);
+		writer.Key("fastDrawCalls");
+		writer.Uint(snapshot.stats.fastDrawCalls);
+		writer.Key("cpuUsage");
+		writer.Double(snapshot.stats.cpuUsage);
+		writer.Key("cpuPerCore");
+		writer.StartArray();
+		for (const auto value : snapshot.stats.cpuPerCore)
+			writer.Double(value);
+		writer.EndArray();
+		writer.Key("ramUsageMb");
+		writer.Uint(snapshot.stats.ramUsageMb);
+		writer.Key("vramUsageMb");
+		writer.Int(snapshot.stats.vramUsageMb);
+		writer.Key("vramTotalMb");
+		writer.Int(snapshot.stats.vramTotalMb);
+		writer.Key("debugLines");
+		writer.StartArray();
+		for (const auto& [label, value] : snapshot.stats.debugLines)
+		{
+			writer.StartObject();
+			writer.Key("label");
+			writer.String(label.data(), label.size());
+			writer.Key("value");
+			writer.String(value.data(), value.size());
+			writer.EndObject();
+		}
+		writer.EndArray();
+		writer.EndObject();
+		writer.Key("notices");
+		writer.StartArray();
+		for (const auto& notice : snapshot.notices)
+		{
+			writer.StartObject();
+			writer.Key("id");
+			writer.String(std::to_string(notice.id).c_str());
+			writer.Key("kind");
+			writer.String(RuntimeOverlay::NoticeKindName(notice.kind).data());
+			writer.Key("text");
+			writer.String(notice.text.data(), notice.text.size());
+			if (notice.player)
+			{
+				writer.Key("player");
+				writer.Uint(*notice.player);
+			}
+			writer.Key("remainingMs");
+			writer.Uint64(notice.expiresAt == std::chrono::steady_clock::time_point{}
+							  ? 0
+							  : static_cast<std::uint64_t>(std::max<std::int64_t>(1,
+																				  std::chrono::duration_cast<std::chrono::milliseconds>(notice.expiresAt - now).count())));
+			writer.EndObject();
+		}
+		writer.EndArray();
+		writer.Key("shaderProgress");
+		writer.StartObject();
+		writer.Key("generation");
+		writer.String(std::to_string(snapshot.shaderProgress.generation).c_str());
+		writer.Key("visible");
+		writer.Bool(snapshot.shaderProgress.visible);
+		writer.Key("pipelines");
+		writer.Bool(snapshot.shaderProgress.pipelines);
+		writer.Key("current");
+		writer.Uint(snapshot.shaderProgress.current);
+		writer.Key("total");
+		writer.Uint(snapshot.shaderProgress.total);
+		writer.Key("vertexShaders");
+		writer.Uint(snapshot.shaderProgress.vertexShaders);
+		writer.Key("pixelShaders");
+		writer.Uint(snapshot.shaderProgress.pixelShaders);
+		writer.Key("geometryShaders");
+		writer.Uint(snapshot.shaderProgress.geometryShaders);
+		writer.Key("backgroundImageAvailable");
+		writer.Bool(snapshot.shaderProgress.backgroundImageTv ||
+					snapshot.shaderProgress.backgroundImagePad);
+		writer.EndObject();
+		writer.Key("keyboard");
+		writer.StartObject();
+		writer.Key("generation");
+		writer.String(std::to_string(snapshot.keyboard.generation).c_str());
+		writer.Key("active");
+		writer.Bool(snapshot.keyboard.active);
+		writer.Key("keyboardOnly");
+		writer.Bool(snapshot.keyboard.keyboardOnly);
+		writer.Key("shifted");
+		writer.Bool(snapshot.keyboard.shifted);
+		writer.Key("maximumLength");
+		writer.Uint(snapshot.keyboard.maximumLength);
+		writer.Key("text");
+		writer.String(snapshot.keyboard.text.data(), snapshot.keyboard.text.size());
+		writer.EndObject();
+		writer.Key("errorDialog");
+		writer.StartObject();
+		writer.Key("generation");
+		writer.String(std::to_string(snapshot.errorDialog.generation).c_str());
+		writer.Key("active");
+		writer.Bool(snapshot.errorDialog.active);
+		writer.Key("title");
+		writer.String(snapshot.errorDialog.title.data(), snapshot.errorDialog.title.size());
+		writer.Key("message");
+		writer.String(snapshot.errorDialog.message.data(), snapshot.errorDialog.message.size());
+		writer.Key("leftButton");
+		writer.String(snapshot.errorDialog.leftButton.data(), snapshot.errorDialog.leftButton.size());
+		writer.Key("rightButton");
+		writer.String(snapshot.errorDialog.rightButton.data(), snapshot.errorDialog.rightButton.size());
+		writer.Key("opacity");
+		writer.Double(snapshot.errorDialog.opacity);
+		writer.EndObject();
+		writer.Key("interaction");
+		switch (snapshot.interaction)
+		{
+		case RuntimeOverlay::Interaction::SoftwareKeyboard:
+			writer.String("softwareKeyboard");
+			break;
+		case RuntimeOverlay::Interaction::ErrorDialog:
+			writer.String("errorDialog");
+			break;
+		default:
+			writer.String("passive");
+			break;
+		}
+		writer.EndObject();
+		return {buffer.GetString(), buffer.GetSize()};
+	}
+
 	class Runtime final
 	{
 	  public:
 		Runtime()
 			: m_nativeWindow(CreateNativeWindowHost())
 		{
+			m_language = NormalizeUiLanguage(GetConfig().frontend.ui_language.GetValue());
 			m_webview = webview_create(
 #if defined(NDEBUG)
 				0,
@@ -1612,6 +1818,11 @@ namespace
 				if (!m_webViewWidget)
 					throw std::runtime_error("failed to acquire the native webview widget");
 				m_nativeWindow->AttachWebView(m_webViewWidget);
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+				m_browserController = webview_get_native_handle(
+					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
+				m_nativeWindow->ConfigureRuntimeOverlayWebView(m_browserController);
+#endif
 				m_nativeWindow->SetCloseHandler([this] { (void)RequestShutdown(); });
 				m_nativeWindow->SetMenuHandler(
 					[this](MenuCommand command) { HandleMenu(command); });
@@ -1648,6 +1859,13 @@ namespace
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
 					m_nativeWindow->GetNativeWindow()));
 				m_callbackGate->target = this;
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+				RuntimeOverlay::Model::Instance().SetChangeHandler([gate = m_callbackGate] {
+					std::scoped_lock lock(gate->mutex);
+					if (gate->target)
+						gate->target->SignalRuntimeOverlayChanged();
+				});
+#endif
 				m_emulatedUsb.SetObserver([gate = m_callbackGate](const Application::UsbDeviceChange& change) {
 					std::scoped_lock lock(gate->mutex);
 					if (!gate->target)
@@ -1682,6 +1900,9 @@ namespace
 				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, &m_mainBinding) != WEBVIEW_ERROR_OK)
 					throw std::runtime_error("failed to install the native RPC binding");
 				m_rpcBound = true;
+				const auto bootstrap = InitialBootstrapScript(0, "main-library");
+				if (webview_init(m_webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to initialize the main webview document");
 				webview_set_title(m_webview, "CemuExtend");
 				webview_set_size(m_webview, 1100, 720, WEBVIEW_HINT_NONE);
 			} catch (...)
@@ -2218,6 +2439,14 @@ namespace
 			auto job = std::make_unique<BackgroundJob>();
 			job->id = id;
 			job->ownerWindow = owner;
+			if (owner != 0)
+			{
+				const auto window = m_toolWindows.find(owner);
+				if (window == m_toolWindows.end())
+					throw std::runtime_error("background-job owner is no longer active");
+				job->ownerGeneration = window->second->generation;
+				job->ownerLifetime = window->second->lifetime;
+			}
 			job->cancelled = std::make_shared<std::atomic_bool>();
 			auto cancelled = job->cancelled;
 			auto gate = m_callbackGate;
@@ -2491,10 +2720,60 @@ namespace
 				throw std::runtime_error("failed to load embedded web UI assets");
 		}
 
+		std::string InitialBootstrapScript(
+			std::uint64_t windowId, std::string_view role,
+			std::optional<std::uint64_t> titleContext = std::nullopt,
+			std::string_view packageContext = {},
+			std::optional<std::uint64_t> generationContext = std::nullopt,
+			std::string_view overlaySurface = {}) const
+		{
+			auto script = std::string("window.__CEMU_BOOTSTRAP__={windowId:") +
+						  JsonString(std::to_string(windowId)) + R"(,windowRole:)" +
+						  JsonString(role) + R"(,appVersion:)" +
+						  JsonString(BUILD_VERSION_STRING) + R"(,platform:)" +
+						  JsonString(PlatformName());
+			if (titleContext || !packageContext.empty() || generationContext)
+			{
+				script += R"(,context:{)";
+				bool separator{};
+				if (titleContext)
+				{
+					script += R"(titleId:)" + JsonString(TitleIdString(*titleContext));
+					separator = true;
+				}
+				if (!packageContext.empty())
+				{
+					if (separator)
+						script += ",";
+					script += R"(packageKey:)" + JsonString(packageContext);
+					separator = true;
+				}
+				if (generationContext)
+				{
+					if (separator)
+						script += ",";
+					script += R"(generation:)" + JsonString(std::to_string(*generationContext));
+				}
+				script += "}";
+			}
+			script += R"(,theme:)" + JsonString(UiThemeName(m_theme)) +
+					  R"(,themeRevision:)" + JsonString(std::to_string(m_themeRevision)) +
+					  R"(,language:)" + JsonString(m_language) +
+					  R"(,languageRevision:)" + JsonString(std::to_string(m_languageRevision)) +
+					  R"(,shuttingDown:false};)";
+			if (!overlaySurface.empty())
+				script +=
+					std::string(R"(addEventListener("DOMContentLoaded",()=>{document.documentElement.dataset.runtimeOverlay="active";document.documentElement.dataset.runtimeOverlaySurface=)") +
+					JsonString(overlaySurface) + R"(},{once:true});)";
+			return script;
+		}
+
 		std::string_view RoleForWindow(std::uint64_t windowId) const
 		{
 			if (windowId == 0)
 				return "main-library";
+			if (windowId == kPadOverlayWindowId)
+				return "runtime-overlay";
 			const auto found = m_toolWindows.find(windowId);
 			if (found == m_toolWindows.end())
 				throw std::runtime_error("the RPC caller window is no longer active");
@@ -2693,6 +2972,11 @@ namespace
 				webview_set_title(window->webview, std::string(descriptor.title).c_str());
 				webview_set_size(window->webview, descriptor.width, descriptor.height,
 								 WEBVIEW_HINT_NONE);
+				const auto bootstrap = InitialBootstrapScript(
+					window->id, window->role, window->titleContext, window->packageContext,
+					window->generationContext);
+				if (webview_init(window->webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to initialize the tool webview document");
 				LoadWebView(window->webview);
 				m_windowByRole.emplace(window->role, id);
 				m_toolWindows.emplace(id, std::move(window));
@@ -2863,6 +3147,9 @@ namespace
 								"Application shutdown cancelled the pending title launch.");
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			RuntimeOverlay::Model::Instance().ClearChangeHandler();
+#endif
 			{
 				std::scoped_lock lock(m_callbackGate->mutex);
 				m_callbackGate->target = nullptr;
@@ -2938,7 +3225,7 @@ namespace
 			}
 			if (!DestroyMainRenderRegion())
 				return false;
-			m_nativeWindow->ShowLibrary();
+			ShowLibraryContent();
 			(void)m_windowState->FinishEmulation();
 			m_rpc.BeginShutdown();
 			(void)m_windowState->BeginShutdown();
@@ -2974,8 +3261,112 @@ namespace
 				return;
 			if (!DestroyMainRenderRegion())
 				return;
-			m_nativeWindow->ShowLibrary();
+			ShowLibraryContent();
 			(void)m_windowState->FinishEmulation();
+		}
+
+		void ShowLibraryContent()
+		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_webview)
+				webview_eval(m_webview,
+							 "document.documentElement.dataset.runtimeOverlay='inactive'");
+			m_nativeWindow->SetRuntimeOverlayMode(false, true);
+#endif
+			m_nativeWindow->ShowLibrary();
+		}
+
+		void ShowRenderContent()
+		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_webview)
+				webview_eval(m_webview,
+							 "document.documentElement.dataset.runtimeOverlay='active';"
+							 "document.documentElement.dataset.runtimeOverlaySurface='tv'");
+#endif
+			m_nativeWindow->ShowRenderRegion();
+		}
+
+		void CreatePadOverlayWebView(Host::IRenderRegion& region)
+		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_padOverlayWebView)
+				return;
+			m_nativeWindow->PreparePadOverlayWebViewCreate();
+			webview_t webview{};
+			void* widget{};
+			bool attached{};
+			bool bound{};
+			try
+			{
+				webview = webview_create(
+#if defined(NDEBUG)
+					0,
+#else
+					1,
+#endif
+					region.GetWindowHandle().surface);
+				if (!webview)
+					throw std::runtime_error("failed to create the GamePad overlay WebView");
+				widget = webview_get_native_handle(
+					webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
+				if (!widget)
+					throw std::runtime_error("failed to acquire the GamePad overlay widget");
+				m_nativeWindow->AttachPadOverlayWebView(widget);
+				attached = true;
+				const auto browserController = webview_get_native_handle(
+					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
+				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
+				m_padOverlayBinding = {this, webview, kPadOverlayWindowId};
+				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
+								 &m_padOverlayBinding) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to bind the GamePad overlay RPC bridge");
+				bound = true;
+				const auto bootstrap = InitialBootstrapScript(
+					kPadOverlayWindowId, "runtime-overlay", std::nullopt, {}, std::nullopt,
+					"pad");
+				if (webview_init(webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to initialize the GamePad overlay document");
+				LoadWebView(webview);
+				m_padOverlayWebView = webview;
+				m_padOverlayWidget = widget;
+				m_padOverlayRpcBound = true;
+			} catch (...)
+			{
+				if (attached)
+					m_nativeWindow->DetachPadOverlayWebView(widget);
+				if (bound)
+					webview_unbind(webview, "cemuInvoke");
+				if (webview)
+					webview_destroy(webview);
+				m_nativeWindow->RestorePadOverlayParent();
+				m_padOverlayBinding = {};
+				throw;
+			}
+#else
+			(void)region;
+#endif
+		}
+
+		void DestroyPadOverlayWebView() noexcept
+		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (!m_padOverlayWebView)
+			{
+				m_nativeWindow->RestorePadOverlayParent();
+				return;
+			}
+			if (m_padOverlayWidget)
+				m_nativeWindow->DetachPadOverlayWebView(m_padOverlayWidget);
+			if (m_padOverlayRpcBound)
+				webview_unbind(m_padOverlayWebView, "cemuInvoke");
+			webview_destroy(m_padOverlayWebView);
+			m_padOverlayWebView = nullptr;
+			m_padOverlayWidget = nullptr;
+			m_padOverlayRpcBound = false;
+			m_padOverlayBinding = {};
+			m_nativeWindow->RestorePadOverlayParent();
+#endif
 		}
 
 		bool DestroyMainRenderRegion()
@@ -3018,6 +3409,7 @@ namespace
 											  JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
 				return false;
 			}
+			DestroyPadOverlayWebView();
 			m_nativeWindow->DestroyPadRenderRegion();
 			++m_padGeneration;
 			return true;
@@ -3039,6 +3431,7 @@ namespace
 			{
 				++m_padGeneration;
 				auto& region = m_nativeWindow->CreatePadRenderRegion();
+				CreatePadOverlayWebView(region);
 				m_rendererHost->InitializePad(region);
 				m_nativeWindow->SetPadMetricsEnabled(true);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
@@ -3200,6 +3593,9 @@ namespace
 		void HandleControllerHotkeys(const ControllerState& current,
 									 const ControllerState& previous)
 		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			HandleRuntimeOverlayControllerNavigation();
+#endif
 			if (m_stopping.load(std::memory_order_acquire) ||
 				m_hotkeyEditing.load(std::memory_order_acquire))
 				return;
@@ -3226,6 +3622,47 @@ namespace
 			if (action)
 				(void)PostToUi([this, action = *action] { ExecuteHotkey(action); });
 		}
+
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+		void HandleRuntimeOverlayControllerNavigation()
+		{
+			std::array<bool, 7> current{};
+			if (m_overlayInteraction.load(std::memory_order_acquire) !=
+				RuntimeOverlay::Interaction::Passive)
+			{
+				for (int index = 0; index < InputManager::kMaxController; ++index)
+				{
+					const auto controller = InputManager::instance().get_controller(index);
+					if (!controller)
+						continue;
+					current[0] = current[0] || controller->is_start_down();
+					current[1] = current[1] || controller->is_a_down();
+					current[2] = current[2] || controller->is_b_down();
+					current[3] = current[3] || controller->is_left_down();
+					current[4] = current[4] || controller->is_right_down();
+					current[5] = current[5] || controller->is_up_down();
+					current[6] = current[6] || controller->is_down_down();
+				}
+			}
+			constexpr std::array<std::string_view, 7> actions{
+				"input", "activate", "cancel", "left", "right", "up", "down"};
+			for (std::size_t index = 0; index < current.size(); ++index)
+			{
+				if (!current[index] || m_overlayNavigationButtons[index])
+					continue;
+				const auto action = std::string(actions[index]);
+				(void)PostToUi([this, action] {
+					if (!m_webview || m_stopping.load(std::memory_order_acquire))
+						return;
+					const auto script =
+						"window.dispatchEvent(new CustomEvent('cemu-overlay-navigate',{detail:" +
+						JsonString(action) + "}))";
+					webview_eval(m_webview, script.c_str());
+				});
+			}
+			m_overlayNavigationButtons = current;
+		}
+#endif
 
 		void ExecuteHotkey(Application::HotkeyAction action)
 		{
@@ -3420,7 +3857,7 @@ namespace
 				auto& region = m_nativeWindow->CreateMainRenderRegion();
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				m_rendererHost->InitializeMain(region);
-				m_nativeWindow->ShowRenderRegion();
+				ShowRenderContent();
 				RefreshTextInput();
 				return true;
 			} catch (const std::exception& error)
@@ -3432,7 +3869,7 @@ namespace
 				} catch (...)
 				{}
 				m_nativeWindow->DestroyMainRenderRegion();
-				m_nativeWindow->ShowLibrary();
+				ShowLibraryContent();
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				return false;
 			}
@@ -3537,6 +3974,8 @@ namespace
 				if (beforeDispatch)
 					beforeDispatch();
 				webview_eval(m_webview, script.c_str());
+				if (m_padOverlayWebView)
+					webview_eval(m_padOverlayWebView, script.c_str());
 				for (const auto& [id, window] : m_toolWindows)
 				{
 					(void)id;
@@ -3568,6 +4007,12 @@ namespace
 					webview_eval(m_webview, script.c_str());
 					return;
 				}
+				if (windowId == kPadOverlayWindowId)
+				{
+					if (m_padOverlayWebView)
+						webview_eval(m_padOverlayWebView, script.c_str());
+					return;
+				}
 				const auto found = m_toolWindows.find(windowId);
 				if (found != m_toolWindows.end() && found->second->webview)
 					webview_eval(found->second->webview, script.c_str());
@@ -3596,7 +4041,7 @@ namespace
 						return;
 					if (!DestroyMainRenderRegion())
 						return;
-					m_nativeWindow->ShowLibrary();
+					ShowLibraryContent();
 					(void)m_windowState->FinishEmulation();
 				});
 				break;
@@ -3682,6 +4127,39 @@ namespace
 						gate->target->FlushLoggingEvents();
 				}))
 				m_loggingFlushPending.store(false, std::memory_order_release);
+		}
+
+		void SignalRuntimeOverlayChanged()
+		{
+			if (m_overlayFlushPending.exchange(true, std::memory_order_acq_rel))
+				return;
+			if (!PostToUi([gate = m_callbackGate] {
+					std::scoped_lock lock(gate->mutex);
+					if (gate->target)
+						gate->target->FlushRuntimeOverlay();
+				}))
+				m_overlayFlushPending.store(false, std::memory_order_release);
+		}
+
+		void FlushRuntimeOverlay()
+		{
+			m_overlayFlushPending.store(false, std::memory_order_release);
+			const auto snapshot = m_controller.GetRuntimeOverlaySnapshot();
+			m_overlayInteraction.store(snapshot.interaction, std::memory_order_release);
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_windowState &&
+				m_windowState->Snapshot().mode == WebFrontend::MainWindowContentMode::Playing)
+				m_nativeWindow->SetRuntimeOverlayMode(
+					true, snapshot.interaction != RuntimeOverlay::Interaction::Passive);
+			if (m_padOverlayWebView)
+				m_nativeWindow->SetPadRuntimeOverlayMode(
+					snapshot.interaction != RuntimeOverlay::Interaction::Passive);
+#endif
+			EmitToWindow(0, "overlay.changed", RuntimeOverlayJson(snapshot));
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_padOverlayWebView)
+				EmitToWindow(kPadOverlayWindowId, "overlay.changed", RuntimeOverlayJson(snapshot));
+#endif
 		}
 
 		void FlushLoggingEvents()
@@ -4282,15 +4760,8 @@ namespace
 				auto result = std::string(R"({"windowId":)") +
 							  JsonString(std::to_string(m_invokingWindow)) + R"(,"windowRole":)" +
 							  JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
-							  JsonString(BUILD_VERSION_STRING) + R"(,"platform":")" +
-#if BOOST_OS_WINDOWS
-							  "windows"
-#elif BOOST_OS_MACOS
-					"macos"
-#else
-					"linux"
-#endif
-							  + "\"";
+							  JsonString(BUILD_VERSION_STRING) + R"(,"platform":)" +
+							  JsonString(PlatformName());
 				if (m_invokingWindow != 0)
 				{
 					const auto found = m_toolWindows.find(m_invokingWindow);
@@ -4320,7 +4791,11 @@ namespace
 						result += "}";
 					}
 				}
-				result += R"(,"theme":"system","shuttingDown":)";
+				result += R"(,"theme":)" + JsonString(UiThemeName(m_theme)) +
+						  R"(,"themeRevision":)" + JsonString(std::to_string(m_themeRevision)) +
+						  R"(,"language":)" + JsonString(m_language) +
+						  R"(,"languageRevision":)" + JsonString(std::to_string(m_languageRevision)) +
+						  R"(,"shuttingDown":)";
 				result += m_rpc.IsShuttingDown() ? "true}" : "false}";
 				if (m_invokingWindow == 0 &&
 					!m_controller.GetFrontendSettings().setupCompleted &&
@@ -4329,11 +4804,103 @@ namespace
 					(void)QueueToolWindow("getting-started", "automatic-getting-started");
 				return result;
 			});
+			m_rpc.Register("theme.get", [this](const rapidjson::Value&) {
+				return std::string(R"({"theme":)") + JsonString(UiThemeName(m_theme)) +
+						R"(,"revision":)" + JsonString(std::to_string(m_themeRevision)) + "}";
+			});
+			m_rpc.Register("theme.set", [this](const rapidjson::Value& params) {
+				const auto requested = RequiredString(params, "theme");
+				UiTheme next;
+				if (requested == "light")
+					next = UiTheme::Light;
+				else if (requested == "dark")
+					next = UiTheme::Dark;
+				else
+					throw std::invalid_argument("theme must be light or dark");
+				if (m_theme != next)
+				{
+					m_theme = next;
+					++m_themeRevision;
+				}
+				const auto result = std::string(R"({"theme":)") +
+								JsonString(UiThemeName(m_theme)) + R"(,"revision":)" +
+								JsonString(std::to_string(m_themeRevision)) + "}";
+				Emit("theme.changed", result);
+				return result;
+			});
+			m_rpc.Register("language.get", [this](const rapidjson::Value&) {
+				return std::string(R"({"language":)") + JsonString(m_language) +
+						R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
+			});
+			m_rpc.Register("language.set", [this](const rapidjson::Value& params) {
+				const auto requested = RequiredString(params, "language");
+				const auto normalized = NormalizeUiLanguage(requested);
+				if (normalized != requested)
+					throw std::invalid_argument("unsupported interface language");
+				if (m_language != normalized)
+				{
+					auto& config = GetConfig();
+					const auto previous = config.frontend.ui_language.GetValue();
+					config.frontend.ui_language = normalized;
+					if (!GetConfigHandle().Save())
+					{
+						config.frontend.ui_language = previous;
+						throw std::runtime_error("unable to save interface language");
+					}
+					m_language = normalized;
+					++m_languageRevision;
+				}
+				const auto result = std::string(R"({"language":)") + JsonString(m_language) +
+								R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
+				Emit("language.changed", result);
+				return result;
+			});
 			m_rpc.Register("system.quit", [this](const rapidjson::Value&) {
 				if (m_invokingWindow != 0)
 					throw std::runtime_error("only the main window may quit the application");
 				if (!RequestShutdown(true))
 					throw std::runtime_error("the running title could not be stopped; shutdown was cancelled");
+				return std::string("{}");
+			});
+			m_rpc.Register("overlay.getSnapshot", [this](const rapidjson::Value&) {
+				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+					throw std::runtime_error("runtime overlay state is available only to a render window");
+				return RuntimeOverlayJson(m_controller.GetRuntimeOverlaySnapshot());
+			});
+			m_rpc.Register("overlay.getShaderBackground", [this](const rapidjson::Value& params) {
+				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+					throw std::runtime_error("runtime overlay state is available only to a render window");
+				const auto generation = RequiredUint64(params, "generation");
+				const auto surface = RequiredString(params, "surface");
+				const auto snapshot = m_controller.GetRuntimeOverlaySnapshot();
+				if (!snapshot.shaderProgress.visible ||
+					snapshot.shaderProgress.generation != generation)
+					throw std::runtime_error("the shader progress request is no longer active");
+				const std::shared_ptr<const std::string>* image{};
+				if (surface == "tv")
+					image = &snapshot.shaderProgress.backgroundImageTv;
+				else if (surface == "pad")
+					image = &snapshot.shaderProgress.backgroundImagePad;
+				else
+					throw std::invalid_argument("unknown runtime overlay surface");
+				return std::string(R"({"generation":)") +
+					   JsonString(std::to_string(generation)) + R"(,"dataUrl":)" +
+					   JsonString(*image ? **image : std::string_view{}) + "}";
+			});
+			m_rpc.Register("overlay.submitKeyboardKey", [this](const rapidjson::Value& params) {
+				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+					throw std::runtime_error("runtime overlay input is available only to a render window");
+				if (!m_controller.SubmitRuntimeOverlayKeyboardKey(
+						RequiredUint64(params, "generation"), RequiredUint(params, "keyCode")))
+					throw std::runtime_error("the software keyboard request is no longer active");
+				return std::string("{}");
+			});
+			m_rpc.Register("overlay.selectErrorButton", [this](const rapidjson::Value& params) {
+				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+					throw std::runtime_error("runtime overlay input is available only to a render window");
+				if (!m_controller.SelectRuntimeOverlayErrorButton(
+						RequiredUint64(params, "generation"), RequiredBool(params, "rightButton")))
+					throw std::runtime_error("the error dialog request is no longer active");
 				return std::string("{}");
 			});
 			m_rpc.Register("window.close", [this](const rapidjson::Value&) {
@@ -5700,7 +6267,7 @@ namespace
 					throw std::runtime_error(result.diagnostic);
 				if (!DestroyMainRenderRegion())
 					throw std::runtime_error("native renderer surfaces could not be detached safely");
-				m_nativeWindow->ShowLibrary();
+				ShowLibraryContent();
 				(void)m_windowState->FinishEmulation();
 				return "{}";
 			});
@@ -5780,10 +6347,10 @@ namespace
 					m_rendererHost->InitializeMain(region);
 					if (!m_windowState->CommitLaunch())
 						throw std::runtime_error("main window content transition failed");
-					m_nativeWindow->ShowRenderRegion(); }, [this, previousFullscreen] {
+					ShowRenderContent(); }, [this, previousFullscreen] {
 					m_rendererHost->AbandonMainInitialization();
 					DestroyMainRenderRegion();
-					m_nativeWindow->ShowLibrary();
+					ShowLibraryContent();
 					(void)m_windowState->RollbackLaunch();
 					if (m_fullscreen != previousFullscreen)
 					{
@@ -5797,12 +6364,12 @@ namespace
 				{
 					(void)m_nativeWindow->CreateMainRenderRegion();
 					(void)m_windowState->CommitLaunch();
-					m_nativeWindow->ShowRenderRegion();
+					ShowRenderContent();
 				}
 				else
 				{
 					DestroyMainRenderRegion();
-					m_nativeWindow->ShowLibrary();
+					ShowLibraryContent();
 					(void)m_windowState->RollbackLaunch();
 				}
 				const auto diagnostic = result.diagnostic.empty() ? "title launch failed" : result.diagnostic;
@@ -5865,7 +6432,12 @@ namespace
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
 		webview_t m_webview{};
 		void* m_webViewWidget{};
+		void* m_browserController{};
 		RpcBinding m_mainBinding;
+		webview_t m_padOverlayWebView{};
+		void* m_padOverlayWidget{};
+		RpcBinding m_padOverlayBinding;
+		bool m_padOverlayRpcBound{};
 		RpcDispatcher m_rpc;
 		std::unordered_map<std::uint64_t, std::unique_ptr<ToolWindow>> m_toolWindows;
 		std::unordered_map<std::string, std::uint64_t> m_windowByRole;
@@ -5883,6 +6455,10 @@ namespace
 		std::unordered_map<std::uint64_t, NativePathRecord> m_wuaDestinations;
 		std::uint64_t m_nextWindowId{};
 		std::uint64_t m_nextWindowGeneration{};
+		UiTheme m_theme{UiTheme::Light};
+		std::uint64_t m_themeRevision{1};
+		std::string m_language{"system"};
+		std::uint64_t m_languageRevision{1};
 		std::uint64_t m_nextBackgroundJobId{};
 		std::uint64_t m_nextSaveTicketId{};
 		WebFrontend::UpdatePlanRegistry m_updatePlans;
@@ -5906,6 +6482,10 @@ namespace
 		Application::TitleCatalogSubscription m_titleEvents;
 		Application::LoggingSubscription m_loggingEvents;
 		std::atomic_bool m_loggingFlushPending{};
+		std::atomic_bool m_overlayFlushPending{};
+		std::atomic<RuntimeOverlay::Interaction> m_overlayInteraction{
+			RuntimeOverlay::Interaction::Passive};
+		std::array<bool, 7> m_overlayNavigationButtons{};
 		std::uint64_t m_lastForwardedLogSequence{};
 		std::atomic_bool m_stopping{};
 		std::shared_ptr<std::atomic_bool> m_eventStopping{std::make_shared<std::atomic_bool>()};

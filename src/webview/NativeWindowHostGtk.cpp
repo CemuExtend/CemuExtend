@@ -11,6 +11,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
+#include <webkit2/webkit2.h>
 #ifdef HAS_WAYLAND
 #include <gdk/gdkwayland.h>
 #endif
@@ -301,9 +302,11 @@ namespace WebFrontend
 				m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 				gtk_window_set_title(GTK_WINDOW(m_window), "CemuExtend GamePad");
 				gtk_window_set_default_size(GTK_WINDOW(m_window), 854, 480);
+				m_overlay = gtk_overlay_new();
 				m_widget = gtk_drawing_area_new();
 				gtk_widget_set_can_focus(m_widget, TRUE);
-				gtk_container_add(GTK_CONTAINER(m_window), m_widget);
+				gtk_container_add(GTK_CONTAINER(m_overlay), m_widget);
+				gtk_container_add(GTK_CONTAINER(m_window), m_overlay);
 				g_signal_connect(m_window, "delete-event", G_CALLBACK(+[](GtkWidget*, GdkEvent*, gpointer data) -> gboolean {
 									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
 									 if (self.m_closeHandler)
@@ -366,22 +369,90 @@ namespace WebFrontend
 				gtk_window_present(GTK_WINDOW(m_window));
 				gtk_widget_grab_focus(m_widget);
 			}
+			void PrepareOverlayWebViewCreate()
+			{
+				if (!m_window || !m_overlay || m_overlayDetached)
+					return;
+				g_object_ref(m_overlay);
+				gtk_container_remove(GTK_CONTAINER(m_window), m_overlay);
+				m_overlayDetached = true;
+			}
+			void AttachOverlayWebView(GtkWidget* webView)
+			{
+				if (!m_window || !m_overlay || !webView)
+					throw std::logic_error("GamePad overlay host is unavailable");
+				g_object_ref(webView);
+				if (const auto parent = gtk_widget_get_parent(webView))
+					gtk_container_remove(GTK_CONTAINER(parent), webView);
+				RestoreOverlayParent();
+				gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), webView);
+				g_object_unref(webView);
+				m_overlayWebView = webView;
+				gtk_widget_show(webView);
+				SetOverlayInteractive(false);
+			}
+			void DetachOverlayWebView(GtkWidget* webView)
+			{
+				if (!m_window || !m_overlay || webView != m_overlayWebView)
+					return;
+				g_object_ref(webView);
+				gtk_container_remove(GTK_CONTAINER(m_overlay), webView);
+				PrepareOverlayWebViewCreate();
+				gtk_container_add(GTK_CONTAINER(m_window), webView);
+				g_object_unref(webView);
+				m_overlayWebView = nullptr;
+			}
+			void RestoreOverlayParent()
+			{
+				if (!m_window || !m_overlay || !m_overlayDetached)
+					return;
+				gtk_container_add(GTK_CONTAINER(m_window), m_overlay);
+				g_object_unref(m_overlay);
+				m_overlayDetached = false;
+				gtk_widget_show_all(m_window);
+				gtk_widget_realize(m_widget);
+			}
+			void SetOverlayInteractive(bool interactive)
+			{
+				if (!m_overlayWebView)
+					return;
+				const bool changed = !m_overlayInteractionInitialized ||
+									 interactive != m_overlayInteractive;
+				m_overlayInteractionInitialized = true;
+				m_overlayInteractive = interactive;
+				gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(m_overlay),
+													 m_overlayWebView, interactive ? FALSE : TRUE);
+				if (!changed)
+					return;
+				if (interactive)
+					gtk_widget_grab_focus(m_overlayWebView);
+				else
+					gtk_widget_grab_focus(m_widget);
+			}
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_window)
 					return;
 				m_closeHandler = {};
 				m_metricsHandler = {};
+				RestoreOverlayParent();
 				gtk_widget_destroy(m_window);
 				m_window = nullptr;
+				m_overlay = nullptr;
 				m_widget = nullptr;
+				m_overlayWebView = nullptr;
 			}
 
 		  private:
 			GtkWidget* m_window{};
+			GtkWidget* m_overlay{};
 			GtkWidget* m_widget{};
+			GtkWidget* m_overlayWebView{};
 			std::function<void()> m_closeHandler;
 			std::function<void()> m_metricsHandler;
+			bool m_overlayDetached{};
+			bool m_overlayInteractionInitialized{};
+			bool m_overlayInteractive{};
 			bool m_prepared{};
 		};
 
@@ -539,13 +610,29 @@ namespace WebFrontend
 				ShowLibrary();
 			}
 
+			void ConfigureRuntimeOverlayWebView(void* browserController) override
+			{
+				if (!WEBKIT_IS_WEB_VIEW(browserController))
+					throw std::runtime_error("failed to acquire the WebKitGTK browser controller");
+				GdkRGBA transparent{};
+				webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(browserController),
+													 &transparent);
+				if (const auto screen = gtk_window_get_screen(GTK_WINDOW(m_window)))
+				{
+					if (const auto visual = gdk_screen_get_rgba_visual(screen))
+						gtk_widget_set_visual(m_window, visual);
+				}
+				gtk_widget_set_app_paintable(m_window, TRUE);
+			}
+
 			void PrepareWebViewDestroy(void* widget) override
 			{
 				if (!m_root || widget != m_webView)
 					return;
 				DestroyMainRenderRegion();
 				g_object_ref(m_webView);
-				gtk_container_remove(GTK_CONTAINER(m_stack), m_webView);
+				if (const auto parent = gtk_widget_get_parent(m_webView))
+					gtk_container_remove(GTK_CONTAINER(parent), m_webView);
 				gtk_container_remove(GTK_CONTAINER(m_window), m_root);
 				gtk_container_add(GTK_CONTAINER(m_window), m_webView);
 				g_object_unref(m_webView);
@@ -567,6 +654,7 @@ namespace WebFrontend
 			{
 				if (!m_stack || !m_webView)
 					return;
+				SetRuntimeOverlayMode(false, true);
 				gtk_widget_set_sensitive(m_webView, TRUE);
 				gtk_stack_set_visible_child(GTK_STACK(m_stack), m_webView);
 				gtk_widget_grab_focus(m_webView);
@@ -591,10 +679,52 @@ namespace WebFrontend
 			void ShowRenderRegion() override
 			{
 				auto& region = CreateMainRenderRegion();
-				gtk_widget_set_sensitive(m_webView, FALSE);
 				region.SetVisible(true);
 				gtk_stack_set_visible_child_name(GTK_STACK(m_stack), "render");
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+				SetRuntimeOverlayMode(true, false);
+#else
+				gtk_widget_set_sensitive(m_webView, FALSE);
 				region.RequestFocus();
+#endif
+			}
+
+			void SetRuntimeOverlayMode(bool active, bool interactive) override
+			{
+				if (!m_webView || !m_stack || !m_overlay)
+					return;
+				const bool modeChanged = active != m_runtimeOverlay ||
+										 interactive != m_runtimeOverlayInteractive;
+				if (active != m_runtimeOverlay)
+				{
+					g_object_ref(m_webView);
+					if (const auto parent = gtk_widget_get_parent(m_webView))
+						gtk_container_remove(GTK_CONTAINER(parent), m_webView);
+					if (active)
+						gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), m_webView);
+					else
+						gtk_stack_add_named(GTK_STACK(m_stack), m_webView, "library");
+					g_object_unref(m_webView);
+					m_runtimeOverlay = active;
+				}
+				m_runtimeOverlayInteractive = interactive;
+				gtk_widget_show(m_webView);
+				if (active)
+				{
+					gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(m_overlay), m_webView,
+														 interactive ? FALSE : TRUE);
+					if (!modeChanged)
+						return;
+					if (interactive)
+						gtk_widget_grab_focus(m_webView);
+					else if (m_renderRegion)
+						m_renderRegion->RequestFocus();
+				}
+				else
+				{
+					gtk_stack_set_visible_child(GTK_STACK(m_stack), m_webView);
+					gtk_widget_grab_focus(m_webView);
+				}
 			}
 
 			Host::IRenderRegion& CreatePadRenderRegion() override
@@ -609,6 +739,37 @@ namespace WebFrontend
 						[this] { if (m_padMetricsEnabled) NotifyMetrics(); }, &m_inputHandler);
 				}
 				return *m_padRenderRegion;
+			}
+
+			void PreparePadOverlayWebViewCreate() override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->PrepareOverlayWebViewCreate();
+			}
+
+			void AttachPadOverlayWebView(void* widget) override
+			{
+				if (!m_padRenderRegion)
+					throw std::logic_error("GamePad render region is unavailable");
+				m_padRenderRegion->AttachOverlayWebView(GTK_WIDGET(widget));
+			}
+
+			void DetachPadOverlayWebView(void* widget) override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->DetachOverlayWebView(GTK_WIDGET(widget));
+			}
+
+			void RestorePadOverlayParent() override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->RestoreOverlayParent();
+			}
+
+			void SetPadRuntimeOverlayMode(bool interactive) override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->SetOverlayInteractive(interactive);
 			}
 
 			void DestroyPadRenderRegion() override
@@ -948,6 +1109,8 @@ namespace WebFrontend
 			GtkWidget* m_overlay{};
 			GtkWidget* m_stack{};
 			GtkWidget* m_webView{};
+			bool m_runtimeOverlay{};
+			bool m_runtimeOverlayInteractive{};
 			GtkWidget* m_textInput{};
 			std::unique_ptr<GtkRenderRegion> m_renderRegion;
 			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;

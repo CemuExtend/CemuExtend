@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import ts from "typescript";
 
 const root = new URL("../dist/", import.meta.url);
 const output = new URL(
@@ -42,7 +43,28 @@ if (/localhost|127\.0\.0\.1:5173/.test(html))
   throw new Error("production asset contains a development server reference");
 if (/unsafe-inline|connect-src[^;]*(?:https?|wss?):/.test(html))
   throw new Error("production asset contains a permissive CSP");
-if (/\bimport\s*(?:\(|[{'*"])|import\.meta/.test(js))
+const javascript = ts.createSourceFile(
+  "embedded.js",
+  js,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.JS,
+);
+let moduleSyntax = false;
+const inspectModuleSyntax = (node: ts.Node): void => {
+  if (
+    ts.isImportDeclaration(node) ||
+    ts.isImportEqualsDeclaration(node) ||
+    ts.isExportAssignment(node) ||
+    ts.isExportDeclaration(node) ||
+    node.kind === ts.SyntaxKind.ImportKeyword ||
+    (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword)
+  )
+    moduleSyntax = true;
+  ts.forEachChild(node, inspectModuleSyntax);
+};
+inspectModuleSyntax(javascript);
+if (moduleSyntax)
   throw new Error(
     "production JavaScript is not a self-contained classic script",
   );

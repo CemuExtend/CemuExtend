@@ -4,8 +4,16 @@
 #include <string_view>
 namespace WebFrontend::Generated
 {
-	inline constexpr std::array<std::string_view, 92> RpcMethods{
+	inline constexpr std::array<std::string_view, 100> RpcMethods{
 		"system.bootstrap",
+		"theme.get",
+		"theme.set",
+		"language.get",
+		"language.set",
+		"overlay.getSnapshot",
+		"overlay.getShaderBackground",
+		"overlay.submitKeyboardKey",
+		"overlay.selectErrorButton",
 		"system.quit",
 		"window.close",
 		"window.open",
@@ -96,5 +104,6 @@ namespace WebFrontend::Generated
 		"titles.list",
 		"titles.refresh",
 		"titles.launch",
-		"emulation.stop"};
+		"emulation.stop"
+	};
 }

@@ -1,0 +1,209 @@
+/* Hallmark · designed-as-app · screen family: detachable Workbench · palette: black / white only */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+
+.detached-shell {
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.detached-shell__bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-navigation);
+  min-height: var(--size-topbar);
+  display: grid;
+  grid-template-columns: var(--size-control) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border-block-end: var(--rule-strong) solid var(--color-rule);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.detached-shell__mark {
+  width: var(--size-control);
+  height: var(--size-control);
+  display: grid;
+  place-items: center;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.detached-shell__identity {
+  min-width: 0;
+}
+
+.detached-shell__identity p,
+.detached-shell__identity h1 {
+  margin: 0;
+}
+
+.detached-shell__identity p {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.detached-shell__identity h1 {
+  min-width: 0;
+  margin-block-start: var(--space-3xs);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  line-height: 1.1;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.detached-shell__scope {
+  justify-self: end;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.detached-shell__description {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border-block-end: var(--rule-thin) solid var(--color-rule);
+  line-height: 1.5;
+}
+
+.detached-shell__body {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+.detached-shell__body > .role-window,
+.detached-shell__body > .tool-window {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-sm);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.detached-shell__body > .role-window > header,
+.detached-shell__body > .tool-window > header {
+  min-height: var(--size-control);
+  padding-block-end: var(--space-xs);
+  border-block-end: var(--rule-strong) double var(--color-rule);
+}
+
+.detached-shell__body > .role-window > header h1,
+.detached-shell__body > .role-window > header .eyebrow,
+.detached-shell__body > .tool-window > header h1,
+.detached-shell__body > .tool-window > header .eyebrow {
+  display: none;
+}
+
+.detached-shell__body .eyebrow {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+}
+
+.detached-shell__body .toolbar,
+.detached-shell__body .button-row,
+.detached-shell__body .actions,
+.detached-shell__body .row,
+.detached-shell__body .diagnostic-actions,
+.detached-shell__body .ppc-debugger-toolbar,
+.detached-shell__body .memory-search-summary {
+  align-items: center;
+}
+
+.detached-shell__body .toolbar,
+.detached-shell__body .toolbar.embedded {
+  padding: var(--space-xs);
+  border: var(--rule-thin) solid var(--color-rule);
+  border-radius: var(--radius-panel);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.detached-shell__body .card,
+.detached-shell__body .hero-card,
+.detached-shell__body .editor-panel,
+.detached-shell__body .log-list,
+.detached-shell__body .table-scroll,
+.detached-shell__body .diagnostic-table-wrap,
+.detached-shell__body .memory-results,
+.detached-shell__body .ppc-disassembly,
+.detached-shell__body .ppc-debugger-side {
+  border-radius: var(--radius-panel);
+  box-shadow: none;
+}
+
+.detached-shell__body .split-view,
+.detached-shell__body .ppc-debugger-grid,
+.detached-shell__body .ppc-thread-split {
+  gap: var(--space-sm);
+}
+
+.detached-shell__body .selection-list > button.selected,
+.detached-shell__body .diagnostic-table tbody tr.selected,
+.detached-shell__body .ppc-disassembly-row.current {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.detached-shell__body .selection-list > button.selected *,
+.detached-shell__body .diagnostic-table tbody tr.selected *,
+.detached-shell__body .ppc-disassembly-row.current * {
+  color: inherit;
+}
+
+.detached-shell__body input,
+.detached-shell__body select,
+.detached-shell__body button {
+  min-height: var(--size-control);
+}
+
+.detached-shell__body input[type="checkbox"],
+.detached-shell__body input[type="radio"] {
+  min-height: var(--size-check);
+}
+
+.detached-shell__body textarea {
+  min-height: calc(var(--size-control) * 2);
+  resize: vertical;
+}
+
+.detached-shell__body table {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 60rem) {
+  .detached-shell__bar,
+  .detached-shell__description {
+    padding-inline: var(--space-md);
+  }
+
+  .detached-shell__body > .role-window,
+  .detached-shell__body > .tool-window {
+    padding: var(--space-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detached-shell *,
+  .detached-shell *::before,
+  .detached-shell *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+}

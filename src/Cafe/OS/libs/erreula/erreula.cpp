@@ -1,10 +1,13 @@
 ﻿#include "Cafe/OS/common/OSCommon.h"
 #include "erreula.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "frontend/RuntimeOverlay.h"
 #include "util/helpers/helpers.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "Cafe/OS/libs/coreinit/coreinit_FS.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
@@ -15,6 +18,8 @@ namespace nn
 {
 	namespace erreula
 	{
+		static void PublishRuntimeOverlayError();
+		static std::uint64_t s_runtimeOverlayGeneration = 0;
 
 		enum class ErrorDialogType : uint32
 		{
@@ -261,6 +266,7 @@ namespace nn
 		void ErrEulaDestroy()
 		{
 			g_errEula.errEulaInstance.reset();
+			PublishRuntimeOverlayError();
 		}
 
 		// check if any dialog button was selected
@@ -326,8 +332,47 @@ namespace nn
 			return result;
 		}
 
+		static void PublishRuntimeOverlayError()
+		{
+			RuntimeOverlay::ErrorDialog dialog{.generation = s_runtimeOverlayGeneration};
+			if (g_errEula.errEulaInstance)
+			{
+				const auto state = g_errEula.errEulaInstance->GetState();
+				dialog.active = state == ErrEulaState::Visible ||
+								state == ErrEulaState::Appearing ||
+								state == ErrEulaState::Disappearing;
+				if (dialog.active)
+				{
+					const auto& source = g_errEula.currentDialog;
+					dialog.title = ReadGuestDialogText(source.title);
+					if (dialog.title.empty())
+						dialog.title = "ErrEula";
+					const auto errorCode = static_cast<std::uint32_t>(source.errorCode);
+					if (errorCode)
+						dialog.message = fmt::format("Error-Code: {:03}-{:04}\n",
+													 errorCode / 10000, errorCode % 10000);
+					const auto message = ReadGuestDialogText(source.text);
+					dialog.message += message.empty() ? "Unknown Error" : message;
+					dialog.leftButton = ReadGuestDialogText(source.button1Text);
+					if (dialog.leftButton.empty())
+						dialog.leftButton = source.errorType == ErrorDialogType::TextTwoButton
+												? "Yes"
+												: "OK";
+					if (source.errorType == ErrorDialogType::TextTwoButton)
+					{
+						dialog.rightButton = ReadGuestDialogText(source.button2Text);
+						if (dialog.rightButton.empty())
+							dialog.rightButton = "No";
+					}
+					dialog.opacity = g_errEula.errEulaInstance->GetFadeTransparency();
+				}
+			}
+			RuntimeOverlay::Model::Instance().SetErrorDialog(std::move(dialog));
+		}
+
 		void ErrEulaAppearError(AppearArg* arg)
 		{
+			++s_runtimeOverlayGeneration;
 			// The title only shows this dialog when something went wrong badly enough
 			// to interrupt the user, and it is the one failure mode that leaves no
 			// trace in the log at all. Record what it says and where it came from.
@@ -341,12 +386,14 @@ namespace nn
 			g_errEula.currentDialog = *arg;
 			if (g_errEula.errEulaInstance)
 				g_errEula.errEulaInstance->DoAppearError(arg);
+			PublishRuntimeOverlayError();
 		}
 
 		void ErrEulaDisappearError()
 		{
 			if (g_errEula.errEulaInstance)
 				g_errEula.errEulaInstance->DoDisappearError();
+			PublishRuntimeOverlayError();
 		}
 
 		ErrEulaState ErrEulaGetStateErrorViewer()
@@ -378,8 +425,10 @@ namespace nn
 		{
 			if (g_errEula.errEulaInstance)
 				g_errEula.errEulaInstance->DoCalc();
+			PublishRuntimeOverlayError();
 		}
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 		void render(bool mainWindow)
 		{
 			if (!g_errEula.errEulaInstance)
@@ -512,6 +561,24 @@ namespace nn
 			ImGui::End();
 			ImGui::PopFont();
 			ImGui::GetStyle().Alpha = originalAlpha;
+		}
+#else
+		void render(bool)
+		{
+		}
+#endif
+
+		bool SelectRuntimeOverlayButton(std::uint64_t generation, bool rightButton)
+		{
+			if (generation != s_runtimeOverlayGeneration || !g_errEula.errEulaInstance ||
+				!RuntimeOverlay::Model::Instance().GetSnapshot().errorDialog.active ||
+				g_errEula.errEulaInstance->IsDecideSelectButtonError())
+				return false;
+			g_errEula.errEulaInstance->SetButtonSelection(
+				rightButton ? ErrEulaInstance::BUTTON_SELECTION::RIGHT
+							: ErrEulaInstance::BUTTON_SELECTION::LEFT);
+			PublishRuntimeOverlayError();
+			return true;
 		}
 
 		class : public COSModule

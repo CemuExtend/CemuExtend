@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChecksumContent, ChecksumModel } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import { activateJob, routeJobEvent } from "./checksumEvents";
 
 type Progress = {
@@ -164,7 +165,9 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span>{entries.length} installations</span>
+        <span>
+          {translateFormat("{count} installations", { count: entries.length })}
+        </span>
       </div>
       <div className="split-view">
         <aside className="selection-list">

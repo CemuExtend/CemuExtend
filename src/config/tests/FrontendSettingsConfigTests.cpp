@@ -17,6 +17,7 @@ int main()
 		assert(!config.frontend.check_updates.GetValue());
 		assert(!config.frontend.save_screenshots.GetValue());
 		assert(config.frontend.setup_completed.GetValue());
+		assert(config.frontend.ui_language.GetValue() == "system");
 	}
 
 	{
@@ -43,6 +44,7 @@ int main()
 		config.frontend.check_updates = false;
 		config.frontend.save_screenshots = false;
 		config.frontend.setup_completed = true;
+		config.frontend.ui_language = "ja";
 		config.Save(parser);
 		const auto* content = document.FirstChildElement("content");
 		assert(content);
@@ -53,6 +55,7 @@ int main()
 		assert(!frontend->FirstChildElement("CheckUpdates")->BoolText(true));
 		assert(!frontend->FirstChildElement("SaveScreenshots")->BoolText(true));
 		assert(frontend->FirstChildElement("SetupCompleted")->BoolText(false));
+		assert(std::string_view(frontend->FirstChildElement("UiLanguage")->GetText()) == "ja");
 		const auto* hotkeys = frontend->FirstChildElement("Hotkeys");
 		assert(hotkeys && !hotkeys->NextSiblingElement("Hotkeys"));
 	}

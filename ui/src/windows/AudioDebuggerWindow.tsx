@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import type { AudioVoiceDiagnosticPage } from "../bridge/contracts";
 
 export function AudioDebuggerWindow() {
@@ -49,7 +50,10 @@ export function AudioDebuggerWindow() {
         </label>
         <span>
           {page
-            ? `${page.total} copied voices · generation ${page.generation}`
+            ? translateFormat("{count} copied voices · generation {generation}", {
+                count: page.total,
+                generation: page.generation,
+              })
             : "Loading…"}
         </span>
       </div>

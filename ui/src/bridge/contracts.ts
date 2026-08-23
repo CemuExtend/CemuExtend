@@ -3,7 +3,8 @@ export { implementedWindowRoles, windowRoles };
 
 export type WindowRole = (typeof windowRoles)[number];
 export type ImplementedToolWindowRole = (typeof implementedWindowRoles)[number];
-export type ActiveWindowRole = "main-library" | ImplementedToolWindowRole;
+export type ActiveWindowRole =
+  "main-library" | "runtime-overlay" | ImplementedToolWindowRole;
 
 export type RpcRequest = { id: string; method: string; params: unknown };
 export type RpcError = { code: string; message: string; details?: unknown };
@@ -17,6 +18,9 @@ export type Bootstrap = {
   appVersion: string;
   platform: string;
   theme: "light" | "dark" | "system";
+  themeRevision: string;
+  language: string;
+  languageRevision: string;
   shuttingDown: boolean;
   context?: { titleId?: string; packageKey?: string; generation?: string };
 };
@@ -303,6 +307,93 @@ export type TitleLaunchStateEvent = NativeEvent & {
 };
 
 export type NativeEvent = { type: string; sequence: string; payload: unknown };
+
+export type OverlayPosition =
+  | "disabled"
+  | "topLeft"
+  | "topCenter"
+  | "topRight"
+  | "bottomLeft"
+  | "bottomCenter"
+  | "bottomRight";
+export type OverlayTextStyle = {
+  position: OverlayPosition;
+  color: number;
+  scale: number;
+};
+export type RuntimeOverlaySnapshot = {
+  sequence: string;
+  overlayStyle: OverlayTextStyle;
+  notificationStyle: OverlayTextStyle;
+  visibility: {
+    fps: boolean;
+    drawCalls: boolean;
+    cpuUsage: boolean;
+    cpuPerCore: boolean;
+    ramUsage: boolean;
+    vramUsage: boolean;
+    debug: boolean;
+  };
+  stats: {
+    fps: number;
+    drawCalls: number;
+    fastDrawCalls: number;
+    cpuUsage: number;
+    cpuPerCore: number[];
+    ramUsageMb: number;
+    vramUsageMb: number;
+    vramTotalMb: number;
+    debugLines: Array<{ label: string; value: string }>;
+  };
+  notices: Array<{
+    id: string;
+    kind:
+      | "account"
+      | "controller"
+      | "friend"
+      | "battery"
+      | "shader"
+      | "pipeline"
+      | "message";
+    text: string;
+    player?: number;
+    remainingMs: number;
+  }>;
+  shaderProgress: {
+    generation: string;
+    visible: boolean;
+    pipelines: boolean;
+    current: number;
+    total: number;
+    vertexShaders: number;
+    pixelShaders: number;
+    geometryShaders: number;
+    backgroundImageAvailable: boolean;
+  };
+  keyboard: {
+    generation: string;
+    active: boolean;
+    keyboardOnly: boolean;
+    shifted: boolean;
+    maximumLength: number;
+    text: string;
+  };
+  errorDialog: {
+    generation: string;
+    active: boolean;
+    title: string;
+    message: string;
+    leftButton: string;
+    rightButton: string;
+    opacity: number;
+  };
+  interaction: "passive" | "softwareKeyboard" | "errorDialog";
+};
+
+export type RuntimeOverlayChangedEvent = NativeEvent & {
+  type: "overlay.changed";
+  payload: RuntimeOverlaySnapshot;
+};
 
 export type LoggingLevel = "info" | "warning" | "error";
 export type LoggingEntry = {

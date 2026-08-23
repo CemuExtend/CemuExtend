@@ -86,6 +86,7 @@ ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
 ARG CEMU_FRONTEND=webview
+ARG CEMU_OVERLAY_BACKEND=
 ARG CLEAN_BUILD=1
 
 WORKDIR /workspace/CemuExtend
@@ -107,6 +108,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
             -DCEMU_FRONTEND=${CEMU_FRONTEND} \
+            ${CEMU_OVERLAY_BACKEND:+-DCEMU_OVERLAY_BACKEND=${CEMU_OVERLAY_BACKEND}} \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
         && break; \

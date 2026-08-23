@@ -6,6 +6,7 @@ import type {
 } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import { cemodEventJobId, parseCemodSnapshot } from "./cemodEvents";
 
 type PendingAction = {
@@ -226,7 +227,10 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
         />
         <span>
           {model
-            ? `${model.packages.length} packages · generation ${model.generation}`
+            ? translateFormat("{count} packages · generation {generation}", {
+                count: model.packages.length,
+                generation: model.generation,
+              })
             : busyJob !== undefined
               ? "Inspecting installed packages…"
               : "No snapshot"}

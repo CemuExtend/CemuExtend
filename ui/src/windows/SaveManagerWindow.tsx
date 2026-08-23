@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveManagerModel, SaveTitle } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import { activateJob, routeJobEvent } from "./checksumEvents";
 import { isValidSavePersistentId } from "./saveManagerModel";
 
@@ -244,7 +245,11 @@ export function SaveManagerWindow({ windowId }: { windowId: string }) {
             >
               <strong>{title.name || title.titleId}</strong>
               <code>{title.titleId}</code>
-              <span>{title.saves.length} save account(s)</span>
+              <span>
+                {translateFormat("{count} save account(s)", {
+                  count: title.saves.length,
+                })}
+              </span>
             </button>
           ))}
         </aside>

@@ -1,6 +1,8 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VKRMemoryManager.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
+#endif
 
 /* VKRSynchronizedMemoryBuffer */
 
@@ -626,6 +628,7 @@ void VKRMemoryManager::imageMemoryFree(VkImageMemAllocation* imageMemAllocation)
 
 void VKRMemoryManager::appendOverlayHeapDebugInfo()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	for (auto& itr : map_textureHeap)
 	{
 		uint32 heapSize;
@@ -637,4 +640,5 @@ void VKRMemoryManager::appendOverlayHeapDebugInfo()
 
 		ImGui::Text("%s", fmt::format("{0:#08x} Size: {1}MB/{2}MB", itr.first, allocatedBytesMB, heapSizeMB).c_str());
 	}
+#endif
 }

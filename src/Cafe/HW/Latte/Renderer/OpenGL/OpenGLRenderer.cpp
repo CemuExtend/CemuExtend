@@ -12,8 +12,10 @@
 
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include "imgui/imgui_impl_opengl3.h"
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -161,6 +163,7 @@ OpenGLRenderer* OpenGLRenderer::GetInstance()
 
 bool OpenGLRenderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (!mainWindow)
 	{
 		GLCanvas_MakeCurrent(true);
@@ -181,10 +184,15 @@ bool OpenGLRenderer::ImguiBegin(bool mainWindow)
 	ImGui_UpdateWindowInformation(mainWindow);
 	ImGui::NewFrame();
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 void OpenGLRenderer::ImguiEnd()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -196,6 +204,7 @@ void OpenGLRenderer::ImguiEnd()
 
 	if (glClipControl)
 		glClipControl(GL_UPPER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
+#endif
 }
 
 ImTextureID OpenGLRenderer::GenerateTexture(const std::vector<uint8>& data, const Vector2i& size)
@@ -226,7 +235,9 @@ void OpenGLRenderer::DeleteTexture(ImTextureID id)
 
 void OpenGLRenderer::DeleteFontTextures()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui_ImplOpenGL3_DestroyFontsTexture();
+#endif
 }
 
 typedef void (*GL_IMPORT)();
@@ -405,7 +416,9 @@ void OpenGLRenderer::Initialize()
 	catchOpenGLError();
 
 	// imgui
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui_ImplOpenGL3_Init("#version 130");
+#endif
 }
 
 bool OpenGLRenderer::IsPadWindowActive()

@@ -45,6 +45,7 @@ target_link_libraries(CemuApplication PRIVATE
 	CemuCommon
 	CemuConfig
 	CemuInput
+	CemuRuntimeOverlay
 	CemuComponents
 	CemuDownloadManager
 	CemuUtil

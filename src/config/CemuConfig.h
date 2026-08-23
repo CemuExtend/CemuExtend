@@ -617,6 +617,7 @@ struct CemuConfig
 		ConfigValue<bool> check_updates{true};
 		ConfigValue<bool> save_screenshots{true};
 		ConfigValue<bool> setup_completed{false};
+		ConfigValue<std::string> ui_language{"system"};
 	} frontend;
 
 	std::vector<std::string> game_paths;

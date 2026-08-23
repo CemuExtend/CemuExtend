@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { FrontendSettings } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
 import { openWindow } from "../bridge/windows";
+import {
+  getUiLanguage,
+  setUiLanguage,
+  translate,
+  uiLanguages,
+} from "../i18n/runtime";
 
 export function GettingStartedWindow() {
   const [model, setModel] = useState<FrontendSettings | null>(null);
@@ -10,18 +16,21 @@ export function GettingStartedWindow() {
   const [startFullscreen, setStartFullscreen] = useState(false);
   const [openPad, setOpenPad] = useState(false);
   const [checkUpdates, setCheckUpdates] = useState(true);
+  const [language, setLanguage] = useState(getUiLanguage());
   const [page, setPage] = useState<0 | 1>(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void invoke("settings.getFrontend")
-      .then((value) => {
+    void Promise.all([invoke("settings.getFrontend"), invoke("language.get")])
+      .then(([value, languageState]) => {
         setModel(value);
         setGamePaths(value.gamePaths);
         setStartFullscreen(value.startFullscreen);
         setOpenPad(value.openPad);
         setCheckUpdates(value.checkUpdates);
+        setLanguage(languageState.language);
+        setUiLanguage(languageState.language);
       })
       .catch((reason: unknown) => setError(String(reason)));
   }, []);
@@ -38,6 +47,20 @@ export function GettingStartedWindow() {
     if (!canAdd) return;
     setGamePaths((paths) => [...paths, normalizedCandidate]);
     setCandidatePath("");
+  }
+
+  async function changeLanguage(nextLanguage: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await invoke("language.set", { language: nextLanguage });
+      setLanguage(result.language);
+      setUiLanguage(result.language);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function finish() {
@@ -98,7 +121,7 @@ export function GettingStartedWindow() {
           <p className="eyebrow">First-run setup</p>
           <h1>Getting Started</h1>
         </div>
-        <span>Step {page + 1} of 2</span>
+        <span>{translate(`Step ${page + 1} of 2`)}</span>
       </header>
       {error && (
         <p className="error" role="alert">
@@ -113,6 +136,23 @@ export function GettingStartedWindow() {
 
       {page === 0 ? (
         <section className="settings-section">
+          <div className="card">
+            <h2>Interface language</h2>
+            <label className="field-stack">
+              <span>Language</span>
+              <select
+                value={language}
+                disabled={busy}
+                onChange={(event) => void changeLanguage(event.target.value)}
+              >
+                {uiLanguages.map((entry) => (
+                  <option key={entry.code} value={entry.code}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <h2>Game library</h2>
           <p>
             Add directories that contain Wii U games, updates, or DLC. Paths are

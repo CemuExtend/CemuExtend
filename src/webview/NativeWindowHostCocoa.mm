@@ -4,6 +4,7 @@
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 
 #include <algorithm>
 #include <array>
@@ -39,6 +40,17 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 	void* context;
 }
 - (void)onMenu:(id)sender;
+@end
+
+@interface CemuOverlayContainer : NSView
+@property(nonatomic) BOOL passesInputThrough;
+@end
+
+@implementation CemuOverlayContainer
+- (NSView*)hitTest:(NSPoint)point
+{
+	return self.passesInputThrough ? nil : [super hitTest:point];
+}
 @end
 
 @implementation CemuRenderView
@@ -258,6 +270,54 @@ namespace WebFrontend
 					[m_window orderOut:nil];
 			}
 			void RequestFocus() override { [m_window makeKeyAndOrderFront:nil]; }
+			void AttachOverlayWebView(NSView* webView)
+			{
+				if (!m_window || !webView)
+					throw std::logic_error("GamePad overlay host is unavailable");
+				if (m_root)
+					throw std::logic_error("GamePad overlay WebView is already attached");
+				m_webView = webView;
+				m_root = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
+				[m_root setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				m_webOverlay = [[CemuOverlayContainer alloc] initWithFrame:[m_root bounds]];
+				[m_webOverlay setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				[m_view setFrame:[m_root bounds]];
+				[m_webView setFrame:[m_webOverlay bounds]];
+				[m_webView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				[m_window setContentView:m_root];
+				[m_root addSubview:m_view];
+				[m_root addSubview:m_webOverlay positioned:NSWindowAbove relativeTo:m_view];
+				[m_webOverlay addSubview:m_webView];
+				SetOverlayInteractive(false);
+			}
+			void DetachOverlayWebView(NSView* webView)
+			{
+				if (!m_webOverlay || webView != m_webView)
+					return;
+				[m_webView removeFromSuperview];
+				m_webView = nil;
+			}
+			void RestoreOverlayParent()
+			{
+				if (m_window && !m_root && [m_window contentView] != m_view)
+					[m_window setContentView:m_view];
+			}
+			void SetOverlayInteractive(bool interactive)
+			{
+				if (!m_webOverlay)
+					return;
+				const bool changed = !m_overlayInteractionInitialized ||
+					interactive != m_overlayInteractive;
+				m_overlayInteractionInitialized = true;
+				m_overlayInteractive = interactive;
+				m_webOverlay.passesInputThrough = !interactive;
+				if (!changed)
+					return;
+				if (interactive)
+					[m_window makeFirstResponder:m_webView];
+				else
+					[m_window makeFirstResponder:m_view];
+			}
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_window)
@@ -268,9 +328,14 @@ namespace WebFrontend
 				[m_window setDelegate:nil];
 				[m_window close];
 				[m_window release];
+				[m_root release];
+				[m_webOverlay release];
 				[m_view release];
 				[m_delegate release];
 				m_window = nil;
+				m_root = nil;
+				m_webOverlay = nil;
+				m_webView = nil;
 				m_view = nil;
 				m_delegate = nil;
 			}
@@ -284,11 +349,16 @@ namespace WebFrontend
 
 		private:
 			NSWindow* m_window{};
+			NSView* m_root{};
 			CemuRenderView* m_view{};
+			CemuOverlayContainer* m_webOverlay{};
+			NSView* m_webView{};
 			CemuWebPadWindowDelegate* m_delegate{};
 			std::function<void()> m_closeHandler;
 			std::function<void()> m_metricsHandler;
 			bool m_prepared{};
+			bool m_overlayInteractionInitialized{};
+			bool m_overlayInteractive{};
 		};
 
 		class CocoaWindowHost final : public INativeWindowHost
@@ -373,11 +443,22 @@ namespace WebFrontend
 				[m_webView retain];
 				m_root = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
 				[m_root setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-				[m_webView setFrame:[m_root bounds]];
+				m_webOverlay = [[CemuOverlayContainer alloc] initWithFrame:[m_root bounds]];
+				[m_webOverlay setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				[m_webView setFrame:[m_webOverlay bounds]];
 				[m_webView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 				[m_window setContentView:m_root];
-				[m_root addSubview:m_webView];
+				[m_root addSubview:m_webOverlay];
+				[m_webOverlay addSubview:m_webView];
 				[m_webView release];
+			}
+			void ConfigureRuntimeOverlayWebView(void* browserController) override
+			{
+				id webView = reinterpret_cast<id>(browserController);
+				SEL selector = NSSelectorFromString(@"_setDrawsBackground:");
+				if (!webView || ![webView respondsToSelector:selector])
+					throw std::runtime_error("WKWebView does not expose transparent background support");
+				reinterpret_cast<void (*)(id, SEL, BOOL)>(objc_msgSend)(webView, selector, NO);
 			}
 			void PrepareWebViewDestroy(void* widget) override
 			{
@@ -395,7 +476,9 @@ namespace WebFrontend
 				[m_window setContentView:m_webView];
 				[m_webView release];
 				[m_root release];
+				[m_webOverlay release];
 				m_root = nil;
+				m_webOverlay = nil;
 				m_webView = nil;
 			}
 			void Show() override
@@ -406,9 +489,11 @@ namespace WebFrontend
 			}
 			void ShowLibrary() override
 			{
+				m_runtimeOverlay = false;
 				if (m_renderRegion)
 					m_renderRegion->SetVisible(false);
-				[m_webView setHidden:NO];
+				[m_webOverlay setHidden:NO];
+				m_webOverlay.passesInputThrough = NO;
 				[m_window makeFirstResponder:m_webView];
 			}
 			Host::IRenderRegion& CreateMainRenderRegion() override
@@ -423,9 +508,33 @@ namespace WebFrontend
 			void ShowRenderRegion() override
 			{
 				auto& region = CreateMainRenderRegion();
-				[m_webView setHidden:YES];
 				region.SetVisible(true);
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+				SetRuntimeOverlayMode(true, false);
+#else
+				[m_webOverlay setHidden:YES];
 				region.RequestFocus();
+#endif
+			}
+			void SetRuntimeOverlayMode(bool active, bool interactive) override
+			{
+				const bool modeChanged = active != m_runtimeOverlay ||
+					interactive != m_runtimeOverlayInteractive;
+				m_runtimeOverlay = active;
+				m_runtimeOverlayInteractive = interactive;
+				if (!m_webOverlay)
+					return;
+				[m_webOverlay setHidden:NO];
+				m_webOverlay.passesInputThrough = active && !interactive;
+				if (active && m_renderRegion)
+					[m_root addSubview:m_webOverlay positioned:NSWindowAbove
+								 relativeTo:m_renderRegion->View()];
+				if (!modeChanged)
+					return;
+				if (!active || interactive)
+					[m_window makeFirstResponder:m_webView];
+				else if (m_renderRegion)
+					m_renderRegion->RequestFocus();
 			}
 			Host::IRenderRegion& CreatePadRenderRegion() override
 			{
@@ -434,6 +543,30 @@ namespace WebFrontend
 						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
 						[this] { if (m_padMetricsEnabled) DispatchMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
+			}
+			void PreparePadOverlayWebViewCreate() override
+			{
+			}
+			void AttachPadOverlayWebView(void* widget) override
+			{
+				if (!m_padRenderRegion)
+					throw std::logic_error("GamePad render region is unavailable");
+				m_padRenderRegion->AttachOverlayWebView(reinterpret_cast<NSView*>(widget));
+			}
+			void DetachPadOverlayWebView(void* widget) override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->DetachOverlayWebView(reinterpret_cast<NSView*>(widget));
+			}
+			void RestorePadOverlayParent() override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->RestoreOverlayParent();
+			}
+			void SetPadRuntimeOverlayMode(bool interactive) override
+			{
+				if (m_padRenderRegion)
+					m_padRenderRegion->SetOverlayInteractive(interactive);
 			}
 			void DestroyPadRenderRegion() override
 			{
@@ -731,6 +864,9 @@ namespace WebFrontend
 			NSWindow* m_window{};
 			NSView* m_root{};
 			NSView* m_webView{};
+			CemuOverlayContainer* m_webOverlay{};
+			bool m_runtimeOverlay{};
+			bool m_runtimeOverlayInteractive{};
 			NSTextField* m_textInput{};
 			CemuWebWindowDelegate* m_delegate{};
 			std::unique_ptr<CocoaRenderRegion> m_renderRegion;

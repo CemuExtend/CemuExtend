@@ -310,6 +310,23 @@ namespace Application
 		return m_backend->SubmitSoftwareKeyboardKey(keyCode);
 	}
 
+	RuntimeOverlay::Snapshot EmulationController::GetRuntimeOverlaySnapshot()
+	{
+		return m_backend->GetRuntimeOverlaySnapshot();
+	}
+
+	bool EmulationController::SubmitRuntimeOverlayKeyboardKey(
+		std::uint64_t generation, std::uint32_t keyCode)
+	{
+		return m_backend->SubmitRuntimeOverlayKeyboardKey(generation, keyCode);
+	}
+
+	bool EmulationController::SelectRuntimeOverlayErrorButton(
+		std::uint64_t generation, bool rightButton)
+	{
+		return m_backend->SelectRuntimeOverlayErrorButton(generation, rightButton);
+	}
+
 	NfcTouchResult EmulationController::TouchNfcTagFromFile(
 		const std::filesystem::path& path)
 	{

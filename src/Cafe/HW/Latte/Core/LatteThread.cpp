@@ -13,7 +13,6 @@
 #include "Cafe/HW/Latte/Core/LatteTexture.h"
 #include "util/helpers/helpers.h"
 
-#include <imgui.h>
 #include "config/ActiveSettings.h"
 
 #include "Cafe/CafeSystem.h"

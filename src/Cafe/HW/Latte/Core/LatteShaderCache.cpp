@@ -5,9 +5,11 @@
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 #include "Cafe/HW/Latte/Core/FetchShader.h"
 #include "Cemu/FileCache/FileCache.h"
+#include "Cemu/ncrypto/ncrypto.h"
 #include "Cafe/GameProfile/GameProfile.h"
 
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "frontend/RuntimeOverlay.h"
 #ifdef ENABLE_OPENGL
 #include "Cafe/HW/Latte/Renderer/OpenGL/RendererShaderGL.h"
 #endif
@@ -20,8 +22,10 @@
 #include "Cafe/HW/Latte/Renderer/Metal/MetalPipelineCache.h"
 #endif
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "config/ActiveSettings.h"
 #include "Cafe/TitleList/GameInfo.h"
@@ -34,6 +38,7 @@
 #include <audio/IAudioAPI.h>
 #include <util/bootSound/BootSoundReader.h>
 #include <thread>
+#include <png.h>
 
 #if BOOST_OS_WINDOWS
 #include <psapi.h>
@@ -54,6 +59,8 @@ struct
 {
 	ImTextureID textureTVId;
 	ImTextureID textureDRCId;
+	std::shared_ptr<const std::string> backgroundImageTv;
+	std::shared_ptr<const std::string> backgroundImagePad;
 	// shader loading
 	sint32 loadedShaderFiles;
 	sint32 shaderFileCount;
@@ -160,6 +167,63 @@ bool LoadTGAFile(const std::vector<uint8>& buffer, TGAFILE* tgaFile)
 	}
 
 	return true;
+}
+
+bool LoadShaderBackground(bool isTv, TGAFILE& file)
+{
+	const auto fileName = isTv ? "bootTvTex.tga" : "bootDRCTex.tga";
+	const auto path = fmt::format("{}/meta/{}",
+								  CafeSystem::GetMlcStoragePath(CafeSystem::GetForegroundTitleId()), fileName);
+	sint32 status{};
+	auto* handle = fsc_open(path.c_str(),
+							FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &status);
+	if (!handle)
+		return false;
+	const auto size = fsc_getFileSize(handle);
+	std::vector<uint8> data(size);
+	const bool loaded = size > 0 && fsc_readFile(handle, data.data(), size) == size &&
+						LoadTGAFile(data, &file);
+	fsc_close(handle);
+	return loaded;
+}
+
+std::shared_ptr<const std::string> ShaderBackgroundDataUrl(const TGAFILE& file)
+{
+	if (file.imageWidth <= 0 || file.imageHeight <= 0)
+		return {};
+	const auto rowBytes = static_cast<std::size_t>(file.imageWidth) * 3;
+	std::vector<uint8> topDown(file.imageData.size());
+	for (int y = 0; y < file.imageHeight; ++y)
+	{
+		const auto source = static_cast<std::size_t>(file.imageHeight - y - 1) * rowBytes;
+		const auto destination = static_cast<std::size_t>(y) * rowBytes;
+		std::copy_n(file.imageData.data() + source, rowBytes,
+					topDown.data() + destination);
+	}
+	png_image image{};
+	image.version = PNG_IMAGE_VERSION;
+	image.width = static_cast<png_uint_32>(file.imageWidth);
+	image.height = static_cast<png_uint_32>(file.imageHeight);
+	image.format = PNG_FORMAT_RGB;
+	png_alloc_size_t encodedSize{};
+	if (!png_image_write_to_memory(&image, nullptr, &encodedSize, 0,
+								   topDown.data(), 0, nullptr) ||
+		encodedSize == 0)
+	{
+		png_image_free(&image);
+		return {};
+	}
+	std::vector<uint8> encoded(encodedSize);
+	if (!png_image_write_to_memory(&image, encoded.data(), &encodedSize, 0,
+								   topDown.data(), 0, nullptr))
+	{
+		png_image_free(&image);
+		return {};
+	}
+	png_image_free(&image);
+	encoded.resize(encodedSize);
+	return std::make_shared<const std::string>(
+		"data:image/png;base64," + NCrypto::base64Encode(encoded.data(), encoded.size()));
 }
 
 class BootSoundPlayer
@@ -312,6 +376,7 @@ uint32 LatteShaderCache_getPipelineCacheExtraVersion(uint64 titleId)
 
 void LatteShaderCache_drawBackgroundImage(ImTextureID texture, int width, int height)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// clear framebuffers and clean up
 	const auto kPopupFlags =
 		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
@@ -347,6 +412,11 @@ void LatteShaderCache_drawBackgroundImage(ImTextureID texture, int width, int he
 	}
 	ImGui::End();
 	ImGui::PopStyleVar(2);
+#else
+	(void)texture;
+	(void)width;
+	(void)height;
+#endif
 }
 
 void LatteShaderCache_Load()
@@ -423,34 +493,29 @@ void LatteShaderCache_Load()
 	g_shaderCacheLoaderState.loadedShaderFiles = 0;
 
 	// get game background loading image
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	auto loadBackgroundTexture = [](bool isTV, ImTextureID& out) {
 		TGAFILE file{};
 		out = nullptr;
-
-		std::string fileName = isTV ? "bootTvTex.tga" : "bootDRCTex.tga";
-
-		std::string texPath = fmt::format("{}/meta/{}", CafeSystem::GetMlcStoragePath(CafeSystem::GetForegroundTitleId()), fileName);
-		sint32 status;
-		auto fscfile = fsc_open(texPath.c_str(), FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &status);
-		if (fscfile)
-		{
-			uint32 size = fsc_getFileSize(fscfile);
-			if (size > 0)
-			{
-				std::vector<uint8> tmpData(size);
-				fsc_readFile(fscfile, tmpData.data(), size);
-				const bool backgroundLoaded = LoadTGAFile(tmpData, &file);
-
-				if (backgroundLoaded)
-					out = g_renderer->GenerateTexture(file.imageData, {file.imageWidth, file.imageHeight});
-			}
-
-			fsc_close(fscfile);
-		}
+		if (LoadShaderBackground(isTV, file))
+			out = g_renderer->GenerateTexture(file.imageData,
+											  {file.imageWidth, file.imageHeight});
 	};
 
 	loadBackgroundTexture(true, g_shaderCacheLoaderState.textureTVId);
 	loadBackgroundTexture(false, g_shaderCacheLoaderState.textureDRCId);
+#else
+	g_shaderCacheLoaderState.textureTVId = nullptr;
+	g_shaderCacheLoaderState.textureDRCId = nullptr;
+	TGAFILE tvBackground{};
+	TGAFILE padBackground{};
+	g_shaderCacheLoaderState.backgroundImageTv = LoadShaderBackground(true, tvBackground)
+													 ? ShaderBackgroundDataUrl(tvBackground)
+													 : nullptr;
+	g_shaderCacheLoaderState.backgroundImagePad = LoadShaderBackground(false, padBackground)
+													  ? ShaderBackgroundDataUrl(padBackground)
+													  : nullptr;
+#endif
 
 	if (GetConfig().play_boot_sound)
 		g_bootSndPlayer.StartSound();
@@ -502,6 +567,7 @@ void LatteShaderCache_Load()
 		LatteShaderCache_LoadPipelineCache(cacheTitleId);
 #endif
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	g_renderer->BeginFrame(true);
 	if (g_renderer->ImguiBegin(true))
 	{
@@ -521,6 +587,14 @@ void LatteShaderCache_Load()
 		g_renderer->DeleteTexture(g_shaderCacheLoaderState.textureTVId);
 	if (g_shaderCacheLoaderState.textureDRCId)
 		g_renderer->DeleteTexture(g_shaderCacheLoaderState.textureDRCId);
+#else
+	RuntimeOverlay::Model::Instance().SetShaderProgress({});
+	g_shaderCacheLoaderState.backgroundImageTv.reset();
+	g_shaderCacheLoaderState.backgroundImagePad.reset();
+	g_renderer->DrawEmptyFrame(true);
+	g_renderer->DrawEmptyFrame(false);
+	g_renderer->SwapBuffers(true, true);
+#endif
 
 	g_bootSndPlayer.FadeOutSound();
 
@@ -530,6 +604,7 @@ void LatteShaderCache_Load()
 
 void LatteShaderCache_ShowProgress(const std::function<bool(void)>& loadUpdateFunc, bool isPipelines)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	const auto kPopupFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize;
 	const auto textColor = 0xFF888888;
 
@@ -658,6 +733,45 @@ void LatteShaderCache_ShowProgress(const std::function<bool(void)>& loadUpdateFu
 		// finish frame
 		g_renderer->SwapBuffers(true, true);
 	}
+#else
+	static std::uint64_t progressGeneration = 0;
+	const auto generation = ++progressGeneration;
+	auto lastFrameUpdate = tick_cached() - std::chrono::seconds(1);
+	auto publish = [&] {
+		RuntimeOverlay::Model::Instance().SetShaderProgress({
+			.generation = generation,
+			.visible = true,
+			.pipelines = isPipelines,
+			.current = isPipelines ? g_shaderCacheLoaderState.loadedPipelines
+								   : static_cast<std::uint32_t>(
+										 std::max(0, g_shaderCacheLoaderState.loadedShaderFiles)),
+			.total = static_cast<std::uint32_t>(std::max(
+				0, isPipelines ? g_shaderCacheLoaderState.pipelineFileCount
+							   : g_shaderCacheLoaderState.shaderFileCount)),
+			.vertexShaders = static_cast<std::uint32_t>(
+				std::max(0, shaderCacheScreenStats.vertexShaderCount)),
+			.pixelShaders = static_cast<std::uint32_t>(
+				std::max(0, shaderCacheScreenStats.pixelShaderCount)),
+			.geometryShaders = static_cast<std::uint32_t>(
+				std::max(0, shaderCacheScreenStats.geometryShaderCount)),
+			.backgroundImageTv = g_shaderCacheLoaderState.backgroundImageTv,
+			.backgroundImagePad = g_shaderCacheLoaderState.backgroundImagePad,
+		});
+	};
+	publish();
+	while (!Latte_GetStopSignal() && loadUpdateFunc())
+	{
+		const auto now = tick_cached();
+		if (now - lastFrameUpdate < std::chrono::milliseconds(50))
+			continue;
+		lastFrameUpdate = now;
+		publish();
+		g_renderer->DrawEmptyFrame(true);
+		g_renderer->DrawEmptyFrame(false);
+		g_renderer->SwapBuffers(true, true);
+	}
+	RuntimeOverlay::Model::Instance().SetShaderProgress({.generation = generation});
+#endif
 }
 
 void LatteShaderCache_LoadPipelineCache(uint64 cacheTitleId)

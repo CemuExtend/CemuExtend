@@ -6,6 +6,7 @@ import type {
   MemoryValueType,
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
+import { translateFormat } from "../i18n/runtime";
 import {
   pageOffset,
   parseMemoryValue,
@@ -259,7 +260,10 @@ export function MemorySearcherWindow() {
           Previous
         </button>
         <span>
-          Page {pageNumber + 1} of {totalPages}
+          {translateFormat("Page {page} of {pages}", {
+            page: pageNumber + 1,
+            pages: totalPages,
+          })}
         </span>
         <button
           disabled={!page || pageNumber + 1 >= totalPages}
