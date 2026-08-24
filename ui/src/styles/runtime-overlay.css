@@ -9,10 +9,10 @@
 :root[data-runtime-overlay="active"],
 :root[data-runtime-overlay="active"] body,
 :root[data-runtime-overlay="active"] #root {
-  background: transparent;
+  background: transparent !important;
 }
 :root[data-runtime-overlay="active"] .runtime-overlay-root {
-  background: transparent;
+  background: transparent !important;
 }
 :root[data-runtime-overlay="active"][data-preview-screen],
 :root[data-runtime-overlay="active"][data-preview-screen] body,

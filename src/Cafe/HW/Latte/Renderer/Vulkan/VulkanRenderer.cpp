@@ -2136,7 +2136,7 @@ bool VulkanRenderer::BeginFrame(bool mainWindow)
 
 	auto& chainInfo = GetChainInfo(mainWindow);
 
-	VkClearColorValue clearColor{0, 0, 0, 0};
+	VkClearColorValue clearColor{0, 0, 0, 1};
 	ClearColorImageRaw(chainInfo.m_swapchainImages[chainInfo.swapchainImageIndex], 0, 0, clearColor, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	// mark current swapchain image as well defined
@@ -3002,6 +3002,8 @@ bool VulkanRenderer::UpdateSwapchainProperties(bool mainWindow)
 	const auto window = GetWindowMetrics();
 	const int width = mainWindow ? window.physicalWidth : window.physicalPadWidth;
 	const int height = mainWindow ? window.physicalHeight : window.physicalPadHeight;
+	if (width <= 0 || height <= 0)
+		return false;
 	auto extent = chainInfo.getExtent();
 	if (width != extent.width || height != extent.height)
 		stateChanged = true;
@@ -3033,7 +3035,7 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 	if (!chainInfo.hasDefinedSwapchainImage)
 	{
 		// set the swapchain image to a defined state
-		VkClearColorValue clearColor{0, 0, 0, 0};
+		VkClearColorValue clearColor{0, 0, 0, 1};
 		ClearColorImageRaw(chainInfo.m_swapchainImages[chainInfo.swapchainImageIndex], 0, 0, clearColor, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 
@@ -3137,7 +3139,7 @@ void VulkanRenderer::ClearColorbuffer(bool padView)
 	if (chainInfo.swapchainImageIndex == -1)
 		return;
 
-	VkClearColorValue clearColor{0, 0, 0, 0};
+	VkClearColorValue clearColor{0, 0, 0, 1};
 	ClearColorImageRaw(chainInfo.m_swapchainImages[chainInfo.swapchainImageIndex], 0, 0, clearColor, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 }
 
@@ -3254,7 +3256,7 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
 	if (clearBackground)
 	{
 		VkClearAttachment clearAttachment{};
-		clearAttachment.clearValue = {0, 0, 0, 0};
+		clearAttachment.clearValue = {0, 0, 0, 1};
 		clearAttachment.colorAttachment = 0;
 		clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		VkClearRect clearExtent = {{{0, 0}, chainInfo.m_actualExtent}, 0, 1};

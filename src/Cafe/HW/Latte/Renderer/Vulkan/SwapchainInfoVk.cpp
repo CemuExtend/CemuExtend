@@ -335,6 +335,22 @@ VkExtent2D SwapchainInfoVk::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& cap
 	return actualExtent;
 }
 
+VkCompositeAlphaFlagBitsKHR SwapchainInfoVk::ChooseCompositeAlpha(VkCompositeAlphaFlagsKHR supported)
+{
+	constexpr std::array candidates{
+		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+		VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+		VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+	};
+	for (const auto candidate : candidates)
+	{
+		if ((supported & candidate) != 0)
+			return candidate;
+	}
+	throw std::runtime_error("Vulkan surface exposes no supported composite alpha mode");
+}
+
 VkPresentModeKHR SwapchainInfoVk::ChoosePresentMode(const std::vector<VkPresentModeKHR>& modes)
 {
 	m_maxQueued = 0;
@@ -391,7 +407,8 @@ VkSwapchainCreateInfoKHR SwapchainInfoVk::CreateSwapchainCreateInfo(VkSurfaceKHR
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	createInfo.preTransform = swapchainSupport.capabilities.currentTransform;
-	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.compositeAlpha = ChooseCompositeAlpha(
+		swapchainSupport.capabilities.supportedCompositeAlpha);
 	createInfo.presentMode = ChoosePresentMode(swapchainSupport.presentModes);
 	createInfo.clipped = VK_TRUE;
 

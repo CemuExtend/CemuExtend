@@ -14,6 +14,9 @@
 #include "util/helpers/helpers.h"
 #include "config/ActiveSettings.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "Cafe/IOSU/legacy/iosu_crypto.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 
@@ -94,7 +97,11 @@ int main(int argc, char* argv[])
 #endif
 
 #if BOOST_OS_LINUX || BOOST_OS_BSD
-	XInitThreads();
+	if (XInitThreads() == 0)
+	{
+		std::fputs("Cemu: XInitThreads() failed\n", stderr);
+		return EXIT_FAILURE;
+	}
 #endif
 	if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;

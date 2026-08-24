@@ -484,6 +484,7 @@ void main()
 		colorOut0 = pow(colorOut0, vec4(targetGamma / displayGamma) );
 	else
 		colorOut0 = vec4( sRGBEncode( pow(colorOut0.rgb, vec3(targetGamma)) ), 1.0f);
+	colorOut0.a = 1.0f;
 
 }
 

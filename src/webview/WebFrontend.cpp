@@ -3636,9 +3636,9 @@ namespace
 				++m_padGeneration;
 				auto& region = m_nativeWindow->CreatePadRenderRegion();
 				CreatePadOverlayWebView(region);
-				m_rendererHost->InitializePad(region);
 				m_nativeWindow->SetPadMetricsEnabled(true);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
+				m_rendererHost->InitializePad(region);
 				region.SetVisible(true);
 				region.RequestFocus();
 			} catch (const std::exception& error)
@@ -4056,7 +4056,10 @@ namespace
 			ReleaseNativeInput(true);
 			try
 			{
-				m_rendererHost->PrepareMainDestroy();
+				// Canvas recreation is requested only after the previous Latte thread
+				// has stopped. Still abandon any retained renderer before GTK can
+				// unrealize the X11 child that owns its VkSurfaceKHR.
+				m_rendererHost->AbandonMainInitialization();
 				DestroyMainOverlayWebView();
 				m_nativeWindow->DestroyMainRenderRegion();
 				auto& region = m_nativeWindow->CreateMainRenderRegion();

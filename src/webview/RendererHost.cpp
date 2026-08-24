@@ -60,6 +60,7 @@ namespace WebFrontend
 					throw std::runtime_error("the native render region has no drawable area");
 				m_mainPublication = m_nativeSurfacePublisher->PublishCanvas(
 					true, region.GetSurfaceHandle());
+				const auto metrics = m_windowMetrics->GetWindowMetrics();
 				try
 				{
 					switch (ActiveSettings::GetGraphicsAPI())
@@ -71,7 +72,9 @@ namespace WebFrontend
 						g_renderer = std::make_unique<VulkanRenderer>(
 							m_windowMetrics, m_nativeSurfaces);
 						VulkanRenderer::GetInstance()->InitializeSurface(
-							{bounds.width, bounds.height}, true);
+							{metrics.physicalWidth > 0 ? metrics.physicalWidth : bounds.width,
+							 metrics.physicalHeight > 0 ? metrics.physicalHeight : bounds.height},
+							true);
 						m_api = kVulkan;
 						break;
 #endif
@@ -166,13 +169,17 @@ namespace WebFrontend
 #endif
 					}
 					else
-						LatteAsyncCommands_runOnRendererThread([this, bounds] {
+					{
+						const auto metrics = m_windowMetrics->GetWindowMetrics();
+						LatteAsyncCommands_runOnRendererThread([this, bounds, metrics] {
 							switch (m_api)
 							{
 #ifdef ENABLE_VULKAN
 							case kVulkan:
 								VulkanRenderer::GetInstance()->InitializeSurface(
-									{bounds.width, bounds.height}, false);
+									{metrics.physicalPadWidth > 0 ? metrics.physicalPadWidth : bounds.width,
+									 metrics.physicalPadHeight > 0 ? metrics.physicalPadHeight : bounds.height},
+									false);
 								break;
 #endif
 #ifdef ENABLE_OPENGL
@@ -184,6 +191,7 @@ namespace WebFrontend
 								throw std::runtime_error("the configured GamePad graphics API is unavailable");
 							}
 						});
+					}
 					m_padRendererInitialized = true;
 				} catch (...)
 				{
