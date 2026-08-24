@@ -206,22 +206,25 @@ namespace WebFrontend
 		class CocoaPadRenderRegion final : public Host::IRenderRegion
 		{
 		public:
-			CocoaPadRenderRegion(std::function<void()> closeHandler,
+			CocoaPadRenderRegion(NSString* title, Host::PointerSurface surface,
+				std::function<void()> closeHandler,
 				std::function<void()> metricsHandler, INativeWindowHost::InputHandler* inputHandler)
 				: m_closeHandler(std::move(closeHandler)),
 				  m_metricsHandler(std::move(metricsHandler))
 			{
 				const auto style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
 					NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
-				m_window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 854, 480)
+				const auto initialSize = surface == Host::PointerSurface::Main
+					? NSMakeSize(1280, 720) : NSMakeSize(854, 480);
+				m_window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, initialSize.width, initialSize.height)
 					styleMask:style backing:NSBackingStoreBuffered defer:NO];
 				if (!m_window)
 					throw std::runtime_error("failed to create the native GamePad window");
 				[m_window setReleasedWhenClosed:NO];
-				[m_window setTitle:@"CemuExtend GamePad"];
+				[m_window setTitle:title];
 				m_view = [[CemuRenderView alloc] initWithFrame:[[m_window contentView] bounds]];
 				m_view->inputContext = inputHandler;
-				m_view->padSurface = YES;
+				m_view->padSurface = surface == Host::PointerSurface::Pad ? YES : NO;
 				[m_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 				[m_view setWantsLayer:YES];
 				[m_view setAcceptsTouchEvents:YES];
@@ -264,6 +267,13 @@ namespace WebFrontend
 					[m_window orderOut:nil];
 			}
 			void RequestFocus() override { [m_window makeKeyAndOrderFront:nil]; }
+			void SetFullscreen(bool fullscreen)
+			{
+				const bool isFullscreen = ([m_window styleMask] & NSWindowStyleMaskFullScreen) != 0;
+				if (fullscreen != isFullscreen)
+					[m_window toggleFullScreen:nil];
+			}
+			bool IsActive() const { return m_window && [m_window isKeyWindow] == YES; }
 			void AttachOverlayWebView(NSView* webView)
 			{
 				if (!m_window || !webView)
@@ -340,6 +350,7 @@ namespace WebFrontend
 				return m_window ? [m_window backingScaleFactor] : 1.0;
 			}
 			CemuRenderView* View() const { return m_view; }
+			NSWindow* Window() const { return m_window; }
 
 		private:
 			NSWindow* m_window{};
@@ -404,10 +415,12 @@ namespace WebFrontend
 			}
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
-				const auto frame = [[m_window contentView] bounds];
-				const auto scale = [m_window backingScaleFactor];
+				const auto frame = m_renderRegion
+					? NSMakeRect(0, 0, m_renderRegion->GetBounds().width, m_renderRegion->GetBounds().height)
+					: [[m_window contentView] bounds];
+				const auto scale = m_renderRegion ? m_renderRegion->GetScaleFactor() : [m_window backingScaleFactor];
 				auto metrics = Host::WindowMetricsSnapshot{
-					.appActive = [m_window isKeyWindow] == YES,
+					.appActive = m_renderRegion ? m_renderRegion->IsActive() : [m_window isKeyWindow] == YES,
 					.fullscreen = m_fullscreen,
 					.width = static_cast<std::int32_t>(frame.size.width),
 					.height = static_cast<std::int32_t>(frame.size.height),
@@ -480,22 +493,48 @@ namespace WebFrontend
 				[NSApp activateIgnoringOtherApps:YES];
 				ShowLibrary();
 			}
+			void HideLauncher() override { [m_window orderOut:nil]; }
+			bool IsLauncherVisible() const override { return m_window && [m_window isVisible] == YES; }
 			void ShowLibrary() override
 			{
 				m_runtimeOverlay = false;
-				if (m_renderRegion)
-					m_renderRegion->SetVisible(false);
 				[m_webOverlay setHidden:NO];
 				m_webOverlay.passesInputThrough = NO;
 				[m_window makeFirstResponder:m_webView];
 			}
 			Host::IRenderRegion& CreateMainRenderRegion() override
 			{
-				if (!m_root)
-					throw std::logic_error("webview content host is not attached");
 				if (!m_renderRegion)
-					m_renderRegion = std::make_unique<CocoaRenderRegion>(m_root, &m_inputHandler);
+					m_renderRegion = std::make_unique<CocoaPadRenderRegion>(
+						@"CemuExtend Game", Host::PointerSurface::Main,
+						[this] { if (m_gameCloseHandler) m_gameCloseHandler(); },
+						[this] { DispatchMetrics(); }, &m_inputHandler);
 				return *m_renderRegion;
+			}
+			void* GetOverlayWebViewParent(Host::PointerSurface surface) const override
+			{
+				const auto* region = surface == Host::PointerSurface::Main
+					? m_renderRegion.get() : m_padRenderRegion.get();
+				return region ? reinterpret_cast<void*>(region->Window()) : nullptr;
+			}
+			void PrepareMainOverlayWebViewCreate() override
+			{
+			}
+			void AttachMainOverlayWebView(void* widget) override
+			{
+				if (!m_renderRegion)
+					throw std::logic_error("game render region is unavailable");
+				m_renderRegion->AttachOverlayWebView(reinterpret_cast<NSView*>(widget));
+			}
+			void DetachMainOverlayWebView(void* widget) override
+			{
+				if (m_renderRegion)
+					m_renderRegion->DetachOverlayWebView(reinterpret_cast<NSView*>(widget));
+			}
+			void RestoreMainOverlayParent() override
+			{
+				if (m_renderRegion)
+					m_renderRegion->RestoreOverlayParent();
 			}
 			void DestroyMainRenderRegion() override { m_renderRegion.reset(); }
 			void ShowRenderRegion() override
@@ -511,28 +550,16 @@ namespace WebFrontend
 			}
 			void SetRuntimeOverlayMode(bool active, bool interactive) override
 			{
-				const bool modeChanged = active != m_runtimeOverlay ||
-					interactive != m_runtimeOverlayInteractive;
 				m_runtimeOverlay = active;
 				m_runtimeOverlayInteractive = interactive;
-				if (!m_webOverlay)
-					return;
-				[m_webOverlay setHidden:NO];
-				m_webOverlay.passesInputThrough = active && !interactive;
-				if (active && m_renderRegion)
-					[m_root addSubview:m_webOverlay positioned:NSWindowAbove
-								 relativeTo:m_renderRegion->View()];
-				if (!modeChanged)
-					return;
-				if (!active || interactive)
-					[m_window makeFirstResponder:m_webView];
-				else if (m_renderRegion)
-					m_renderRegion->RequestFocus();
+				if (m_renderRegion)
+					m_renderRegion->SetOverlayInteractive(active && interactive);
 			}
 			Host::IRenderRegion& CreatePadRenderRegion() override
 			{
 				if (!m_padRenderRegion)
 					m_padRenderRegion = std::make_unique<CocoaPadRenderRegion>(
+						@"CemuExtend GamePad", Host::PointerSurface::Pad,
 						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
 						[this] { if (m_padMetricsEnabled) DispatchMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
@@ -570,12 +597,12 @@ namespace WebFrontend
 			bool IsPadRenderRegionOpen() const override { return m_padRenderRegion != nullptr; }
 			void SetFullscreen(bool fullscreen) override
 			{
-				if (m_fullscreen == fullscreen)
-					return;
 				m_fullscreen = fullscreen;
-				[m_window toggleFullScreen:nil];
+				if (m_renderRegion)
+					m_renderRegion->SetFullscreen(fullscreen);
 			}
 			void SetCloseHandler(CloseHandler handler) override { m_closeHandler = std::move(handler); }
+			void SetGameCloseHandler(GameCloseHandler handler) override { m_gameCloseHandler = std::move(handler); }
 			void SetMetricsHandler(MetricsHandler handler) override
 			{
 				m_metricsHandler = std::move(handler);
@@ -815,9 +842,10 @@ namespace WebFrontend
 			bool m_runtimeOverlayInteractive{};
 			NSTextField* m_textInput{};
 			CemuWebWindowDelegate* m_delegate{};
-			std::unique_ptr<CocoaRenderRegion> m_renderRegion;
+			std::unique_ptr<CocoaPadRenderRegion> m_renderRegion;
 			std::unique_ptr<CocoaPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
+			GameCloseHandler m_gameCloseHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;

@@ -75,6 +75,7 @@ namespace
 		Runtime* target{};
 	};
 	constexpr std::uint64_t kPadOverlayWindowId = std::numeric_limits<std::uint64_t>::max();
+	constexpr std::uint64_t kMainOverlayWindowId = kPadOverlayWindowId - 1;
 
 	std::string JsonString(std::string_view value)
 	{
@@ -1883,7 +1884,8 @@ namespace
 					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
 				m_nativeWindow->ConfigureRuntimeOverlayWebView(m_browserController);
 #endif
-				m_nativeWindow->SetCloseHandler([this] { (void)RequestShutdown(); });
+				m_nativeWindow->SetCloseHandler([this] { HandleLauncherClose(); });
+				m_nativeWindow->SetGameCloseHandler([this] { HandleGameWindowClose(); });
 				m_nativeWindow->SetMetricsHandler(
 					[this](Host::WindowMetricsSnapshot metrics) { HandleMetrics(metrics); });
 				m_nativeWindow->SetInputHandler(
@@ -2842,7 +2844,7 @@ namespace
 		{
 			if (windowId == 0)
 				return "main-library";
-			if (windowId == kPadOverlayWindowId)
+			if (windowId == kMainOverlayWindowId || windowId == kPadOverlayWindowId)
 				return "runtime-overlay";
 			const auto found = m_toolWindows.find(windowId);
 			if (found == m_toolWindows.end())
@@ -3253,6 +3255,7 @@ namespace
 			if (!m_webview)
 				return;
 			m_nativeWindow->SetCloseHandler({});
+			m_nativeWindow->SetGameCloseHandler({});
 			m_nativeWindow->SetMetricsHandler({});
 			m_nativeWindow->SetPadCloseHandler({});
 			m_nativeWindow->SetInputHandler({});
@@ -3325,41 +3328,168 @@ namespace
 			return false;
 		}
 
-		void StopEmulation()
+		bool StopEmulation()
 		{
 			const auto result = m_controller.Stop();
 			if (!result.stopped)
-				return;
+			{
+				cemuLog_log(LogType::Force, "Game window close could not stop the title: {}",
+							result.diagnostic);
+				return false;
+			}
 			if (!DestroyMainRenderRegion())
-				return;
-			ShowLibraryContent();
+			{
+				cemuLog_log(LogType::Force,
+							"Game window close stopped the title but could not detach its render surfaces");
+				return false;
+			}
 			(void)m_windowState->FinishEmulation();
+			FinishGameWindowLifetime();
+			return true;
+		}
+
+		void HandleGameWindowClose()
+		{
+			// Hyprland killactive and the native title-bar close button both arrive
+			// here as graceful close requests. Coalesce repeats while teardown is in
+			// progress and bind the request to the game generation that received it.
+			if (m_gameClosePending.exchange(true, std::memory_order_acq_rel))
+				return;
+			const auto expectedGeneration = m_windowState->Snapshot().generation;
+			if (!PostToUi([this, expectedGeneration] {
+					const auto state = m_windowState->Snapshot();
+					if (state.mode == WebFrontend::MainWindowContentMode::Playing &&
+						state.generation == expectedGeneration)
+						(void)StopEmulation();
+					m_gameClosePending.store(false, std::memory_order_release);
+				}))
+				m_gameClosePending.store(false, std::memory_order_release);
+		}
+
+		void HandleLauncherClose()
+		{
+			const auto mode = m_windowState ? m_windowState->Snapshot().mode
+										  : WebFrontend::MainWindowContentMode::Library;
+			if (mode == WebFrontend::MainWindowContentMode::Playing ||
+				mode == WebFrontend::MainWindowContentMode::LaunchPending ||
+				m_controller.State() == Application::EmulationState::Running)
+			{
+				m_launcherClosed = true;
+				m_nativeWindow->HideLauncher();
+				return;
+			}
+			(void)RequestShutdown();
+		}
+
+		void FinishGameWindowLifetime()
+		{
+			if (m_launcherClosed)
+				(void)RequestShutdown();
+			else
+				ShowLibraryContent();
 		}
 
 		void ShowLibraryContent()
 		{
 #if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_webview)
-				webview_eval(m_webview,
-							 "document.documentElement.dataset.runtimeOverlay='inactive'");
 			m_nativeWindow->SetRuntimeOverlayMode(false, true);
 #endif
-			m_nativeWindow->ShowLibrary();
+			if (!m_launcherClosed)
+				m_nativeWindow->ShowLibrary();
 		}
 
 		void ShowRenderContent()
 		{
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_webview)
-				webview_eval(m_webview,
-							 "document.documentElement.dataset.runtimeOverlay='active';"
-							 "document.documentElement.dataset.runtimeOverlaySurface='tv'");
-#endif
 			m_nativeWindow->ShowRenderRegion();
+		}
+
+		void CreateMainOverlayWebView(Host::IRenderRegion& region)
+		{
+			(void)region;
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_mainOverlayWebView)
+				return;
+			m_nativeWindow->PrepareMainOverlayWebViewCreate();
+			webview_t webview{};
+			void* widget{};
+			bool attached{};
+			bool bound{};
+			try
+			{
+				const auto parent = m_nativeWindow->GetOverlayWebViewParent(
+					Host::PointerSurface::Main);
+				if (!parent)
+					throw std::runtime_error("game overlay parent is unavailable");
+				webview = webview_create(
+#if defined(NDEBUG)
+					0,
+#else
+					1,
+#endif
+					parent);
+				if (!webview)
+					throw std::runtime_error("failed to create the game overlay WebView");
+				widget = webview_get_native_handle(webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
+				if (!widget)
+					throw std::runtime_error("failed to acquire the game overlay widget");
+				m_nativeWindow->AttachMainOverlayWebView(widget);
+				attached = true;
+				const auto browserController = webview_get_native_handle(
+					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
+				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
+				m_mainOverlayBinding = {this, webview, kMainOverlayWindowId};
+				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
+								 &m_mainOverlayBinding) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to bind the game overlay RPC bridge");
+				bound = true;
+				const auto bootstrap = InitialBootstrapScript(
+					kMainOverlayWindowId, "runtime-overlay", std::nullopt, {}, std::nullopt, "tv");
+				if (webview_init(webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
+					throw std::runtime_error("failed to initialize the game overlay document");
+				LoadWebView(webview);
+				m_mainOverlayWebView = webview;
+				m_mainOverlayWidget = widget;
+				m_mainOverlayRpcBound = true;
+			}
+			catch (...)
+			{
+				if (attached)
+					m_nativeWindow->DetachMainOverlayWebView(widget);
+				if (bound)
+					webview_unbind(webview, "cemuInvoke");
+				if (webview)
+					webview_destroy(webview);
+				m_nativeWindow->RestoreMainOverlayParent();
+				m_mainOverlayBinding = {};
+				throw;
+			}
+#endif
+		}
+
+		void DestroyMainOverlayWebView() noexcept
+		{
+#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (!m_mainOverlayWebView)
+			{
+				m_nativeWindow->RestoreMainOverlayParent();
+				return;
+			}
+			if (m_mainOverlayWidget)
+				m_nativeWindow->DetachMainOverlayWebView(m_mainOverlayWidget);
+			if (m_mainOverlayRpcBound)
+				webview_unbind(m_mainOverlayWebView, "cemuInvoke");
+			webview_destroy(m_mainOverlayWebView);
+			m_mainOverlayWebView = nullptr;
+			m_mainOverlayWidget = nullptr;
+			m_mainOverlayRpcBound = false;
+			m_mainOverlayBinding = {};
+			m_nativeWindow->RestoreMainOverlayParent();
+#endif
 		}
 
 		void CreatePadOverlayWebView(Host::IRenderRegion& region)
 		{
+			(void)region;
 #if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
 			if (m_padOverlayWebView)
 				return;
@@ -3370,13 +3500,17 @@ namespace
 			bool bound{};
 			try
 			{
+				const auto parent = m_nativeWindow->GetOverlayWebViewParent(
+					Host::PointerSurface::Pad);
+				if (!parent)
+					throw std::runtime_error("GamePad overlay parent is unavailable");
 				webview = webview_create(
 #if defined(NDEBUG)
 					0,
 #else
 					1,
 #endif
-					region.GetWindowHandle().surface);
+					parent);
 				if (!webview)
 					throw std::runtime_error("failed to create the GamePad overlay WebView");
 				widget = webview_get_native_handle(
@@ -3414,8 +3548,6 @@ namespace
 				m_padOverlayBinding = {};
 				throw;
 			}
-#else
-			(void)region;
 #endif
 		}
 
@@ -3447,6 +3579,7 @@ namespace
 			ReleaseNativeInput(true);
 			if (m_rendererHost)
 				m_rendererHost->PrepareMainDestroy();
+			DestroyMainOverlayWebView();
 			m_nativeWindow->DestroyMainRenderRegion();
 			return true;
 		}
@@ -3924,8 +4057,11 @@ namespace
 			try
 			{
 				m_rendererHost->PrepareMainDestroy();
+				DestroyMainOverlayWebView();
 				m_nativeWindow->DestroyMainRenderRegion();
 				auto& region = m_nativeWindow->CreateMainRenderRegion();
+				CreateMainOverlayWebView(region);
+				m_nativeWindow->SetFullscreen(m_fullscreen);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				m_rendererHost->InitializeMain(region);
 				ShowRenderContent();
@@ -3939,6 +4075,7 @@ namespace
 					m_rendererHost->AbandonMainInitialization();
 				} catch (...)
 				{}
+				DestroyMainOverlayWebView();
 				m_nativeWindow->DestroyMainRenderRegion();
 				ShowLibraryContent();
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
@@ -3997,6 +4134,8 @@ namespace
 				if (beforeDispatch)
 					beforeDispatch();
 				webview_eval(m_webview, script.c_str());
+				if (m_mainOverlayWebView)
+					webview_eval(m_mainOverlayWebView, script.c_str());
 				if (m_padOverlayWebView)
 					webview_eval(m_padOverlayWebView, script.c_str());
 				for (const auto& [id, window] : m_toolWindows)
@@ -4036,12 +4175,36 @@ namespace
 						webview_eval(m_padOverlayWebView, script.c_str());
 					return;
 				}
+				if (windowId == kMainOverlayWindowId)
+				{
+					if (m_mainOverlayWebView)
+						webview_eval(m_mainOverlayWebView, script.c_str());
+					return;
+				}
 				const auto found = m_toolWindows.find(windowId);
 				if (found != m_toolWindows.end() && found->second->webview)
 					webview_eval(found->second->webview, script.c_str());
 			};
 			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
 				pending.release();
+		}
+
+		void EmitToWebViewNow(webview_t target, std::string_view type,
+							  std::string_view payloadJson)
+		{
+			if (!target || m_stopping.load(std::memory_order_acquire))
+				return;
+			std::string script;
+			{
+				std::scoped_lock eventLock(m_eventMutex);
+				const auto sequence = ++m_eventSequence;
+				const auto event = std::string(R"({"type":)") + JsonString(type) +
+								   R"(,"sequence":)" + JsonString(std::to_string(sequence)) +
+								   R"(,"payload":)" + std::string(payloadJson) + "}";
+				script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
+						 Base64(event) + "'),c=>c.charCodeAt(0)))));";
+			}
+			webview_eval(target, script.c_str());
 		}
 
 		void ForwardEvent(const Application::Event& event)
@@ -4052,7 +4215,9 @@ namespace
 				Emit("emulation.loading", "{}");
 				break;
 			case Application::EventType::GameLoaded:
-				Emit("emulation.loaded", "{}");
+				Emit("emulation.loaded", "{}", [this] {
+					(void)PostToUi([this] { FlushRuntimeOverlay(); });
+				});
 				break;
 			case Application::EventType::GameExited:
 			{
@@ -4064,8 +4229,8 @@ namespace
 						return;
 					if (!DestroyMainRenderRegion())
 						return;
-					ShowLibraryContent();
 					(void)m_windowState->FinishEmulation();
+					FinishGameWindowLifetime();
 				});
 				break;
 			}
@@ -4144,11 +4309,10 @@ namespace
 		{
 			if (m_loggingFlushPending.exchange(true, std::memory_order_acq_rel))
 				return;
-			if (!PostToUi([gate = m_callbackGate] {
-					std::scoped_lock lock(gate->mutex);
-					if (gate->target)
-						gate->target->FlushLoggingEvents();
-				}))
+			// PendingEvent owns the shutdown token and suppresses this callback once
+			// cleanup begins. Do not hold the callback lifetime gate while flushing:
+			// a flush may synchronously publish another model change.
+			if (!PostToUi([this] { FlushLoggingEvents(); }))
 				m_loggingFlushPending.store(false, std::memory_order_release);
 		}
 
@@ -4156,11 +4320,11 @@ namespace
 		{
 			if (m_overlayFlushPending.exchange(true, std::memory_order_acq_rel))
 				return;
-			if (!PostToUi([gate = m_callbackGate] {
-					std::scoped_lock lock(gate->mutex);
-					if (gate->target)
-						gate->target->FlushRuntimeOverlay();
-				}))
+			// GetRuntimeOverlaySnapshot() can prune an expired notice and invoke the
+			// model change handler synchronously. Keeping m_callbackGate locked here
+			// would therefore try to acquire the same non-recursive mutex again on
+			// the UI thread and freeze both the launcher and LatteThread.
+			if (!PostToUi([this] { FlushRuntimeOverlay(); }))
 				m_overlayFlushPending.store(false, std::memory_order_release);
 		}
 
@@ -4168,6 +4332,7 @@ namespace
 		{
 			m_overlayFlushPending.store(false, std::memory_order_release);
 			const auto snapshot = m_controller.GetRuntimeOverlaySnapshot();
+			const auto payload = RuntimeOverlayJson(snapshot);
 			m_overlayInteraction.store(snapshot.interaction, std::memory_order_release);
 #if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
 			if (m_windowState &&
@@ -4178,10 +4343,11 @@ namespace
 				m_nativeWindow->SetPadRuntimeOverlayMode(
 					snapshot.interaction != RuntimeOverlay::Interaction::Passive);
 #endif
-			EmitToWindow(0, "overlay.changed", RuntimeOverlayJson(snapshot));
 #if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+			if (m_mainOverlayWebView)
+				EmitToWebViewNow(m_mainOverlayWebView, "overlay.changed", payload);
 			if (m_padOverlayWebView)
-				EmitToWindow(kPadOverlayWindowId, "overlay.changed", RuntimeOverlayJson(snapshot));
+				EmitToWebViewNow(m_padOverlayWebView, "overlay.changed", payload);
 #endif
 		}
 
@@ -4918,12 +5084,14 @@ namespace
 				return std::string("{}");
 			});
 			m_rpc.Register("overlay.getSnapshot", [this](const rapidjson::Value&) {
-				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+				if (m_invokingWindow != 0 && m_invokingWindow != kMainOverlayWindowId &&
+					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay state is available only to a render window");
 				return RuntimeOverlayJson(m_controller.GetRuntimeOverlaySnapshot());
 			});
 			m_rpc.Register("overlay.getShaderBackground", [this](const rapidjson::Value& params) {
-				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+				if (m_invokingWindow != 0 && m_invokingWindow != kMainOverlayWindowId &&
+					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay state is available only to a render window");
 				const auto generation = RequiredUint64(params, "generation");
 				const auto surface = RequiredString(params, "surface");
@@ -4943,7 +5111,8 @@ namespace
 					   JsonString(*image ? **image : std::string_view{}) + "}";
 			});
 			m_rpc.Register("overlay.submitKeyboardKey", [this](const rapidjson::Value& params) {
-				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+				if (m_invokingWindow != 0 && m_invokingWindow != kMainOverlayWindowId &&
+					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay input is available only to a render window");
 				if (!m_controller.SubmitRuntimeOverlayKeyboardKey(
 						RequiredUint64(params, "generation"), RequiredUint(params, "keyCode")))
@@ -4951,7 +5120,8 @@ namespace
 				return std::string("{}");
 			});
 			m_rpc.Register("overlay.selectErrorButton", [this](const rapidjson::Value& params) {
-				if (m_invokingWindow != 0 && m_invokingWindow != kPadOverlayWindowId)
+				if (m_invokingWindow != 0 && m_invokingWindow != kMainOverlayWindowId &&
+					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay input is available only to a render window");
 				if (!m_controller.SelectRuntimeOverlayErrorButton(
 						RequiredUint64(params, "generation"), RequiredBool(params, "rightButton")))
@@ -6335,8 +6505,8 @@ namespace
 					throw std::runtime_error(result.diagnostic);
 				if (!DestroyMainRenderRegion())
 					throw std::runtime_error("native renderer surfaces could not be detached safely");
-				ShowLibraryContent();
 				(void)m_windowState->FinishEmulation();
+				FinishGameWindowLifetime();
 				return "{}";
 			});
 			m_rpc.VerifyMethods(WebFrontend::Generated::RpcMethods);
@@ -6405,12 +6575,10 @@ namespace
 				frontendSettings.startFullscreen);
 			const bool previousFullscreen = m_fullscreen;
 			const auto result = m_controller.Launch({path}, [this, launchFullscreen](const Application::LaunchResult&) {
-					if (m_fullscreen != launchFullscreen)
-					{
-						m_fullscreen = launchFullscreen;
-						m_nativeWindow->SetFullscreen(m_fullscreen);
-					}
+					m_fullscreen = launchFullscreen;
 					auto& region = m_nativeWindow->CreateMainRenderRegion();
+					CreateMainOverlayWebView(region);
+					m_nativeWindow->SetFullscreen(m_fullscreen);
 					m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 					m_rendererHost->InitializeMain(region);
 					if (!m_windowState->CommitLaunch())
@@ -6430,15 +6598,19 @@ namespace
 				m_pendingLaunch.reset();
 				if (m_controller.State() == Application::EmulationState::Running)
 				{
-					(void)m_nativeWindow->CreateMainRenderRegion();
+					auto& region = m_nativeWindow->CreateMainRenderRegion();
+					CreateMainOverlayWebView(region);
 					(void)m_windowState->CommitLaunch();
 					ShowRenderContent();
 				}
 				else
 				{
 					DestroyMainRenderRegion();
-					ShowLibraryContent();
 					(void)m_windowState->RollbackLaunch();
+					if (m_launcherClosed)
+						(void)RequestShutdown();
+					else
+						ShowLibraryContent();
 				}
 				const auto diagnostic = result.diagnostic.empty() ? "title launch failed" : result.diagnostic;
 				Emit("titles.launchState", std::string(R"({"status":"failed","titleId":)") +
@@ -6502,6 +6674,10 @@ namespace
 		void* m_webViewWidget{};
 		void* m_browserController{};
 		RpcBinding m_mainBinding;
+		webview_t m_mainOverlayWebView{};
+		void* m_mainOverlayWidget{};
+		RpcBinding m_mainOverlayBinding;
+		bool m_mainOverlayRpcBound{};
 		webview_t m_padOverlayWebView{};
 		void* m_padOverlayWidget{};
 		RpcBinding m_padOverlayBinding;
@@ -6551,6 +6727,7 @@ namespace
 		Application::LoggingSubscription m_loggingEvents;
 		std::atomic_bool m_loggingFlushPending{};
 		std::atomic_bool m_overlayFlushPending{};
+		std::atomic_bool m_gameClosePending{};
 		std::atomic<RuntimeOverlay::Interaction> m_overlayInteraction{
 			RuntimeOverlay::Interaction::Passive};
 		std::array<bool, 7> m_overlayNavigationButtons{};
@@ -6577,6 +6754,7 @@ namespace
 		std::string m_mainWorkspaceRole{"main-library"};
 		std::unordered_map<std::uint64_t, std::string> m_titleIconCache;
 		bool m_fullscreen{};
+		bool m_launcherClosed{};
 		bool m_rpcBound{};
 		bool m_cleanedUp{};
 		bool m_applicationShutdown{};
@@ -6629,7 +6807,13 @@ void Frontend::Run()
 		std::rethrow_exception(uiFailure);
 #else
 	SetThreadName("cemu-web-ui");
-	Runtime runtime;
-	runtime.Run();
+	{
+		Runtime runtime;
+		runtime.Run();
+	}
+	// Cemu owns process-lifetime worker objects whose static destruction is not
+	// safe after the frontend has shut the application down. Runtime cleanup has
+	// already released emulation and native UI resources at this point.
+	std::_Exit(EXIT_SUCCESS);
 #endif
 }

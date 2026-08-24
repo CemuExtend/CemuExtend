@@ -203,8 +203,8 @@ export function Library({
       const result = await launchTitle(title.titleId);
       if (result.status === "awaitingPermission") {
         setPermissionTitleId(title.titleId);
-        setLaunchingId(undefined);
       }
+      setLaunchingId(undefined);
     } catch (reason) {
       setLaunchingId(undefined);
       setError(messageFrom(reason));

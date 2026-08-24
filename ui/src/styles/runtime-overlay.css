@@ -9,13 +9,18 @@
 :root[data-runtime-overlay="active"],
 :root[data-runtime-overlay="active"] body,
 :root[data-runtime-overlay="active"] #root {
-  background: var(--color-canvas) url("../assets/covers/open_air.png?inline")
-    center / cover no-repeat;
+  background: transparent;
 }
 :root[data-runtime-overlay="active"] .runtime-overlay-root {
   background: transparent;
 }
-:root[data-runtime-overlay="active"] #root::before {
+:root[data-runtime-overlay="active"][data-preview-screen],
+:root[data-runtime-overlay="active"][data-preview-screen] body,
+:root[data-runtime-overlay="active"][data-preview-screen] #root {
+  background: var(--color-canvas) url("../assets/covers/open_air.png?inline")
+    center / cover no-repeat;
+}
+:root[data-runtime-overlay="active"][data-preview-screen] #root::before {
   content: "";
   position: fixed;
   inset: 0;

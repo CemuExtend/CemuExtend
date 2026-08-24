@@ -283,6 +283,18 @@ export function RuntimeOverlayRoot() {
     const unsubscribe = subscribe((event) => {
       if (event.type === "overlay.changed")
         accept(event.payload as RuntimeOverlaySnapshot);
+      else if (event.type === "emulation.loaded")
+        setSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                shaderProgress: {
+                  ...current.shaderProgress,
+                  visible: false,
+                },
+              }
+            : current,
+        );
     });
     void invoke("overlay.getSnapshot").then(accept);
     return unsubscribe;

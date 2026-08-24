@@ -180,12 +180,9 @@ export function App() {
     );
   if (bootstrap.windowRole === "runtime-overlay") return <RuntimeOverlayRoot />;
   return bootstrap.windowRole === "main-library" ? (
-    <>
-      <div className="main-application">
-        <AppShell bootstrap={bootstrap} />
-      </div>
-      <RuntimeOverlayRoot />
-    </>
+    <div className="main-application">
+      <AppShell bootstrap={bootstrap} />
+    </div>
   ) : (
     <RoleWindow
       role={bootstrap.windowRole}

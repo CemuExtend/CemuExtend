@@ -275,7 +275,6 @@ namespace WebFrontend
 			{
 				return m_widget;
 			}
-
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_widget)
@@ -294,14 +293,17 @@ namespace WebFrontend
 		class GtkPadRenderRegion final : public Host::IRenderRegion
 		{
 		  public:
-			explicit GtkPadRenderRegion(std::function<void()> closeHandler,
+			explicit GtkPadRenderRegion(std::string title, Host::PointerSurface surface,
+										std::function<void()> closeHandler,
 										std::function<void()> metricsHandler, INativeWindowHost::InputHandler* inputHandler)
 				: m_closeHandler(std::move(closeHandler)),
 				  m_metricsHandler(std::move(metricsHandler))
 			{
 				m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-				gtk_window_set_title(GTK_WINDOW(m_window), "CemuExtend GamePad");
-				gtk_window_set_default_size(GTK_WINDOW(m_window), 854, 480);
+				gtk_window_set_title(GTK_WINDOW(m_window), title.c_str());
+				gtk_window_set_default_size(GTK_WINDOW(m_window),
+										surface == Host::PointerSurface::Main ? 1280 : 854,
+										surface == Host::PointerSurface::Main ? 720 : 480);
 				m_overlay = gtk_overlay_new();
 				m_widget = gtk_drawing_area_new();
 				gtk_widget_set_can_focus(m_widget, TRUE);
@@ -323,7 +325,7 @@ namespace WebFrontend
 				gtk_widget_show_all(m_window);
 				gtk_widget_realize(m_widget);
 				gtk_widget_grab_focus(m_widget);
-				ConnectInput(m_widget, Host::PointerSurface::Pad, inputHandler);
+				ConnectInput(m_widget, surface, inputHandler);
 			}
 
 			~GtkPadRenderRegion() override
@@ -345,6 +347,10 @@ namespace WebFrontend
 			GtkWidget* Widget() const
 			{
 				return m_widget;
+			}
+			GtkWidget* WindowWidget() const
+			{
+				return m_window;
 			}
 			Host::RenderRegionBounds GetBounds() const override
 			{
@@ -368,6 +374,17 @@ namespace WebFrontend
 			{
 				gtk_window_present(GTK_WINDOW(m_window));
 				gtk_widget_grab_focus(m_widget);
+			}
+			void SetFullscreen(bool fullscreen)
+			{
+				if (fullscreen)
+					gtk_window_fullscreen(GTK_WINDOW(m_window));
+				else
+					gtk_window_unfullscreen(GTK_WINDOW(m_window));
+			}
+			bool IsActive() const
+			{
+				return m_window && gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE;
 			}
 			void PrepareOverlayWebViewCreate()
 			{
@@ -520,10 +537,20 @@ namespace WebFrontend
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
 				GtkAllocation allocation{};
-				gtk_widget_get_allocation(m_stack ? m_stack : m_window, &allocation);
-				const auto scale = gtk_widget_get_scale_factor(m_window);
+				int scale = gtk_widget_get_scale_factor(m_window);
+				bool appActive = gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE;
+				if (m_renderRegion)
+				{
+					const auto bounds = m_renderRegion->GetBounds();
+					allocation.width = bounds.width;
+					allocation.height = bounds.height;
+					scale = m_renderRegion->GetScaleFactor();
+					appActive = m_renderRegion->IsActive();
+				}
+				else
+					gtk_widget_get_allocation(m_stack ? m_stack : m_window, &allocation);
 				auto metrics = Host::WindowMetricsSnapshot{
-					.appActive = gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE,
+					.appActive = appActive,
 					.fullscreen = m_fullscreen,
 					.width = allocation.width,
 					.height = allocation.height,
@@ -647,6 +674,16 @@ namespace WebFrontend
 				ShowLibrary();
 			}
 
+			void HideLauncher() override
+			{
+				gtk_widget_hide(m_window);
+			}
+
+			bool IsLauncherVisible() const override
+			{
+				return m_window && gtk_widget_get_visible(m_window) != FALSE;
+			}
+
 			void ShowLibrary() override
 			{
 				if (!m_stack || !m_webView)
@@ -659,11 +696,44 @@ namespace WebFrontend
 
 			Host::IRenderRegion& CreateMainRenderRegion() override
 			{
-				if (!m_stack)
-					throw std::logic_error("webview content host is not attached");
 				if (!m_renderRegion)
-					m_renderRegion = std::make_unique<GtkRenderRegion>(m_stack, &m_inputHandler);
+					m_renderRegion = std::make_unique<GtkPadRenderRegion>(
+						"CemuExtend Game", Host::PointerSurface::Main,
+						[this] { if (m_gameCloseHandler) m_gameCloseHandler(); },
+						[this] { NotifyMetrics(); }, &m_inputHandler);
 				return *m_renderRegion;
+			}
+
+			void* GetOverlayWebViewParent(Host::PointerSurface surface) const override
+			{
+				const auto* region = surface == Host::PointerSurface::Main
+									 ? m_renderRegion.get() : m_padRenderRegion.get();
+				return region ? region->WindowWidget() : nullptr;
+			}
+
+			void PrepareMainOverlayWebViewCreate() override
+			{
+				if (m_renderRegion)
+					m_renderRegion->PrepareOverlayWebViewCreate();
+			}
+
+			void AttachMainOverlayWebView(void* widget) override
+			{
+				if (!m_renderRegion)
+					throw std::logic_error("game render region is unavailable");
+				m_renderRegion->AttachOverlayWebView(GTK_WIDGET(widget));
+			}
+
+			void DetachMainOverlayWebView(void* widget) override
+			{
+				if (m_renderRegion)
+					m_renderRegion->DetachOverlayWebView(GTK_WIDGET(widget));
+			}
+
+			void RestoreMainOverlayParent() override
+			{
+				if (m_renderRegion)
+					m_renderRegion->RestoreOverlayParent();
 			}
 
 			void DestroyMainRenderRegion() override
@@ -677,7 +747,6 @@ namespace WebFrontend
 			{
 				auto& region = CreateMainRenderRegion();
 				region.SetVisible(true);
-				gtk_stack_set_visible_child_name(GTK_STACK(m_stack), "render");
 #if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
 				SetRuntimeOverlayMode(true, false);
 #else
@@ -688,40 +757,10 @@ namespace WebFrontend
 
 			void SetRuntimeOverlayMode(bool active, bool interactive) override
 			{
-				if (!m_webView || !m_stack || !m_overlay)
-					return;
-				const bool modeChanged = active != m_runtimeOverlay ||
-										 interactive != m_runtimeOverlayInteractive;
-				if (active != m_runtimeOverlay)
-				{
-					g_object_ref(m_webView);
-					if (const auto parent = gtk_widget_get_parent(m_webView))
-						gtk_container_remove(GTK_CONTAINER(parent), m_webView);
-					if (active)
-						gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), m_webView);
-					else
-						gtk_stack_add_named(GTK_STACK(m_stack), m_webView, "library");
-					g_object_unref(m_webView);
-					m_runtimeOverlay = active;
-				}
+				m_runtimeOverlay = active;
 				m_runtimeOverlayInteractive = interactive;
-				gtk_widget_show(m_webView);
-				if (active)
-				{
-					gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(m_overlay), m_webView,
-														 interactive ? FALSE : TRUE);
-					if (!modeChanged)
-						return;
-					if (interactive)
-						gtk_widget_grab_focus(m_webView);
-					else if (m_renderRegion)
-						m_renderRegion->RequestFocus();
-				}
-				else
-				{
-					gtk_stack_set_visible_child(GTK_STACK(m_stack), m_webView);
-					gtk_widget_grab_focus(m_webView);
-				}
+				if (m_renderRegion)
+					m_renderRegion->SetOverlayInteractive(active && interactive);
 			}
 
 			Host::IRenderRegion& CreatePadRenderRegion() override
@@ -729,6 +768,7 @@ namespace WebFrontend
 				if (!m_padRenderRegion)
 				{
 					m_padRenderRegion = std::make_unique<GtkPadRenderRegion>(
+						"CemuExtend GamePad", Host::PointerSurface::Pad,
 						[this] {
 							if (m_padCloseHandler)
 								m_padCloseHandler();
@@ -784,19 +824,18 @@ namespace WebFrontend
 			void SetFullscreen(bool fullscreen) override
 			{
 				m_fullscreen = fullscreen;
-				if (fullscreen)
-				{
-					gtk_window_fullscreen(GTK_WINDOW(m_window));
-				}
-				else
-				{
-					gtk_window_unfullscreen(GTK_WINDOW(m_window));
-				}
+				if (m_renderRegion)
+					m_renderRegion->SetFullscreen(fullscreen);
 			}
 
 			void SetCloseHandler(CloseHandler handler) override
 			{
 				m_closeHandler = std::move(handler);
+			}
+
+			void SetGameCloseHandler(GameCloseHandler handler) override
+			{
+				m_gameCloseHandler = std::move(handler);
 			}
 
 			void SetMetricsHandler(MetricsHandler handler) override
@@ -1055,9 +1094,10 @@ namespace WebFrontend
 			bool m_runtimeOverlay{};
 			bool m_runtimeOverlayInteractive{};
 			GtkWidget* m_textInput{};
-			std::unique_ptr<GtkRenderRegion> m_renderRegion;
+			std::unique_ptr<GtkPadRenderRegion> m_renderRegion;
 			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
+			GameCloseHandler m_gameCloseHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;

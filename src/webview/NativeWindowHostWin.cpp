@@ -329,13 +329,14 @@ namespace WebFrontend
 		class WinPadRenderRegion final : public Host::IRenderRegion
 		{
 		  public:
-			WinPadRenderRegion(std::function<void()> closeHandler,
+			WinPadRenderRegion(const wchar_t* title, Host::PointerSurface surface,
+							   std::function<void()> closeHandler,
 							   std::function<void()> metricsHandler, INativeWindowHost::InputHandler* handler)
 				: m_closeHandler(std::move(closeHandler)),
 				  m_metricsHandler(std::move(metricsHandler))
 			{
 				m_binding.handler = handler;
-				m_binding.surface = Host::PointerSurface::Pad;
+				m_binding.surface = surface;
 				WNDCLASSEXW windowClass{sizeof(windowClass)};
 				windowClass.hInstance = GetModuleHandleW(nullptr);
 				windowClass.lpfnWndProc = &WinPadRenderRegion::WindowProc;
@@ -344,9 +345,11 @@ namespace WebFrontend
 				windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
 				if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
 					throw std::runtime_error("failed to register the GamePad render window class");
-				m_window = CreateWindowExW(0, PadWindowClass, L"CemuExtend GamePad",
+				const int initialWidth = surface == Host::PointerSurface::Main ? 1296 : 870;
+				const int initialHeight = surface == Host::PointerSurface::Main ? 759 : 520;
+				m_window = CreateWindowExW(0, PadWindowClass, title,
 										   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-										   870, 520, nullptr, nullptr, GetModuleHandleW(nullptr), this);
+										   initialWidth, initialHeight, nullptr, nullptr, GetModuleHandleW(nullptr), this);
 				if (!m_window)
 					throw std::runtime_error("failed to create the native GamePad render window");
 				ShowWindow(m_window, SW_SHOW);
@@ -387,6 +390,37 @@ namespace WebFrontend
 			{
 				SetForegroundWindow(m_window);
 				SetFocus(m_window);
+			}
+			HWND Window() const
+			{
+				return m_window;
+			}
+			void SetFullscreen(bool fullscreen)
+			{
+				if (!m_window || fullscreen == m_fullscreen)
+					return;
+				m_fullscreen = fullscreen;
+				if (fullscreen)
+				{
+					m_windowPlacement.length = sizeof(m_windowPlacement);
+					GetWindowPlacement(m_window, &m_windowPlacement);
+					m_windowStyle = GetWindowLongW(m_window, GWL_STYLE);
+					MONITORINFO monitor{sizeof(monitor)};
+					GetMonitorInfoW(MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST), &monitor);
+					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle & ~WS_OVERLAPPEDWINDOW);
+					SetWindowPos(m_window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
+								 monitor.rcMonitor.right - monitor.rcMonitor.left,
+								 monitor.rcMonitor.bottom - monitor.rcMonitor.top,
+								 SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+				}
+				else
+				{
+					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle);
+					SetWindowPlacement(m_window, &m_windowPlacement);
+					SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
+								 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+								 SWP_NOZORDER | SWP_NOOWNERZORDER);
+				}
 			}
 			void AttachOverlayWebView(HWND webView)
 			{
@@ -494,6 +528,9 @@ namespace WebFrontend
 			std::function<void()> m_closeHandler;
 			std::function<void()> m_metricsHandler;
 			WinInputBinding m_binding;
+			WINDOWPLACEMENT m_windowPlacement{sizeof(m_windowPlacement)};
+			LONG m_windowStyle{};
+			bool m_fullscreen{};
 			bool m_prepared{};
 		};
 
@@ -538,11 +575,12 @@ namespace WebFrontend
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
 				RECT area{};
-				GetClientRect(m_window, &area);
-				const auto dpi = GetDpiForWindow(m_window);
+				const auto metricsWindow = m_renderRegion ? m_renderRegion->Window() : m_window;
+				GetClientRect(metricsWindow, &area);
+				const auto dpi = GetDpiForWindow(metricsWindow);
 				const auto scale = static_cast<double>(dpi) / 96.0;
 				auto metrics = Host::WindowMetricsSnapshot{
-					.appActive = GetForegroundWindow() == m_window,
+					.appActive = GetForegroundWindow() == metricsWindow,
 					.fullscreen = m_fullscreen,
 					.width = static_cast<std::int32_t>(std::lround(area.right / scale)),
 					.height = static_cast<std::int32_t>(std::lround(area.bottom / scale)),
@@ -598,11 +636,17 @@ namespace WebFrontend
 				UpdateWindow(m_window);
 				ShowLibrary();
 			}
+			void HideLauncher() override
+			{
+				ShowWindow(m_window, SW_HIDE);
+			}
+			bool IsLauncherVisible() const override
+			{
+				return m_window && IsWindowVisible(m_window) != FALSE;
+			}
 			void ShowLibrary() override
 			{
 				m_runtimeOverlay = false;
-				if (m_renderRegion)
-					m_renderRegion->SetVisible(false);
 				if (m_webView)
 				{
 					EnableWindow(m_webView, TRUE);
@@ -614,10 +658,35 @@ namespace WebFrontend
 			{
 				if (!m_renderRegion)
 				{
-					m_renderRegion = std::make_unique<WinRenderRegion>(m_window, &m_inputHandler);
-					ResizeChildren();
+					m_renderRegion = std::make_unique<WinPadRenderRegion>(
+						L"CemuExtend Game", Host::PointerSurface::Main,
+						[this] { if (m_gameCloseHandler) m_gameCloseHandler(); },
+						[this] { NotifyMetrics(); }, &m_inputHandler);
 				}
 				return *m_renderRegion;
+			}
+			void* GetOverlayWebViewParent(Host::PointerSurface surface) const override
+			{
+				const auto* region = surface == Host::PointerSurface::Main
+									 ? m_renderRegion.get() : m_padRenderRegion.get();
+				return region ? region->Window() : nullptr;
+			}
+			void PrepareMainOverlayWebViewCreate() override
+			{
+			}
+			void AttachMainOverlayWebView(void* widget) override
+			{
+				if (!m_renderRegion)
+					throw std::logic_error("game render region is unavailable");
+				m_renderRegion->AttachOverlayWebView(static_cast<HWND>(widget));
+			}
+			void DetachMainOverlayWebView(void* widget) override
+			{
+				if (m_renderRegion)
+					m_renderRegion->DetachOverlayWebView(static_cast<HWND>(widget));
+			}
+			void RestoreMainOverlayParent() override
+			{
 			}
 			void DestroyMainRenderRegion() override
 			{
@@ -640,34 +709,16 @@ namespace WebFrontend
 			}
 			void SetRuntimeOverlayMode(bool active, bool interactive) override
 			{
-				const bool modeChanged = active != m_runtimeOverlay ||
-										 interactive != m_runtimeOverlayInteractive;
 				m_runtimeOverlay = active;
 				m_runtimeOverlayInteractive = interactive;
-				if (!m_webView)
-					return;
-				if (!active)
-				{
-					EnableWindow(m_webView, TRUE);
-					ShowWindow(m_webView, SW_SHOW);
-					SetFocus(m_webView);
-					return;
-				}
-				ShowWindow(m_webView, SW_SHOW);
-				EnableWindow(m_webView, interactive ? TRUE : FALSE);
-				SetWindowPos(m_webView, HWND_TOP, 0, 0, 0, 0,
-							 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-				if (!modeChanged)
-					return;
-				if (interactive)
-					SetFocus(m_webView);
-				else if (m_renderRegion)
-					m_renderRegion->RequestFocus();
+				if (m_renderRegion)
+					m_renderRegion->SetOverlayInteractive(active && interactive);
 			}
 			Host::IRenderRegion& CreatePadRenderRegion() override
 			{
 				if (!m_padRenderRegion)
 					m_padRenderRegion = std::make_unique<WinPadRenderRegion>(
+						L"CemuExtend GamePad", Host::PointerSurface::Pad,
 						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
 						[this] { if (m_padMetricsEnabled) NotifyMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
@@ -706,33 +757,17 @@ namespace WebFrontend
 			}
 			void SetFullscreen(bool fullscreen) override
 			{
-				if (fullscreen == m_fullscreen)
-					return;
 				m_fullscreen = fullscreen;
-				if (fullscreen)
-				{
-					m_windowPlacement.length = sizeof(m_windowPlacement);
-					GetWindowPlacement(m_window, &m_windowPlacement);
-					m_windowStyle = GetWindowLongW(m_window, GWL_STYLE);
-					MONITORINFO monitor{sizeof(monitor)};
-					GetMonitorInfoW(MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST), &monitor);
-					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle & ~WS_OVERLAPPEDWINDOW);
-					SetWindowPos(m_window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
-								 monitor.rcMonitor.right - monitor.rcMonitor.left,
-								 monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-								 SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
-				}
-				else
-				{
-					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle);
-					SetWindowPlacement(m_window, &m_windowPlacement);
-					SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
-								 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
-				}
+				if (m_renderRegion)
+					m_renderRegion->SetFullscreen(fullscreen);
 			}
 			void SetCloseHandler(CloseHandler handler) override
 			{
 				m_closeHandler = std::move(handler);
+			}
+			void SetGameCloseHandler(GameCloseHandler handler) override
+			{
+				m_gameCloseHandler = std::move(handler);
 			}
 			void SetMetricsHandler(MetricsHandler handler) override
 			{
@@ -1113,11 +1148,6 @@ namespace WebFrontend
 				GetClientRect(m_window, &area);
 				if (m_webView)
 					MoveWindow(m_webView, 0, 0, area.right, area.bottom, TRUE);
-				if (m_renderRegion)
-					m_renderRegion->SetBounds({0, 0, area.right, area.bottom});
-				if (m_runtimeOverlay && m_webView)
-					SetWindowPos(m_webView, HWND_TOP, 0, 0, area.right, area.bottom,
-								 SWP_NOACTIVATE | SWP_SHOWWINDOW);
 			}
 
 			void NotifyMetrics()
@@ -1132,9 +1162,10 @@ namespace WebFrontend
 			bool m_runtimeOverlayInteractive{};
 			HWND m_textInput{};
 			WNDPROC m_textInputProc{};
-			std::unique_ptr<WinRenderRegion> m_renderRegion;
+			std::unique_ptr<WinPadRenderRegion> m_renderRegion;
 			std::unique_ptr<WinPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
+			GameCloseHandler m_gameCloseHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;
