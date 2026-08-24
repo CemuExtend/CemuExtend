@@ -18,6 +18,7 @@ namespace iosu
 		IOSMsgQueueId sFSAIoMsgQueue;
 		SysAllocator<iosu::kernel::IOSMessage, 352> _m_sFSAIoMsgQueueMsgBuffer;
 		std::thread sFSAIoThread;
+		std::atomic_bool sFSAServiceRunning{false};
 
 		struct FSAClient // IOSU's counterpart to the coreinit FSClient struct
 		{
@@ -178,6 +179,17 @@ namespace iosu
 			};
 
 		  public:
+			void Reset()
+			{
+				for (auto& it : m_handleTable)
+				{
+					if (it.isAllocated && it.fscFile)
+						fsc_close(it.fscFile);
+					it = {};
+				}
+				m_currentCounter = 1;
+			}
+
 			FSA_RESULT AllocateHandle(FSResHandle& handleOut, FSCVirtualFile* fscFile)
 			{
 				for (size_t i = 0; i < m_handleTable.size(); i++)
@@ -889,8 +901,12 @@ namespace iosu
 
 		void Initialize()
 		{
+			if (sFSAServiceRunning.exchange(true))
+				return;
 			for (auto& it : sFSAClientArray)
 				it.ReleaseAndCleanup();
+			sFileHandleTable.Reset();
+			sDirHandleTable.Reset();
 			sFSAIoMsgQueue = (IOSMsgQueueId)IOS_CreateMessageQueue(_m_sFSAIoMsgQueueMsgBuffer.GetPtr(), _m_sFSAIoMsgQueueMsgBuffer.GetCount());
 			IOS_ERROR r = IOS_RegisterResourceManager("/dev/fsa", sFSAIoMsgQueue);
 			IOS_DeviceAssociateId("/dev/fsa", 11);
@@ -900,8 +916,16 @@ namespace iosu
 
 		void Shutdown()
 		{
+			if (!sFSAServiceRunning.exchange(false))
+				return;
 			IOS_SendMessage(sFSAIoMsgQueue, 0, 0);
 			sFSAIoThread.join();
+			IOS_DestroyMessageQueue(sFSAIoMsgQueue);
+			sFSAIoMsgQueue = -1;
+			for (auto& it : sFSAClientArray)
+				it.ReleaseAndCleanup();
+			sFileHandleTable.Reset();
+			sDirHandleTable.Reset();
 		}
 	} // namespace fsa
 } // namespace iosu

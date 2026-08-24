@@ -16,6 +16,7 @@ namespace iosu
 			virtual ~IPCSimpleService() {};
 
 			virtual void StartService() {};
+			virtual void BeforeStopService() {};
 			virtual void StopService() {};
 
 			virtual std::string GetThreadName() = 0;

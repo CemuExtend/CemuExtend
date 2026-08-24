@@ -8,7 +8,7 @@ namespace iosu
 {
 	namespace ccr_nfc
 	{
-		IOSMsgQueueId sCCRNFCMsgQueue;
+		IOSMsgQueueId sCCRNFCMsgQueue{static_cast<IOSMsgQueueId>(-1)};
 		SysAllocator<iosu::kernel::IOSMessage, 0x20> sCCRNFCMsgQueueMsgBuffer;
 		std::thread sCCRNFCThread;
 
@@ -372,8 +372,10 @@ namespace iosu
 
 		class : public ::IOSUModule
 		{
-			void SystemLaunch() override
+			void TitleStart() override
 			{
+				if (sCCRNFCThread.joinable())
+					return;
 				sCCRNFCMsgQueue = iosu::kernel::IOS_CreateMessageQueue(sCCRNFCMsgQueueMsgBuffer.GetPtr(), sCCRNFCMsgQueueMsgBuffer.GetCount());
 				cemu_assert(!IOS_ResultIsError(static_cast<IOS_ERROR>(sCCRNFCMsgQueue)));
 
@@ -383,9 +385,9 @@ namespace iosu
 				sCCRNFCThread = std::thread(CCRNFCThread);
 			}
 
-			void SystemExit() override
+			void TitleStop() override
 			{
-				if (sCCRNFCMsgQueue < 0)
+				if (!sCCRNFCThread.joinable())
 				{
 					return;
 				}
@@ -395,6 +397,11 @@ namespace iosu
 
 				iosu::kernel::IOS_DestroyMessageQueue(sCCRNFCMsgQueue);
 				sCCRNFCMsgQueue = -1;
+			}
+
+			void SystemExit() override
+			{
+				TitleStop();
 			}
 		} sIOSUModuleCCRNFC;
 

@@ -1,5 +1,8 @@
 #pragma once
 #include "nexTypes.h"
+#include <atomic>
+#include <condition_variable>
+#include <memory>
 #include <mutex>
 
 const int NEX_PROTOCOL_AUTHENTICATION = 0xA;
@@ -90,6 +93,10 @@ class nexService
 	sint32 getState();
 	void registerForAsyncProcessing();
 	void destroy();
+	// Stops an asynchronously processed service and waits until no callback can
+	// still be running. discardPendingCallbacks is required when the callback
+	// targets belong to a title that is being torn down.
+	void destroyAndWait(bool discardPendingCallbacks);
 	bool isMarkedForDestruction();
 
   private:
@@ -98,13 +105,23 @@ class nexService
 	void updateTemporaryConnections();
 	void updateNexServiceConnection();
 	void processQueuedRequest(queuedRequest_t* queuedRequest);
+	bool ShouldInvokeCallbacks() const;
+
+	struct DestructionState
+	{
+		std::mutex mutex;
+		std::condition_variable condition;
+		bool complete{};
+	};
 
   private:
 	// bool serviceIsConnected;
 	uint8 connectionState;
 	prudpClient* conNexService;
-	bool isAsync;
-	bool isDestroyed; // if set, delete object asynchronously
+	std::atomic_bool isAsync;
+	std::atomic_bool isDestroyed; // if set, delete object asynchronously
+	std::atomic_bool discardPendingCallbacks{false};
+	std::shared_ptr<DestructionState> destructionState{std::make_shared<DestructionState>()};
 	std::vector<nexActiveRequestInfo_t> list_activeRequests;
 	// protocol request handlers
 	std::vector<protocolHandler_t> list_requestHandlers;

@@ -123,21 +123,27 @@ nexService::nexService(uint32 ip, uint16 port, const char* accessKey) : nexServi
 nexService::~nexService()
 {
 	// call error handlers for unfinished method calls
-	for (auto& it : list_activeRequests)
+	if (ShouldInvokeCallbacks())
 	{
-		nexServiceResponse_t response = {0};
-		response.isSuccessful = false;
-		response.errorCode = ERR_TIMEOUT;
-		response.custom = it.custom;
-		if (it.nexServiceResponse)
-			it.nexServiceResponse(this, &response);
-		else
+		for (auto& it : list_activeRequests)
 		{
-			it.cb2(&response);
+			nexServiceResponse_t response = {0};
+			response.isSuccessful = false;
+			response.errorCode = ERR_TIMEOUT;
+			response.custom = it.custom;
+			if (it.nexServiceResponse)
+				it.nexServiceResponse(this, &response);
+			else
+				it.cb2(&response);
 		}
 	}
 	if (conNexService)
 		delete conNexService;
+	{
+		std::scoped_lock lock(destructionState->mutex);
+		destructionState->complete = true;
+	}
+	destructionState->condition.notify_all();
 }
 
 void nexService::destroy()
@@ -151,6 +157,24 @@ void nexService::destroy()
 		isDestroyed = true;
 	else
 		delete this;
+}
+
+void nexService::destroyAndWait(bool discardCallbacks)
+{
+	auto completion = destructionState;
+	if (discardCallbacks)
+		discardPendingCallbacks.store(true, std::memory_order_release);
+	const bool currentNexThread = nexThread_isCurrentThread();
+	destroy();
+	if (currentNexThread)
+		return;
+	std::unique_lock lock(completion->mutex);
+	completion->condition.wait(lock, [&] { return completion->complete; });
+}
+
+bool nexService::ShouldInvokeCallbacks() const
+{
+	return !discardPendingCallbacks.load(std::memory_order_acquire);
 }
 
 bool nexService::isMarkedForDestruction()
@@ -197,11 +221,12 @@ void nexService::processQueuedRequest(queuedRequest_t* queuedRequest)
 		response.isSuccessful = false;
 		response.errorCode = ERR_NO_CONNECTION;
 		response.custom = queuedRequest->custom;
-		if (queuedRequest->nexServiceResponse)
-			queuedRequest->nexServiceResponse(this, &response);
-		else
+		if (ShouldInvokeCallbacks())
 		{
-			queuedRequest->cb2(&response);
+			if (queuedRequest->nexServiceResponse)
+				queuedRequest->nexServiceResponse(this, &response);
+			else
+				queuedRequest->cb2(&response);
 		}
 		return;
 	}
@@ -265,11 +290,12 @@ void nexService::update()
 			response.isSuccessful = false;
 			response.errorCode = ERR_TIMEOUT;
 			response.custom = it.custom;
-			if (it.nexServiceResponse)
-				it.nexServiceResponse(this, &response);
-			else
+			if (ShouldInvokeCallbacks())
 			{
-				it.cb2(&response);
+				if (it.nexServiceResponse)
+					it.nexServiceResponse(this, &response);
+				else
+					it.cb2(&response);
 			}
 			list_activeRequests.erase(list_activeRequests.cbegin() + idx);
 			continue;
@@ -381,7 +407,8 @@ void nexService::updateNexServiceConnection()
 				// call request handler
 				for (auto& it : list_requestHandlers)
 				{
-					if (it.protocol == nexServiceRequest.protocolId)
+					if (ShouldInvokeCallbacks() &&
+						it.protocol == nexServiceRequest.protocolId)
 					{
 						nexServiceRequest.custom = it.custom;
 						it.processRequest(&nexServiceRequest);
@@ -407,7 +434,8 @@ void nexService::updateNexServiceConnection()
 						(nexServiceResponse.methodId == list_activeRequests[i].methodId || nexServiceResponse.methodId == 0xFFFFFFFF))
 					{
 						nexServiceResponse.custom = list_activeRequests[i].custom;
-						if (nexServiceResponse.isSuccessful || list_activeRequests[i].handleError)
+						if ((nexServiceResponse.isSuccessful || list_activeRequests[i].handleError) &&
+							ShouldInvokeCallbacks())
 						{
 							if (list_activeRequests[i].nexServiceResponse)
 								list_activeRequests[i].nexServiceResponse(this, &nexServiceResponse);

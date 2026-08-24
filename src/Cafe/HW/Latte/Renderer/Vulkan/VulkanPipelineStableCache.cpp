@@ -22,6 +22,9 @@ struct
 	std::atomic_uint32_t pipelinesLoaded;
 } g_vkCacheState;
 
+struct CachedPipeline;
+ConcurrentQueue<CachedPipeline*> g_pipelineCachingQueue;
+
 VulkanPipelineStableCache g_vkPipelineStableCacheInstance;
 
 VulkanPipelineStableCache& VulkanPipelineStableCache::GetInstance()
@@ -41,23 +44,15 @@ uint32 VulkanPipelineStableCache::BeginLoading(uint64 cacheTitleId)
 	g_vkCacheState.pipelinesLoaded = 0;
 	g_vkCacheState.pipelinesQueued = 0;
 
-	// start async compilation threads
+	// A previous interrupted load must be completely quiescent before this
+	// instance is reused for another title.
+	if (!m_compilationThreads.empty())
+		EndLoading();
 	m_compilationCount.store(0);
 	m_compilationQueue.clear();
 
-	// get core count
-	uint32 cpuCoreCount = GetPhysicalCoreCount();
-	m_numCompilationThreads = std::clamp(cpuCoreCount, 1u, 8u);
-	if (VulkanRenderer::GetInstance()->GetDisableMultithreadedCompilation())
-		m_numCompilationThreads = 1;
-
-	for (uint32 i = 0; i < m_numCompilationThreads; i++)
-	{
-		std::thread compileThread(&VulkanPipelineStableCache::CompilerThread, this);
-		compileThread.detach();
-	}
-
-	// open cache file or create it
+	// Open the cache before starting workers. Apart from avoiding workers with no
+	// backing cache, this also makes a failed open a clean, thread-free failure.
 	cemu_assert_debug(s_cache == nullptr);
 	s_cache = FileCache::Open(pathCacheFile, true, LatteShaderCache_getPipelineCacheExtraVersion(cacheTitleId));
 	if (!s_cache)
@@ -65,11 +60,19 @@ uint32 VulkanPipelineStableCache::BeginLoading(uint64 cacheTitleId)
 		cemuLog_log(LogType::Force, "Failed to open or create Vulkan pipeline cache file: {}", _pathToUtf8(pathCacheFile));
 		return 0;
 	}
-	else
-	{
-		s_cache->UseCompression(false);
-		g_vkCacheState.pipelineMaxFileIndex = s_cache->GetMaximumFileIndex();
-	}
+	s_cache->UseCompression(false);
+	g_vkCacheState.pipelineMaxFileIndex = s_cache->GetMaximumFileIndex();
+
+	// get core count
+	uint32 cpuCoreCount = GetPhysicalCoreCount();
+	m_numCompilationThreads = std::clamp(cpuCoreCount, 1u, 8u);
+	if (VulkanRenderer::GetInstance()->GetDisableMultithreadedCompilation())
+		m_numCompilationThreads = 1;
+
+	m_compilationThreads.reserve(m_numCompilationThreads);
+	for (uint32 i = 0; i < m_numCompilationThreads; i++)
+		m_compilationThreads.emplace_back(&VulkanPipelineStableCache::CompilerThread, this);
+
 	return s_cache->GetFileCount();
 }
 
@@ -107,23 +110,41 @@ bool VulkanPipelineStableCache::UpdateLoading(uint32& pipelinesLoadedTotal, uint
 
 void VulkanPipelineStableCache::EndLoading()
 {
-	// shut down compilation threads
-	uint32 threadCount = m_numCompilationThreads;
-	m_numCompilationThreads = 0; // signal thread shutdown
-	for (uint32 i = 0; i < threadCount; i++)
-	{
-		m_compilationQueue.push({}); // push empty workload for every thread. Threads then will shutdown after checking for m_numCompilationThreads == 0
-	}
+	// Stop and join every compiler before the renderer and title memory can be
+	// destroyed. Detached workers used to survive an interrupted cache load and
+	// access the next title's global Vulkan/PPC state.
+	m_numCompilationThreads = 0;
+	for (size_t i = 0; i < m_compilationThreads.size(); i++)
+		m_compilationQueue.push({});
+	for (auto& thread : m_compilationThreads)
+		if (thread.joinable())
+			thread.join();
+	m_compilationThreads.clear();
+	m_compilationQueue.clear();
 	// keep cache file open for writing of new pipelines
 }
 
 void VulkanPipelineStableCache::Close()
 {
+	// Close can also be reached after an aborted loader path. Never release the
+	// cache or renderer while a compiler still owns title/Vulkan objects.
+	if (!m_compilationThreads.empty())
+		EndLoading();
+	if (m_pipelineCacheStoreThread.joinable())
+	{
+		// nullptr is a shutdown marker. It is queued after existing write jobs so
+		// the cache remains valid until the writer has drained them.
+		g_pipelineCachingQueue.push(nullptr);
+		m_pipelineCacheStoreThread.join();
+	}
 	if (s_cache)
 	{
 		delete s_cache;
 		s_cache = nullptr;
 	}
+	m_pipelineIsCachedLock.lock();
+	m_pipelineIsCached.clear();
+	m_pipelineIsCachedLock.unlock();
 }
 
 struct CachedPipeline
@@ -310,16 +331,11 @@ bool VulkanPipelineStableCache::HasPipelineCached(uint64 baseHash, uint64 pipeli
 	return m_pipelineIsCached.find(ph) != m_pipelineIsCached.end();
 }
 
-ConcurrentQueue<CachedPipeline*> g_pipelineCachingQueue;
-
 void VulkanPipelineStableCache::AddCurrentStateToCache(uint64 baseHash, uint64 pipelineStateHash)
 {
 	m_pipelineIsCached.emplace(baseHash, pipelineStateHash);
-	if (!m_pipelineCacheStoreThread)
-	{
-		m_pipelineCacheStoreThread = new std::thread(&VulkanPipelineStableCache::WorkerThread, this);
-		m_pipelineCacheStoreThread->detach();
-	}
+	if (!m_pipelineCacheStoreThread.joinable())
+		m_pipelineCacheStoreThread = std::thread(&VulkanPipelineStableCache::WorkerThread, this);
 	// fill job structure with cached GPU state
 	// for each cached pipeline we store:
 	// - Active shaders (referenced by hash)
@@ -427,6 +443,8 @@ void VulkanPipelineStableCache::WorkerThread()
 	{
 		CachedPipeline* job;
 		g_pipelineCachingQueue.pop(job);
+		if (!job)
+			break;
 		if (!s_cache)
 		{
 			delete job;
@@ -441,7 +459,12 @@ void VulkanPipelineStableCache::WorkerThread()
 		SHA256(blob.data(), blob.size(), hash);
 		uint64 nameA = *(uint64be*)(hash + 0);
 		uint64 nameB = *(uint64be*)(hash + 8);
-		s_cache->AddFileAsync({nameA, nameB}, blob.data(), blob.size());
+		// This worker already provides asynchronous cache writes. Writing through
+		// FileCache's second global async queue would outlive this worker, allowing
+		// Close() to delete s_cache while that queue still holds its raw pointer.
+		// A synchronous write here makes joining m_pipelineCacheStoreThread a real
+		// lifetime barrier for the cache object.
+		s_cache->AddFile({nameA, nameB}, blob.data(), blob.size());
 		delete job;
 	}
 }

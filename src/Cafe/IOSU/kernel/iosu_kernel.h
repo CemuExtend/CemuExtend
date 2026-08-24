@@ -20,6 +20,9 @@ namespace iosu
 		IOS_ERROR IOS_RegisterResourceManager(const char* devicePath, IOSMsgQueueId msgQueueId);
 		IOS_ERROR IOS_DeviceAssociateId(const char* devicePath, uint32 id);
 		IOS_ERROR IOS_ResourceReply(IPCCommandBody* cmd, IOS_ERROR result);
+		// Releases a delayed host-side command during title teardown without
+		// notifying guest memory or scheduling a PPC callback.
+		IOS_ERROR IOS_AbandonResourceReply(IPCCommandBody* cmd);
 
 		void IPCSubmitFromCOS(uint32 ppcCoreIndex, IPCCommandBody* cmd);
 

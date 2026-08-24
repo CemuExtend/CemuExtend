@@ -393,10 +393,30 @@ namespace iosu
 
 			void StopService() override
 			{
+				// Delayed FPD requests still own entries in the IOSU dispatch pool.
+				// Release those host entries without notifying the old guest: sending a
+				// failure response here queues a PPC callback that can run after the next
+				// title has reused the IPC driver memory and stale device handle.
+				for (auto* cmd : m_asyncLoginRequests)
+					(void)iosu::kernel::IOS_AbandonResourceReply(cmd);
 				m_asyncLoginRequests.clear();
 				for (auto& it : m_clients)
+				{
+					for (const auto& request : it->notificationRequests)
+						(void)iosu::kernel::IOS_AbandonResourceReply(request.cmd);
+					it->notificationRequests.clear();
 					delete it;
+				}
 				m_clients.clear();
+			}
+
+			void BeforeStopService() override
+			{
+				// NexFriends owns an independently processed NEX service. Its normal
+				// destructor completes pending callbacks, which is unsafe once those
+				// callbacks refer to the title being stopped. Destroy and wait while the
+				// IPC service and its delayed-command bookkeeping are still intact.
+				StopFriendSession();
 			}
 
 			void* CreateClientObject() override
@@ -1548,7 +1568,6 @@ namespace iosu
 			}
 			void TitleStop() override
 			{
-				gFPDService.StopFriendSession();
 				gFPDService.Stop();
 			}
 		} sIOSUModuleNNFPD;

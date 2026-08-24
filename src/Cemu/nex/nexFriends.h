@@ -1,5 +1,7 @@
 #pragma once
 
+#include <thread>
+
 #ifndef FFL_SIZE
 #define FFL_SIZE 0x60
 #endif
@@ -612,6 +614,7 @@ class NexFriends
 	uint8 countryCode;
 	// login tracking
 	std::recursive_mutex mtx_login;
+	std::thread loginThread;
 	bool loginInProcess;
 	uint32 lastLoginAttemptTime;
 	uint32 numFailedLogins;

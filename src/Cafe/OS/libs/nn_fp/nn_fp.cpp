@@ -42,6 +42,7 @@ namespace nn
 			void Init()
 			{
 				std::unique_lock _l(m_mtx);
+				delete g_fp.fpBufferHeap;
 				g_fp.fpBufferHeap = new VHeap(g_fp.g_fpdAllocatorSpace.GetPtr(), g_fp.g_fpdAllocatorSpace.GetByteSize());
 			}
 
@@ -49,6 +50,7 @@ namespace nn
 			{
 				std::unique_lock _l(m_mtx);
 				delete g_fp.fpBufferHeap;
+				g_fp.fpBufferHeap = nullptr;
 			}
 
 			void* Allocate(uint32 size, uint32 alignment)
@@ -236,6 +238,11 @@ namespace nn
 			if (g_fp.initCounter == 0)
 			{
 				g_fp.fpdHandle = coreinit::IOS_Open("/dev/fpd", 0);
+				if (IOS_ResultIsError((IOS_ERROR)g_fp.fpdHandle))
+				{
+					g_fp.fpdHandle = 0;
+					return FPResult_RequestFailed;
+				}
 			}
 			g_fp.initCounter++;
 			return FPResult_OkZero;
@@ -269,6 +276,7 @@ namespace nn
 				g_fp.isAdminMode = false;
 				g_fp.isLoggedIn = false;
 				coreinit::IOS_Close(g_fp.fpdHandle);
+				g_fp.fpdHandle = 0;
 				g_fp.getNotificationCalled = false;
 			}
 			else if (g_fp.initCounter > 0)
@@ -791,6 +799,18 @@ namespace nn
 			return ipcCtx->SubmitAsync(std::move(ipcCtx), funcPtr, customParam);
 		}
 
+		void ResetForTitleShutdown()
+		{
+			FPIpcBufferAllocator.Destroy();
+			g_fp.initCounter = 0;
+			g_fp.isAdminMode = false;
+			g_fp.isLoggedIn = false;
+			g_fp.fpdHandle = 0;
+			g_fp.getNotificationCalled = false;
+			g_fp.notificationHandler = nullptr;
+			g_fp.notificationHandlerParam = nullptr;
+		}
+
 		class : public COSModule
 		{
 		  public:
@@ -804,6 +824,7 @@ namespace nn
 				g_fp.initCounter = 0;
 				g_fp.isAdminMode = false;
 				g_fp.isLoggedIn = false;
+				g_fp.fpdHandle = 0;
 				g_fp.getNotificationCalled = false;
 				g_fp.notificationHandler = nullptr;
 				g_fp.notificationHandlerParam = nullptr;

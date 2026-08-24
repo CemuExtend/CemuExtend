@@ -54,11 +54,12 @@ class VulkanPipelineStableCache
 	int CompilerThread();
 	void WorkerThread();
 
-	std::thread* m_pipelineCacheStoreThread;
+	std::thread m_pipelineCacheStoreThread;
+	std::vector<std::thread> m_compilationThreads;
 
 	std::unordered_set<PipelineHash, PipelineHash::HashFunc> m_pipelineIsCached;
 	FSpinlock m_pipelineIsCachedLock;
-	class FileCache* s_cache;
+	class FileCache* s_cache{};
 
 	std::atomic_uint32_t m_numCompilationThreads{0};
 	ConcurrentQueue<std::vector<uint8>> m_compilationQueue;

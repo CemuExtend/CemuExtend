@@ -221,8 +221,19 @@ NexFriends::NexFriends(uint32 authServerIp, uint16 authServerPort, const char* a
 
 NexFriends::~NexFriends()
 {
+	// Login used to be detached and could publish nexCon through a destroyed
+	// NexFriends instance. The title stop path must own and drain that worker too.
+	if (loginThread.joinable())
+		loginThread.join();
 	if (nexCon)
-		nexCon->destroy();
+	{
+		// Pending friend callbacks retain pointers into the current title's IPC
+		// buffers and sometimes this NexFriends instance itself. Do not invoke them
+		// after title teardown, and do not release this object until the NEX worker
+		// has stopped touching it.
+		nexCon->destroyAndWait(true);
+		nexCon = nullptr;
+	}
 }
 
 void NexFriends::doAsyncLogin()
@@ -263,8 +274,9 @@ void NexFriends::initiateLogin()
 	this->hasData = false;
 	// start login attempt
 	cemuLog_logDebug(LogType::Force, "Attempt to log into friend server...");
-	std::thread t(&NexFriends::doAsyncLogin, this);
-	t.detach();
+	if (loginThread.joinable())
+		loginThread.join();
+	loginThread = std::thread(&NexFriends::doAsyncLogin, this);
 }
 
 void NexFriends::handleResponse_getAllInformation(nexServiceResponse_t* response, NexFriends* nexFriends, std::function<void(uint32)> cb)
@@ -984,7 +996,7 @@ void NexFriends::update()
 			cemuLog_log(LogType::Force, "NEX: Lost friend server session");
 			if (this->nexCon)
 			{
-				this->nexCon->destroy();
+				this->nexCon->destroyAndWait(true);
 				this->nexCon = nullptr;
 			}
 

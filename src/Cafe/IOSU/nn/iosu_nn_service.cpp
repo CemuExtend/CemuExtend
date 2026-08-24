@@ -26,12 +26,21 @@ namespace iosu
 			if (!m_isRunning.exchange(false))
 				return;
 			m_requestStop = true;
-			StopService();
 			if (m_timerId != IOSInvalidTimerId)
 				IOS_DestroyTimer(m_timerId);
 			m_timerId = IOSInvalidTimerId;
 			IOS_SendMessage(m_msgQueueId, 0, 0); // wake up thread
 			m_serviceThread.join();
+
+			// External async producers must be quiescent before delayed IPC commands
+			// and their guest buffers are released.
+			BeforeStopService();
+			StopService();
+			IOS_DestroyMessageQueue(m_msgQueueId);
+			m_clientObjects.clear();
+			m_nextHandle = 1;
+			m_activeCmd = nullptr;
+			m_delayResponse = false;
 		}
 
 		void IPCSimpleService::ServiceThread()
@@ -111,7 +120,6 @@ namespace iosu
 					IOS_ResourceReply(cmd, IOS_ERROR_INVALID);
 				}
 			}
-			IOS_DestroyMessageQueue(m_msgQueueId);
 			m_threadInitialized = false;
 		}
 
@@ -153,6 +161,7 @@ namespace iosu
 			m_requestStop = true;
 			IOS_SendMessage(m_msgQueueId, 0, 0); // wake up thread
 			m_serviceThread.join();
+			IOS_DestroyMessageQueue(m_msgQueueId);
 		}
 
 		void IPCService::ServiceThread()
@@ -237,7 +246,6 @@ namespace iosu
 					IOS_ResourceReply(cmd, IOS_ERROR_INVALID);
 				}
 			}
-			IOS_DestroyMessageQueue(m_msgQueueId);
 			m_threadInitialized = false;
 		}
 	}; // namespace nn

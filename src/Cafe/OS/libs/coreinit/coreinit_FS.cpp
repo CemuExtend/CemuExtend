@@ -2661,6 +2661,20 @@ namespace coreinit
 
 	void InitializeFS()
 	{
+		// These variables live on the host while their buffers and client bodies
+		// live in title memory. Recreate the bridge for every coreinit mapping;
+		// otherwise a second title reuses the first title's closed IOS handles.
+		sFSInitialized = true;
+		sFSShutdown = false;
+		g_fsRegisteredClientBodies = nullptr;
+		{
+			std::scoped_lock lock(s_fsa_activeClientsMutex);
+			s_fsa_activeClients.clear();
+		}
+		s_fsaInitDone = false;
+		s_fsaIpcPool = nullptr;
+		s_fsaIpcPoolBufferNumItems = 0;
+
 		OSInitMutex(&s_fsGlobalMutex);
 
 		cafeExportRegister("coreinit", FSInit, LogType::CoreinitFile);
@@ -2791,6 +2805,5 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSAGetStat, LogType::Placeholder);
 		cafeExportRegister("coreinit", FSAGetStatusStr, LogType::Placeholder);
 
-		g_fsRegisteredClientBodies = nullptr;
 	}
 } // namespace coreinit

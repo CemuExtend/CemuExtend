@@ -65,6 +65,7 @@
 #include "Cafe/OS/libs/nn_ccr/nn_ccr.h"
 #include "Cafe/OS/libs/nn_temp/nn_temp.h"
 #include "Cafe/OS/libs/nn_save/nn_save.h"
+#include "Cafe/OS/libs/nn_fp/nn_fp.h"
 
 // HW interfaces
 #include "Cafe/HW/SI/si.h"
@@ -701,7 +702,6 @@ namespace CafeSystem
 			module->SystemLaunch();
 		// init IOSU (deprecated manual init)
 		iosuCrypto_init();
-		iosu::fsa::Initialize();
 		iosuIoctl_init();
 		iosuAct_init_depr();
 		iosu::act::Initialize();
@@ -1038,6 +1038,7 @@ namespace CafeSystem
 
 	void _LaunchTitleThread()
 	{
+		iosu::fsa::Initialize();
 		for (auto& module : s_iosuModules)
 			module->TitleStart();
 		cemu_initForGame();
@@ -1281,6 +1282,7 @@ namespace CafeSystem
 			return false;
 		if (!sSystemRunning)
 			return true;
+		cemuLog_log(LogType::Force, "------- Stop title -------");
 		auto& cemodRuntime = cemuextend_hle::GetCemodRuntime();
 		if (!cemodRuntime.TitleRplUnloadPending())
 		{
@@ -1303,6 +1305,16 @@ namespace CafeSystem
 			// OSSchedulerBegin transition.
 			if (sTitleThread.joinable())
 				sTitleThread.join();
+			iosu::fsa::Shutdown();
+
+			// Stop every title-owned IOSU service before GPU, PPC, RPL, or guest
+			// memory teardown. These services may own network workers and delayed IPC
+			// replies whose callbacks still address the current title. Their TitleStop
+			// implementations are required to join those producers and abandon replies
+			// before returning.
+			for (auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
+				(*it)->TitleStop();
+
 			Latte_Stop();
 			// reset Cafe OS userspace modules
 			snd_core::reset();
@@ -1310,6 +1322,7 @@ namespace CafeSystem
 			GX2::_GX2DriverReset();
 			nn::save::ResetToDefaultState();
 			coreinit::__OSDeleteAllActivePPCThreads();
+			nn::fp::ResetForTitleShutdown();
 			std::string trustedReleaseError;
 			if (!cemodRuntime.MarkTrustedTitleThreadsStopped(trustedReleaseError))
 			{
@@ -1353,8 +1366,6 @@ namespace CafeSystem
 			return false;
 		}
 		cemodRuntime.MarkTitleRplUnloadComplete();
-		for (auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
-			(*it)->TitleStop();
 		// reset Cemu subsystems
 		PPCRecompiler_Shutdown();
 		GraphicPack2::Reset();
@@ -1375,6 +1386,7 @@ namespace CafeSystem
 		sPrepareRecompilerInitialized = false;
 		sPrepareVirtualMlcInitialized = false;
 		sPrepareExtrasMounted = false;
+		cemuLog_log(LogType::Force, "------- Title stopped cleanly -------");
 		EmitEvent({.type = EventType::GameExited});
 		return true;
 	}

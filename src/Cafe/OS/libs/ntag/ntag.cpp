@@ -18,6 +18,7 @@ namespace ntag
 
 	bool ccrNfcOpened = false;
 	IOSDevHandle gCcrNfcHandle;
+	std::mutex gCcrNfcMutex;
 
 	NTAGFormatSettings gFormatSettings;
 
@@ -25,6 +26,30 @@ namespace ntag
 	MPTR gAbortCallbacks[2];
 	MPTR gReadCallbacks[2];
 	MPTR gWriteCallbacks[2];
+
+	bool EnsureCCRNFCOpen()
+	{
+		std::scoped_lock lock(gCcrNfcMutex);
+		if (ccrNfcOpened)
+			return true;
+		const IOSDevHandle handle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
+		if (IOS_ResultIsError((IOS_ERROR)handle))
+			return false;
+		gCcrNfcHandle = handle;
+		ccrNfcOpened = true;
+		return true;
+	}
+
+	void ResetCCRNFCForTitle()
+	{
+		std::scoped_lock lock(gCcrNfcMutex);
+		ccrNfcOpened = false;
+		gCcrNfcHandle = 0;
+		std::fill(std::begin(gDetectCallbacks), std::end(gDetectCallbacks), MPTR_NULL);
+		std::fill(std::begin(gAbortCallbacks), std::end(gAbortCallbacks), MPTR_NULL);
+		std::fill(std::begin(gReadCallbacks), std::end(gReadCallbacks), MPTR_NULL);
+		std::fill(std::begin(gWriteCallbacks), std::end(gWriteCallbacks), MPTR_NULL);
+	}
 
 	sint32 __NTAGConvertNFCResult(sint32 result)
 	{
@@ -64,10 +89,14 @@ namespace ntag
 	{
 		sint32 result = nfc::NFCShutdown(chan);
 
-		if (ccrNfcOpened)
 		{
-			coreinit::IOS_Close(gCcrNfcHandle);
-			ccrNfcOpened = false;
+			std::scoped_lock lock(gCcrNfcMutex);
+			if (ccrNfcOpened)
+			{
+				coreinit::IOS_Close(gCcrNfcHandle);
+				ccrNfcOpened = false;
+				gCcrNfcHandle = 0;
+			}
 		}
 
 		gDetectCallbacks[chan] = MPTR_NULL;
@@ -244,10 +273,8 @@ namespace ntag
 	{
 		StackAllocator<iosu::ccr_nfc::CCRNFCCryptData> nfcRawData, nfcInData, nfcOutData;
 
-		if (!ccrNfcOpened)
-		{
-			gCcrNfcHandle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
-		}
+		if (!EnsureCCRNFCOpen())
+			return IOS_ERROR_INVALID;
 
 		// Prepare nfc buffer
 		nfcRawData->version = 0;
@@ -454,10 +481,8 @@ namespace ntag
 	{
 		StackAllocator<iosu::ccr_nfc::CCRNFCCryptData> nfcRawData, nfcInData, nfcOutData;
 
-		if (!ccrNfcOpened)
-		{
-			gCcrNfcHandle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
-		}
+		if (!EnsureCCRNFCOpen())
+			return IOS_ERROR_INVALID;
 
 		// Prepare nfc buffer
 		nfcRawData->version = 0;
@@ -640,6 +665,7 @@ namespace ntag
 
 		void RPLMapped() override
 		{
+			ResetCCRNFCForTitle();
 			cafeExportRegister("ntag", NTAGInit, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGInitEx, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGShutdown, LogType::NTAG);
