@@ -46,6 +46,12 @@
 #include <shared_mutex>
 #include <sys/stat.h>
 
+#ifdef _WIN32
+#ifndef S_IFLNK
+#define S_IFLNK 0120000
+#endif
+#endif
+
 namespace Application
 {
 	namespace
@@ -64,21 +70,45 @@ namespace Application
 			translated.diagnostic = event.diagnostic;
 			switch (event.type)
 			{
-			case CafeSystem::EventType::LoadingStarted: translated.type = EventType::LoadingStarted; break;
-			case CafeSystem::EventType::GameLoaded: translated.type = EventType::GameLoaded; break;
-			case CafeSystem::EventType::GameExited: translated.type = EventType::GameExited; break;
-			case CafeSystem::EventType::PpcProcessExited: translated.type = EventType::PpcProcessExited; break;
-			case CafeSystem::EventType::PerformanceUpdated: translated.type = EventType::PerformanceUpdated; break;
-			case CafeSystem::EventType::Diagnostic: translated.type = EventType::Diagnostic; break;
+			case CafeSystem::EventType::LoadingStarted:
+				translated.type = EventType::LoadingStarted;
+				break;
+			case CafeSystem::EventType::GameLoaded:
+				translated.type = EventType::GameLoaded;
+				break;
+			case CafeSystem::EventType::GameExited:
+				translated.type = EventType::GameExited;
+				break;
+			case CafeSystem::EventType::PpcProcessExited:
+				translated.type = EventType::PpcProcessExited;
+				break;
+			case CafeSystem::EventType::PerformanceUpdated:
+				translated.type = EventType::PerformanceUpdated;
+				break;
+			case CafeSystem::EventType::Diagnostic:
+				translated.type = EventType::Diagnostic;
+				break;
 			}
 			switch (event.diagnosticCode)
 			{
-			case CafeSystem::DiagnosticCode::DamagedExecutable: translated.diagnosticCode = DiagnosticCode::DamagedExecutable; break;
-			case CafeSystem::DiagnosticCode::KeyFileCreateFailed: translated.diagnosticCode = DiagnosticCode::KeyFileCreateFailed; break;
-			case CafeSystem::DiagnosticCode::KeyFileInvalidLine: translated.diagnosticCode = DiagnosticCode::KeyFileInvalidLine; break;
-			case CafeSystem::DiagnosticCode::GraphicPackInvalid: translated.diagnosticCode = DiagnosticCode::GraphicPackInvalid; break;
-			case CafeSystem::DiagnosticCode::MemoryAllocationFailed: translated.diagnosticCode = DiagnosticCode::MemoryAllocationFailed; break;
-			case CafeSystem::DiagnosticCode::MemoryReservationFailed: translated.diagnosticCode = DiagnosticCode::MemoryReservationFailed; break;
+			case CafeSystem::DiagnosticCode::DamagedExecutable:
+				translated.diagnosticCode = DiagnosticCode::DamagedExecutable;
+				break;
+			case CafeSystem::DiagnosticCode::KeyFileCreateFailed:
+				translated.diagnosticCode = DiagnosticCode::KeyFileCreateFailed;
+				break;
+			case CafeSystem::DiagnosticCode::KeyFileInvalidLine:
+				translated.diagnosticCode = DiagnosticCode::KeyFileInvalidLine;
+				break;
+			case CafeSystem::DiagnosticCode::GraphicPackInvalid:
+				translated.diagnosticCode = DiagnosticCode::GraphicPackInvalid;
+				break;
+			case CafeSystem::DiagnosticCode::MemoryAllocationFailed:
+				translated.diagnosticCode = DiagnosticCode::MemoryAllocationFailed;
+				break;
+			case CafeSystem::DiagnosticCode::MemoryReservationFailed:
+				translated.diagnosticCode = DiagnosticCode::MemoryReservationFailed;
+				break;
 			}
 			return translated;
 		}
@@ -93,8 +123,7 @@ namespace Application
 					.principal = std::move(request.principal),
 					.requestedPermissions = request.requestedPermissions,
 					.grantedPermissions = request.grantedPermissions,
-					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ?
-						CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
+					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ? CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 					.signedPackage = request.signedPackage,
 				});
 			}
@@ -108,8 +137,7 @@ namespace Application
 				.modId = std::move(package.modId),
 				.principal = std::move(package.principal),
 				.requestedPermissions = package.requestedPermissions,
-				.executionMode = package.executionMode == ::CemodExecutionMode::TrustedNative ?
-					CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
+				.executionMode = package.executionMode == ::CemodExecutionMode::TrustedNative ? CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 				.signedPackage = package.signedPackage,
 				.titleIds = std::move(package.titleIds),
 				.error = std::move(package.error),
@@ -167,9 +195,9 @@ namespace Application
 		{
 			const auto& accounts = ::Account::GetAccounts();
 			const auto found = std::ranges::find_if(accounts,
-				[persistentId](const auto& account) {
-					return account.GetPersistentId() == persistentId;
-				});
+													[persistentId](const auto& account) {
+														return account.GetPersistentId() == persistentId;
+													});
 			return found == accounts.end() ? nullptr : &*found;
 		}
 
@@ -202,8 +230,8 @@ namespace Application
 		fs::path SaveUserRoot(std::uint64_t titleId)
 		{
 			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/user",
-				static_cast<std::uint32_t>(titleId >> 32),
-				static_cast<std::uint32_t>(titleId));
+											  static_cast<std::uint32_t>(titleId >> 32),
+											  static_cast<std::uint32_t>(titleId));
 		}
 
 		fs::path SaveAccountPath(std::uint64_t titleId, std::uint32_t persistentId)
@@ -214,8 +242,8 @@ namespace Application
 		fs::path SaveInfoPath(std::uint64_t titleId)
 		{
 			return ActiveSettings::GetMlcPath("usr/save/{:08x}/{:08x}/meta/saveinfo.xml",
-				static_cast<std::uint32_t>(titleId >> 32),
-				static_cast<std::uint32_t>(titleId));
+											  static_cast<std::uint32_t>(titleId >> 32),
+											  static_cast<std::uint32_t>(titleId));
 		}
 
 		SaveEntryLocation InspectSaveEntryPath(const fs::path& path)
@@ -227,8 +255,7 @@ namespace Application
 				return {SaveEntryState::Missing, path};
 			if (ec)
 				return {SaveEntryState::NonDirectory, path};
-			return {status.type() == fs::file_type::directory ?
-				SaveEntryState::Directory : SaveEntryState::NonDirectory, path};
+			return {status.type() == fs::file_type::directory ? SaveEntryState::Directory : SaveEntryState::NonDirectory, path};
 		}
 
 		std::optional<fs::path> NormalizeSaveArchivePath(std::string_view rawName)
@@ -269,7 +296,7 @@ namespace Application
 			zip_uint8_t operatingSystem{};
 			zip_uint32_t attributes{};
 			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
-				&attributes) != 0)
+												 &attributes) != 0)
 				return false;
 			if (operatingSystem != ZIP_OPSYS_UNIX)
 				return false;
@@ -282,7 +309,7 @@ namespace Application
 			SaveArchivePlan plan;
 			int zipError{};
 			zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
-				&zipError);
+									  &zipError);
 			if (!archive)
 			{
 				plan.error = SaveOperationError::ArchiveInvalid;
@@ -294,7 +321,7 @@ namespace Application
 
 			const auto entryCount = zip_get_num_entries(archive, 0);
 			if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) >
-				kMaximumSaveArchiveEntries)
+									  kMaximumSaveArchiveEntries)
 			{
 				plan.error = SaveOperationError::ArchiveInvalid;
 				plan.diagnostic = "save archive contains too many entries";
@@ -332,18 +359,18 @@ namespace Application
 						return plan;
 					}
 					zip_file_t* file = zip_fopen_index(archive,
-						static_cast<zip_uint64_t>(index), 0);
+													   static_cast<zip_uint64_t>(index), 0);
 					if (!file)
 					{
 						plan.error = SaveOperationError::ArchiveInvalid;
 						plan.diagnostic = "unable to read save archive metadata";
 						return plan;
 					}
-					const std::unique_ptr<zip_file_t, void(*)(zip_file_t*)> closeFile(
+					const std::unique_ptr<zip_file_t, void (*)(zip_file_t*)> closeFile(
 						file, [](zip_file_t* value) { (void)zip_fclose(value); });
 					std::string metadata(static_cast<std::size_t>(stat.size), '\0');
 					if (stat.size && zip_fread(file, metadata.data(), stat.size) !=
-						static_cast<zip_int64_t>(stat.size))
+										 static_cast<zip_int64_t>(stat.size))
 					{
 						plan.error = SaveOperationError::ArchiveInvalid;
 						plan.diagnostic = "save archive metadata is truncated";
@@ -358,7 +385,7 @@ namespace Application
 							value.remove_prefix(2);
 						std::uint64_t titleId{};
 						const auto parsed = std::from_chars(value.data(),
-							value.data() + value.size(), titleId, 16);
+															value.data() + value.size(), titleId, 16);
 						if (parsed.ec == std::errc())
 							plan.sourceTitleId = titleId;
 					}
@@ -399,7 +426,7 @@ namespace Application
 					plan.bytesTotal += stat.size;
 				}
 				plan.entries.push_back({static_cast<zip_uint64_t>(index),
-					*relativePath, stat.size, directory});
+										*relativePath, stat.size, directory});
 			}
 			return plan;
 		}
@@ -412,8 +439,8 @@ namespace Application
 			for (std::uint64_t attempt = 0; attempt != 1024; ++attempt)
 			{
 				const auto candidate = target.parent_path() /
-					fmt::format("{}.{}.{}", _pathToUtf8(target.filename()), purpose,
-						nonce + sequence.fetch_add(1) + attempt);
+									   fmt::format("{}.{}.{}", _pathToUtf8(target.filename()), purpose,
+												   nonce + sequence.fetch_add(1) + attempt);
 				std::error_code ec;
 				if (!fs::exists(candidate, ec) && !ec)
 					return candidate;
@@ -438,25 +465,26 @@ namespace Application
 
 		template<typename Modifier>
 		SaveOperationResult StageSaveMetadata(std::uint64_t titleId,
-			Modifier&& modifier, SaveMetadataStage& stage)
+											  Modifier&& modifier, SaveMetadataStage& stage)
 		{
 			stage.original = SaveInfoPath(titleId);
 			std::error_code ec;
 			if (!fs::exists(stage.original, ec))
 				return ec ? SaveOperationResult{SaveOperationError::MetadataFailure,
-					ec.message()} : SaveOperationResult{};
+												ec.message()}
+						  : SaveOperationResult{};
 			if (ec || !fs::is_regular_file(stage.original, ec) || ec)
 				return {SaveOperationError::MetadataFailure,
-					"saveinfo.xml is not a regular file"};
+						"saveinfo.xml is not a regular file"};
 
 			pugi::xml_document document;
 			if (!document.load_file(stage.original.c_str()))
 				return {SaveOperationError::MetadataFailure,
-					"unable to parse saveinfo.xml"};
+						"unable to parse saveinfo.xml"};
 			auto info = document.child("info");
 			if (!info)
 				return {SaveOperationError::MetadataFailure,
-					"saveinfo.xml is missing its info node"};
+						"saveinfo.xml is missing its info node"};
 			stage.changed = std::forward<Modifier>(modifier)(info);
 			if (!stage.changed)
 				return {};
@@ -466,7 +494,7 @@ namespace Application
 			{
 				RemovePathQuietly(stage.temporary);
 				return {SaveOperationError::MetadataFailure,
-					"unable to stage saveinfo.xml"};
+						"unable to stage saveinfo.xml"};
 			}
 			return {};
 		}
@@ -478,7 +506,7 @@ namespace Application
 			const auto backup = UniqueSiblingPath(stage.original, "backup");
 			if (backup.empty())
 				return {SaveOperationError::MetadataFailure,
-					"unable to reserve saveinfo.xml backup path"};
+						"unable to reserve saveinfo.xml backup path"};
 
 			std::error_code ec;
 			fs::rename(stage.original, backup, ec);
@@ -490,8 +518,9 @@ namespace Application
 				std::error_code restoreError;
 				fs::rename(backup, stage.original, restoreError);
 				return {SaveOperationError::MetadataFailure,
-					restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
-						restoreError.message()) : ec.message()};
+						restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+												   restoreError.message())
+									 : ec.message()};
 			}
 			RemovePathQuietly(backup);
 			stage.temporary.clear();
@@ -499,7 +528,7 @@ namespace Application
 		}
 
 		pugi::xml_node FindSaveAccountNode(pugi::xml_node info,
-			std::uint32_t persistentId)
+										   std::uint32_t persistentId)
 		{
 			const auto id = fmt::format("{:08x}", persistentId);
 			return info.find_child([&id](const pugi::xml_node& node) {
@@ -512,10 +541,10 @@ namespace Application
 			lock = CafeSaveList::AcquireOperationLock();
 			if (CafeSaveList::IsScanning())
 				return {SaveOperationError::Scanning,
-					"save catalog scan is still running"};
+						"save catalog scan is still running"};
 			if (CafeSystem::IsTitleRunning())
 				return {SaveOperationError::TitleRunning,
-					"save data cannot be changed while a title is running"};
+						"save data cannot be changed while a title is running"};
 			return {};
 		}
 
@@ -544,7 +573,7 @@ namespace Application
 				.hasPatches = pack->HasPatches(),
 				.hasCustomVsync = pack->HasCustomVSyncFrequency(),
 				.supportedVersion = pack->GetVersion() >= 3 &&
-					pack->GetVersion() <= GraphicPack2::GFXPACK_VERSION_8,
+									pack->GetVersion() <= GraphicPack2::GFXPACK_VERSION_8,
 				.titleIds = pack->GetTitleIds(),
 			};
 			auto categorized = pack->GetCategorizedPresets(result.presetOrder);
@@ -555,7 +584,7 @@ namespace Application
 					continue;
 				for (const auto& preset : found->second)
 					result.presets.push_back({preset->category, preset->name,
-						preset->active, preset->visible});
+											  preset->active, preset->visible});
 			}
 			return result;
 		}
@@ -693,9 +722,13 @@ namespace Application
 
 		class TitleListLease final
 		{
-		public:
-			TitleListLease() : titles(CafeTitleList::AcquireInternalList()) {}
-			~TitleListLease() { CafeTitleList::ReleaseInternalList(); }
+		  public:
+			TitleListLease()
+				: titles(CafeTitleList::AcquireInternalList()) {}
+			~TitleListLease()
+			{
+				CafeTitleList::ReleaseInternalList();
+			}
 			std::span<TitleInfo*> titles;
 		};
 
@@ -707,8 +740,7 @@ namespace Application
 			const bool hasBase = parser.GetType() != TitleIdParser::TITLE_TYPE::AOC;
 			const bool hasUpdate = parser.CanHaveSeparateUpdateTitleId();
 			const std::uint64_t updateId = hasUpdate ? parser.GetSeparateUpdateTitleId() : 0;
-			const std::uint64_t aocId = hasBase ?
-				(titleId & ~0xff00000000ULL) | 0x0c00000000ULL : titleId;
+			const std::uint64_t aocId = hasBase ? (titleId & ~0xff00000000ULL) | 0x0c00000000ULL : titleId;
 
 			TitleInfo* base{};
 			TitleInfo* update{};
@@ -721,10 +753,10 @@ namespace Application
 				if (hasBase && candidateId == titleId && (!base || preferred))
 					base = candidate;
 				else if (hasUpdate && candidateId == updateId &&
-					(!update || candidate->GetAppTitleVersion() > update->GetAppTitleVersion() || preferred))
+						 (!update || candidate->GetAppTitleVersion() > update->GetAppTitleVersion() || preferred))
 					update = candidate;
 				else if (candidateId == aocId &&
-					(!aoc || candidate->GetAppTitleVersion() > aoc->GetAppTitleVersion() || preferred))
+						 (!aoc || candidate->GetAppTitleVersion() > aoc->GetAppTitleVersion() || preferred))
 					aoc = candidate;
 			}
 
@@ -766,9 +798,9 @@ namespace Application
 
 		class WuaWriterContext final
 		{
-		public:
+		  public:
 			WuaWriterContext(std::filesystem::path outputPath,
-				ContentProgressHandler progress, ContentCancellationCheck cancelled)
+							 ContentProgressHandler progress, ContentCancellationCheck cancelled)
 				: outputPath(std::move(outputPath)), progress(std::move(progress)),
 				  cancelled(std::move(cancelled)) {}
 
@@ -801,13 +833,16 @@ namespace Application
 					self.valid = false;
 			}
 
-			bool IsCancelled() const { return cancelled && cancelled(); }
+			bool IsCancelled() const
+			{
+				return cancelled && cancelled();
+			}
 
 			void Publish(ContentOperationPhase phase) const
 			{
 				if (progress)
 					progress({phase, filesCompleted, filesTotal,
-						bytesCompleted, bytesTotal});
+							  bytesCompleted, bytesTotal});
 			}
 
 			bool CountFiles(const std::string& path)
@@ -828,7 +863,7 @@ namespace Application
 						Publish(ContentOperationPhase::Collecting);
 					}
 					else if (entry.isDirectory &&
-						!CountFiles(fmt::format("{}{}/", path, entry.path)))
+							 !CountFiles(fmt::format("{}{}/", path, entry.path)))
 						return false;
 				}
 				return true;
@@ -850,7 +885,7 @@ namespace Application
 					if (entry.isDirectory)
 					{
 						if (!AddFiles(fmt::format("{}{}/", archivePath, entry.path),
-							fmt::format("{}{}/", path, entry.path)))
+									  fmt::format("{}{}/", path, entry.path)))
 							return false;
 						continue;
 					}
@@ -859,8 +894,7 @@ namespace Application
 					if (!writer->StartNewFile((archivePath + entry.path).c_str()))
 						return false;
 					std::unique_ptr<FSCVirtualFile> file(fsc_open(
-						(path + entry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE |
-						FSC_ACCESS_FLAG::READ_PERMISSION, &status));
+						(path + entry.path).c_str(), FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &status));
 					if (!file)
 						return false;
 					buffer.resize(32 * 1024);
@@ -887,13 +921,10 @@ namespace Application
 					return false;
 				try
 				{
-					const bool result = count ? CountFiles(mountPath) :
-						AddFiles(fmt::format("{:016x}_v{}/", title.GetAppTitleId(),
-							title.GetAppTitleVersion()), mountPath);
+					const bool result = count ? CountFiles(mountPath) : AddFiles(fmt::format("{:016x}_v{}/", title.GetAppTitleId(), title.GetAppTitleVersion()), mountPath);
 					title.Unmount(mountPath);
 					return result;
-				}
-				catch (...)
+				} catch (...)
 				{
 					title.Unmount(mountPath);
 					throw;
@@ -913,11 +944,10 @@ namespace Application
 			bool valid{};
 		};
 
-		class CafeTitleEventSubscription final :
-			public Detail::TitleSubscriptionState,
-			public std::enable_shared_from_this<CafeTitleEventSubscription>
+		class CafeTitleEventSubscription final : public Detail::TitleSubscriptionState,
+												 public std::enable_shared_from_this<CafeTitleEventSubscription>
 		{
-		public:
+		  public:
 			explicit CafeTitleEventSubscription(TitleCatalogHandler handler)
 				: m_handler(std::move(handler)) {}
 
@@ -928,8 +958,7 @@ namespace Application
 				try
 				{
 					state->Connect();
-				}
-				catch (...)
+				} catch (...)
 				{
 					state->Stop();
 					throw;
@@ -966,7 +995,7 @@ namespace Application
 					m_thread.join();
 			}
 
-		private:
+		  private:
 			void Connect()
 			{
 				auto self = shared_from_this();
@@ -990,7 +1019,7 @@ namespace Application
 								break;
 							default:
 								cemuLog_log(LogType::Force,
-									"Ignoring unknown title catalog event");
+											"Ignoring unknown title catalog event");
 								return;
 							}
 							if (event->titleInfo)
@@ -998,22 +1027,22 @@ namespace Application
 								translated.titleId = ToBaseTitleId(
 									event->titleInfo->GetAppTitleId());
 								const bool discovered = event->eventType ==
-									CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED;
+														CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED;
 								if (!discovered || (!event->titleInfo->IsCached() &&
-									!event->titleInfo->IsSystemDataTitle()))
+													!event->titleInfo->IsSystemDataTitle()))
 								{
 									translated.managedEntry = TranslateManagedTitle(
 										*event->titleInfo, discovered);
 								}
 							}
 							self.Enqueue(std::move(translated));
-						}
-						catch (const std::exception& exception)
+						} catch (const std::exception& exception)
 						{
 							cemuLog_log(LogType::Force,
-								"Unable to queue title catalog event: {}", exception.what());
+										"Unable to queue title catalog event: {}", exception.what());
 						}
-					}, this);
+					},
+					this);
 
 				m_saveCallbackId = CafeSaveList::RegisterCallback(
 					[](CafeSaveListCallbackEvent* event, void* context) {
@@ -1034,7 +1063,7 @@ namespace Application
 								break;
 							default:
 								cemuLog_log(LogType::Force,
-									"Ignoring unknown save catalog event");
+											"Ignoring unknown save catalog event");
 								return;
 							}
 							if (event->saveInfo)
@@ -1043,13 +1072,13 @@ namespace Application
 								translated.managedEntry = TranslateManagedSave(*event->saveInfo);
 							}
 							self.Enqueue(std::move(translated));
-						}
-						catch (const std::exception& exception)
+						} catch (const std::exception& exception)
 						{
 							cemuLog_log(LogType::Force,
-								"Unable to queue save catalog event: {}", exception.what());
+										"Unable to queue save catalog event: {}", exception.what());
 						}
-					}, this);
+					},
+					this);
 			}
 
 			void Enqueue(TitleCatalogEvent event)
@@ -1082,11 +1111,10 @@ namespace Application
 					try
 					{
 						m_handler(event);
-					}
-					catch (const std::exception& exception)
+					} catch (const std::exception& exception)
 					{
 						cemuLog_log(LogType::Force,
-							"Title catalog subscriber failed: {}", exception.what());
+									"Title catalog subscriber failed: {}", exception.what());
 					}
 				}
 			}
@@ -1120,7 +1148,7 @@ namespace Application
 				}
 				if (shaderType)
 					LatteAsyncCommands_queueDeleteShader(shader.shader_base_hash,
-						shader.shader_aux_hash, *shaderType);
+														 shader.shader_aux_hash, *shaderType);
 			}
 		}
 
@@ -1139,11 +1167,16 @@ namespace Application
 		{
 			switch (status)
 			{
-			case CafeSystem::PREPARE_STATUS_CODE::SUCCESS: return LaunchError::None;
-			case CafeSystem::PREPARE_STATUS_CODE::CANCELLED: return LaunchError::PermissionDenied;
-			case CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX: return LaunchError::InvalidExecutable;
-			case CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT: return LaunchError::UnableToMount;
-			case CafeSystem::PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY: return LaunchError::CemodRuntimeBusy;
+			case CafeSystem::PREPARE_STATUS_CODE::SUCCESS:
+				return LaunchError::None;
+			case CafeSystem::PREPARE_STATUS_CODE::CANCELLED:
+				return LaunchError::PermissionDenied;
+			case CafeSystem::PREPARE_STATUS_CODE::INVALID_RPX:
+				return LaunchError::InvalidExecutable;
+			case CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT:
+				return LaunchError::UnableToMount;
+			case CafeSystem::PREPARE_STATUS_CODE::CEMOD_RUNTIME_BUSY:
+				return LaunchError::CemodRuntimeBusy;
 			}
 			return LaunchError::InvalidExecutable;
 		}
@@ -1152,15 +1185,21 @@ namespace Application
 		{
 			switch (type)
 			{
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE: return TitleInstallKind::Base;
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO: return TitleInstallKind::Demo;
-			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE: return TitleInstallKind::Update;
-			case TitleIdParser::TITLE_TYPE::AOC: return TitleInstallKind::Dlc;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE:
+				return TitleInstallKind::Base;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_DEMO:
+				return TitleInstallKind::Demo;
+			case TitleIdParser::TITLE_TYPE::BASE_TITLE_UPDATE:
+				return TitleInstallKind::Update;
+			case TitleIdParser::TITLE_TYPE::AOC:
+				return TitleInstallKind::Dlc;
 			case TitleIdParser::TITLE_TYPE::SYSTEM_TITLE:
 			case TitleIdParser::TITLE_TYPE::SYSTEM_OVERLAY_TITLE:
 				return TitleInstallKind::SystemTitle;
-			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA: return TitleInstallKind::SystemData;
-			default: return TitleInstallKind::Unknown;
+			case TitleIdParser::TITLE_TYPE::SYSTEM_DATA:
+				return TitleInstallKind::SystemData;
+			default:
+				return TitleInstallKind::Unknown;
 			}
 		}
 
@@ -1178,8 +1217,7 @@ namespace Application
 			{
 				std::error_code ec;
 				const auto status = fs::symlink_status(path, ec);
-				mix(ec ? std::numeric_limits<std::uint64_t>::max() :
-					static_cast<std::uint64_t>(status.type()));
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() : static_cast<std::uint64_t>(status.type()));
 				if (!ec && fs::is_regular_file(status))
 				{
 					mix(fs::file_size(path, ec));
@@ -1188,14 +1226,13 @@ namespace Application
 				}
 				ec.clear();
 				const auto modified = fs::last_write_time(path, ec);
-				mix(ec ? std::numeric_limits<std::uint64_t>::max() - 2 :
-					static_cast<std::uint64_t>(modified.time_since_epoch().count()));
+				mix(ec ? std::numeric_limits<std::uint64_t>::max() - 2 : static_cast<std::uint64_t>(modified.time_since_epoch().count()));
 			}
 			return result;
 		}
 
 		TitleInstallPlanResult BuildTitleInstallPlan(const fs::path& requestedSource,
-			bool checkAvailableSpace = true)
+													 bool checkAvailableSpace = true)
 		{
 			std::error_code ec;
 			auto source = fs::weakly_canonical(requestedSource, ec);
@@ -1204,7 +1241,7 @@ namespace Application
 			TitleInfo title(source);
 			if (!title.IsValid())
 				return {TitleInstallError::InvalidSource,
-					"The selected folder is not a valid installable title", std::nullopt};
+						"The selected folder is not a valid installable title", std::nullopt};
 
 			const std::array<const char*, 3> requiredFolders{"content", "code", "meta"};
 			std::uint64_t requiredBytes{};
@@ -1219,12 +1256,11 @@ namespace Application
 				const auto rootStatus = fs::symlink_status(root, ec);
 				if (ec || fs::is_symlink(rootStatus))
 					return {TitleInstallError::InvalidSource,
-						fs::is_symlink(rootStatus) ?
-							"Symbolic links are not supported in title installs" : ec.message(),
-						std::nullopt};
+							fs::is_symlink(rootStatus) ? "Symbolic links are not supported in title installs" : ec.message(),
+							std::nullopt};
 				if (!fs::is_directory(rootStatus))
 					return {TitleInstallError::MissingContent,
-						fmt::format("Required '{}' folder is missing", folder), std::nullopt};
+							fmt::format("Required '{}' folder is missing", folder), std::nullopt};
 				fs::recursive_directory_iterator iterator(root, ec), end;
 				if (ec)
 					return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
@@ -1232,7 +1268,7 @@ namespace Application
 				{
 					if (iterator->is_symlink(ec))
 						return {TitleInstallError::InvalidSource,
-							"Symbolic links are not supported in title installs", std::nullopt};
+								"Symbolic links are not supported in title installs", std::nullopt};
 					if (ec)
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
 					if (iterator->is_regular_file(ec))
@@ -1240,7 +1276,7 @@ namespace Application
 						const auto size = iterator->file_size(ec);
 						if (ec || size > std::numeric_limits<std::uint64_t>::max() - requiredBytes)
 							return {TitleInstallError::InvalidSource,
-								"Unable to measure title files", std::nullopt};
+									"Unable to measure title files", std::nullopt};
 						requiredBytes += size;
 						mixSource(std::hash<std::string>{}(
 							_pathToUtf8(fs::relative(iterator->path(), source, ec))));
@@ -1257,7 +1293,7 @@ namespace Application
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
 					else if (!iterator->is_directory(ec) || ec)
 						return {TitleInstallError::InvalidSource,
-							"Unsupported entry in title install source", std::nullopt};
+								"Unsupported entry in title install source", std::nullopt};
 					iterator.increment(ec);
 					if (ec)
 						return {TitleInstallError::InvalidSource, ec.message(), std::nullopt};
@@ -1277,9 +1313,9 @@ namespace Application
 			const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
 			if ((!ec && canonicalTarget == source) ||
 				(fs::exists(plan.targetPath, ec) && !ec &&
-					fs::equivalent(source, plan.targetPath, ec) && !ec))
+				 fs::equivalent(source, plan.targetPath, ec) && !ec))
 				return {TitleInstallError::InvalidSource,
-					"A title cannot be installed from its destination folder", std::nullopt};
+						"A title cannot be installed from its destination folder", std::nullopt};
 			ec.clear();
 
 			plan.installed.exists = fs::exists(plan.targetPath, ec) && !ec;
@@ -1310,43 +1346,42 @@ namespace Application
 			plan.availableBytes = space.available;
 			if (checkAvailableSpace && plan.availableBytes <= plan.requiredBytes)
 				return {TitleInstallError::NotEnoughSpace,
-					fmt::format("Not enough space available. Required: {} MB, available: {} MB",
-						plan.requiredBytes / 1024 / 1024,
-						plan.availableBytes / 1024 / 1024), std::nullopt};
+						fmt::format("Not enough space available. Required: {} MB, available: {} MB",
+									plan.requiredBytes / 1024 / 1024,
+									plan.availableBytes / 1024 / 1024),
+						std::nullopt};
 			return {TitleInstallError::None, {}, std::move(plan)};
 		}
 
 		TitleInstallPlanResult SafeBuildTitleInstallPlan(const fs::path& source,
-			bool checkAvailableSpace = true)
+														 bool checkAvailableSpace = true)
 		{
 			try
 			{
 				return BuildTitleInstallPlan(source, checkAvailableSpace);
-			}
-			catch (const std::exception& exception)
+			} catch (const std::exception& exception)
 			{
 				return {TitleInstallError::InvalidSource, exception.what(), std::nullopt};
-			}
-			catch (...)
+			} catch (...)
 			{
 				return {TitleInstallError::InvalidSource,
-					"Unknown title install planning failure", std::nullopt};
+						"Unknown title install planning failure", std::nullopt};
 			}
 		}
 
 		bool SameInstallSnapshot(const TitleInstallPlan& left, const TitleInstallPlan& right)
 		{
 			return left.sourcePath == right.sourcePath && left.targetPath == right.targetPath &&
-				left.titleId == right.titleId && left.version == right.version &&
-				left.kind == right.kind && left.requiredBytes == right.requiredBytes &&
-				left.sourceFingerprint == right.sourceFingerprint &&
-				left.conflict == right.conflict &&
-				left.installed.exists == right.installed.exists &&
-				left.installed.valid == right.installed.valid &&
-				left.installed.titleId == right.installed.titleId &&
-				left.installed.version == right.installed.version &&
-				left.installed.kind == right.installed.kind &&
-				left.installed.fingerprint == right.installed.fingerprint;
+				   left.titleId == right.titleId && left.version == right.version &&
+				   left.kind == right.kind && left.requiredBytes == right.requiredBytes &&
+				   left.sourceFingerprint == right.sourceFingerprint &&
+				   left.conflict == right.conflict &&
+				   left.installed.exists == right.installed.exists &&
+				   left.installed.valid == right.installed.valid &&
+				   left.installed.titleId == right.installed.titleId &&
+				   left.installed.version == right.installed.version &&
+				   left.installed.kind == right.installed.kind &&
+				   left.installed.fingerprint == right.installed.fingerprint;
 		}
 
 		fs::path UniqueInstallSibling(const fs::path& target, std::string_view suffix)
@@ -1358,7 +1393,7 @@ namespace Application
 			{
 				auto candidate = target;
 				candidate += _utf8ToPath(fmt::format(".{}.{}.{}", suffix, seed,
-					sequence.fetch_add(1, std::memory_order_relaxed)));
+													 sequence.fetch_add(1, std::memory_order_relaxed)));
 				std::error_code ec;
 				if (!fs::exists(candidate, ec) && !ec)
 					return candidate;
@@ -1367,11 +1402,12 @@ namespace Application
 		}
 
 		class CafeEmulationBackend final : public IEmulationBackend,
-			public CafeSystem::IEventSink,
-			public Input::IEmulationInputContext
+										   public CafeSystem::IEventSink,
+										   public Input::IEmulationInputContext
 		{
-		public:
-			explicit CafeEmulationBackend(ApplicationEvents& events) : m_events(events)
+		  public:
+			explicit CafeEmulationBackend(ApplicationEvents& events)
+				: m_events(events)
 			{
 				CafeSystem::SetEventSink(this);
 				InputManager::instance().ConfigureEmulationContext(*this);
@@ -1437,12 +1473,17 @@ namespace Application
 				};
 				switch (CafeSystem::GetForegroundTitleRegion())
 				{
-				case CafeConsoleRegion::JPN: presentation.region = TitleRegion::Japan; break;
+				case CafeConsoleRegion::JPN:
+					presentation.region = TitleRegion::Japan;
+					break;
 				case CafeConsoleRegion::USA:
 					presentation.region = TitleRegion::UnitedStates;
 					break;
-				case CafeConsoleRegion::EUR: presentation.region = TitleRegion::Europe; break;
-				default: break;
+				case CafeConsoleRegion::EUR:
+					presentation.region = TitleRegion::Europe;
+					break;
+				default:
+					break;
 				}
 
 				if (g_renderer)
@@ -1458,13 +1499,16 @@ namespace Application
 					case RendererAPI::Metal:
 						presentation.renderer = PresentationRenderer::Metal;
 						break;
-					default: break;
+					default:
+						break;
 					}
 				}
 
 				switch (LatteGPUState.glVendor)
 				{
-				case GLVENDOR_AMD: presentation.gpuVendor = PresentationGpuVendor::Amd; break;
+				case GLVENDOR_AMD:
+					presentation.gpuVendor = PresentationGpuVendor::Amd;
+					break;
 				case GLVENDOR_INTEL:
 					presentation.gpuVendor = PresentationGpuVendor::Intel;
 					break;
@@ -1474,7 +1518,8 @@ namespace Application
 				case GLVENDOR_APPLE:
 					presentation.gpuVendor = PresentationGpuVendor::Apple;
 					break;
-				default: break;
+				default:
+					break;
 				}
 				return presentation;
 			}
@@ -1486,7 +1531,7 @@ namespace Application
 					return {};
 				Input::ScreenImageArea area;
 				LatteRenderTarget_getScreenImageArea(&area.x, &area.y, &area.width, &area.height,
-					nullptr, nullptr, padView);
+													 nullptr, nullptr, padView);
 				return area;
 			}
 
@@ -1604,7 +1649,7 @@ namespace Application
 			}
 
 			void SubmitKeyboard(std::uint16_t usage, bool pressed,
-				std::uint8_t modifiers) override
+								std::uint8_t modifiers) override
 			{
 				cemuextend_hle::Cex2Host::Instance().KeyboardEvent(usage, pressed, modifiers);
 			}
@@ -1644,10 +1689,12 @@ namespace Application
 					return NfcTouchResult::Success;
 				switch (error)
 				{
-				case NFC_TOUCH_TAG_ERROR_NO_ACCESS: return NfcTouchResult::NoAccess;
+				case NFC_TOUCH_TAG_ERROR_NO_ACCESS:
+					return NfcTouchResult::NoAccess;
 				case NFC_TOUCH_TAG_ERROR_INVALID_FILE_FORMAT:
 					return NfcTouchResult::InvalidFileFormat;
-				default: return NfcTouchResult::UnknownError;
+				default:
+					return NfcTouchResult::UnknownError;
 				}
 			}
 
@@ -1687,18 +1734,18 @@ namespace Application
 			}
 
 			void SubmitTextComposition(std::string_view text, std::string_view preedit,
-				std::uint32_t cursor, std::uint32_t selectionLength) override
+									   std::uint32_t cursor, std::uint32_t selectionLength) override
 			{
 				cemuextend_hle::Cex2Host::Instance().TextCompositionEvent(
 					text, preedit, cursor, selectionLength);
 			}
 
 			void SaveCemodPermissionDecisions(std::uint64_t titleId,
-				std::span<const CemodPermissionDecision> decisions) override
+											  std::span<const CemodPermissionDecision> decisions) override
 			{
 				for (const auto& decision : decisions)
 					GetConfig().SetCemuExtendModGrant(titleId, decision.principal,
-						{decision.grantedPermissions, decision.requestedPermissions, true});
+													  {decision.grantedPermissions, decision.requestedPermissions, true});
 				GetConfigHandle().Save();
 			}
 
@@ -1719,21 +1766,21 @@ namespace Application
 			}
 
 			CemodGrant ResolveCemodGrant(std::uint64_t titleId, std::string_view modId,
-				std::string_view principal, std::uint32_t requestedPermissions) override
+										 std::string_view principal, std::uint32_t requestedPermissions) override
 			{
 				const auto grant = cemuextend_hle::ResolveCemodGrant(titleId,
-					std::string(modId), std::string(principal), requestedPermissions);
+																	 std::string(modId), std::string(principal), requestedPermissions);
 				return {grant.permissions, grant.approved_request_mask, grant.approved};
 			}
 
 			CemuExtendServiceGrantDefaults ServiceGrantDefaults() const override
 			{
 				return {cemuextend_hle::kDefaultReadMask,
-					cemuextend_hle::kDefaultWriteMask, cemuextend_hle::kDefaultInjectMask};
+						cemuextend_hle::kDefaultWriteMask, cemuextend_hle::kDefaultInjectMask};
 			}
 
 			bool ImportLegacyCemodData(std::uint64_t titleId,
-				std::string_view principal, std::string& error) override
+									   std::string_view principal, std::string& error) override
 			{
 				return cemuextend_hle::ImportLegacyData(titleId, principal, error);
 			}
@@ -1844,7 +1891,7 @@ namespace Application
 					return {ContentOperationError::NotFound, "No title content selected"};
 				if (outputPath.empty())
 					return {ContentOperationError::UnableToCreateOutput,
-						"Archive output path is empty"};
+							"Archive output path is empty"};
 
 				std::vector<TitleInfo> titles;
 				titles.reserve(locationUids.size());
@@ -1853,13 +1900,13 @@ namespace Application
 					auto title = CafeTitleList::GetTitleInfoByUID(uid);
 					if (!title.IsValid())
 						return {ContentOperationError::NotFound,
-							fmt::format("Title content {:016x} is no longer available", uid)};
+								fmt::format("Title content {:016x} is no longer available", uid)};
 					titles.push_back(std::move(title));
 				}
 
 				auto temporaryPath = outputPath;
 				temporaryPath += fmt::format(".tmp.{}",
-					std::chrono::steady_clock::now().time_since_epoch().count());
+											 std::chrono::steady_clock::now().time_since_epoch().count());
 				auto removeTemporary = [&temporaryPath] {
 					std::error_code ignored;
 					std::filesystem::remove(temporaryPath, ignored);
@@ -1868,15 +1915,15 @@ namespace Application
 				try
 				{
 					WuaWriterContext context(temporaryPath, std::move(progress),
-						cancelled);
+											 cancelled);
 					context.writer = new ZArchiveWriter(&WuaWriterContext::NewOutputFile,
-						&WuaWriterContext::WriteOutputData, &context);
+														&WuaWriterContext::WriteOutputData, &context);
 					if (!context.valid)
 					{
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::UnableToCreateOutput,
-							"Unable to create archive output"};
+								"Unable to create archive output"};
 					}
 
 					context.Publish(ContentOperationPhase::Counting);
@@ -1887,10 +1934,8 @@ namespace Application
 							const bool wasCancelled = context.IsCancelled();
 							context.Close();
 							removeTemporary();
-							return {wasCancelled ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								wasCancelled ? "Conversion cancelled" :
-								"Unable to enumerate title files"};
+							return {wasCancelled ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
+									wasCancelled ? "Conversion cancelled" : "Unable to enumerate title files"};
 						}
 					}
 					for (auto& title : titles)
@@ -1900,10 +1945,8 @@ namespace Application
 							const bool wasCancelled = context.IsCancelled();
 							context.Close();
 							removeTemporary();
-							return {wasCancelled ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								wasCancelled ? "Conversion cancelled" :
-								"Unable to read title files"};
+							return {wasCancelled ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
+									wasCancelled ? "Conversion cancelled" : "Unable to read title files"};
 						}
 					}
 					if (!context.valid)
@@ -1911,7 +1954,7 @@ namespace Application
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::UnableToCreateOutput,
-							"Unable to write archive output"};
+								"Unable to write archive output"};
 					}
 
 					if (context.IsCancelled())
@@ -1931,19 +1974,17 @@ namespace Application
 						context.Close();
 						removeTemporary();
 						return {ContentOperationError::VerificationFailure,
-							"Unable to reopen the generated archive"};
+								"Unable to reopen the generated archive"};
 					}
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					removeTemporary();
 					return {ContentOperationError::ReadFailure, exception.what()};
-				}
-				catch (...)
+				} catch (...)
 				{
 					removeTemporary();
 					return {ContentOperationError::ReadFailure,
-						"Unknown archive conversion failure"};
+							"Unknown archive conversion failure"};
 				}
 
 				if (cancelled && cancelled())
@@ -1954,7 +1995,7 @@ namespace Application
 
 				auto backupPath = outputPath;
 				backupPath += fmt::format(".backup.{}",
-					std::chrono::steady_clock::now().time_since_epoch().count());
+										  std::chrono::steady_clock::now().time_since_epoch().count());
 				std::error_code renameError;
 				const bool destinationExists = std::filesystem::exists(outputPath, renameError);
 				if (renameError)
@@ -1982,9 +2023,9 @@ namespace Application
 						{
 							removeTemporary();
 							return {ContentOperationError::RenameFailure,
-								fmt::format("{}; original output remains at {} because restore failed: {}",
-									renameError.message(), _pathToUtf8(backupPath),
-									restoreError.message())};
+									fmt::format("{}; original output remains at {} because restore failed: {}",
+												renameError.message(), _pathToUtf8(backupPath),
+												restoreError.message())};
 						}
 					}
 					removeTemporary();
@@ -2006,14 +2047,16 @@ namespace Application
 				auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
 				if (!title.IsValid())
 					return {ContentOperationError::NotFound,
-						"Title content is no longer available", std::nullopt};
+							"Title content is no longer available", std::nullopt};
 
 				ContentChecksum checksum{
-					.titleId = title.GetAppTitleId(),
+					.titleId = static_cast<std::uint64_t>(title.GetAppTitleId()),
 					.version = title.GetAppTitleVersion(),
 					.region = static_cast<std::uint32_t>(title.GetMetaRegion()),
 				};
-				auto isCancelled = [&cancelled] { return cancelled && cancelled(); };
+				auto isCancelled = [&cancelled] {
+					return cancelled && cancelled();
+				};
 				auto publish = [&progress](const ContentOperationProgress& value) {
 					if (progress)
 						progress(value);
@@ -2035,38 +2078,38 @@ namespace Application
 						WudHandle wud(wud_open(title.GetPath()), &wud_close);
 						if (!wud)
 							return {ContentOperationError::ReadFailure,
-								"Unable to open game image", std::nullopt};
+									"Unable to open game image", std::nullopt};
 						const auto total = wud_getWUDSize(wud.get());
 						if (total <= 0)
 							return {ContentOperationError::ReadFailure,
-								"Game image is empty", std::nullopt};
+									"Game image is empty", std::nullopt};
 						using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 						DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
 						if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
 							return {ContentOperationError::ReadFailure,
-								"Unable to initialize SHA-256", std::nullopt};
+									"Unable to initialize SHA-256", std::nullopt};
 						std::vector<std::uint8_t> buffer(8 * 1024 * 1024);
 						std::uint64_t offset{};
 						while (offset < total)
 						{
 							if (isCancelled())
 								return {ContentOperationError::Cancelled, "Checksum cancelled",
-									std::nullopt};
+										std::nullopt};
 							const auto requested = static_cast<std::size_t>(
 								std::min<std::uint64_t>(buffer.size(), total - offset));
 							const auto read = wud_readData(wud.get(), buffer.data(), requested, offset);
 							if (read != requested ||
 								EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
 								return {ContentOperationError::ReadFailure,
-									"Game image ended before its declared size", std::nullopt};
+										"Game image ended before its declared size", std::nullopt};
 							offset += read;
-							publish({ContentOperationPhase::Hashing, 0, 0, offset, total});
+							publish({ContentOperationPhase::Hashing, 0, 0, offset, static_cast<std::uint64_t>(total)});
 						}
 						unsigned int digestLength{};
 						if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
 							digestLength != digest.size())
 							return {ContentOperationError::ReadFailure,
-								"Unable to finalize SHA-256", std::nullopt};
+									"Unable to finalize SHA-256", std::nullopt};
 						checksum.imageSha256 = toHex(digest);
 					}
 					else
@@ -2074,12 +2117,15 @@ namespace Application
 						const auto mountPath = TitleInfo::GetUniqueTempMountingPath();
 						if (!title.Mount(mountPath, "", FSC_PRIORITY_BASE))
 							return {ContentOperationError::ReadFailure,
-								"Unable to mount title content", std::nullopt};
+									"Unable to mount title content", std::nullopt};
 						struct UnmountGuard
 						{
 							TitleInfo& title;
 							std::string path;
-							~UnmountGuard() { title.Unmount(path); }
+							~UnmountGuard()
+							{
+								title.Unmount(path);
+							}
 						} unmount{title, mountPath};
 
 						std::vector<std::pair<std::string, std::uint64_t>> files;
@@ -2104,78 +2150,75 @@ namespace Application
 								else if (entry.isFile)
 								{
 									files.emplace_back(child,
-										static_cast<std::uint64_t>(entry.fileSize));
+													   static_cast<std::uint64_t>(entry.fileSize));
 									publish({ContentOperationPhase::Collecting, 0,
-										static_cast<std::uint32_t>(files.size()), 0, 0});
+											 static_cast<std::uint32_t>(files.size()), 0, 0});
 								}
 							}
 							return true;
 						};
 						if (!collect(""))
-							return {isCancelled() ? ContentOperationError::Cancelled :
-								ContentOperationError::ReadFailure,
-								isCancelled() ? "Checksum cancelled" :
-								"Unable to enumerate title files", std::nullopt};
+							return {isCancelled() ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
+									isCancelled() ? "Checksum cancelled" : "Unable to enumerate title files", std::nullopt};
 						std::ranges::sort(files, {}, &decltype(files)::value_type::first);
 						for (std::size_t index = 0; index < files.size(); ++index)
 						{
 							const auto& [filePath, expectedSize] = files[index];
 							if (isCancelled())
 								return {ContentOperationError::Cancelled, "Checksum cancelled",
-									std::nullopt};
+										std::nullopt};
 							sint32 status{};
 							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> file(
 								fsc_open((mountPath + "/" + filePath).c_str(),
-									FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION,
-									&status), &fsc_close);
+										 FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION,
+										 &status),
+								&fsc_close);
 							if (!file)
 								return {ContentOperationError::ReadFailure,
-									fmt::format("Unable to read {}", filePath), std::nullopt};
+										fmt::format("Unable to read {}", filePath), std::nullopt};
 							using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 							DigestContext context(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
 							if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
 								return {ContentOperationError::ReadFailure,
-									"Unable to initialize SHA-256", std::nullopt};
+										"Unable to initialize SHA-256", std::nullopt};
 							std::vector<std::uint8_t> buffer(1024 * 1024);
 							std::uint64_t bytesRead{};
 							for (;;)
 							{
 								if (isCancelled())
 									return {ContentOperationError::Cancelled,
-										"Checksum cancelled", std::nullopt};
+											"Checksum cancelled", std::nullopt};
 								const auto read = file->fscReadData(buffer.data(), buffer.size());
 								if (read == 0)
 									break;
 								if (EVP_DigestUpdate(context.get(), buffer.data(), read) != 1)
 									return {ContentOperationError::ReadFailure,
-										"Unable to update SHA-256", std::nullopt};
+											"Unable to update SHA-256", std::nullopt};
 								bytesRead += read;
 							}
 							if (bytesRead != expectedSize)
 								return {ContentOperationError::ReadFailure,
-									fmt::format("{} ended before its declared size", filePath),
-									std::nullopt};
+										fmt::format("{} ended before its declared size", filePath),
+										std::nullopt};
 							unsigned int digestLength{};
 							if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
 								digestLength != digest.size())
 								return {ContentOperationError::ReadFailure,
-									"Unable to finalize SHA-256", std::nullopt};
+										"Unable to finalize SHA-256", std::nullopt};
 							checksum.files.push_back({filePath, toHex(digest)});
 							publish({ContentOperationPhase::Hashing,
-								static_cast<std::uint32_t>(index + 1),
-								static_cast<std::uint32_t>(files.size()), 0, 0});
+									 static_cast<std::uint32_t>(index + 1),
+									 static_cast<std::uint32_t>(files.size()), 0, 0});
 						}
 					}
 					return {ContentOperationError::None, {}, std::move(checksum)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {ContentOperationError::ReadFailure, exception.what(), std::nullopt};
-				}
-				catch (...)
+				} catch (...)
 				{
 					return {ContentOperationError::ReadFailure,
-						"Unknown checksum failure", std::nullopt};
+							"Unknown checksum failure", std::nullopt};
 				}
 			}
 
@@ -2216,12 +2259,20 @@ namespace Application
 				{
 					switch (*api)
 					{
-					case kOpenGL: result.settings.graphicsApi = GameProfileGraphicsApi::OpenGL; break;
-					case kVulkan: result.settings.graphicsApi = GameProfileGraphicsApi::Vulkan; break;
+					case kOpenGL:
+						result.settings.graphicsApi = GameProfileGraphicsApi::OpenGL;
+						break;
+					case kVulkan:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Vulkan;
+						break;
 #ifdef ENABLE_METAL
-					case kMetal: result.settings.graphicsApi = GameProfileGraphicsApi::Metal; break;
+					case kMetal:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Metal;
+						break;
 #endif
-					default: result.settings.graphicsApi = GameProfileGraphicsApi::Default; break;
+					default:
+						result.settings.graphicsApi = GameProfileGraphicsApi::Default;
+						break;
 					}
 				}
 
@@ -2237,7 +2288,7 @@ namespace Application
 			}
 
 			GameProfileSaveResult SaveGameProfile(std::uint64_t titleId,
-				const GameProfileUpdate& update) override
+												  const GameProfileUpdate& update) override
 			{
 				GameProfile profile;
 				profile.Reset();
@@ -2245,8 +2296,7 @@ namespace Application
 				profile.SetStartWithGamepadView(update.startWithPadView);
 				profile.SetThreadQuantum(std::clamp<std::uint32_t>(
 					update.threadQuantum, 5000, 536870912));
-				profile.SetAccurateShaderMul(update.accurateShaderMultiplication ?
-					AccurateShaderMulOption::True : AccurateShaderMulOption::False);
+				profile.SetAccurateShaderMul(update.accurateShaderMultiplication ? AccurateShaderMulOption::True : AccurateShaderMulOption::False);
 
 				switch (update.cpuMode)
 				{
@@ -2266,22 +2316,30 @@ namespace Application
 
 				switch (update.graphicsApi)
 				{
-				case GameProfileGraphicsApi::OpenGL: profile.SetGraphicsAPI(kOpenGL); break;
-				case GameProfileGraphicsApi::Vulkan: profile.SetGraphicsAPI(kVulkan); break;
+				case GameProfileGraphicsApi::OpenGL:
+					profile.SetGraphicsAPI(kOpenGL);
+					break;
+				case GameProfileGraphicsApi::Vulkan:
+					profile.SetGraphicsAPI(kVulkan);
+					break;
 #ifdef ENABLE_METAL
-				case GameProfileGraphicsApi::Metal: profile.SetGraphicsAPI(kMetal); break;
+				case GameProfileGraphicsApi::Metal:
+					profile.SetGraphicsAPI(kMetal);
+					break;
 #endif
-				default: profile.SetGraphicsAPI(std::nullopt); break;
+				default:
+					profile.SetGraphicsAPI(std::nullopt);
+					break;
 				}
 
 #ifdef ENABLE_METAL
 				profile.SetShaderFastMath(update.shaderFastMath);
 				profile.SetBufferCacheMode(static_cast<MetalBufferCacheMode>(
 					std::min<std::uint8_t>(update.metalBufferCacheMode,
-						static_cast<std::uint8_t>(MetalBufferCacheMode::Host))));
+										   static_cast<std::uint8_t>(MetalBufferCacheMode::Host))));
 				profile.SetPositionInvariance(static_cast<PositionInvariance>(
 					std::min<std::uint8_t>(update.positionInvariance,
-						static_cast<std::uint8_t>(PositionInvariance::True))));
+										   static_cast<std::uint8_t>(PositionInvariance::True))));
 #endif
 				for (std::size_t index = 0; index < update.controllerProfiles.size(); ++index)
 					profile.SetControllerProfile(index, update.controllerProfiles[index]);
@@ -2298,20 +2356,22 @@ namespace Application
 			}
 
 			TitleInstallResult InstallTitle(const TitleInstallPlan& plan,
-				TitleInstallDecision decision, TitleInstallProgressHandler progress,
-				TitleInstallCancellationCheck cancelled) override
+											TitleInstallDecision decision, TitleInstallProgressHandler progress,
+											TitleInstallCancellationCheck cancelled) override
 			{
 				if (plan.conflict != TitleInstallConflict::None &&
 					decision != TitleInstallDecision::AcceptConflict)
 					return {TitleInstallError::ConflictNotAccepted,
-						"The existing title conflict was not accepted", {}};
+							"The existing title conflict was not accepted",
+							{}};
 
 				auto currentPlanResult = SafeBuildTitleInstallPlan(plan.sourcePath);
 				if (!currentPlanResult)
 					return {currentPlanResult.error, currentPlanResult.diagnostic, {}};
 				if (!SameInstallSnapshot(plan, *currentPlanResult.plan))
 					return {TitleInstallError::StalePlan,
-						"The source or installed title changed before installation", {}};
+							"The source or installed title changed before installation",
+							{}};
 
 				std::error_code ec;
 				const auto canonicalSource = fs::weakly_canonical(plan.sourcePath, ec);
@@ -2319,19 +2379,20 @@ namespace Application
 				const auto canonicalTarget = fs::weakly_canonical(plan.targetPath, ec);
 				if ((!canonicalSource.empty() && canonicalSource == canonicalTarget) ||
 					(fs::exists(plan.targetPath, ec) && !ec &&
-						fs::equivalent(plan.sourcePath, plan.targetPath, ec) && !ec))
+					 fs::equivalent(plan.sourcePath, plan.targetPath, ec) && !ec))
 					return {TitleInstallError::InvalidSource,
-						"A title cannot be installed from its destination folder", {}};
+							"A title cannot be installed from its destination folder",
+							{}};
 
 				if (cancelled && cancelled())
 					return {TitleInstallError::Cancelled, "Title installation cancelled", {}};
 
 				const auto stagingPath = UniqueInstallSibling(plan.targetPath, "installing");
-				const auto backupPath = plan.installed.exists ?
-					UniqueInstallSibling(plan.targetPath, "backup") : fs::path{};
+				const auto backupPath = plan.installed.exists ? UniqueInstallSibling(plan.targetPath, "backup") : fs::path{};
 				if (stagingPath.empty() || (plan.installed.exists && backupPath.empty()))
 					return {TitleInstallError::CopyFailure,
-						"Unable to reserve a temporary installation path", {}};
+							"Unable to reserve a temporary installation path",
+							{}};
 
 				auto removeStaging = [&] {
 					std::error_code ignored;
@@ -2344,7 +2405,8 @@ namespace Application
 						return {TitleInstallError::CopyFailure, ec.message(), {}};
 					if (!fs::create_directory(stagingPath, ec))
 						return {TitleInstallError::CopyFailure,
-							ec ? ec.message() : "Temporary installation path already exists", {}};
+								ec ? ec.message() : "Temporary installation path already exists",
+								{}};
 
 					std::uint64_t copiedBytes{};
 					std::vector<std::uint8_t> buffer(1024 * 1024);
@@ -2364,7 +2426,8 @@ namespace Application
 							{
 								removeStaging();
 								return {TitleInstallError::Cancelled,
-									"Title installation cancelled", {}};
+										"Title installation cancelled",
+										{}};
 							}
 							const auto relative = fs::relative(iterator->path(), plan.sourcePath, ec);
 							if (ec)
@@ -2383,10 +2446,10 @@ namespace Application
 									throw std::runtime_error(ec.message());
 								std::ifstream input(iterator->path(), std::ios::binary);
 								std::ofstream output(destination,
-									std::ios::binary | std::ios::trunc);
+													 std::ios::binary | std::ios::trunc);
 								if (!input || !output)
 									throw std::runtime_error(fmt::format("Unable to copy {}",
-										_pathToUtf8(iterator->path())));
+																		 _pathToUtf8(iterator->path())));
 								while (input)
 								{
 									if (cancelled && cancelled())
@@ -2395,7 +2458,8 @@ namespace Application
 										output.close();
 										removeStaging();
 										return {TitleInstallError::Cancelled,
-											"Title installation cancelled", {}};
+												"Title installation cancelled",
+												{}};
 									}
 									input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 									const auto count = input.gcount();
@@ -2404,18 +2468,18 @@ namespace Application
 									output.write(reinterpret_cast<const char*>(buffer.data()), count);
 									if (!output)
 										throw std::runtime_error(fmt::format("Unable to write {}",
-											_pathToUtf8(destination)));
+																			 _pathToUtf8(destination)));
 									copiedBytes += static_cast<std::uint64_t>(count);
 									if (progress)
 										progress({copiedBytes, plan.requiredBytes, relative});
 								}
 								if (!input.eof())
 									throw std::runtime_error(fmt::format("Unable to read {}",
-										_pathToUtf8(iterator->path())));
+																		 _pathToUtf8(iterator->path())));
 								output.flush();
 								if (!output)
 									throw std::runtime_error(fmt::format("Unable to flush {}",
-										_pathToUtf8(destination)));
+																		 _pathToUtf8(destination)));
 								const auto permissions = iterator->status(ec).permissions();
 								if (!ec)
 									fs::permissions(destination, permissions, ec);
@@ -2426,7 +2490,7 @@ namespace Application
 							else if (iterator->is_symlink(ec))
 							{
 								fs::copy(iterator->path(), destination,
-									fs::copy_options::copy_symlinks, ec);
+										 fs::copy_options::copy_symlinks, ec);
 								if (ec)
 									throw std::runtime_error(ec.message());
 							}
@@ -2447,23 +2511,26 @@ namespace Application
 					{
 						removeStaging();
 						return {TitleInstallError::StalePlan,
-							"The title source changed while staging the installation", {}};
+								"The title source changed while staging the installation",
+								{}};
 					}
 					if (cancelled && cancelled())
 					{
 						removeStaging();
 						return {TitleInstallError::Cancelled,
-							"Title installation cancelled", {}};
+								"Title installation cancelled",
+								{}};
 					}
 
 					const bool targetExists = fs::exists(plan.targetPath, ec) && !ec;
 					if (ec || targetExists != plan.installed.exists ||
 						(targetExists && FingerprintInstallTarget(plan.targetPath) !=
-							plan.installed.fingerprint))
+											 plan.installed.fingerprint))
 					{
 						removeStaging();
 						return {TitleInstallError::StalePlan,
-							"The installed title changed while staging the update", {}};
+								"The installed title changed while staging the update",
+								{}};
 					}
 
 					bool originalMoved{};
@@ -2490,8 +2557,9 @@ namespace Application
 							{
 								removeStaging();
 								return {TitleInstallError::RestoreFailure,
-									fmt::format("{}; original title remains at {} because restore failed: {}",
-										commitError.message(), _pathToUtf8(backupPath), ec.message()), {}};
+										fmt::format("{}; original title remains at {} because restore failed: {}",
+													commitError.message(), _pathToUtf8(backupPath), ec.message()),
+										{}};
 							}
 						}
 						removeStaging();
@@ -2505,7 +2573,7 @@ namespace Application
 						fs::remove_all(backupPath, ec);
 						if (ec)
 							warning = fmt::format("Installed title, but unable to remove backup {}: {}",
-								_pathToUtf8(backupPath), ec.message());
+												  _pathToUtf8(backupPath), ec.message());
 					}
 					try
 					{
@@ -2515,16 +2583,14 @@ namespace Application
 								warning.append("; ");
 							warning.append("installed title could not be refreshed in the title catalog");
 						}
-					}
-					catch (const std::exception& exception)
+					} catch (const std::exception& exception)
 					{
 						if (!warning.empty())
 							warning.append("; ");
 						warning.append(fmt::format(
 							"installed title could not be refreshed in the title catalog: {}",
 							exception.what()));
-					}
-					catch (...)
+					} catch (...)
 					{
 						if (!warning.empty())
 							warning.append("; ");
@@ -2532,17 +2598,16 @@ namespace Application
 							"installed title could not be refreshed in the title catalog");
 					}
 					return {TitleInstallError::None, std::move(warning), plan.targetPath};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					removeStaging();
 					return {TitleInstallError::CopyFailure, exception.what(), {}};
-				}
-				catch (...)
+				} catch (...)
 				{
 					removeStaging();
 					return {TitleInstallError::CopyFailure,
-						"Unknown title installation failure", {}};
+							"Unknown title installation failure",
+							{}};
 				}
 			}
 
@@ -2577,7 +2642,7 @@ namespace Application
 			{
 				std::vector<AccountCountry> result;
 				for (std::uint32_t index = 0;
-					index < static_cast<std::uint32_t>(NCrypto::GetCountryCount()); ++index)
+					 index < static_cast<std::uint32_t>(NCrypto::GetCountryCount()); ++index)
 				{
 					const char* country = NCrypto::GetCountryAsString(index);
 					if (country && (index == 0 || !boost::equals(country, "NN")))
@@ -2651,23 +2716,23 @@ namespace Application
 			}
 
 			AccountOperationResult CreateAccount(std::uint32_t persistentId,
-				std::wstring_view miiName) override
+												 std::wstring_view miiName) override
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				if (persistentId < kMinimumPersistentId)
 					return {AccountOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				if (miiName.empty())
 					return {AccountOperationError::InvalidMiiName,
-						"account name may not be empty"};
+							"account name may not be empty"};
 				if (!::Account::HasFreeAccountSlots())
 					return {AccountOperationError::NoFreeSlots,
-						"all account slots are occupied"};
+							"all account slots are occupied"};
 				if (FindAccount(persistentId))
 					return {AccountOperationError::DuplicatePersistentId,
-						"persistent id is already in use"};
+							"persistent id is already in use"};
 				try
 				{
 					::Account account(persistentId, miiName);
@@ -2676,25 +2741,24 @@ namespace Application
 						return {AccountOperationError::IoFailure, error.message()};
 					::Account::RefreshAccounts();
 					return {AccountOperationError::None, {}, TranslateAccount(account)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {AccountOperationError::BackendFailure, exception.what()};
 				}
 			}
 
 			AccountOperationResult UpdateAccount(std::uint32_t persistentId,
-				const AccountUpdate& update) override
+												 const AccountUpdate& update) override
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				const auto* existing = FindAccount(persistentId);
 				if (!existing)
 					return {AccountOperationError::NotFound, "account no longer exists"};
 				if (update.miiName.empty())
 					return {AccountOperationError::InvalidMiiName,
-						"account name may not be empty"};
+							"account name may not be empty"};
 				try
 				{
 					::Account account = *existing;
@@ -2710,8 +2774,7 @@ namespace Application
 						return {AccountOperationError::IoFailure, error.message()};
 					::Account::RefreshAccounts();
 					return {AccountOperationError::None, {}, TranslateAccount(account)};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					return {AccountOperationError::BackendFailure, exception.what()};
 				}
@@ -2722,11 +2785,11 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {AccountOperationError::TitleRunning,
-						"accounts cannot be changed while a title is running"};
+							"accounts cannot be changed while a title is running"};
 				const auto& accounts = ::Account::GetAccounts();
 				if (accounts.size() <= 1)
 					return {AccountOperationError::CannotDeleteOnlyAccount,
-						"the only account cannot be deleted"};
+							"the only account cannot be deleted"};
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
@@ -2745,7 +2808,7 @@ namespace Application
 				std::vector<std::uint32_t> result;
 				std::error_code ec;
 				for (fs::directory_iterator iterator(SaveUserRoot(titleId), ec), end;
-					!ec && iterator != end; iterator.increment(ec))
+					 !ec && iterator != end; iterator.increment(ec))
 				{
 					const auto status = iterator->symlink_status(ec);
 					if (ec || status.type() != fs::file_type::directory ||
@@ -2759,7 +2822,7 @@ namespace Application
 						continue;
 					std::uint32_t persistentId{};
 					const auto parsed = std::from_chars(name.data(), name.data() + name.size(),
-						persistentId, 16);
+														persistentId, 16);
 					if (parsed.ec == std::errc() && parsed.ptr == name.data() + name.size())
 						result.push_back(persistentId);
 				}
@@ -2768,32 +2831,31 @@ namespace Application
 			}
 
 			SaveEntryLocation InspectSaveEntry(std::uint64_t titleId,
-				std::uint32_t persistentId) const override
+											   std::uint32_t persistentId) const override
 			{
 				auto saveListLock = CafeSaveList::AcquireOperationLock();
 				return InspectSaveEntryPath(SaveAccountPath(titleId, persistentId));
 			}
 
 			SaveImportInspection InspectSaveImport(const fs::path& archivePath,
-				std::uint64_t titleId, std::uint32_t persistentId) const override
+												   std::uint64_t titleId, std::uint32_t persistentId) const override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				const auto plan = BuildSaveArchivePlan(archivePath);
 				if (!plan)
 					return {plan.error, plan.diagnostic};
 				auto saveListLock = CafeSaveList::AcquireOperationLock();
-				return {SaveOperationError::None, {}, plan.sourceTitleId,
-					InspectSaveEntryPath(SaveAccountPath(titleId, persistentId))};
+				return {SaveOperationError::None, {}, plan.sourceTitleId, InspectSaveEntryPath(SaveAccountPath(titleId, persistentId))};
 			}
 
 			SaveOperationResult DeleteSave(std::uint64_t titleId,
-				std::uint32_t persistentId) override
+										   std::uint32_t persistentId) override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -2803,11 +2865,9 @@ namespace Application
 					return {SaveOperationError::NotFound, "save directory no longer exists"};
 
 				SaveMetadataStage metadata;
-				auto metadataResult = StageSaveMetadata(titleId,
-					[persistentId](pugi::xml_node info) {
+				auto metadataResult = StageSaveMetadata(titleId, [persistentId](pugi::xml_node info) {
 						auto node = FindSaveAccountNode(info, persistentId);
-						return node ? info.remove_child(node) : false;
-					}, metadata);
+						return node ? info.remove_child(node) : false; }, metadata);
 				if (!metadataResult)
 					return metadataResult;
 
@@ -2816,7 +2876,7 @@ namespace Application
 				{
 					RemovePathQuietly(metadata.temporary);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save deletion staging path"};
+							"unable to reserve save deletion staging path"};
 				}
 				std::error_code ec;
 				fs::rename(target, quarantine, ec);
@@ -2841,14 +2901,14 @@ namespace Application
 			}
 
 			SaveOperationResult TransferSave(std::uint64_t titleId,
-				std::uint32_t sourcePersistentId, std::uint32_t targetPersistentId,
-				bool overwrite) override
+											 std::uint32_t sourcePersistentId, std::uint32_t targetPersistentId,
+											 bool overwrite) override
 			{
 				if (sourcePersistentId < kMinimumPersistentId ||
 					targetPersistentId < kMinimumPersistentId ||
 					sourcePersistentId == targetPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"source and target persistent ids must be distinct and valid"};
+							"source and target persistent ids must be distinct and valid"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -2860,14 +2920,13 @@ namespace Application
 				const auto targetState = InspectSaveEntryPath(target).state;
 				if (targetState == SaveEntryState::NonDirectory)
 					return {SaveOperationError::InvalidTarget,
-						"target save path is not a directory"};
+							"target save path is not a directory"};
 				if (targetState == SaveEntryState::Directory && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"target account already has save data"};
+							"target account already has save data"};
 
 				SaveMetadataStage metadata;
-				auto metadataResult = StageSaveMetadata(titleId,
-					[sourcePersistentId, targetPersistentId](pugi::xml_node info) {
+				auto metadataResult = StageSaveMetadata(titleId, [sourcePersistentId, targetPersistentId](pugi::xml_node info) {
 						if (auto targetNode = FindSaveAccountNode(info, targetPersistentId))
 							info.remove_child(targetNode);
 						const auto targetId = fmt::format("{:08x}", targetPersistentId);
@@ -2884,19 +2943,17 @@ namespace Application
 						constexpr std::int64_t unixToWiiEpoch = 946684800;
 						timestamp.text().set(fmt::format("{:016x}",
 							std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
-						return true;
-					}, metadata);
+						return true; }, metadata);
 				if (!metadataResult)
 					return metadataResult;
 
 				const auto staging = UniqueSiblingPath(source, "moving");
-				const auto backup = targetState == SaveEntryState::Directory ?
-					UniqueSiblingPath(target, "backup") : fs::path{};
+				const auto backup = targetState == SaveEntryState::Directory ? UniqueSiblingPath(target, "backup") : fs::path{};
 				if (staging.empty() || (targetState == SaveEntryState::Directory && backup.empty()))
 				{
 					RemovePathQuietly(metadata.temporary);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save transfer staging paths"};
+							"unable to reserve save transfer staging paths"};
 				}
 
 				std::error_code ec;
@@ -2954,13 +3011,13 @@ namespace Application
 			}
 
 			SaveOperationResult ImportSave(const fs::path& archivePath,
-				std::uint64_t titleId, std::uint32_t persistentId, bool overwrite,
-				SaveProgressHandler progress,
-				SaveCancellationCheck cancelled) override
+										   std::uint64_t titleId, std::uint32_t persistentId, bool overwrite,
+										   SaveProgressHandler progress,
+										   SaveCancellationCheck cancelled) override
 			{
 				if (persistentId < kMinimumPersistentId)
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id is below the supported range"};
+							"persistent id is below the supported range"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -2972,10 +3029,10 @@ namespace Application
 				const auto targetState = InspectSaveEntryPath(target).state;
 				if (targetState == SaveEntryState::NonDirectory)
 					return {SaveOperationError::InvalidTarget,
-						"target save path is not a directory"};
+							"target save path is not a directory"};
 				if (targetState == SaveEntryState::Directory && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"target account already has save data"};
+							"target account already has save data"};
 
 				std::error_code ec;
 				fs::create_directories(target.parent_path(), ec);
@@ -2984,7 +3041,7 @@ namespace Application
 				const auto staging = UniqueSiblingPath(target, "importing");
 				if (staging.empty() || !fs::create_directory(staging, ec) || ec)
 					return {SaveOperationError::IoFailure,
-						ec ? ec.message() : "unable to create save import staging directory"};
+							ec ? ec.message() : "unable to create save import staging directory"};
 
 				SaveMetadataStage metadata;
 				auto cleanup = [&] {
@@ -2995,12 +3052,12 @@ namespace Application
 				{
 					int zipError{};
 					zip_t* archive = zip_open(_pathToUtf8(archivePath).c_str(), ZIP_RDONLY,
-						&zipError);
+											  &zipError);
 					if (!archive)
 					{
 						cleanup();
 						return {SaveOperationError::ArchiveInvalid,
-							"unable to reopen save archive"};
+								"unable to reopen save archive"};
 					}
 					const std::unique_ptr<zip_t, decltype(&zip_discard)> closeArchive(
 						archive, &zip_discard);
@@ -3038,7 +3095,7 @@ namespace Application
 							{
 								cleanup();
 								return {SaveOperationError::ArchiveInvalid,
-									"unable to read save archive entry"};
+										"unable to read save archive entry"};
 							}
 							std::ofstream output(destination, std::ios::binary | std::ios::trunc);
 							if (!output)
@@ -3046,7 +3103,7 @@ namespace Application
 								zip_fclose(file);
 								cleanup();
 								return {SaveOperationError::IoFailure,
-									"unable to create staged save file"};
+										"unable to create staged save file"};
 							}
 							std::uint64_t remaining = entry.size;
 							while (remaining)
@@ -3057,7 +3114,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::Cancelled,
-										"save import was cancelled"};
+											"save import was cancelled"};
 								}
 								const auto requested = static_cast<zip_uint64_t>(
 									std::min<std::uint64_t>(remaining, buffer.size()));
@@ -3068,7 +3125,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::ArchiveInvalid,
-										"save archive entry is truncated"};
+											"save archive entry is truncated"};
 								}
 								output.write(buffer.data(), static_cast<std::streamsize>(read));
 								if (!output)
@@ -3077,7 +3134,7 @@ namespace Application
 									output.close();
 									cleanup();
 									return {SaveOperationError::IoFailure,
-										"unable to write staged save file"};
+											"unable to write staged save file"};
 								}
 								remaining -= static_cast<std::uint64_t>(read);
 								progressValue.bytesCompleted += static_cast<std::uint64_t>(read);
@@ -3089,7 +3146,7 @@ namespace Application
 							{
 								cleanup();
 								return {SaveOperationError::ArchiveInvalid,
-									"unable to finalize staged save file"};
+										"unable to finalize staged save file"};
 							}
 						}
 						++progressValue.filesCompleted;
@@ -3097,8 +3154,7 @@ namespace Application
 							progress(progressValue);
 					}
 
-					auto metadataResult = StageSaveMetadata(titleId,
-						[persistentId](pugi::xml_node info) {
+					auto metadataResult = StageSaveMetadata(titleId, [persistentId](pugi::xml_node info) {
 							if (FindSaveAccountNode(info, persistentId))
 								return false;
 							const auto id = fmt::format("{:08x}", persistentId);
@@ -3110,21 +3166,19 @@ namespace Application
 							constexpr std::int64_t unixToWiiEpoch = 946684800;
 							timestamp.text().set(fmt::format("{:016x}",
 								std::max<std::int64_t>(0, unixSeconds - unixToWiiEpoch)).c_str());
-							return true;
-						}, metadata);
+							return true; }, metadata);
 					if (!metadataResult)
 					{
 						cleanup();
 						return metadataResult;
 					}
 
-					const auto backup = targetState == SaveEntryState::Directory ?
-						UniqueSiblingPath(target, "backup") : fs::path{};
+					const auto backup = targetState == SaveEntryState::Directory ? UniqueSiblingPath(target, "backup") : fs::path{};
 					if (targetState == SaveEntryState::Directory && backup.empty())
 					{
 						cleanup();
 						return {SaveOperationError::IoFailure,
-							"unable to reserve save backup path"};
+								"unable to reserve save backup path"};
 					}
 					if (!backup.empty())
 					{
@@ -3159,8 +3213,7 @@ namespace Application
 					}
 					RemovePathQuietly(backup);
 					return {};
-				}
-				catch (const std::exception& exception)
+				} catch (const std::exception& exception)
 				{
 					cleanup();
 					return {SaveOperationError::BackendFailure, exception.what()};
@@ -3168,13 +3221,13 @@ namespace Application
 			}
 
 			SaveOperationResult ExportSave(std::uint64_t titleId,
-				std::uint32_t persistentId, const fs::path& archivePath,
-				bool overwrite, SaveProgressHandler progress,
-				SaveCancellationCheck cancelled) override
+										   std::uint32_t persistentId, const fs::path& archivePath,
+										   bool overwrite, SaveProgressHandler progress,
+										   SaveCancellationCheck cancelled) override
 			{
 				if (persistentId < kMinimumPersistentId || archivePath.empty())
 					return {SaveOperationError::InvalidPersistentId,
-						"persistent id or archive path is invalid"};
+							"persistent id or archive path is invalid"};
 				std::unique_lock<std::mutex> saveListLock;
 				if (auto status = BeginSaveMutation(saveListLock); !status)
 					return status;
@@ -3186,29 +3239,29 @@ namespace Application
 				const auto outputState = InspectSaveEntryPath(archivePath).state;
 				if (outputState == SaveEntryState::Directory)
 					return {SaveOperationError::InvalidTarget,
-						"archive target is a directory"};
+							"archive target is a directory"};
 				if (outputState != SaveEntryState::Missing && !overwrite)
 					return {SaveOperationError::TargetExists,
-						"archive target already exists"};
+							"archive target already exists"};
 
 				std::vector<std::pair<fs::path, bool>> entries;
 				std::uint64_t bytesTotal{};
 				for (fs::recursive_directory_iterator iterator(source, ec), end;
-					!ec && iterator != end; iterator.increment(ec))
+					 !ec && iterator != end; iterator.increment(ec))
 				{
 					const auto status = iterator->symlink_status(ec);
 					if (ec || status.type() == fs::file_type::symlink ||
 						(status.type() != fs::file_type::directory &&
 						 status.type() != fs::file_type::regular))
 						return {SaveOperationError::PathUnsafe,
-							"save directory contains an unsupported entry"};
+								"save directory contains an unsupported entry"};
 					const bool directory = status.type() == fs::file_type::directory;
 					if (!directory)
 					{
 						const auto size = iterator->file_size(ec);
 						if (ec || bytesTotal > kMaximumSaveArchiveTotalSize - size)
 							return {SaveOperationError::IoFailure,
-								"save data exceeds export limits"};
+									"save data exceeds export limits"};
 						bytesTotal += size;
 					}
 					entries.emplace_back(iterator->path(), directory);
@@ -3219,13 +3272,13 @@ namespace Application
 				const auto staging = UniqueSiblingPath(archivePath, "exporting");
 				if (staging.empty())
 					return {SaveOperationError::IoFailure,
-						"unable to reserve save export staging path"};
+							"unable to reserve save export staging path"};
 				int zipError{};
 				zip_t* archive = zip_open(_pathToUtf8(staging).c_str(),
-					ZIP_CREATE | ZIP_TRUNCATE, &zipError);
+										  ZIP_CREATE | ZIP_TRUNCATE, &zipError);
 				if (!archive)
 					return {SaveOperationError::IoFailure,
-						"unable to create save archive"};
+							"unable to create save archive"};
 				auto failArchive = [&](SaveOperationError error, std::string diagnostic) {
 					zip_discard(archive);
 					RemovePathQuietly(staging);
@@ -3238,32 +3291,32 @@ namespace Application
 				{
 					if (cancelled && cancelled())
 						return failArchive(SaveOperationError::Cancelled,
-							"save export was cancelled");
+										   "save export was cancelled");
 					const auto relative = fs::relative(entryPath, source, ec);
 					if (ec || relative.empty() || relative.has_root_path())
 						return failArchive(SaveOperationError::PathUnsafe,
-							"unable to derive safe archive path");
+										   "unable to derive safe archive path");
 					const auto archiveName = relative.generic_string();
 					progressValue.currentPath = relative;
 					if (directory)
 					{
 						if (zip_dir_add(archive, archiveName.c_str(), ZIP_FL_ENC_UTF_8) < 0)
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 					}
 					else
 					{
 						zip_source_t* zipSource = zip_source_file(archive,
-							_pathToUtf8(entryPath).c_str(), 0, 0);
+																  _pathToUtf8(entryPath).c_str(), 0, 0);
 						if (!zipSource)
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 						if (zip_file_add(archive, archiveName.c_str(), zipSource,
-							ZIP_FL_ENC_UTF_8) < 0)
+										 ZIP_FL_ENC_UTF_8) < 0)
 						{
 							zip_source_free(zipSource);
 							return failArchive(SaveOperationError::IoFailure,
-								zip_strerror(archive));
+											   zip_strerror(archive));
 						}
 						progressValue.bytesCompleted += fs::file_size(entryPath, ec);
 						if (ec)
@@ -3276,27 +3329,26 @@ namespace Application
 
 				const std::string metadata = fmt::format("titleId = {:#016x}", titleId);
 				zip_source_t* metadataSource = zip_source_buffer(archive, metadata.data(),
-					metadata.size(), 0);
+																 metadata.size(), 0);
 				if (!metadataSource || zip_file_add(archive, "cemu_meta", metadataSource,
-					ZIP_FL_ENC_UTF_8) < 0)
+													ZIP_FL_ENC_UTF_8) < 0)
 				{
 					if (metadataSource)
 						zip_source_free(metadataSource);
 					return failArchive(SaveOperationError::IoFailure,
-						zip_strerror(archive));
+									   zip_strerror(archive));
 				}
 				if (zip_close(archive) != 0)
 					return failArchive(SaveOperationError::IoFailure,
-						"unable to finalize save archive");
+									   "unable to finalize save archive");
 				archive = nullptr;
 
-				const auto backup = outputState == SaveEntryState::Missing ? fs::path{} :
-					UniqueSiblingPath(archivePath, "backup");
+				const auto backup = outputState == SaveEntryState::Missing ? fs::path{} : UniqueSiblingPath(archivePath, "backup");
 				if (outputState != SaveEntryState::Missing && backup.empty())
 				{
 					RemovePathQuietly(staging);
 					return {SaveOperationError::IoFailure,
-						"unable to reserve archive backup path"};
+							"unable to reserve archive backup path"};
 				}
 				if (!backup.empty())
 				{
@@ -3315,8 +3367,9 @@ namespace Application
 						fs::rename(backup, archivePath, restoreError);
 					RemovePathQuietly(staging);
 					return {SaveOperationError::IoFailure,
-						restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
-							restoreError.message()) : ec.message()};
+							restoreError ? fmt::format("{}; restore failed: {}", ec.message(),
+													   restoreError.message())
+										 : ec.message()};
 				}
 				RemovePathQuietly(backup);
 				return {};
@@ -3337,7 +3390,7 @@ namespace Application
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 
 				GraphicPackResult result;
 				result.changed = pack->IsEnabled() != enabled;
@@ -3380,12 +3433,12 @@ namespace Application
 			}
 
 			GraphicPackResult SetGraphicPackPreset(std::string_view key,
-				std::string_view category, std::string_view preset) override
+												   std::string_view category, std::string_view preset) override
 			{
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 
 				GraphicPackResult result;
 				if (!preset.empty())
@@ -3394,9 +3447,9 @@ namespace Application
 					const auto categorized = pack->GetCategorizedPresets(categoryOrder);
 					const auto categoryIt = categorized.find(std::string(category));
 					const bool presetExists = categoryIt != categorized.end() &&
-						std::ranges::any_of(categoryIt->second, [preset](const auto& candidate) {
-							return candidate->name == preset;
-						});
+											  std::ranges::any_of(categoryIt->second, [preset](const auto& candidate) {
+												  return candidate->name == preset;
+											  });
 					if (!presetExists)
 					{
 						result.error = GraphicPackError::InvalidPreset;
@@ -3425,7 +3478,7 @@ namespace Application
 				auto pack = FindGraphicPack(key);
 				if (!pack)
 					return {.error = GraphicPackError::NotFound,
-						.diagnostic = "graphic pack no longer exists"};
+							.diagnostic = "graphic pack no longer exists"};
 				GraphicPackResult result;
 				result.reloaded = ReloadGraphicPackInternal(pack);
 				result.info = TranslateGraphicPack(pack);
@@ -3436,13 +3489,13 @@ namespace Application
 			{
 				if (IsTitleRunning())
 					return {.error = GraphicPackError::TitleRunning,
-						.diagnostic = "graphic packs cannot be refreshed while a title is running"};
+							.diagnostic = "graphic packs cannot be refreshed while a title is running"};
 
 				std::map<std::string, std::string> previouslyEnabled;
 				for (const auto& pack : GraphicPack2::GetGraphicPacks())
 					if (pack->IsEnabled())
 						previouslyEnabled.emplace(pack->GetNormalizedPathString(),
-							pack->GetVirtualPath());
+												  pack->GetVirtualPath());
 
 				GraphicPack2::ClearGraphicPacks();
 				GraphicPack2::LoadAll();
@@ -3477,16 +3530,16 @@ namespace Application
 				GetConfigHandle().Save();
 			}
 
-		private:
+		  private:
 			ApplicationEvents& m_events;
 			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
 			mutable std::shared_mutex m_inputLifecycleMutex;
 			bool m_inputAvailable{};
 		};
-	}
+	} // namespace
 
 	std::unique_ptr<IEmulationBackend> CreateCafeEmulationBackend(ApplicationEvents& events)
 	{
 		return std::make_unique<CafeEmulationBackend>(events);
 	}
-}
+} // namespace Application
