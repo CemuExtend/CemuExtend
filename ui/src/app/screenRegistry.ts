@@ -16,7 +16,6 @@ export type ScreenDefinition = {
   title: string;
   category: ScreenCategory;
   description: string;
-  detachable: boolean;
 };
 
 export const SCREEN_REGISTRY: Record<
@@ -24,123 +23,103 @@ export const SCREEN_REGISTRY: Record<
   ScreenDefinition
 > = {
   "general-settings": {
-    title: "General settings",
+    title: "General Settings",
     category: "Settings",
     description: "Library, startup, storage, appearance, and advanced options.",
-    detachable: false,
   },
   "input-settings": {
-    title: "Input settings",
+    title: "Input Settings",
     category: "Controllers",
     description: "Players, devices, mappings, profiles, and calibration.",
-    detachable: false,
   },
   "hotkey-settings": {
-    title: "Hotkey settings",
+    title: "Hotkey Settings",
     category: "Controllers",
     description: "Keyboard and controller shortcuts.",
-    detachable: false,
   },
   "graphic-packs": {
-    title: "Graphic packs",
+    title: "Graphic Packs",
     category: "Mods",
     description: "Title enhancements, presets, installation, and refresh.",
-    detachable: false,
   },
   "title-manager": {
-    title: "Title manager",
+    title: "Title Manager",
     category: "Downloads",
     description: "Installed content, conversion, verification, and removal.",
-    detachable: false,
   },
   "cemod-manager": {
-    title: "CemuMod manager",
+    title: "CemuMod Manager",
     category: "Mods",
     description: "Packages, discovery, compatibility, and approvals.",
-    detachable: false,
   },
   "cemod-permissions": {
-    title: "CemuMod permissions",
+    title: "CemuMod Permissions",
     category: "Security",
     description: "Exact-package permission review and approval changes.",
-    detachable: false,
   },
   "account-manager": {
-    title: "Account manager",
+    title: "Account Manager",
     category: "Accounts",
     description: "Local identities, active account, and network service.",
-    detachable: false,
   },
   "save-manager": {
-    title: "Save manager",
+    title: "Save Manager",
     category: "Saves",
     description: "Save inspection, import, export, transfer, and removal.",
-    detachable: false,
   },
   "update-manager": {
-    title: "Downloads and updates",
+    title: "Downloads & Updates",
     category: "Downloads",
     description: "Tracked title and graphic-pack installation jobs.",
-    detachable: false,
   },
   logging: {
     title: "Logging",
     category: "Developer",
     description: "Live structured logs with filtering and retention status.",
-    detachable: true,
   },
   "memory-searcher": {
-    title: "Memory search",
+    title: "Memory Searcher",
     category: "Developer",
     description: "Typed scans, filtering, progress, and paged results.",
-    detachable: true,
   },
   "ppc-debugger": {
-    title: "PPC debugger",
+    title: "PPC Debugger",
     category: "Developer",
     description: "Execution control, disassembly, registers, and breakpoints.",
-    detachable: true,
   },
   "audio-debugger": {
-    title: "Audio voices",
+    title: "Audio Voices",
     category: "Developer",
     description: "Active audio voice diagnostics.",
-    detachable: true,
   },
   "texture-relations": {
-    title: "Texture relations",
+    title: "Texture Relations",
     category: "Developer",
     description: "Texture cache relationships and diagnostic snapshots.",
-    detachable: true,
   },
   "ppc-threads": {
-    title: "PPC threads",
+    title: "PPC Threads",
     category: "Developer",
     description: "Thread state, priority, ownership, and execution controls.",
-    detachable: true,
   },
   "emulated-usb-devices": {
-    title: "USB devices",
+    title: "Emulated USB",
     category: "Developer",
     description: "Emulated USB device state and attachment controls.",
-    detachable: true,
   },
   "checksum-tool": {
-    title: "Checksum tool",
+    title: "Checksum Tool",
     category: "Developer",
     description: "Content verification jobs and detailed results.",
-    detachable: true,
   },
   "getting-started": {
-    title: "Getting started",
+    title: "Getting Started",
     category: "Onboarding",
     description: "Initial frontend, library, and controller setup.",
-    detachable: false,
   },
   about: {
     title: "About CemuExtend",
     category: "About",
     description: "Version, project, licence, and support information.",
-    detachable: false,
   },
 };

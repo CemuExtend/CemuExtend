@@ -1,98 +1,104 @@
-/* Hallmark · design-system: CemuExtend · palette: black / white only · theme: White + Dark */
-:root,
-:root[data-theme="light"] {
-  color-scheme: light;
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: dark desktop
+ * designed-as-app · nav: N9 edge-aligned desktop chrome · footer: Ft2 status line
+ * Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
+ */
+:root {
+  color-scheme: dark;
 
-  --color-paper: oklch(100% 0 0);
-  --color-paper-2: oklch(100% 0 0);
-  --color-ink: oklch(0% 0 0);
-  --color-ink-2: oklch(0% 0 0);
-  --color-rule: oklch(0% 0 0);
-  --color-focus: oklch(0% 0 0);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-ink: oklch(100% 0 0);
-  --color-danger: oklch(0% 0 0);
+  --color-canvas: oklch(17.764% 0 89.88);
+  --color-inset: oklch(21.648% 0.00498 248.06);
+  --color-input: oklch(22.083% 0.00496 248.05);
+  --color-paper: oklch(25.069% 0.0048 248.02);
+  --color-paper-2: oklch(26.736% 0.00473 248);
+  --color-paper-3: oklch(28.377% 0.00466 247.99);
+  --color-paper-4: oklch(31.93% 0.00678 248.04);
+  --color-paper-hover: oklch(33.76% 0.00652 229.01);
+  --color-rule: oklch(37.264% 0.00743 240.02);
+  --color-rule-2: oklch(42.817% 0.00926 241.85);
+  --color-rule-strong: oklch(49.227% 0.00986 236.73);
+  --color-muted: oklch(73.2% 0.00811 241.71);
+  --color-neutral: oklch(76.128% 0.00623 239.85);
+  --color-ink-2: oklch(87.204% 0.00352 247.86);
+  --color-ink: oklch(93.08% 0.0029 264.54);
 
-  --font-display: ui-monospace, "Cascadia Mono", "Liberation Mono", monospace;
-  --font-body: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "Liberation Mono", monospace;
+  --color-accent: oklch(61.465% 0.12583 235.32);
+  --color-accent-bright: oklch(73.161% 0.1383 230.13);
+  --color-accent-soft: oklch(79.437% 0.09148 227.52);
+  --color-accent-ink: oklch(98% 0.004 230);
+  --color-selection: oklch(41.021% 0.07321 231.58);
+  --color-selection-soft: oklch(34.749% 0.05331 229.15);
+  --color-focus: oklch(73.161% 0.1383 230.13);
 
-  --space-3xs: 0.25rem;
-  --space-2xs: 0.5rem;
-  --space-xs: 0.75rem;
-  --space-sm: 1rem;
-  --space-md: 1.5rem;
-  --space-lg: 2rem;
-  --space-xl: 3rem;
-  --space-2xl: 4.5rem;
+  --color-success: oklch(85.725% 0.14761 133.71);
+  --color-success-surface: oklch(33.094% 0.05828 141.03);
+  --color-warning: oklch(76% 0.12 80.95);
+  --color-warning-surface: oklch(35.195% 0.05151 85.95);
+  --color-error: oklch(77.207% 0.13432 20.63);
+  --color-error-ink: oklch(91.799% 0.04254 12.57);
+  --color-error-surface: oklch(31.709% 0.05739 14.2);
+  --color-overlay: oklch(0% 0 0 / 0.63);
+  --color-shadow: oklch(0% 0 0 / 0.55);
+  --color-runtime-tint: oklch(15% 0.02 240 / 0.22);
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
+  --font-display: "Segoe UI", "Noto Sans", ui-sans-serif, sans-serif;
+  --font-body: "Segoe UI", "Noto Sans", ui-sans-serif, sans-serif;
+  --font-outlier: "Cascadia Mono", "Noto Sans Mono", ui-monospace, monospace;
+  --font-mono: var(--font-outlier);
+
+  --text-xs: 0.7143rem;
+  --text-sm: 0.8571rem;
   --text-base: 1rem;
-  --text-md: 1.25rem;
-  --text-lg: 1.5rem;
-  --text-xl: 2rem;
+  --text-md: 1.0714rem;
+  --text-lg: 1.3571rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.6429rem;
+  --text-display: clamp(1.75rem, 4vw, 2.5rem);
+
+  --space-3xs: 0.1429rem;
+  --space-2xs: 0.2857rem;
+  --space-xs: 0.5714rem;
+  --space-sm: 0.8571rem;
+  --space-md: 1.1429rem;
+  --space-lg: 1.7143rem;
+  --space-xl: 2.2857rem;
+  --space-2xl: 3.4286rem;
+  --space-3xl: 5.1429rem;
+  --space-4xl: 7.1429rem;
+
+  --control-h: 30px;
+  --touch-control-h: 44px;
+  --menubar-h: 27px;
+  --toolbar-h: 51px;
+  --statusbar-h: 30px;
+  --side-nav-w: 193px;
+  --right-rail-w: 254px;
+  --detached-head-h: 59px;
+  --detached-foot-h: 49px;
+
+  --rule-hair: 1px;
+  --rule-fine: 2px;
+  --radius-card: 3px;
+  --radius-pill: 10px;
+  --radius-input: 2px;
+  --shadow-popover: 0 12px 30px var(--color-shadow);
+  --shadow-modal: 0 16px 50px var(--color-shadow);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-short: 120ms;
-  --dur-medium: 200ms;
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
 
-  --rule-thin: 0.0625rem;
-  --rule-strong: 0.125rem;
-  --rule-focus: 0.1875rem;
-  --radius-control: 0;
-  --radius-panel: 0;
-
-  --size-control: 2.75rem;
-  --size-topbar: 4rem;
-  --size-sidebar: 13.5rem;
-  --size-game-icon: 3.5rem;
-  --size-detail-pane: 24rem;
-  --measure-control: 24rem;
-  --size-content-max: 110rem;
-  --size-list-min: 18rem;
-  --size-check: 1rem;
-  --size-check-mark: 0.5rem;
-  --z-navigation: 20;
-  --z-popover: 40;
-  --z-runtime-overlay: 10000;
-
-  --bg: var(--color-paper);
-  --panel: var(--color-paper-2);
-  --text: var(--color-ink);
-  --muted: var(--color-ink-2);
-  --line: var(--color-rule);
-  --accent: var(--color-accent);
-  --accent-soft: var(--color-paper-2);
-  --danger: var(--color-danger);
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="light"] {
   color-scheme: dark;
-  --color-paper: oklch(0% 0 0);
-  --color-paper-2: oklch(0% 0 0);
-  --color-ink: oklch(100% 0 0);
-  --color-ink-2: oklch(100% 0 0);
-  --color-rule: oklch(100% 0 0);
-  --color-focus: oklch(100% 0 0);
-  --color-accent: oklch(100% 0 0);
-  --color-accent-ink: oklch(0% 0 0);
-  --color-danger: oklch(100% 0 0);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    color-scheme: dark;
-    --color-paper: oklch(0% 0 0);
-    --color-paper-2: oklch(0% 0 0);
-    --color-ink: oklch(100% 0 0);
-    --color-ink-2: oklch(100% 0 0);
-    --color-rule: oklch(100% 0 0);
-    --color-focus: oklch(100% 0 0);
-    --color-accent: oklch(100% 0 0);
-    --color-accent-ink: oklch(0% 0 0);
-    --color-danger: oklch(100% 0 0);
-  }
 }

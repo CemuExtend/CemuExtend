@@ -171,7 +171,6 @@ export function TitleManagerWindow({ windowId }: { windowId: string }) {
   const launch = (entry: TitleManagerEntry) =>
     attempt(async () => {
       await invoke("titleManager.launch", { locationUid: entry.locationUid });
-      await invoke("window.close");
     });
   const verify = (entry: TitleManagerEntry) =>
     attempt(async () =>
@@ -259,7 +258,7 @@ export function TitleManagerWindow({ windowId }: { windowId: string }) {
     : 0;
   const busy = !!progress || !!confirmation;
   return (
-    <main className="role-window manager-window">
+    <main className="role-window manager-window title-manager-window">
       <header>
         <div>
           <span className="eyebrow">Installed content</span>
@@ -276,7 +275,6 @@ export function TitleManagerWindow({ windowId }: { windowId: string }) {
             Install title…
           </button>
           {progress && <button onClick={cancel}>Cancel</button>}
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (

@@ -11,21 +11,6 @@
 
 namespace WebFrontend
 {
-	enum class MenuCommand
-	{
-		Load,
-		EndEmulation,
-		Exit,
-		ToggleFullscreen,
-		TogglePadView,
-		GeneralSettings,
-		InputSettings,
-		GraphicPacks,
-		TitleManager,
-		Logging,
-		About,
-	};
-
 	enum class NativeInputKind : std::uint8_t
 	{
 		PointerMove,
@@ -95,7 +80,6 @@ namespace WebFrontend
 	{
 	  public:
 		using CloseHandler = std::function<void()>;
-		using MenuHandler = std::function<void(MenuCommand)>;
 		using MetricsHandler = std::function<void(Host::WindowMetricsSnapshot)>;
 		using PadCloseHandler = std::function<void()>;
 		using InputHandler = std::function<void(const NativeInputEvent&)>;
@@ -123,7 +107,6 @@ namespace WebFrontend
 		[[nodiscard]] virtual bool IsPadRenderRegionOpen() const = 0;
 		virtual void SetFullscreen(bool fullscreen) = 0;
 		virtual void SetCloseHandler(CloseHandler handler) = 0;
-		virtual void SetMenuHandler(MenuHandler handler) = 0;
 		virtual void SetMetricsHandler(MetricsHandler handler) = 0;
 		virtual void SetPadCloseHandler(PadCloseHandler handler) = 0;
 		virtual void SetPadMetricsEnabled(bool enabled) = 0;

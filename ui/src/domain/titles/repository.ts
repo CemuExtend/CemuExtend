@@ -27,6 +27,12 @@ export function listTitles(): Promise<Title[]> {
   return invoke("titles.list");
 }
 
+export function loadTitleIcon(
+  titleId: string,
+): Promise<{ titleId: string; iconDataUrl: string | null }> {
+  return invoke("titles.icon", { titleId });
+}
+
 export async function refreshTitles(): Promise<Title[]> {
   await invoke("titles.refresh");
   return listTitles();

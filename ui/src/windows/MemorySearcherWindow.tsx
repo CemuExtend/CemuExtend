@@ -6,7 +6,7 @@ import type {
   MemoryValueType,
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
-import { translateFormat } from "../i18n/runtime";
+import { translate, translateFormat } from "../i18n/runtime";
 import {
   pageOffset,
   parseMemoryValue,
@@ -71,7 +71,7 @@ export function MemorySearcherWindow() {
         else if (next.state === "complete")
           await loadPage(session, 0, next.resultCount);
         else if (next.state === "failed")
-          setError(next.diagnostic || "Memory search failed.");
+          setError(next.diagnostic || translate("Memory search failed."));
       } catch (reason) {
         if (!stopped) setError(String(reason));
       }
@@ -117,6 +117,9 @@ export function MemorySearcherWindow() {
         sessionToken: session.sessionToken,
         generation: session.generation,
       });
+      setStatus((current) =>
+        current ? { ...current, state: "cancelled" } : current,
+      );
     } catch (reason) {
       setError(String(reason));
     }
@@ -136,11 +139,8 @@ export function MemorySearcherWindow() {
     <main className="role-window memory-search-window">
       <header>
         <div>
-          <span className="eyebrow">Runtime diagnostics</span>
           <h1>Memory Searcher</h1>
-        </div>
-        <div className="button-row">
-          <button onClick={() => void invoke("window.close")}>Close</button>
+          <p>Typed scans, filtering, progress, and paged results.</p>
         </div>
       </header>
       {error && (
@@ -148,11 +148,14 @@ export function MemorySearcherWindow() {
           {error}
         </div>
       )}
-      <section className="memory-search-controls" aria-label="Search controls">
+      <section
+        className="memory-search-controls"
+        aria-label={translate("Search controls")}
+      >
         <label>
           Data type
           <select
-            disabled={!!session}
+            disabled={busy}
             value={type}
             onChange={(event) => setType(event.target.value as MemoryValueType)}
           >
@@ -176,7 +179,7 @@ export function MemorySearcherWindow() {
         <label>
           Scan cap
           <select
-            disabled={!!session}
+            disabled={busy}
             value={scanMiB}
             onChange={(event) => setScanMiB(Number(event.target.value))}
           >
@@ -189,7 +192,7 @@ export function MemorySearcherWindow() {
         <div className="button-row">
           <button
             className="primary"
-            disabled={busy}
+            disabled={busy || !input.trim()}
             onClick={() => void begin(false)}
           >
             Search
@@ -208,13 +211,17 @@ export function MemorySearcherWindow() {
       </section>
       <section className="memory-search-summary" aria-live="polite">
         {status ? (
-          <>
+          <div className="memory-search-progress">
             <progress max={100} value={progressPercent(status)} />
             <span>
-              {status.state === "scanning" ? "Scanning" : status.state}:{" "}
-              {Math.round(status.bytesScanned / 1048576)} /{" "}
+              {translate(
+                status.state === "scanning" ? "Scanning" : status.state,
+              )}
+              : {Math.round(status.bytesScanned / 1048576)} /{" "}
               {Math.round(status.bytesTotal / 1048576)} MiB ·{" "}
-              {status.resultCount.toLocaleString()} results
+              {translateFormat("{count} results", {
+                count: status.resultCount.toLocaleString(),
+              })}
             </span>
             {status.scanCapReached && (
               <span className="warning">
@@ -224,7 +231,7 @@ export function MemorySearcherWindow() {
             {status.resultCapReached && (
               <span className="warning">Result cap reached (50,000).</span>
             )}
-          </>
+          </div>
         ) : (
           <p className="muted">
             Start a running Wii U title, then search mapped guest memory.
@@ -233,7 +240,10 @@ export function MemorySearcherWindow() {
           </p>
         )}
       </section>
-      <section className="memory-results" aria-label="Memory search results">
+      <section
+        className="memory-results"
+        aria-label={translate("Memory search results")}
+      >
         <div className="memory-result-header">
           <strong>Address</strong>
           <strong>Value</strong>

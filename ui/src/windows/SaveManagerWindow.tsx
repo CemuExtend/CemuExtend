@@ -225,7 +225,6 @@ export function SaveManagerWindow({ windowId }: { windowId: string }) {
         </div>
         <div className="button-row">
           {progress && <button onClick={cancel}>Cancel</button>}
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (

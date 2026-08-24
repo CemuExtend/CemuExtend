@@ -1,141 +1,116 @@
 .runtime-overlay-root {
-  display: none;
   position: fixed;
   inset: 0;
-  z-index: var(--z-runtime-overlay);
-  overflow: hidden;
+  z-index: var(--z-toast);
   pointer-events: none;
-  color: var(--color-ink);
-  font-family: var(--font-body);
-  user-select: none;
+  overflow: hidden;
+  color: var(--color-accent-ink);
 }
-
-html[data-runtime-overlay="active"],
-html[data-runtime-overlay="active"] body,
-html[data-runtime-overlay="active"] #root {
-  background: transparent !important;
+:root[data-runtime-overlay="active"],
+:root[data-runtime-overlay="active"] body,
+:root[data-runtime-overlay="active"] #root {
+  background: var(--color-canvas) url("../assets/covers/open_air.png?inline")
+    center / cover no-repeat;
 }
-
-html[data-runtime-overlay="active"] .main-application {
-  display: none;
+:root[data-runtime-overlay="active"] .runtime-overlay-root {
+  background: transparent;
 }
-
-html[data-runtime-overlay="active"] .runtime-overlay-root {
-  display: block;
+:root[data-runtime-overlay="active"] #root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--color-runtime-tint);
+  pointer-events: none;
 }
-
 .runtime-overlay-root--softwareKeyboard,
 .runtime-overlay-root--errorDialog {
   pointer-events: auto;
 }
-
 .runtime-overlay__anchor {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  padding: 0.625rem;
-  max-width: min(36rem, calc(100% - 1.25rem));
-  max-height: 100dvh;
-  overflow: auto;
-  overscroll-behavior: contain;
-  pointer-events: auto;
-  scrollbar-color: var(--color-ink) var(--color-paper);
+  gap: 9px;
+  padding: 24px;
 }
 .runtime-overlay__anchor--topLeft {
-  top: 0;
-  left: 0;
+  inset: 0 auto auto 0;
   align-items: flex-start;
 }
 .runtime-overlay__anchor--topCenter {
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  inset: 0 50% auto auto;
+  transform: translateX(50%);
   align-items: center;
 }
 .runtime-overlay__anchor--topRight {
-  top: 0;
-  right: 0;
+  inset: 0 0 auto auto;
   align-items: flex-end;
 }
 .runtime-overlay__anchor--bottomLeft {
-  bottom: 0;
-  left: 0;
-  flex-direction: column-reverse;
+  inset: auto auto 0 0;
   align-items: flex-start;
 }
 .runtime-overlay__anchor--bottomCenter {
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  flex-direction: column-reverse;
+  inset: auto 50% 0 auto;
+  transform: translateX(50%);
   align-items: center;
 }
 .runtime-overlay__anchor--bottomRight {
-  bottom: 0;
-  right: 0;
-  flex-direction: column-reverse;
+  inset: auto 0 0 auto;
   align-items: flex-end;
 }
-
 .runtime-overlay__panel {
-  border: var(--rule-strong) solid var(--color-rule);
-  border-radius: var(--radius-panel);
-  background: var(--color-paper);
-  box-shadow: none;
+  min-width: 210px;
+  max-width: min(390px, calc(100vw - 32px));
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  background: var(--color-inset);
+  color: var(--color-accent-ink);
+  padding: 9px 11px;
+  box-shadow: var(--shadow-popover);
 }
-
 .runtime-overlay__stats {
   margin: 0;
-  padding: 0.55em 0.75em;
 }
 .runtime-overlay__stats div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-  gap: 1.2em;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-block: 2px;
 }
 .runtime-overlay__stats dt {
-  min-width: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+  color: var(--color-ink-2);
+  background: transparent;
+  padding: 0;
 }
 .runtime-overlay__stats dd {
-  min-width: 0;
   margin: 0;
-  text-align: right;
+  padding: 0;
+  font-family: var(--font-outlier);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
 }
 .runtime-overlay__notices {
-  min-width: 0;
-  max-width: 100%;
+  width: 390px;
+  max-width: calc(100vw - 32px);
   display: flex;
   flex-direction: column;
-  gap: 0.45em;
+  gap: 9px;
 }
 .runtime-overlay__notice {
-  min-width: 0;
-  max-width: 100%;
   display: flex;
-  gap: 0.6em;
   align-items: center;
-  padding: 0.65em 0.8em;
-}
-.runtime-overlay__notice > :last-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  gap: 12px;
+  padding: 12px;
 }
 .runtime-overlay__notice-icon {
-  color: var(--color-ink);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-soft);
+  font-size: var(--text-lg);
 }
 .runtime-overlay__notice--battery .runtime-overlay__notice-icon {
-  color: var(--color-ink);
-  animation: runtime-battery 1.5s steps(2) infinite;
-}
-@keyframes runtime-battery {
-  50% {
-    opacity: 0.25;
-  }
+  color: var(--color-warning);
 }
 
 .runtime-overlay__shader-progress {
@@ -143,51 +118,50 @@ html[data-runtime-overlay="active"] .runtime-overlay-root {
   inset: 0;
   display: grid;
   place-items: center;
-  background: var(--color-paper) center / cover no-repeat;
-  pointer-events: none;
-}
-.runtime-overlay__shader-progress::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--color-paper);
+  background: var(--color-overlay);
 }
 .runtime-overlay__shader-card {
-  position: relative;
-  width: min(34rem, 62vw);
-  padding: 1.25rem;
-  border: var(--rule-strong) solid var(--color-rule);
-  border-radius: var(--radius-panel);
-  background: var(--color-paper);
-  display: grid;
-  gap: 0.8rem;
+  width: min(570px, calc(100% - 32px));
+  background: var(--color-paper-3);
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  padding: 22px;
+  box-shadow: var(--shadow-modal);
 }
-.runtime-overlay__shader-card p,
+.runtime-overlay__shader-card p {
+  margin: 0 0 12px;
+  color: var(--color-ink);
+}
 .runtime-overlay__shader-card strong {
-  margin: 0;
-  text-align: center;
-}
-.runtime-overlay__shader-card progress {
-  width: 100%;
-  accent-color: var(--color-ink);
+  display: block;
+  margin-block-start: 8px;
+  color: var(--color-ink);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 .runtime-overlay__shader-counts {
+  width: min(570px, calc(100% - 32px));
   position: absolute;
-  left: 1rem;
-  bottom: 1rem;
+  inset: calc(50% + 70px) auto auto 50%;
+  transform: translateX(-50%);
   margin: 0;
-  padding: 0.75rem;
-  border: var(--rule-strong) solid var(--color-rule);
-  background: var(--color-paper);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  background: var(--color-paper-3);
 }
 .runtime-overlay__shader-counts div {
-  display: flex;
-  justify-content: space-between;
-  gap: 2rem;
+  padding: 8px;
+  text-align: center;
+  border-inline-end: var(--rule-hair) solid var(--color-rule);
 }
+.runtime-overlay__shader-counts div:last-child {
+  border: 0;
+}
+.runtime-overlay__shader-counts dt,
 .runtime-overlay__shader-counts dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
 }
 
 .runtime-overlay__modal-layer {
@@ -195,92 +169,123 @@ html[data-runtime-overlay="active"] .runtime-overlay-root {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: clamp(var(--space-xs), 4dvh, var(--space-xl))
-    clamp(var(--space-xs), 4dvw, var(--space-xl));
-  background: var(--color-paper);
-  overflow: auto;
-  pointer-events: auto;
+  background: var(--color-overlay);
 }
 .runtime-overlay__dialog {
-  width: min(38rem, 88vw);
-  padding: 1.5rem;
-  border: var(--rule-strong) solid var(--color-rule);
-  border-radius: var(--radius-panel);
-  background: var(--color-paper);
-  box-shadow: none;
+  width: min(520px, calc(100% - 32px));
+  background: var(--color-paper-3);
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  padding: 18px;
+  box-shadow: var(--shadow-modal);
 }
 .runtime-overlay__dialog h1 {
-  margin: 0 0 0.8rem;
-  font-size: 1.35rem;
+  margin: 0 0 6px;
+  font-size: var(--text-lg);
 }
 .runtime-overlay__dialog p {
-  white-space: pre-wrap;
+  margin: 0 0 16px;
+  color: var(--color-muted);
 }
 .runtime-overlay__dialog-actions {
   display: flex;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
+  justify-content: flex-end;
+  gap: 8px;
 }
-.runtime-overlay__dialog button,
-.runtime-overlay__key-grid button {
-  min-height: 2.5rem;
-  border: var(--rule-thin) solid var(--color-rule);
-  border-radius: var(--radius-control);
-  color: var(--color-ink);
-  background: var(--color-paper);
-}
-.runtime-overlay__dialog button:focus-visible,
-.runtime-overlay__key-grid button:focus-visible {
-  outline: var(--rule-focus) solid var(--color-focus);
-  outline-offset: var(--space-3xs);
+.runtime-overlay__dialog-actions button:last-child {
+  background: var(--color-accent);
+  border-color: var(--color-accent-bright);
+  color: var(--color-accent-ink);
 }
 
 .runtime-overlay__keyboard {
-  align-content: start;
-  gap: 1.25rem;
+  align-content: center;
+  width: min(1040px, calc(100% - 32px));
+  height: auto;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-paper-3);
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  padding: 18px;
+  box-shadow: var(--shadow-modal);
 }
 .runtime-overlay__input-preview {
-  width: min(54rem, 100%);
-  padding: 1rem 1.25rem;
-  border: var(--rule-strong) solid var(--color-rule);
-  border-radius: var(--radius-panel);
-  background: var(--color-paper);
-  font-size: 1.35rem;
-  overflow-wrap: anywhere;
+  width: 100%;
+  height: 54px;
+  border: var(--rule-hair) solid var(--color-rule-strong);
+  background: var(--color-inset);
+  margin-block-end: 14px;
+  padding: 14px;
+  color: var(--color-ink);
+  font-size: var(--text-lg);
 }
 .runtime-overlay__input-preview i {
   display: inline-block;
-  height: 1.2em;
-  border-right: 2px solid currentColor;
-  animation: runtime-caret 1s steps(2) infinite;
-}
-@keyframes runtime-caret {
-  50% {
-    opacity: 0;
-  }
+  width: 1px;
+  height: 1em;
+  background: var(--color-accent-bright);
+  margin-inline-start: 2px;
 }
 .runtime-overlay__key-grid {
-  width: min(62rem, 100%);
-  min-width: 0;
-  display: grid;
-  gap: 0.45rem;
+  width: 100%;
 }
 .runtime-overlay__key-row {
-  min-width: 0;
   display: flex;
+  gap: 7px;
+  margin-block-end: 7px;
   justify-content: center;
-  gap: 0.4rem;
 }
 .runtime-overlay__key-row button {
-  min-width: 0;
-  flex: 1 1 0;
-  padding-inline: var(--space-3xs);
-  font-size: 1rem;
+  min-width: 70px;
+  height: 54px;
+  border-color: var(--color-rule-strong);
+  background: var(--color-paper-hover);
+  color: var(--color-ink);
+  border-radius: var(--radius-card);
+  font-size: var(--text-lg);
 }
 .runtime-overlay__key-row--actions button {
-  flex-grow: 2;
+  min-width: 150px;
 }
-.runtime-overlay__key-row--actions .runtime-overlay__space {
-  flex-grow: 5;
+.runtime-overlay__key-row .runtime-overlay__space {
+  min-width: 240px;
+}
+
+@media (max-width: 59.999rem) {
+  .runtime-overlay__keyboard {
+    width: calc(100% - 16px);
+    padding: 10px;
+  }
+  .runtime-overlay__key-row {
+    gap: 4px;
+    margin-block-end: 4px;
+  }
+  .runtime-overlay__key-row button {
+    min-width: 0;
+    flex: 1;
+    height: 46px;
+    padding-inline: 4px;
+  }
+  .runtime-overlay__key-row .runtime-overlay__space {
+    min-width: 0;
+    flex: 3;
+  }
+}
+@media (max-width: 39.999rem) {
+  .runtime-overlay__anchor {
+    padding: 8px;
+  }
+  .runtime-overlay__notices {
+    width: calc(100vw - 16px);
+  }
+  .runtime-overlay__shader-counts {
+    grid-template-columns: minmax(0, 1fr);
+    inset-block-start: calc(50% + 80px);
+  }
+  .runtime-overlay__shader-counts div {
+    border-inline-end: 0;
+    border-block-end: var(--rule-hair) solid var(--color-rule);
+  }
+  .runtime-overlay__key-row button {
+    font-size: var(--text-base);
+  }
 }

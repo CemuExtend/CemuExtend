@@ -25,16 +25,23 @@ import {
   previewUpdates,
   previewUsb,
 } from "./previewData";
+import {
+  getReferencePreviewScreen,
+  overlayModeForScreen,
+} from "./referencePreview";
+import { titleCover } from "../assets/titleCovers";
 
-let previewTheme: "light" | "dark" = "light";
+let previewTheme: "light" | "dark" = "dark";
 
 function createPreviewOverlay(): RuntimeOverlaySnapshot {
-  const mode = new URLSearchParams(window.location.search).get("overlay");
+  const previewScreen = getReferencePreviewScreen();
+  const mode =
+    new URLSearchParams(window.location.search).get("overlay") ??
+    (previewScreen ? overlayModeForScreen(previewScreen.index) : undefined);
   const snapshot = structuredClone(previewOverlay);
   snapshot.overlayStyle.scale = 100;
   snapshot.notificationStyle.scale = 100;
   if (mode === "stats") {
-    snapshot.overlayStyle.scale = 200;
     snapshot.visibility = {
       fps: true,
       drawCalls: true,
@@ -42,20 +49,22 @@ function createPreviewOverlay(): RuntimeOverlaySnapshot {
       cpuPerCore: true,
       ramUsage: true,
       vramUsage: true,
-      debug: true,
+      debug: false,
     };
-    snapshot.stats.debugLines = [
-      {
-        label: "Long diagnostic label used for wrapping verification",
-        value:
-          "A deliberately long runtime value that must stay inside the render surface",
-      },
-    ];
+    snapshot.stats.debugLines = [];
+    snapshot.notices = [];
+  } else if (mode === "notifications") {
     snapshot.notices = [
       {
-        id: "preview-notice",
+        id: "controller-connected",
         kind: "controller",
-        text: "A deliberately long controller notification that must wrap without leaving the render surface.",
+        text: "Controller 1 connected",
+        remainingMs: 0,
+      },
+      {
+        id: "shader-cache",
+        kind: "shader",
+        text: "Shader cache updated",
         remainingMs: 0,
       },
     ];
@@ -99,15 +108,16 @@ function createPreviewOverlay(): RuntimeOverlaySnapshot {
 
 function createPreviewBootstrap(): Bootstrap {
   const search = new URLSearchParams(window.location.search);
+  const previewScreen = getReferencePreviewScreen();
   const requestedRole = search.get("role");
   const requestedTheme = search.get("theme");
   if (requestedTheme === "light" || requestedTheme === "dark")
     previewTheme = requestedTheme;
-  const windowRole = windowRoles.includes(
-    requestedRole as (typeof windowRoles)[number],
-  )
-    ? (requestedRole as ActiveWindowRole)
-    : "main-library";
+  const windowRole =
+    previewScreen?.role ??
+    (windowRoles.includes(requestedRole as (typeof windowRoles)[number])
+      ? (requestedRole as ActiveWindowRole)
+      : "main-library");
   const context =
     windowRole === "cemod-permissions"
       ? {
@@ -121,53 +131,77 @@ function createPreviewBootstrap(): Bootstrap {
     windowRole,
     appVersion: "preview",
     platform: "browser preview",
+    activeAccountName:
+      previewAccounts.accounts.find(
+        (account) =>
+          account.persistentId === previewAccounts.activePersistentId,
+      )?.miiName ?? "",
     theme: previewTheme,
     themeRevision: "1",
     language: search.get("language") ?? "system",
     languageRevision: "1",
-    shuttingDown: false,
+    shuttingDown: previewScreen?.index === 79,
     context,
   };
 }
 
 const previewTitles: Title[] = [
-  {
-    titleId: "0005000000000001",
-    name: "Preview Adventure",
-    path: "/preview/adventure",
-    region: "USA",
-    version: 1,
-    playTimeMinutes: 0,
-    lastPlayed: null,
-  },
-  {
-    titleId: "0005000000000002",
-    name: "Preview Title With a Deliberately Long Name",
-    path: "/preview/long-title-layout-test",
-    region: "EUR",
-    version: 1,
-    playTimeMinutes: 0,
-    lastPlayed: null,
-  },
-  {
-    titleId: "0005000000000003",
-    name: "Preview Racing",
-    path: "/preview/racing",
-    region: "JPN",
-    version: 1,
-    playTimeMinutes: 0,
-    lastPlayed: null,
-  },
-  {
-    titleId: "0005000000000004",
-    name: "Preview Platformer",
-    path: "/preview/platformer",
-    region: "USA",
-    version: 1,
-    playTimeMinutes: 0,
-    lastPlayed: null,
-  },
-];
+  ["00050000101C9400", "Open Air Quest", "EU", 208, 2892, "Today", "open_air"],
+  ["00050000101D4E5F", "Kart Party U", "US", 32, 1902, "Yesterday", "kart"],
+  [
+    "00050000101AA22B",
+    "Splatter Arena",
+    "JP",
+    288,
+    1584,
+    "2026-08-20",
+    "splatter",
+  ],
+  [
+    "000500001010CC33",
+    "Builder Blocks",
+    "EU",
+    16,
+    1146,
+    "2026-08-16",
+    "builder",
+  ],
+  ["000500001055CC77", "Wind Sailor HD", "EU", 80, 1104, "2026-08-12", "wind"],
+  ["0005000010442266", "Captain Cosmo", "US", 32, 422, "2026-08-07", "cosmo"],
+  [
+    "0005000010DEAD22",
+    "Starship Raiders",
+    "JP",
+    24,
+    221,
+    "2026-07-30",
+    "starship",
+  ],
+  ["0005000010F1E2D3", "Mystic Garden", "EU", 48, 132, "2026-07-21", "garden"],
+  [
+    "0005000010AABB11",
+    "Homebrew Channel",
+    "ALL",
+    1,
+    84,
+    "2026-07-18",
+    "homebrew",
+  ],
+  ["0005000010CCDD22", "NUS Downloader", "ALL", 4, 46, "2026-07-12", "nus"],
+  ["0005000010EEFF33", "System Tools", "ALL", 2, 32, "2026-07-05", "system"],
+  ["000500001012AB34", "Media Studio", "USA", 12, 18, "2026-06-28", "media"],
+].map(
+  ([titleId, name, region, version, playTimeMinutes, lastPlayed, cover]) => ({
+    titleId: String(titleId),
+    name: String(name),
+    path: `/games/${String(name).replaceAll(" ", "_")}`,
+    region: String(region),
+    version: Number(version),
+    playTimeMinutes: Number(playTimeMinutes),
+    lastPlayed: String(lastPlayed),
+    iconDataUrl: titleCover(String(cover)),
+  }),
+);
 
 let eventSequence = 100;
 
@@ -184,6 +218,11 @@ export function installDevNativeMock(): void {
     new URLSearchParams(window.location.search).get("preview") === "1";
   if (window.cemuInvoke && !previewRequested) return;
   const bootstrap = createPreviewBootstrap();
+  const previewScreen = getReferencePreviewScreen();
+  if (previewScreen)
+    document.documentElement.dataset.previewScreen = String(
+      previewScreen.index,
+    ).padStart(2, "0");
   if (bootstrap.windowRole === "runtime-overlay")
     document.documentElement.dataset.runtimeOverlay = "active";
   window.__CEMU_BOOTSTRAP__ = bootstrap;
@@ -214,14 +253,26 @@ export function installDevNativeMock(): void {
         language: bootstrap.language,
         revision: bootstrap.languageRevision,
       };
-      window.setTimeout(
-        () => dispatch("language.changed", result),
-        0,
-      );
+      window.setTimeout(() => dispatch("language.changed", result), 0);
     } else if (request.method === "overlay.getSnapshot")
       result = createPreviewOverlay();
-    else if (request.method === "titles.list") result = previewTitles;
-    else if (request.method === "settings.getFrontend")
+    else if (request.method === "titles.list") {
+      const screenIndex = getReferencePreviewScreen()?.index;
+      result =
+        screenIndex === 2
+          ? []
+          : screenIndex === 1
+            ? previewTitles
+            : previewTitles.slice(0, 8);
+    } else if (request.method === "titles.icon") {
+      const titleId = (request.params as { titleId: string }).titleId;
+      result = {
+        titleId,
+        iconDataUrl:
+          previewTitles.find((title) => title.titleId === titleId)
+            ?.iconDataUrl ?? null,
+      };
+    } else if (request.method === "settings.getFrontend")
       result = previewFrontendSettings;
     else if (request.method === "settings.applyFrontend")
       result = {
@@ -313,16 +364,8 @@ export function installDevNativeMock(): void {
         () => dispatch("titles.launchState", { status: "started", titleId }),
         80,
       );
-    } else if (request.method === "window.open") {
-      const { requestId } = request.params as { requestId: string };
-      window.setTimeout(
-        () =>
-          dispatch("window.opened", {
-            requestId,
-            windowId: String(eventSequence + 1),
-          }),
-        80,
-      );
+    } else if (request.method === "workspace.activate") {
+      result = {};
     } else if (request.method === "about.get") {
       result = {
         name: "CemuExtend",

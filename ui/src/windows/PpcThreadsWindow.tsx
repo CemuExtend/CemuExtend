@@ -84,8 +84,8 @@ export function PpcThreadsWindow() {
     <main className="role-window manager-window ppc-threads-window">
       <header>
         <div>
-          <span className="eyebrow">Live diagnostics</span>
           <h1>PPC Threads</h1>
+          <p>Thread state, priority, ownership, and execution controls.</p>
         </div>
         <div className="button-row">
           <button disabled={busy} onClick={() => void refresh()}>
@@ -99,7 +99,6 @@ export function PpcThreadsWindow() {
             />{" "}
             Auto refresh
           </label>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -119,7 +118,9 @@ export function PpcThreadsWindow() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span>{translateFormat("{count} threads", { count: visible.length })}</span>
+        <span>
+          {translateFormat("{count} threads", { count: visible.length })}
+        </span>
       </div>
       <div className="split-view ppc-thread-split">
         <div className="table-scroll">
@@ -143,6 +144,13 @@ export function PpcThreadsWindow() {
                     thread.address === selectedAddress ? "selected" : ""
                   }
                   onClick={() => setSelectedAddress(thread.address)}
+                  tabIndex={0}
+                  aria-selected={thread.address === selectedAddress}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    setSelectedAddress(thread.address);
+                  }}
                 >
                   <td>
                     <code>{thread.address}</code>
@@ -157,13 +165,25 @@ export function PpcThreadsWindow() {
                   <td>{thread.totalCycles}</td>
                 </tr>
               ))}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="table-empty">
+                    No threads match the current filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <section className="editor-panel">
           {selected ? (
             <>
-              <h2>{selected.name || `Thread ${selected.address}`}</h2>
+              <h2>
+                {selected.name ||
+                  translateFormat("Thread {address}", {
+                    address: selected.address,
+                  })}
+              </h2>
               <div className="button-row diagnostic-actions">
                 <button
                   disabled={busy || selected.state === "suspended"}

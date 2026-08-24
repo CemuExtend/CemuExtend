@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FrontendSettings } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
-import { openWindow } from "../bridge/windows";
+import { useWorkspaceNavigation } from "../app/workspaceNavigation";
 import { getUiLanguage, setUiLanguage, uiLanguages } from "../i18n/runtime";
 
 export function GeneralSettingsWindow() {
+  const navigate = useWorkspaceNavigation();
   const [model, setModel] = useState<FrontendSettings>();
   const [gamePaths, setGamePaths] = useState<string[]>([]);
   const [candidatePath, setCandidatePath] = useState("");
@@ -115,7 +116,17 @@ export function GeneralSettingsWindow() {
           >
             Apply
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
+          <button
+            disabled={busy || !dirty}
+            onClick={() => {
+              install(model);
+              setLanguage(savedLanguage);
+              setUiLanguage(savedLanguage);
+              setError("");
+            }}
+          >
+            Revert
+          </button>
         </div>
       </header>
       {error && (
@@ -263,7 +274,7 @@ export function GeneralSettingsWindow() {
         <div className="button-row">
           <button
             onClick={() =>
-              void openWindow("input-settings").catch((reason: unknown) =>
+              void navigate("input-settings").catch((reason: unknown) =>
                 setError(String(reason)),
               )
             }
@@ -272,7 +283,7 @@ export function GeneralSettingsWindow() {
           </button>
           <button
             onClick={() =>
-              void openWindow("account-manager").catch((reason: unknown) =>
+              void navigate("account-manager").catch((reason: unknown) =>
                 setError(String(reason)),
               )
             }
@@ -281,7 +292,7 @@ export function GeneralSettingsWindow() {
           </button>
           <button
             onClick={() =>
-              void openWindow("graphic-packs").catch((reason: unknown) =>
+              void navigate("graphic-packs").catch((reason: unknown) =>
                 setError(String(reason)),
               )
             }
@@ -290,25 +301,6 @@ export function GeneralSettingsWindow() {
           </button>
         </div>
       </section>
-      <footer className="button-row">
-        <button
-          disabled={busy || !dirty || (model.titleRunning && frontendDirty)}
-          onClick={() => void apply()}
-        >
-          Apply
-        </button>
-        <button
-          disabled={busy || !dirty}
-          onClick={() => {
-            install(model);
-            setLanguage(savedLanguage);
-            setUiLanguage(savedLanguage);
-            setError("");
-          }}
-        >
-          Revert
-        </button>
-      </footer>
     </main>
   );
 }

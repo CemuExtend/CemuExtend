@@ -8,6 +8,7 @@ import { invoke } from "../bridge/native";
 import { translateFormat } from "../i18n/runtime";
 import { subscribe } from "../bridge/events";
 import { Modal } from "../components/Modal";
+import { getReferencePreviewScreen } from "../dev/referencePreview";
 
 type JobPayload = Record<string, unknown>;
 type InstallView = {
@@ -28,6 +29,7 @@ export function GraphicPacksWindow({
   windowId: string;
   initialTitleId?: string;
 }) {
+  const previewIndex = getReferencePreviewScreen()?.index;
   const [packs, setPacks] = useState<GraphicPack[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -35,7 +37,26 @@ export function GraphicPacksWindow({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [install, setInstall] = useState<InstallView>();
+  const [install, setInstall] = useState<InstallView | undefined>(
+    previewIndex === 35
+      ? {
+          request: { kind: "community", replaceExisting: false },
+          jobId: "preview-install",
+          phase: "downloading",
+          completed: 64,
+          total: 100,
+          currentPath: "graphicPacks/latest.zip",
+        }
+      : previewIndex === 36
+        ? {
+            request: { kind: "customUrl", replaceExisting: false },
+            phase: "ready",
+            completed: 0,
+            total: 0,
+            currentPath: "",
+          }
+        : undefined,
+  );
   const [customUrl, setCustomUrl] = useState("");
   const activeJob = useRef<string | undefined>(undefined);
   const pendingJobEvents = useRef(
@@ -239,7 +260,7 @@ export function GraphicPacksWindow({
   };
 
   return (
-    <main className="role-window manager-window">
+    <main className="role-window manager-window graphic-packs-window">
       <header>
         <div>
           <span className="eyebrow">Enhancements & fixes</span>
@@ -287,7 +308,6 @@ export function GraphicPacksWindow({
           >
             Refresh
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       <div className="toolbar embedded">
@@ -305,7 +325,9 @@ export function GraphicPacksWindow({
             </button>
           </>
         )}
-        <span>{translateFormat("{count} packs", { count: filtered.length })}</span>
+        <span>
+          {translateFormat("{count} packs", { count: filtered.length })}
+        </span>
       </div>
       {error && (
         <div className="notice error" role="alert">

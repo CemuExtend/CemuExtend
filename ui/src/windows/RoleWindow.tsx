@@ -21,6 +21,11 @@ import { TextureRelationsWindow } from "./TextureRelationsWindow";
 import { AudioDebuggerWindow } from "./AudioDebuggerWindow";
 import { MemorySearcherWindow } from "./MemorySearcherWindow";
 import { PpcDebuggerWindow } from "./PpcDebuggerWindow";
+import {
+  getReferencePreviewScreen,
+  hasReferenceDetachedPreview,
+} from "../dev/referencePreview";
+import { ReferenceDetachedPreview } from "../dev/ReferenceStatePreview";
 
 export function RoleWindow({
   role,
@@ -31,7 +36,13 @@ export function RoleWindow({
   windowId: string;
   context?: { titleId?: string; packageKey?: string; generation?: string };
 }) {
+  const preview = getReferencePreviewScreen();
+  const referenceContent =
+    preview && hasReferenceDetachedPreview(preview.index) ? (
+      <ReferenceDetachedPreview index={preview.index} />
+    ) : null;
   const content = (() => {
+    if (referenceContent) return referenceContent;
     switch (role) {
       case "about":
         return <AboutWindow />;
@@ -81,7 +92,7 @@ export function RoleWindow({
     }
   })();
   return (
-    <DetachedToolShell definition={SCREEN_REGISTRY[role]}>
+    <DetachedToolShell role={role} definition={SCREEN_REGISTRY[role]}>
       {content}
     </DetachedToolShell>
   );

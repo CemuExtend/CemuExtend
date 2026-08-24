@@ -176,9 +176,6 @@ export function UpdateManagerWindow({ windowId }: { windowId: string }) {
         </div>
         <div className="button-row">
           {operation && <button onClick={cancel}>Cancel</button>}
-          <button disabled={busy} onClick={() => void invoke("window.close")}>
-            Close
-          </button>
         </div>
       </header>
       {model.titleRunning && (

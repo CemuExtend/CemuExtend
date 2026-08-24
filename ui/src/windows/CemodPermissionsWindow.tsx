@@ -144,7 +144,6 @@ export function CemodPermissionsWindow({
           <span className="eyebrow">Security boundary</span>
           <h1>Exact CemuMod approval</h1>
         </div>
-        <button onClick={() => void invoke("window.close")}>Cancel</button>
       </header>
       {error && (
         <div className="error" role="alert">
@@ -192,6 +191,7 @@ export function CemodPermissionsWindow({
               I verified this exact digest
             </label>
           </div>
+          <h3 className="permission-heading">Requested permissions</h3>
           <div className="permission-list">
             {item.permissions.map((permission) => (
               <label

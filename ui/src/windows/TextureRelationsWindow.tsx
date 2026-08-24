@@ -44,8 +44,8 @@ export function TextureRelationsWindow() {
     <main className="tool-window diagnostic-window">
       <header>
         <div>
-          <div className="eyebrow">Graphics diagnostics</div>
           <h1>Texture relations</h1>
+          <p>Texture cache relationships and diagnostic snapshots.</p>
         </div>
         <button onClick={() => void load(0, "0")} disabled={loading}>
           Refresh snapshot
@@ -145,6 +145,13 @@ export function TextureRelationsWindow() {
                 </td>
               </tr>
             ))}
+            {page && page.rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="table-empty">
+                  No texture relations match the current filters.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

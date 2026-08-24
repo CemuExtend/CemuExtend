@@ -192,7 +192,9 @@ export function HotkeySettingsWindow() {
           <button disabled={busy || !dirty} onClick={() => void apply()}>
             Apply
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
+          <button disabled={busy || !dirty} onClick={() => install(model)}>
+            Revert
+          </button>
         </div>
       </header>
       {error && (
@@ -305,14 +307,6 @@ export function HotkeySettingsWindow() {
           );
         })}
       </section>
-      <footer className="button-row">
-        <button disabled={busy || !dirty} onClick={() => void apply()}>
-          Apply
-        </button>
-        <button disabled={busy || !dirty} onClick={() => install(model)}>
-          Revert
-        </button>
-      </footer>
     </main>
   );
 }

@@ -8,8 +8,11 @@ test("every implemented Native window has a shared screen definition", () => {
   );
 });
 
-test("only monitoring workspaces remain detachable", () => {
-  for (const definition of Object.values(SCREEN_REGISTRY)) {
-    if (definition.detachable) expect(definition.category).toBe("Developer");
-  }
+test("screen definitions contain presentation metadata only", () => {
+  for (const definition of Object.values(SCREEN_REGISTRY))
+    expect(Object.keys(definition).sort()).toEqual([
+      "category",
+      "description",
+      "title",
+    ]);
 });

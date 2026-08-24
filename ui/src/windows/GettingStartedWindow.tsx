@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FrontendSettings } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
-import { openWindow } from "../bridge/windows";
+import { useWorkspaceNavigation } from "../app/workspaceNavigation";
 import {
   getUiLanguage,
   setUiLanguage,
   translate,
   uiLanguages,
 } from "../i18n/runtime";
+import { getReferencePreviewScreen } from "../dev/referencePreview";
 
 export function GettingStartedWindow() {
+  const navigate = useWorkspaceNavigation();
   const [model, setModel] = useState<FrontendSettings | null>(null);
   const [gamePaths, setGamePaths] = useState<string[]>([]);
   const [candidatePath, setCandidatePath] = useState("");
@@ -17,7 +19,9 @@ export function GettingStartedWindow() {
   const [openPad, setOpenPad] = useState(false);
   const [checkUpdates, setCheckUpdates] = useState(true);
   const [language, setLanguage] = useState(getUiLanguage());
-  const [page, setPage] = useState<0 | 1>(0);
+  const [page, setPage] = useState<0 | 1>(
+    getReferencePreviewScreen()?.index === 18 ? 1 : 0,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -88,7 +92,7 @@ export function GettingStartedWindow() {
         setError(result.diagnostic || "The settings could not be applied.");
         return;
       }
-      await invoke("window.close");
+      await navigate("general-settings");
     } catch (reason) {
       setError(String(reason));
       try {
@@ -123,156 +127,172 @@ export function GettingStartedWindow() {
         </div>
         <span>{translate(`Step ${page + 1} of 2`)}</span>
       </header>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {model.titleRunning && (
-        <p className="warning">
-          Stop the running title before applying setup changes.
-        </p>
-      )}
-
-      {page === 0 ? (
-        <section className="settings-section">
-          <div className="card">
-            <h2>Interface language</h2>
-            <label className="field-stack">
-              <span>Language</span>
-              <select
-                value={language}
-                disabled={busy}
-                onChange={(event) => void changeLanguage(event.target.value)}
-              >
-                {uiLanguages.map((entry) => (
-                  <option key={entry.code} value={entry.code}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <h2>Game library</h2>
-          <p>
-            Add directories that contain Wii U games, updates, or DLC. Paths are
-            validated by the native host when you finish.
+      <div className="wizard-scroll">
+        {error && (
+          <p className="error" role="alert">
+            {error}
           </p>
-          <div className="row">
-            <input
-              value={candidatePath}
-              onChange={(event) => setCandidatePath(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addGamePath();
+        )}
+        {model.titleRunning && (
+          <p className="warning">
+            Stop the running title before applying setup changes.
+          </p>
+        )}
+        {getReferencePreviewScreen()?.index === 17 && (
+          <div className="notice">
+            Choose the interface language and add at least one directory
+            containing Wii U titles.
+          </div>
+        )}
+        {getReferencePreviewScreen()?.index === 18 && (
+          <div className="notice">
+            These options can be changed later in General Settings.
+          </div>
+        )}
+
+        {page === 0 ? (
+          <section className="settings-section">
+            <div className="card">
+              <h2>Interface language</h2>
+              <label className="field-stack">
+                <span>Language</span>
+                <select
+                  value={language}
+                  disabled={busy}
+                  onChange={(event) => void changeLanguage(event.target.value)}
+                >
+                  {uiLanguages.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <h2>Game library</h2>
+            <p>
+              Add directories that contain Wii U games, updates, or DLC. Paths
+              are validated by the native host when you finish.
+            </p>
+            <div className="row">
+              <input
+                value={candidatePath}
+                onChange={(event) => setCandidatePath(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addGamePath();
+                  }
+                }}
+                placeholder="Absolute game directory path"
+                aria-label="Game directory path"
+              />
+              <button disabled={!canAdd} onClick={addGamePath}>
+                Add path
+              </button>
+            </div>
+            {gamePaths.length === 0 ? (
+              <p className="muted">No game paths configured.</p>
+            ) : (
+              <ul className="path-list">
+                {gamePaths.map((path) => (
+                  <li key={path}>
+                    <code>{path}</code>
+                    <button
+                      onClick={() =>
+                        setGamePaths((paths) =>
+                          paths.filter((item) => item !== path),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="card">
+              <h3>Graphic packs and mods</h3>
+              <p>
+                Download community packs or install a custom pack, then
+                configure presets for your games.
+              </p>
+              <button
+                onClick={() =>
+                  void navigate("graphic-packs").catch((reason: unknown) =>
+                    setError(String(reason)),
+                  )
                 }
-              }}
-              placeholder="Absolute game directory path"
-              aria-label="Game directory path"
-            />
-            <button disabled={!canAdd} onClick={addGamePath}>
-              Add path
-            </button>
-          </div>
-          {gamePaths.length === 0 ? (
-            <p className="muted">No game paths configured.</p>
-          ) : (
-            <ul className="path-list">
-              {gamePaths.map((path) => (
-                <li key={path}>
-                  <code>{path}</code>
-                  <button
-                    onClick={() =>
-                      setGamePaths((paths) =>
-                        paths.filter((item) => item !== path),
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="card">
-            <h3>Graphic packs and mods</h3>
-            <p>
-              Download community packs or install a custom pack, then configure
-              presets for your games.
-            </p>
-            <button
-              onClick={() =>
-                void openWindow("graphic-packs").catch((reason: unknown) =>
-                  setError(String(reason)),
-                )
-              }
-            >
-              Open Graphic Packs
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="settings-section">
-          <h2>Startup preferences</h2>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={startFullscreen}
-              disabled={model.fullscreenOverride !== null}
-              onChange={(event) => setStartFullscreen(event.target.checked)}
-            />
-            Start games in fullscreen
-          </label>
-          {model.fullscreenOverride !== null && (
-            <p className="muted">
-              Fullscreen startup is controlled by the command line for this
-              session.
-            </p>
-          )}
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={openPad}
-              onChange={(event) => setOpenPad(event.target.checked)}
-            />
-            Open the separate GamePad view when a game starts
-          </label>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={checkUpdates}
-              disabled={!model.updateChecksSupported}
-              onChange={(event) => setCheckUpdates(event.target.checked)}
-            />
-            Automatically check for updates
-          </label>
-          {!model.updateChecksSupported && (
-            <p className="muted">
-              Automatic update checks are managed by this Linux package.
-            </p>
-          )}
-          <div className="card">
-            <h3>Controller setup</h3>
-            <p>
-              Configure each player's emulated controller, devices, profiles,
-              and mappings before launching a game.
-            </p>
-            <button
-              onClick={() =>
-                void openWindow("input-settings").catch((reason: unknown) =>
-                  setError(String(reason)),
-                )
-              }
-            >
-              Open Input Settings
-            </button>
-          </div>
-        </section>
-      )}
+              >
+                Open Graphic Packs
+              </button>
+            </div>
+          </section>
+        ) : (
+          <section className="settings-section">
+            <h2>Startup preferences</h2>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={startFullscreen}
+                disabled={model.fullscreenOverride !== null}
+                onChange={(event) => setStartFullscreen(event.target.checked)}
+              />
+              Start games in fullscreen
+            </label>
+            {model.fullscreenOverride !== null && (
+              <p className="muted">
+                Fullscreen startup is controlled by the command line for this
+                session.
+              </p>
+            )}
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={openPad}
+                onChange={(event) => setOpenPad(event.target.checked)}
+              />
+              Open the separate GamePad view when a game starts
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={checkUpdates}
+                disabled={!model.updateChecksSupported}
+                onChange={(event) => setCheckUpdates(event.target.checked)}
+              />
+              Automatically check for updates
+            </label>
+            {!model.updateChecksSupported && (
+              <p className="muted">
+                Automatic update checks are managed by this Linux package.
+              </p>
+            )}
+            <div className="card">
+              <h3>Controller setup</h3>
+              <p>
+                Configure each player's emulated controller, devices, profiles,
+                and mappings before launching a game.
+              </p>
+              <button
+                onClick={() =>
+                  void navigate("input-settings").catch((reason: unknown) =>
+                    setError(String(reason)),
+                  )
+                }
+              >
+                Open Input Settings
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
 
       <footer className="actions">
-        <button onClick={() => void invoke("window.close")} disabled={busy}>
+        <button
+          onClick={() => void navigate("general-settings")}
+          disabled={busy}
+        >
           Cancel
         </button>
         {page === 1 && (

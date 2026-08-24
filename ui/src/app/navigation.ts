@@ -1,4 +1,3 @@
-import type { ImplementedToolWindowRole } from "../bridge/contracts";
 import { en } from "../i18n/en";
 
 export type MainRoute =
@@ -8,17 +7,13 @@ export type MainRoute =
   | "controllers"
   | "accounts"
   | "settings"
-  | "developer";
+  | "developer"
+  | "help";
 export type AppRoute = MainRoute | "game";
-export type ToolRoute = Exclude<MainRoute, "library">;
 
 export type NavigationItem = {
   route: MainRoute;
   label: string;
-};
-
-export type ToolAction = {
-  role: ImplementedToolWindowRole;
 };
 
 export const primaryNavigation: NavigationItem[] = [
@@ -35,31 +30,14 @@ export const developerNavigation: NavigationItem = {
   label: en.navigation.developer,
 };
 
-export const pageTools: Record<ToolRoute, ToolAction[]> = {
-  mods: [{ role: "cemod-manager" }, { role: "graphic-packs" }],
-  downloads: [{ role: "update-manager" }, { role: "title-manager" }],
-  controllers: [{ role: "input-settings" }, { role: "hotkey-settings" }],
-  accounts: [{ role: "account-manager" }],
-  settings: [
-    { role: "general-settings" },
-    { role: "getting-started" },
-    { role: "about" },
-  ],
-  developer: [
-    { role: "logging" },
-    { role: "memory-searcher" },
-    { role: "ppc-debugger" },
-    { role: "ppc-threads" },
-    { role: "audio-debugger" },
-    { role: "texture-relations" },
-    { role: "emulated-usb-devices" },
-    { role: "checksum-tool" },
-  ],
+export const helpNavigation: NavigationItem = {
+  route: "help",
+  label: en.navigation.help,
 };
 
 export function routeLabel(route: AppRoute): string {
   if (route === "game") return en.navigation.gameWorkspace;
-  return route === "developer"
-    ? developerNavigation.label
-    : (primaryNavigation.find((item) => item.route === route)?.label ?? route);
+  if (route === "developer") return developerNavigation.label;
+  if (route === "help") return helpNavigation.label;
+  return primaryNavigation.find((item) => item.route === route)?.label ?? route;
 }

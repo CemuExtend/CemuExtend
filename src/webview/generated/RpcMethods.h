@@ -16,8 +16,7 @@ namespace WebFrontend::Generated
 		"overlay.selectErrorButton",
 		"system.quit",
 		"window.close",
-		"window.open",
-		"window.focus",
+		"workspace.activate",
 		"system.openExternalUrl",
 		"about.get",
 		"settings.getFrontend",
@@ -102,6 +101,7 @@ namespace WebFrontend::Generated
 		"ppcDebugger.control",
 		"jobs.cancel",
 		"titles.list",
+		"titles.icon",
 		"titles.refresh",
 		"titles.launch",
 		"emulation.stop"

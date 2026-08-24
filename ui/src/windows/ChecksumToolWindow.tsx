@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChecksumContent, ChecksumModel } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
-import { translateFormat } from "../i18n/runtime";
+import { translate, translateFormat } from "../i18n/runtime";
 import { activateJob, routeJobEvent } from "./checksumEvents";
 
 type Progress = {
@@ -136,7 +136,7 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
         : 0
     : 0;
   return (
-    <main className="role-window manager-window">
+    <main className="role-window manager-window checksum-tool-window">
       <header>
         <div>
           <span className="eyebrow">Content integrity</span>
@@ -150,7 +150,6 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
             Generate checksum
           </button>
           {progress && <button onClick={cancel}>Cancel</button>}
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -175,6 +174,8 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
             <button
               key={entry.locationUid}
               className={entry.locationUid === selectedUid ? "selected" : ""}
+              aria-selected={entry.locationUid === selectedUid}
+              title={entry.name || entry.titleId}
               disabled={!!progress}
               onClick={() => {
                 setSelectedUid(entry.locationUid);
@@ -183,7 +184,9 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
             >
               <strong>{entry.name || entry.titleId}</strong>
               <span>
-                {entry.type} · {entry.format} · v{entry.version}
+                {translate(entry.type)} ·{" "}
+                <span data-i18n-ignore>{entry.format.toUpperCase()}</span> · v
+                {entry.version}
               </span>
               <code>{entry.titleId}</code>
             </button>
@@ -207,7 +210,10 @@ export function ChecksumToolWindow({ windowId }: { windowId: string }) {
                 <div>
                   <dt>Content</dt>
                   <dd>
-                    {selected.type} / {selected.format}
+                    {translate(selected.type)} /{" "}
+                    <span data-i18n-ignore>
+                      {selected.format.toUpperCase()}
+                    </span>
                   </dd>
                 </div>
               </dl>

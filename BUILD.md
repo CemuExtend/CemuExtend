@@ -182,7 +182,19 @@ docker build -t cemu-extend:build .
 docker run --rm -it cemu-extend:build
 ```
 
-The default image performs a WebView Release build. Use `--build-arg CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another frontend, `--build-arg CEMU_OVERLAY_BACKEND=imgui` to select the ImGui fallback for a WebView frontend build, and `--build-arg BUILD_TYPE=Debug` for a Debug build. The `docker-build.sh` wrapper accepts the same selections through `CEMU_FRONTEND` and `CEMU_OVERLAY_BACKEND`. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
+The default image performs an incremental WebView Release build. Its persistent
+CMake/Ninja cache means regenerating `src/webview/generated/WebAssets.h` only
+recompiles the affected WebView target and relinks Cemu. Use
+`CEMU_CLEAN_BUILD=1 ./docker-build.sh` only when a dependency, toolchain, or
+configuration change requires `--clean-first`. Use `--build-arg
+CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another
+frontend, `--build-arg CEMU_OVERLAY_BACKEND=imgui` to select the ImGui fallback
+for a WebView frontend build, and `--build-arg BUILD_TYPE=Debug` for a Debug
+build. The `docker-build.sh` wrapper accepts the frontend and overlay selections
+through `CEMU_FRONTEND` and `CEMU_OVERLAY_BACKEND`. The compiled executable is at
+`/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container.
+To create only the dependency-enabled development image without compiling, use
+`docker build --target dev -t cemu-extend:dev .`.
 
 To build and launch the desktop frontend with its GTK/WebKitGTK runtime, use:
 

@@ -58,7 +58,8 @@ const inspectModuleSyntax = (node: ts.Node): void => {
     ts.isExportAssignment(node) ||
     ts.isExportDeclaration(node) ||
     node.kind === ts.SyntaxKind.ImportKeyword ||
-    (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword)
+    (ts.isMetaProperty(node) &&
+      node.keywordToken === ts.SyntaxKind.ImportKeyword)
   )
     moduleSyntax = true;
   ts.forEachChild(node, inspectModuleSyntax);

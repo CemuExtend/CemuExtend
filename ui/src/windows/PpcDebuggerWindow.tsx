@@ -5,6 +5,7 @@ import type {
   PpcDebuggerSnapshot,
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
+import { translate } from "../i18n/runtime";
 import { centerAddress, parseGuestAddress } from "./ppcDebuggerModel";
 
 const LINE_COUNT = 64;
@@ -65,7 +66,7 @@ export function PpcDebuggerWindow() {
   const go = () => {
     const parsed = parseGuestAddress(addressInput);
     if (!parsed || (Number.parseInt(parsed, 16) & 3) !== 0) {
-      setError("Enter a 4-byte aligned Wii U virtual address.");
+      setError(translate("Enter a 4-byte aligned Wii U virtual address."));
       return;
     }
     setCenter(parsed);
@@ -76,12 +77,11 @@ export function PpcDebuggerWindow() {
     <main className="role-window ppc-debugger-window">
       <header>
         <div>
-          <span className="eyebrow">Runtime diagnostics</span>
           <h1>PPC Debugger</h1>
+          <p>Execution control, disassembly, registers, and breakpoints.</p>
         </div>
         <div className="button-row">
           <button onClick={() => void refresh()}>Refresh</button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -152,7 +152,8 @@ export function PpcDebuggerWindow() {
       </section>
       {!snapshot?.available && (
         <p className="muted">
-          {snapshot?.diagnostic || "Start a Wii U title to inspect PPC code."}
+          {snapshot?.diagnostic ||
+            translate("Start a Wii U title to inspect PPC code.")}
         </p>
       )}
       <section className="ppc-debugger-grid">
@@ -165,8 +166,25 @@ export function PpcDebuggerWindow() {
           </div>
           {snapshot?.instructions.map((instruction) => (
             <button
-              className={`ppc-disassembly-row ${instruction.current ? "current" : ""}`}
+              className={`ppc-disassembly-row ${instruction.current ? "current" : ""} ${instruction.address === addressInput ? "selected" : ""}`}
               key={instruction.address}
+              title={translate(
+                "Select instruction; press Enter or double-click to toggle breakpoint",
+              )}
+              onClick={() => {
+                setCenter(instruction.address);
+                setAddressInput(instruction.address);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !snapshot) return;
+                event.preventDefault();
+                void mutate(() =>
+                  invoke("ppcDebugger.toggleBreakpoint", {
+                    generation: snapshot.generation,
+                    address: instruction.address,
+                  }),
+                );
+              }}
               onDoubleClick={() =>
                 snapshot &&
                 void mutate(() =>
@@ -227,7 +245,7 @@ export function PpcDebuggerWindow() {
                       }
                     />{" "}
                     <code>{breakpoint.address}</code>{" "}
-                    {breakpoint.logging ? "log" : "execute"}
+                    {translate(breakpoint.logging ? "log" : "execute")}
                   </label>
                   <button
                     className="danger"
@@ -244,6 +262,9 @@ export function PpcDebuggerWindow() {
                   </button>
                 </div>
               ))}
+              {snapshot?.breakpoints.length === 0 && (
+                <p className="empty-results">No breakpoints.</p>
+              )}
             </div>
           </section>
         </aside>

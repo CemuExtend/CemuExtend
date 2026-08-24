@@ -554,7 +554,6 @@ namespace WebFrontend
 				gtk_container_remove(GTK_CONTAINER(m_window), m_webView);
 
 				m_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-				m_menuBar = BuildMenu();
 				m_stack = gtk_stack_new();
 				gtk_stack_set_transition_type(GTK_STACK(m_stack), GTK_STACK_TRANSITION_TYPE_NONE);
 				gtk_widget_set_hexpand(m_stack, TRUE);
@@ -603,7 +602,6 @@ namespace WebFrontend
 									 }
 								 }),
 								 this);
-				gtk_box_pack_start(GTK_BOX(m_root), m_menuBar, FALSE, FALSE, 0);
 				gtk_box_pack_start(GTK_BOX(m_root), m_overlay, TRUE, TRUE, 0);
 				gtk_container_add(GTK_CONTAINER(m_window), m_root);
 				g_object_unref(m_webView);
@@ -639,7 +637,6 @@ namespace WebFrontend
 				m_root = nullptr;
 				m_overlay = nullptr;
 				m_stack = nullptr;
-				m_menuBar = nullptr;
 				m_webView = nullptr;
 				m_textInput = nullptr;
 			}
@@ -789,24 +786,17 @@ namespace WebFrontend
 				m_fullscreen = fullscreen;
 				if (fullscreen)
 				{
-					gtk_widget_hide(m_menuBar);
 					gtk_window_fullscreen(GTK_WINDOW(m_window));
 				}
 				else
 				{
 					gtk_window_unfullscreen(GTK_WINDOW(m_window));
-					gtk_widget_show(m_menuBar);
 				}
 			}
 
 			void SetCloseHandler(CloseHandler handler) override
 			{
 				m_closeHandler = std::move(handler);
-			}
-
-			void SetMenuHandler(MenuHandler handler) override
-			{
-				m_menuHandler = std::move(handler);
 			}
 
 			void SetMetricsHandler(MetricsHandler handler) override
@@ -1057,55 +1047,8 @@ namespace WebFrontend
 					m_metricsHandler(GetMetrics());
 			}
 
-			GtkWidget* MenuItem(const char* label, MenuCommand command)
-			{
-				auto* item = gtk_menu_item_new_with_label(label);
-				g_object_set_data(G_OBJECT(item), "cemu-command",
-								  GINT_TO_POINTER(static_cast<int>(command) + 1));
-				g_signal_connect(item, "activate", G_CALLBACK(+[](GtkMenuItem* item, gpointer data) {
-									 auto& self = *static_cast<GtkWindowHost*>(data);
-									 const auto raw = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(item), "cemu-command"));
-									 if (self.m_menuHandler && raw > 0)
-										 self.m_menuHandler(static_cast<MenuCommand>(raw - 1));
-								 }),
-								 this);
-				return item;
-			}
-
-			GtkWidget* BuildMenu()
-			{
-				auto* bar = gtk_menu_bar_new();
-				auto addMenu = [bar](const char* name) {
-					auto* root = gtk_menu_item_new_with_label(name);
-					auto* menu = gtk_menu_new();
-					gtk_menu_item_set_submenu(GTK_MENU_ITEM(root), menu);
-					gtk_menu_shell_append(GTK_MENU_SHELL(bar), root);
-					return menu;
-				};
-				auto* file = addMenu("File");
-				gtk_menu_shell_append(GTK_MENU_SHELL(file), MenuItem("Load", MenuCommand::Load));
-				gtk_menu_shell_append(GTK_MENU_SHELL(file), MenuItem("End emulation", MenuCommand::EndEmulation));
-				gtk_menu_shell_append(GTK_MENU_SHELL(file), MenuItem("Exit", MenuCommand::Exit));
-				auto* options = addMenu("Options");
-				gtk_menu_shell_append(GTK_MENU_SHELL(options), MenuItem("Fullscreen", MenuCommand::ToggleFullscreen));
-				gtk_menu_shell_append(GTK_MENU_SHELL(options), MenuItem("Separate GamePad view", MenuCommand::TogglePadView));
-				gtk_menu_shell_append(GTK_MENU_SHELL(options), MenuItem("General Settings", MenuCommand::GeneralSettings));
-				gtk_menu_shell_append(GTK_MENU_SHELL(options), MenuItem("Input Settings", MenuCommand::InputSettings));
-				auto* tools = addMenu("Tools");
-				gtk_menu_shell_append(GTK_MENU_SHELL(tools), MenuItem("Graphic Packs", MenuCommand::GraphicPacks));
-				gtk_menu_shell_append(GTK_MENU_SHELL(tools), MenuItem("Title Manager", MenuCommand::TitleManager));
-				(void)addMenu("CPU");
-				(void)addMenu("NFC");
-				auto* debug = addMenu("Debug");
-				gtk_menu_shell_append(GTK_MENU_SHELL(debug), MenuItem("Logging", MenuCommand::Logging));
-				auto* help = addMenu("Help");
-				gtk_menu_shell_append(GTK_MENU_SHELL(help), MenuItem("About", MenuCommand::About));
-				return bar;
-			}
-
 			GtkWidget* m_window{};
 			GtkWidget* m_root{};
-			GtkWidget* m_menuBar{};
 			GtkWidget* m_overlay{};
 			GtkWidget* m_stack{};
 			GtkWidget* m_webView{};
@@ -1115,7 +1058,6 @@ namespace WebFrontend
 			std::unique_ptr<GtkRenderRegion> m_renderRegion;
 			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
-			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;

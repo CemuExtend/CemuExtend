@@ -84,8 +84,7 @@ export const jaSupplement: Record<string, string> = {
     "行 {count}件 · 世代 {generation}",
   "{count} packages · generation {generation}":
     "パッケージ {count}件 · 世代 {generation}",
-  "{shown} shown / {retained} retained":
-    "表示 {shown}件 / 保持 {retained}件",
+  "{shown} shown / {retained} retained": "表示 {shown}件 / 保持 {retained}件",
   "Page {page} of {pages}": "{pages}ページ中 {page}ページ",
   "{count} installations": "インストール {count}件",
   "{count} packs": "パック {count}件",
@@ -104,7 +103,8 @@ export const jaSupplement: Record<string, string> = {
   "Account Manager": "アカウント管理",
   "Save Manager": "セーブ管理",
   "CemuMod Manager": "CemuMod 管理",
-  "Checksum Tool": "チェックサムツール",
+  "Checksum Tool": "チェックサム",
+  "Emulated USB": "USBデバイス",
   "Emulated USB Devices": "エミュレートUSBデバイス",
   "Hotkey Settings": "ホットキー設定",
   "PPC Debugger": "PPC デバッガー",
@@ -163,11 +163,15 @@ export const jaSupplement: Record<string, string> = {
   "SHA-256 package digest": "パッケージSHA-256ダイジェスト",
   "No game paths configured.": "ゲームパスが設定されていません。",
   "No graphic packs were found.": "グラフィックパックが見つかりません。",
-  "No installed content was found.": "インストール済みコンテンツが見つかりません。",
-  "No installed save data was found.": "インストール済みセーブデータが見つかりません。",
-  "No managed content matches the filter.": "条件に一致する管理対象コンテンツがありません。",
+  "No installed content was found.":
+    "インストール済みコンテンツが見つかりません。",
+  "No installed save data was found.":
+    "インストール済みセーブデータが見つかりません。",
+  "No managed content matches the filter.":
+    "条件に一致する管理対象コンテンツがありません。",
   "No matching values found.": "一致する値が見つかりません。",
-  "No physical controllers assigned.": "物理コントローラーが割り当てられていません。",
+  "No physical controllers assigned.":
+    "物理コントローラーが割り当てられていません。",
   "No supported HID devices are currently attached.":
     "対応HIDデバイスは現在接続されていません。",
   "No CemuMod packages found.": "CemuModパッケージが見つかりません。",

@@ -70,7 +70,6 @@ export function EmulatedUsbDevicesWindow() {
           <button disabled={Boolean(busy)} onClick={() => void load()}>
             Refresh
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       <p className="lead">

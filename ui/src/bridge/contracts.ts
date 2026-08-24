@@ -17,6 +17,7 @@ export type Bootstrap = {
   windowRole: ActiveWindowRole;
   appVersion: string;
   platform: string;
+  activeAccountName: string;
   theme: "light" | "dark" | "system";
   themeRevision: string;
   language: string;
@@ -24,13 +25,6 @@ export type Bootstrap = {
   shuttingDown: boolean;
   context?: { titleId?: string; packageKey?: string; generation?: string };
 };
-
-export type WindowOpenRequest =
-  | { role: "graphic-packs"; requestId: string; context?: { titleId?: string } }
-  | {
-      role: Exclude<ImplementedToolWindowRole, "graphic-packs">;
-      requestId: string;
-    };
 
 export type CemodPermission = {
   name: string;

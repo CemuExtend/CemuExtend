@@ -1,0 +1,9 @@
+{
+  "date": "2026-08-24",
+  "framework": "React 19 + Vite 7 + TypeScript 5.9",
+  "font_stack": "Segoe UI / Noto Sans + Cascadia Mono / Noto Sans Mono",
+  "palette": "OKLCH dark custom properties in tokens.css",
+  "motion": "motion-cut; CSS-only state feedback",
+  "spacing": "4-point named scale with fixed desktop chrome geometry",
+  "source": "81 approved 1440x900 reference UI captures"
+}

@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <utility>
 
-static void CemuDispatchMenu(void* context, NSInteger tag);
 static bool CemuDispatchClose(void* context);
 static void CemuDispatchMetrics(void* context);
 static void CemuDispatchPadClose(void* context);
@@ -39,7 +38,6 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 @public
 	void* context;
 }
-- (void)onMenu:(id)sender;
 @end
 
 @interface CemuOverlayContainer : NSView
@@ -107,10 +105,6 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 @end
 
 @implementation CemuWebWindowDelegate
-- (void)onMenu:(id)sender
-{
-	CemuDispatchMenu(context, [sender tag]);
-}
 - (BOOL)windowShouldClose:(id)sender
 {
 	(void)sender;
@@ -381,7 +375,6 @@ namespace WebFrontend
 				m_delegate = [[CemuWebWindowDelegate alloc] init];
 				m_delegate->context = this;
 				[m_window setDelegate:m_delegate];
-				BuildMenu();
 			}
 
 			~CocoaWindowHost() override
@@ -583,7 +576,6 @@ namespace WebFrontend
 				[m_window toggleFullScreen:nil];
 			}
 			void SetCloseHandler(CloseHandler handler) override { m_closeHandler = std::move(handler); }
-			void SetMenuHandler(MenuHandler handler) override { m_menuHandler = std::move(handler); }
 			void SetMetricsHandler(MetricsHandler handler) override
 			{
 				m_metricsHandler = std::move(handler);
@@ -802,11 +794,6 @@ namespace WebFrontend
 				}
 				return YES;
 			}
-			void DispatchMenu(NSInteger tag)
-			{
-				if (m_menuHandler && tag >= 0 && tag <= static_cast<NSInteger>(MenuCommand::About))
-					m_menuHandler(static_cast<MenuCommand>(tag));
-			}
 			bool DispatchClose()
 			{
 				if (m_closeHandler)
@@ -820,47 +807,6 @@ namespace WebFrontend
 			}
 
 		private:
-			NSMenuItem* Item(NSString* title, MenuCommand command)
-			{
-				auto* item = [[[NSMenuItem alloc] initWithTitle:title action:@selector(onMenu:)
-					keyEquivalent:@""] autorelease];
-				[item setTag:static_cast<NSInteger>(command)];
-				[item setTarget:m_delegate];
-				return item;
-			}
-			NSMenu* Submenu(NSMenu* bar, NSString* title)
-			{
-				auto* root = [[[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""] autorelease];
-				auto* menu = [[[NSMenu alloc] initWithTitle:title] autorelease];
-				[root setSubmenu:menu];
-				[bar addItem:root];
-				return menu;
-			}
-			void BuildMenu()
-			{
-				auto* bar = [[[NSMenu alloc] initWithTitle:@"CemuExtend"] autorelease];
-				auto* app = Submenu(bar, @"CemuExtend");
-				[app addItem:Item(@"About CemuExtend", MenuCommand::About)];
-				[app addItem:[NSMenuItem separatorItem]];
-				[app addItem:Item(@"Quit CemuExtend", MenuCommand::Exit)];
-				auto* file = Submenu(bar, @"File");
-				[file addItem:Item(@"Load…", MenuCommand::Load)];
-				[file addItem:Item(@"End emulation", MenuCommand::EndEmulation)];
-				auto* options = Submenu(bar, @"Options");
-				[options addItem:Item(@"Fullscreen", MenuCommand::ToggleFullscreen)];
-				[options addItem:Item(@"Separate GamePad view", MenuCommand::TogglePadView)];
-				[options addItem:Item(@"General Settings", MenuCommand::GeneralSettings)];
-				[options addItem:Item(@"Input Settings", MenuCommand::InputSettings)];
-				auto* tools = Submenu(bar, @"Tools");
-				[tools addItem:Item(@"Graphic Packs", MenuCommand::GraphicPacks)];
-				[tools addItem:Item(@"Title Manager", MenuCommand::TitleManager)];
-				(void)Submenu(bar, @"CPU");
-				(void)Submenu(bar, @"NFC");
-				auto* debug = Submenu(bar, @"Debug");
-				[debug addItem:Item(@"Logging", MenuCommand::Logging)];
-				[NSApp setMainMenu:bar];
-			}
-
 			NSWindow* m_window{};
 			NSView* m_root{};
 			NSView* m_webView{};
@@ -872,7 +818,6 @@ namespace WebFrontend
 			std::unique_ptr<CocoaRenderRegion> m_renderRegion;
 			std::unique_ptr<CocoaPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
-			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;
@@ -888,11 +833,6 @@ namespace WebFrontend
 	std::unique_ptr<INativeWindowHost> CreateNativeWindowHost()
 	{
 		return std::make_unique<CocoaWindowHost>();
-	}
-
-	void DispatchCocoaMenu(void* context, NSInteger tag)
-	{
-		static_cast<CocoaWindowHost*>(context)->DispatchMenu(tag);
 	}
 
 	bool DispatchCocoaClose(void* context)
@@ -924,12 +864,6 @@ namespace WebFrontend
 	{
 		return static_cast<CocoaWindowHost*>(context)->DispatchTextCommand(command);
 	}
-}
-
-static void CemuDispatchMenu(void* context, NSInteger tag)
-{
-	if (context)
-		WebFrontend::DispatchCocoaMenu(context, tag);
 }
 
 static bool CemuDispatchClose(void* context)

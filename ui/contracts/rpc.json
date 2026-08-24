@@ -94,11 +94,10 @@
     { "name": "system.quit", "params": "undefined", "result": "EmptyResult" },
     { "name": "window.close", "params": "undefined", "result": "EmptyResult" },
     {
-      "name": "window.open",
-      "params": "WindowOpenRequest",
-      "result": "{ windowId: string }"
+      "name": "workspace.activate",
+      "params": "{ role: ImplementedToolWindowRole | \"main-library\" }",
+      "result": "EmptyResult"
     },
-    { "name": "window.focus", "params": "undefined", "result": "EmptyResult" },
     {
       "name": "system.openExternalUrl",
       "params": "{ url: string }",
@@ -511,6 +510,11 @@
       "result": "EmptyResult"
     },
     { "name": "titles.list", "params": "undefined", "result": "Title[]" },
+    {
+      "name": "titles.icon",
+      "params": "{ titleId: string }",
+      "result": "{ titleId: string; iconDataUrl: string | null }"
+    },
     {
       "name": "titles.refresh",
       "params": "undefined",

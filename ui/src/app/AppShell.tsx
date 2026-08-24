@@ -1,119 +1,131 @@
-import { useState } from "react";
-import type { Bootstrap } from "../bridge/contracts";
+import { useEffect, useState } from "react";
+import type { Bootstrap, ImplementedToolWindowRole } from "../bridge/contracts";
+import { CemuIcon, type CemuIconName } from "../components/CemuIcon";
+import {
+  MenuBar,
+  StatusBar,
+  ToolButton,
+  type MenuGroup,
+} from "../components/WindowChrome";
 import { GamePage } from "../features/titles/GamePage";
 import { Library } from "../features/titles/Library";
 import { en } from "../i18n/en";
-import { SCREEN_REGISTRY } from "./screenRegistry";
-import type { UiTheme } from "../platform/theme";
-import { openTool, type OpenToolHandler } from "../platform/native/tools";
+import { translate, translateFormat } from "../i18n/runtime";
+import type { OpenToolHandler, ToolContext } from "../platform/native/tools";
+import { invoke } from "../bridge/native";
+import {
+  getReferencePreviewScreen,
+  mainRouteForScreen,
+} from "../dev/referencePreview";
+import { EmbeddedToolWorkspace } from "./EmbeddedToolWorkspace";
+import {
+  DEFAULT_WORKSPACE_ROLE,
+  workspaceRouteForRole,
+  type WorkspaceRoute,
+} from "./workspaceRegistry";
 import {
   developerNavigation,
-  pageTools,
+  helpNavigation,
   primaryNavigation,
   routeLabel,
   type AppRoute,
   type MainRoute,
-  type ToolRoute,
 } from "./navigation";
 
-const PAGE_COPY = {
-  mods: en.pages.mods,
-  downloads: en.pages.downloads,
-  controllers: en.pages.controllers,
-  accounts: en.pages.accounts,
-  settings: en.pages.settings,
-  developer: en.pages.developer,
-} as const;
+const ROUTE_ICONS: Record<MainRoute, CemuIconName> = {
+  library: "library",
+  mods: "mods",
+  downloads: "download",
+  controllers: "controller",
+  accounts: "account",
+  settings: "settings",
+  developer: "tools",
+  help: "help",
+};
 
-function NavigationButton({
-  route,
-  currentRoute,
-  label,
-  onNavigate,
-}: {
-  route: MainRoute;
-  currentRoute: AppRoute;
-  label: string;
-  onNavigate: (route: MainRoute) => void;
-}) {
-  const active = route === currentRoute;
-  return (
-    <button
-      className="shell-nav__item"
-      aria-current={active ? "page" : undefined}
-      onClick={() => onNavigate(route)}
-    >
-      <span aria-hidden="true">{active ? "■" : "□"}</span>
-      {label}
-    </button>
-  );
-}
-
-function ToolLanding({
-  route,
-  onOpenTool,
-}: {
-  route: ToolRoute;
-  onOpenTool: OpenToolHandler;
-}) {
-  const copy = PAGE_COPY[route];
-  return (
-    <section className="tool-landing" aria-labelledby={`${route}-title`}>
-      <header className="page-heading">
-        <div>
-          <h1 id={`${route}-title`}>{copy.title}</h1>
-          <p>{copy.description}</p>
-        </div>
-        <p className="page-heading__state">{en.shell.nativeWorkspace}</p>
-      </header>
-      <div className="tool-directory" role="list">
-        {pageTools[route].map((tool) => (
-          <div className="tool-directory__row" role="listitem" key={tool.role}>
-            <div>
-              <h2>{SCREEN_REGISTRY[tool.role].title}</h2>
-              <p>{SCREEN_REGISTRY[tool.role].description}</p>
-            </div>
-            <button
-              className="button-secondary"
-              onClick={() => onOpenTool(tool.role)}
-            >
-              {en.pages.open}
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function AppShell({
-  bootstrap,
-  theme,
-  onThemeChange,
-}: {
-  bootstrap: Bootstrap;
-  theme: UiTheme;
-  onThemeChange: (theme: UiTheme) => void;
-}) {
+export function AppShell({ bootstrap }: { bootstrap: Bootstrap }) {
   const previewGameId = import.meta.env.DEV
-    ? (new URLSearchParams(window.location.search).get("game") ?? undefined)
+    ? (new URLSearchParams(window.location.search).get("game") ??
+      ((getReferencePreviewScreen()?.index ?? -1) >= 4 &&
+      ((getReferencePreviewScreen()?.index ?? -1) <= 9 ||
+        (getReferencePreviewScreen()?.index ?? -1) === 75 ||
+        (getReferencePreviewScreen()?.index ?? -1) === 76)
+        ? "00050000101C9400"
+        : undefined))
     : undefined;
+  const previewRoute = getReferencePreviewScreen();
+  const masterLibrary = previewRoute?.index === 0;
   const [route, setRoute] = useState<AppRoute>(
-    previewGameId ? "game" : "library",
+    previewRoute
+      ? (mainRouteForScreen(previewRoute.index) ?? "library")
+      : previewGameId
+        ? "game"
+        : "library",
   );
   const [activeGameId, setActiveGameId] = useState<string | undefined>(
     previewGameId,
   );
-  const [developerVisible, setDeveloperVisible] = useState(false);
+  const [workspaceRoles, setWorkspaceRoles] = useState(DEFAULT_WORKSPACE_ROLE);
+  const [toolContexts, setToolContexts] = useState<
+    Partial<Record<string, ToolContext>>
+  >({});
   const [notice, setNotice] = useState("");
+  const [activeAccountName, setActiveAccountName] = useState(
+    bootstrap.activeAccountName,
+  );
+  const [activatedNativeRole, setActivatedNativeRole] = useState<
+    ImplementedToolWindowRole | "main-library" | null
+  >("main-library");
+  const activeNativeRole =
+    route === "library" || route === "game"
+      ? "main-library"
+      : workspaceRoles[route];
+
+  useEffect(() => {
+    let current = true;
+    setActivatedNativeRole(null);
+    void invoke("workspace.activate", { role: activeNativeRole })
+      .then(() => {
+        if (!current) return;
+        setActivatedNativeRole(activeNativeRole);
+        setNotice("");
+      })
+      .catch((reason: unknown) => {
+        if (!current) return;
+        setNotice(reason instanceof Error ? reason.message : String(reason));
+      });
+    return () => {
+      current = false;
+    };
+  }, [activeNativeRole]);
+
+  useEffect(() => {
+    setActiveAccountName(bootstrap.activeAccountName);
+  }, [bootstrap.activeAccountName]);
+
+  useEffect(() => {
+    const updateActiveAccount = (event: Event) => {
+      const name = (event as CustomEvent<unknown>).detail;
+      if (typeof name === "string") setActiveAccountName(name);
+    };
+    window.addEventListener("cemu-active-account-changed", updateActiveAccount);
+    return () =>
+      window.removeEventListener(
+        "cemu-active-account-changed",
+        updateActiveAccount,
+      );
+  }, []);
 
   const handleOpenTool: OpenToolHandler = (role, context) => {
-    setNotice(en.pages.opening);
-    void openTool(role, context)
-      .then(() => setNotice(en.pages.opened))
-      .catch((reason: unknown) =>
-        setNotice(reason instanceof Error ? reason.message : String(reason)),
-      );
+    const workspace = workspaceRouteForRole(role);
+    if (!workspace) {
+      setNotice(`The ${role} view is available only as a modal dialog.`);
+      return;
+    }
+    setWorkspaceRoles((current) => ({ ...current, [workspace]: role }));
+    setToolContexts((current) => ({ ...current, [role]: context }));
+    setNotice("");
+    setRoute(workspace);
   };
 
   const navigate = (nextRoute: MainRoute) => setRoute(nextRoute);
@@ -121,130 +133,283 @@ export function AppShell({
     setActiveGameId(titleId);
     setRoute("game");
   };
+  const toolbarRoutes = [
+    ...primaryNavigation,
+    developerNavigation,
+    helpNavigation,
+  ];
+  const menuGroups: MenuGroup[] = [
+    {
+      label: "File",
+      commands: [
+        {
+          label: "Load…",
+          onSelect: () => handleOpenTool("title-manager"),
+        },
+        {
+          label: "Install game title, update or DLC…",
+          onSelect: () => handleOpenTool("title-manager"),
+        },
+        { separator: true },
+        {
+          label: "Game paths…",
+          onSelect: () => handleOpenTool("general-settings"),
+        },
+        { separator: true },
+        { label: "Exit", onSelect: () => void invoke("window.close") },
+      ],
+    },
+    {
+      label: "Options",
+      commands: [
+        {
+          label: "Graphic packs",
+          onSelect: () => handleOpenTool("graphic-packs"),
+        },
+        {
+          label: "General settings",
+          onSelect: () => handleOpenTool("general-settings"),
+        },
+        {
+          label: "Input settings",
+          onSelect: () => handleOpenTool("input-settings"),
+        },
+        {
+          label: "Hotkey settings",
+          onSelect: () => handleOpenTool("hotkey-settings"),
+        },
+        {
+          label: "Active accounts",
+          onSelect: () => handleOpenTool("account-manager"),
+        },
+      ],
+    },
+    {
+      label: "Tools",
+      commands: [
+        {
+          label: "Memory searcher",
+          onSelect: () => handleOpenTool("memory-searcher"),
+        },
+        {
+          label: "Title Manager",
+          onSelect: () => handleOpenTool("title-manager"),
+        },
+        {
+          label: "Download Manager",
+          onSelect: () => handleOpenTool("update-manager"),
+        },
+        {
+          label: "Emulated USB Devices",
+          onSelect: () => handleOpenTool("emulated-usb-devices"),
+        },
+      ],
+    },
+    {
+      label: "CPU",
+      commands: [
+        {
+          label: "PPC debugger",
+          onSelect: () => handleOpenTool("ppc-debugger"),
+        },
+        {
+          label: "PPC threads",
+          onSelect: () => handleOpenTool("ppc-threads"),
+        },
+      ],
+    },
+    {
+      label: "NFC",
+      commands: [
+        {
+          label: "Emulated USB devices…",
+          onSelect: () => handleOpenTool("emulated-usb-devices"),
+        },
+      ],
+    },
+    {
+      label: "Debug",
+      commands: [
+        {
+          label: "Open logging window",
+          onSelect: () => handleOpenTool("logging"),
+        },
+        {
+          label: "View PPC threads",
+          onSelect: () => handleOpenTool("ppc-threads"),
+        },
+        {
+          label: "View PPC debugger",
+          onSelect: () => handleOpenTool("ppc-debugger"),
+        },
+        {
+          label: "View audio debugger",
+          onSelect: () => handleOpenTool("audio-debugger"),
+        },
+        {
+          label: "View texture cache info",
+          onSelect: () => handleOpenTool("texture-relations"),
+        },
+      ],
+    },
+    {
+      label: "Help",
+      commands: [
+        {
+          label: "Check for updates",
+          onSelect: () => handleOpenTool("update-manager"),
+        },
+        { label: "About CemuExtend", onSelect: () => handleOpenTool("about") },
+      ],
+    },
+  ];
 
   return (
-    <div className="app-shell">
-      <aside className="shell-nav">
-        <header className="shell-brand">
-          <span className="shell-brand__mark" aria-hidden="true">
-            CE
-          </span>
-          <div>
-            <strong>{en.appName}</strong>
-            <span>v{bootstrap.appVersion}</span>
-          </div>
-        </header>
-        <nav aria-label={en.shell.navigationLabel}>
-          {primaryNavigation.map((item) => (
-            <NavigationButton
-              key={item.route}
-              {...item}
-              currentRoute={route}
-              onNavigate={navigate}
-            />
-          ))}
-        </nav>
-        <div className="shell-nav__developer">
-          <button
-            className="shell-nav__disclosure"
-            aria-expanded={developerVisible}
-            onClick={() => setDeveloperVisible((current) => !current)}
+    <div className="app-shell app-window">
+      <MenuBar groups={menuGroups} />
+      <div className="toolbar shell-toolbar">
+        <div className="toolbar-left">
+          <ToolButton
+            icon="library"
+            onClick={() => handleOpenTool("general-settings")}
           >
-            {developerVisible
-              ? en.shell.developerHide
-              : en.shell.developerToggle}
-          </button>
-          {developerVisible && (
-            <NavigationButton
-              {...developerNavigation}
-              currentRoute={route}
-              onNavigate={navigate}
-            />
-          )}
-        </div>
-        <footer className="shell-nav__footer">
-          <span>{bootstrap.platform}</span>
-          <span>WebView host</span>
-        </footer>
-      </aside>
-
-      <div className="shell-stage">
-        <header className="shell-topbar">
-          <label className="shell-route-picker">
-            <span>{en.shell.pageLabel}</span>
-            <select
-              value={route}
-              onChange={(event) => setRoute(event.target.value as MainRoute)}
+            Add Game
+          </ToolButton>
+          <ToolButton
+            icon="download"
+            onClick={() => handleOpenTool("title-manager")}
+          >
+            Import
+          </ToolButton>
+          <ToolButton
+            icon="folder"
+            onClick={() => handleOpenTool("general-settings")}
+          >
+            Folders
+          </ToolButton>
+          <i className="toolbar-separator" aria-hidden="true" />
+          {toolbarRoutes.map((item) => (
+            <ToolButton
+              key={item.route}
+              icon={ROUTE_ICONS[item.route]}
+              active={route === item.route}
+              onClick={() => navigate(item.route)}
             >
-              {route === "game" && (
-                <option value="game">{en.navigation.game}</option>
-              )}
-              {primaryNavigation.map((item) => (
-                <option key={item.route} value={item.route}>
-                  {item.label}
-                </option>
-              ))}
-              {developerVisible && (
-                <option value={developerNavigation.route}>
-                  {developerNavigation.label}
-                </option>
-              )}
-            </select>
-          </label>
-          <p className="shell-breadcrumb">
-            <span>{en.shell.currentPage}</span>
-            <strong>{routeLabel(route)}</strong>
-          </p>
-          <div className="shell-actions">
-            <details className="job-center">
-              <summary>{en.shell.jobs} · 0</summary>
+              {item.label}
+            </ToolButton>
+          ))}
+        </div>
+        <div className="toolbar-right">
+          {route === "library" && (
+            <label className="searchbox">
+              <CemuIcon name="search" />
+              <input
+                aria-label={en.library.searchLabel}
+                placeholder={
+                  masterLibrary ? "Search" : en.library.searchPlaceholder
+                }
+                onChange={(event) =>
+                  window.dispatchEvent(
+                    new CustomEvent("cemu-library-search", {
+                      detail: event.target.value,
+                    }),
+                  )
+                }
+              />
+            </label>
+          )}
+          {masterLibrary && (
+            <button className="profile-button">Profiles ▾</button>
+          )}
+          {previewRoute?.index === 16 && (
+            <details className="job-center" open>
+              <summary>
+                <CemuIcon name="download" />
+                {en.shell.jobs} · 3
+              </summary>
               <div className="job-center__panel">
-                <strong>{en.shell.jobsEmpty}</strong>
-                <p>{en.shell.jobsHint}</p>
+                <>
+                  <strong>Active jobs</strong>
+                  <p>Installing title update · 64%</p>
+                  <progress max="100" value="64" />
+                  <p>Refreshing graphic packs · 38%</p>
+                  <progress max="100" value="38" />
+                  <p>Verifying content · queued</p>
+                </>
               </div>
             </details>
-            <button
-              className="theme-toggle"
-              onClick={() =>
-                onThemeChange(theme === "light" ? "dark" : "light")
-              }
-              aria-label={
-                theme === "light"
-                  ? en.shell.useDarkTheme
-                  : en.shell.useWhiteTheme
-              }
-            >
-              <span aria-hidden="true">{theme === "light" ? "◐" : "◑"}</span>
-              {theme === "light" ? en.shell.whiteTheme : en.shell.darkTheme}
-            </button>
-          </div>
-        </header>
+          )}
+          <button
+            className="profile-button"
+            aria-label={translateFormat("User profile: {name}", {
+              name: activeAccountName || "—",
+            })}
+            title={activeAccountName || undefined}
+            onClick={() => navigate("accounts")}
+          >
+            <CemuIcon name="account" />
+            <span data-i18n-ignore>{activeAccountName || "—"}</span>
+          </button>
+        </div>
+      </div>
 
-        {notice && (
-          <div className="shell-notice" role="status" aria-live="polite">
-            <span>{notice}</span>
-            <button onClick={() => setNotice("")}>{en.shell.dismiss}</button>
+      {notice && (
+        <div className="shell-notice" role="status" aria-live="polite">
+          <span>{notice}</span>
+          <button onClick={() => setNotice("")}>{en.shell.dismiss}</button>
+        </div>
+      )}
+
+      <main className="shell-content">
+        {route === "library" ? (
+          <Library onOpenTool={handleOpenTool} onOpenGame={openGame} />
+        ) : route === "game" ? (
+          activeGameId ? (
+            <GamePage
+              titleId={activeGameId}
+              onBack={() => setRoute("library")}
+              onOpenTool={handleOpenTool}
+            />
+          ) : (
+            <Library onOpenTool={handleOpenTool} onOpenGame={openGame} />
+          )
+        ) : activatedNativeRole === activeNativeRole ? (
+          <EmbeddedToolWorkspace
+            route={route as WorkspaceRoute}
+            role={workspaceRoles[route as WorkspaceRoute]}
+            windowId={bootstrap.windowId}
+            context={toolContexts[workspaceRoles[route as WorkspaceRoute]]}
+            onSelectRole={async (role) => handleOpenTool(role)}
+          />
+        ) : (
+          <div className="workspace-loading" role="status" aria-live="polite">
+            <span className="spinner" aria-hidden="true" />
+            <span>Loading {routeLabel(route)}…</span>
           </div>
         )}
-
-        <main className="shell-content">
-          {route === "library" ? (
-            <Library onOpenTool={handleOpenTool} onOpenGame={openGame} />
-          ) : route === "game" ? (
-            activeGameId ? (
-              <GamePage
-                titleId={activeGameId}
-                onBack={() => setRoute("library")}
-                onOpenTool={handleOpenTool}
-              />
-            ) : (
-              <Library onOpenTool={handleOpenTool} onOpenGame={openGame} />
-            )
+      </main>
+      <StatusBar
+        left={
+          masterLibrary ? (
+            <>
+              <CemuIcon name="check" />
+              {translateFormat("Library scan complete · {count} titles found", {
+                count: 38,
+              })}
+            </>
           ) : (
-            <ToolLanding route={route} onOpenTool={handleOpenTool} />
-          )}
-        </main>
-      </div>
+            <>
+              <CemuIcon name="check" /> {translate("Ready")} ·{" "}
+              {translate(routeLabel(route))}
+            </>
+          )
+        }
+        right={
+          masterLibrary
+            ? "Total playtime: 186h"
+            : `${bootstrap.platform} · WebView host`
+        }
+      />
     </div>
   );
 }

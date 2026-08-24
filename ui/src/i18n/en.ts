@@ -8,6 +8,7 @@ export const en = {
     accounts: "Accounts",
     settings: "Settings",
     developer: "Developer tools",
+    help: "Help",
     game: "Game",
     gameWorkspace: "Game workspace",
   },
@@ -25,12 +26,8 @@ export const en = {
     useWhiteTheme: "Use White theme",
     useDarkTheme: "Use Dark theme",
     appTheme: "App theme",
-    developerToggle: "Show developer tools",
-    developerHide: "Hide developer tools",
     dismiss: "Dismiss",
-    nativeWorkspace: "Native workspace",
     available: "Available",
-    detachable: "Detachable",
   },
   library: {
     title: "Game library",
@@ -124,40 +121,5 @@ export const en = {
     openPacks: "Open graphic packs",
     openSaves: "Open Save manager",
     openSettings: "Open settings",
-  },
-  pages: {
-    mods: {
-      title: "Mods",
-      description:
-        "Review installed packages, exact-package approvals, and permission history.",
-    },
-    downloads: {
-      title: "Downloads & updates",
-      description:
-        "Install title content and graphic pack updates through tracked Native jobs.",
-    },
-    controllers: {
-      title: "Controllers",
-      description:
-        "Configure players, devices, mappings, profiles, calibration, and hotkeys.",
-    },
-    accounts: {
-      title: "Accounts",
-      description:
-        "Manage local identities, active accounts, and online service settings.",
-    },
-    settings: {
-      title: "Settings",
-      description:
-        "Manage global library, startup, storage, appearance, and advanced options.",
-    },
-    developer: {
-      title: "Developer tools",
-      description:
-        "Open detachable diagnostic workspaces when monitoring a running title.",
-    },
-    open: "Open",
-    opening: "Opening…",
-    opened: "Opened in a Native tool window.",
   },
 } as const;

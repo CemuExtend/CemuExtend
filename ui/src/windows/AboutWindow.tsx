@@ -17,7 +17,6 @@ export function AboutWindow() {
           <span className="eyebrow">CemuExtend</span>
           <h1>About</h1>
         </div>
-        <button onClick={() => void invoke("window.close")}>Close</button>
       </header>
       {error && (
         <div className="notice error" role="alert">

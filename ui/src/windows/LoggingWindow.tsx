@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LoggingEntry, LoggingLevel } from "../bridge/contracts";
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
-import { translateFormat } from "../i18n/runtime";
+import { translate, translateFormat } from "../i18n/runtime";
 import { loggingSnapshotFromEvent, mergeLoggingEntries } from "./loggingEvents";
 
 export function LoggingWindow() {
@@ -122,12 +122,11 @@ export function LoggingWindow() {
     <main className="role-window logging-window">
       <header>
         <div>
-          <span className="eyebrow">Diagnostics</span>
           <h1>Logging</h1>
+          <p>Live structured logs with filtering and retention status.</p>
         </div>
         <div className="button-row">
           <button onClick={() => void clear()}>Clear</button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -179,7 +178,11 @@ export function LoggingWindow() {
           shown: visible.length,
           retained: entries.length,
         })}
-        {BigInt(dropped) > 0n ? ` · ${dropped} older entries discarded` : ""}
+        {BigInt(dropped) > 0n
+          ? ` · ${translateFormat("{count} older entries discarded", {
+              count: dropped,
+            })}`
+          : ""}
       </div>
       <section
         className="log-list"
@@ -188,11 +191,18 @@ export function LoggingWindow() {
       >
         {visible.map((entry) => (
           <article key={entry.sequence} className={`log-entry ${entry.level}`}>
-            <span className="log-level">{entry.level}</span>
-            <span className="log-category">{entry.category || "General"}</span>
-            <pre>{entry.message}</pre>
+            <span className="log-level">{translate(entry.level)}</span>
+            <span className="log-category" data-i18n-ignore>
+              {entry.category || translate("General")}
+            </span>
+            <pre data-i18n-ignore>{entry.message}</pre>
           </article>
         ))}
+        {visible.length === 0 && (
+          <p className="empty-results">
+            No log messages match the current filters.
+          </p>
+        )}
         <div ref={end} />
       </section>
     </main>

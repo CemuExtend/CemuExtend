@@ -87,7 +87,9 @@ ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
 ARG CEMU_FRONTEND=webview
 ARG CEMU_OVERLAY_BACKEND=
-ARG CLEAN_BUILD=1
+# Preserve the CMake/Ninja cache by default. Set CLEAN_BUILD=1 only when a
+# dependency, toolchain, or configuration change requires a full rebuild.
+ARG CLEAN_BUILD=0
 
 WORKDIR /workspace/CemuExtend
 

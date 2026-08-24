@@ -5,6 +5,7 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build}"
 frontend="${CEMU_FRONTEND:-webview}"
 overlay_backend="${CEMU_OVERLAY_BACKEND:-}"
+clean_build="${CEMU_CLEAN_BUILD:-0}"
 case "${frontend}" in
 	webview|wx|headless) ;;
 	*)
@@ -16,6 +17,13 @@ case "${overlay_backend}" in
 	""|webview|imgui) ;;
 	*)
 		printf 'Unsupported CEMU_OVERLAY_BACKEND: %s (expected webview or imgui)\n' "${overlay_backend}" >&2
+		exit 2
+		;;
+esac
+case "${clean_build}" in
+	0|1) ;;
+	*)
+		printf 'Unsupported CEMU_CLEAN_BUILD: %s (expected 0 or 1)\n' "${clean_build}" >&2
 		exit 2
 		;;
 esac
@@ -44,7 +52,7 @@ docker build --progress=plain --target build \
 	--build-arg "SOURCE_FINGERPRINT=${source_fingerprint}" \
 	--build-arg "CEMU_FRONTEND=${frontend}" \
 	--build-arg "CEMU_OVERLAY_BACKEND=${overlay_backend}" \
-	--build-arg "CLEAN_BUILD=${CEMU_CLEAN_BUILD:-1}" \
+	--build-arg "CLEAN_BUILD=${clean_build}" \
 	-t "${image_name}" "${project_dir}"
 
 mkdir -p "${artifact_dir}"

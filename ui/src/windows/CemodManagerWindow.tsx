@@ -205,7 +205,6 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
               Cancel
             </button>
           )}
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -221,19 +220,19 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
       <div className="toolbar embedded">
         <input
           type="search"
-          placeholder="Filter packages or digests"
+          placeholder="Filter mods"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
         <span>
           {model
-            ? translateFormat("{count} packages · generation {generation}", {
-                count: model.packages.length,
-                generation: model.generation,
-              })
+            ? translateFormat(
+                model.packages.length === 1 ? "{count} mod" : "{count} mods",
+                { count: model.packages.length },
+              )
             : busyJob !== undefined
-              ? "Inspecting installed packages…"
-              : "No snapshot"}
+              ? "Finding installed mods…"
+              : "No mods"}
         </span>
       </div>
       <div className="split-view">
@@ -242,15 +241,11 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
             <button
               key={item.packageKey}
               className={selectedKey === item.packageKey ? "selected" : ""}
+              aria-selected={selectedKey === item.packageKey}
+              title={item.pluginName || item.modId || "Unnamed mod"}
               onClick={() => setSelectedKey(item.packageKey)}
             >
-              <strong>
-                {item.pluginName || item.modId || "Unnamed package"}
-              </strong>
-              <span>
-                {item.status} · {item.author || "Unknown author"}
-              </span>
-              <code>{item.packageDigest}</code>
+              <strong>{item.pluginName || item.modId || "Unnamed mod"}</strong>
             </button>
           ))}
           {model && packages.length === 0 && (

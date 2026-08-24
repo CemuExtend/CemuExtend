@@ -1,4 +1,10 @@
 import bundle from "../generated/translations.json";
+import {
+  contextualUiSupplements,
+  developerUiSupplements,
+  technicalUiOverrides,
+  uiSupplements,
+} from "./supplements";
 
 export type UiLanguage = { code: string; name: string };
 
@@ -8,6 +14,16 @@ const systemLanguage: UiLanguage = {
 };
 const languages = bundle.languages as UiLanguage[];
 const messages = bundle.messages as Record<string, Record<string, string>>;
+for (const [language, supplement] of Object.entries(uiSupplements))
+  messages[language] = {
+    ...messages[language],
+    ...supplement,
+    ...contextualUiSupplements[
+      language as keyof typeof contextualUiSupplements
+    ],
+    ...developerUiSupplements[language as keyof typeof developerUiSupplements],
+    ...technicalUiOverrides[language as keyof typeof technicalUiOverrides],
+  };
 const foldedMessages = Object.fromEntries(
   Object.entries(messages).map(([language, catalog]) => [
     language,
@@ -21,14 +37,20 @@ const foldedMessages = Object.fromEntries(
 ) as Record<string, Record<string, string>>;
 const supported = new Set(languages.map(({ code }) => code));
 const textState = new WeakMap<Text, { source: string; translated: string }>();
-const attributeState = new WeakMap<Element, Map<string, { source: string; translated: string }>>();
+const attributeState = new WeakMap<
+  Element,
+  Map<string, { source: string; translated: string }>
+>();
 const translatedAttributes = ["aria-label", "placeholder", "title"] as const;
 const rightToLeftLanguages = new Set(["ar", "he"]);
 let selectedLanguage = "system";
 let activeLanguage = "en";
 let observer: MutationObserver | undefined;
 
-export const uiLanguages: readonly UiLanguage[] = [systemLanguage, ...languages];
+export const uiLanguages: readonly UiLanguage[] = [
+  systemLanguage,
+  ...languages,
+];
 
 function normalizeLanguage(value: string): string {
   const candidate = value.trim().toLowerCase().replace("_", "-");
@@ -67,11 +89,17 @@ export function translateFormat(
 
 function translateText(node: Text): void {
   const parent = node.parentElement;
-  if (!parent || parent.closest("script, style, [data-i18n-ignore], [contenteditable='true']"))
+  if (
+    !parent ||
+    parent.closest(
+      "script, style, [data-i18n-ignore], [contenteditable='true']",
+    )
+  )
     return;
   const previous = textState.get(node);
   const current = node.data;
-  const source = previous && current === previous.translated ? previous.source : current;
+  const source =
+    previous && current === previous.translated ? previous.source : current;
   const match = /^(\s*)(.*?)(\s*)$/su.exec(source);
   if (!match || !match[2]) return;
   const translated = `${match[1]}${translate(match[2])}${match[3]}`;
@@ -89,7 +117,8 @@ function translateAttributes(element: Element): void {
     const current = element.getAttribute(name);
     if (current === null) continue;
     const previous = state.get(name);
-    const source = previous && current === previous.translated ? previous.source : current;
+    const source =
+      previous && current === previous.translated ? previous.source : current;
     const translated = translate(source);
     state.set(name, { source, translated });
     if (translated !== current) element.setAttribute(name, translated);
@@ -101,7 +130,10 @@ function localize(root: Node): void {
     translateText(root as Text);
     return;
   }
-  if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE)
+  if (
+    root.nodeType !== Node.ELEMENT_NODE &&
+    root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE
+  )
     return;
   if (root instanceof Element) translateAttributes(root);
   const walker = document.createTreeWalker(
@@ -135,7 +167,8 @@ export function installLocalization(language: string): void {
   observer = new MutationObserver((records) => {
     for (const record of records) {
       if (record.type === "characterData") localize(record.target);
-      else if (record.type === "attributes") translateAttributes(record.target as Element);
+      else if (record.type === "attributes")
+        translateAttributes(record.target as Element);
       else record.addedNodes.forEach(localize);
     }
   });

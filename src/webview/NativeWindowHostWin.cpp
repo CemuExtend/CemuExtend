@@ -33,7 +33,6 @@ namespace WebFrontend
 		constexpr wchar_t MainWindowClass[] = L"CemuExtendWebMainWindow";
 		constexpr wchar_t RenderWindowClass[] = L"CemuExtendRenderRegion";
 		constexpr wchar_t PadWindowClass[] = L"CemuExtendPadRenderRegion";
-		constexpr UINT FirstCommandId = 0x2000;
 
 		std::string Utf8(std::wstring_view text)
 		{
@@ -513,10 +512,9 @@ namespace WebFrontend
 				windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
 				if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
 					throw std::runtime_error("failed to register native main window class");
-				m_menu = BuildMenu();
 				m_window = CreateWindowExW(0, MainWindowClass, L"CemuExtend",
 										   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-										   1120, 760, nullptr, m_menu, GetModuleHandleW(nullptr), this);
+										   1120, 760, nullptr, nullptr, GetModuleHandleW(nullptr), this);
 				if (!m_window)
 					throw std::runtime_error("failed to create native main window");
 			}
@@ -527,8 +525,6 @@ namespace WebFrontend
 				DestroyMainRenderRegion();
 				if (m_window)
 					DestroyWindow(m_window);
-				if (m_menu)
-					DestroyMenu(m_menu);
 			}
 
 			void* GetNativeWindow() const override
@@ -720,7 +716,6 @@ namespace WebFrontend
 					m_windowStyle = GetWindowLongW(m_window, GWL_STYLE);
 					MONITORINFO monitor{sizeof(monitor)};
 					GetMonitorInfoW(MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST), &monitor);
-					SetMenu(m_window, nullptr);
 					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle & ~WS_OVERLAPPEDWINDOW);
 					SetWindowPos(m_window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
 								 monitor.rcMonitor.right - monitor.rcMonitor.left,
@@ -730,7 +725,6 @@ namespace WebFrontend
 				else
 				{
 					SetWindowLongW(m_window, GWL_STYLE, m_windowStyle);
-					SetMenu(m_window, m_menu);
 					SetWindowPlacement(m_window, &m_windowPlacement);
 					SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
 								 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
@@ -739,10 +733,6 @@ namespace WebFrontend
 			void SetCloseHandler(CloseHandler handler) override
 			{
 				m_closeHandler = std::move(handler);
-			}
-			void SetMenuHandler(MenuHandler handler) override
-			{
-				m_menuHandler = std::move(handler);
 			}
 			void SetMetricsHandler(MetricsHandler handler) override
 			{
@@ -1103,11 +1093,6 @@ namespace WebFrontend
 					self->NotifyMetrics();
 					return 0;
 				}
-				case WM_COMMAND:
-					if (HIWORD(wparam) == 0 && LOWORD(wparam) >= FirstCommandId &&
-						LOWORD(wparam) < FirstCommandId + 12 && self->m_menuHandler)
-						self->m_menuHandler(static_cast<MenuCommand>(LOWORD(wparam) - FirstCommandId));
-					return 0;
 				case WM_DEVICECHANGE:
 					if (wparam == DBT_DEVNODES_CHANGED && self->m_inputHandler)
 						self->m_inputHandler({.kind = NativeInputKind::DeviceChanged});
@@ -1141,49 +1126,15 @@ namespace WebFrontend
 					m_metricsHandler(GetMetrics());
 			}
 
-			HMENU BuildMenu()
-			{
-				auto* bar = CreateMenu();
-				auto append = [](HMENU menu, const wchar_t* text, MenuCommand command) {
-					AppendMenuW(menu, MF_STRING, FirstCommandId + static_cast<UINT>(command), text);
-				};
-				auto* file = CreatePopupMenu();
-				append(file, L"&Load...", MenuCommand::Load);
-				append(file, L"&End emulation", MenuCommand::EndEmulation);
-				append(file, L"E&xit", MenuCommand::Exit);
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(file), L"&File");
-				auto* options = CreatePopupMenu();
-				append(options, L"&Fullscreen", MenuCommand::ToggleFullscreen);
-				append(options, L"Separate &GamePad view", MenuCommand::TogglePadView);
-				append(options, L"General Settings", MenuCommand::GeneralSettings);
-				append(options, L"Input Settings", MenuCommand::InputSettings);
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(options), L"&Options");
-				auto* tools = CreatePopupMenu();
-				append(tools, L"Graphic Packs", MenuCommand::GraphicPacks);
-				append(tools, L"Title Manager", MenuCommand::TitleManager);
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(tools), L"&Tools");
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(CreatePopupMenu()), L"&CPU");
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(CreatePopupMenu()), L"&NFC");
-				auto* debug = CreatePopupMenu();
-				append(debug, L"Logging", MenuCommand::Logging);
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(debug), L"&Debug");
-				auto* help = CreatePopupMenu();
-				append(help, L"About", MenuCommand::About);
-				AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(help), L"&Help");
-				return bar;
-			}
-
 			HWND m_window{};
 			HWND m_webView{};
 			bool m_runtimeOverlay{};
 			bool m_runtimeOverlayInteractive{};
 			HWND m_textInput{};
 			WNDPROC m_textInputProc{};
-			HMENU m_menu{};
 			std::unique_ptr<WinRenderRegion> m_renderRegion;
 			std::unique_ptr<WinPadRenderRegion> m_padRenderRegion;
 			CloseHandler m_closeHandler;
-			MenuHandler m_menuHandler;
 			MetricsHandler m_metricsHandler;
 			PadCloseHandler m_padCloseHandler;
 			InputHandler m_inputHandler;

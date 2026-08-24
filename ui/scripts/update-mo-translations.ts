@@ -68,7 +68,11 @@ function addLiteral(target: Set<string>, value: string): void {
   if (shouldTranslate(normalized)) target.add(normalized);
 }
 
-function collectFromSource(path: string, text: string, target: Set<string>): void {
+function collectFromSource(
+  path: string,
+  text: string,
+  target: Set<string>,
+): void {
   const source = ts.createSourceFile(
     path,
     text,
@@ -76,7 +80,8 @@ function collectFromSource(path: string, text: string, target: Set<string>): voi
     true,
     path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  const collectStrings = path.endsWith("i18n/en.ts") || path.endsWith("screenRegistry.ts");
+  const collectStrings =
+    path.endsWith("i18n/en.ts") || path.endsWith("screenRegistry.ts");
   const visit = (node: ts.Node, insideJsxExpression = false): void => {
     if (ts.isJsxText(node)) addLiteral(target, node.getText(source));
     else if (
@@ -138,7 +143,9 @@ function writeMo(entries: MoEntry[]): Uint8Array {
     Buffer.compare(Buffer.from(left.original), Buffer.from(right.original)),
   );
   const originals = sorted.map(({ original }) => encoder.encode(original));
-  const translations = sorted.map(({ translation }) => encoder.encode(translation));
+  const translations = sorted.map(({ translation }) =>
+    encoder.encode(translation),
+  );
   const count = sorted.length;
   const headerSize = 28;
   const originalTable = headerSize;
@@ -170,7 +177,11 @@ function writeMo(entries: MoEntry[]): Uint8Array {
   });
   translations.forEach((value, index) => {
     view.setUint32(translatedTable + index * 8, value.length, true);
-    view.setUint32(translatedTable + index * 8 + 4, translatedOffsets[index], true);
+    view.setUint32(
+      translatedTable + index * 8 + 4,
+      translatedOffsets[index],
+      true,
+    );
     output.set(value, translatedOffsets[index]);
   });
   return output;
@@ -183,11 +194,18 @@ function decodeHtml(value: string): string {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replaceAll("&amp;", "&")
-    .replace(/&#(\d+);/gu, (_, code: string) => String.fromCodePoint(Number(code)));
+    .replace(/&#(\d+);/gu, (_, code: string) =>
+      String.fromCodePoint(Number(code)),
+    );
 }
 
-async function translateBatch(language: string, sources: string[]): Promise<string[]> {
-  const placeholders = sources.map((source) => source.match(/\{[^}]+\}/gu) ?? []);
+async function translateBatch(
+  language: string,
+  sources: string[],
+): Promise<string[]> {
+  const placeholders = sources.map(
+    (source) => source.match(/\{[^}]+\}/gu) ?? [],
+  );
   const querySources = sources.map((source, sourceIndex) => {
     let protectedSource = source;
     placeholders[sourceIndex].forEach((placeholder, placeholderIndex) => {
@@ -201,7 +219,10 @@ async function translateBatch(language: string, sources: string[]): Promise<stri
   const restorePlaceholders = (value: string, sourceIndex: number) => {
     let restored = value;
     placeholders[sourceIndex].forEach((placeholder, placeholderIndex) => {
-      restored = restored.replaceAll(`__CEMUVAR${placeholderIndex}__`, placeholder);
+      restored = restored.replaceAll(
+        `__CEMUVAR${placeholderIndex}__`,
+        placeholder,
+      );
     });
     return restored;
   };
@@ -247,7 +268,10 @@ async function translateBatch(language: string, sources: string[]): Promise<stri
     const marker = `__CEMU_${String(index).padStart(3, "0")}__ `;
     const start = translated.indexOf(marker);
     const nextMarker = `\n__CEMU_${String(index + 1).padStart(3, "0")}__ `;
-    const end = index + 1 === sources.length ? translated.length : translated.indexOf(nextMarker);
+    const end =
+      index + 1 === sources.length
+        ? translated.length
+        : translated.indexOf(nextMarker);
     if (start < 0 || end < 0) {
       const middle = Math.ceil(sources.length / 2);
       return [
@@ -285,20 +309,26 @@ async function translateMissing(
       console.log(`${language}: batch ${index + 1}/${batches.length}`);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(6, batches.length) }, worker));
+  await Promise.all(
+    Array.from({ length: Math.min(6, batches.length) }, worker),
+  );
 }
 
 const sources = await collectUiSources();
 await mkdir(dirname(cachePath), { recursive: true });
-const cache: TranslationCache = await Bun.file(cachePath).exists()
+const cache: TranslationCache = (await Bun.file(cachePath).exists())
   ? ((await Bun.file(cachePath).json()) as TranslationCache)
   : { sources: [], translations: {} };
 cache.sources = sources;
 
-for (const languageEntry of await readdir(resourceDirectory, { withFileTypes: true })) {
+for (const languageEntry of await readdir(resourceDirectory, {
+  withFileTypes: true,
+})) {
   if (!languageEntry.isDirectory() || languageEntry.name === "en") continue;
   const directory = resolve(resourceDirectory, languageEntry.name);
-  const moName = (await readdir(directory)).find((name) => name.endsWith(".mo"));
+  const moName = (await readdir(directory)).find((name) =>
+    name.endsWith(".mo"),
+  );
   if (!moName) continue;
   const moPath = resolve(directory, moName);
   const entries = parseMo(await readFile(moPath));

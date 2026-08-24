@@ -6,6 +6,9 @@ import type {
   PhysicalControllerSettings,
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
+import { Modal } from "../components/Modal";
+import { getReferencePreviewScreen } from "../dev/referencePreview";
+import { translateFormat } from "../i18n/runtime";
 
 const controllerTypes: Array<[EmulatedControllerType, string]> = [
   ["disabled", "Disabled"],
@@ -16,6 +19,10 @@ const controllerTypes: Array<[EmulatedControllerType, string]> = [
 ];
 
 export function InputSettingsWindow() {
+  const previewIndex = getReferencePreviewScreen()?.index;
+  const [previewModalOpen, setPreviewModalOpen] = useState(
+    previewIndex === 27 || previewIndex === 28 || previewIndex === 80,
+  );
   const [model, setModel] = useState<InputSettingsModel>();
   const [playerIndex, setPlayerIndex] = useState(0);
   const [api, setApi] = useState("");
@@ -109,7 +116,6 @@ export function InputSettingsWindow() {
           <button disabled={busy} onClick={() => void load()}>
             Refresh
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
@@ -300,7 +306,7 @@ export function InputSettingsWindow() {
                 Clear all
               </button>
             </div>
-            <div className="form-grid">
+            <div className="form-grid mapping-grid">
               {player.mappings.map((mapping) => {
                 const captureKey = `${player.player}:${mapping.mappingId}`;
                 const token =
@@ -310,33 +316,34 @@ export function InputSettingsWindow() {
                   0;
                 return (
                   <div className="mapping-row" key={mapping.mappingId}>
-                    <label>
-                      {mapping.label}
-                      <select
-                        disabled={
-                          busy ||
-                          player.gameProfileLocked ||
-                          player.controllers.length === 0
-                        }
-                        value={token}
-                        onChange={(event) =>
-                          setCaptureTokens((current) => ({
-                            ...current,
-                            [captureKey]: Number(event.target.value),
-                          }))
-                        }
-                      >
-                        {player.controllers.map((controller) => (
-                          <option
-                            key={controller.token}
-                            value={controller.token}
-                          >
-                            {controller.displayName}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <span>{mapping.binding || "Unassigned"}</span>
+                    <span className="mapping-row__name">{mapping.label}</span>
+                    <select
+                      className="mapping-row__controller"
+                      aria-label={translateFormat("Controller for {mapping}", {
+                        mapping: mapping.label,
+                      })}
+                      disabled={
+                        busy ||
+                        player.gameProfileLocked ||
+                        player.controllers.length === 0
+                      }
+                      value={token}
+                      onChange={(event) =>
+                        setCaptureTokens((current) => ({
+                          ...current,
+                          [captureKey]: Number(event.target.value),
+                        }))
+                      }
+                    >
+                      {player.controllers.map((controller) => (
+                        <option key={controller.token} value={controller.token}>
+                          {controller.displayName}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mapping-row__binding">
+                      {mapping.binding || "Unassigned"}
+                    </span>
                     <div className="button-row">
                       <button
                         disabled={!token || busy || player.gameProfileLocked}
@@ -366,6 +373,96 @@ export function InputSettingsWindow() {
             </div>
           </section>
         </>
+      )}
+      {previewModalOpen && previewIndex === 27 && (
+        <Modal
+          title="Add input device"
+          onClose={() => setPreviewModalOpen(false)}
+        >
+          <div className="field-stack">
+            <label>
+              <span>Input API</span>
+              <select defaultValue="SDL">
+                <option>SDL</option>
+                <option>Keyboard</option>
+              </select>
+            </label>
+            <div className="selection-list">
+              <button aria-selected="true">
+                <strong>Wireless Controller</strong>
+                <span>SDL · Connected</span>
+              </button>
+              <button>
+                <strong>Keyboard</strong>
+                <span>Keyboard · Available</span>
+              </button>
+            </div>
+          </div>
+          <footer>
+            <button onClick={() => setPreviewModalOpen(false)}>Cancel</button>
+            <button
+              className="primary"
+              onClick={() => setPreviewModalOpen(false)}
+            >
+              Add device
+            </button>
+          </footer>
+        </Modal>
+      )}
+      {previewModalOpen && previewIndex === 28 && (
+        <Modal
+          title="Controller calibration"
+          onClose={() => setPreviewModalOpen(false)}
+        >
+          <div className="calibration-preview">
+            <div className="calibration-preview__axis">
+              <i />
+              <span>Live stick position</span>
+            </div>
+            <label className="field-stack">
+              <span>Deadzone · 15%</span>
+              <input type="range" defaultValue="15" />
+            </label>
+            <label className="field-stack">
+              <span>Range · 100%</span>
+              <input type="range" defaultValue="100" />
+            </label>
+          </div>
+          <footer>
+            <button onClick={() => setPreviewModalOpen(false)}>Cancel</button>
+            <button
+              className="primary"
+              onClick={() => setPreviewModalOpen(false)}
+            >
+              Apply calibration
+            </button>
+          </footer>
+        </Modal>
+      )}
+      {previewModalOpen && previewIndex === 80 && (
+        <Modal
+          title="Bluetooth pairing"
+          onClose={() => setPreviewModalOpen(false)}
+        >
+          <div className="notice">
+            Make the controller discoverable, then select it below.
+          </div>
+          <div className="selection-list">
+            <button aria-selected="true">
+              <strong>Wireless Controller</strong>
+              <span>Ready to pair · 84:30:95:12:48:CA</span>
+            </button>
+          </div>
+          <footer>
+            <button onClick={() => setPreviewModalOpen(false)}>Close</button>
+            <button
+              className="primary"
+              onClick={() => setPreviewModalOpen(false)}
+            >
+              Pair
+            </button>
+          </footer>
+        </Modal>
       )}
     </main>
   );

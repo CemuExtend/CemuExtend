@@ -33,7 +33,7 @@ function styleProperties(style: OverlayTextStyle) {
   );
   return {
     color: overlayColor(style.color),
-    fontSize: `clamp(${MIN_OVERLAY_SCALE / PERCENT_SCALE}rem, ${scale / PERCENT_SCALE}rem, ${MAX_OVERLAY_VIEWPORT_SCALE}vmin)`,
+    fontSize: `clamp(${MIN_OVERLAY_SCALE / PERCENT_SCALE}em, ${scale / PERCENT_SCALE}em, ${MAX_OVERLAY_VIEWPORT_SCALE}vmin)`,
   };
 }
 

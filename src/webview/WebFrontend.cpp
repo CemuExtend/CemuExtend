@@ -59,7 +59,6 @@ namespace
 	using WebFrontend::IRendererHost;
 	using WebFrontend::IToolWindowSupport;
 	using WebFrontend::MainWindowState;
-	using WebFrontend::MenuCommand;
 	using WebFrontend::RpcDispatcher;
 	using WebFrontend::WebHostServices;
 	using WebFrontend::WebHostState;
@@ -116,6 +115,86 @@ namespace
 			output.push_back(remaining > 2 ? alphabet[bits & 0x3f] : '=');
 		}
 		return output;
+	}
+
+	std::optional<std::string> TgaDataUrl(const std::vector<std::uint8_t>& data)
+	{
+		if (data.size() < 18 || data[1] != 0 ||
+			(data[2] != 2 && data[2] != 3))
+			return std::nullopt;
+		const auto readU16 = [&data](std::size_t offset) {
+			return static_cast<std::uint16_t>(data[offset]) |
+				   static_cast<std::uint16_t>(data[offset + 1] << 8);
+		};
+		const auto width = readU16(12);
+		const auto height = readU16(14);
+		const auto bitsPerPixel = data[16];
+		const auto channels = static_cast<std::size_t>(bitsPerPixel / 8);
+		if (width == 0 || height == 0 || width > 4096 || height > 4096 ||
+			(data[2] == 2 && channels != 3 && channels != 4) ||
+			(data[2] == 3 && channels != 1))
+			return std::nullopt;
+		const auto pixelOffset = static_cast<std::size_t>(18 + data[0]);
+		const auto pixelCount = static_cast<std::size_t>(width) * height;
+		if (pixelOffset > data.size() ||
+			pixelCount > (data.size() - pixelOffset) / channels)
+			return std::nullopt;
+
+		const bool topOrigin = (data[17] & 0x20) != 0;
+		const bool rightOrigin = (data[17] & 0x10) != 0;
+		std::vector<std::uint8_t> rgba(pixelCount * 4);
+		for (std::size_t y = 0; y < height; ++y)
+		{
+			const auto sourceY = topOrigin ? y : height - y - 1;
+			for (std::size_t x = 0; x < width; ++x)
+			{
+				const auto sourceX = rightOrigin ? width - x - 1 : x;
+				const auto source = pixelOffset +
+					(sourceY * static_cast<std::size_t>(width) + sourceX) * channels;
+				const auto destination =
+					(y * static_cast<std::size_t>(width) + x) * 4;
+				if (channels == 1)
+				{
+					rgba[destination] = data[source];
+					rgba[destination + 1] = data[source];
+					rgba[destination + 2] = data[source];
+					rgba[destination + 3] = 0xff;
+				}
+				else
+				{
+					rgba[destination] = data[source + 2];
+					rgba[destination + 1] = data[source + 1];
+					rgba[destination + 2] = data[source];
+					rgba[destination + 3] = channels == 4 ? data[source + 3] : 0xff;
+				}
+			}
+		}
+
+		png_image image{};
+		image.version = PNG_IMAGE_VERSION;
+		image.width = width;
+		image.height = height;
+		image.format = PNG_FORMAT_RGBA;
+		png_alloc_size_t encodedSize{};
+		if (!png_image_write_to_memory(&image, nullptr, &encodedSize, 0,
+									   rgba.data(), 0, nullptr) ||
+			encodedSize == 0)
+		{
+			png_image_free(&image);
+			return std::nullopt;
+		}
+		std::vector<std::uint8_t> encoded(encodedSize);
+		if (!png_image_write_to_memory(&image, encoded.data(), &encodedSize, 0,
+									   rgba.data(), 0, nullptr))
+		{
+			png_image_free(&image);
+			return std::nullopt;
+		}
+		png_image_free(&image);
+		encoded.resize(encodedSize);
+		return "data:image/png;base64," +
+			   Base64(std::string_view(
+				   reinterpret_cast<const char*>(encoded.data()), encoded.size()));
 	}
 
 	std::optional<fs::path> ScreenshotPath(bool mainWindow)
@@ -1048,26 +1127,7 @@ namespace
 	}
 
 	constexpr std::array WindowDescriptors{
-		WindowDescriptor{"general-settings", "General Settings", 900, 680, false},
-		WindowDescriptor{"input-settings", "Input Settings", 980, 720, false},
-		WindowDescriptor{"hotkey-settings", "Hotkey Settings", 860, 620, false},
-		WindowDescriptor{"graphic-packs", "Graphic Packs", 1040, 760, false},
-		WindowDescriptor{"title-manager", "Title Manager", 1100, 720, false},
-		WindowDescriptor{"cemod-manager", "CemuExtend Manager", 980, 680, false},
 		WindowDescriptor{"cemod-permissions", "CemuExtend Permissions", 760, 620, true},
-		WindowDescriptor{"account-manager", "Account Manager", 760, 620, true},
-		WindowDescriptor{"save-manager", "Save Manager", 920, 680, true},
-		WindowDescriptor{"update-manager", "Updates", 820, 620, true},
-		WindowDescriptor{"logging", "Logging", 980, 700, false},
-		WindowDescriptor{"memory-searcher", "Memory Searcher", 1080, 720, false},
-		WindowDescriptor{"ppc-debugger", "PPC Debugger", 1280, 800, false},
-		WindowDescriptor{"audio-debugger", "Audio Debugger", 980, 700, false},
-		WindowDescriptor{"texture-relations", "Texture Relations", 1100, 720, false},
-		WindowDescriptor{"ppc-threads", "PPC Threads", 940, 680, false},
-		WindowDescriptor{"emulated-usb-devices", "Emulated USB Devices", 820, 620, false},
-		WindowDescriptor{"checksum-tool", "Checksum Tool", 820, 620, false},
-		WindowDescriptor{"getting-started", "Getting Started", 900, 680, true},
-		WindowDescriptor{"about", "About CemuExtend", 680, 560, true},
 	};
 
 	const WindowDescriptor& DescribeWindow(std::string_view role)
@@ -1824,8 +1884,6 @@ namespace
 				m_nativeWindow->ConfigureRuntimeOverlayWebView(m_browserController);
 #endif
 				m_nativeWindow->SetCloseHandler([this] { (void)RequestShutdown(); });
-				m_nativeWindow->SetMenuHandler(
-					[this](MenuCommand command) { HandleMenu(command); });
 				m_nativeWindow->SetMetricsHandler(
 					[this](Host::WindowMetricsSnapshot metrics) { HandleMetrics(metrics); });
 				m_nativeWindow->SetInputHandler(
@@ -1873,8 +1931,10 @@ namespace
 					auto* runtime = gate->target;
 					const auto payload = runtime->UsbDeviceChangeJson(change);
 					(void)runtime->PostToUi([runtime, payload] {
-						const auto window = runtime->m_windowByRole.find("emulated-usb-devices");
-						if (window != runtime->m_windowByRole.end())
+						if (runtime->m_mainWorkspaceRole == "emulated-usb-devices")
+							runtime->EmitToWindow(0, "usb.devicesChanged", payload);
+						else if (const auto window = runtime->m_windowByRole.find("emulated-usb-devices");
+								 window != runtime->m_windowByRole.end())
 							runtime->EmitToWindow(window->second, "usb.devicesChanged", payload);
 					});
 				});
@@ -2727,11 +2787,21 @@ namespace
 			std::optional<std::uint64_t> generationContext = std::nullopt,
 			std::string_view overlaySurface = {}) const
 		{
+			const auto accountSnapshot = m_controller.GetAccountManagerSnapshot();
+			const auto activeAccount = std::ranges::find_if(
+				accountSnapshot.accounts, [&accountSnapshot](const auto& account) {
+					return account.persistentId == accountSnapshot.activePersistentId;
+				});
+			const auto activeAccountName =
+				activeAccount == accountSnapshot.accounts.end()
+					? std::string{}
+					: boost::nowide::narrow(activeAccount->miiName);
 			auto script = std::string("window.__CEMU_BOOTSTRAP__={windowId:") +
 						  JsonString(std::to_string(windowId)) + R"(,windowRole:)" +
 						  JsonString(role) + R"(,appVersion:)" +
 						  JsonString(BUILD_VERSION_STRING) + R"(,platform:)" +
-						  JsonString(PlatformName());
+						  JsonString(PlatformName()) + R"(,activeAccountName:)" +
+						  JsonString(activeAccountName);
 			if (titleContext || !packageContext.empty() || generationContext)
 			{
 				script += R"(,context:{)";
@@ -3076,8 +3146,10 @@ namespace
 
 		void RefreshInputConfigurationFocus()
 		{
-			const bool editing = m_windowByRole.contains("input-settings") ||
-								 m_windowByRole.contains("hotkey-settings");
+			const bool editing = m_mainWorkspaceRole == "input-settings" ||
+							 m_mainWorkspaceRole == "hotkey-settings" ||
+							 m_windowByRole.contains("input-settings") ||
+							 m_windowByRole.contains("hotkey-settings");
 			m_hotkeyEditing.store(editing, std::memory_order_release);
 			if (m_hostServices)
 				m_hostServices->SetInputConfigurationFocused(editing);
@@ -3181,7 +3253,6 @@ namespace
 			if (!m_webview)
 				return;
 			m_nativeWindow->SetCloseHandler({});
-			m_nativeWindow->SetMenuHandler({});
 			m_nativeWindow->SetMetricsHandler({});
 			m_nativeWindow->SetPadCloseHandler({});
 			m_nativeWindow->SetInputHandler({});
@@ -3875,54 +3946,6 @@ namespace
 			}
 		}
 
-		void HandleMenu(MenuCommand command)
-		{
-			try
-			{
-				switch (command)
-				{
-				case MenuCommand::EndEmulation:
-					StopEmulation();
-					break;
-				case MenuCommand::Exit:
-					(void)RequestShutdown();
-					break;
-				case MenuCommand::ToggleFullscreen:
-					m_fullscreen = !m_fullscreen;
-					m_nativeWindow->SetFullscreen(m_fullscreen);
-					break;
-				case MenuCommand::Load:
-					Emit("menu.command", R"({"command":"load"})");
-					break;
-				case MenuCommand::TogglePadView:
-					TogglePadRenderRegion();
-					break;
-				case MenuCommand::GeneralSettings:
-					(void)QueueToolWindow("general-settings", {});
-					break;
-				case MenuCommand::InputSettings:
-					(void)QueueToolWindow("input-settings", {});
-					break;
-				case MenuCommand::GraphicPacks:
-					(void)QueueToolWindow("graphic-packs", {});
-					break;
-				case MenuCommand::TitleManager:
-					(void)QueueToolWindow("title-manager", {});
-					break;
-				case MenuCommand::Logging:
-					(void)QueueToolWindow("logging", {});
-					break;
-				case MenuCommand::About:
-					(void)QueueToolWindow("about", {});
-					break;
-				}
-			} catch (const std::exception& error)
-			{
-				Emit("system.diagnostic", std::string(R"({"message":)") +
-											  JsonString(error.what()) + "}");
-			}
-		}
-
 		struct PendingEvent
 		{
 			std::shared_ptr<std::atomic_bool> stopping;
@@ -4166,8 +4189,13 @@ namespace
 		{
 			m_loggingFlushPending.store(false, std::memory_order_release);
 			const auto snapshot = m_logging.Snapshot(m_lastForwardedLogSequence, 128);
-			const auto loggingWindow = m_windowByRole.find("logging");
-			if (loggingWindow == m_windowByRole.end())
+			std::optional<std::uint64_t> target;
+			if (m_mainWorkspaceRole == "logging")
+				target = 0;
+			else if (const auto loggingWindow = m_windowByRole.find("logging");
+					 loggingWindow != m_windowByRole.end())
+				target = loggingWindow->second;
+			if (!target)
 			{
 				m_lastForwardedLogSequence = snapshot.nextSequence == 0 ? 0 : snapshot.nextSequence - 1;
 				return;
@@ -4175,7 +4203,7 @@ namespace
 			if (!snapshot.entries.empty())
 			{
 				m_lastForwardedLogSequence = snapshot.entries.back().sequence;
-				EmitToWindow(loggingWindow->second, "logging.entries",
+				EmitToWindow(*target, "logging.entries",
 							 LoggingSnapshotJson(snapshot));
 			}
 			if (snapshot.truncated)
@@ -4237,9 +4265,31 @@ namespace
 
 		void RequireRole(std::initializer_list<std::string_view> roles) const
 		{
-			const auto role = RoleForWindow(m_invokingWindow);
+			const auto role = m_invokingWindow == 0
+				? std::string_view(m_mainWorkspaceRole)
+				: RoleForWindow(m_invokingWindow);
 			if (std::ranges::find(roles, role) == roles.end())
 				throw std::runtime_error("this RPC method is not available to the current window role");
+		}
+
+		std::uint64_t InvokingWindowGeneration() const
+		{
+			if (m_invokingWindow == 0)
+				return 0;
+			const auto window = m_toolWindows.find(m_invokingWindow);
+			if (window == m_toolWindows.end())
+				throw std::runtime_error("the owning window is no longer active");
+			return window->second->generation;
+		}
+
+		void* InvokingNativeWindow() const
+		{
+			if (m_invokingWindow == 0)
+				return m_nativeWindow->GetNativeWindow();
+			const auto window = m_toolWindows.find(m_invokingWindow);
+			if (window == m_toolWindows.end() || !window->second->nativeSupport)
+				throw std::runtime_error("the owning window is no longer active");
+			return window->second->nativeSupport->GetWindow();
 		}
 
 		std::string AccountManagerJson() const
@@ -4757,11 +4807,21 @@ namespace
 		void RegisterRpc()
 		{
 			m_rpc.Register("system.bootstrap", [this](const rapidjson::Value&) {
+				const auto accountSnapshot = m_controller.GetAccountManagerSnapshot();
+				const auto activeAccount = std::ranges::find_if(
+					accountSnapshot.accounts, [&accountSnapshot](const auto& account) {
+						return account.persistentId == accountSnapshot.activePersistentId;
+					});
+				const auto activeAccountName =
+					activeAccount == accountSnapshot.accounts.end()
+						? std::string{}
+						: boost::nowide::narrow(activeAccount->miiName);
 				auto result = std::string(R"({"windowId":)") +
 							  JsonString(std::to_string(m_invokingWindow)) + R"(,"windowRole":)" +
 							  JsonString(RoleForWindow(m_invokingWindow)) + R"(,"appVersion":)" +
 							  JsonString(BUILD_VERSION_STRING) + R"(,"platform":)" +
-							  JsonString(PlatformName());
+							  JsonString(PlatformName()) + R"(,"activeAccountName":)" +
+							  JsonString(activeAccountName);
 				if (m_invokingWindow != 0)
 				{
 					const auto found = m_toolWindows.find(m_invokingWindow);
@@ -4797,11 +4857,6 @@ namespace
 						  R"(,"languageRevision":)" + JsonString(std::to_string(m_languageRevision)) +
 						  R"(,"shuttingDown":)";
 				result += m_rpc.IsShuttingDown() ? "true}" : "false}";
-				if (m_invokingWindow == 0 &&
-					!m_controller.GetFrontendSettings().setupCompleted &&
-					!m_windowByRole.contains("getting-started") &&
-					!m_pendingWindowRoles.contains("getting-started"))
-					(void)QueueToolWindow("getting-started", "automatic-getting-started");
 				return result;
 			});
 			m_rpc.Register("theme.get", [this](const rapidjson::Value&) {
@@ -4916,34 +4971,20 @@ namespace
 					throw std::runtime_error("the running title could not be stopped; window close was cancelled");
 				return std::string("{}");
 			});
-			m_rpc.Register("window.open", [this](const rapidjson::Value& params) {
+			m_rpc.Register("workspace.activate", [this](const rapidjson::Value& params) {
 				if (m_invokingWindow != 0)
-					throw std::runtime_error("only the main library window may open tool windows");
-				const auto role = params.FindMember("role");
-				if (role == params.MemberEnd() || !role->value.IsString())
-					throw std::invalid_argument("role is required");
-				const std::string_view roleName(role->value.GetString(),
-												role->value.GetStringLength());
-				const auto requestId = RequiredString(params, "requestId");
-				if (requestId.empty() || requestId.size() > 128)
-					throw std::invalid_argument("requestId must contain between 1 and 128 characters");
-				std::optional<std::uint64_t> titleContext;
-				if (const auto context = params.FindMember("context"); context != params.MemberEnd())
-				{
-					if (roleName != "graphic-packs" || !context->value.IsObject())
-						throw std::invalid_argument("context is not supported for this window role");
-					if (context->value.HasMember("titleId"))
-						titleContext = ParseTitleId(context->value);
-				}
-				const auto id = QueueToolWindow(roleName, std::string(requestId), titleContext);
-				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
-			});
-			m_rpc.Register("window.focus", [this](const rapidjson::Value&) {
-				if (m_invokingWindow == 0)
-					m_nativeWindow->Show();
-				else if (const auto found = m_toolWindows.find(m_invokingWindow);
-						 found != m_toolWindows.end() && found->second->nativeSupport)
-					found->second->nativeSupport->Focus();
+					throw std::runtime_error("only the main window owns embedded workspaces");
+				const auto role = RequiredString(params, "role");
+				if (role != "main-library" &&
+					std::ranges::find(WebFrontend::Generated::ImplementedWindowRoles, role) ==
+						WebFrontend::Generated::ImplementedWindowRoles.end())
+					throw std::invalid_argument("the requested workspace role is not implemented");
+				if (role == "cemod-permissions")
+					throw std::invalid_argument("permission approval remains an exact-context modal");
+				m_mainWorkspaceRole.assign(role);
+				RefreshInputConfigurationFocus();
+				if (role == "logging")
+					SignalLoggingChanged();
 				return std::string("{}");
 			});
 			m_rpc.Register("system.openExternalUrl", [this](const rapidjson::Value& params) {
@@ -5381,10 +5422,8 @@ namespace
 			m_rpc.Register("save.import.pick", [this](const rapidjson::Value& params) {
 				RequireRole({"save-manager"});
 				const auto titleId = ParseTitleId(params);
-				const auto window = m_toolWindows.find(m_invokingWindow);
-				if (window == m_toolWindows.end())
-					throw std::runtime_error("save window is closing");
-				const auto selected = WebFrontend::SelectArchiveToOpen(window->second->nativeSupport->GetWindow(), "Select a zipped save file");
+				const auto selected = WebFrontend::SelectArchiveToOpen(
+					InvokingNativeWindow(), "Select a zipped save file");
 				if (!selected)
 					return std::string(R"({"selected":false})");
 				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Import, *selected, titleId});
@@ -5425,11 +5464,9 @@ namespace
 				const auto persistentId = ParsePersistentId(params);
 				if (m_controller.InspectSaveEntry(titleId, persistentId).state != Application::SaveEntryState::Directory)
 					throw std::invalid_argument("the selected save no longer exists");
-				const auto window = m_toolWindows.find(m_invokingWindow);
-				if (window == m_toolWindows.end())
-					throw std::runtime_error("save window is closing");
 				const auto name = TitleIdString(titleId) + "-" + PersistentIdString(persistentId) + ".zip";
-				const auto selected = WebFrontend::SelectArchiveToSave(window->second->nativeSupport->GetWindow(), "Export save archive", name);
+				const auto selected = WebFrontend::SelectArchiveToSave(
+					InvokingNativeWindow(), "Export save archive", name);
 				if (!selected)
 					return std::string(R"({"selected":false})");
 				const auto token = IssueSaveTicket({m_invokingWindow, SaveTicketKind::Export, *selected, titleId, persistentId, 0, true});
@@ -5449,19 +5486,36 @@ namespace
 				RequireRole({"update-manager"});
 				if (m_controller.IsTitleRunning())
 					throw std::runtime_error("titles cannot be installed while a game is running");
-				const auto owner = m_toolWindows.find(m_invokingWindow);
-				if (owner == m_toolWindows.end() || !owner->second->nativeSupport)
-					throw std::runtime_error("the update window is no longer active");
-				const auto selected = owner->second->nativeSupport->PickDirectory(
-					"Select the title folder containing code, content, and meta");
+				std::optional<fs::path> selected;
+				if (m_invokingWindow == 0)
+				{
+					const auto metadata = m_nativeWindow->PickTitleInstallSource();
+					if (metadata)
+					{
+						std::error_code pathError;
+						auto canonical = fs::canonical(_utf8ToPath(*metadata), pathError);
+						if (pathError || canonical.filename() != "meta.xml" ||
+							canonical.parent_path().filename() != "meta")
+							throw std::invalid_argument("the selected file must be meta/meta.xml");
+						selected = canonical.parent_path().parent_path();
+					}
+				}
+				else
+				{
+					const auto owner = m_toolWindows.find(m_invokingWindow);
+					if (owner == m_toolWindows.end() || !owner->second->nativeSupport)
+						throw std::runtime_error("the update workspace is no longer active");
+					selected = owner->second->nativeSupport->PickDirectory(
+						"Select the title folder containing code, content, and meta");
+				}
 				if (!selected)
 					return std::string("null");
 				const auto planned = m_controller.PlanTitleInstall(*selected);
 				if (!planned)
 					throw std::runtime_error(planned.diagnostic.empty() ? "the selected folder is not an installable title" : planned.diagnostic);
 				const auto& plan = *planned.plan;
-				const auto token = m_updatePlans.Issue(m_invokingWindow,
-													   owner->second->generation, plan);
+				const auto token = m_updatePlans.Issue(
+					m_invokingWindow, InvokingWindowGeneration(), plan);
 				auto kindName = [](Application::TitleInstallKind kind) {
 					switch (kind)
 					{
@@ -5525,12 +5579,9 @@ namespace
 				RequireRole({"update-manager"});
 				if (m_controller.IsTitleRunning())
 					throw std::runtime_error("titles cannot be installed while a game is running");
-				const auto owner = m_toolWindows.find(m_invokingWindow);
-				if (owner == m_toolWindows.end())
-					throw std::runtime_error("the update window is no longer active");
 				auto plan = m_updatePlans.Take(
 					ParseDecimalUint64(RequiredString(params, "planToken"), "planToken"),
-					m_invokingWindow, owner->second->generation);
+					m_invokingWindow, InvokingWindowGeneration());
 				if (!plan)
 					throw std::invalid_argument("the title-install plan is missing, stale, or owned by another window");
 				const bool acceptConflict = RequiredBool(params, "acceptConflict");
@@ -6250,7 +6301,24 @@ namespace
 				document.Accept(writer);
 				return std::string(buffer.GetString(), buffer.GetSize());
 			});
+			m_rpc.Register("titles.icon", [this](const rapidjson::Value& params) {
+				RequireRole({"main-library"});
+				const auto titleId = ParseTitleId(params);
+				const auto [cached, inserted] =
+					m_titleIconCache.try_emplace(titleId, std::string{});
+				if (inserted)
+				{
+					if (const auto icon = m_controller.LoadTitleIcon(titleId))
+						if (const auto dataUrl = TgaDataUrl(*icon))
+							cached->second = *dataUrl;
+				}
+				const auto titleIdText = TitleIdString(titleId);
+				return std::string(R"({"titleId":)") + JsonString(titleIdText) +
+					   R"(,"iconDataUrl":)" +
+					   (cached->second.empty() ? "null" : JsonString(cached->second)) + "}";
+			});
 			m_rpc.Register("titles.refresh", [this](const rapidjson::Value&) {
+				m_titleIconCache.clear();
 				m_controller.RefreshTitles();
 				return "{}";
 			});
@@ -6506,6 +6574,8 @@ namespace
 		Application::HotkeySettingsModel m_hotkeySettings;
 		std::atomic_bool m_hotkeyEditing{};
 		std::uint64_t m_textInputSequence{};
+		std::string m_mainWorkspaceRole{"main-library"};
+		std::unordered_map<std::uint64_t, std::string> m_titleIconCache;
 		bool m_fullscreen{};
 		bool m_rpcBound{};
 		bool m_cleanedUp{};

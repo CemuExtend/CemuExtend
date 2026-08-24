@@ -7,6 +7,7 @@ import {
 } from "../../domain/titles/repository";
 import { en } from "../../i18n/en";
 import type { OpenToolHandler } from "../../platform/native/tools";
+import { getReferencePreviewScreen } from "../../dev/referencePreview";
 
 type GameTab =
   "overview" | "mods" | "graphic-packs" | "saves" | "settings" | "play";
@@ -48,8 +49,17 @@ export function GamePage({
   onBack: () => void;
   onOpenTool: OpenToolHandler;
 }) {
+  const previewIndex = getReferencePreviewScreen()?.index;
+  const previewTab: GameTab | undefined =
+    previewIndex !== undefined && previewIndex >= 4 && previewIndex <= 9
+      ? GAME_TABS[previewIndex - 4]?.id
+      : previewIndex === 76
+        ? "settings"
+        : previewIndex === 75
+          ? "overview"
+          : undefined;
   const [title, setTitle] = useState<Title>();
-  const [activeTab, setActiveTab] = useState<GameTab>("overview");
+  const [activeTab, setActiveTab] = useState<GameTab>(previewTab ?? "overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus>("ready");

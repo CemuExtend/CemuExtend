@@ -6,6 +6,7 @@ import type {
 } from "../bridge/contracts";
 import { invoke } from "../bridge/native";
 import { Modal } from "../components/Modal";
+import { getReferencePreviewScreen } from "../dev/referencePreview";
 
 function editable(account: Account): AccountUpdate {
   return {
@@ -26,13 +27,22 @@ export function AccountManagerWindow() {
   const selectedIdRef = useRef<number | undefined>(undefined);
   const [draft, setDraft] = useState<AccountUpdate>();
   const [newName, setNewName] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const previewIndex = getReferencePreviewScreen()?.index;
+  const [createOpen, setCreateOpen] = useState(previewIndex === 31);
+  const [deleteOpen, setDeleteOpen] = useState(previewIndex === 32);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     const next = await invoke("accounts.getModel");
     setModel(next);
+    window.dispatchEvent(
+      new CustomEvent("cemu-active-account-changed", {
+        detail:
+          next.accounts.find(
+            (account) => account.persistentId === next.activePersistentId,
+          )?.miiName ?? "",
+      }),
+    );
     const currentId = selectedIdRef.current;
     const id =
       currentId &&
@@ -97,7 +107,6 @@ export function AccountManagerWindow() {
           >
             New account
           </button>
-          <button onClick={() => void invoke("window.close")}>Close</button>
         </div>
       </header>
       {error && (
