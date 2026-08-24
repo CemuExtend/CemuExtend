@@ -3432,11 +3432,11 @@ namespace
 				widget = webview_get_native_handle(webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
 				if (!widget)
 					throw std::runtime_error("failed to acquire the game overlay widget");
-				m_nativeWindow->AttachMainOverlayWebView(widget);
-				attached = true;
 				const auto browserController = webview_get_native_handle(
 					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
 				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
+				m_nativeWindow->AttachMainOverlayWebView(widget);
+				attached = true;
 				m_mainOverlayBinding = {this, webview, kMainOverlayWindowId};
 				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
 								 &m_mainOverlayBinding) != WEBVIEW_ERROR_OK)
@@ -3517,11 +3517,11 @@ namespace
 					webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
 				if (!widget)
 					throw std::runtime_error("failed to acquire the GamePad overlay widget");
-				m_nativeWindow->AttachPadOverlayWebView(widget);
-				attached = true;
 				const auto browserController = webview_get_native_handle(
 					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
 				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
+				m_nativeWindow->AttachPadOverlayWebView(widget);
+				attached = true;
 				m_padOverlayBinding = {this, webview, kPadOverlayWindowId};
 				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
 								 &m_padOverlayBinding) != WEBVIEW_ERROR_OK)

@@ -188,6 +188,18 @@ namespace WebFrontend
 				   g_type_is_a(G_OBJECT_TYPE(display), waylandType);
 		}
 
+		void ConfigureTransparentGtkWindow(GtkWidget* window)
+		{
+			if (!window)
+				return;
+			if (const auto screen = gtk_widget_get_screen(window))
+			{
+				if (const auto visual = gdk_screen_get_rgba_visual(screen))
+					gtk_widget_set_visual(window, visual);
+			}
+			gtk_widget_set_app_paintable(window, TRUE);
+		}
+
 		Host::NativeWindowHandle NativeHandle(GtkWidget* widget)
 		{
 			if (!widget)
@@ -300,6 +312,7 @@ namespace WebFrontend
 				  m_metricsHandler(std::move(metricsHandler))
 			{
 				m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+				ConfigureTransparentGtkWindow(m_window);
 				gtk_window_set_title(GTK_WINDOW(m_window), title.c_str());
 				gtk_window_set_default_size(GTK_WINDOW(m_window),
 										surface == Host::PointerSurface::Main ? 1280 : 854,
@@ -322,8 +335,36 @@ namespace WebFrontend
 										 self.m_metricsHandler();
 								 }),
 								 this);
+				g_signal_connect(m_overlay, "draw", G_CALLBACK(+[](GtkWidget*, cairo_t* cr, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+									 if (!self.m_widget)
+										 return FALSE;
+									 const auto renderWindow = gtk_widget_get_window(self.m_widget);
+									 if (!renderWindow || !gdk_window_get_composited(renderWindow))
+										 return FALSE;
+									 GtkAllocation allocation{};
+									 gtk_widget_get_allocation(self.m_widget, &allocation);
+									 cairo_save(cr);
+									 cairo_rectangle(cr, allocation.x, allocation.y,
+												 allocation.width, allocation.height);
+									 cairo_clip(cr);
+									 cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+									 gdk_cairo_set_source_window(cr, renderWindow,
+														 allocation.x, allocation.y);
+									 cairo_paint(cr);
+									 cairo_restore(cr);
+									 return FALSE;
+								 }),
+								 this);
 				gtk_widget_show_all(m_window);
 				gtk_widget_realize(m_widget);
+				const auto renderWindow = gtk_widget_get_window(m_widget);
+				const auto display = renderWindow ? gdk_window_get_display(renderWindow) : nullptr;
+				if (!renderWindow || !display || !GDK_IS_X11_DISPLAY(display) ||
+					!gdk_display_supports_composite(display))
+					throw std::runtime_error(
+						"the WebView runtime overlay requires X11 composited child windows");
+				gdk_window_set_composited(renderWindow, TRUE);
 				gtk_widget_grab_focus(m_widget);
 				ConnectInput(m_widget, surface, inputHandler);
 			}
@@ -438,7 +479,7 @@ namespace WebFrontend
 				m_overlayInteractionInitialized = true;
 				m_overlayInteractive = interactive;
 				gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(m_overlay),
-													 m_overlayWebView, interactive ? FALSE : TRUE);
+											 m_overlayWebView, interactive ? FALSE : TRUE);
 				if (!changed)
 					return;
 				if (interactive)
@@ -642,12 +683,6 @@ namespace WebFrontend
 				GdkRGBA transparent{};
 				webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(browserController),
 													 &transparent);
-				if (const auto screen = gtk_window_get_screen(GTK_WINDOW(m_window)))
-				{
-					if (const auto visual = gdk_screen_get_rgba_visual(screen))
-						gtk_widget_set_visual(m_window, visual);
-				}
-				gtk_widget_set_app_paintable(m_window, TRUE);
 			}
 
 			void PrepareWebViewDestroy(void* widget) override
@@ -759,6 +794,8 @@ namespace WebFrontend
 			{
 				m_runtimeOverlay = active;
 				m_runtimeOverlayInteractive = interactive;
+				if (active && interactive)
+					ReleasePointerGrab();
 				if (m_renderRegion)
 					m_renderRegion->SetOverlayInteractive(active && interactive);
 			}
@@ -805,6 +842,8 @@ namespace WebFrontend
 
 			void SetPadRuntimeOverlayMode(bool interactive) override
 			{
+				if (interactive)
+					ReleasePointerGrab();
 				if (m_padRenderRegion)
 					m_padRenderRegion->SetOverlayInteractive(interactive);
 			}

@@ -62,7 +62,17 @@ namespace MemMapper
 	bool FreeMemory(void* baseAddr, size_t size, bool fromReservation)
 	{
 		if (fromReservation)
-			return mprotect(baseAddr, size, PROT_NONE) == 0;
+		{
+			// mprotect(PROT_NONE) only makes the committed pages inaccessible; it
+			// does not discard their contents. Re-enabling such a range therefore
+			// exposed data from the previous title on Unix, unlike MEM_DECOMMIT on
+			// Windows. Replace the range with fresh inaccessible anonymous pages so
+			// the address-space reservation remains intact and the next commit is
+			// zero-initialized.
+			void* result = mmap(baseAddr, size, PROT_NONE,
+							MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+			return result == baseAddr;
+		}
 		return munmap(baseAddr, size) == 0;
 	}
 
