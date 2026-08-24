@@ -1,6 +1,12 @@
 #!/bin/bash
 
-if [ "$1" == 'X64' ]; then CPU_ARCH="x86_64"; else CPU_ARCH="aarch64"; fi
+if [ "$1" == 'X64' ]; then
+	CPU_ARCH="x86_64"
+elif [ "$1" == 'ARM64' ]; then
+	CPU_ARCH="aarch64"
+else
+	CPU_ARCH="$(uname -m)"
+fi
 
 if [[ -z "${GITHUB_WORKSPACE}" ]]; then
 	export GITHUB_WORKSPACE="."
@@ -31,12 +37,20 @@ cp dist/linux/info.cemu.Cemu.metainfo.xml AppDir/usr/share/metainfo/info.cemu.Ce
 
 cp -r bin/* AppDir/usr/share/Cemu
 
-mv AppDir/usr/share/Cemu/Cemu AppDir/usr/bin/
+# CemuExtend's CMakeLists names the output binary Cemu_<config>
+# (Cemu_release, Cemu_debug, ...), not plain "Cemu" like upstream Cemu.
+# Find whatever config was actually built instead of assuming a name.
+CEMU_BIN="$(find AppDir/usr/share/Cemu -maxdepth 1 -type f -name 'Cemu_*' | sort | head -n1)"
+if [[ -z "${CEMU_BIN}" ]]; then
+	echo "appimage.sh: no Cemu_<config> binary found under bin/ (looked in AppDir/usr/share/Cemu)" >&2
+	exit 1
+fi
+mv "${CEMU_BIN}" AppDir/usr/bin/Cemu
 chmod +x AppDir/usr/bin/Cemu
 
 cp /usr/lib/"${CPU_ARCH}"-linux-gnu/{libsepol.so.1,libffi.so.7,libpcre.so.3,libGLU.so.1,libthai.so.0} AppDir/usr/lib
 
-export UPD_INFO="gh-releases-zsync|cemu-project|Cemu|ci|Cemu.AppImage.zsync"
+export UPD_INFO="gh-releases-zsync|CemuExtend|CemuExtend|ci|Cemu.AppImage.zsync"
 export NO_STRIP=1
 ./linuxdeploy-"${CPU_ARCH}".AppImage --appimage-extract-and-run \
   --appdir="${GITHUB_WORKSPACE}"/AppDir/ \

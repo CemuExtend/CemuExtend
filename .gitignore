@@ -23,6 +23,7 @@ out/
 .cache/
 bin/Cemu_*
 bin/Cemu_*.exe
+appimage/*.AppImage
 
 # Cemu bin files
 bin/otp.bin

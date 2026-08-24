@@ -114,6 +114,27 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     done \
     && cmake --build build/docker --parallel \
     && ctest --test-dir build/docker --output-on-failure \
-    && cp bin/Cemu_release /Cemu_release
+    && build_type_lower="$(printf '%s' "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')" \
+    && cp "bin/Cemu_${build_type_lower}" "/Cemu_${build_type_lower}" \
+    && mkdir -p /cemu-bin \
+    && cp -r bin/. /cemu-bin/
+
+CMD ["bash"]
+
+# AppImage packaging. Reuses the compiled tree from the build stage (copied to
+# /cemu-bin above, outside the bind mount, so it survives into this stage) and
+# runs it through dist/linux/appimage.sh, which downloads linuxdeploy/mkappimage
+# and produces a self-contained .AppImage. Requires network access at build
+# time (docker build --network=default, which is the default).
+FROM build AS appimage
+
+ARG CEMU_APPIMAGE_ARCH=X64
+
+WORKDIR /workspace/CemuExtend
+
+COPY dist/linux ./dist/linux
+RUN mkdir -p bin && cp -r /cemu-bin/. bin/
+
+RUN bash dist/linux/appimage.sh "${CEMU_APPIMAGE_ARCH}"
 
 CMD ["bash"]
