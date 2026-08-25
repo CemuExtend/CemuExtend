@@ -371,17 +371,12 @@ namespace WebFrontend
 											 self.m_metricsHandler();
 									 }),
 									 this);
-					g_signal_connect(m_window, "draw", G_CALLBACK(+[](GtkWidget* source, cairo_t* cr, gpointer data) -> gboolean {
-										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-										 if (self.m_compositeReady)
-											 PaintCompositedChild(source, self.m_widget, cr,
-																	 CAIRO_OPERATOR_SOURCE);
-										 return FALSE;
-									 }),
-									 this);
 					g_signal_connect_after(m_window, "draw", G_CALLBACK(+[](GtkWidget* source, cairo_t* cr, gpointer data) -> gboolean {
 										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-										 if (self.m_webCompositeReady)
+										 if (self.m_compositeReady && self.m_widget)
+											 PaintCompositedChild(source, self.m_widget, cr,
+																	 CAIRO_OPERATOR_SOURCE);
+										 if (self.m_webCompositeReady && self.m_overlayWebView)
 											 PaintCompositedChild(source, self.m_overlayWebView, cr,
 																	 CAIRO_OPERATOR_OVER);
 										 return FALSE;
