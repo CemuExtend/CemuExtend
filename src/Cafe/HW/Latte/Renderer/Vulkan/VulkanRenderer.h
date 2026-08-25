@@ -187,7 +187,8 @@ class VulkanRenderer : public Renderer
 
 	static std::vector<DeviceInfo> GetDevices(const Host::NativeWindowHandle& mainWindow);
 	VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-				   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+				   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+				   std::function<void(bool mainWindow)> framePresented = {});
 	virtual ~VulkanRenderer();
 
 	static VulkanRenderer* GetInstance();
@@ -520,6 +521,7 @@ class VulkanRenderer : public Renderer
 	VkDescriptorSetLayout m_swapchainDescriptorSetLayout;
 
 	VkQueue m_graphicsQueue, m_presentQueue;
+	std::function<void(bool)> m_framePresented;
 
 	// swapchain
 

@@ -107,6 +107,7 @@ namespace WebFrontend
 		virtual void DestroyMainRenderRegion() = 0;
 		virtual void ShowRenderRegion() = 0;
 		virtual void SetRuntimeOverlayMode(bool active, bool interactive) = 0;
+		virtual void RequestRenderRedraw(Host::PointerSurface) {}
 		[[nodiscard]] virtual Host::IRenderRegion& CreatePadRenderRegion() = 0;
 		virtual void PreparePadOverlayWebViewCreate() = 0;
 		virtual void AttachPadOverlayWebView(void* widget) = 0;

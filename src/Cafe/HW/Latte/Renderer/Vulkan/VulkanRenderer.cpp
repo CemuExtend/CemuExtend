@@ -489,8 +489,10 @@ static void LinuxBreathOfTheWildWorkaround(VkInstance& instance, const VkInstanc
 #endif
 
 VulkanRenderer::VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-							   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
-	: Renderer(RendererAPI::Vulkan, std::move(windowMetrics), std::move(nativeSurfaces))
+							   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+							   std::function<void(bool)> framePresented)
+	: Renderer(RendererAPI::Vulkan, std::move(windowMetrics), std::move(nativeSurfaces)),
+	  m_framePresented(std::move(framePresented))
 {
 	glslang::InitializeProcess();
 
@@ -3093,6 +3095,14 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 	{
 		chainInfo.m_queueDepth++;
 		chainInfo.m_presentId++;
+		if (m_framePresented)
+		{
+			try
+			{
+				m_framePresented(mainWindow);
+			} catch (...)
+			{}
+		}
 	}
 
 	chainInfo.hasDefinedSwapchainImage = false;

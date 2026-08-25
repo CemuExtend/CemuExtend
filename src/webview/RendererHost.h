@@ -2,6 +2,7 @@
 
 #include "host/contracts/HostContracts.h"
 
+#include <functional>
 #include <memory>
 
 namespace WebFrontend
@@ -20,5 +21,6 @@ namespace WebFrontend
 	[[nodiscard]] std::unique_ptr<IRendererHost> CreateRendererHost(
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+		std::function<void(bool mainWindow)> framePresented = {});
 } // namespace WebFrontend

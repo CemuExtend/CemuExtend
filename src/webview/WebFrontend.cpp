@@ -1898,7 +1898,13 @@ namespace
 				});
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
-				m_rendererHost = CreateRendererHost(m_hostState, m_hostState, m_hostState);
+				m_rendererHost = CreateRendererHost(
+					m_hostState, m_hostState, m_hostState,
+					[gate = m_callbackGate](bool mainWindow) {
+						std::scoped_lock lock(gate->mutex);
+						if (gate->target)
+							gate->target->SignalFramePresented(mainWindow);
+					});
 				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow, [this](std::function<void()> action) { return PostToUi(std::move(action)); }, [this] { return RecreateCanvasForHost(); });
 				RefreshHotkeyBindings(m_controller.GetHotkeySettings());
 				m_hostServices->SetControllerObserver(
@@ -4331,6 +4337,20 @@ namespace
 				m_overlayFlushPending.store(false, std::memory_order_release);
 		}
 
+		void SignalFramePresented(bool mainWindow)
+		{
+			auto& pending = mainWindow ? m_mainFrameRedrawPending : m_padFrameRedrawPending;
+			if (pending.exchange(true, std::memory_order_acq_rel))
+				return;
+			if (!PostToUi([this, mainWindow] {
+					auto& pending = mainWindow ? m_mainFrameRedrawPending : m_padFrameRedrawPending;
+					pending.store(false, std::memory_order_release);
+					m_nativeWindow->RequestRenderRedraw(
+						mainWindow ? Host::PointerSurface::Main : Host::PointerSurface::Pad);
+				}))
+				pending.store(false, std::memory_order_release);
+		}
+
 		void FlushRuntimeOverlay()
 		{
 			m_overlayFlushPending.store(false, std::memory_order_release);
@@ -6730,6 +6750,8 @@ namespace
 		Application::LoggingSubscription m_loggingEvents;
 		std::atomic_bool m_loggingFlushPending{};
 		std::atomic_bool m_overlayFlushPending{};
+		std::atomic_bool m_mainFrameRedrawPending{};
+		std::atomic_bool m_padFrameRedrawPending{};
 		std::atomic_bool m_gameClosePending{};
 		std::atomic<RuntimeOverlay::Interaction> m_overlayInteraction{
 			RuntimeOverlay::Interaction::Passive};

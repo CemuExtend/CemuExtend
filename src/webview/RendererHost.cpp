@@ -31,10 +31,12 @@ namespace WebFrontend
 		  public:
 			RendererHost(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 						 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-						 std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+						 std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+						 std::function<void(bool)> framePresented)
 				: m_windowMetrics(std::move(windowMetrics)),
 				  m_nativeSurfaces(std::move(nativeSurfaces)),
-				  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher))
+				  m_nativeSurfacePublisher(std::move(nativeSurfacePublisher)),
+				  m_framePresented(std::move(framePresented))
 			{
 				static std::once_flag initialization;
 				std::call_once(initialization, [] {
@@ -70,7 +72,7 @@ namespace WebFrontend
 						if (!g_vulkan_available)
 							throw std::runtime_error("the Vulkan loader is unavailable");
 						g_renderer = std::make_unique<VulkanRenderer>(
-							m_windowMetrics, m_nativeSurfaces);
+							m_windowMetrics, m_nativeSurfaces, m_framePresented);
 						VulkanRenderer::GetInstance()->InitializeSurface(
 							{metrics.physicalWidth > 0 ? metrics.physicalWidth : bounds.width,
 							 metrics.physicalHeight > 0 ? metrics.physicalHeight : bounds.height},
@@ -267,6 +269,7 @@ namespace WebFrontend
 			std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 			std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
 			std::shared_ptr<Host::INativeSurfacePublisher> m_nativeSurfacePublisher;
+			std::function<void(bool)> m_framePresented;
 			Host::NativeSurfacePublication m_mainPublication{};
 			Host::NativeSurfacePublication m_padWindowPublication{};
 			Host::NativeSurfacePublication m_padSurfacePublication{};
@@ -281,9 +284,11 @@ namespace WebFrontend
 	std::unique_ptr<IRendererHost> CreateRendererHost(
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+		std::function<void(bool)> framePresented)
 	{
 		return std::make_unique<RendererHost>(std::move(windowMetrics),
-											  std::move(nativeSurfaces), std::move(nativeSurfacePublisher));
+											  std::move(nativeSurfaces), std::move(nativeSurfacePublisher),
+											  std::move(framePresented));
 	}
 } // namespace WebFrontend

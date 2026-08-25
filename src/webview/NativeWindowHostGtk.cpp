@@ -340,16 +340,16 @@ namespace WebFrontend
 											 self.m_metricsHandler();
 									 }),
 									 this);
-					g_signal_connect(m_overlay, "draw", G_CALLBACK(+[](GtkWidget* overlay, cairo_t* cr, gpointer data) -> gboolean {
+					g_signal_connect(m_window, "draw", G_CALLBACK(+[](GtkWidget* source, cairo_t* cr, gpointer data) -> gboolean {
 										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-										 if (!self.m_widget)
+										 if (!self.m_widget || !self.m_compositeReady)
 											 return FALSE;
 										 const auto renderWindow = gtk_widget_get_window(self.m_widget);
 										 if (!renderWindow || !gdk_window_get_composited(renderWindow))
 											 return FALSE;
 										 gint x{};
 										 gint y{};
-										 if (!gtk_widget_translate_coordinates(self.m_widget, overlay, 0, 0,
+										 if (!gtk_widget_translate_coordinates(self.m_widget, source, 0, 0,
 																			   &x, &y))
 											 return FALSE;
 										 const auto width = gtk_widget_get_allocated_width(self.m_widget);
@@ -519,6 +519,11 @@ namespace WebFrontend
 				else
 					gtk_widget_grab_focus(m_widget);
 			}
+			void RequestCompositeRedraw()
+			{
+				if (m_window && m_compositeReady)
+					gtk_widget_queue_draw(m_window);
+			}
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_window)
@@ -550,7 +555,7 @@ namespace WebFrontend
 				if (!gdk_window_get_composited(renderWindow))
 					gdk_window_set_composited(renderWindow, TRUE);
 				m_compositeReady = true;
-				gtk_widget_queue_draw(m_overlay);
+				gtk_widget_queue_draw(m_window);
 				gtk_widget_grab_focus(m_widget);
 			}
 			void DisableCompositeSurface()
@@ -861,6 +866,14 @@ namespace WebFrontend
 					ReleasePointerGrab();
 				if (m_renderRegion)
 					m_renderRegion->SetOverlayInteractive(active && interactive);
+			}
+
+			void RequestRenderRedraw(Host::PointerSurface surface) override
+			{
+				auto* region = surface == Host::PointerSurface::Main
+								 ? m_renderRegion.get() : m_padRenderRegion.get();
+				if (region)
+					region->RequestCompositeRedraw();
 			}
 
 			Host::IRenderRegion& CreatePadRenderRegion() override
