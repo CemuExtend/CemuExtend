@@ -521,8 +521,23 @@ namespace WebFrontend
 			}
 			void RequestCompositeRedraw()
 			{
-				if (m_window && m_compositeReady)
-					gtk_widget_queue_draw(m_window);
+				if (!m_window || !m_widget || !m_compositeReady)
+					return;
+				const auto parentWindow = gtk_widget_get_window(m_window);
+				if (!parentWindow)
+					return;
+				gint x{};
+				gint y{};
+				if (!gtk_widget_translate_coordinates(m_widget, m_window, 0, 0, &x, &y))
+					return;
+				const auto width = gtk_widget_get_allocated_width(m_widget);
+				const auto height = gtk_widget_get_allocated_height(m_widget);
+				if (width <= 0 || height <= 0)
+					return;
+				GdkRectangle rect{x, y, width, height};
+				// Redraw only the parent. Invalidating child windows clears the Vulkan
+				// presentation target before the XComposite pixmap can be sampled.
+				gdk_window_invalidate_rect(parentWindow, &rect, FALSE);
 			}
 			void PrepareForDestroy() override
 			{
@@ -555,7 +570,7 @@ namespace WebFrontend
 				if (!gdk_window_get_composited(renderWindow))
 					gdk_window_set_composited(renderWindow, TRUE);
 				m_compositeReady = true;
-				gtk_widget_queue_draw(m_window);
+				RequestCompositeRedraw();
 				gtk_widget_grab_focus(m_widget);
 			}
 			void DisableCompositeSurface()
