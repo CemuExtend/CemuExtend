@@ -201,6 +201,32 @@ namespace WebFrontend
 			gtk_widget_set_app_paintable(window, TRUE);
 		}
 
+		bool PaintCompositedChild(GtkWidget* parent, GtkWidget* child, cairo_t* cr,
+								  cairo_operator_t op)
+		{
+			if (!parent || !child || !cr)
+				return false;
+			const auto childWindow = gtk_widget_get_window(child);
+			if (!childWindow || !gdk_window_get_composited(childWindow))
+				return false;
+			gint x{};
+			gint y{};
+			if (!gtk_widget_translate_coordinates(child, parent, 0, 0, &x, &y))
+				return false;
+			const auto width = gtk_widget_get_allocated_width(child);
+			const auto height = gtk_widget_get_allocated_height(child);
+			if (width <= 0 || height <= 0)
+				return false;
+			cairo_save(cr);
+			cairo_rectangle(cr, x, y, width, height);
+			cairo_clip(cr);
+			cairo_set_operator(cr, op);
+			gdk_cairo_set_source_window(cr, childWindow, x, y);
+			cairo_paint(cr);
+			cairo_restore(cr);
+			return true;
+		}
+
 		Host::NativeWindowHandle NativeHandle(GtkWidget* widget)
 		{
 			if (!widget)
@@ -322,6 +348,11 @@ namespace WebFrontend
 												surface == Host::PointerSurface::Main ? 720 : 480);
 					m_overlay = gtk_overlay_new();
 					m_widget = gtk_drawing_area_new();
+					if (const auto screen = gtk_widget_get_screen(m_window))
+					{
+						if (const auto visual = gdk_screen_get_system_visual(screen))
+							gtk_widget_set_visual(m_widget, visual);
+					}
 					gtk_widget_set_hexpand(m_widget, TRUE);
 					gtk_widget_set_vexpand(m_widget, TRUE);
 					gtk_widget_set_can_focus(m_widget, TRUE);
@@ -342,27 +373,17 @@ namespace WebFrontend
 									 this);
 					g_signal_connect(m_window, "draw", G_CALLBACK(+[](GtkWidget* source, cairo_t* cr, gpointer data) -> gboolean {
 										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-										 if (!self.m_widget || !self.m_compositeReady)
-											 return FALSE;
-										 const auto renderWindow = gtk_widget_get_window(self.m_widget);
-										 if (!renderWindow || !gdk_window_get_composited(renderWindow))
-											 return FALSE;
-										 gint x{};
-										 gint y{};
-										 if (!gtk_widget_translate_coordinates(self.m_widget, source, 0, 0,
-																			   &x, &y))
-											 return FALSE;
-										 const auto width = gtk_widget_get_allocated_width(self.m_widget);
-										 const auto height = gtk_widget_get_allocated_height(self.m_widget);
-										 if (width <= 0 || height <= 0)
-											 return FALSE;
-										 cairo_save(cr);
-										 cairo_rectangle(cr, x, y, width, height);
-										 cairo_clip(cr);
-										 cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-										 gdk_cairo_set_source_window(cr, renderWindow, x, y);
-										 cairo_paint(cr);
-										 cairo_restore(cr);
+										 if (self.m_compositeReady)
+											 PaintCompositedChild(source, self.m_widget, cr,
+																	 CAIRO_OPERATOR_SOURCE);
+										 return FALSE;
+									 }),
+									 this);
+					g_signal_connect_after(m_window, "draw", G_CALLBACK(+[](GtkWidget* source, cairo_t* cr, gpointer data) -> gboolean {
+										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+										 if (self.m_webCompositeReady)
+											 PaintCompositedChild(source, self.m_overlayWebView, cr,
+																	 CAIRO_OPERATOR_OVER);
 										 return FALSE;
 									 }),
 									 this);
@@ -473,7 +494,9 @@ namespace WebFrontend
 				try
 				{
 					FinalizeCompositeSurface();
+					FinalizeWebCompositeSurface();
 					SetOverlayInteractive(false);
+					RequestCompositeRedraw();
 				} catch (...)
 				{
 					DetachOverlayWebView(webView);
@@ -484,6 +507,7 @@ namespace WebFrontend
 			{
 				if (!m_window || !m_overlay || webView != m_overlayWebView)
 					return;
+				DisableWebCompositeSurface();
 				g_object_ref(webView);
 				gtk_container_remove(GTK_CONTAINER(m_overlay), webView);
 				PrepareOverlayWebViewCreate();
@@ -573,8 +597,34 @@ namespace WebFrontend
 				RequestCompositeRedraw();
 				gtk_widget_grab_focus(m_widget);
 			}
+			void FinalizeWebCompositeSurface()
+			{
+				if (!m_overlayWebView)
+					throw std::logic_error("overlay WebView is unavailable");
+				gtk_widget_realize(m_overlayWebView);
+				const auto webWindow = gtk_widget_get_window(m_overlayWebView);
+				const auto display = webWindow ? gdk_window_get_display(webWindow) : nullptr;
+				if (!webWindow || !display || !GDK_IS_X11_WINDOW(webWindow) ||
+					!gdk_display_supports_composite(display))
+					throw std::runtime_error(
+						"the WebKitGTK overlay requires an X11 composited child window");
+				if (!gdk_window_get_composited(webWindow))
+					gdk_window_set_composited(webWindow, TRUE);
+				m_webCompositeReady = true;
+			}
+			void DisableWebCompositeSurface()
+			{
+				if (m_overlayWebView)
+				{
+					if (const auto webWindow = gtk_widget_get_window(m_overlayWebView);
+						webWindow && gdk_window_get_composited(webWindow))
+						gdk_window_set_composited(webWindow, FALSE);
+				}
+				m_webCompositeReady = false;
+			}
 			void DisableCompositeSurface()
 			{
+				DisableWebCompositeSurface();
 				if (m_widget)
 				{
 					if (const auto renderWindow = gtk_widget_get_window(m_widget);
@@ -594,6 +644,7 @@ namespace WebFrontend
 			bool m_overlayInteractionInitialized{};
 			bool m_overlayInteractive{};
 			bool m_compositeReady{};
+			bool m_webCompositeReady{};
 			bool m_prepared{};
 		};
 
@@ -763,9 +814,14 @@ namespace WebFrontend
 			{
 				if (!WEBKIT_IS_WEB_VIEW(browserController))
 					throw std::runtime_error("failed to acquire the WebKitGTK browser controller");
+				auto* view = WEBKIT_WEB_VIEW(browserController);
+				auto* settings = webkit_web_view_get_settings(view);
+				if (!settings)
+					throw std::runtime_error("failed to acquire the WebKitGTK runtime settings");
+				webkit_settings_set_hardware_acceleration_policy(
+					settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
 				GdkRGBA transparent{};
-				webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(browserController),
-													 &transparent);
+				webkit_web_view_set_background_color(view, &transparent);
 			}
 
 			void PrepareWebViewDestroy(void* widget) override
