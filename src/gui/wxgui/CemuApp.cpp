@@ -20,6 +20,9 @@
 #if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
 #include "wxgui/helpers/wxWayland.h"
 #endif
+#if BOOST_OS_LINUX || BOOST_OS_BSD
+#include <gdk/gdkkeysyms.h>
+#endif
 #if __WXGTK__
 #include <glib.h>
 #endif
@@ -498,6 +501,14 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	case 91: return 0xe3;  // VK_LWIN
 	case 92: return 0xe7;  // VK_RWIN
 	case 93: return 0x65;  // VK_APPS
+	default: break;
+	}
+#elif BOOST_OS_LINUX || BOOST_OS_BSD
+	// wxGTK stores GDK's keyval in GetRawKeyCode().
+	switch (rawKey)
+	{
+	case GDK_KEY_Shift_L: return 0xe1;
+	case GDK_KEY_Shift_R: return 0xe5;
 	default: break;
 	}
 #else
