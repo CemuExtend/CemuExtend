@@ -14,9 +14,9 @@ case "${frontend}" in
 		;;
 esac
 case "${overlay_backend}" in
-	""|webview|imgui) ;;
+	""|webview|cef|imgui) ;;
 	*)
-		printf 'Unsupported CEMU_OVERLAY_BACKEND: %s (expected webview or imgui)\n' "${overlay_backend}" >&2
+		printf 'Unsupported CEMU_OVERLAY_BACKEND: %s (expected cef or imgui)\n' "${overlay_backend}" >&2
 		exit 2
 		;;
 esac
@@ -56,6 +56,11 @@ docker build --progress=plain --target build \
 	-t "${image_name}" "${project_dir}"
 
 mkdir -p "${artifact_dir}"
+# Extraction is additive, so remove the obsolete generic CEF copy that older
+# bundles may have left behind. libcef.so belongs in the bundle root beside its
+# ICU/resource files.
+rm -f "${artifact_dir}/.cemu-runtime/lib/libcef.so"
+rm -f "${artifact_dir}/libvulkan.so.1"
 docker run --rm --user "$(id -u):$(id -g)" \
 	-v "${artifact_dir}:/artifacts" \
 	"${image_name}" \

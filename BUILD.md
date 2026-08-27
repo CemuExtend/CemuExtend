@@ -145,13 +145,21 @@ cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DA
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. Desktop WebView builds use the WebView runtime overlay by default. Use `-DCEMU_OVERLAY_BACKEND=imgui` to build the source-compatible ImGui fallback, or set it to `webview` explicitly. The WebView overlay requires `CEMU_FRONTEND=webview`; wx builds default to ImGui.
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. Linux WebView builds use the CEF off-screen runtime overlay by default. Use `-DCEMU_OVERLAY_BACKEND=imgui` for the source-compatible ImGui fallback, or set it to `cef` explicitly. CEF requires the WebView frontend; wx builds default to ImGui.
+
+CEF is pinned in `cmake/CefVersion.cmake`. Before a native configure, fetch and verify the official Linux x86-64 archive:
+
+```bash
+./scripts/fetch-cef-linux-x64.sh
+```
+
+It extracts to `dependencies/cef` by default; set `CEF_ROOT` to use another extraction. CEF builds require Linux x86-64 and NSS development files (`libnss3-dev` on Ubuntu). Runtime resources and licenses are staged beside the executable.
 
 For example, to validate both desktop overlay implementations:
 
 ```bash
-nix develop --command cmake -S . -B build/nix-webview -G Ninja \
-  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=webview
+nix develop --command cmake -S . -B build/nix-cef -G Ninja \
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=cef
 nix develop --command cmake -S . -B build/nix-imgui -G Ninja \
   -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=imgui
 ```
@@ -182,7 +190,7 @@ docker build -t cemu-extend:build .
 docker run --rm -it cemu-extend:build
 ```
 
-The default image performs an incremental WebView Release build. Its persistent
+The default image performs an incremental WebView/CEF Release build. Its persistent
 CMake/Ninja cache means regenerating `src/webview/generated/WebAssets.h` only
 recompiles the affected WebView target and relinks Cemu. Use
 `CEMU_CLEAN_BUILD=1 ./docker-build.sh` only when a dependency, toolchain, or
@@ -201,6 +209,8 @@ To build and launch the desktop frontend with its GTK/WebKitGTK runtime, use:
 ```bash
 ./docker-run.sh
 ```
+
+The launcher UI still uses WebKitGTK; the in-game Main/Pad overlays use CEF OSR and are composited into Vulkan. For sandboxed local installation, install the staged `chrome-sandbox` helper as root with mode 4755. An explicitly unsandboxed development run can set `CEMU_CEF_NO_SANDBOX=1`. The OSR path supports Wayland and X11 without XComposite or Cairo child-window composition.
 
 The launcher forwards the current Wayland/X11 display, PulseAudio socket, and
 `/dev/dri`. It persists data in dedicated `Cemu-Docker` XDG directories so a

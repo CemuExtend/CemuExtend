@@ -32,6 +32,7 @@ RUN apt-get update \
         libglu1-mesa-dev \
         libgtk-3-dev \
         libpulse-dev \
+        libnss3-dev \
         libsecret-1-dev \
         libssl-dev \
         libsystemd-dev \
@@ -68,6 +69,13 @@ RUN apt-get update \
         autoconf-archive \
         automake \
         libglm-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# CEF OSR smoke tests need a display server even though no native browser
+# window is created. Keep it in a separate layer so the large toolchain layer
+# remains reusable.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y xauth xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 FROM cemu-extend-base AS dev

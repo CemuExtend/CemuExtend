@@ -199,8 +199,9 @@ cemu_assert_target_internal_edges_allowed(CemuApplication
 	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuRuntimeOverlay CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuWebRpc)
 cemu_assert_target_internal_edges_allowed(CemuWebFrontend
-	CemuApplication CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuRuntimeOverlay CemuUtil CemuWebRpc
+	CemuApplication CemuCefRuntime CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuRuntimeOverlay CemuUtil CemuWebRpc
 	CemuWebRendererAdapters)
+cemu_assert_target_internal_edges_allowed(CemuCefRuntime)
 cemu_assert_target_internal_edges_allowed(CemuRuntimeOverlay)
 cemu_assert_target_internal_edges_allowed(CemuWebRendererAdapters
 	CemuCafe CemuCommon CemuConfig CemuHostContracts)
@@ -493,6 +494,10 @@ if(CEMU_FRONTEND STREQUAL "wx")
 	target_link_libraries(CemuBin PRIVATE CemuWxFrontend)
 elseif(CEMU_FRONTEND STREQUAL "webview")
 	target_link_libraries(CemuBin PRIVATE CemuWebFrontend)
+endif()
+
+if(CEMU_OVERLAY_ENABLED AND CEMU_OVERLAY_BACKEND STREQUAL "cef")
+	cemu_stage_cef_runtime(CemuBin)
 endif()
 
 if(UNIX AND NOT APPLE)

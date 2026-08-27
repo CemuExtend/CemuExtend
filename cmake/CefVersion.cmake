@@ -1,0 +1,5 @@
+set(CEMU_CEF_VERSION "151.3.24+g2384915+chromium-151.0.7922.174")
+set(CEMU_CEF_PLATFORM "linux64")
+set(CEMU_CEF_ARCHIVE "cef_binary_${CEMU_CEF_VERSION}_${CEMU_CEF_PLATFORM}.tar.bz2")
+set(CEMU_CEF_URL "https://cef-builds.spotifycdn.com/${CEMU_CEF_ARCHIVE}")
+set(CEMU_CEF_SHA256 "995fb57fe6b9af9ea184a983bc878cea9cc5895d3ed071065a1d4ad78d0ea3af")
