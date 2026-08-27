@@ -64,6 +64,15 @@ add_library(CemuWebFrontend STATIC
   generated/WindowRoles.h
   generated/WebAssets.h
 )
+if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
+  target_sources(CemuWebFrontend PRIVATE
+    cef/CefOverlayFrameMailbox.cpp
+    cef/CefOverlayFrameMailbox.h
+    cef/CefOverlayRuntime.cpp
+    cef/CefOverlayRuntime.h
+  )
+  target_link_libraries(CemuWebFrontend PRIVATE CemuCefRuntime)
+endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp NativeFileDialogGtk.cpp ToolWindowSupportGtk.cpp)
 elseif(WIN32)
@@ -96,6 +105,29 @@ target_link_libraries(CemuWebFrontend PRIVATE
 )
 
 if(BUILD_TESTING)
+	if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
+		add_executable(cef_overlay_frame_mailbox_tests
+			cef/CefOverlayFrameMailbox.cpp
+			cef/tests/CefOverlayFrameMailboxTests.cpp)
+		target_include_directories(cef_overlay_frame_mailbox_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+		add_test(NAME cef_overlay_frame_mailbox_tests COMMAND cef_overlay_frame_mailbox_tests)
+
+		add_executable(cef_overlay_osr_smoke_tests cef/tests/CefOverlayOsrSmokeTests.cpp)
+		target_include_directories(cef_overlay_osr_smoke_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+		target_link_libraries(cef_overlay_osr_smoke_tests PRIVATE CemuWebFrontend)
+		cemu_stage_cef_runtime(cef_overlay_osr_smoke_tests)
+		find_program(XVFB_RUN_EXECUTABLE xvfb-run)
+		if(XVFB_RUN_EXECUTABLE)
+			add_test(NAME cef_overlay_osr_smoke_tests COMMAND
+				"${XVFB_RUN_EXECUTABLE}" -a -s "-screen 0 1280x720x24"
+				$<TARGET_FILE:cef_overlay_osr_smoke_tests>)
+		else()
+			add_test(NAME cef_overlay_osr_smoke_tests COMMAND cef_overlay_osr_smoke_tests)
+		endif()
+		set_tests_properties(cef_overlay_osr_smoke_tests PROPERTIES
+			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1"
+			TIMEOUT 90)
+	endif()
   add_executable(web_main_window_state_tests tests/MainWindowStateTests.cpp)
   target_link_libraries(web_main_window_state_tests PRIVATE CemuWebRpc)
   add_test(NAME web_main_window_state_tests COMMAND web_main_window_state_tests)

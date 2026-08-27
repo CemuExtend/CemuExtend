@@ -90,30 +90,16 @@ namespace WebFrontend
 		[[nodiscard]] virtual Host::NativeWindowHandle GetMainWindowHandle() const = 0;
 		[[nodiscard]] virtual Host::WindowMetricsSnapshot GetMetrics() const = 0;
 		virtual void AttachWebView(void* widget) = 0;
-		virtual void ConfigureRuntimeOverlayWebView(void* browserController) = 0;
 		virtual void PrepareWebViewDestroy(void* widget) = 0;
 		virtual void Show() = 0;
 		virtual void HideLauncher() = 0;
 		[[nodiscard]] virtual bool IsLauncherVisible() const = 0;
 		virtual void ShowLibrary() = 0;
 		[[nodiscard]] virtual Host::IRenderRegion& CreateMainRenderRegion() = 0;
-		// webview_create() requires the toolkit-owned parent object (GtkWindow,
-		// NSWindow, or HWND), not the renderer-facing native surface handle.
-		[[nodiscard]] virtual void* GetOverlayWebViewParent(Host::PointerSurface surface) const = 0;
-		virtual void PrepareMainOverlayWebViewCreate() = 0;
-		virtual void AttachMainOverlayWebView(void* widget) = 0;
-		virtual void DetachMainOverlayWebView(void* widget) = 0;
-		virtual void RestoreMainOverlayParent() = 0;
 		virtual void DestroyMainRenderRegion() = 0;
 		virtual void ShowRenderRegion() = 0;
-		virtual void SetRuntimeOverlayMode(bool active, bool interactive) = 0;
 		virtual void RequestRenderRedraw(Host::PointerSurface) {}
 		[[nodiscard]] virtual Host::IRenderRegion& CreatePadRenderRegion() = 0;
-		virtual void PreparePadOverlayWebViewCreate() = 0;
-		virtual void AttachPadOverlayWebView(void* widget) = 0;
-		virtual void DetachPadOverlayWebView(void* widget) = 0;
-		virtual void RestorePadOverlayParent() = 0;
-		virtual void SetPadRuntimeOverlayMode(bool interactive) = 0;
 		virtual void DestroyPadRenderRegion() = 0;
 		[[nodiscard]] virtual bool IsPadRenderRegionOpen() const = 0;
 		virtual void SetFullscreen(bool fullscreen) = 0;

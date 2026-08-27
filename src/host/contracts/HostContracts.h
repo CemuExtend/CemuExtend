@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,6 +78,35 @@ namespace Host
 	{
 		Main,
 		Pad,
+	};
+
+	struct OverlayDirtyRect
+	{
+		std::int32_t x{};
+		std::int32_t y{};
+		std::int32_t width{};
+		std::int32_t height{};
+	};
+
+	struct OverlayFrameSnapshot
+	{
+		PointerSurface surface{PointerSurface::Main};
+		std::uint64_t sequence{};
+		std::uint64_t resizeGeneration{};
+		std::int32_t width{};
+		std::int32_t height{};
+		std::int32_t stride{};
+		bool fullDamage{};
+		std::shared_ptr<const std::vector<std::uint8_t>> bgra;
+		std::vector<OverlayDirtyRect> dirtyRects;
+	};
+
+	class IOverlayFrameSource
+	{
+	  public:
+		virtual ~IOverlayFrameSource() = default;
+		[[nodiscard]] virtual std::optional<OverlayFrameSnapshot> AcquireLatestOverlayFrame(
+			PointerSurface surface, std::uint64_t afterSequence) = 0;
 	};
 
 	enum class PointerButton : std::uint8_t

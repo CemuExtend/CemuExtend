@@ -30,6 +30,9 @@
 #include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
 #include "webview/generated/WindowRoles.h"
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+#include "webview/cef/CefOverlayRuntime.h"
+#endif
 #include "util/helpers/helpers.h"
 
 #include <array>
@@ -1879,11 +1882,6 @@ namespace
 				if (!m_webViewWidget)
 					throw std::runtime_error("failed to acquire the native webview widget");
 				m_nativeWindow->AttachWebView(m_webViewWidget);
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-				m_browserController = webview_get_native_handle(
-					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
-				m_nativeWindow->ConfigureRuntimeOverlayWebView(m_browserController);
-#endif
 				m_nativeWindow->SetCloseHandler([this] { HandleLauncherClose(); });
 				m_nativeWindow->SetGameCloseHandler([this] { HandleGameWindowClose(); });
 				m_nativeWindow->SetMetricsHandler(
@@ -1898,8 +1896,23 @@ namespace
 				});
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
+				#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				m_cefOverlay = WebFrontend::CefOverlay::CreateBrowserRuntime(
+					[this](std::uint64_t windowId, std::string_view request) {
+						const auto previousWindow = std::exchange(m_invokingWindow, windowId);
+						auto response = m_rpc.Dispatch(request);
+						m_invokingWindow = previousWindow;
+						return response;
+					},
+					[this](Host::PointerSurface surface) {
+						if (m_nativeWindow)
+							m_nativeWindow->RequestRenderRedraw(surface);
+					});
+				if (!m_cefOverlay)
+					cemuLog_log(LogType::Force, "CEF Runtime Overlay is disabled because initialization failed");
+				#endif
 				m_rendererHost = CreateRendererHost(
-					m_hostState, m_hostState, m_hostState,
+					m_hostState, m_hostState, m_hostState, m_cefOverlay,
 					[gate = m_callbackGate](bool mainWindow) {
 						std::scoped_lock lock(gate->mutex);
 						if (gate->target)
@@ -1925,7 +1938,7 @@ namespace
 				m_windowState = std::make_unique<MainWindowState>(reinterpret_cast<std::uintptr_t>(
 					m_nativeWindow->GetNativeWindow()));
 				m_callbackGate->target = this;
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 				RuntimeOverlay::Model::Instance().SetChangeHandler([gate = m_callbackGate] {
 					std::scoped_lock lock(gate->mutex);
 					if (gate->target)
@@ -3227,7 +3240,7 @@ namespace
 								"Application shutdown cancelled the pending title launch.");
 			StopAllBackgroundJobs();
 			m_emulatedUsb.Close();
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 			RuntimeOverlay::Model::Instance().ClearChangeHandler();
 #endif
 			{
@@ -3255,6 +3268,13 @@ namespace
 							"Cemu could not safely detach native renderer surfaces during final shutdown");
 				std::_Exit(EXIT_FAILURE);
 			}
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+			{
+				m_cefOverlay->CloseAll();
+				m_cefOverlay.reset();
+			}
+#endif
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
 			CloseAllToolWindows();
@@ -3397,9 +3417,6 @@ namespace
 
 		void ShowLibraryContent()
 		{
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			m_nativeWindow->SetRuntimeOverlayMode(false, true);
-#endif
 			if (!m_launcherClosed)
 				m_nativeWindow->ShowLibrary();
 		}
@@ -3409,172 +3426,49 @@ namespace
 			m_nativeWindow->ShowRenderRegion();
 		}
 
-		void CreateMainOverlayWebView(Host::IRenderRegion& region)
+		void CreateMainRuntimeOverlay(Host::IRenderRegion& region)
 		{
-			(void)region;
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_mainOverlayWebView)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (!m_cefOverlay)
 				return;
-			m_nativeWindow->PrepareMainOverlayWebViewCreate();
-			webview_t webview{};
-			void* widget{};
-			bool attached{};
-			bool bound{};
-			try
-			{
-				const auto parent = m_nativeWindow->GetOverlayWebViewParent(
-					Host::PointerSurface::Main);
-				if (!parent)
-					throw std::runtime_error("game overlay parent is unavailable");
-				webview = webview_create(
-#if defined(NDEBUG)
-					0,
-#else
-					1,
-#endif
-					parent);
-				if (!webview)
-					throw std::runtime_error("failed to create the game overlay WebView");
-				widget = webview_get_native_handle(webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
-				if (!widget)
-					throw std::runtime_error("failed to acquire the game overlay widget");
-				const auto browserController = webview_get_native_handle(
-					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
-				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
-				m_nativeWindow->AttachMainOverlayWebView(widget);
-				attached = true;
-				m_mainOverlayBinding = {this, webview, kMainOverlayWindowId};
-				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
-								 &m_mainOverlayBinding) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to bind the game overlay RPC bridge");
-				bound = true;
-				const auto bootstrap = InitialBootstrapScript(
-					kMainOverlayWindowId, "runtime-overlay", std::nullopt, {}, std::nullopt, "tv");
-				if (webview_init(webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to initialize the game overlay document");
-				LoadWebView(webview);
-				m_mainOverlayWebView = webview;
-				m_mainOverlayWidget = widget;
-				m_mainOverlayRpcBound = true;
-			}
-			catch (...)
-			{
-				if (attached)
-					m_nativeWindow->DetachMainOverlayWebView(widget);
-				if (bound)
-					webview_unbind(webview, "cemuInvoke");
-				if (webview)
-					webview_destroy(webview);
-				m_nativeWindow->RestoreMainOverlayParent();
-				m_mainOverlayBinding = {};
-				throw;
-			}
+			const auto metrics = m_hostState->GetWindowMetrics();
+			const auto bounds = region.GetBounds();
+			if (!m_cefOverlay->Create(Host::PointerSurface::Main, kMainOverlayWindowId,
+				metrics.physicalWidth > 0 ? metrics.physicalWidth : bounds.width,
+				metrics.physicalHeight > 0 ? metrics.physicalHeight : bounds.height,
+				metrics.dpiScale))
+				cemuLog_log(LogType::Force, "Main CEF Runtime Overlay browser could not be created; continuing without overlay");
 #endif
 		}
 
-		void DestroyMainOverlayWebView() noexcept
+		void DestroyMainRuntimeOverlay() noexcept
 		{
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (!m_mainOverlayWebView)
-			{
-				m_nativeWindow->RestoreMainOverlayParent();
-				return;
-			}
-			if (m_mainOverlayWidget)
-				m_nativeWindow->DetachMainOverlayWebView(m_mainOverlayWidget);
-			if (m_mainOverlayRpcBound)
-				webview_unbind(m_mainOverlayWebView, "cemuInvoke");
-			webview_destroy(m_mainOverlayWebView);
-			m_mainOverlayWebView = nullptr;
-			m_mainOverlayWidget = nullptr;
-			m_mainOverlayRpcBound = false;
-			m_mainOverlayBinding = {};
-			m_nativeWindow->RestoreMainOverlayParent();
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+				m_cefOverlay->Close(Host::PointerSurface::Main);
 #endif
 		}
 
-		void CreatePadOverlayWebView(Host::IRenderRegion& region)
+		void CreatePadRuntimeOverlay(Host::IRenderRegion& region)
 		{
-			(void)region;
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_padOverlayWebView)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (!m_cefOverlay)
 				return;
-			m_nativeWindow->PreparePadOverlayWebViewCreate();
-			webview_t webview{};
-			void* widget{};
-			bool attached{};
-			bool bound{};
-			try
-			{
-				const auto parent = m_nativeWindow->GetOverlayWebViewParent(
-					Host::PointerSurface::Pad);
-				if (!parent)
-					throw std::runtime_error("GamePad overlay parent is unavailable");
-				webview = webview_create(
-#if defined(NDEBUG)
-					0,
-#else
-					1,
-#endif
-					parent);
-				if (!webview)
-					throw std::runtime_error("failed to create the GamePad overlay WebView");
-				widget = webview_get_native_handle(
-					webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
-				if (!widget)
-					throw std::runtime_error("failed to acquire the GamePad overlay widget");
-				const auto browserController = webview_get_native_handle(
-					webview, WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER);
-				m_nativeWindow->ConfigureRuntimeOverlayWebView(browserController);
-				m_nativeWindow->AttachPadOverlayWebView(widget);
-				attached = true;
-				m_padOverlayBinding = {this, webview, kPadOverlayWindowId};
-				if (webview_bind(webview, "cemuInvoke", &Runtime::Invoke,
-								 &m_padOverlayBinding) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to bind the GamePad overlay RPC bridge");
-				bound = true;
-				const auto bootstrap = InitialBootstrapScript(
-					kPadOverlayWindowId, "runtime-overlay", std::nullopt, {}, std::nullopt,
-					"pad");
-				if (webview_init(webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to initialize the GamePad overlay document");
-				LoadWebView(webview);
-				m_padOverlayWebView = webview;
-				m_padOverlayWidget = widget;
-				m_padOverlayRpcBound = true;
-			} catch (...)
-			{
-				if (attached)
-					m_nativeWindow->DetachPadOverlayWebView(widget);
-				if (bound)
-					webview_unbind(webview, "cemuInvoke");
-				if (webview)
-					webview_destroy(webview);
-				m_nativeWindow->RestorePadOverlayParent();
-				m_padOverlayBinding = {};
-				throw;
-			}
+			const auto metrics = m_hostState->GetWindowMetrics();
+			const auto bounds = region.GetBounds();
+			if (!m_cefOverlay->Create(Host::PointerSurface::Pad, kPadOverlayWindowId,
+				metrics.physicalPadWidth > 0 ? metrics.physicalPadWidth : bounds.width,
+				metrics.physicalPadHeight > 0 ? metrics.physicalPadHeight : bounds.height,
+				metrics.padDpiScale))
+				cemuLog_log(LogType::Force, "GamePad CEF Runtime Overlay browser could not be created; continuing without overlay");
 #endif
 		}
 
-		void DestroyPadOverlayWebView() noexcept
+		void DestroyPadRuntimeOverlay() noexcept
 		{
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (!m_padOverlayWebView)
-			{
-				m_nativeWindow->RestorePadOverlayParent();
-				return;
-			}
-			if (m_padOverlayWidget)
-				m_nativeWindow->DetachPadOverlayWebView(m_padOverlayWidget);
-			if (m_padOverlayRpcBound)
-				webview_unbind(m_padOverlayWebView, "cemuInvoke");
-			webview_destroy(m_padOverlayWebView);
-			m_padOverlayWebView = nullptr;
-			m_padOverlayWidget = nullptr;
-			m_padOverlayRpcBound = false;
-			m_padOverlayBinding = {};
-			m_nativeWindow->RestorePadOverlayParent();
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+				m_cefOverlay->Close(Host::PointerSurface::Pad);
 #endif
 		}
 
@@ -3585,7 +3479,7 @@ namespace
 			ReleaseNativeInput(true);
 			if (m_rendererHost)
 				m_rendererHost->PrepareMainDestroy();
-			DestroyMainOverlayWebView();
+					DestroyMainRuntimeOverlay();
 			m_nativeWindow->DestroyMainRenderRegion();
 			return true;
 		}
@@ -3619,7 +3513,7 @@ namespace
 											  JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
 				return false;
 			}
-			DestroyPadOverlayWebView();
+					DestroyPadRuntimeOverlay();
 			m_nativeWindow->DestroyPadRenderRegion();
 			++m_padGeneration;
 			return true;
@@ -3641,7 +3535,7 @@ namespace
 			{
 				++m_padGeneration;
 				auto& region = m_nativeWindow->CreatePadRenderRegion();
-				CreatePadOverlayWebView(region);
+					CreatePadRuntimeOverlay(region);
 				m_nativeWindow->SetPadMetricsEnabled(true);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				m_rendererHost->InitializePad(region);
@@ -3659,6 +3553,16 @@ namespace
 		{
 			const auto previous = m_hostState->GetWindowMetrics();
 			m_hostState->UpdateMetrics(metrics);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+			{
+				m_cefOverlay->Resize(Host::PointerSurface::Main, metrics.physicalWidth,
+					metrics.physicalHeight, metrics.dpiScale);
+				if (metrics.padOpen)
+					m_cefOverlay->Resize(Host::PointerSurface::Pad, metrics.physicalPadWidth,
+						metrics.physicalPadHeight, metrics.padDpiScale);
+			}
+#endif
 			if (previous.appActive != metrics.appActive)
 			{
 				m_controller.PointerFocusChanged(metrics.appActive);
@@ -3803,7 +3707,7 @@ namespace
 		void HandleControllerHotkeys(const ControllerState& current,
 									 const ControllerState& previous)
 		{
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 			HandleRuntimeOverlayControllerNavigation();
 #endif
 			if (m_stopping.load(std::memory_order_acquire) ||
@@ -3833,7 +3737,7 @@ namespace
 				(void)PostToUi([this, action = *action] { ExecuteHotkey(action); });
 		}
 
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 		void HandleRuntimeOverlayControllerNavigation()
 		{
 			std::array<bool, 7> current{};
@@ -3862,12 +3766,13 @@ namespace
 					continue;
 				const auto action = std::string(actions[index]);
 				(void)PostToUi([this, action] {
-					if (!m_webview || m_stopping.load(std::memory_order_acquire))
+					if (!m_cefOverlay || m_stopping.load(std::memory_order_acquire))
 						return;
 					const auto script =
 						"window.dispatchEvent(new CustomEvent('cemu-overlay-navigate',{detail:" +
 						JsonString(action) + "}))";
-					webview_eval(m_webview, script.c_str());
+					m_cefOverlay->ExecuteScript(Host::PointerSurface::Main, script);
+					m_cefOverlay->ExecuteScript(Host::PointerSurface::Pad, script);
 				});
 			}
 			m_overlayNavigationButtons = current;
@@ -3953,6 +3858,11 @@ namespace
 		{
 			if (m_stopping.load(std::memory_order_acquire) || !m_hostServices)
 				return;
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay && m_overlayInteraction.load(std::memory_order_acquire) !=
+				RuntimeOverlay::Interaction::Passive && m_cefOverlay->SendInput(event))
+				return;
+#endif
 			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];
 			auto& bridge = PointerBridge(event.surface);
 			switch (event.kind)
@@ -4066,14 +3976,16 @@ namespace
 				// has stopped. Still abandon any retained renderer before GTK can
 				// unrealize the X11 child that owns its VkSurfaceKHR.
 				m_rendererHost->AbandonMainInitialization();
-				DestroyMainOverlayWebView();
+				DestroyMainRuntimeOverlay();
 				m_nativeWindow->DestroyMainRenderRegion();
 				auto& region = m_nativeWindow->CreateMainRenderRegion();
-				CreateMainOverlayWebView(region);
 				m_nativeWindow->SetFullscreen(m_fullscreen);
+				// A hidden GTK Wayland window has no wl_surface. Map the game window
+				// before publishing its native handle to CEF/Vulkan.
+				ShowRenderContent();
+				CreateMainRuntimeOverlay(region);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				m_rendererHost->InitializeMain(region);
-				ShowRenderContent();
 				RefreshTextInput();
 				return true;
 			} catch (const std::exception& error)
@@ -4084,7 +3996,7 @@ namespace
 					m_rendererHost->AbandonMainInitialization();
 				} catch (...)
 				{}
-				DestroyMainOverlayWebView();
+				DestroyMainRuntimeOverlay();
 				m_nativeWindow->DestroyMainRenderRegion();
 				ShowLibraryContent();
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
@@ -4143,10 +4055,13 @@ namespace
 				if (beforeDispatch)
 					beforeDispatch();
 				webview_eval(m_webview, script.c_str());
-				if (m_mainOverlayWebView)
-					webview_eval(m_mainOverlayWebView, script.c_str());
-				if (m_padOverlayWebView)
-					webview_eval(m_padOverlayWebView, script.c_str());
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				if (m_cefOverlay)
+				{
+					m_cefOverlay->ExecuteScript(Host::PointerSurface::Main, script);
+					m_cefOverlay->ExecuteScript(Host::PointerSurface::Pad, script);
+				}
+#endif
 				for (const auto& [id, window] : m_toolWindows)
 				{
 					(void)id;
@@ -4180,14 +4095,18 @@ namespace
 				}
 				if (windowId == kPadOverlayWindowId)
 				{
-					if (m_padOverlayWebView)
-						webview_eval(m_padOverlayWebView, script.c_str());
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+					if (m_cefOverlay)
+						m_cefOverlay->ExecuteScript(Host::PointerSurface::Pad, script);
+#endif
 					return;
 				}
 				if (windowId == kMainOverlayWindowId)
 				{
-					if (m_mainOverlayWebView)
-						webview_eval(m_mainOverlayWebView, script.c_str());
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+					if (m_cefOverlay)
+						m_cefOverlay->ExecuteScript(Host::PointerSurface::Main, script);
+#endif
 					return;
 				}
 				const auto found = m_toolWindows.find(windowId);
@@ -4357,20 +4276,17 @@ namespace
 			const auto snapshot = m_controller.GetRuntimeOverlaySnapshot();
 			const auto payload = RuntimeOverlayJson(snapshot);
 			m_overlayInteraction.store(snapshot.interaction, std::memory_order_release);
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_windowState &&
-				m_windowState->Snapshot().mode == WebFrontend::MainWindowContentMode::Playing)
-				m_nativeWindow->SetRuntimeOverlayMode(
-					true, snapshot.interaction != RuntimeOverlay::Interaction::Passive);
-			if (m_padOverlayWebView)
-				m_nativeWindow->SetPadRuntimeOverlayMode(
-					snapshot.interaction != RuntimeOverlay::Interaction::Passive);
-#endif
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-			if (m_mainOverlayWebView)
-				EmitToWebViewNow(m_mainOverlayWebView, "overlay.changed", payload);
-			if (m_padOverlayWebView)
-				EmitToWebViewNow(m_padOverlayWebView, "overlay.changed", payload);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+			{
+				const bool interactive = snapshot.interaction != RuntimeOverlay::Interaction::Passive;
+				m_cefOverlay->SetInteractive(Host::PointerSurface::Main, interactive);
+				m_cefOverlay->SetInteractive(Host::PointerSurface::Pad, interactive);
+				std::scoped_lock eventLock(m_eventMutex);
+				const auto sequence = ++m_eventSequence;
+				m_cefOverlay->ExecuteEvent(Host::PointerSurface::Main, "overlay.changed", payload, sequence);
+				m_cefOverlay->ExecuteEvent(Host::PointerSurface::Pad, "overlay.changed", payload, sequence);
+			}
 #endif
 		}
 
@@ -6600,13 +6516,16 @@ namespace
 			const auto result = m_controller.Launch({path}, [this, launchFullscreen](const Application::LaunchResult&) {
 					m_fullscreen = launchFullscreen;
 					auto& region = m_nativeWindow->CreateMainRenderRegion();
-					CreateMainOverlayWebView(region);
 					m_nativeWindow->SetFullscreen(m_fullscreen);
+					// GTK destroys the Wayland wl_surface while the temporary game
+					// window is hidden. Show/map it before RendererHost publishes the
+					// handle and creates the VkSurfaceKHR.
+					ShowRenderContent();
+					CreateMainRuntimeOverlay(region);
 					m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 					m_rendererHost->InitializeMain(region);
 					if (!m_windowState->CommitLaunch())
-						throw std::runtime_error("main window content transition failed");
-					ShowRenderContent(); }, [this, previousFullscreen] {
+						throw std::runtime_error("main window content transition failed"); }, [this, previousFullscreen] {
 					m_rendererHost->AbandonMainInitialization();
 					DestroyMainRenderRegion();
 					ShowLibraryContent();
@@ -6622,7 +6541,7 @@ namespace
 				if (m_controller.State() == Application::EmulationState::Running)
 				{
 					auto& region = m_nativeWindow->CreateMainRenderRegion();
-					CreateMainOverlayWebView(region);
+					CreateMainRuntimeOverlay(region);
 					(void)m_windowState->CommitLaunch();
 					ShowRenderContent();
 				}
@@ -6695,16 +6614,12 @@ namespace
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
 		webview_t m_webview{};
 		void* m_webViewWidget{};
-		void* m_browserController{};
 		RpcBinding m_mainBinding;
-		webview_t m_mainOverlayWebView{};
-		void* m_mainOverlayWidget{};
-		RpcBinding m_mainOverlayBinding;
-		bool m_mainOverlayRpcBound{};
-		webview_t m_padOverlayWebView{};
-		void* m_padOverlayWidget{};
-		RpcBinding m_padOverlayBinding;
-		bool m_padOverlayRpcBound{};
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+		std::shared_ptr<WebFrontend::CefOverlay::BrowserRuntime> m_cefOverlay;
+#else
+		std::shared_ptr<Host::IOverlayFrameSource> m_cefOverlay;
+#endif
 		RpcDispatcher m_rpc;
 		std::unordered_map<std::uint64_t, std::unique_ptr<ToolWindow>> m_toolWindows;
 		std::unordered_map<std::string, std::uint64_t> m_windowByRole;
@@ -6803,6 +6718,11 @@ void Frontend::Run()
 		setenv("GDK_BACKEND", "x11", 1);
 	}
 #endif
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	const bool cefOverlayAvailable = WebFrontend::CefOverlay::InitializeProcessRuntime();
+	if (!cefOverlayAvailable)
+		cemuLog_log(LogType::Force, "CEF Runtime Overlay initialization failed; games will continue without the overlay");
+#endif
 	Application::InitializePaths();
 	CemuCommonInit();
 #if BOOST_OS_WINDOWS
@@ -6836,6 +6756,9 @@ void Frontend::Run()
 		Runtime runtime;
 		runtime.Run();
 	}
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	WebFrontend::CefOverlay::ShutdownProcessRuntime();
+#endif
 	// Cemu owns process-lifetime worker objects whose static destruction is not
 	// safe after the frontend has shut the application down. Runtime cleanup has
 	// already released emulation and native UI resources at this point.

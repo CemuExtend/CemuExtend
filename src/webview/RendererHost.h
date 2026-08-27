@@ -22,5 +22,6 @@ namespace WebFrontend
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
 		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher,
+		std::shared_ptr<Host::IOverlayFrameSource> overlayFrames = {},
 		std::function<void(bool mainWindow)> framePresented = {});
 } // namespace WebFrontend

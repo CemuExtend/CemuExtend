@@ -422,38 +422,6 @@ namespace WebFrontend
 								 SWP_NOZORDER | SWP_NOOWNERZORDER);
 				}
 			}
-			void AttachOverlayWebView(HWND webView)
-			{
-				if (!webView || GetParent(webView) != m_window)
-					throw std::logic_error("GamePad WebView is not owned by the render window");
-				m_overlayWebView = webView;
-				ResizeOverlay();
-				SetOverlayInteractive(false);
-			}
-			void DetachOverlayWebView(HWND webView)
-			{
-				if (webView == m_overlayWebView)
-					m_overlayWebView = nullptr;
-			}
-			void SetOverlayInteractive(bool interactive)
-			{
-				if (!m_overlayWebView)
-					return;
-				const bool changed = !m_overlayInteractionInitialized ||
-									 interactive != m_overlayInteractive;
-				m_overlayInteractionInitialized = true;
-				m_overlayInteractive = interactive;
-				EnableWindow(m_overlayWebView, interactive ? TRUE : FALSE);
-				ShowWindow(m_overlayWebView, SW_SHOW);
-				SetWindowPos(m_overlayWebView, HWND_TOP, 0, 0, 0, 0,
-							 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-				if (!changed)
-					return;
-				if (interactive)
-					SetFocus(m_overlayWebView);
-				else
-					SetFocus(m_window);
-			}
 			void PrepareForDestroy() override
 			{
 				if (std::exchange(m_prepared, true) || !m_window)
@@ -469,16 +437,6 @@ namespace WebFrontend
 			}
 
 		  private:
-			void ResizeOverlay()
-			{
-				if (!m_overlayWebView || !m_window)
-					return;
-				RECT area{};
-				GetClientRect(m_window, &area);
-				SetWindowPos(m_overlayWebView, HWND_TOP, 0, 0, area.right, area.bottom,
-							 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-			}
-
 			static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 			{
 				auto* self = reinterpret_cast<WinPadRenderRegion*>(
@@ -499,7 +457,6 @@ namespace WebFrontend
 						self->m_closeHandler();
 					return 0;
 				case WM_SIZE:
-					self->ResizeOverlay();
 					if (self->m_metricsHandler)
 						self->m_metricsHandler();
 					return 0;
@@ -522,9 +479,6 @@ namespace WebFrontend
 			}
 
 			HWND m_window{};
-			HWND m_overlayWebView{};
-			bool m_overlayInteractionInitialized{};
-			bool m_overlayInteractive{};
 			std::function<void()> m_closeHandler;
 			std::function<void()> m_metricsHandler;
 			WinInputBinding m_binding;
@@ -610,21 +564,6 @@ namespace WebFrontend
 					throw std::logic_error("webview widget is not owned by the native main window");
 				ResizeChildren();
 			}
-			void ConfigureRuntimeOverlayWebView(void* browserController) override
-			{
-				auto* controller = static_cast<ICoreWebView2Controller*>(browserController);
-				if (!controller)
-					throw std::runtime_error("failed to acquire the WebView2 browser controller");
-				ICoreWebView2Controller2* transparentController{};
-				if (FAILED(controller->QueryInterface(IID_PPV_ARGS(&transparentController))) ||
-					!transparentController)
-					throw std::runtime_error("WebView2 does not support transparent backgrounds");
-				const COREWEBVIEW2_COLOR transparent{0, 0, 0, 0};
-				const auto result = transparentController->put_DefaultBackgroundColor(transparent);
-				transparentController->Release();
-				if (FAILED(result))
-					throw std::runtime_error("failed to configure the transparent WebView2 background");
-			}
 			void PrepareWebViewDestroy(void* widget) override
 			{
 				if (widget == m_webView)
@@ -665,29 +604,6 @@ namespace WebFrontend
 				}
 				return *m_renderRegion;
 			}
-			void* GetOverlayWebViewParent(Host::PointerSurface surface) const override
-			{
-				const auto* region = surface == Host::PointerSurface::Main
-									 ? m_renderRegion.get() : m_padRenderRegion.get();
-				return region ? region->Window() : nullptr;
-			}
-			void PrepareMainOverlayWebViewCreate() override
-			{
-			}
-			void AttachMainOverlayWebView(void* widget) override
-			{
-				if (!m_renderRegion)
-					throw std::logic_error("game render region is unavailable");
-				m_renderRegion->AttachOverlayWebView(static_cast<HWND>(widget));
-			}
-			void DetachMainOverlayWebView(void* widget) override
-			{
-				if (m_renderRegion)
-					m_renderRegion->DetachOverlayWebView(static_cast<HWND>(widget));
-			}
-			void RestoreMainOverlayParent() override
-			{
-			}
 			void DestroyMainRenderRegion() override
 			{
 				m_renderRegion.reset();
@@ -696,23 +612,12 @@ namespace WebFrontend
 			{
 				auto& region = CreateMainRenderRegion();
 				region.SetVisible(true);
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
-				SetRuntimeOverlayMode(true, false);
-#else
 				if (m_webView)
 				{
 					EnableWindow(m_webView, FALSE);
 					ShowWindow(m_webView, SW_HIDE);
 				}
 				region.RequestFocus();
-#endif
-			}
-			void SetRuntimeOverlayMode(bool active, bool interactive) override
-			{
-				m_runtimeOverlay = active;
-				m_runtimeOverlayInteractive = interactive;
-				if (m_renderRegion)
-					m_renderRegion->SetOverlayInteractive(active && interactive);
 			}
 			Host::IRenderRegion& CreatePadRenderRegion() override
 			{
@@ -722,28 +627,6 @@ namespace WebFrontend
 						[this] { if (m_padCloseHandler) m_padCloseHandler(); },
 						[this] { if (m_padMetricsEnabled) NotifyMetrics(); }, &m_inputHandler);
 				return *m_padRenderRegion;
-			}
-			void PreparePadOverlayWebViewCreate() override
-			{
-			}
-			void AttachPadOverlayWebView(void* widget) override
-			{
-				if (!m_padRenderRegion)
-					throw std::logic_error("GamePad render region is unavailable");
-				m_padRenderRegion->AttachOverlayWebView(static_cast<HWND>(widget));
-			}
-			void DetachPadOverlayWebView(void* widget) override
-			{
-				if (m_padRenderRegion)
-					m_padRenderRegion->DetachOverlayWebView(static_cast<HWND>(widget));
-			}
-			void RestorePadOverlayParent() override
-			{
-			}
-			void SetPadRuntimeOverlayMode(bool interactive) override
-			{
-				if (m_padRenderRegion)
-					m_padRenderRegion->SetOverlayInteractive(interactive);
 			}
 			void DestroyPadRenderRegion() override
 			{

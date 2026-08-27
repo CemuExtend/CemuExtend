@@ -6,6 +6,9 @@
 #include "Cafe/GameProfile/GameProfile.h"
 #include "config/CemuConfig.h"
 #include "config/LaunchSettings.h"
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+#include "webview/cef/CefOverlayRuntime.h"
+#endif
 
 #include "Cafe/CafeSystem.h"
 
@@ -91,6 +94,11 @@ int main(int argc, char* argv[])
 int BreathOfTheWildChildProcessMain();
 int main(int argc, char* argv[])
 {
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	const int cefProcessCode = WebFrontend::CefOverlay::ExecuteSubprocess(argc, argv);
+	if (cefProcessCode >= 0)
+		return cefProcessCode;
+#endif
 #if BOOST_OS_LINUX && defined(ENABLE_VULKAN)
 	if (getenv("CEMU_DETECT_RADV") != nullptr)
 		return BreathOfTheWildChildProcessMain();

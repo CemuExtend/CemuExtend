@@ -50,7 +50,7 @@ extern std::vector<std::pair<std::string, int>> g_friend_notifications;
 std::mutex g_notification_mutex;
 std::vector<std::pair<std::string, int>> g_notifications;
 
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 namespace
 {
 	std::chrono::steady_clock::time_point s_webLastUpdate;
@@ -653,7 +653,7 @@ namespace
 
 void LatteOverlay_updateWebSnapshot()
 {
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 	const auto now = std::chrono::steady_clock::now();
 	if (now - s_webLastUpdate < std::chrono::milliseconds(100))
 		return;
@@ -765,7 +765,7 @@ void LatteOverlay_updateWebSnapshot()
 void LatteOverlay_init()
 {
 	RuntimeOverlay::Model::Instance().Reset();
-#if defined(CEMU_OVERLAY_BACKEND_WEBVIEW)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 	s_webLastUpdate = {};
 	s_webLastShaderCompile = {};
 	s_webLastPipelineCompile = {};

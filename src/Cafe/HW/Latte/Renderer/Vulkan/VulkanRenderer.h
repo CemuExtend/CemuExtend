@@ -188,7 +188,8 @@ class VulkanRenderer : public Renderer
 	static std::vector<DeviceInfo> GetDevices(const Host::NativeWindowHandle& mainWindow);
 	VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
 				   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-				   std::function<void(bool mainWindow)> framePresented = {});
+				   std::function<void(bool mainWindow)> framePresented = {},
+				   std::shared_ptr<Host::IOverlayFrameSource> overlayFrames = {});
 	virtual ~VulkanRenderer();
 
 	static VulkanRenderer* GetInstance();
@@ -522,6 +523,7 @@ class VulkanRenderer : public Renderer
 
 	VkQueue m_graphicsQueue, m_presentQueue;
 	std::function<void(bool)> m_framePresented;
+	std::shared_ptr<Host::IOverlayFrameSource> m_overlayFrames;
 
 	// swapchain
 
@@ -533,6 +535,51 @@ class VulkanRenderer : public Renderer
 	void CreateCommandBuffers();
 
 	void swapchain_createDescriptorSetLayout();
+
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	struct OverlayStagingBuffer
+	{
+		VkBuffer buffer{VK_NULL_HANDLE};
+		VkDeviceMemory memory{VK_NULL_HANDLE};
+		std::uint8_t* mapped{};
+		bool coherent{};
+		bool inUse{};
+		std::uint64_t commandBufferId{};
+	};
+	struct OverlaySurfaceResources
+	{
+		VkImage image{VK_NULL_HANDLE};
+		VkDeviceMemory imageMemory{VK_NULL_HANDLE};
+		VkImageView imageView{VK_NULL_HANDLE};
+		VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
+		VkPipeline pipeline{VK_NULL_HANDLE};
+		VkRenderPass pipelineRenderPass{VK_NULL_HANDLE};
+		std::array<OverlayStagingBuffer, 3> staging;
+		std::size_t stagingCapacity{};
+		std::size_t stagingIndex{};
+		std::uint64_t uploadedSequence{};
+		std::uint64_t resizeGeneration{};
+		std::int32_t width{};
+		std::int32_t height{};
+		bool imageInitialized{};
+		bool drawable{};
+	};
+	void overlayInitialize();
+	void overlayCleanup();
+	void overlayDestroySurface(OverlaySurfaceResources& surface);
+	void overlayCreateSurface(OverlaySurfaceResources& surface, int width, int height);
+	void overlayUpload(bool mainWindow);
+	void overlayDraw(bool mainWindow);
+	VkPipeline overlayCreatePipeline(VkRenderPass renderPass);
+	OverlaySurfaceResources& overlaySurface(bool mainWindow)
+	{
+		return m_overlaySurfaces[mainWindow ? 0 : 1];
+	}
+	std::array<OverlaySurfaceResources, 2> m_overlaySurfaces;
+	VkDescriptorSetLayout m_overlayDescriptorSetLayout{VK_NULL_HANDLE};
+	VkPipelineLayout m_overlayPipelineLayout{VK_NULL_HANDLE};
+	VkSampler m_overlaySampler{VK_NULL_HANDLE};
+#endif
 
 	// shader
 
