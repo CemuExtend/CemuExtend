@@ -27,11 +27,6 @@ public:
 	LPCDIDATAFORMAT get_data_format() const;
 
 private:
-	HMODULE m_module = nullptr;
-
-	decltype(&DirectInput8Create) m_DirectInput8Create;
-	decltype(&GetdfDIJoystick) m_GetdfDIJoystick = nullptr;
-
 	Microsoft::WRL::ComPtr<IDirectInput8W> m_dinput8;
 };
 

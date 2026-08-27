@@ -769,7 +769,7 @@ endif()
 
 if (ENABLE_LIBUSB)
   if (ENABLE_VCPKG)
-    if(WIN32)
+    if(WIN32 AND NOT MINGW)
       set(PKG_CONFIG_EXECUTABLE "${VCPKG_INSTALLED_DIR}/x64-windows/tools/pkgconf/pkgconf.exe")
     endif()
     find_package(PkgConfig REQUIRED)
@@ -782,7 +782,7 @@ if (ENABLE_LIBUSB)
 endif()
 
 if(WIN32)
-	target_link_libraries(CemuCafe PRIVATE iphlpapi)
+	target_link_libraries(CemuCafe PRIVATE iphlpapi opengl32)
 endif()
 
 if(BUILD_TESTING)

@@ -19,6 +19,14 @@ if(WIN32)
 		XAudio27API.cpp
 		XAudio27API.h
 	)
+	target_link_libraries(CemuAudio PRIVATE
+		avrt
+		dsound
+		ksuser
+		ole32
+		oleaut32
+		wbemuuid
+	)
 endif()
 
 if(ENABLE_CUBEB)
@@ -41,4 +49,7 @@ target_link_libraries(CemuAudio PRIVATE
 if(ENABLE_CUBEB)
 	# PUBLIC because cubeb.h/cubeb.h is included in CubebAPI.h
 	target_link_libraries(CemuAudio PUBLIC cubeb::cubeb)
+	if(WIN32)
+		target_link_libraries(CemuAudio PRIVATE winmm)
+	endif()
 endif()

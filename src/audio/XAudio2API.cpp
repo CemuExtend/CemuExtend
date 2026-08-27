@@ -5,6 +5,10 @@
 #include <wrl/client.h>
 #include <xaudio2.h>
 
+#if defined(__MINGW32__) && !defined(XAUDIO2_DLL)
+#define XAUDIO2_DLL "xaudio2_9.dll"
+#endif
+
 #ifndef XAUDIO2_DLL
 #error wrong <xaudio2.h> included!
 #endif
@@ -12,14 +16,12 @@
 #include "XAudio2API.h"
 #include "util/helpers/helpers.h"
 
-#include <WbemCli.h>
-#include <OleAuto.h>
+#include <wbemcli.h>
+#include <oleauto.h>
 #include <system_error>
 
 // guid from mmdeviceapi.h
 static const GUID DEVINTERFACE_AUDIO_RENDER_GUID = { 0xe6327cad, 0xdcec, 0x4949, 0xae, 0x8a, 0x99, 0x1e, 0x97, 0x6a, 0x79, 0xd2 };
-
-#pragma comment(lib, "wbemuuid.lib")
 
 static_assert(IAudioAPI::kBlockCount < XAUDIO2_MAX_QUEUED_BUFFERS, "too many xaudio2 buffers");
 

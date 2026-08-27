@@ -37,5 +37,9 @@ std::vector<std::shared_ptr<ControllerBase>> DirectInputControllerProvider::get_
 
 LPCDIDATAFORMAT DirectInputControllerProvider::get_data_format() const
 {
+#if defined(__MINGW32__)
+	return &c_dfDIJoystick;
+#else
 	return GetdfDIJoystick();
+#endif
 }

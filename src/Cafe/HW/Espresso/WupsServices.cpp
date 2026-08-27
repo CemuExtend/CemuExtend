@@ -21,6 +21,7 @@
 #if BOOST_OS_WINDOWS
 #include <fcntl.h>
 #include <io.h>
+#include <sys/stat.h>
 #else
 #include <fcntl.h>
 #include <unistd.h>

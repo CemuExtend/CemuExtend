@@ -64,6 +64,7 @@ if(WIN32)
 		api/DirectInput/DirectInputControllerProvider.h
 		api/DirectInput/DirectInputController.cpp
 	)
+	target_link_libraries(CemuInput PRIVATE dinput8 dxguid ws2_32)
 endif()
 
 if (SUPPORTS_WIIMOTE)
@@ -105,6 +106,7 @@ target_link_libraries(CemuInput PRIVATE
 	CemuCommon
 	CemuHostContracts
 	CemuUtil
+	pugixml::pugixml
 )
 
 if (ENABLE_BLUEZ)

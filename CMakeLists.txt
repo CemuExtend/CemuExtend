@@ -59,7 +59,13 @@ if (ENABLE_VCPKG)
 		)
 	endif()
 
-	if(UNIX AND NOT APPLE)
+	# During a Linux-to-Windows cross build the host's UNIX value is true before
+	# project() loads the vcpkg toolchain. Select overlays from the requested
+	# target triplet first so Windows dependencies are not replaced by Linux-only
+	# empty overlay ports (notably libpng and glm).
+	if(VCPKG_TARGET_TRIPLET MATCHES "mingw")
+		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports_win;${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")
+	elseif(UNIX AND NOT APPLE)
 		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports_linux;${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")
 	elseif(APPLE)
 		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports_mac;${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")
@@ -110,8 +116,18 @@ add_definitions(-DEMULATOR_VERSION_PATCH=${EMULATOR_VERSION_PATCH})
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # enable link time optimization for release builds
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+if(MINGW)
+	# GCC's MinGW LTO plugin can discard COM/wxWidgets adjustment thunks while
+	# linking static archives. Keep regular Release optimization enabled.
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO OFF)
+	# Docker artifacts are standalone: neither the application nor test binaries
+	# may require MinGW runtime DLLs beside the executable.
+	add_link_options(-static -static-libgcc -static-libstdc++)
+else()
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+endif()
 
 if (MSVC)
 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CemuBin)

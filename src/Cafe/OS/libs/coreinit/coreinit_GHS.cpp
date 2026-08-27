@@ -18,7 +18,7 @@ namespace coreinit
 
 	struct GHSAccessibleData
 	{
-		iobbuf _iob[GHS_FOPEN_MAX];
+		iobbuf iob[GHS_FOPEN_MAX];
 		MPTR _iob_lock[GHS_FOPEN_MAX];
 		uint16be __gh_FOPEN_MAX;
 		MEMPTR<void> ghs_environ;
@@ -55,18 +55,18 @@ namespace coreinit
 		for (sint32 i = 0; i < GHS_FOPEN_MAX; i++)
 			_flockMutexMask[i] = false;
 		// init stdin/stdout/stderr
-		g_ghs_data->_iob[0].flags = IOB_FLAG_IN;
-		g_ghs_data->_iob[1].flags = IOB_FLAG_OUT;
-		g_ghs_data->_iob[1].flags = IOB_FLAG_OUT;
-		g_ghs_data->_iob[0].flags |= IOB_FLAG_CHANNEL(0);
-		g_ghs_data->_iob[1].flags |= IOB_FLAG_CHANNEL(1);
-		g_ghs_data->_iob[2].flags |= IOB_FLAG_CHANNEL(2);
-		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->_iob + 0));
-		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->_iob + 1));
-		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->_iob + 2));
+		g_ghs_data->iob[0].flags = IOB_FLAG_IN;
+		g_ghs_data->iob[1].flags = IOB_FLAG_OUT;
+		g_ghs_data->iob[1].flags = IOB_FLAG_OUT;
+		g_ghs_data->iob[0].flags |= IOB_FLAG_CHANNEL(0);
+		g_ghs_data->iob[1].flags |= IOB_FLAG_CHANNEL(1);
+		g_ghs_data->iob[2].flags |= IOB_FLAG_CHANNEL(2);
+		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->iob + 0));
+		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->iob + 1));
+		__ghs_flock_create(__ghs_flock_ptr(g_ghs_data->iob + 2));
 
 		osLib_addVirtualPointer("coreinit", "__gh_FOPEN_MAX", memory_getVirtualOffsetFromPointer(&g_ghs_data->__gh_FOPEN_MAX));
-		osLib_addVirtualPointer("coreinit", "_iob", memory_getVirtualOffsetFromPointer(g_ghs_data->_iob));
+		osLib_addVirtualPointer("coreinit", "_iob", memory_getVirtualOffsetFromPointer(g_ghs_data->iob));
 		osLib_addVirtualPointer("coreinit", "environ", memory_getVirtualOffsetFromPointer(&g_ghs_data->ghs_environ));
 		osLib_addVirtualPointer("coreinit", "errno", memory_getVirtualOffsetFromPointer(&g_ghs_data->ghs_Errno));
 	}
@@ -110,7 +110,7 @@ namespace coreinit
 
 	ghs_flock* __ghs_flock_ptr(iobbuf* iob)
 	{
-		size_t streamIndex = iob - g_ghs_data->_iob;
+		size_t streamIndex = iob - g_ghs_data->iob;
 		return (ghs_flock*)&(g_ghs_data->_iob_lock[streamIndex]);
 	}
 

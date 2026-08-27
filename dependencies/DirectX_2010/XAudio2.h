@@ -68,6 +68,38 @@ DEFINE_IID(IXAudio2, 8bcf1f58, 9fe7, 4583, 8a, c6, e2, ad, c4, 65, c8, bb);
 #endif
 
 #include <sal.h>            // Markers for documenting API semantics
+#ifdef __MINGW32__
+    #ifndef __in
+        #define __in
+    #endif
+    #ifndef __in_opt
+        #define __in_opt
+    #endif
+    #ifndef __out
+        #define __out
+    #endif
+    #ifndef __deref_out
+        #define __deref_out
+    #endif
+    #ifndef __reserved
+        #define __reserved
+    #endif
+    #ifndef __inout
+        #define __inout
+    #endif
+    #ifndef __in_bcount
+        #define __in_bcount(x)
+    #endif
+    #ifndef __in_ecount
+        #define __in_ecount(x)
+    #endif
+    #ifndef __out_bcount
+        #define __out_bcount(x)
+    #endif
+    #ifndef __out_ecount
+        #define __out_ecount(x)
+    #endif
+#endif
 #include "audiodefs.h"      // Basic audio data types and constants
 #include "xma2defs.h"       // Data types and constants for XMA2 audio
 
@@ -1236,10 +1268,28 @@ __inline HRESULT XAudio2Create(__deref_out IXAudio2** ppXAudio2, UINT32 Flags X2
     // Instantiate the appropriate XAudio2 engine
     IXAudio2* pXAudio2;
 
-    #ifdef __cplusplus
+    #if defined(__cplusplus) && !defined(__MINGW32__)
 
         HRESULT hr = CoCreateInstance((Flags & XAUDIO2_DEBUG_ENGINE) ? __uuidof(XAudio2_Debug) : __uuidof(XAudio2),
                                       NULL, CLSCTX_INPROC_SERVER, __uuidof(IXAudio2), (void**)&pXAudio2);
+        if (SUCCEEDED(hr))
+        {
+            hr = pXAudio2->Initialize(Flags, XAudio2Processor);
+
+            if (SUCCEEDED(hr))
+            {
+                *ppXAudio2 = pXAudio2;
+            }
+            else
+            {
+                pXAudio2->Release();
+            }
+        }
+
+    #elif defined(__MINGW32__)
+
+        HRESULT hr = CoCreateInstance((Flags & XAUDIO2_DEBUG_ENGINE) ? CLSID_XAudio2_Debug : CLSID_XAudio2,
+                                      NULL, CLSCTX_INPROC_SERVER, IID_IXAudio2, (void**)&pXAudio2);
         if (SUCCEEDED(hr))
         {
             hr = pXAudio2->Initialize(Flags, XAudio2Processor);
@@ -1272,7 +1322,7 @@ __inline HRESULT XAudio2Create(__deref_out IXAudio2** ppXAudio2, UINT32 Flags X2
             }
         }
 
-    #endif // #ifdef __cplusplus
+    #endif // defined(__cplusplus) && !defined(__MINGW32__)
 
     return hr;
 }

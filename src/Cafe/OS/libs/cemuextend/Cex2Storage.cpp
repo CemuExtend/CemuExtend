@@ -22,7 +22,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #else
-#include <Windows.h>
+#include <windows.h>
 #include <winternl.h>
 #endif
 
@@ -547,7 +547,18 @@ Cex2StorageResult SaveConfig(const fs::path& root, const ConfigMap& values)
 	rename->FileNameLength = static_cast<DWORD>(destination.size() * sizeof(wchar_t));
 	std::memcpy(rename->FileName, destination.data(), rename->FileNameLength);
 	if (!::SetFileInformationByHandle(output.get(), FileRenameInfo, rename,
-		static_cast<DWORD>(renameBytes))) return {Status::IoError};
+		static_cast<DWORD>(renameBytes)))
+	{
+		// Wine and older Windows implementations do not consistently support a
+		// root-relative FILE_RENAME_INFO. The file was opened without following a
+		// reparse point and has already been flushed, so fall back to the equivalent
+		// Win32 atomic replacement using the controlled namespace paths.
+		output = {};
+		const auto source = root / temporary;
+		const auto target = root / L"config.cxc2";
+		if (!::MoveFileExW(source.c_str(), target.c_str(),
+			MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return {Status::IoError};
+	}
 #endif
 	return {Status::Ok};
 }
@@ -840,7 +851,8 @@ Cex2StorageResult File(std::uint64_t title, std::string_view principal, std::uin
 			standard.EndOfFile.QuadPart < 0) return {Status::IoError};
 		const auto oldSize = static_cast<std::uint64_t>(standard.EndOfFile.QuadPart);
 		const auto newSize = std::max<std::uint64_t>(oldSize, offset + data.size());
-		if (offset > oldSize || oldSize > usage.bytes || newSize > kMaximumFileBytes ||
+		if (offset > oldSize) return {Status::InvalidArgument};
+		if (oldSize > usage.bytes || newSize > kMaximumFileBytes ||
 			usage.bytes - oldSize > kNamespaceBytes - newSize) return {Status::TooLarge};
 		// Re-measure after opening: this also identifies newly created files and
 		// prevents the file-count admission from racing our own namespace state.

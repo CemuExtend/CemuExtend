@@ -3,7 +3,7 @@
 #include <boost/predef/os.h>
 
 #if BOOST_OS_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #include <mmreg.h>
 #endif
 

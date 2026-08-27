@@ -19,7 +19,6 @@
 
 #if BOOST_OS_WINDOWS
 #include <objbase.h>
-#pragma comment(lib, "Dbghelp.lib")
 #endif
 
 #ifdef HAS_SDL

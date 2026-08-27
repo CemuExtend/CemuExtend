@@ -660,6 +660,12 @@ static uint8 CemuExtendKeyModifiers(const wxKeyEvent& event)
 
 int CemuApp::FilterEvent(wxEvent& event)
 {
+	// wxWidgets may deliver activation/focus events while OnInit is still
+	// constructing the frontend context. There is no Cemu input state to update
+	// until that publication completes.
+	if (!m_windowState)
+		return wxApp::FilterEvent(event);
+
 	// Native text controls own their key stream while an OS IME session is
 	// active. Do not mirror those keys into CEX2's raw keyboard service: the
 	// control publishes the resulting committed/preedit text separately. If

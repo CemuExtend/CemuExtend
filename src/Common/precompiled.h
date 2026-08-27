@@ -191,7 +191,7 @@ inline uint64 _swapEndianU64(uint64 v)
     return bswap64(v);
 #endif
 #else
-    return bswap_64(v);
+    return __builtin_bswap64(v);
 #endif
 }
 
@@ -206,7 +206,7 @@ inline uint32 _swapEndianU32(uint32 v)
     return bswap32(v);
 #endif
 #else
-    return bswap_32(v);
+    return __builtin_bswap32(v);
 #endif
 }
 
@@ -221,7 +221,7 @@ inline sint32 _swapEndianS32(sint32 v)
     return (sint32)bswap32((uint32)v);
 #endif
 #else
-    return (sint32)bswap_32((uint32)v);
+    return (sint32)__builtin_bswap32((uint32)v);
 #endif
 }
 
@@ -241,6 +241,7 @@ inline uint64 _umul128(uint64 multiplier, uint64 multiplicand, uint64 *highProdu
     return x & 0xFFFFFFFFFFFFFFFF;
 }
 
+#if !BOOST_OS_WINDOWS
 typedef uint8_t BYTE;
 typedef uint32_t DWORD;
 typedef int32_t LONG;
@@ -257,7 +258,9 @@ typedef union _LARGE_INTEGER {
     } u;
     LONGLONG QuadPart;
 } LARGE_INTEGER, *PLARGE_INTEGER;
+#endif
 
+#ifndef DEFINE_ENUM_FLAG_OPERATORS
 #define DEFINE_ENUM_FLAG_OPERATORS(T)                                                                                                                                            \
     inline T operator~ (T a) { return static_cast<T>( ~static_cast<std::underlying_type<T>::type>(a) ); }                                                                       \
     inline T operator| (T a, T b) { return static_cast<T>( static_cast<std::underlying_type<T>::type>(a) | static_cast<std::underlying_type<T>::type>(b) ); }                   \
@@ -266,6 +269,7 @@ typedef union _LARGE_INTEGER {
     inline T& operator|= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) |= static_cast<std::underlying_type<T>::type>(b) ); }   \
     inline T& operator&= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) &= static_cast<std::underlying_type<T>::type>(b) ); }   \
     inline T& operator^= (T& a, T b) { return reinterpret_cast<T&>( reinterpret_cast<std::underlying_type<T>::type&>(a) ^= static_cast<std::underlying_type<T>::type>(b) ); }
+#endif
 #endif
 
 template<typename T>
@@ -310,6 +314,8 @@ inline uint64 _udiv128(uint64 highDividend, uint64 lowDividend, uint64 divisor, 
 
 #if defined(_MSC_VER)
     #define DEBUG_BREAK __debugbreak()
+#elif defined(__GNUC__)
+    #define DEBUG_BREAK __builtin_trap()
 #else
     #include <csignal>
     #define DEBUG_BREAK raise(SIGTRAP) 
@@ -482,8 +488,10 @@ bool match_any_of(T1&& value, Types&&... others)
 {
 #ifdef _WIN32
     // get current time
-	static const long long _Freq = _Query_perf_frequency();	// doesn't change after system boot
-	const long long _Ctr = _Query_perf_counter();
+	static const long long _Freq = [] { LARGE_INTEGER value; QueryPerformanceFrequency(&value); return value.QuadPart; }();
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter(&counter);
+	const long long _Ctr = counter.QuadPart;
 	static_assert(std::nano::num == 1, "This assumes period::num == 1.");
 	const long long _Whole = (_Ctr / _Freq) * std::nano::den;
 	const long long _Part = (_Ctr % _Freq) * std::nano::den / _Freq;
@@ -497,8 +505,10 @@ bool match_any_of(T1&& value, Types&&... others)
 {
 #if BOOST_OS_WINDOWS
     // get current time
-	static const long long _Freq = _Query_perf_frequency();	// doesn't change after system boot
-	const long long _Ctr = _Query_perf_counter();
+	static const long long _Freq = [] { LARGE_INTEGER value; QueryPerformanceFrequency(&value); return value.QuadPart; }();
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter(&counter);
+	const long long _Ctr = counter.QuadPart;
 	static_assert(std::nano::num == 1, "This assumes period::num == 1.");
 	const long long _Whole = (_Ctr / _Freq) * std::nano::den;
 	const long long _Part = (_Ctr % _Freq) * std::nano::den / _Freq;

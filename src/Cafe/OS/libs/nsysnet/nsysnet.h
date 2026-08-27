@@ -4,7 +4,7 @@
 #include "Cafe/OS/RPL/COSModule.h"
 
 #if BOOST_OS_WINDOWS
-#include <WinSock2.h>
+#include <winsock2.h>
 #else
 #include <sys/socket.h>
 #define SOCKET int

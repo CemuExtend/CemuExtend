@@ -3,8 +3,6 @@
 #include "util/helpers/helpers.h"
 #include <wrl/client.h>
 
-#pragma comment(lib, "Dsound.lib")
-
 std::wstring DirectSoundAPI::DirectSoundDeviceDescription::GetIdentifier() const
 {
 	return m_guid ? WStringFromGUID(*m_guid) : L"default";
@@ -77,7 +75,7 @@ DirectSoundAPI::DirectSoundAPI(GUID* guid, Host::NativeWindowHandle mainWindow,
 	m_running = true;
 	m_thread = std::thread(&DirectSoundAPI::AudioThread, this);
 #if BOOST_OS_WINDOWS
-	SetThreadPriority(m_thread.native_handle(), THREAD_PRIORITY_TIME_CRITICAL);
+	SetThreadPriority(reinterpret_cast<HANDLE>(m_thread.native_handle()), THREAD_PRIORITY_TIME_CRITICAL);
 #endif
 }
 

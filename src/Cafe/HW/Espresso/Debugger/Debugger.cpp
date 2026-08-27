@@ -16,7 +16,7 @@
 #include <fstream>
 
 #if BOOST_OS_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #endif
 
 void debugger_updateExecutionBreakpoint(uint32 address, bool forceRestore = false);

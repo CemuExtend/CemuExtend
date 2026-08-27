@@ -9,6 +9,13 @@
 //
 #include "winres.h"
 
+// MSVC embeds the manifest listed as a target source. windres does not, so the
+// MinGW build must add the RT_MANIFEST resource explicitly to activate Common
+// Controls v6 (required for functions such as GetWindowSubclass).
+#ifdef __MINGW32__
+1 RT_MANIFEST "../dist/windows/Cemu.manifest"
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
@@ -25,19 +32,19 @@ LANGUAGE LANG_NEUTRAL, 0x8
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-M_WND_ICON128           ICON                    "resource\\logo_icon.ico"
+M_WND_ICON128           ICON                    "resource/logo_icon.ico"
 
-M_WND_ICON16            ICON                    "resource\\logo_icon16.ico"
+M_WND_ICON16            ICON                    "resource/logo_icon16.ico"
 
-X_INPUT_CONTROLLER      ICON                    "resource\\input\\icons8-game-controller-24.ico"
+X_INPUT_CONTROLLER      ICON                    "resource/input/icons8-game-controller-24.ico"
 
-X_BOX                   ICON                    "resource\\icons8_cardboard_box_filled.ico"
+X_BOX                   ICON                    "resource/icons8_cardboard_box_filled.ico"
 
-X_SETTINGS              ICON                    "resource\\icons8_automatic_26_xQK_icon.ico"
+X_SETTINGS              ICON                    "resource/icons8_automatic_26_xQK_icon.ico"
 
-X_GAME_PROFILE          ICON                    "resource\\icons8-compose-filled-50.ico"
+X_GAME_PROFILE          ICON                    "resource/icons8-compose-filled-50.ico"
 
-X_HOTKEY_SETTINGS       ICON                    "resource\\icons8_hotkeys.ico"
+X_HOTKEY_SETTINGS       ICON                    "resource/icons8_hotkeys.ico"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -110,7 +117,7 @@ END
 // RCDATA
 //
 
-IDR_FONTAWESOME         RCDATA                  "resource\\fontawesome-webfont.ttf"
+IDR_FONTAWESOME         RCDATA                  "resource/fontawesome-webfont.ttf"
 
 #endif    // Neutral (Default) (unknown sub-lang: 0x8) resources
 /////////////////////////////////////////////////////////////////////////////

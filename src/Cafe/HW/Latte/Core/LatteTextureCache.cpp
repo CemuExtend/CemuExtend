@@ -39,6 +39,25 @@ uint32 _quickStochasticHash(void* texData, uint32 memRange)
 	return (uint32)hashVal ^ (uint32)(hashVal >> 32);
 }
 
+#if BOOST_OS_WINDOWS && defined(__GNUC__) && !defined(__clang__)
+__attribute__((target("avx2")))
+static uint32 CalculateTextureHashAVX2(const uint32* textureData, uint32 memoryRange)
+{
+	__m256i hash = _mm256_setzero_si256();
+	const auto* readPtr = reinterpret_cast<const __m256i*>(textureData);
+	memoryRange /= 288;
+	while (memoryRange--)
+	{
+		hash = _mm256_xor_si256(hash, _mm256_load_si256(readPtr));
+		readPtr += (288 / 32);
+	}
+	alignas(32) uint32 parts[8];
+	_mm256_store_si256(reinterpret_cast<__m256i*>(parts), hash);
+	return parts[0] + parts[1] + parts[2] + parts[3] +
+		parts[4] + parts[5] + parts[6] + parts[7];
+}
+#endif
+
 uint32 LatteTexture_CalculateTextureDataHash(LatteTexture* hostTexture)
 {
 	if( hostTexture->texDataPtrHigh == hostTexture->texDataPtrLow )
@@ -149,6 +168,9 @@ uint32 LatteTexture_CalculateTextureDataHash(LatteTexture* hostTexture)
 #if BOOST_OS_WINDOWS
 			if (g_CPUFeatures.x86.avx2)
 			{
+#if defined(__GNUC__) && !defined(__clang__)
+				hashVal = CalculateTextureHashAVX2(texDataU32, memRange);
+#else
 				__m256i h256 = { 0 };
 				__m256i* readPtr = (__m256i*)texDataU32;
 				memRange /= (288);
@@ -162,6 +184,7 @@ uint32 LatteTexture_CalculateTextureDataHash(LatteTexture* hostTexture)
 				hashVal = h256[0] + h256[1] + h256[2] + h256[3] + h256[4] + h256[5] + h256[6] + h256[7];
 #else
 				hashVal = h256.m256i_u32[0] + h256.m256i_u32[1] + h256.m256i_u32[2] + h256.m256i_u32[3] + h256.m256i_u32[4] + h256.m256i_u32[5] + h256.m256i_u32[6] + h256.m256i_u32[7];
+#endif
 #endif
 			}
 #else

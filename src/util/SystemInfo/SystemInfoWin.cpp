@@ -1,8 +1,7 @@
 #include "util/SystemInfo/SystemInfo.h"
 
-#include <Psapi.h>
+#include <psapi.h>
 #include <winternl.h>
-#pragma comment(lib, "ntdll.lib")
 
 uint64 QueryRamUsage()
 {

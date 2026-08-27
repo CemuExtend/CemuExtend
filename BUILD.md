@@ -149,15 +149,41 @@ The development build is written to `bin/Cemu_debug`. To build the packaged Nix 
 
 ## Docker
 
-The Dockerfile uses CemuExtend's vcpkg manifest and initializes all git submodules inside the image. Build from the CemuExtend directory:
+The Dockerfile uses CemuExtend's vcpkg manifest. Initialize the git submodules before building:
 
 ```
 git submodule update --init --recursive
-docker build -t cemu-extend:build .
-docker run --rm -it cemu-extend:build
 ```
 
-The default image performs a Release build. Use `--build-arg BUILD_TYPE=Debug` for a Debug build. The compiled executable is at `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container. To create only the dependency-enabled development image without compiling, use `docker build --target dev -t cemu-extend:dev .`.
+Use the build wrapper to select the target platform:
+
+```
+./docker-build.sh linux
+./docker-build.sh win
+```
+
+Omitting the argument is equivalent to `./docker-build.sh linux`. The Linux
+release executable is written to `result/bin/Cemu_release`. The Windows build
+cross-compiles an x64 PE executable with MinGW-w64 and writes it to
+`result/bin/Cemu_release.exe`. Both builds run the full CTest suite; Windows
+tests run under Wine in the build container.
+
+The Windows executable uses statically linked vcpkg and MinGW runtime
+libraries, so no MinGW runtime DLLs need to be copied beside it. It still uses
+the Windows system DLLs that Cemu normally requires. To run it, place the
+executable alongside the existing `bin/gameProfiles` and `bin/resources`
+directories.
+
+The MinGW triplets supplied by vcpkg are community supported and are not part
+of vcpkg's own continuous integration matrix. This repository therefore pins
+the vcpkg revision, uses a project-specific static triplet, and treats the Wine
+test suite and imported-DLL check as required build steps.
+
+`CEMU_DOCKER_IMAGE` overrides the generated image name and
+`CEMU_ENABLE_WXWIDGETS=OFF` retains the existing headless build behavior. For
+lower-level Docker usage, the native Linux stage is named `build`, the Windows
+cross-build stage is named `build-windows`, and the development stage remains
+`dev`.
 
 
 ##### Building Errors

@@ -11,8 +11,12 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 	message( FATAL_ERROR "Pointers are not 64bit" )
 endif()
 
-if(MSVC)
+if(WIN32)
 	add_compile_definitions(WIN32_LEAN_AND_MEAN CURL_STATICLIB)
+endif()
+
+if(MSVC)
+	# MSVC-specific options are configured at the top level.
 elseif(UNIX)
 	if(APPLE)
 		if (ENABLE_VULKAN)
@@ -283,19 +287,36 @@ if(BUILD_TESTING)
 			"${CMAKE_SOURCE_DIR}/cmake/tests/StaticLibrarySelfContainment.cpp")
 		target_link_libraries("${test_name}" PRIVATE
 			"$<LINK_LIBRARY:WHOLE_ARCHIVE,${library}>" ${ARGN})
+		if(MINGW)
+			# GNU archive resolution is order-sensitive. Audio implements the
+			# process-wide callbacks referenced by Cafe, while remaining outside
+			# Cafe's guarded architecture edge set.
+			# Cafe and Audio intentionally remain separate architecture targets but
+			# contain callbacks in both directions. Rescan just this composition pair.
+			target_link_libraries("${test_name}" PRIVATE
+				-Wl,--start-group
+				"$<TARGET_FILE:CemuCafe>"
+				"$<TARGET_FILE:CemuAudio>"
+				-Wl,--end-group
+				CemuAudio)
+			target_link_options("${test_name}" PRIVATE -Wl,--allow-multiple-definition)
+		endif()
 	endfunction()
 
 	# Force every object from each architectural archive into a consumer. This
 	# catches missing direct/transitive dependencies that an ordinary static link
 	# can hide by never extracting the affected object.
 	cemu_add_static_self_containment_test(components_self_containment CemuComponents)
-	cemu_add_static_self_containment_test(input_self_containment CemuInput)
+	# CemuInput consumes the process-wide logging contract implemented by
+	# CemuComponents, but the architecture intentionally forbids that edge in
+	# production targets. Supply the implementation to this link-only harness.
+	cemu_add_static_self_containment_test(input_self_containment CemuInput CemuComponents)
 	cemu_add_static_self_containment_test(config_self_containment CemuConfig)
 	cemu_add_static_self_containment_test(cafe_self_containment CemuCafe)
 	cemu_add_static_self_containment_test(download_manager_self_containment CemuDownloadManager)
 	cemu_add_static_self_containment_test(application_self_containment CemuApplication)
 	if(ENABLE_WXWIDGETS)
-		cemu_add_static_self_containment_test(renderer_adapter_self_containment CemuWxRendererAdapters)
+		cemu_add_static_self_containment_test(renderer_adapter_self_containment CemuWxRendererAdapters CemuWxGui)
 		cemu_add_static_self_containment_test(debugger_adapter_self_containment CemuWxDebuggerAdapters)
 		cemu_add_static_self_containment_test(device_adapter_self_containment CemuWxDeviceAdapters)
 		cemu_add_static_self_containment_test(wxgui_self_containment CemuWxGui
@@ -323,8 +344,9 @@ endif()
 if(WIN32)
 	target_sources(CemuBin PRIVATE
 	resource/cemu.rc
-	../dist/windows/cemu.manifest
+	${CMAKE_SOURCE_DIR}/dist/windows/Cemu.manifest
 	)
+	target_link_libraries(CemuBin PRIVATE dbghelp ole32)
 endif()
 
 if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
@@ -461,8 +483,7 @@ endif()
 
 target_link_libraries(CemuBin PRIVATE
 	CemuApplication
-	CemuAudio
-	CemuCafe
+	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
 	CemuCommon
 	CemuComponents
 	CemuConfig
