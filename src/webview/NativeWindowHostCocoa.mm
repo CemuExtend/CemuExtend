@@ -40,17 +40,6 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 }
 @end
 
-@interface CemuOverlayContainer : NSView
-@property(nonatomic) BOOL passesInputThrough;
-@end
-
-@implementation CemuOverlayContainer
-- (NSView*)hitTest:(NSPoint)point
-{
-	return self.passesInputThrough ? nil : [super hitTest:point];
-}
-@end
-
 @implementation CemuRenderView
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)acceptsFirstMouse:(NSEvent*)event { (void)event; return YES; }
@@ -328,6 +317,7 @@ namespace WebFrontend
 				m_delegate = [[CemuWebWindowDelegate alloc] init];
 				m_delegate->context = this;
 				[m_window setDelegate:m_delegate];
+				InitializeContentRoot();
 			}
 
 			~CocoaWindowHost() override
@@ -342,10 +332,13 @@ namespace WebFrontend
 					[m_textInput release];
 					m_textInput = nil;
 				}
+				DetachBrowser(reinterpret_cast<void*>(m_browserView));
 				m_delegate->context = nullptr;
 				[m_window setDelegate:nil];
 				[m_window close];
 				[m_window release];
+				[m_root release];
+				[m_browserContainer release];
 				[m_delegate release];
 			}
 
@@ -383,43 +376,47 @@ namespace WebFrontend
 				}
 				return metrics;
 			}
-			void AttachWebView(void* widget) override
+			void* GetBrowserParentWindow() const override
 			{
-				if (m_root || !widget)
-					throw std::logic_error("webview widget cannot be attached");
-				m_webView = reinterpret_cast<NSView*>(widget);
-				[m_webView retain];
-				m_root = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
-				[m_root setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-				m_webOverlay = [[CemuOverlayContainer alloc] initWithFrame:[m_root bounds]];
-				[m_webOverlay setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-				[m_webView setFrame:[m_webOverlay bounds]];
-				[m_webView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-				[m_window setContentView:m_root];
-				[m_root addSubview:m_webOverlay];
-				[m_webOverlay addSubview:m_webView];
-				[m_webView release];
+				return reinterpret_cast<void*>(m_browserContainer);
 			}
-			void PrepareWebViewDestroy(void* widget) override
+			Host::RenderRegionBounds GetBrowserBounds() const override
 			{
-				if (!m_root || widget != reinterpret_cast<void*>(m_webView))
+				const auto bounds = m_browserContainer ? [m_browserContainer bounds] : NSZeroRect;
+				return {0, 0, static_cast<std::int32_t>(bounds.size.width),
+					static_cast<std::int32_t>(bounds.size.height)};
+			}
+			double GetBrowserDpiScale() const override
+			{
+				return m_window ? static_cast<double>([m_window backingScaleFactor]) : 1.0;
+			}
+			void AttachBrowser(void* widget) override
+			{
+				if (!widget || m_browserView)
+					throw std::logic_error("CEF browser view cannot be attached");
+				m_browserView = reinterpret_cast<NSView*>(widget);
+				[m_browserView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				ResizeBrowser();
+				if ([m_browserView superview] != m_browserContainer)
+					[m_browserContainer addSubview:m_browserView];
+			}
+			void ResizeBrowser() override
+			{
+				if (m_browserView && m_browserContainer)
+					[m_browserView setFrame:[m_browserContainer bounds]];
+			}
+			void FocusBrowser() override
+			{
+				if (!m_browserView)
 					return;
-				DestroyMainRenderRegion();
-				if (m_textInput)
-				{
-					[m_textInput removeFromSuperview];
-					[m_textInput release];
-					m_textInput = nil;
-				}
-				[m_webView retain];
-				[m_webView removeFromSuperview];
-				[m_window setContentView:m_webView];
-				[m_webView release];
-				[m_root release];
-				[m_webOverlay release];
-				m_root = nil;
-				m_webOverlay = nil;
-				m_webView = nil;
+				[m_window makeFirstResponder:m_browserView];
+			}
+			void DetachBrowser(void* widget) override
+			{
+				if (!m_browserView || widget != reinterpret_cast<void*>(m_browserView))
+					return;
+				[m_browserView removeFromSuperview];
+				m_browserView = nil;
 			}
 			void Show() override
 			{
@@ -431,10 +428,8 @@ namespace WebFrontend
 			bool IsLauncherVisible() const override { return m_window && [m_window isVisible] == YES; }
 			void ShowLibrary() override
 			{
-				m_runtimeOverlay = false;
-				[m_webOverlay setHidden:NO];
-				m_webOverlay.passesInputThrough = NO;
-				[m_window makeFirstResponder:m_webView];
+				[m_browserContainer setHidden:NO];
+				FocusBrowser();
 			}
 			Host::IRenderRegion& CreateMainRenderRegion() override
 			{
@@ -450,7 +445,7 @@ namespace WebFrontend
 			{
 				auto& region = CreateMainRenderRegion();
 				region.SetVisible(true);
-				[m_webOverlay setHidden:YES];
+				[m_browserContainer setHidden:YES];
 				region.RequestFocus();
 			}
 			Host::IRenderRegion& CreatePadRenderRegion() override
@@ -708,12 +703,20 @@ namespace WebFrontend
 			}
 
 		private:
+			void InitializeContentRoot()
+			{
+				m_root = [[NSView alloc] initWithFrame:[[m_window contentView] bounds]];
+				[m_root setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				m_browserContainer = [[NSView alloc] initWithFrame:[m_root bounds]];
+				[m_browserContainer setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+				[m_window setContentView:m_root];
+				[m_root addSubview:m_browserContainer];
+			}
+
 			NSWindow* m_window{};
 			NSView* m_root{};
-			NSView* m_webView{};
-			CemuOverlayContainer* m_webOverlay{};
-			bool m_runtimeOverlay{};
-			bool m_runtimeOverlayInteractive{};
+			NSView* m_browserView{};
+			NSView* m_browserContainer{};
 			NSTextField* m_textInput{};
 			CemuWebWindowDelegate* m_delegate{};
 			std::unique_ptr<CocoaPadRenderRegion> m_renderRegion;

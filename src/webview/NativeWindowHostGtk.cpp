@@ -3,6 +3,7 @@
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <unordered_set>
@@ -423,6 +424,15 @@ namespace WebFrontend
 		  public:
 			GtkWindowHost()
 			{
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				if (const char* display = std::getenv("DISPLAY"); !display || !*display)
+					throw std::runtime_error(
+						"the CEF frontend requires X11 or XWayland, but DISPLAY is not set");
+				// A windowed CEF child on Linux uses an XID. Select the X11 GDK
+				// backend before GTK opens its default display, even in a Wayland
+				// desktop session where XWayland is available.
+				g_setenv("GDK_BACKEND", "x11", TRUE);
+#endif
 				if (!gtk_init_check(nullptr, nullptr))
 					throw std::runtime_error("GTK initialization failed");
 #ifndef HAS_WAYLAND
@@ -479,6 +489,136 @@ namespace WebFrontend
 				return NativeHandle(m_window);
 			}
 
+			// The CEF windowed browser is parented to a small, window-owning GTK
+			// drawing area.  Keep the CEF/X11 details behind INativeWindowHost so
+			// the browser runtime does not need to include GTK headers.
+			void* GetBrowserParentWindow() const override
+			{
+				auto& self = *const_cast<GtkWindowHost*>(this);
+				self.EnsureBrowserContainer();
+				auto* display = self.BrowserXDisplay();
+				if (!display)
+					throw std::runtime_error(
+						"CEF native browser requires an X11 or XWayland GTK session");
+				// Chromium creates its first child with the default X11 visual. GTK may
+				// give the drawing area a different (for example GL-capable) visual,
+				// which makes XCreateWindow fail with BadMatch. Create against the root
+				// window first; OnAfterCreated immediately reparents the browser into
+				// the GTK-owned container in AttachBrowser().
+				return reinterpret_cast<void*>(
+					static_cast<std::uintptr_t>(DefaultRootWindow(display)));
+			}
+
+			Host::RenderRegionBounds GetBrowserBounds() const override
+			{
+				if (!m_browserContainer)
+					return {};
+				GtkAllocation allocation{};
+				gtk_widget_get_allocation(m_browserContainer, &allocation);
+				if (auto* window = gtk_widget_get_window(m_browserContainer);
+					window && GDK_IS_X11_WINDOW(window))
+				{
+					XWindowAttributes attributes{};
+					auto* display = gdk_x11_display_get_xdisplay(
+						gdk_window_get_display(window));
+					if (XGetWindowAttributes(display, gdk_x11_window_get_xid(window),
+									 &attributes))
+						return {0, 0, std::max(1, attributes.width),
+								std::max(1, attributes.height)};
+				}
+				return {0, 0, std::max(1, allocation.width),
+						std::max(1, allocation.height)};
+			}
+
+			double GetBrowserDpiScale() const override
+			{
+				return m_browserContainer
+						   ? static_cast<double>(gtk_widget_get_scale_factor(m_browserContainer))
+						   : 1.0;
+			}
+
+			void AttachBrowser(void* widget) override
+			{
+				EnsureBrowserContainer();
+				if (!widget)
+					throw std::invalid_argument("CEF browser window must not be null");
+				const auto child = static_cast<::Window>(
+					reinterpret_cast<std::uintptr_t>(widget));
+				auto* display = BrowserXDisplay();
+				const auto parent = BrowserParentXWindow();
+				if (!display || !parent)
+					throw std::runtime_error("CEF browser parent is not a valid X11 window");
+
+				auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
+				gdk_x11_display_error_trap_push(gdkDisplay);
+				::Window root{}, currentParent{}, *children{};
+				unsigned childCount{};
+				const bool queried = XQueryTree(display, child, &root, &currentParent,
+										 &children, &childCount) != 0;
+				if (children)
+					XFree(children);
+				if (queried)
+				{
+					if (currentParent != parent)
+						XReparentWindow(display, child, parent, 0, 0);
+					const auto bounds = GetBrowserBounds();
+					XMoveResizeWindow(display, child, 0, 0,
+						static_cast<unsigned>(std::max(1, bounds.width)),
+						static_cast<unsigned>(std::max(1, bounds.height)));
+					XMapWindow(display, child);
+				}
+				XSync(display, False);
+				const auto xError = gdk_x11_display_error_trap_pop(gdkDisplay);
+				if (!queried || xError)
+					throw std::invalid_argument("CEF browser window is not a valid X11 child");
+				m_browserChild = child;
+			}
+
+			void ResizeBrowser() override
+			{
+				if (!m_browserChild)
+					return;
+				auto* display = BrowserXDisplay();
+				if (!display)
+					return;
+				const auto bounds = GetBrowserBounds();
+				auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
+				gdk_x11_display_error_trap_push(gdkDisplay);
+				XMoveResizeWindow(display, m_browserChild, 0, 0,
+							  static_cast<unsigned>(std::max(1, bounds.width)),
+							  static_cast<unsigned>(std::max(1, bounds.height)));
+				XSync(display, False);
+				if (gdk_x11_display_error_trap_pop(gdkDisplay))
+					m_browserChild = None;
+			}
+
+			void FocusBrowser() override
+			{
+				if (m_browserContainer)
+					gtk_widget_grab_focus(m_browserContainer);
+				if (m_browserChild)
+				{
+					if (auto* display = BrowserXDisplay())
+					{
+						auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
+						gdk_x11_display_error_trap_push(gdkDisplay);
+						XRaiseWindow(display, m_browserChild);
+						XSetInputFocus(display, m_browserChild, RevertToParent, CurrentTime);
+						XSync(display, False);
+						if (gdk_x11_display_error_trap_pop(gdkDisplay))
+							m_browserChild = None;
+					}
+				}
+			}
+
+			void DetachBrowser(void* widget) override
+			{
+				const auto child = static_cast<::Window>(
+					reinterpret_cast<std::uintptr_t>(widget));
+				if (!widget || child == m_browserChild)
+					m_browserChild = None;
+			}
+
 			Host::WindowMetricsSnapshot GetMetrics() const override
 			{
 				GtkAllocation allocation{};
@@ -517,89 +657,9 @@ namespace WebFrontend
 				return metrics;
 			}
 
-			void AttachWebView(void* widget) override
-			{
-				if (m_root || !GTK_IS_WIDGET(widget))
-					throw std::logic_error("webview widget cannot be attached");
-				m_webView = GTK_WIDGET(widget);
-				g_object_ref(m_webView);
-				gtk_container_remove(GTK_CONTAINER(m_window), m_webView);
-
-				m_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-				m_stack = gtk_stack_new();
-				gtk_stack_set_transition_type(GTK_STACK(m_stack), GTK_STACK_TRANSITION_TYPE_NONE);
-				gtk_widget_set_hexpand(m_stack, TRUE);
-				gtk_widget_set_vexpand(m_stack, TRUE);
-				gtk_stack_add_named(GTK_STACK(m_stack), m_webView, "library");
-				m_overlay = gtk_overlay_new();
-				gtk_container_add(GTK_CONTAINER(m_overlay), m_stack);
-				m_textInput = gtk_entry_new();
-				gtk_entry_set_has_frame(GTK_ENTRY(m_textInput), FALSE);
-				gtk_entry_set_input_purpose(GTK_ENTRY(m_textInput), GTK_INPUT_PURPOSE_FREE_FORM);
-				gtk_widget_set_opacity(m_textInput, 0.0);
-				gtk_widget_set_halign(m_textInput, GTK_ALIGN_START);
-				gtk_widget_set_valign(m_textInput, GTK_ALIGN_START);
-				gtk_widget_set_size_request(m_textInput, 2, 24);
-				gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), m_textInput);
-				gtk_widget_hide(m_textInput);
-				g_signal_connect(m_textInput, "changed", G_CALLBACK(+[](GtkEditable* editable, gpointer data) {
-									 auto& self = *static_cast<GtkWindowHost*>(data);
-									 if (self.m_textInputUpdating || !self.m_inputHandler)
-										 return;
-									 const char* text = gtk_entry_get_text(GTK_ENTRY(editable));
-									 const auto characterOffset = gtk_editable_get_position(editable);
-									 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
-									 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
-														  .text = text ? text : "",
-														  .preedit = self.m_textPreedit,
-														  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
-														  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
-														  .textSequence = self.m_textInputSequence});
-								 }),
-								 this);
-				g_signal_connect(m_textInput, "preedit-changed", G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
-									 auto& self = *static_cast<GtkWindowHost*>(data);
-									 self.m_textPreedit = preedit ? preedit : "";
-									 if (!self.m_textInputUpdating && self.m_inputHandler)
-									 {
-										 const char* text = gtk_entry_get_text(GTK_ENTRY(self.m_textInput));
-										 const auto characterOffset = gtk_editable_get_position(GTK_EDITABLE(self.m_textInput));
-										 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
-										 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
-															  .text = text ? text : "",
-															  .preedit = self.m_textPreedit,
-															  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
-															  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
-															  .textSequence = self.m_textInputSequence});
-									 }
-								 }),
-								 this);
-				gtk_box_pack_start(GTK_BOX(m_root), m_overlay, TRUE, TRUE, 0);
-				gtk_container_add(GTK_CONTAINER(m_window), m_root);
-				g_object_unref(m_webView);
-				ShowLibrary();
-			}
-
-			void PrepareWebViewDestroy(void* widget) override
-			{
-				if (!m_root || widget != m_webView)
-					return;
-				DestroyMainRenderRegion();
-				g_object_ref(m_webView);
-				if (const auto parent = gtk_widget_get_parent(m_webView))
-					gtk_container_remove(GTK_CONTAINER(parent), m_webView);
-				gtk_container_remove(GTK_CONTAINER(m_window), m_root);
-				gtk_container_add(GTK_CONTAINER(m_window), m_webView);
-				g_object_unref(m_webView);
-				m_root = nullptr;
-				m_overlay = nullptr;
-				m_stack = nullptr;
-				m_webView = nullptr;
-				m_textInput = nullptr;
-			}
-
 			void Show() override
 			{
+				EnsureBrowserContainer();
 				gtk_widget_show_all(m_window);
 				ShowLibrary();
 			}
@@ -616,11 +676,13 @@ namespace WebFrontend
 
 			void ShowLibrary() override
 			{
-				if (!m_stack || !m_webView)
+				if (!m_stack || !m_browserContainer)
 					return;
-				gtk_widget_set_sensitive(m_webView, TRUE);
-				gtk_stack_set_visible_child(GTK_STACK(m_stack), m_webView);
-				gtk_widget_grab_focus(m_webView);
+				gtk_widget_set_sensitive(m_browserContainer, TRUE);
+				gtk_stack_set_visible_child(GTK_STACK(m_stack), m_browserContainer);
+				gtk_widget_grab_focus(m_browserContainer);
+				if (m_browserChild)
+					FocusBrowser();
 			}
 
 			Host::IRenderRegion& CreateMainRenderRegion() override
@@ -644,7 +706,7 @@ namespace WebFrontend
 			{
 				auto& region = CreateMainRenderRegion();
 				region.SetVisible(true);
-				gtk_widget_set_sensitive(m_webView, FALSE);
+				gtk_widget_set_sensitive(m_browserContainer, FALSE);
 				region.RequestFocus();
 			}
 
@@ -927,6 +989,100 @@ namespace WebFrontend
 			}
 
 		  private:
+			void EnsureBrowserContainer()
+			{
+				if (m_browserContainer)
+					return;
+				m_browserContainer = gtk_drawing_area_new();
+				gtk_widget_set_hexpand(m_browserContainer, TRUE);
+				gtk_widget_set_vexpand(m_browserContainer, TRUE);
+				gtk_widget_set_can_focus(m_browserContainer, TRUE);
+				gtk_widget_add_events(m_browserContainer, GDK_FOCUS_CHANGE_MASK);
+				g_signal_connect(m_browserContainer, "size-allocate",
+					G_CALLBACK(+[](GtkWidget*, GtkAllocation*, gpointer data) {
+						static_cast<GtkWindowHost*>(data)->ResizeBrowser();
+					}), this);
+				g_signal_connect(m_browserContainer, "focus-in-event",
+					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+						static_cast<GtkWindowHost*>(data)->FocusBrowser();
+						return FALSE;
+					}), this);
+
+				m_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+				m_stack = gtk_stack_new();
+				gtk_stack_set_transition_type(GTK_STACK(m_stack), GTK_STACK_TRANSITION_TYPE_NONE);
+				gtk_widget_set_hexpand(m_stack, TRUE);
+				gtk_widget_set_vexpand(m_stack, TRUE);
+				gtk_stack_add_named(GTK_STACK(m_stack), m_browserContainer, "library");
+				m_overlay = gtk_overlay_new();
+				gtk_container_add(GTK_CONTAINER(m_overlay), m_stack);
+
+				m_textInput = gtk_entry_new();
+				gtk_entry_set_has_frame(GTK_ENTRY(m_textInput), FALSE);
+				gtk_entry_set_input_purpose(GTK_ENTRY(m_textInput), GTK_INPUT_PURPOSE_FREE_FORM);
+				gtk_widget_set_opacity(m_textInput, 0.0);
+				gtk_widget_set_halign(m_textInput, GTK_ALIGN_START);
+				gtk_widget_set_valign(m_textInput, GTK_ALIGN_START);
+				gtk_widget_set_size_request(m_textInput, 2, 24);
+				gtk_widget_set_no_show_all(m_textInput, TRUE);
+				gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), m_textInput);
+				gtk_widget_hide(m_textInput);
+				g_signal_connect(m_textInput, "changed", G_CALLBACK(+[](GtkEditable* editable, gpointer data) {
+									 auto& self = *static_cast<GtkWindowHost*>(data);
+									 if (self.m_textInputUpdating || !self.m_inputHandler)
+										 return;
+									 const char* text = gtk_entry_get_text(GTK_ENTRY(editable));
+									 const auto characterOffset = gtk_editable_get_position(editable);
+									 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
+									 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
+															  .text = text ? text : "",
+															  .preedit = self.m_textPreedit,
+															  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
+															  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
+															  .textSequence = self.m_textInputSequence});
+								 }), this);
+				g_signal_connect(m_textInput, "preedit-changed", G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
+									 auto& self = *static_cast<GtkWindowHost*>(data);
+									 self.m_textPreedit = preedit ? preedit : "";
+									 if (!self.m_textInputUpdating && self.m_inputHandler)
+									 {
+										 const char* text = gtk_entry_get_text(GTK_ENTRY(self.m_textInput));
+										 const auto characterOffset = gtk_editable_get_position(GTK_EDITABLE(self.m_textInput));
+										 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
+										 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
+																  .text = text ? text : "",
+																  .preedit = self.m_textPreedit,
+																  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
+																  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
+																  .textSequence = self.m_textInputSequence});
+									 }
+								 }), this);
+				gtk_box_pack_start(GTK_BOX(m_root), m_overlay, TRUE, TRUE, 0);
+				gtk_container_add(GTK_CONTAINER(m_window), m_root);
+				gtk_widget_realize(m_window);
+				gtk_widget_realize(m_browserContainer);
+			}
+
+			Display* BrowserXDisplay() const
+			{
+				if (!m_browserContainer)
+					return nullptr;
+				auto* window = gtk_widget_get_window(m_browserContainer);
+				if (!window || !GDK_IS_X11_WINDOW(window))
+					return nullptr;
+				return gdk_x11_display_get_xdisplay(gdk_window_get_display(window));
+			}
+
+			::Window BrowserParentXWindow() const
+			{
+				if (!m_browserContainer)
+					return None;
+				auto* window = gtk_widget_get_window(m_browserContainer);
+				return window && GDK_IS_X11_WINDOW(window)
+						   ? gdk_x11_window_get_xid(window)
+						   : None;
+			}
+
 			void ReleasePointerGrab()
 			{
 				if (m_x11Grabbed)
@@ -952,7 +1108,8 @@ namespace WebFrontend
 			GtkWidget* m_root{};
 			GtkWidget* m_overlay{};
 			GtkWidget* m_stack{};
-			GtkWidget* m_webView{};
+			GtkWidget* m_browserContainer{};
+			::Window m_browserChild{None};
 			GtkWidget* m_textInput{};
 			std::unique_ptr<GtkPadRenderRegion> m_renderRegion;
 			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;

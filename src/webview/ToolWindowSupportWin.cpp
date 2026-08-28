@@ -2,9 +2,18 @@
 
 #if defined(_WIN32)
 
+#include <algorithm>
 #include <mutex>
 #include <stdexcept>
+#include <string>
 #include <utility>
+
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
+#ifndef WINVER
+#define WINVER _WIN32_WINNT
+#endif
 #include <windows.h>
 #include <shobjidl.h>
 
@@ -13,6 +22,21 @@ namespace WebFrontend
 	namespace
 	{
 		constexpr wchar_t ToolWindowClass[] = L"CemuExtendWebToolWindow";
+
+		std::wstring Wide(std::string_view text)
+		{
+			if (text.empty())
+				return {};
+			const auto length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+				text.data(), static_cast<int>(text.size()), nullptr, 0);
+			if (length <= 0)
+				throw std::invalid_argument("tool window title must be valid UTF-8");
+			std::wstring result(static_cast<std::size_t>(length), L'\0');
+			if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+					static_cast<int>(text.size()), result.data(), length) != length)
+				throw std::runtime_error("failed to convert the tool window title");
+			return result;
+		}
 
 		class WinToolWindowSupport final : public IToolWindowSupport
 		{
@@ -43,6 +67,77 @@ namespace WebFrontend
 			{
 				return m_window;
 			}
+			void* GetBrowserParentWindow() const override
+			{
+				return m_window;
+			}
+			Host::RenderRegionBounds GetBrowserBounds() const override
+			{
+				RECT area{};
+				if (m_window)
+					GetClientRect(m_window, &area);
+				return {0, 0,
+						static_cast<std::int32_t>(std::max<LONG>(0, area.right - area.left)),
+						static_cast<std::int32_t>(std::max<LONG>(0, area.bottom - area.top))};
+			}
+			double GetBrowserDpiScale() const override
+			{
+				return m_window ? static_cast<double>(GetDpiForWindow(m_window)) / 96.0 : 1.0;
+			}
+			void AttachBrowser(void* widget) override
+			{
+				auto browserWindow = static_cast<HWND>(widget);
+				if (!browserWindow || !IsWindow(browserWindow))
+					throw std::invalid_argument("browser widget must be a valid HWND");
+				if (GetParent(browserWindow) != m_window)
+					throw std::logic_error("browser widget is not owned by the native tool window");
+				m_browserWindow = browserWindow;
+				ResizeBrowser();
+			}
+			void ResizeBrowser() override
+			{
+				if (!m_window || !m_browserWindow || !IsWindow(m_browserWindow))
+					return;
+				const auto bounds = GetBrowserBounds();
+				MoveWindow(m_browserWindow, bounds.x, bounds.y, std::max(1, bounds.width),
+						   std::max(1, bounds.height), TRUE);
+			}
+			void FocusBrowser() override
+			{
+				if (m_browserWindow && IsWindow(m_browserWindow))
+					SetFocus(m_browserWindow);
+			}
+			void DetachBrowser(void* widget) override
+			{
+				if (widget == m_browserWindow)
+					m_browserWindow = nullptr;
+			}
+			void SetSize(std::int32_t width, std::int32_t height) override
+			{
+				if (!m_window || !IsWindow(m_window))
+					return;
+				RECT frame{0, 0,
+						   static_cast<LONG>(std::max<std::int32_t>(1, width)),
+						   static_cast<LONG>(std::max<std::int32_t>(1, height))};
+				const auto style = static_cast<DWORD>(GetWindowLongPtrW(m_window, GWL_STYLE));
+				const auto extendedStyle = static_cast<DWORD>(
+					GetWindowLongPtrW(m_window, GWL_EXSTYLE));
+				if (!AdjustWindowRectExForDpi(&frame, style, GetMenu(m_window) != nullptr,
+						extendedStyle, GetDpiForWindow(m_window)))
+					AdjustWindowRectEx(&frame, style, GetMenu(m_window) != nullptr, extendedStyle);
+				SetWindowPos(m_window, nullptr, 0, 0, frame.right - frame.left,
+						 frame.bottom - frame.top,
+						 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+				ResizeBrowser();
+			}
+			void SetTitle(std::string_view title) override
+			{
+				if (!m_window || !IsWindow(m_window))
+					return;
+				const auto wide = Wide(title);
+				if (!SetWindowTextW(m_window, wide.c_str()))
+					throw std::runtime_error("failed to set the native tool window title");
+			}
 
 			void Show() override
 			{
@@ -53,6 +148,7 @@ namespace WebFrontend
 				}
 				ShowWindow(m_window, SW_SHOW);
 				UpdateWindow(m_window);
+				ResizeBrowser();
 				Focus();
 			}
 
@@ -63,6 +159,7 @@ namespace WebFrontend
 				ShowWindow(m_window, SW_RESTORE);
 				SetForegroundWindow(m_window);
 				SetActiveWindow(m_window);
+				FocusBrowser();
 			}
 
 			std::optional<std::filesystem::path> PickDirectory(std::string_view) override
@@ -140,11 +237,23 @@ namespace WebFrontend
 						self->m_closeHandler();
 					return 0;
 				case WM_SIZE:
-					if (const auto child = GetWindow(window, GW_CHILD))
-						MoveWindow(child, 0, 0, LOWORD(lparam), HIWORD(lparam), TRUE);
+					if (!self->m_browserWindow)
+						self->m_browserWindow = GetWindow(window, GW_CHILD);
+					self->ResizeBrowser();
 					return 0;
+				case WM_DPICHANGED:
+				{
+					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
+					SetWindowPos(window, nullptr, suggested->left, suggested->top,
+							 suggested->right - suggested->left,
+							 suggested->bottom - suggested->top,
+							 SWP_NOACTIVATE | SWP_NOZORDER);
+					self->ResizeBrowser();
+					return 0;
+				}
 				case WM_NCDESTROY:
 					SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+					self->m_browserWindow = nullptr;
 					self->m_window = nullptr;
 					self->RestoreParent();
 					break;
@@ -165,6 +274,7 @@ namespace WebFrontend
 
 			HWND m_window{};
 			HWND m_parent{};
+			HWND m_browserWindow{};
 			bool m_modal{};
 			bool m_parentDisabled{};
 			std::function<void()> m_closeHandler;

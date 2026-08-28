@@ -29,6 +29,15 @@
       pkgs = import nixpkgs { inherit system; };
       lib = pkgs.lib;
 
+      cefLinuxX64Archive = pkgs.fetchurl {
+        url = "https://cef-builds.spotifycdn.com/cef_binary_151.3.24%2Bg2384915%2Bchromium-151.0.7922.174_linux64.tar.bz2";
+        hash = "sha256-mV+1f+a5r56hhKmDvIeM6pzFiV0+0HEGWh1K140Oo68=";
+      };
+      cefLinuxX64 = pkgs.runCommand "cef-151.3.24-linux64" { nativeBuildInputs = [ pkgs.bzip2 ]; } ''
+        mkdir -p "$out"
+        tar -xjf ${cefLinuxX64Archive} --strip-components=1 -C "$out"
+      '';
+
       # Keep the Nix source small and reproducible.  Dependencies that are
       # supplied by Nixpkgs are deliberately omitted and linked in
       # preConfigure below where Cemu expects a vendored source tree.
@@ -55,8 +64,7 @@
               ./dist
               commonSourceFiles
             ]
-            ++ lib.optionals (frontend == "webview") [
-              (lib.fileset.maybeMissing ./dependencies/webview)
+            ++ lib.optionals (frontend == "cef") [
               ./src/webview
             ]
             ++ lib.optionals (frontend == "wx") [
@@ -133,9 +141,6 @@
             ++ lib.optionals (frontend != "headless") [
               gtk3
             ]
-            ++ lib.optionals (frontend == "webview") [
-              webkitgtk_4_1
-            ]
             ++ lib.optionals (frontend == "wx") [
               wxwidgets_3_3
             ];
@@ -145,6 +150,7 @@
             (lib.cmakeBool "ENABLE_FERAL_GAMEMODE" true)
             (lib.cmakeBool "ENABLE_VCPKG" false)
             (lib.cmakeFeature "CEMU_FRONTEND" frontend)
+            (lib.cmakeFeature "CEF_ROOT" (if frontend == "cef" then toString cefLinuxX64 else ""))
             (lib.cmakeFeature "CMAKE_PROJECT_INCLUDE" (toString devCmakeInit))
             (lib.cmakeFeature "EMULATOR_VERSION_MAJOR" "2")
             (lib.cmakeFeature "EMULATOR_VERSION_MINOR" "0")
@@ -163,8 +169,20 @@
           installPhase = ''
             runHook preInstall
 
-            install -Dm755 ../bin/Cemu_release $out/bin/Cemu_release
-            ln -s Cemu_release $out/bin/cemu
+            ${
+              if frontend == "cef" then
+                ''
+                  install -d $out/lib/cemu-extend $out/bin
+                  cp -a ../bin/. $out/lib/cemu-extend/
+                  ln -s ../lib/cemu-extend/Cemu_release $out/bin/Cemu_release
+                  ln -s Cemu_release $out/bin/cemu
+                ''
+              else
+                ''
+                  install -Dm755 ../bin/Cemu_release $out/bin/Cemu_release
+                  ln -s Cemu_release $out/bin/cemu
+                ''
+            }
 
             install -d $out/share/Cemu
             cp -r ../bin/resources ../bin/gameProfiles $out/share/Cemu/
@@ -199,28 +217,29 @@
             platforms = [ system ];
           };
         };
-      cemuWebview = makeCemu "webview";
+      cemuCef = makeCemu "cef";
       cemuWx = makeCemu "wx";
       cemuHeadless = makeCemu "headless";
     in
     {
       packages.${system} = {
-        default = cemuWebview;
-        cemu-extend = cemuWebview;
-        cemu-extend-webview = cemuWebview;
+        default = cemuCef;
+        cemu-extend = cemuCef;
+        cemu-extend-cef = cemuCef;
+        cemu-extend-webview = cemuCef;
         cemu-extend-wx = cemuWx;
         cemu-extend-headless = cemuHeadless;
       };
 
       apps.${system}.default = {
         type = "app";
-        program = lib.getExe cemuWebview;
+        program = lib.getExe cemuCef;
         meta.description = "Run CemuExtend";
       };
 
       devShells.${system}.default = pkgs.mkShell {
         inputsFrom = [
-          cemuWebview
+          cemuCef
           cemuWx
         ];
         packages = [ pkgs.git ];
@@ -228,12 +247,12 @@
 
         shellHook = ''
           echo "CemuExtend Nix development shell"
-          echo "Configure with: cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=webview"
+          echo "Configure with: cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=cef"
         '';
       };
 
       checks.${system} = {
-        default = cemuWebview;
+        default = cemuCef;
         frontend-wx = cemuWx;
         frontend-headless = cemuHeadless;
       };

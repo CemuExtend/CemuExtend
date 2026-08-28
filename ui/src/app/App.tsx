@@ -126,7 +126,7 @@ export function App() {
           <CemuIcon name="warning" className="state-icon" />
           <h1>Native frontend unavailable</h1>
           <p>
-            The WebView could not establish a connection to the CemuExtend
+            The CEF browser could not establish a connection to the CemuExtend
             native host.
           </p>
           <div className="fatal-diagnostic">

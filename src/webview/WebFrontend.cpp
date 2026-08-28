@@ -27,10 +27,10 @@
 #include "webview/UpdatePlanRegistry.h"
 #include "webview/WebHostState.h"
 #include "webview/WebHostServices.h"
-#include "webview/generated/WebAssets.h"
 #include "webview/generated/RpcMethods.h"
 #include "webview/generated/WindowRoles.h"
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
+#include "webview/cef/CefNativeUiLoop.h"
 #include "webview/cef/CefOverlayRuntime.h"
 #endif
 #include "util/helpers/helpers.h"
@@ -49,7 +49,6 @@
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
-#include <webview/webview.h>
 #include <boost/nowide/cstdio.hpp>
 #include <png.h>
 
@@ -66,12 +65,6 @@ namespace
 	using WebFrontend::WebHostServices;
 	using WebFrontend::WebHostState;
 	class Runtime;
-	struct RpcBinding
-	{
-		Runtime* runtime{};
-		webview_t webview{};
-		std::uint64_t windowId{};
-	};
 	struct RuntimeCallbackGate
 	{
 		std::mutex mutex;
@@ -1862,26 +1855,24 @@ namespace
 	{
 	  public:
 		Runtime()
-			: m_nativeWindow(CreateNativeWindowHost())
 		{
 			m_language = NormalizeUiLanguage(GetConfig().frontend.ui_language.GetValue());
-			m_webview = webview_create(
-#if defined(NDEBUG)
-				0,
-#else
-				1,
-#endif
-				m_nativeWindow->GetNativeWindow());
 			try
 			{
-				if (!m_webview)
-					throw std::runtime_error("failed to create the native webview window");
-				m_mainBinding = {this, m_webview, 0};
-				m_webViewWidget = webview_get_native_handle(
-					m_webview, WEBVIEW_NATIVE_HANDLE_KIND_UI_WIDGET);
-				if (!m_webViewWidget)
-					throw std::runtime_error("failed to acquire the native webview widget");
-				m_nativeWindow->AttachWebView(m_webViewWidget);
+#if !defined(CEMU_OVERLAY_BACKEND_CEF)
+				throw std::runtime_error("the React frontend requires the CEF backend");
+#else
+				if (!WebFrontend::CefNative::InitializeNativeUiLoop())
+					throw std::runtime_error("failed to initialize the native CEF UI loop");
+				m_nativeUiLoopInitialized = true;
+				if (!WebFrontend::CefOverlay::InitializeProcessRuntime())
+					throw std::runtime_error("failed to initialize the CEF process runtime");
+				// On Linux CEF must initialize before GTK. CefInitialize configures
+				// Chromium's GTK integration (including locale handling), while the
+				// native host constructor calls gtk_init_check and opens the display.
+				// Both operations still run on this frontend UI thread.
+				m_nativeWindow = CreateNativeWindowHost();
+#endif
 				m_nativeWindow->SetCloseHandler([this] { HandleLauncherClose(); });
 				m_nativeWindow->SetGameCloseHandler([this] { HandleGameWindowClose(); });
 				m_nativeWindow->SetMetricsHandler(
@@ -1899,17 +1890,15 @@ namespace
 				#if defined(CEMU_OVERLAY_BACKEND_CEF)
 				m_cefOverlay = WebFrontend::CefOverlay::CreateBrowserRuntime(
 					[this](std::uint64_t windowId, std::string_view request) {
-						const auto previousWindow = std::exchange(m_invokingWindow, windowId);
-						auto response = m_rpc.Dispatch(request);
-						m_invokingWindow = previousWindow;
-						return response;
+						return DispatchCefRpc(windowId, request);
 					},
 					[this](Host::PointerSurface surface) {
 						if (m_nativeWindow)
 							m_nativeWindow->RequestRenderRedraw(surface);
-					});
+					}, {},
+					[this](std::uint64_t windowId) { HandleCefWindowClosed(windowId); });
 				if (!m_cefOverlay)
-					cemuLog_log(LogType::Force, "CEF Runtime Overlay is disabled because initialization failed");
+					throw std::runtime_error("failed to create the shared CEF browser runtime");
 				#endif
 				m_rendererHost = CreateRendererHost(
 					m_hostState, m_hostState, m_hostState, m_cefOverlay,
@@ -1978,14 +1967,31 @@ namespace
 						if (gate->target)
 							gate->target->SignalLoggingChanged();
 					});
-				if (webview_bind(m_webview, "cemuInvoke", &Runtime::Invoke, &m_mainBinding) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to install the native RPC binding");
-				m_rpcBound = true;
-				const auto bootstrap = InitialBootstrapScript(0, "main-library");
-				if (webview_init(m_webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to initialize the main webview document");
-				webview_set_title(m_webview, "CemuExtend");
-				webview_set_size(m_webview, 1100, 720, WEBVIEW_HINT_NONE);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				const auto bounds = m_nativeWindow->GetBrowserBounds();
+				WebFrontend::CefOverlay::BrowserDescriptor browser;
+				browser.windowId = 0;
+				browser.role = "main-library";
+				browser.bootstrapJson = BrowserBootstrapJson(0, "main-library");
+				browser.contextJson = "{}";
+				browser.initialUrl = FrontendUrl();
+				browser.presentation = WebFrontend::CefOverlay::BrowserPresentation::NativeChild;
+				browser.nativeParent = m_nativeWindow->GetBrowserParentWindow();
+				browser.bounds = bounds;
+				browser.bounds.width = std::max(browser.bounds.width, 1);
+				browser.bounds.height = std::max(browser.bounds.height, 1);
+				browser.dpiScale = m_nativeWindow->GetBrowserDpiScale();
+				browser.nativeBrowserCreated = [this](void* child) {
+					if (m_nativeWindow)
+						m_nativeWindow->AttachBrowser(child);
+				};
+				browser.nativeBrowserClosing = [this](void* child) {
+					if (m_nativeWindow)
+						m_nativeWindow->DetachBrowser(child);
+				};
+				if (!m_cefOverlay->CreateBrowser(browser))
+					throw std::runtime_error("failed to create the CEF launcher browser");
+#endif
 			} catch (...)
 			{
 				Cleanup();
@@ -2000,9 +2006,11 @@ namespace
 
 		void Run()
 		{
-			LoadWebView(m_webview);
 			m_nativeWindow->Show();
-			webview_run(m_webview);
+			m_nativeWindow->FocusBrowser();
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			WebFrontend::CefNative::RunNativeUiLoop();
+#endif
 		}
 
 	  private:
@@ -2014,25 +2022,11 @@ namespace
 			std::optional<std::uint64_t> titleContext;
 			std::string packageContext;
 			std::optional<std::uint64_t> generationContext;
-			webview_t webview{};
-			RpcBinding binding;
 			std::unique_ptr<IToolWindowSupport> nativeSupport;
-			bool rpcBound{};
 			bool closeRequested{};
 			bool closing{};
 			std::shared_ptr<std::atomic_bool> lifetime{
 				std::make_shared<std::atomic_bool>(true)};
-		};
-
-		struct DeferredToolClose
-		{
-			std::shared_ptr<RuntimeCallbackGate> gate;
-			std::uint64_t windowId{};
-		};
-
-		struct DeferredMainTermination
-		{
-			std::shared_ptr<RuntimeCallbackGate> gate;
 		};
 
 		struct BackgroundJob
@@ -2106,44 +2100,6 @@ namespace
 			bool decisionSaved{};
 			bool approved{};
 		};
-
-		static void DispatchToolCloseAfterReply(webview_t, void* context)
-		{
-			std::unique_ptr<DeferredToolClose> pending(
-				static_cast<DeferredToolClose*>(context));
-			std::scoped_lock lock(pending->gate->mutex);
-			if (pending->gate->target)
-			{
-				auto* runtime = pending->gate->target;
-				const auto id = pending->windowId;
-				(void)runtime->PostToUi([runtime, id] { runtime->RequestToolWindowClose(id); });
-			}
-		}
-
-		static void DispatchToolCloseAfterDrain(webview_t, void* context)
-		{
-			std::unique_ptr<DeferredToolClose> pending(
-				static_cast<DeferredToolClose*>(context));
-			std::scoped_lock lock(pending->gate->mutex);
-			if (pending->gate->target)
-			{
-				auto* runtime = pending->gate->target;
-				const auto id = pending->windowId;
-				(void)runtime->PostToUi([runtime, id] { runtime->CloseToolWindow(id); });
-			}
-		}
-
-		static void DispatchMainTerminationAfterReply(webview_t, void* context)
-		{
-			std::unique_ptr<DeferredMainTermination> pending(
-				static_cast<DeferredMainTermination*>(context));
-			std::scoped_lock lock(pending->gate->mutex);
-			if (pending->gate->target)
-			{
-				pending->gate->target->m_mainReplyPending = false;
-				pending->gate->target->MaybeTerminateAfterShutdown();
-			}
-		}
 
 		static void PostBackgroundJobEvent(std::shared_ptr<RuntimeCallbackGate> gate,
 										   std::uint64_t jobId, std::uint64_t ownerWindow, std::string type,
@@ -2784,29 +2740,51 @@ namespace
 			m_backgroundJobs.clear();
 		}
 
-		void LoadWebView(webview_t webview)
+		static std::string FrontendUrl()
 		{
 			if (const char* devUrl = std::getenv("CEMU_WEB_UI_DEV_URL"); devUrl && *devUrl)
 			{
 				const std::string_view url(devUrl);
 				if (!url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:"))
 					throw std::runtime_error("CEMU_WEB_UI_DEV_URL must use a loopback HTTP origin");
-				if (webview_navigate(webview, devUrl) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to navigate the webview to the development UI");
-				return;
+				return std::string(url);
 			}
-			const std::string html(reinterpret_cast<const char*>(WebAssets::html),
-								   WebAssets::htmlSize);
-			if (webview_set_html(webview, html.c_str()) != WEBVIEW_ERROR_OK)
-				throw std::runtime_error("failed to load embedded web UI assets");
+			return "cemu://ui/index.html";
 		}
 
-		std::string InitialBootstrapScript(
+		static std::string BrowserContextJson(
+			std::optional<std::uint64_t> titleContext = std::nullopt,
+			std::string_view packageContext = {},
+			std::optional<std::uint64_t> generationContext = std::nullopt)
+		{
+			std::string context{"{"};
+			bool separator{};
+			if (titleContext)
+			{
+				context += R"("titleId":)" + JsonString(TitleIdString(*titleContext));
+				separator = true;
+			}
+			if (!packageContext.empty())
+			{
+				if (separator)
+					context += ',';
+				context += R"("packageKey":)" + JsonString(packageContext);
+				separator = true;
+			}
+			if (generationContext)
+			{
+				if (separator)
+					context += ',';
+				context += R"("generation":)" + JsonString(std::to_string(*generationContext));
+			}
+			return context + '}';
+		}
+
+		std::string BrowserBootstrapJson(
 			std::uint64_t windowId, std::string_view role,
 			std::optional<std::uint64_t> titleContext = std::nullopt,
 			std::string_view packageContext = {},
-			std::optional<std::uint64_t> generationContext = std::nullopt,
-			std::string_view overlaySurface = {}) const
+			std::optional<std::uint64_t> generationContext = std::nullopt) const
 		{
 			const auto accountSnapshot = m_controller.GetAccountManagerSnapshot();
 			const auto activeAccount = std::ranges::find_if(
@@ -2817,46 +2795,18 @@ namespace
 				activeAccount == accountSnapshot.accounts.end()
 					? std::string{}
 					: boost::nowide::narrow(activeAccount->miiName);
-			auto script = std::string("window.__CEMU_BOOTSTRAP__={windowId:") +
-						  JsonString(std::to_string(windowId)) + R"(,windowRole:)" +
-						  JsonString(role) + R"(,appVersion:)" +
-						  JsonString(BUILD_VERSION_STRING) + R"(,platform:)" +
-						  JsonString(PlatformName()) + R"(,activeAccountName:)" +
-						  JsonString(activeAccountName);
-			if (titleContext || !packageContext.empty() || generationContext)
-			{
-				script += R"(,context:{)";
-				bool separator{};
-				if (titleContext)
-				{
-					script += R"(titleId:)" + JsonString(TitleIdString(*titleContext));
-					separator = true;
-				}
-				if (!packageContext.empty())
-				{
-					if (separator)
-						script += ",";
-					script += R"(packageKey:)" + JsonString(packageContext);
-					separator = true;
-				}
-				if (generationContext)
-				{
-					if (separator)
-						script += ",";
-					script += R"(generation:)" + JsonString(std::to_string(*generationContext));
-				}
-				script += "}";
-			}
-			script += R"(,theme:)" + JsonString(UiThemeName(m_theme)) +
-					  R"(,themeRevision:)" + JsonString(std::to_string(m_themeRevision)) +
-					  R"(,language:)" + JsonString(m_language) +
-					  R"(,languageRevision:)" + JsonString(std::to_string(m_languageRevision)) +
-					  R"(,shuttingDown:false};)";
-			if (!overlaySurface.empty())
-				script +=
-					std::string(R"(addEventListener("DOMContentLoaded",()=>{document.documentElement.dataset.runtimeOverlay="active";document.documentElement.dataset.runtimeOverlaySurface=)") +
-					JsonString(overlaySurface) + R"(},{once:true});)";
-			return script;
+			return std::string(R"({"windowId":)") + JsonString(std::to_string(windowId)) +
+				R"(,"windowRole":)" + JsonString(role) +
+				R"(,"appVersion":)" + JsonString(BUILD_VERSION_STRING) +
+				R"(,"platform":)" + JsonString(PlatformName()) +
+				R"(,"activeAccountName":)" + JsonString(activeAccountName) +
+				R"(,"context":)" +
+				BrowserContextJson(titleContext, packageContext, generationContext) +
+				R"(,"theme":)" + JsonString(UiThemeName(m_theme)) +
+				R"(,"themeRevision":)" + JsonString(std::to_string(m_themeRevision)) +
+				R"(,"language":)" + JsonString(m_language) +
+				R"(,"languageRevision":)" + JsonString(std::to_string(m_languageRevision)) +
+				R"(,"shuttingDown":false})";
 		}
 
 		std::string_view RoleForWindow(std::uint64_t windowId) const
@@ -3044,31 +2994,37 @@ namespace
 				m_nativeWindow->GetNativeWindow(), descriptor.modal, [this, id] {
 					(void)PostToUi([this, id] { RequestToolWindowClose(id); });
 				});
-			window->webview = webview_create(
-#if defined(NDEBUG)
-				0,
-#else
-				1,
-#endif
-				window->nativeSupport->GetWindow());
-			if (!window->webview)
-				throw std::runtime_error("failed to create tool webview window");
+			window->nativeSupport->SetTitle(descriptor.title);
+			window->nativeSupport->SetSize(descriptor.width, descriptor.height);
 			try
 			{
-				window->binding = {this, window->webview, window->id};
-				if (webview_bind(window->webview, "cemuInvoke", &Runtime::Invoke,
-								 &window->binding) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to bind tool window RPC");
-				window->rpcBound = true;
-				webview_set_title(window->webview, std::string(descriptor.title).c_str());
-				webview_set_size(window->webview, descriptor.width, descriptor.height,
-								 WEBVIEW_HINT_NONE);
-				const auto bootstrap = InitialBootstrapScript(
-					window->id, window->role, window->titleContext, window->packageContext,
-					window->generationContext);
-				if (webview_init(window->webview, bootstrap.c_str()) != WEBVIEW_ERROR_OK)
-					throw std::runtime_error("failed to initialize the tool webview document");
-				LoadWebView(window->webview);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				auto* support = window->nativeSupport.get();
+				const auto bounds = support->GetBrowserBounds();
+				WebFrontend::CefOverlay::BrowserDescriptor browser;
+				browser.windowId = window->id;
+				browser.role = window->role;
+				browser.contextJson = BrowserContextJson(
+					window->titleContext, window->packageContext, window->generationContext);
+				browser.bootstrapJson = BrowserBootstrapJson(
+					window->id, window->role, window->titleContext,
+					window->packageContext, window->generationContext);
+				browser.initialUrl = FrontendUrl();
+				browser.presentation = WebFrontend::CefOverlay::BrowserPresentation::NativeChild;
+				browser.nativeParent = support->GetBrowserParentWindow();
+				browser.bounds = bounds;
+				browser.bounds.width = std::max(browser.bounds.width, 1);
+				browser.bounds.height = std::max(browser.bounds.height, 1);
+				browser.dpiScale = support->GetBrowserDpiScale();
+				browser.nativeBrowserCreated = [support](void* child) {
+					support->AttachBrowser(child);
+				};
+				browser.nativeBrowserClosing = [support](void* child) {
+					support->DetachBrowser(child);
+				};
+				if (!m_cefOverlay || !m_cefOverlay->CreateBrowser(browser))
+					throw std::runtime_error("failed to create the CEF tool browser");
+#endif
 				m_windowByRole.emplace(window->role, id);
 				m_toolWindows.emplace(id, std::move(window));
 				m_toolWindows.at(id)->nativeSupport->Show();
@@ -3088,10 +3044,6 @@ namespace
 				}
 				if (!window)
 					throw;
-				if (window->rpcBound)
-					webview_unbind(window->webview, "cemuInvoke");
-				if (window->webview)
-					webview_destroy(window->webview);
 				window->nativeSupport.reset();
 				throw;
 			}
@@ -3126,9 +3078,6 @@ namespace
 			m_toolWindows.erase(found);
 			m_windowByRole.erase(window->role);
 			RefreshInputConfigurationFocus();
-			if (window->rpcBound)
-				webview_unbind(window->webview, "cemuInvoke");
-			webview_destroy(window->webview);
 			window->nativeSupport.reset();
 			if (launchOwnerWindow)
 			{
@@ -3179,8 +3128,12 @@ namespace
 		void MaybeTerminateAfterShutdown() noexcept
 		{
 			if (m_terminateWhenToolsClosed && !m_mainReplyPending &&
-				m_toolWindows.empty() && m_webview)
-				webview_terminate(m_webview);
+				m_toolWindows.empty())
+			{
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				WebFrontend::CefNative::QuitNativeUiLoop();
+#endif
+			}
 		}
 
 		void RequestToolWindowClose(std::uint64_t id) noexcept
@@ -3188,24 +3141,12 @@ namespace
 			const auto found = m_toolWindows.find(id);
 			if (found == m_toolWindows.end() || std::exchange(found->second->closing, true))
 				return;
-			auto& window = *found->second;
-			if (window.rpcBound)
-			{
-				webview_unbind(window.webview, "cemuInvoke");
-				window.rpcBound = false;
-			}
-			auto pending = std::make_unique<DeferredToolClose>();
-			pending->gate = m_callbackGate;
-			pending->windowId = id;
-			if (webview_dispatch(window.webview, &Runtime::DispatchToolCloseAfterDrain,
-								 pending.get()) == WEBVIEW_ERROR_OK)
-			{
-				pending.release();
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay && m_cefOverlay->CloseWindow(id))
 				return;
-			}
-			window.closing = false;
-			cemuLog_log(LogType::Force,
-						"Failed to drain tool window {} before close; keeping it alive", id);
+#endif
+			found->second->closing = false;
+			CloseToolWindow(id);
 		}
 
 		void RequestAllToolWindowsClose() noexcept
@@ -3224,8 +3165,7 @@ namespace
 		void CloseAllToolWindows() noexcept
 		{
 			m_pendingWindowRoles.clear();
-			while (!m_toolWindows.empty())
-				CloseToolWindow(m_toolWindows.begin()->first);
+			RequestAllToolWindowsClose();
 		}
 
 		void Cleanup() noexcept
@@ -3278,8 +3218,6 @@ namespace
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
 			CloseAllToolWindows();
-			if (!m_webview)
-				return;
 			m_nativeWindow->SetCloseHandler({});
 			m_nativeWindow->SetGameCloseHandler({});
 			m_nativeWindow->SetMetricsHandler({});
@@ -3296,18 +3234,19 @@ namespace
 				IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
 				m_hostConnected = false;
 			}
-			if (m_webViewWidget)
-				m_nativeWindow->PrepareWebViewDestroy(m_webViewWidget);
-			if (m_rpcBound)
-				webview_unbind(m_webview, "cemuInvoke");
-			webview_destroy(m_webview);
-			m_webview = nullptr;
-			m_webViewWidget = nullptr;
 			if (m_mainWindowPublication)
 			{
 				m_hostState->ClearMainWindow(m_mainWindowPublication);
 				m_mainWindowPublication = {};
 			}
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			WebFrontend::CefOverlay::ShutdownProcessRuntime();
+			if (m_nativeUiLoopInitialized)
+			{
+				WebFrontend::CefNative::ShutdownNativeUiLoop();
+				m_nativeUiLoopInitialized = false;
+			}
+#endif
 		}
 
 		bool RequestShutdown(bool deferMainReply = false)
@@ -3556,6 +3495,13 @@ namespace
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 			if (m_cefOverlay)
 			{
+				if (m_cefOverlay->HasWindow(0))
+				{
+					const auto browserBounds = m_nativeWindow->GetBrowserBounds();
+					m_cefOverlay->ResizeWindow(0, std::max(browserBounds.width, 1),
+						std::max(browserBounds.height, 1), m_nativeWindow->GetBrowserDpiScale());
+					m_cefOverlay->SetWindowFocus(0, metrics.appActive);
+				}
 				m_cefOverlay->Resize(Host::PointerSurface::Main, metrics.physicalWidth,
 					metrics.physicalHeight, metrics.dpiScale);
 				if (metrics.padOpen)
@@ -4004,37 +3950,20 @@ namespace
 			}
 		}
 
-		struct PendingEvent
-		{
-			std::shared_ptr<std::atomic_bool> stopping;
-			std::function<void()> beforeDispatch;
-			std::string script;
-		};
-
-		static void DispatchEvent(webview_t webview, void* argument)
-		{
-			std::unique_ptr<PendingEvent> pending(static_cast<PendingEvent*>(argument));
-			if (pending->stopping->load(std::memory_order_acquire))
-				return;
-			if (pending->beforeDispatch)
-				pending->beforeDispatch();
-			if (!pending->script.empty())
-				webview_eval(webview, pending->script.c_str());
-		}
-
 		bool PostToUi(std::function<void()> action)
 		{
 			if (m_stopping.load(std::memory_order_acquire))
 				return false;
-			auto pending = std::make_unique<PendingEvent>();
-			pending->stopping = m_eventStopping;
-			pending->beforeDispatch = std::move(action);
-			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
-			{
-				pending.release();
-				return true;
-			}
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			auto stopping = m_eventStopping;
+			return WebFrontend::CefNative::PostNativeUi(
+				[stopping = std::move(stopping), action = std::move(action)]() mutable {
+					if (!stopping->load(std::memory_order_acquire) && action)
+						action();
+				});
+#else
 			return false;
+#endif
 		}
 
 		void Emit(std::string_view type, std::string_view payloadJson,
@@ -4044,33 +3973,26 @@ namespace
 			if (m_stopping.load(std::memory_order_acquire))
 				return;
 			const auto sequence = ++m_eventSequence;
-			const auto event = std::string(R"({"type":)") + JsonString(type) +
-							   R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
-							   std::string(payloadJson) + "}";
-			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-								Base64(event) + "'),c=>c.charCodeAt(0)))));";
-			auto pending = std::make_unique<PendingEvent>();
-			pending->stopping = m_eventStopping;
-			pending->beforeDispatch = [this, beforeDispatch = std::move(beforeDispatch), script] {
+			const std::string eventType(type);
+			const std::string payload(payloadJson);
+			(void)PostToUi([this, beforeDispatch = std::move(beforeDispatch), eventType,
+							payload, sequence] {
 				if (beforeDispatch)
 					beforeDispatch();
-				webview_eval(m_webview, script.c_str());
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 				if (m_cefOverlay)
 				{
-					m_cefOverlay->ExecuteScript(Host::PointerSurface::Main, script);
-					m_cefOverlay->ExecuteScript(Host::PointerSurface::Pad, script);
+					m_cefOverlay->ExecuteWindowEvent(0, eventType, payload, sequence);
+					m_cefOverlay->ExecuteWindowEvent(kMainOverlayWindowId, eventType, payload, sequence);
+					m_cefOverlay->ExecuteWindowEvent(kPadOverlayWindowId, eventType, payload, sequence);
+					for (const auto& [id, window] : m_toolWindows)
+					{
+						(void)window;
+						m_cefOverlay->ExecuteWindowEvent(id, eventType, payload, sequence);
+					}
 				}
 #endif
-				for (const auto& [id, window] : m_toolWindows)
-				{
-					(void)id;
-					if (window->webview)
-						webview_eval(window->webview, script.c_str());
-				}
-			};
-			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
-				pending.release();
+			});
 		}
 
 		void EmitToWindow(std::uint64_t windowId, std::string_view type,
@@ -4080,59 +4002,14 @@ namespace
 			if (m_stopping.load(std::memory_order_acquire))
 				return;
 			const auto sequence = ++m_eventSequence;
-			const auto event = std::string(R"({"type":)") + JsonString(type) +
-							   R"(,"sequence":)" + JsonString(std::to_string(sequence)) + R"(,"payload":)" +
-							   std::string(payloadJson) + "}";
-			const auto script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-								Base64(event) + "'),c=>c.charCodeAt(0)))));";
-			auto pending = std::make_unique<PendingEvent>();
-			pending->stopping = m_eventStopping;
-			pending->beforeDispatch = [this, windowId, script] {
-				if (windowId == 0)
-				{
-					webview_eval(m_webview, script.c_str());
-					return;
-				}
-				if (windowId == kPadOverlayWindowId)
-				{
+			const std::string eventType(type);
+			const std::string payload(payloadJson);
+			(void)PostToUi([this, windowId, eventType, payload, sequence] {
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
-					if (m_cefOverlay)
-						m_cefOverlay->ExecuteScript(Host::PointerSurface::Pad, script);
+				if (m_cefOverlay)
+					m_cefOverlay->ExecuteWindowEvent(windowId, eventType, payload, sequence);
 #endif
-					return;
-				}
-				if (windowId == kMainOverlayWindowId)
-				{
-#if defined(CEMU_OVERLAY_BACKEND_CEF)
-					if (m_cefOverlay)
-						m_cefOverlay->ExecuteScript(Host::PointerSurface::Main, script);
-#endif
-					return;
-				}
-				const auto found = m_toolWindows.find(windowId);
-				if (found != m_toolWindows.end() && found->second->webview)
-					webview_eval(found->second->webview, script.c_str());
-			};
-			if (webview_dispatch(m_webview, &Runtime::DispatchEvent, pending.get()) == WEBVIEW_ERROR_OK)
-				pending.release();
-		}
-
-		void EmitToWebViewNow(webview_t target, std::string_view type,
-							  std::string_view payloadJson)
-		{
-			if (!target || m_stopping.load(std::memory_order_acquire))
-				return;
-			std::string script;
-			{
-				std::scoped_lock eventLock(m_eventMutex);
-				const auto sequence = ++m_eventSequence;
-				const auto event = std::string(R"({"type":)") + JsonString(type) +
-								   R"(,"sequence":)" + JsonString(std::to_string(sequence)) +
-								   R"(,"payload":)" + std::string(payloadJson) + "}";
-				script = "window.__cemuDispatchEvent?.(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" +
-						 Base64(event) + "'),c=>c.charCodeAt(0)))));";
-			}
-			webview_eval(target, script.c_str());
+			});
 		}
 
 		void ForwardEvent(const Application::Event& event)
@@ -4315,57 +4192,52 @@ namespace
 				SignalLoggingChanged();
 		}
 
-		static void Invoke(const char* sequence, const char* arguments, void* context)
+		std::string DispatchCefRpc(std::uint64_t windowId, std::string_view request)
 		{
-			auto& binding = *static_cast<RpcBinding*>(context);
-			auto& self = *binding.runtime;
-			rapidjson::Document array;
-			array.Parse(arguments);
+			const auto previousWindow = std::exchange(m_invokingWindow, windowId);
 			std::string response;
-			if (!array.IsArray() || array.Size() != 1 || !array[0].IsString())
-				response = R"({"id":"","ok":false,"error":{"code":"invalid_binding_call","message":"cemuInvoke expects one JSON string"}})";
-			else
+			try
 			{
-				const auto previousWindow = std::exchange(self.m_invokingWindow, binding.windowId);
-				response = self.m_rpc.Dispatch(
-					std::string_view(array[0].GetString(), array[0].GetStringLength()));
-				self.m_invokingWindow = previousWindow;
+				response = m_rpc.Dispatch(request);
 			}
-			const auto encoded = JsonString(response);
-			const auto returned = webview_return(binding.webview, sequence, 0, encoded.c_str());
-			if (binding.windowId == 0 && self.m_mainReplyPending)
+			catch (...)
 			{
-				auto pending = std::make_unique<DeferredMainTermination>();
-				pending->gate = self.m_callbackGate;
-				if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
-																	 &Runtime::DispatchMainTerminationAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
-					pending.release();
-				else
-				{
-					self.m_mainReplyPending = false;
-					self.MaybeTerminateAfterShutdown();
-				}
+				m_invokingWindow = previousWindow;
+				throw;
 			}
-			else if (binding.windowId != 0)
+			m_invokingWindow = previousWindow;
+
+			// CEF completes Callback::Success after this handler returns. Queue close
+			// work on the native loop so the RPC response is delivered first.
+			if (windowId == 0 && m_mainReplyPending)
 			{
-				const auto found = self.m_toolWindows.find(binding.windowId);
-				if (found != self.m_toolWindows.end() &&
+				(void)PostToUi([this] {
+					m_mainReplyPending = false;
+					MaybeTerminateAfterShutdown();
+				});
+			}
+			else if (windowId != 0)
+			{
+				const auto found = m_toolWindows.find(windowId);
+				if (found != m_toolWindows.end() &&
 					std::exchange(found->second->closeRequested, false))
-				{
-					auto pending = std::make_unique<DeferredToolClose>();
-					pending->gate = self.m_callbackGate;
-					pending->windowId = binding.windowId;
-					if (returned == WEBVIEW_ERROR_OK && webview_dispatch(binding.webview,
-																		 &Runtime::DispatchToolCloseAfterReply, pending.get()) == WEBVIEW_ERROR_OK)
-						pending.release();
-					else
-					{
-						const auto id = binding.windowId;
-						auto* runtime = &self;
-						(void)self.PostToUi([runtime, id] { runtime->RequestToolWindowClose(id); });
-					}
-				}
+					(void)PostToUi([this, windowId] { RequestToolWindowClose(windowId); });
 			}
+			return response;
+		}
+
+		void HandleCefWindowClosed(std::uint64_t windowId)
+		{
+			if (windowId == 0)
+			{
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+				if (!m_stopping.load(std::memory_order_acquire))
+					WebFrontend::CefNative::QuitNativeUiLoop();
+#endif
+				return;
+			}
+			if (windowId != kMainOverlayWindowId && windowId != kPadOverlayWindowId)
+				CloseToolWindow(windowId);
 		}
 
 		void RequireRole(std::initializer_list<std::string_view> roles) const
@@ -5115,10 +4987,10 @@ namespace
 					   JsonString(BUILD_VERSION_STRING) + R"(,"commit":)" +
 					   JsonString(CEMU_EXTEND_COMMIT_HASH) + R"(,"buildDate":)" +
 					   JsonString(__DATE__ " " __TIME__) +
-					   R"(,"frontend":"webview-react","webviewEngine":)" +
-					   JsonString("webview/webview " WEBVIEW_VERSION_NUMBER) +
+					   R"(,"frontend":"cef-react","browserEngine":)" +
+					   JsonString("Chromium Embedded Framework") +
 					   R"(,"originalAuthors":["Exzap","Petergov"],"libraries":[)"
-					   R"({"name":"webview/webview","license":"MIT","url":"https://github.com/webview/webview"},)"
+					   R"({"name":"Chromium Embedded Framework","license":"BSD-3-Clause","url":"https://bitbucket.org/chromiumembedded/cef"},)"
 					   R"({"name":"React","license":"MIT","url":"https://github.com/facebook/react"},)"
 					   R"({"name":"Bun","license":"MIT","url":"https://github.com/oven-sh/bun"},)"
 					   R"({"name":"Vulkan","license":"Apache-2.0","url":"https://github.com/KhronosGroup/Vulkan-Headers"}],"links":[)"
@@ -6612,9 +6484,6 @@ namespace
 		}
 
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
-		webview_t m_webview{};
-		void* m_webViewWidget{};
-		RpcBinding m_mainBinding;
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 		std::shared_ptr<WebFrontend::CefOverlay::BrowserRuntime> m_cefOverlay;
 #else
@@ -6695,7 +6564,7 @@ namespace
 		std::unordered_map<std::uint64_t, std::string> m_titleIconCache;
 		bool m_fullscreen{};
 		bool m_launcherClosed{};
-		bool m_rpcBound{};
+		bool m_nativeUiLoopInitialized{};
 		bool m_cleanedUp{};
 		bool m_applicationShutdown{};
 		bool m_hostConnected{};
@@ -6709,7 +6578,7 @@ void Frontend::Run()
 {
 #if BOOST_OS_LINUX
 	// steam-run exposes its host /etc at this path. Its FHS Wayland stack can
-	// conflict with Nix-linked WebKitGTK, while the forwarded X11 socket stays
+	// conflict with bundled Chromium, while the forwarded X11 socket stays
 	// ABI-isolated and reliable. Keep native Wayland for ordinary launches.
 	std::error_code steamRuntimeError;
 	if (std::getenv("DISPLAY") &&
@@ -6717,11 +6586,6 @@ void Frontend::Run()
 	{
 		setenv("GDK_BACKEND", "x11", 1);
 	}
-#endif
-#if defined(CEMU_OVERLAY_BACKEND_CEF)
-	const bool cefOverlayAvailable = WebFrontend::CefOverlay::InitializeProcessRuntime();
-	if (!cefOverlayAvailable)
-		cemuLog_log(LogType::Force, "CEF Runtime Overlay initialization failed; games will continue without the overlay");
 #endif
 	Application::InitializePaths();
 	CemuCommonInit();
@@ -6734,7 +6598,7 @@ void Frontend::Run()
 		if (FAILED(initialized))
 		{
 			uiFailure = std::make_exception_ptr(
-				std::runtime_error("failed to initialize the webview STA UI thread"));
+				std::runtime_error("failed to initialize the CEF STA UI thread"));
 			return;
 		}
 		try
@@ -6756,9 +6620,6 @@ void Frontend::Run()
 		Runtime runtime;
 		runtime.Run();
 	}
-#if defined(CEMU_OVERLAY_BACKEND_CEF)
-	WebFrontend::CefOverlay::ShutdownProcessRuntime();
-#endif
 	// Cemu owns process-lifetime worker objects whose static destruction is not
 	// safe after the frontend has shut the application down. Runtime cleanup has
 	// already released emulation and native UI resources at this point.

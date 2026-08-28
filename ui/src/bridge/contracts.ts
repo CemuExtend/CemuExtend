@@ -449,8 +449,8 @@ export type AboutInfo = {
   version: string;
   commit: string;
   buildDate: string;
-  frontend: "webview-react";
-  webviewEngine: string;
+  frontend: "cef-react";
+  browserEngine: string;
   originalAuthors: string[];
   libraries: Array<{ name: string; license: string; url: string }>;
   links: Array<{ label: string; url: string }>;

@@ -146,7 +146,6 @@ export const jaSupplement: Record<string, string> = {
   "Account save data": "アカウントのセーブデータ",
   "Portal emulation": "ポータルエミュレーション",
   "Attached HID snapshot": "接続済みHIDのスナップショット",
-  "WebView host": "WebView ホスト",
   "All categories": "すべてのカテゴリ",
   "All content": "すべてのコンテンツ",
   "All levels": "すべてのレベル",

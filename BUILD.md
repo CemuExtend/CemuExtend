@@ -141,11 +141,11 @@ From the CemuExtend directory:
 
 ```
 nix develop
-cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=webview
+cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=cef
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `webview`, `wx`, or `headless`. Linux WebView builds use the CEF off-screen runtime overlay by default. Use `-DCEMU_OVERLAY_BACKEND=imgui` for the source-compatible ImGui fallback, or set it to `cef` explicitly. CEF requires the WebView frontend; wx builds default to ImGui.
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `cef`, `wx`, or `headless`. The CEF frontend uses Chromium for the React launcher and tool windows and CEF OSR for the Vulkan-composited Main/Pad overlays. The legacy `webview` value remains a deprecated alias for `cef`; wx builds use ImGui.
 
 CEF is pinned in `cmake/CefVersion.cmake`. Before a native configure, fetch and verify the official Linux x86-64 archive:
 
@@ -153,15 +153,15 @@ CEF is pinned in `cmake/CefVersion.cmake`. Before a native configure, fetch and 
 ./scripts/fetch-cef-linux-x64.sh
 ```
 
-It extracts to `dependencies/cef` by default; set `CEF_ROOT` to use another extraction. CEF builds require Linux x86-64 and NSS development files (`libnss3-dev` on Ubuntu). Runtime resources and licenses are staged beside the executable.
+It extracts to `dependencies/cef` by default; set `CEF_ROOT` to use another extraction. Platform wrappers are also provided for Linux ARM64, Windows x64, and macOS x64/ARM64. Linux builds require NSS development files (`libnss3-dev` on Ubuntu). Runtime resources, subprocess helpers, and licenses are staged with the executable.
 
 For example, to validate both desktop overlay implementations:
 
 ```bash
 nix develop --command cmake -S . -B build/nix-cef -G Ninja \
-  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=cef
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=cef
 nix develop --command cmake -S . -B build/nix-imgui -G Ninja \
-  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=webview -DCEMU_OVERLAY_BACKEND=imgui
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=wx -DCEMU_OVERLAY_BACKEND=imgui
 ```
 
 To produce a Nix-linked Release executable directly at `bin/Cemu_release`, configure a Release build inside the development shell:
@@ -169,15 +169,15 @@ To produce a Nix-linked Release executable directly at `bin/Cemu_release`, confi
 ```bash
 nix develop --command cmake -S . -B build/nix-release -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF \
-  -DCEMU_FRONTEND=webview
+  -DCEMU_FRONTEND=cef
 nix develop --command cmake --build build/nix-release --parallel
 steam-run ./bin/Cemu_release
 ```
 
 Unlike the Ubuntu artifact emitted by Docker, this executable records the Nix
-GTK/WebKitGTK runtime paths in its ELF RUNPATH and can therefore be launched
+GTK/CEF runtime paths in its ELF RUNPATH and can therefore be launched
 directly by `steam-run`. To build a packaged Nix output instead, use `nix build
-.#cemu-extend-webview`, `nix build .#cemu-extend-wx`, or `nix build
+.#cemu-extend-webview` (compatibility package), `nix build .#cemu-extend-wx`, or `nix build
 .#cemu-extend-headless`; the executable is available as `result/bin/cemu`.
 
 ## Docker
@@ -190,29 +190,29 @@ docker build -t cemu-extend:build .
 docker run --rm -it cemu-extend:build
 ```
 
-The default image performs an incremental WebView/CEF Release build. Its persistent
+The default image downloads and verifies the pinned CEF SDK into a persistent
+BuildKit cache, then performs an incremental CEF Release build. Its persistent
 CMake/Ninja cache means regenerating `src/webview/generated/WebAssets.h` only
-recompiles the affected WebView target and relinks Cemu. Use
+recompiles the affected frontend target and relinks Cemu. Use
 `CEMU_CLEAN_BUILD=1 ./docker-build.sh` only when a dependency, toolchain, or
 configuration change requires `--clean-first`. Use `--build-arg
 CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another
-frontend, `--build-arg CEMU_OVERLAY_BACKEND=imgui` to select the ImGui fallback
-for a WebView frontend build, and `--build-arg BUILD_TYPE=Debug` for a Debug
+frontend, and `--build-arg BUILD_TYPE=Debug` for a Debug
 build. The `docker-build.sh` wrapper accepts the frontend and overlay selections
 through `CEMU_FRONTEND` and `CEMU_OVERLAY_BACKEND`. The compiled executable is at
 `/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container.
 To create only the dependency-enabled development image without compiling, use
 `docker build --target dev -t cemu-extend:dev .`.
 
-To build and launch the desktop frontend with its GTK/WebKitGTK runtime, use:
+To build and launch the desktop frontend with its GTK/CEF runtime, use:
 
 ```bash
 ./docker-run.sh
 ```
 
-The launcher UI still uses WebKitGTK; the in-game Main/Pad overlays use CEF OSR and are composited into Vulkan. For sandboxed local installation, install the staged `chrome-sandbox` helper as root with mode 4755. An explicitly unsandboxed development run can set `CEMU_CEF_NO_SANDBOX=1`. The OSR path supports Wayland and X11 without XComposite or Cairo child-window composition.
+The launcher and tool windows use native CEF child browsers and therefore require an X11 or XWayland display on Linux. The in-game Main/Pad overlays use CEF OSR and are composited into Vulkan without XComposite or Cairo child-window composition. For sandboxed local installation, install the staged `chrome-sandbox` helper as root with mode 4755. An explicitly unsandboxed development run can set `CEMU_CEF_NO_SANDBOX=1`.
 
-The launcher forwards the current Wayland/X11 display, PulseAudio socket, and
+The launcher forwards the current X11/XWayland display, PulseAudio socket, and
 `/dev/dri`. It persists data in dedicated `Cemu-Docker` XDG directories so a
 container never rewrites the native frontend's settings. Override
 `CEMU_DOCKER_DATA_DIR`, `CEMU_DOCKER_CONFIG_DIR`, or `CEMU_DOCKER_CACHE_DIR`

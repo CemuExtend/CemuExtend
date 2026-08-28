@@ -3,13 +3,13 @@ set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build}"
-frontend="${CEMU_FRONTEND:-webview}"
+frontend="${CEMU_FRONTEND:-cef}"
 overlay_backend="${CEMU_OVERLAY_BACKEND:-}"
 clean_build="${CEMU_CLEAN_BUILD:-0}"
 case "${frontend}" in
-	webview|wx|headless) ;;
+	cef|webview|wx|headless) ;;
 	*)
-		printf 'Unsupported CEMU_FRONTEND: %s (expected webview, wx, or headless)\n' "${frontend}" >&2
+		printf 'Unsupported CEMU_FRONTEND: %s (expected cef, wx, or headless)\n' "${frontend}" >&2
 		exit 2
 		;;
 esac

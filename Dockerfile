@@ -40,7 +40,6 @@ RUN apt-get update \
         libudev-dev \
         libusb-1.0-0-dev \
         libwayland-dev \
-        libwebkit2gtk-4.1-dev \
         libx11-dev \
         libx11-xcb-dev \
         libxcursor-dev \
@@ -93,7 +92,7 @@ ARG BUILD_TYPE=Release
 ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
-ARG CEMU_FRONTEND=webview
+ARG CEMU_FRONTEND=cef
 ARG CEMU_OVERLAY_BACKEND=
 # Preserve the CMake/Ninja cache by default. Set CLEAN_BUILD=1 only when a
 # dependency, toolchain, or configuration change requires a full rebuild.
@@ -107,9 +106,17 @@ WORKDIR /workspace/CemuExtend
 RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
     --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
+    --mount=type=cache,id=cemu-extend-cef,target=/root/.cache/cemu-cef,sharing=locked \
     --mount=type=cache,id=cemu-extend-cmake,target=/workspace/CemuExtend/build/docker,sharing=locked \
     test -n "${SOURCE_FINGERPRINT}" \
     && bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
+    && cef_root_arg="" \
+    && if [ "${CEMU_FRONTEND}" = "cef" ] || [ "${CEMU_FRONTEND}" = "webview" ]; then \
+        CEMU_CEF_DOWNLOAD_DIR=/root/.cache/cemu-cef/downloads \
+            CEF_ROOT=/root/.cache/cemu-cef/sdk \
+            bash ./scripts/fetch-cef.sh; \
+        cef_root_arg="-DCEF_ROOT=/root/.cache/cemu-cef/sdk"; \
+    fi \
     && for attempt in 1 2 3; do \
         cmake -S . -B build/docker \
             -G Ninja \
@@ -118,6 +125,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
             -DCEMU_FRONTEND=${CEMU_FRONTEND} \
+            ${cef_root_arg} \
             ${CEMU_OVERLAY_BACKEND:+-DCEMU_OVERLAY_BACKEND=${CEMU_OVERLAY_BACKEND}} \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
@@ -143,10 +151,10 @@ CMD ["bash"]
 
 # Runnable desktop image. The build stage intentionally remains separate so
 # CI can keep extracting the bare binary, while this stage supplies the GTK,
-# WebKitGTK, graphics, input, and audio runtime required to launch it.
+# CEF, graphics, input, and audio runtime required to launch it.
 FROM cemu-extend-base AS runtime
 
-ARG CEMU_FRONTEND=webview
+ARG CEMU_FRONTEND=cef
 
 COPY --from=build /Cemu_release.bundle /opt/cemu
 COPY bin/resources /opt/cemu/resources
@@ -166,7 +174,6 @@ ENV HOME=/home/cemu \
     XDG_DATA_HOME=/home/cemu/.local/share \
     XDG_RUNTIME_DIR=/tmp/cemu-runtime \
     MESA_SHADER_CACHE_DIR=/home/cemu/.cache/Cemu/mesa_shader_cache \
-    WEBKIT_DISABLE_DMABUF_RENDERER=1 \
     GDK_BACKEND=wayland,x11
 
 WORKDIR /opt/cemu

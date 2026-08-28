@@ -372,8 +372,8 @@ export function installDevNativeMock(): void {
         version: "preview",
         commit: "preview-build",
         buildDate: "Preview data",
-        frontend: "WebView React UI",
-        webviewEngine: "Browser preview",
+        frontend: "cef-react",
+        browserEngine: "Browser preview",
         originalAuthors: ["Preview author"],
         libraries: [
           {

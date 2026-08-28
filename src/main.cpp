@@ -39,6 +39,42 @@ extern "C"
 	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 }
+
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+namespace
+{
+	int ExecuteWindowsCefSubprocess()
+	{
+		int argc{};
+		LPWSTR* wideArguments = CommandLineToArgvW(GetCommandLineW(), &argc);
+		if (!wideArguments || argc <= 0)
+			return -1;
+		std::vector<std::string> arguments;
+		std::vector<char*> pointers;
+		arguments.reserve(static_cast<std::size_t>(argc));
+		pointers.reserve(static_cast<std::size_t>(argc));
+		for (int index = 0; index < argc; ++index)
+		{
+			const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+				wideArguments[index], -1, nullptr, 0, nullptr, nullptr);
+			if (length <= 0)
+				arguments.emplace_back();
+			else
+			{
+				std::string value(static_cast<std::size_t>(length), '\0');
+				WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArguments[index], -1,
+					value.data(), length, nullptr, nullptr);
+				value.pop_back();
+				arguments.emplace_back(std::move(value));
+			}
+		}
+		LocalFree(wideArguments);
+		for (auto& argument : arguments)
+			pointers.push_back(argument.data());
+		return WebFrontend::CefOverlay::ExecuteSubprocess(argc, pointers.data());
+	}
+}
+#endif
 #endif
 
 void mainEmulatorLLE();
@@ -64,6 +100,10 @@ void ToolShaderCacheMerger();
 // entrypoint for release builds
 int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	if (const int cefProcessCode = ExecuteWindowsCefSubprocess(); cefProcessCode >= 0)
+		return cefProcessCode;
+#endif
 	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE)))
 		cemuLog_log(LogType::Force, "CoInitializeEx() failed");
 #ifdef HAS_SDL
@@ -78,6 +118,11 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int
 // entrypoint for debug builds with console
 int main(int argc, char* argv[])
 {
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	if (const int cefProcessCode = WebFrontend::CefOverlay::ExecuteSubprocess(argc, argv);
+		cefProcessCode >= 0)
+		return cefProcessCode;
+#endif
 	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE)))
 		cemuLog_log(LogType::Force, "CoInitializeEx() failed");
 #ifdef HAS_SDL

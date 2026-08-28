@@ -45,8 +45,8 @@ export function AboutWindow() {
               <dd>{model.frontend}</dd>
             </div>
             <div>
-              <dt>WebView</dt>
-              <dd>{model.webviewEngine}</dd>
+              <dt>Browser engine</dt>
+              <dd>{model.browserEngine}</dd>
             </div>
             <div>
               <dt>Original authors</dt>

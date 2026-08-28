@@ -66,6 +66,8 @@ add_library(CemuWebFrontend STATIC
 )
 if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
   target_sources(CemuWebFrontend PRIVATE
+	cef/CefNativeUiLoop.cpp
+	cef/CefNativeUiLoop.h
     cef/CefOverlayFrameMailbox.cpp
     cef/CefOverlayFrameMailbox.h
     cef/CefOverlayRuntime.cpp
@@ -75,13 +77,15 @@ if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp NativeFileDialogGtk.cpp ToolWindowSupportGtk.cpp)
+  target_include_directories(CemuWebFrontend PRIVATE ${GTK3_INCLUDE_DIRS})
+  target_link_libraries(CemuWebFrontend PRIVATE ${GTK3_LIBRARIES})
 elseif(WIN32)
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostWin.cpp NativeFileDialogWin.cpp ToolWindowSupportWin.cpp)
   target_link_libraries(CemuWebFrontend PRIVATE comdlg32 imm32 shell32 ole32)
 elseif(APPLE)
   enable_language(OBJCXX)
 	target_sources(CemuWebFrontend PRIVATE NativeWindowHostCocoa.mm NativeFileDialogCocoa.mm ToolWindowSupportCocoa.mm)
-  target_link_libraries(CemuWebFrontend PRIVATE "-framework Cocoa" "-framework CoreGraphics" "-framework QuartzCore")
+	target_link_libraries(CemuWebFrontend PRIVATE "-framework Cocoa" "-framework CoreFoundation" "-framework CoreGraphics" "-framework QuartzCore")
 endif()
 if(TARGET cemu_web_assets)
   add_dependencies(CemuWebFrontend cemu_web_assets)
@@ -101,7 +105,6 @@ target_link_libraries(CemuWebFrontend PRIVATE
   CemuUtil
   CemuWebRendererAdapters
   PNG::PNG
-  webview::core_static
 )
 
 if(BUILD_TESTING)

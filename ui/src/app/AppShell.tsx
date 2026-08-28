@@ -407,7 +407,7 @@ export function AppShell({ bootstrap }: { bootstrap: Bootstrap }) {
         right={
           masterLibrary
             ? "Total playtime: 186h"
-            : `${bootstrap.platform} · WebView host`
+            : `${bootstrap.platform} · CEF host`
         }
       />
     </div>

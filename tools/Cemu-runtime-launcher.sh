@@ -3,22 +3,10 @@ set -eu
 
 launcher_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 runtime_dir="$launcher_dir/.cemu-runtime"
-webkit_link_root=/tmp/.cemu-wk.dir
 
 if [ ! -x "$launcher_dir/.Cemu_release.bin" ]; then
 	echo "CemuExtend runtime binary is missing: $launcher_dir/.Cemu_release.bin" >&2
 	exit 127
-fi
-
-if [ -d "$runtime_dir/libexec/webkit2gtk-4.1" ]; then
-	mkdir -p "$webkit_link_root"
-	ln -snf "$runtime_dir/libexec/webkit2gtk-4.1" \
-		"$webkit_link_root/webkit2gtk-4.1"
-	ln -snf "$runtime_dir/libexec/webkit2gtk-4.1/injected-bundle" \
-		"$webkit_link_root/injected-bundle"
-	export WEBKIT_INJECTED_BUNDLE_PATH="$webkit_link_root/injected-bundle"
-	export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-	export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
 fi
 
 library_path="$launcher_dir"
@@ -35,7 +23,7 @@ if [ -d /run/opengl-driver/lib ]; then
 	# NixOS exposes the vendor GL implementation through /run/opengl-driver,
 	# while the GLVND frontend and the matching GBM/DRM ABI live in immutable
 	# store paths. Loading the Ubuntu copies bundled below together with the Nix
-	# driver makes WebKitGTK's EGL initialization abort before the React frontend
+	# driver makes the portable GTK/CEF process abort before the React frontend
 	# can paint. Discover the driver closure and prefer those host libraries.
 	nix_glvnd_found=0
 	if command -v nix-store >/dev/null 2>&1; then
@@ -68,7 +56,7 @@ if [ -d /run/opengl-driver/lib ]; then
 	if [ -d /run/opengl-driver/share/glvnd/egl_vendor.d ]; then
 		export __EGL_VENDOR_LIBRARY_DIRS="${__EGL_VENDOR_LIBRARY_DIRS:-/run/opengl-driver/share/glvnd/egl_vendor.d}"
 	fi
-	# The portable Ubuntu GTK/WebKit stack cannot safely share its Wayland
+	# The portable Ubuntu GTK/CEF stack cannot safely share its Wayland
 	# wl_surface with the NixOS Vulkan WSI. The result is a protocol error as soon
 	# as a game creates its swapchain. Use XWayland by default for this portable
 	# runtime; advanced users can explicitly opt back into native Wayland.

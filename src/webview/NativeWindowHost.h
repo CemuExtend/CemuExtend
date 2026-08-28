@@ -89,8 +89,15 @@ namespace WebFrontend
 		[[nodiscard]] virtual void* GetNativeWindow() const = 0;
 		[[nodiscard]] virtual Host::NativeWindowHandle GetMainWindowHandle() const = 0;
 		[[nodiscard]] virtual Host::WindowMetricsSnapshot GetMetrics() const = 0;
-		virtual void AttachWebView(void* widget) = 0;
-		virtual void PrepareWebViewDestroy(void* widget) = 0;
+		// Native child-browser container used by the CEF frontend. Handles are
+		// intentionally opaque so CEF platform types do not leak into host contracts.
+		[[nodiscard]] virtual void* GetBrowserParentWindow() const = 0;
+		[[nodiscard]] virtual Host::RenderRegionBounds GetBrowserBounds() const = 0;
+		[[nodiscard]] virtual double GetBrowserDpiScale() const = 0;
+		virtual void AttachBrowser(void* browserWindow) = 0;
+		virtual void ResizeBrowser() = 0;
+		virtual void FocusBrowser() = 0;
+		virtual void DetachBrowser(void* browserWindow) = 0;
 		virtual void Show() = 0;
 		virtual void HideLauncher() = 0;
 		[[nodiscard]] virtual bool IsLauncherVisible() const = 0;

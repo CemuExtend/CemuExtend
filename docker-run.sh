@@ -3,11 +3,25 @@ set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 image_name="${CEMU_DOCKER_RUNTIME_IMAGE:-cemu-extend:runtime}"
-frontend="${CEMU_FRONTEND:-webview}"
+frontend="${CEMU_FRONTEND:-cef}"
 runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 gdk_backend="${GDK_BACKEND:-}"
 
-if [[ -z "${gdk_backend}" ]]; then
+if [[ "${frontend}" == "webview" ]]; then
+	frontend=cef
+fi
+
+if [[ "${frontend}" == "cef" ]]; then
+	if [[ -z "${DISPLAY:-}" || ! -d /tmp/.X11-unix ]]; then
+		printf 'The CEF desktop frontend requires an X11 or XWayland DISPLAY.\n' >&2
+		exit 2
+	fi
+	if [[ -n "${gdk_backend}" && "${gdk_backend}" != "x11" ]]; then
+		printf 'The CEF desktop frontend requires GDK_BACKEND=x11.\n' >&2
+		exit 2
+	fi
+	gdk_backend=x11
+elif [[ -z "${gdk_backend}" ]]; then
 	if [[ -n "${WAYLAND_DISPLAY:-}" && -S "${runtime_dir}/${WAYLAND_DISPLAY}" ]]; then
 		gdk_backend=wayland
 	else
@@ -16,9 +30,9 @@ if [[ -z "${gdk_backend}" ]]; then
 fi
 
 case "${frontend}" in
-	webview|wx) ;;
+	cef|wx) ;;
 	*)
-		printf 'Docker desktop runtime supports webview or wx, got: %s\n' "${frontend}" >&2
+		printf 'Docker desktop runtime supports cef or wx, got: %s\n' "${frontend}" >&2
 		exit 2
 		;;
 esac
@@ -56,14 +70,14 @@ run_args=(
 	--env XDG_DATA_HOME=/home/cemu/.local/share
 	--env XDG_RUNTIME_DIR=/tmp/cemu-runtime
 	--env MESA_SHADER_CACHE_DIR=/home/cemu/.cache/Cemu/mesa_shader_cache
-	--env WEBKIT_DISABLE_DMABUF_RENDERER=1
 	--env "GDK_BACKEND=${gdk_backend}"
 	--volume "${data_dir}:/home/cemu/.local/share/Cemu"
 	--volume "${config_dir}:/home/cemu/.config/Cemu"
 	--volume "${cache_dir}:/home/cemu/.cache/Cemu"
 )
 
-if [[ -n "${WAYLAND_DISPLAY:-}" && -S "${runtime_dir}/${WAYLAND_DISPLAY}" ]]; then
+if [[ "${frontend}" == "wx" && "${gdk_backend}" == "wayland" &&
+	-n "${WAYLAND_DISPLAY:-}" && -S "${runtime_dir}/${WAYLAND_DISPLAY}" ]]; then
 	run_args+=(
 		--env "WAYLAND_DISPLAY=${WAYLAND_DISPLAY}"
 		--volume "${runtime_dir}/${WAYLAND_DISPLAY}:/tmp/cemu-runtime/${WAYLAND_DISPLAY}"

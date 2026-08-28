@@ -24,7 +24,6 @@
 #include <commdlg.h>
 #include <imm.h>
 #include <shellapi.h>
-#include <webview/webview.h>
 
 namespace WebFrontend
 {
@@ -522,6 +521,51 @@ namespace WebFrontend
 			{
 				return m_window;
 			}
+			void* GetBrowserParentWindow() const override
+			{
+				return m_window;
+			}
+			Host::RenderRegionBounds GetBrowserBounds() const override
+			{
+				RECT area{};
+				if (m_window)
+					GetClientRect(m_window, &area);
+				return {0, 0,
+						static_cast<std::int32_t>(std::max<LONG>(0, area.right - area.left)),
+						static_cast<std::int32_t>(std::max<LONG>(0, area.bottom - area.top))};
+			}
+			double GetBrowserDpiScale() const override
+			{
+				return m_window ? static_cast<double>(GetDpiForWindow(m_window)) / 96.0 : 1.0;
+			}
+			void AttachBrowser(void* widget) override
+			{
+				auto browserWindow = static_cast<HWND>(widget);
+				if (!browserWindow || !IsWindow(browserWindow))
+					throw std::invalid_argument("browser widget must be a valid HWND");
+				if (GetParent(browserWindow) != m_window)
+					throw std::logic_error("browser widget is not owned by the native main window");
+				m_browserWindow = browserWindow;
+				ResizeBrowser();
+			}
+			void ResizeBrowser() override
+			{
+				if (!m_window || !m_browserWindow || !IsWindow(m_browserWindow))
+					return;
+				const auto bounds = GetBrowserBounds();
+				MoveWindow(m_browserWindow, bounds.x, bounds.y, std::max(1, bounds.width),
+						   std::max(1, bounds.height), TRUE);
+			}
+			void FocusBrowser() override
+			{
+				if (m_browserWindow && IsWindow(m_browserWindow))
+					SetFocus(m_browserWindow);
+			}
+			void DetachBrowser(void* widget) override
+			{
+				if (widget == m_browserWindow)
+					m_browserWindow = nullptr;
+			}
 			Host::NativeWindowHandle GetMainWindowHandle() const override
 			{
 				return {Host::NativeWindowBackend::Windows, nullptr, m_window};
@@ -557,18 +601,6 @@ namespace WebFrontend
 				}
 				return metrics;
 			}
-			void AttachWebView(void* widget) override
-			{
-				m_webView = static_cast<HWND>(widget);
-				if (!m_webView || GetParent(m_webView) != m_window)
-					throw std::logic_error("webview widget is not owned by the native main window");
-				ResizeChildren();
-			}
-			void PrepareWebViewDestroy(void* widget) override
-			{
-				if (widget == m_webView)
-					m_webView = nullptr;
-			}
 			void Show() override
 			{
 				ShowWindow(m_window, SW_SHOW);
@@ -586,11 +618,11 @@ namespace WebFrontend
 			void ShowLibrary() override
 			{
 				m_runtimeOverlay = false;
-				if (m_webView)
+				if (m_browserWindow)
 				{
-					EnableWindow(m_webView, TRUE);
-					ShowWindow(m_webView, SW_SHOW);
-					SetFocus(m_webView);
+					EnableWindow(m_browserWindow, TRUE);
+					ShowWindow(m_browserWindow, SW_SHOW);
+					FocusBrowser();
 				}
 			}
 			Host::IRenderRegion& CreateMainRenderRegion() override
@@ -612,10 +644,10 @@ namespace WebFrontend
 			{
 				auto& region = CreateMainRenderRegion();
 				region.SetVisible(true);
-				if (m_webView)
+				if (m_browserWindow)
 				{
-					EnableWindow(m_webView, FALSE);
-					ShowWindow(m_webView, SW_HIDE);
+					EnableWindow(m_browserWindow, FALSE);
+					ShowWindow(m_browserWindow, SW_HIDE);
 				}
 				region.RequestFocus();
 			}
@@ -1017,6 +1049,7 @@ namespace WebFrontend
 					return 0;
 				case WM_NCDESTROY:
 					SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+					self->m_browserWindow = nullptr;
 					self->m_window = nullptr;
 					break;
 				}
@@ -1027,10 +1060,7 @@ namespace WebFrontend
 			{
 				if (!m_window)
 					return;
-				RECT area{};
-				GetClientRect(m_window, &area);
-				if (m_webView)
-					MoveWindow(m_webView, 0, 0, area.right, area.bottom, TRUE);
+				ResizeBrowser();
 			}
 
 			void NotifyMetrics()
@@ -1040,7 +1070,7 @@ namespace WebFrontend
 			}
 
 			HWND m_window{};
-			HWND m_webView{};
+			HWND m_browserWindow{};
 			bool m_runtimeOverlay{};
 			bool m_runtimeOverlayInteractive{};
 			HWND m_textInput{};
