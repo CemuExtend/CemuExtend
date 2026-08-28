@@ -158,13 +158,14 @@ namespace
 		return elf;
 	}
 
-	void Add(zip_t* archive, const char* name, const void* data, std::size_t size)
+	zip_int64_t Add(zip_t* archive, const char* name, const void* data, std::size_t size)
 	{
 		auto* source = zip_source_buffer(archive, data, size, 0);
 		CHECK(source != nullptr);
 		const auto index = zip_file_add(archive, name, source, ZIP_FL_ENC_UTF_8);
 		CHECK(index >= 0);
 		CHECK(zip_set_file_compression(archive, index, ZIP_CM_DEFLATE, 9) == 0);
+		return index;
 	}
 
 	using Entry = std::pair<std::string, std::vector<std::byte>>;
@@ -184,6 +185,22 @@ namespace
 		CHECK(archive != nullptr);
 		for (const auto& [name, data] : entries)
 			Add(archive, name.c_str(), data.data(), data.size());
+		CHECK(zip_close(archive) == 0);
+	}
+
+	void WriteAttributedUiPackage(const std::filesystem::path& path, std::string_view manifest,
+								  zip_uint8_t operatingSystem, zip_uint32_t attributes)
+	{
+		std::filesystem::remove(path);
+		int error{};
+		auto* archive = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_EXCL, &error);
+		CHECK(archive != nullptr);
+		Add(archive, "manifest.json", manifest.data(), manifest.size());
+		const auto wups = BuildWupsTestImage();
+		Add(archive, "plugin.wps", wups.data(), wups.size());
+		const auto index = Add(archive, "ui/main/index.html", "target", 6);
+		Add(archive, "ui/overlay/index.html", "html", 4);
+		CHECK(zip_file_set_external_attributes(archive, index, 0, operatingSystem, attributes) == 0);
 		CHECK(zip_close(archive) == 0);
 	}
 
@@ -256,6 +273,40 @@ namespace
  "mod_id":"org.example.native.v2",
  "title_ids":["0005000012345678"],
  "requested_permissions":["read"]
+})";
+
+	constexpr std::string_view kWebUiManifest = R"({
+ "package_version":4,
+ "api_version":2,
+ "execution_mode":"trusted_native",
+ "payload":{"format":"wups","path":"plugin.wps"},
+ "scope":{"type":"aroma_native"},
+ "mod_id":"org.example.web-ui",
+ "title_ids":["0005000012345678"],
+ "requested_permissions":["ui","network"],
+ "web_ui":{
+   "bridge_version":1,
+   "views":{
+     "main":{
+       "entry":"ui/main/index.html",
+       "single_instance":true,
+       "modes":["window"],
+       "window":{"title":"AquaU Web UI","width":960,"height":540,"min_width":480,"min_height":270,"resizable":true}
+     },
+     "overlay":{
+       "entry":"ui/overlay/index.html",
+       "modes":["overlay"],
+       "overlay":{"surfaces":["tv","drc"],"transparent":true,"interactive":false}
+     }
+   },
+   "network":{
+     "connect":["https://API.example.com","wss://stream.example.com:443"],
+     "resources":["https://cdn.example.com"],
+     "credentials":false,
+     "persistent_storage":false,
+     "allow_private_network":false
+   }
+ }
 })";
 
 	void WritePackage(const std::filesystem::path& path, bool unsafe,
@@ -529,6 +580,132 @@ namespace
 		std::filesystem::remove(path);
 	}
 
+	void TestWebUiV4Package()
+	{
+		std::string error;
+		auto path = PackagePath("web-ui-v4");
+		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("<!doctype html><title>AquaU</title>")},
+						{"ui/main/assets/app.js", Bytes("window.ready = true;")},
+						{"ui/overlay/index.html", Bytes("<!doctype html><canvas></canvas>")}});
+		auto package = CemodPackage::Inspect(path, error);
+		CHECK(package.has_value());
+		CHECK(package->manifest.packageVersion == 4);
+		CHECK((package->manifest.requestedPermissions & 64U) != 0);
+		CHECK(package->manifest.webUi.has_value());
+		CHECK(package->manifest.webUi->bridgeVersion == 1);
+		CHECK(package->manifest.webUi->views.size() == 2);
+		CHECK(package->manifest.webUi->views.at("main").singleInstance);
+		CHECK(package->manifest.webUi->views.at("main").window->width == 960);
+		CHECK(package->manifest.webUi->views.at("overlay").overlay->surfaces.size() == 2);
+		CHECK(package->manifest.webUi->network.connect ==
+			  std::vector<std::string>({"https://api.example.com:443", "wss://stream.example.com:443"}));
+		CHECK(package->uiAssets.size() == 3);
+		CHECK(package->uiAssets.contains("ui/main/index.html"));
+		CHECK(package->uiAssets.contains("ui/main/assets/app.js"));
+		std::filesystem::remove(path);
+
+		path = PackagePath("web-ui-missing-entry");
+		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("entry is missing") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::string missingPermission(kWebUiManifest);
+		const auto permission = missingPermission.find("\"ui\",");
+		CHECK(permission != std::string::npos);
+		missingPermission.erase(permission, std::string_view("\"ui\",").size());
+		path = PackagePath("web-ui-missing-permission");
+		WriteEntries(path, {{"manifest.json", Bytes(missingPermission)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("requires ui permission") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::string oldVersion(kWebUiManifest);
+		oldVersion.replace(oldVersion.find("\"package_version\":4"),
+					   std::string_view("\"package_version\":4").size(), "\"package_version\":3");
+		path = PackagePath("web-ui-old-version");
+		WriteEntries(path, {{"manifest.json", Bytes(oldVersion)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("package_version 4") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::string invalidOrigin(kWebUiManifest);
+		invalidOrigin.replace(invalidOrigin.find("https://API.example.com"),
+						  std::string_view("https://API.example.com").size(), "http://api.example.com");
+		path = PackagePath("web-ui-invalid-origin");
+		WriteEntries(path, {{"manifest.json", Bytes(invalidOrigin)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("invalid origin") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::string emptyPort(kWebUiManifest);
+		emptyPort.replace(emptyPort.find("https://API.example.com"),
+					  std::string_view("https://API.example.com").size(), "https://api.example.com:");
+		path = PackagePath("web-ui-empty-port");
+		WriteEntries(path, {{"manifest.json", Bytes(emptyPort)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("invalid origin") != std::string::npos);
+		std::filesystem::remove(path);
+
+		path = PackagePath("web-ui-noncanonical-entry");
+		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui//main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		std::filesystem::remove(path);
+
+		path = PackagePath("web-ui-unicode-entry");
+		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")},
+						{"ui/caf\xc3\xa9.css", Bytes("css")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("unsafe entry name") != std::string::npos);
+		std::filesystem::remove(path);
+
+		path = PackagePath("web-ui-non-unix-symlink");
+		WriteAttributedUiPackage(path, kWebUiManifest, ZIP_OPSYS_DOS, 0120777U << 16U);
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("non-regular entry") != std::string::npos);
+		std::filesystem::remove(path);
+
+		path = PackagePath("web-ui-device-entry");
+		WriteAttributedUiPackage(path, kWebUiManifest, ZIP_OPSYS_UNIX, 0020666U << 16U);
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("non-regular entry") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::vector<Entry> tooMany{{"manifest.json", Bytes(kWebUiManifest)},
+								   {"plugin.wps", BuildWupsTestImage()},
+								   {"ui/main/index.html", Bytes("html")},
+								   {"ui/overlay/index.html", Bytes("html")}};
+		for (std::size_t index = 0; index < CemodPackage::kMaximumUiFiles - 1; ++index)
+			tooMany.emplace_back("ui/assets/" + std::to_string(index) + ".css", Bytes(""));
+		path = PackagePath("web-ui-too-many-files");
+		WriteEntries(path, tooMany);
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("count limit") != std::string::npos);
+		std::filesystem::remove(path);
+	}
+
 } // namespace
 
 int main()
@@ -554,5 +731,6 @@ int main()
 	TestV3Mem2ExpansionRequest();
 	TestV3LateWupsReleasePolicy();
 	TestPayloadAndZipRejections();
+	TestWebUiV4Package();
 	return 0;
 }

@@ -2,6 +2,7 @@
 
 #include "Cemu/CemuExtend/Formats/CemodPackage.h"
 
+#include <boost/asio/ip/address.hpp>
 #include <openssl/evp.h>
 #include <rapidjson/document.h>
 #include <zip.h>
@@ -9,6 +10,7 @@
 #include <charconv>
 #include <array>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -55,6 +57,7 @@ namespace
 	{
 		if (name.empty() || name.size() > 255 || name.front() == '/' || name.front() == '\\' ||
 			name.find('\\') != std::string_view::npos || name.find('\0') != std::string_view::npos ||
+			!std::ranges::all_of(name, [](unsigned char character) { return character < 0x80; }) ||
 			(name.size() >= 2 && std::isalpha(static_cast<unsigned char>(name[0])) && name[1] == ':'))
 			return std::nullopt;
 		std::string result;
@@ -79,6 +82,368 @@ namespace
 			start = end + 1;
 		}
 		return result.empty() ? std::nullopt : std::optional<std::string>(std::move(result));
+	}
+
+	std::string AsciiLower(std::string_view value)
+	{
+		std::string result(value);
+		std::ranges::transform(result, result.begin(), [](unsigned char character) {
+			return static_cast<char>(std::tolower(character));
+		});
+		return result;
+	}
+
+	bool Identifier(std::string_view value, std::size_t maximum = 128)
+	{
+		return !value.empty() && value.size() <= maximum &&
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return std::isalnum(character) || character == '_' || character == '.' || character == '-';
+			   });
+	}
+
+	bool SafeText(std::string_view value, std::size_t maximum)
+	{
+		return !value.empty() && value.size() <= maximum &&
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return character >= 0x20 || character == '\t' || character == '\n' || character == '\r';
+			   });
+	}
+
+	bool HasOnlyMembers(const rapidjson::Value& object,
+						std::initializer_list<std::string_view> allowed)
+	{
+		if (!object.IsObject())
+			return false;
+		for (auto member = object.MemberBegin(); member != object.MemberEnd(); ++member)
+		{
+			const std::string_view name(member->name.GetString(), member->name.GetStringLength());
+			if (std::ranges::find(allowed, name) == allowed.end())
+				return false;
+		}
+		return true;
+	}
+
+	std::optional<std::string> CanonicalOrigin(std::string_view value,
+											 std::initializer_list<std::string_view> allowedSchemes)
+	{
+		if (value.empty() || value.size() > 2048 || value.find('\\') != std::string_view::npos ||
+			!std::ranges::all_of(value, [](unsigned char character) {
+				return character >= 0x20 && character < 0x7f;
+			}))
+			return std::nullopt;
+		const auto separator = value.find("://");
+		if (separator == std::string_view::npos)
+			return std::nullopt;
+		const auto scheme = value.substr(0, separator);
+		if (std::ranges::find(allowedSchemes, scheme) == allowedSchemes.end())
+			return std::nullopt;
+		auto authority = value.substr(separator + 3);
+		if (authority.empty() || authority.find_first_of("/?#@") != std::string_view::npos)
+			return std::nullopt;
+
+		std::string_view host;
+		std::string_view portText;
+		bool bracketed{};
+		if (authority.front() == '[')
+		{
+			const auto close = authority.find(']');
+			if (close == std::string_view::npos)
+				return std::nullopt;
+			host = authority.substr(1, close - 1);
+			bracketed = true;
+			if (close + 1 < authority.size())
+			{
+				if (authority[close + 1] != ':')
+					return std::nullopt;
+				portText = authority.substr(close + 2);
+			}
+		}
+		else
+		{
+			const auto colon = authority.rfind(':');
+			if (colon != std::string_view::npos)
+			{
+				if (authority.find(':') != colon)
+					return std::nullopt;
+				host = authority.substr(0, colon);
+				portText = authority.substr(colon + 1);
+			}
+			else
+			{
+				host = authority;
+			}
+		}
+		if (host.empty())
+			return std::nullopt;
+
+		std::uint32_t port = 443;
+		if (!portText.empty())
+		{
+			const auto parsed = std::from_chars(portText.data(), portText.data() + portText.size(), port);
+			if (parsed.ec != std::errc{} || parsed.ptr != portText.data() + portText.size() ||
+				port == 0 || port > std::numeric_limits<std::uint16_t>::max())
+				return std::nullopt;
+		}
+		else if (authority.ends_with(':'))
+		{
+			return std::nullopt;
+		}
+
+		const auto lowerHost = AsciiLower(host);
+		boost::system::error_code addressError;
+		const auto address = boost::asio::ip::make_address(lowerHost, addressError);
+		std::string hostIdentity;
+		if (!addressError)
+		{
+			if (address.is_v6() != bracketed)
+				return std::nullopt;
+			hostIdentity = address.is_v6() ? '[' + address.to_string() + ']' : address.to_string();
+		}
+		else
+		{
+			if (bracketed || lowerHost.size() > 253 || lowerHost.starts_with('.') ||
+				lowerHost.ends_with('.') || lowerHost.find("..") != std::string::npos)
+				return std::nullopt;
+			std::size_t start{};
+			while (start < lowerHost.size())
+			{
+				const auto end = lowerHost.find('.', start);
+				const auto label = lowerHost.substr(start, end == std::string::npos ? lowerHost.size() - start : end - start);
+				if (label.empty() || label.size() > 63 || label.front() == '-' || label.back() == '-' ||
+					!std::ranges::all_of(label, [](unsigned char character) {
+						return std::isalnum(character) || character == '-';
+					}))
+					return std::nullopt;
+				if (end == std::string::npos)
+					break;
+				start = end + 1;
+			}
+			hostIdentity = lowerHost;
+		}
+		return fmt::format("{}://{}:{}", scheme, hostIdentity, port);
+	}
+
+	bool ParseWebUi(const rapidjson::Value& value, std::uint32_t requestedPermissions,
+					CemodWebUi& output, std::string& error)
+	{
+		if (!HasOnlyMembers(value, {"bridge_version", "views", "network"}))
+		{
+			error = "web_ui contains an unknown field";
+			return false;
+		}
+		if (!value.HasMember("bridge_version") || !value["bridge_version"].IsUint() ||
+			value["bridge_version"].GetUint() != 1)
+		{
+			error = "web_ui.bridge_version must be 1";
+			return false;
+		}
+		if (!value.HasMember("views") || !value["views"].IsObject() ||
+			value["views"].MemberCount() == 0 || value["views"].MemberCount() > 16)
+		{
+			error = "web_ui.views must contain between 1 and 16 views";
+			return false;
+		}
+		output.bridgeVersion = 1;
+		for (auto member = value["views"].MemberBegin(); member != value["views"].MemberEnd(); ++member)
+		{
+			const std::string viewId(member->name.GetString(), member->name.GetStringLength());
+			const auto& viewValue = member->value;
+			if (!Identifier(viewId) || viewId.starts_with("cemu.") ||
+				!HasOnlyMembers(viewValue, {"entry", "single_instance", "modes", "window", "overlay"}) ||
+				!viewValue.HasMember("entry") || !viewValue["entry"].IsString())
+			{
+				error = "web_ui contains an invalid view";
+				return false;
+			}
+			CemodWebUiView view;
+			view.entry.assign(viewValue["entry"].GetString(), viewValue["entry"].GetStringLength());
+			const auto normalizedEntry = NormalizedEntryName(view.entry);
+			if (!normalizedEntry || *normalizedEntry != AsciiLower(view.entry) ||
+				!view.entry.starts_with("ui/") || !AsciiLower(view.entry).ends_with(".html"))
+			{
+				error = fmt::format("web_ui view '{}' entry must be a safe HTML file below ui/", viewId);
+				return false;
+			}
+			if (viewValue.HasMember("single_instance"))
+			{
+				if (!viewValue["single_instance"].IsBool())
+				{
+					error = fmt::format("web_ui view '{}' single_instance must be boolean", viewId);
+					return false;
+				}
+				view.singleInstance = viewValue["single_instance"].GetBool();
+			}
+			if (!viewValue.HasMember("modes") || !viewValue["modes"].IsArray() ||
+				viewValue["modes"].Empty())
+			{
+				error = fmt::format("web_ui view '{}' modes are invalid", viewId);
+				return false;
+			}
+			for (const auto& mode : viewValue["modes"].GetArray())
+			{
+				if (!mode.IsString())
+				{
+					error = fmt::format("web_ui view '{}' modes are invalid", viewId);
+					return false;
+				}
+				const std::string_view name(mode.GetString(), mode.GetStringLength());
+				if (name == "window" && !view.windowMode)
+					view.windowMode = true;
+				else if (name == "overlay" && !view.overlayMode)
+					view.overlayMode = true;
+				else
+				{
+					error = fmt::format("web_ui view '{}' modes are invalid", viewId);
+					return false;
+				}
+			}
+			if (view.windowMode != viewValue.HasMember("window") ||
+				view.overlayMode != viewValue.HasMember("overlay"))
+			{
+				error = fmt::format("web_ui view '{}' mode descriptors do not match modes", viewId);
+				return false;
+			}
+			if (view.windowMode)
+			{
+				const auto& windowValue = viewValue["window"];
+				if (!HasOnlyMembers(windowValue, {"title", "width", "height", "min_width", "min_height", "resizable"}))
+				{
+					error = fmt::format("web_ui view '{}' window descriptor is invalid", viewId);
+					return false;
+				}
+				CemodWebUiWindow window;
+				if (windowValue.HasMember("title"))
+				{
+					if (!windowValue["title"].IsString() ||
+						!SafeText({windowValue["title"].GetString(), windowValue["title"].GetStringLength()}, 256))
+					{
+						error = fmt::format("web_ui view '{}' window title is invalid", viewId);
+						return false;
+					}
+					window.title = std::string(windowValue["title"].GetString(), windowValue["title"].GetStringLength());
+				}
+				auto dimension = [&](const char* name, std::optional<std::uint32_t>& destination) {
+					if (!windowValue.HasMember(name))
+						return true;
+					if (!windowValue[name].IsUint() || windowValue[name].GetUint() == 0 ||
+						windowValue[name].GetUint() > 16384)
+						return false;
+					destination = windowValue[name].GetUint();
+					return true;
+				};
+				if (!dimension("width", window.width) || !dimension("height", window.height) ||
+					!dimension("min_width", window.minimumWidth) || !dimension("min_height", window.minimumHeight) ||
+					(window.width && window.minimumWidth && *window.minimumWidth > *window.width) ||
+					(window.height && window.minimumHeight && *window.minimumHeight > *window.height) ||
+					(windowValue.HasMember("resizable") && !windowValue["resizable"].IsBool()))
+				{
+					error = fmt::format("web_ui view '{}' window descriptor is invalid", viewId);
+					return false;
+				}
+				if (windowValue.HasMember("resizable"))
+					window.resizable = windowValue["resizable"].GetBool();
+				view.window = std::move(window);
+			}
+			if (view.overlayMode)
+			{
+				const auto& overlayValue = viewValue["overlay"];
+				if (!HasOnlyMembers(overlayValue, {"surfaces", "transparent", "interactive"}) ||
+					!overlayValue.HasMember("surfaces") || !overlayValue["surfaces"].IsArray() ||
+					overlayValue["surfaces"].Empty())
+				{
+					error = fmt::format("web_ui view '{}' overlay descriptor is invalid", viewId);
+					return false;
+				}
+				CemodWebUiOverlay overlay;
+				for (const auto& surface : overlayValue["surfaces"].GetArray())
+				{
+					if (!surface.IsString())
+					{
+						error = fmt::format("web_ui view '{}' overlay surfaces are invalid", viewId);
+						return false;
+					}
+					const std::string_view name(surface.GetString(), surface.GetStringLength());
+					const auto parsed = name == "tv" ? std::optional{CemodWebUiSurface::Tv} :
+						name == "drc" ? std::optional{CemodWebUiSurface::Drc} : std::nullopt;
+					if (!parsed || std::ranges::find(overlay.surfaces, *parsed) != overlay.surfaces.end())
+					{
+						error = fmt::format("web_ui view '{}' overlay surfaces are invalid", viewId);
+						return false;
+					}
+					overlay.surfaces.push_back(*parsed);
+				}
+				for (const auto* name : {"transparent", "interactive"})
+					if (overlayValue.HasMember(name) && !overlayValue[name].IsBool())
+					{
+						error = fmt::format("web_ui view '{}' overlay {} must be boolean", viewId, name);
+						return false;
+					}
+				if (overlayValue.HasMember("transparent"))
+					overlay.transparent = overlayValue["transparent"].GetBool();
+				if (overlayValue.HasMember("interactive"))
+					overlay.interactive = overlayValue["interactive"].GetBool();
+				view.overlay = std::move(overlay);
+			}
+			if (!output.views.emplace(viewId, std::move(view)).second)
+			{
+				error = "web_ui contains a duplicate view ID";
+				return false;
+			}
+		}
+
+		if (value.HasMember("network"))
+		{
+			const auto& network = value["network"];
+			if (!HasOnlyMembers(network, {"connect", "resources", "credentials", "persistent_storage", "allow_private_network"}))
+			{
+				error = "web_ui.network contains an unknown field";
+				return false;
+			}
+			auto origins = [&](const char* name, std::initializer_list<std::string_view> schemes,
+							   std::vector<std::string>& destination) {
+				if (!network.HasMember(name))
+					return true;
+				if (!network[name].IsArray() || network[name].Size() > 128)
+					return false;
+				for (const auto& origin : network[name].GetArray())
+				{
+					if (!origin.IsString())
+						return false;
+					const auto canonical = CanonicalOrigin(
+						{origin.GetString(), origin.GetStringLength()}, schemes);
+					if (!canonical || std::ranges::find(destination, *canonical) != destination.end())
+						return false;
+					destination.push_back(*canonical);
+				}
+				return true;
+			};
+			if (!origins("connect", {"https", "wss"}, output.network.connect) ||
+				!origins("resources", {"https"}, output.network.resources))
+			{
+				error = "web_ui.network contains an invalid origin";
+				return false;
+			}
+			for (const auto* name : {"credentials", "persistent_storage", "allow_private_network"})
+				if (network.HasMember(name) && !network[name].IsBool())
+				{
+					error = fmt::format("web_ui.network.{} must be boolean", name);
+					return false;
+				}
+			if (network.HasMember("credentials"))
+				output.network.credentials = network["credentials"].GetBool();
+			if (network.HasMember("persistent_storage"))
+				output.network.persistentStorage = network["persistent_storage"].GetBool();
+			if (network.HasMember("allow_private_network"))
+				output.network.allowPrivateNetwork = network["allow_private_network"].GetBool();
+		}
+		const bool usesNetwork = !output.network.connect.empty() || !output.network.resources.empty() ||
+			output.network.credentials || output.network.allowPrivateNetwork;
+		if (usesNetwork && (requestedPermissions & 32U) == 0)
+		{
+			error = "web_ui network access requires the network permission";
+			return false;
+		}
+		return true;
 	}
 
 	bool ReadEntry(zip_t* archive, zip_uint64_t index, std::uint64_t maximum,
@@ -173,7 +538,7 @@ namespace
 		if (document.HasParseError() || !document.IsObject() ||
 			!document.HasMember("package_version") || !document["package_version"].IsUint() ||
 			(document["package_version"].GetUint() != 1 && document["package_version"].GetUint() != 2 &&
-			 document["package_version"].GetUint() != 3) ||
+			 document["package_version"].GetUint() != 3 && document["package_version"].GetUint() != 4) ||
 			!document.HasMember("api_version") ||
 			!document["api_version"].IsUint() || document["api_version"].GetUint() != 2 ||
 			!document.HasMember("execution_mode") || !document["execution_mode"].IsString() ||
@@ -199,7 +564,7 @@ namespace
 		{
 			if (!document.HasMember("payload") || !document["payload"].IsObject())
 			{
-				error = "package_version 2 or 3 requires a payload descriptor";
+				error = "package_version 2, 3 or 4 requires a payload descriptor";
 				return false;
 			}
 			const auto& payload = document["payload"];
@@ -303,6 +668,7 @@ namespace
 			{"clipboard", 8U},
 			{"capture", 16U},
 			{"network", 32U},
+			{"ui", 64U},
 		};
 		for (const auto& value : document["requested_permissions"].GetArray())
 		{
@@ -319,6 +685,24 @@ namespace
 				return false;
 			}
 			manifest.requestedPermissions |= found->second;
+		}
+		if (manifest.packageVersion < 4 &&
+			((manifest.requestedPermissions & 64U) != 0 || document.HasMember("web_ui")))
+		{
+			error = "ui permission and web_ui require package_version 4";
+			return false;
+		}
+		if (manifest.packageVersion == 4)
+		{
+			if ((manifest.requestedPermissions & 64U) == 0 || !document.HasMember("web_ui"))
+			{
+				error = "package_version 4 requires ui permission and web_ui";
+				return false;
+			}
+			CemodWebUi webUi;
+			if (!ParseWebUi(document["web_ui"], manifest.requestedPermissions, webUi, error))
+				return false;
+			manifest.webUi = std::move(webUi);
 		}
 		if (manifest.packageVersion >= 2 && document.HasMember("scope"))
 		{
@@ -785,7 +1169,7 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 	}
 	std::error_code filesystemError;
 	const auto packageSize = std::filesystem::file_size(path, filesystemError);
-	if (filesystemError || packageSize == 0 || packageSize > kMaximumExpandedBytes)
+	if (filesystemError || packageSize == 0 || packageSize > kMaximumArchiveBytes)
 	{
 		error = "package file has an invalid size";
 		return std::nullopt;
@@ -798,7 +1182,7 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 		return std::nullopt;
 	}
 	const auto count = zip_get_num_entries(archive.get(), 0);
-	if (count <= 0 || count > 256)
+	if (count <= 0 || static_cast<std::uint64_t>(count) > kMaximumPackageEntries)
 	{
 		error = "package contains an invalid number of entries";
 		return std::nullopt;
@@ -806,6 +1190,8 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 	std::map<std::string, std::vector<std::byte>> entries;
 	std::set<std::string> normalizedNames;
 	std::uint64_t expandedBytes{};
+	std::size_t uiFiles{};
+	std::uint64_t uiBytes{};
 	static const std::set<std::string_view> allowedEntries{
 		"manifest.json", "mod.elf", "plugin.wps", "public_key.ed25519", "signature.ed25519"};
 	for (zip_int64_t index = 0; index < count; ++index)
@@ -822,18 +1208,46 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 			error = "package contains a duplicate normalized entry name";
 			return std::nullopt;
 		}
-		if (!allowedEntries.contains(rawName))
+		const std::string_view entryName(rawName);
+		const bool uiEntry = entryName.starts_with("ui/");
+		if ((!allowedEntries.contains(entryName) && !uiEntry) ||
+			(uiEntry && *normalized != AsciiLower(entryName)))
 		{
 			error = fmt::format("package contains unknown mandatory entry '{}'", rawName);
 			return std::nullopt;
 		}
+		zip_uint8_t operatingSystem{};
+		zip_uint32_t attributes{};
+		if (zip_file_get_external_attributes(archive.get(), index, ZIP_FL_UNCHANGED,
+										 &operatingSystem, &attributes) != 0)
+		{
+			error = "package entry attributes cannot be read";
+			return std::nullopt;
+		}
+		const auto fileType = (attributes >> 16U) & 0170000U;
+		if (fileType != 0 && fileType != 0100000U)
+		{
+			error = "package contains a non-regular entry";
+			return std::nullopt;
+		}
+		if (uiEntry && ++uiFiles > kMaximumUiFiles)
+		{
+			error = "package UI files exceed the count limit";
+			return std::nullopt;
+		}
 		std::vector<std::byte> data;
-		if (!ReadEntry(archive.get(), index, kMaximumExpandedBytes - expandedBytes, data))
+		const auto maximumEntry = uiEntry ?
+			std::min({kMaximumExpandedBytes - expandedBytes, kMaximumUiFileBytes,
+					  kMaximumUiBytes - uiBytes}) :
+			kMaximumExpandedBytes - expandedBytes;
+		if (!ReadEntry(archive.get(), index, maximumEntry, data))
 		{
 			error = "package entry cannot be read or exceeds the expansion limit";
 			return std::nullopt;
 		}
 		expandedBytes += data.size();
+		if (uiEntry)
+			uiBytes += data.size();
 		if (!entries.emplace(rawName, std::move(data)).second)
 		{
 			error = "package contains a duplicate entry name";
@@ -850,6 +1264,30 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 	if (!ParseManifest(manifestEntry->second, result.manifest, error))
 	{
 		return std::nullopt;
+	}
+	const auto hasUiEntries = std::ranges::any_of(entries, [](const auto& entry) {
+		return entry.first.starts_with("ui/");
+	});
+	if (result.manifest.packageVersion != 4 && hasUiEntries)
+	{
+		error = "UI files require package_version 4";
+		return std::nullopt;
+	}
+	if (result.manifest.packageVersion == 4)
+	{
+		if (!hasUiEntries)
+		{
+			error = "package_version 4 package contains no UI files";
+			return std::nullopt;
+		}
+		for (const auto& [viewId, view] : result.manifest.webUi->views)
+		{
+			if (!entries.contains(view.entry))
+			{
+				error = fmt::format("web_ui view '{}' entry is missing from the package", viewId);
+				return std::nullopt;
+			}
+		}
 	}
 	const auto elfEntry = entries.find("mod.elf");
 	const auto wpsEntry = entries.find("plugin.wps");
@@ -940,6 +1378,9 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 		const auto digest = Hash(packageBytes);
 		result.principal = "sha256:" + Hex(digest);
 	}
+	for (auto& [name, data] : entries)
+		if (name.starts_with("ui/"))
+			result.uiAssets.emplace(name, std::move(data));
 	return result;
 }
 

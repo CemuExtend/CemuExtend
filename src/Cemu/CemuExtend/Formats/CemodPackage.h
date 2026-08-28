@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -62,6 +63,56 @@ struct CemodNativePermissions
 	std::vector<std::string> modules;
 };
 
+enum class CemodWebUiSurface : std::uint8_t
+{
+	Tv,
+	Drc,
+};
+
+struct CemodWebUiWindow
+{
+	std::optional<std::string> title;
+	std::optional<std::uint32_t> width;
+	std::optional<std::uint32_t> height;
+	std::optional<std::uint32_t> minimumWidth;
+	std::optional<std::uint32_t> minimumHeight;
+	std::optional<bool> resizable;
+};
+
+struct CemodWebUiOverlay
+{
+	std::vector<CemodWebUiSurface> surfaces;
+	bool transparent{};
+	bool interactive{};
+};
+
+struct CemodWebUiView
+{
+	std::string entry;
+	bool singleInstance{};
+	bool windowMode{};
+	bool overlayMode{};
+	std::optional<CemodWebUiWindow> window;
+	std::optional<CemodWebUiOverlay> overlay;
+};
+
+struct CemodWebUiNetwork
+{
+	// Canonical origins always include a lower-case scheme/host and effective port.
+	std::vector<std::string> connect;
+	std::vector<std::string> resources;
+	bool credentials{};
+	bool persistentStorage{};
+	bool allowPrivateNetwork{};
+};
+
+struct CemodWebUi
+{
+	std::uint32_t bridgeVersion{};
+	std::map<std::string, CemodWebUiView> views;
+	CemodWebUiNetwork network;
+};
+
 struct CemodManifest
 {
 	std::uint32_t packageVersion{};
@@ -81,12 +132,18 @@ struct CemodManifest
 	std::uint32_t timeMicrosecondsPerFrame{};
 	std::uint32_t mem2ExpansionBytes{};
 	std::string entrypoint;
+	std::optional<CemodWebUi> webUi;
 };
 
 struct CemodPackage
 {
-	static constexpr std::uint64_t kMaximumExpandedBytes = 64ULL * 1024ULL * 1024ULL;
+	static constexpr std::uint64_t kMaximumArchiveBytes = 97ULL * 1024ULL * 1024ULL;
+	static constexpr std::uint64_t kMaximumExpandedBytes = 97ULL * 1024ULL * 1024ULL;
 	static constexpr std::uint64_t kMaximumPayloadBytes = 64ULL * 1024ULL * 1024ULL;
+	static constexpr std::uint64_t kMaximumUiFileBytes = 16ULL * 1024ULL * 1024ULL;
+	static constexpr std::uint64_t kMaximumUiBytes = 32ULL * 1024ULL * 1024ULL;
+	static constexpr std::size_t kMaximumUiFiles = 512;
+	static constexpr std::size_t kMaximumPackageEntries = kMaximumUiFiles + 5;
 	static constexpr std::uint64_t kMaximumCompressionRatio = 200;
 
 	CemodManifest manifest;
@@ -95,6 +152,7 @@ struct CemodPackage
 	// Loaded ELF packages mirror payload here; new code must use PayloadBytes().
 	std::vector<std::byte> elf;
 	std::optional<WupsInspection> wups;
+	std::map<std::string, std::vector<std::byte>> uiAssets;
 	std::string principal;
 	std::uint64_t targetTitleId{};
 	bool signedPackage{};
