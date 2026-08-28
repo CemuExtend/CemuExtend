@@ -1062,9 +1062,9 @@ namespace coreinit
 
 	bool OSSetThreadRunQuantum(OSThread_t* thread, uint32 quantum)
 	{
-		if (!thread || !thread->IsValidMagic())
-			return false;
-		thread->quantumTicks = quantum == 0 ? ppcThreadQuantum : quantum;
+		// if (!thread || !thread->IsValidMagic())
+		//     return false;
+		// thread->quantumTicks = quantum == 0 ? ppcThreadQuantum : quantum;
 		return true;
 	}
 
