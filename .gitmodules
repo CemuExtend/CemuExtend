@@ -27,7 +27,7 @@
 	url = https://github.com/fujitsu/xbyak_aarch64
 [submodule "dependencies/libcemuextend"]
 	path = dependencies/libcemuextend
-	url = ../libcemuextend.git
+	url = git@github.com:CemuExtend/libcemuextend.git
 [submodule "dependencies/webview"]
 	path = dependencies/webview
 	url = git@github.com:webview/webview.git

@@ -103,10 +103,9 @@ else
 	# bundles may have left behind.
 	rm -f "${artifact_dir}/.cemu-runtime/lib/libcef.so"
 	rm -f "${artifact_dir}/libvulkan.so.1"
-	docker run --rm --user "$(id -u):$(id -g)" \
-		-v "${artifact_dir}:/artifacts" \
-		"${image_name}" \
-		cp -a /Cemu_release.bundle/. /artifacts/
+	container_id="$(docker create "${image_name}")"
+	trap 'docker rm -f "${container_id}" >/dev/null' EXIT
+	docker cp "${container_id}:/Cemu_release.bundle/." "${artifact_dir}"
 	if [[ "${artifact_name}" != "Cemu_release" ]]; then
 		mv -f "${artifact_dir}/Cemu_release" "${artifact_dir}/${artifact_name}"
 	fi
