@@ -249,7 +249,7 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DVCPKG_APPLOCAL_DEPS=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
     && cmake --build build/docker-windows --parallel \
-    && xvfb-run -a sh -c 'wineboot --init && wineserver -w' \
+    && xvfb-run -a sh -c 'timeout --signal=TERM --kill-after=10s 60s wineboot --init; status=$?; wineserver -k; [ "$status" -eq 0 ] || [ "$status" -eq 124 ]' \
     && xvfb-run -a ctest --test-dir build/docker-windows --output-on-failure \
     && build_type_lower="$(printf '%s' "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')" \
     && windows_executable="bin/Cemu_${build_type_lower}.exe" \
@@ -259,6 +259,15 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
 	&& cp "${windows_executable}" /Cemu_release.exe
 
 CMD ["bash"]
+
+# Keep the exported Windows image small so docker-build.sh can create a
+# temporary extraction container without unpacking the complete toolchain and
+# Wine prefix.
+FROM scratch AS build-windows-artifact
+
+COPY --from=build-windows /Cemu_release.exe /Cemu_release.exe
+
+CMD ["/Cemu_release.exe"]
 
 # Runnable desktop image. The build stage intentionally remains separate so
 # CI can keep extracting the bare binary, while this stage supplies the GTK,

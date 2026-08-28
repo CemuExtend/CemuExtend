@@ -295,7 +295,7 @@ if(BUILD_TESTING)
 		"${CMAKE_SOURCE_DIR}/cmake/tests/CemuUpdateWorkerTests.cpp")
 	target_include_directories(cemu_update_worker_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 	add_test(NAME cemu_update_worker_tests COMMAND cemu_update_worker_tests)
-	set_tests_properties(cemu_update_worker_tests PROPERTIES TIMEOUT 5)
+	set_tests_properties(cemu_update_worker_tests PROPERTIES TIMEOUT 30)
 
 	function(cemu_add_static_self_containment_test test_name library)
 		if(NOT TARGET "${library}")

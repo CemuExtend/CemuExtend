@@ -12,7 +12,7 @@ case "${build_platform}" in
 		;;
 	win)
 		image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build-win}"
-		docker_target="build-windows"
+		docker_target="build-windows-artifact"
 		container_artifact="/Cemu_release.exe"
 		artifact_suffix=".exe"
 		;;

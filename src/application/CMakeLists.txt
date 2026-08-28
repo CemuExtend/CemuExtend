@@ -84,18 +84,30 @@ if(BUILD_TESTING)
   add_test(NAME application_logging_facade_tests COMMAND application_logging_facade_tests)
 
   add_executable(emulated_usb_facade_tests tests/EmulatedUsbFacadeTests.cpp)
-  target_link_libraries(emulated_usb_facade_tests PRIVATE CemuApplication)
+  target_link_libraries(emulated_usb_facade_tests PRIVATE
+	CemuApplication
+	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
+  )
   add_test(NAME emulated_usb_facade_tests COMMAND emulated_usb_facade_tests)
 
   add_executable(diagnostic_facade_tests tests/DiagnosticFacadeTests.cpp)
-  target_link_libraries(diagnostic_facade_tests PRIVATE CemuApplication)
+  target_link_libraries(diagnostic_facade_tests PRIVATE
+	CemuApplication
+	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
+  )
   add_test(NAME diagnostic_facade_tests COMMAND diagnostic_facade_tests)
 
   add_executable(memory_search_facade_tests tests/MemorySearchFacadeTests.cpp)
-  target_link_libraries(memory_search_facade_tests PRIVATE CemuApplication)
+  target_link_libraries(memory_search_facade_tests PRIVATE
+	CemuApplication
+	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
+  )
   add_test(NAME memory_search_facade_tests COMMAND memory_search_facade_tests)
 
   add_executable(ppc_debugger_facade_tests tests/PpcDebuggerFacadeTests.cpp)
-  target_link_libraries(ppc_debugger_facade_tests PRIVATE CemuApplication)
+  target_link_libraries(ppc_debugger_facade_tests PRIVATE
+	CemuApplication
+	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
+  )
   add_test(NAME ppc_debugger_facade_tests COMMAND ppc_debugger_facade_tests)
 endif()

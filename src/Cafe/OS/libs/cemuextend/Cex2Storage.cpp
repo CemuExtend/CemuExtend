@@ -1063,7 +1063,8 @@ namespace cemuextend_hle
 			const auto parts = SplitPath(pathText, list);
 			if (!parts)
 				return {Status::PermissionDenied};
-			auto root = OpenRoot(NamespaceRoot(title, principal, "files"));
+			const auto rootPath = NamespaceRoot(title, principal, "files");
+			auto root = OpenRoot(rootPath);
 			if (!root)
 				return {Status::IoError};
 			DWORD error{};
@@ -1269,7 +1270,22 @@ namespace cemuextend_hle
 				rename->FileNameLength = static_cast<DWORD>(wideName.size() * sizeof(wchar_t));
 				std::memcpy(rename->FileName, wideName.data(), rename->FileNameLength);
 				if (!::SetFileInformationByHandle(source.get(), FileRenameInfo, rename, static_cast<DWORD>(bytes)))
-					return {WinStatus(::GetLastError())};
+				{
+					// Wine and older Windows implementations do not consistently support a
+					// root-relative FILE_RENAME_INFO. Both paths were validated component by
+					// component without following reparse points, so use the controlled
+					// namespace paths for the equivalent atomic replacement fallback.
+					source = {};
+					auto sourcePath = rootPath;
+					for (const auto& part : *parts)
+						sourcePath /= Wide(part);
+					auto destinationPath = rootPath;
+					for (const auto& part : *destination)
+						destinationPath /= Wide(part);
+					if (!::MoveFileExW(sourcePath.c_str(), destinationPath.c_str(),
+									   MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+						return {WinStatus(::GetLastError())};
+				}
 				return {Status::Ok};
 			}
 			return {Status::NotSupported};
