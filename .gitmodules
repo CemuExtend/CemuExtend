@@ -28,3 +28,6 @@
 [submodule "dependencies/libcemuextend"]
 	path = dependencies/libcemuextend
 	url = ../libcemuextend.git
+[submodule "dependencies/webview"]
+	path = dependencies/webview
+	url = git@github.com:webview/webview.git

@@ -9,16 +9,16 @@
 
 inline MTL::ResourceOptions GetResourceOptions(MTL::ResourceOptions options)
 {
-    if (options & MTL::ResourceStorageModeShared || options & MTL::ResourceStorageModeManaged)
-        options |= MTL::ResourceCPUCacheModeWriteCombined;
+	if (options & MTL::ResourceStorageModeShared || options & MTL::ResourceStorageModeManaged)
+		options |= MTL::ResourceCPUCacheModeWriteCombined;
 
-    return options;
+	return options;
 }
 
 class MetalBufferChunkedHeap : private ChunkedHeap<>
 {
   public:
-	MetalBufferChunkedHeap(const class MetalRenderer* mtlRenderer, MTL::ResourceOptions options, size_t minimumBufferAllocationSize) : m_mtlr(mtlRenderer), m_options(GetResourceOptions(options)), m_minimumBufferAllocationSize(minimumBufferAllocationSize) { };
+	MetalBufferChunkedHeap(const class MetalRenderer* mtlRenderer, MTL::ResourceOptions options, size_t minimumBufferAllocationSize) : m_mtlr(mtlRenderer), m_options(GetResourceOptions(options)), m_minimumBufferAllocationSize(minimumBufferAllocationSize) {};
 	~MetalBufferChunkedHeap();
 
 	using ChunkedHeap::alloc;
@@ -33,16 +33,16 @@ class MetalBufferChunkedHeap : private ChunkedHeap<>
 	}
 
 	MTL::Buffer* GetBufferByIndex(uint32 index) const
-    {
-        cemu_assert_debug(index < m_chunkBuffers.size());
+	{
+		cemu_assert_debug(index < m_chunkBuffers.size());
 
-        return m_chunkBuffers[index];
-    }
+		return m_chunkBuffers[index];
+	}
 
-    bool RequiresFlush() const
-    {
-        return m_options & MTL::ResourceStorageModeManaged;
-    }
+	bool RequiresFlush() const
+	{
+		return m_options & MTL::ResourceStorageModeManaged;
+	}
 
 	void GetStats(uint32& numBuffers, size_t& totalBufferSize, size_t& freeBufferSize) const
 	{
@@ -65,7 +65,7 @@ class MetalBufferChunkedHeap : private ChunkedHeap<>
 // a circular ring-buffer which tracks and releases memory per command-buffer
 class MetalSynchronizedRingAllocator
 {
-public:
+  public:
 	MetalSynchronizedRingAllocator(class MetalRenderer* mtlRenderer, MTL::ResourceOptions options, uint32 minimumBufferAllocSize) : m_mtlr(mtlRenderer), m_options(GetResourceOptions(options)), m_minimumBufferAllocSize(minimumBufferAllocSize) {};
 	MetalSynchronizedRingAllocator(const MetalSynchronizedRingAllocator&) = delete; // disallow copy
 
@@ -85,9 +85,9 @@ public:
 		uint32 size;
 		uint32 writeIndex;
 		std::queue<BufferSyncPoint_t> queue_syncPoints;
-		MTL::CommandBuffer* lastSyncpointCommandBuffer{ nullptr };
+		MTL::CommandBuffer* lastSyncpointCommandBuffer{nullptr};
 		uint32 index;
-		uint32 cleanupCounter{ 0 }; // increased by one every time CleanupBuffer() is called if there is no sync point. If it reaches 300 then the buffer is released
+		uint32 cleanupCounter{0}; // increased by one every time CleanupBuffer() is called if there is no sync point. If it reaches 300 then the buffer is released
 	};
 
 	struct AllocatorReservation_t
@@ -104,14 +104,14 @@ public:
 	void CleanupBuffer(MTL::CommandBuffer* latestFinishedCommandBuffer);
 	MTL::Buffer* GetBufferByIndex(uint32 index) const;
 
-    bool RequiresFlush() const
-    {
-        return m_options & MTL::ResourceStorageModeManaged;
-    }
+	bool RequiresFlush() const
+	{
+		return m_options & MTL::ResourceStorageModeManaged;
+	}
 
 	void GetStats(uint32& numBuffers, size_t& totalBufferSize, size_t& freeBufferSize) const;
 
-private:
+  private:
 	void allocateAdditionalUploadBuffer(uint32 sizeRequiredForAlloc);
 	void addUploadBufferSyncPoint(AllocatorBuffer_t& buffer, uint32 offset);
 
@@ -152,6 +152,7 @@ class MetalSynchronizedHeapAllocator
 	void CleanupBuffer(MTL::CommandBuffer* latestFinishedCommandBuffer);
 
 	void GetStats(uint32& numBuffers, size_t& totalBufferSize, size_t& freeBufferSize) const;
+
   private:
 	const class MetalRenderer* m_mtlr;
 	MetalBufferChunkedHeap m_chunkedHeap;

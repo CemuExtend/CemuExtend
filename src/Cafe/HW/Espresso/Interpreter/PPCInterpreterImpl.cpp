@@ -8,7 +8,7 @@
 namespace
 {
 	uint8* ResolveModMemory(PPCInterpreter_t* hCPU, uint32 address, size_t size,
-		ModMemoryPermission permission)
+							ModMemoryPermission permission)
 	{
 		if (!hCPU->modExecutionContext)
 			return nullptr;
@@ -20,11 +20,11 @@ namespace
 		}
 		return reinterpret_cast<uint8*>(pointer);
 	}
-}
+} // namespace
 
 class PPCItpCafeOSUsermode
 {
-public:
+  public:
 	static const bool allowSupervisorMode = false;
 	static const bool allowDSI = false;
 
@@ -35,14 +35,15 @@ public:
 			if ((address & 3U) != 0)
 			{
 				hCPU->modExecutionContext->Stop(ModFaultReason::InvalidMapping, address,
-					ModMemoryPermission::Execute);
+												ModMemoryPermission::Execute);
 				hCPU->memoryException = true;
 				hCPU->remainingCycles = 0;
 				return 0;
 			}
 			auto* pointer = ResolveModMemory(hCPU, address, sizeof(uint32), ModMemoryPermission::Execute);
 			uint32 value{};
-			if (pointer) std::memcpy(&value, pointer, sizeof(value));
+			if (pointer)
+				std::memcpy(&value, pointer, sizeof(value));
 			return _swapEndianU32(value);
 		}
 		return _swapEndianU32(*(uint32*)(memory_base + address));
@@ -54,7 +55,8 @@ public:
 		uint32 v1 = v & 0xFFFFFFFF;
 		uint32 v2 = v >> 32;
 		uint8* ptr = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint64),
-			ModMemoryPermission::Write) : memory_getPointerFromVirtualOffset(address);
+																  ModMemoryPermission::Write)
+											   : memory_getPointerFromVirtualOffset(address);
 		if (!ptr)
 			return;
 		v1 = CPU_swapEndianU32(v1);
@@ -73,57 +75,53 @@ public:
 
 	inline static void ppcMem_writeDataU64(PPCInterpreter_t* hCPU, uint32 address, uint64 v)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) : memory_getPointerFromVirtualOffset(address);
 		if (pointer)
 		{
 			v = CPU_swapEndianU64(v);
-			if (hCPU->modExecutionContext) std::memcpy(pointer, &v, sizeof(v));
-			else *(uint64*)pointer = v;
+			if (hCPU->modExecutionContext)
+				std::memcpy(pointer, &v, sizeof(v));
+			else
+				*(uint64*)pointer = v;
 		}
 	}
 
 	inline static void ppcMem_writeDataU32(PPCInterpreter_t* hCPU, uint32 address, uint32 v)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) : memory_getPointerFromVirtualOffset(address);
 		if (pointer)
 		{
 			v = CPU_swapEndianU32(v);
-			if (hCPU->modExecutionContext) std::memcpy(pointer, &v, sizeof(v));
-			else *(uint32*)pointer = v;
+			if (hCPU->modExecutionContext)
+				std::memcpy(pointer, &v, sizeof(v));
+			else
+				*(uint32*)pointer = v;
 		}
 	}
 
 	inline static void ppcMem_writeDataU16(PPCInterpreter_t* hCPU, uint32 address, uint16 v)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) : memory_getPointerFromVirtualOffset(address);
 		if (pointer)
 		{
 			v = CPU_swapEndianU16(v);
-			if (hCPU->modExecutionContext) std::memcpy(pointer, &v, sizeof(v));
-			else *(uint16*)pointer = v;
+			if (hCPU->modExecutionContext)
+				std::memcpy(pointer, &v, sizeof(v));
+			else
+				*(uint16*)pointer = v;
 		}
 	}
 
 	inline static void ppcMem_writeDataU8(PPCInterpreter_t* hCPU, uint32 address, uint8 v)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(v), ModMemoryPermission::Write) : memory_getPointerFromVirtualOffset(address);
 		if (pointer)
 			*pointer = v;
 	}
-	
+
 	inline static double ppcMem_readDataDouble(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint64), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint64), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		if (!pointer)
 			return 0.0;
 		uint32 v[2];
@@ -144,85 +142,86 @@ public:
 
 	inline static float ppcMem_readDataFloat(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint32), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint32), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		if (!pointer)
 			return 0.0f;
 		uint32 v{};
-		if (hCPU->modExecutionContext) std::memcpy(&v, pointer, sizeof(v));
-		else v = *(uint32*)pointer;
+		if (hCPU->modExecutionContext)
+			std::memcpy(&v, pointer, sizeof(v));
+		else
+			v = *(uint32*)pointer;
 		v = CPU_swapEndianU32(v);
 		return std::bit_cast<float>(v);
 	}
 
 	inline static uint64 ppcMem_readDataU64(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint64), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint64), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		if (!pointer)
 			return 0;
 		uint64 v{};
-		if (hCPU->modExecutionContext) std::memcpy(&v, pointer, sizeof(v));
-		else v = *(uint64*)pointer;
+		if (hCPU->modExecutionContext)
+			std::memcpy(&v, pointer, sizeof(v));
+		else
+			v = *(uint64*)pointer;
 		return CPU_swapEndianU64(v);
 	}
 
 	inline static uint32 ppcMem_readDataU32(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint32), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint32), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		if (!pointer)
 			return 0;
 		uint32 v{};
-		if (hCPU->modExecutionContext) std::memcpy(&v, pointer, sizeof(v));
-		else v = *(uint32*)pointer;
+		if (hCPU->modExecutionContext)
+			std::memcpy(&v, pointer, sizeof(v));
+		else
+			v = *(uint32*)pointer;
 		return CPU_swapEndianU32(v);
 	}
 
 	inline static uint16 ppcMem_readDataU16(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint16), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint16), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		if (!pointer)
 			return 0;
 		uint16 v{};
-		if (hCPU->modExecutionContext) std::memcpy(&v, pointer, sizeof(v));
-		else v = *(uint16*)pointer;
+		if (hCPU->modExecutionContext)
+			std::memcpy(&v, pointer, sizeof(v));
+		else
+			v = *(uint16*)pointer;
 		return CPU_swapEndianU16(v);
 	}
 
 	inline static uint8 ppcMem_readDataU8(PPCInterpreter_t* hCPU, uint32 address)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, address, sizeof(uint8), ModMemoryPermission::Read) :
-			memory_getPointerFromVirtualOffset(address);
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, address, sizeof(uint8), ModMemoryPermission::Read) : memory_getPointerFromVirtualOffset(address);
 		return pointer ? *pointer : 0;
 	}
 
 	inline static uint64 ppcMem_readDataFloatEx(PPCInterpreter_t* hCPU, uint32 addr)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, addr, sizeof(uint32), ModMemoryPermission::Read) : memory_base + addr;
-		if (!pointer) return 0;
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, addr, sizeof(uint32), ModMemoryPermission::Read) : memory_base + addr;
+		if (!pointer)
+			return 0;
 		uint32 value{};
-		if (hCPU->modExecutionContext) std::memcpy(&value, pointer, sizeof(value));
-		else value = *(uint32*)pointer;
+		if (hCPU->modExecutionContext)
+			std::memcpy(&value, pointer, sizeof(value));
+		else
+			value = *(uint32*)pointer;
 		return ConvertToDoubleNoFTZ(_swapEndianU32(value));
 	}
 
 	inline static void ppcMem_writeDataFloatEx(PPCInterpreter_t* hCPU, uint32 addr, uint64 value)
 	{
-		auto* pointer = hCPU->modExecutionContext ?
-			ResolveModMemory(hCPU, addr, sizeof(uint32), ModMemoryPermission::Write) : memory_base + addr;
+		auto* pointer = hCPU->modExecutionContext ? ResolveModMemory(hCPU, addr, sizeof(uint32), ModMemoryPermission::Write) : memory_base + addr;
 		if (pointer)
 		{
 			auto encoded = _swapEndianU32(ConvertToSingleNoFTZ(value));
-			if (hCPU->modExecutionContext) std::memcpy(pointer, &encoded, sizeof(encoded));
-			else *(uint32*)pointer = encoded;
+			if (hCPU->modExecutionContext)
+				std::memcpy(pointer, &encoded, sizeof(encoded));
+			else
+				*(uint32*)pointer = encoded;
 		}
 	}
 
@@ -252,17 +251,15 @@ void generateDSIException(PPCInterpreter_t* hCPU, uint32 dataAddress)
 
 	hCPU->instructionPointer = 0xFFF00300;
 
-
 	uint32 dsisr = 0;
-	dsisr |= (1<<(31-1)); // set if no TLB/BAT match found
+	dsisr |= (1 << (31 - 1)); // set if no TLB/BAT match found
 
 	hCPU->sprExtended.dsisr = dsisr;
-
 }
 
 class PPCItpSupervisorWithMMU
 {
-public:
+  public:
 	static const bool allowSupervisorMode = true;
 	static const bool allowDSI = true;
 
@@ -299,10 +296,10 @@ public:
 			uint32 BRPN = ((batL >> 17) & 0x7FFF) << 17;
 
 			// check for match
-			if ((vAddr&BL) == BEPI)
+			if ((vAddr & BL) == BEPI)
 			{
 				// match
-				vAddr = (vAddr&~BL) | (BRPN&BL);
+				vAddr = (vAddr & ~BL) | (BRPN & BL);
 				debug_lastTranslatedHit = vAddr;
 				return vAddr;
 			}
@@ -312,30 +309,29 @@ public:
 		debug_lastTranslatedHit = 0xFFFFFFFF;
 
 		// find segment
-		uint32 segmentIndex = (vAddr>>28);
-		//uint32 pageIndex = (vAddr >> 12) & 0xFFFF; // for 4KB pages
-		// uint32 byteOffset = vAddr & 0xFFF; // for 4KB pages
-		uint32 pageIndex = (vAddr >> 17) & 0x7FF; // for 128KB pages 
+		uint32 segmentIndex = (vAddr >> 28);
+		// uint32 pageIndex = (vAddr >> 12) & 0xFFFF; // for 4KB pages
+		//  uint32 byteOffset = vAddr & 0xFFF; // for 4KB pages
+		uint32 pageIndex = (vAddr >> 17) & 0x7FF; // for 128KB pages
 		uint32 byteOffset = vAddr & 0x1FFFF;
 		uint32 srValue = hCPU->sprExtended.sr[segmentIndex];
-		
+
 		uint8 sr_ks = (srValue >> 30) & 1; // supervisor
 		uint8 sr_kp = (srValue >> 29) & 1; // user mode
-		uint8 sr_n = (srValue >> 28) & 1; // no-execute
+		uint8 sr_n = (srValue >> 28) & 1;  // no-execute
 		uint32 sr_vsid = (srValue & 0xFFFFFF);
-		//uint32 vpn = pageIndex | (sr_vsid << 16); // 40bit virtual page number
-
+		// uint32 vpn = pageIndex | (sr_vsid << 16); // 40bit virtual page number
 
 		// look up in page table
-		//uint32 lookupHash = (sr_vsid ^ pageIndex) & 0x7FFFF; // not correct for 4KB pages? sr_vsid must be shifted?
-		//uint32 lookupHash = (sr_vsid ^ pageIndex) & 0x7FFFF;
-		//uint32 lookupHash = ((sr_vsid>>8) ^ pageIndex) & 0x7FFFF;
+		// uint32 lookupHash = (sr_vsid ^ pageIndex) & 0x7FFFF; // not correct for 4KB pages? sr_vsid must be shifted?
+		// uint32 lookupHash = (sr_vsid ^ pageIndex) & 0x7FFFF;
+		// uint32 lookupHash = ((sr_vsid>>8) ^ pageIndex) & 0x7FFFF;
 		uint32 lookupHash = ((sr_vsid >> 0) ^ pageIndex) & 0x7FFFF;
 
-		//lookupHash ^= 0x7FFFF;
+		// lookupHash ^= 0x7FFFF;
 
-		uint32 pageTableAddr = hCPU->sprExtended.sdr1&0xFFFF0000;
-		uint32 pageTableMask = hCPU->sprExtended.sdr1&0x1FF;
+		uint32 pageTableAddr = hCPU->sprExtended.sdr1 & 0xFFFF0000;
+		uint32 pageTableMask = hCPU->sprExtended.sdr1 & 0x1FF;
 
 		for (uint32 ch = 0; ch < 2; ch++)
 		{
@@ -364,7 +360,6 @@ public:
 					// replace page (128KB)
 					vAddr = (vAddr & ~0xFFFE0000) | (ptegPhysicalPage << 12);
 					return vAddr;
-
 				}
 			}
 			// calculate hash 2
@@ -378,7 +373,6 @@ public:
 		// todo: Check hash func 1
 		// todo: Check protection bits
 		// todo: Check supervisor/usermode bits
-
 
 		// also use this function in all the mem stuff below
 
@@ -417,10 +411,10 @@ public:
 			uint32 BRPN = ((batL >> 17) & 0x7FFF) << 17;
 
 			// check for match
-			if ((vAddr&BL) == BEPI)
+			if ((vAddr & BL) == BEPI)
 			{
 				// match
-				vAddr = (vAddr&~BL) | (BRPN&BL);
+				vAddr = (vAddr & ~BL) | (BRPN & BL);
 				debug_lastTranslatedHit = vAddr;
 				return vAddr;
 			}
@@ -459,7 +453,7 @@ public:
 
 	inline static void ppcMem_writeDataU32(PPCInterpreter_t* hCPU, uint32 address, uint32 v)
 	{
-		uint32 pAddr = ppcMem_translateVirtualDataToPhysicalAddr(hCPU, address); 
+		uint32 pAddr = ppcMem_translateVirtualDataToPhysicalAddr(hCPU, address);
 		if (hCPU->memoryException)
 			return;
 
@@ -514,7 +508,7 @@ public:
 			debug_printf("Access u32 boot param block 0x%08x IP %08x LR %08x\n", pAddr, hCPU->instructionPointer, hCPU->spr.LR);
 			cemuLog_logDebug(LogType::Force, "Access u32 boot param block 0x{:08x} (org {:08x}) IP {:08x}", pAddr, address, hCPU->instructionPointer);
 		}
-		if (pAddr >= 0xFFEB73B0 && pAddr < (0xFFEB73B0+0x40C))
+		if (pAddr >= 0xFFEB73B0 && pAddr < (0xFFEB73B0 + 0x40C))
 		{
 			debug_printf("Access cached u32 boot param block 0x%08x IP %08x LR %08x\n", pAddr, hCPU->instructionPointer, hCPU->spr.LR);
 			cemuLog_logDebug(LogType::Force, "Access cached u32 boot param block 0x{:08x} (org {:08x}) IP {:08x}", pAddr, address, hCPU->instructionPointer);
@@ -562,10 +556,10 @@ public:
 	}
 };
 
-template <typename ppcItpCtrl>
+template<typename ppcItpCtrl>
 class PPCInterpreterContainer
 {
-public:
+  public:
 #include "PPCInterpreterSPR.hpp"
 #include "PPCInterpreterOPC.hpp"
 #include "PPCInterpreterLoadStore.hpp"
@@ -580,7 +574,7 @@ public:
 			hCPU->remainingCycles = 0;
 			return;
 		}
-		if constexpr(ppcItpCtrl::allowSupervisorMode)
+		if constexpr (ppcItpCtrl::allowSupervisorMode)
 		{
 			hCPU->global->tb++;
 		}
@@ -597,7 +591,7 @@ public:
 		if (hCPU->modExecutionContext && !cemod_sandbox::IsInstructionAllowed(opcode))
 		{
 			hCPU->modExecutionContext->Stop(ModFaultReason::PrivilegedInstruction,
-				hCPU->instructionPointer, ModMemoryPermission::Execute);
+											hCPU->instructionPointer, ModMemoryPermission::Execute);
 			hCPU->remainingCycles = 0;
 			return;
 		}
@@ -606,10 +600,11 @@ public:
 		{
 		case 0:
 			debug_printf("ZERO[NOP] | 0x%08X\n", (unsigned int)hCPU->instructionPointer);
-	#ifdef CEMU_DEBUG_ASSERT		
+#ifdef CEMU_DEBUG_ASSERT
 			assert_dbg();
-			while (true) std::this_thread::sleep_for(std::chrono::seconds(1));
-	#endif
+			while (true)
+				std::this_thread::sleep_for(std::chrono::seconds(1));
+#endif
 			hCPU->instructionPointer += 4;
 			break;
 		case 1: // virtual HLE
@@ -1056,7 +1051,7 @@ public:
 			case 522:
 				PPCInterpreter_ADDCO(hCPU, opcode);
 				break;
-			case 523: // 11 | OE
+			case 523:								  // 11 | OE
 				PPCInterpreter_MULHWU_(hCPU, opcode); // OE is ignored
 				break;
 			case 533:
@@ -1080,7 +1075,7 @@ public:
 			case 567:
 				PPCInterpreter_LFSUX(hCPU, opcode);
 				break;
-			case 587: // 75 | OE
+			case 587:								 // 75 | OE
 				PPCInterpreter_MULHW_(hCPU, opcode); // OE is ignored for MULHW
 				break;
 			case 595:

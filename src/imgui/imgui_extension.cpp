@@ -11,9 +11,20 @@
 #include "input/InputManager.h"
 
 // <imgui_internal.h>
-template<typename T> static T ImMin(T lhs, T rhs) { return lhs < rhs ? lhs : rhs; }
-template<typename T> static T ImMax(T lhs, T rhs) { return lhs >= rhs ? lhs : rhs; }
-static ImVec2 ImRotate(const ImVec2& v, float cos_a, float sin_a) { return ImVec2(v.x * cos_a - v.y * sin_a, v.x * sin_a + v.y * cos_a); }
+template<typename T>
+static T ImMin(T lhs, T rhs)
+{
+	return lhs < rhs ? lhs : rhs;
+}
+template<typename T>
+static T ImMax(T lhs, T rhs)
+{
+	return lhs >= rhs ? lhs : rhs;
+}
+static ImVec2 ImRotate(const ImVec2& v, float cos_a, float sin_a)
+{
+	return ImVec2(v.x * cos_a - v.y * sin_a, v.x * sin_a + v.y * cos_a);
+}
 
 int rotation_start_index;
 void ImRotateStart()
@@ -59,7 +70,7 @@ void ImGui_PrecacheFonts()
 	{
 		const int size = g_font_requests.top();
 		g_font_requests.pop();
-		
+
 		auto& io = ImGui::GetIO();
 		cemu_assert(io.Fonts->Locked == false);
 
@@ -68,18 +79,18 @@ void ImGui_PrecacheFonts()
 
 		ImFontConfig cfg{};
 		cfg.FontDataOwnedByAtlas = false;
-		//cfg.FontData = g_font_data;
-		//cfg.FontDataSize = g_font_size;
-		//cfg.SizePixels = size;
+		// cfg.FontData = g_font_data;
+		// cfg.FontDataSize = g_font_size;
+		// cfg.SizePixels = size;
 		ImFont* font = io.Fonts->AddFontFromMemoryTTF(g_font_data, g_font_size, (float)size, &cfg);
 
 		ImFontConfig cfgmerge{};
 		cfgmerge.FontDataOwnedByAtlas = false;
 		cfgmerge.MergeMode = true;
 		cfgmerge.GlyphMinAdvanceX = 20.0f;
-		//cfgmerge.GlyphOffset = { 2,2 };
+		// cfgmerge.GlyphOffset = { 2,2 };
 
-		static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+		static const ImWchar icon_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
 
 #if BOOST_OS_WINDOWS
 		const auto hinstance = GetModuleHandle(nullptr);
@@ -109,7 +120,7 @@ void ImGui_PrecacheFonts()
 
 void ImGui_ClearFonts()
 {
-    g_imgui_fonts.clear();
+	g_imgui_fonts.clear();
 }
 
 ImFont* ImGui_GetFont(float size)
@@ -140,13 +151,12 @@ void ImGui_UpdateWindowInformation(bool mainWindow)
 	auto& instance = inputManager;
 
 	const auto mousePos = instance.get_mouse_position(!mainWindow);
-	io.MousePos = { (float)mousePos.x, (float)mousePos.y };
+	io.MousePos = {(float)mousePos.x, (float)mousePos.y};
 
 	bool padDown;
 	const auto pos = instance.get_left_down_mouse_info(&padDown);
 	io.MouseDown[0] = padDown != mainWindow && pos.has_value();
-	auto get_mapping = [&](uint32 key_code)
-	{
+	auto get_mapping = [&](uint32 key_code) {
 		auto key = keyboard_mapping.find(key_code);
 		if (key != keyboard_mapping.end())
 			return key->second;
@@ -171,19 +181,19 @@ void ImGui_UpdateWindowInformation(bool mainWindow)
 
 		if (controller->is_a_down())
 			io.NavInputs[ImGuiNavInput_Activate] = 1.0f;
-		
+
 		if (controller->is_b_down())
 			io.NavInputs[ImGuiNavInput_Cancel] = 1.0f;
-		
+
 		if (controller->is_left_down())
 			io.NavInputs[ImGuiNavInput_DpadLeft] = 1.0f;
-		
+
 		if (controller->is_right_down())
 			io.NavInputs[ImGuiNavInput_DpadRight] = 1.0f;
-		
+
 		if (controller->is_up_down())
 			io.NavInputs[ImGuiNavInput_DpadUp] = 1.0f;
-		
+
 		if (controller->is_down_down())
 			io.NavInputs[ImGuiNavInput_DpadDown] = 1.0f;
 	}

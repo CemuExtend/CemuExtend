@@ -31,7 +31,7 @@ struct WupsContainerSnapshot
 
 class WupsBackendManagementRuntime
 {
-public:
+  public:
 	static constexpr std::size_t kMaximumDataHandles = 4096;
 	static constexpr std::size_t kMaximumPlanPlugins = 256;
 
@@ -42,7 +42,7 @@ public:
 	void DeletePluginData(std::span<const std::uint32_t> handles);
 
 	[[nodiscard]] bool ScheduleNextLaunch(WupsProcessKey key,
-		std::span<const std::uint32_t> handles);
+										  std::span<const std::uint32_t> handles);
 	[[nodiscard]] bool HasPendingPlan(WupsProcessKey key) const;
 	[[nodiscard]] std::optional<std::vector<CemodPackage>> ConsumePendingPlan(
 		WupsProcessKey key);
@@ -55,7 +55,7 @@ public:
 	[[nodiscard]] std::optional<WupsContainerSnapshot> FindContainer(
 		std::uint32_t handle) const;
 
-private:
+  private:
 	mutable std::mutex m_mutex;
 	std::map<std::uint32_t, std::shared_ptr<const CemodPackage>> m_pluginData;
 	std::map<std::uint32_t, WupsContainerSnapshot> m_containers;
@@ -69,4 +69,3 @@ private:
 [[nodiscard]] CemodPackage MakeDynamicWupsPackage(
 	std::vector<std::byte> bytes, WupsInspection inspection,
 	const CemodPackage& caller);
-

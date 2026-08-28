@@ -4,7 +4,7 @@
 #include "config/ActiveSettings.h"
 
 const std::string RendererOutputShader::s_copy_shader_source =
-R"(
+	R"(
 void outputShader()
 {
 	colorOut0 = vec4(texture(textureSrc, passUV).rgb,1.0);
@@ -12,7 +12,7 @@ void outputShader()
 )";
 
 const std::string RendererOutputShader::s_copy_shader_source_mtl =
-R"(#include <metal_stdlib>
+	R"(#include <metal_stdlib>
 using namespace metal;
 
 struct VertexOut {
@@ -25,7 +25,7 @@ fragment float4 main0(VertexOut in [[stage_in]], texture2d<float> textureSrc [[t
 )";
 
 const std::string RendererOutputShader::s_bicubic_shader_source =
-R"(
+	R"(
 vec4 cubic(float x)
 {
 	float x2 = x * x;
@@ -71,7 +71,7 @@ void outputShader(){
 )";
 
 const std::string RendererOutputShader::s_bicubic_shader_source_mtl =
-R"(#include <metal_stdlib>
+	R"(#include <metal_stdlib>
 using namespace metal;
 
 float4 cubic(float x) {
@@ -122,7 +122,7 @@ fragment float4 main0(VertexOut in [[stage_in]], texture2d<float> textureSrc [[t
 )";
 
 const std::string RendererOutputShader::s_hermite_shader_source =
-R"(
+	R"(
 // https://www.shadertoy.com/view/MllSzX
 
 vec3 CubicHermite (vec3 A, vec3 B, vec3 C, vec3 D, float t)
@@ -181,7 +181,7 @@ void outputShader(){
 )";
 
 const std::string RendererOutputShader::s_hermite_shader_source_mtl =
-R"(#include <metal_stdlib>
+	R"(#include <metal_stdlib>
 using namespace metal;
 
 // https://www.shadertoy.com/view/MllSzX
@@ -246,8 +246,8 @@ fragment float4 main0(VertexOut in [[stage_in]], texture2d<float> textureSrc [[t
 
 RendererOutputShader::RendererOutputShader(const std::string& vertex_source, const std::string& fragment_source)
 {
-    std::string finalFragmentSrc;
-	switch(g_renderer->GetType())
+	std::string finalFragmentSrc;
+	switch (g_renderer->GetType())
 	{
 #ifdef ENABLE_METAL
 	case RendererAPI::Metal:
@@ -268,9 +268,8 @@ RendererOutputShader::RendererOutputShader(const std::string& vertex_source, con
 	if (!m_vertex_shader->WaitForCompiled())
 		throw std::exception();
 
-	if(!m_fragment_shader->WaitForCompiled())
+	if (!m_fragment_shader->WaitForCompiled())
 		throw std::exception();
-
 }
 
 RendererOutputShader::OutputUniformVariables RendererOutputShader::FillUniformBlockBuffer(const LatteTextureView& texture_view, const Vector2i& output_res, const bool padView) const
@@ -304,8 +303,8 @@ std::string RendererOutputShader::GetOpenGlVertexSource(bool render_upside_down)
 {
 	// vertex shader
 	std::ostringstream vertex_source;
-		vertex_source <<
-			R"(#version 420
+	vertex_source <<
+		R"(#version 420
 layout(location = 0) smooth out vec2 passUV;
 
 out gl_PerVertex
@@ -319,43 +318,43 @@ void main(){
 	int vID = gl_VertexID;
 )";
 
-		if (render_upside_down)
-		{
-			vertex_source <<
-				R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
+	if (render_upside_down)
+	{
+		vertex_source <<
+			R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
 	else if( vID == 1 ) { vPos = vec2(-1.0,1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 2 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 3 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 4 ) { vPos = vec2(1.0,-1.0); vUV = vec2(1.0,1.0); }
 	else if( vID == 5 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
 	)";
-		}
-		else
-		{
-			vertex_source <<
-				R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
+	}
+	else
+	{
+		vertex_source <<
+			R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
 	else if( vID == 1 ) { vPos = vec2(-1.0,1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 2 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 3 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 4 ) { vPos = vec2(1.0,-1.0); vUV = vec2(1.0,0.0); }
 	else if( vID == 5 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
 	)";
-		}
+	}
 
-		vertex_source <<
-			R"(	passUV = vUV;
+	vertex_source <<
+		R"(	passUV = vUV;
 	gl_Position = vec4(vPos, 0.0, 1.0);
 }
 )";
-		return vertex_source.str();
+	return vertex_source.str();
 }
 
 std::string RendererOutputShader::GetVulkanVertexSource(bool render_upside_down)
 {
 	// vertex shader
 	std::ostringstream vertex_source;
-		vertex_source <<
-			R"(#version 450
+	vertex_source <<
+		R"(#version 450
 layout(location = 0) out vec2 passUV;
 
 out gl_PerVertex
@@ -369,43 +368,43 @@ void main(){
 	int vID = gl_VertexIndex;
 )";
 
-		if (render_upside_down)
-		{
-			vertex_source <<
-				R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
+	if (render_upside_down)
+	{
+		vertex_source <<
+			R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
 	else if( vID == 1 ) { vPos = vec2(-1.0,1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 2 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 3 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 4 ) { vPos = vec2(1.0,-1.0); vUV = vec2(1.0,1.0); }
 	else if( vID == 5 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,0.0); }
 	)";
-		}
-		else
-		{
-			vertex_source <<
-				R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
+	}
+	else
+	{
+		vertex_source <<
+			R"(	if( vID == 0 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
 	else if( vID == 1 ) { vPos = vec2(-1.0,1.0); vUV = vec2(0.0,1.0); }
 	else if( vID == 2 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 3 ) { vPos = vec2(-1.0,-1.0); vUV = vec2(0.0,0.0); }
 	else if( vID == 4 ) { vPos = vec2(1.0,-1.0); vUV = vec2(1.0,0.0); }
 	else if( vID == 5 ) { vPos = vec2(1.0,1.0); vUV = vec2(1.0,1.0); }
 	)";
-		}
+	}
 
-		vertex_source <<
-			R"(	passUV = vUV;
+	vertex_source <<
+		R"(	passUV = vUV;
 	gl_Position = vec4(vPos, 0.0, 1.0);
 }
 )";
-		return vertex_source.str();
+	return vertex_source.str();
 }
 
 std::string RendererOutputShader::GetMetalVertexSource(bool render_upside_down)
 {
 	// vertex shader
 	std::ostringstream vertex_source;
-		vertex_source <<
-			R"(#include <metal_stdlib>
+	vertex_source <<
+		R"(#include <metal_stdlib>
 using namespace metal;
 
 struct VertexOut {
@@ -423,19 +422,19 @@ vertex VertexOut main0(ushort vid [[vertex_id]]) {
 	out.uv.y = 1.0 - out.uv.y;
 )";
 
-		if (render_upside_down)
-		{
-			vertex_source <<
-				R"(	pos.y = -pos.y;
-	)";
-		}
-
+	if (render_upside_down)
+	{
 		vertex_source <<
-			R"(	out.position = float4(pos, 0.0, 1.0);
+			R"(	pos.y = -pos.y;
+	)";
+	}
+
+	vertex_source <<
+		R"(	out.position = float4(pos, 0.0, 1.0);
 	return out;
 }
 )";
-		return vertex_source.str();
+	return vertex_source.str();
 }
 
 std::string RendererOutputShader::PrependFragmentPreamble(const std::string& shaderSrc)
@@ -485,6 +484,7 @@ void main()
 		colorOut0 = pow(colorOut0, vec4(targetGamma / displayGamma) );
 	else
 		colorOut0 = vec4( sRGBEncode( pow(colorOut0.rgb, vec3(targetGamma)) ), 1.0f);
+	colorOut0.a = 1.0f;
 
 }
 
@@ -492,62 +492,62 @@ void main()
 }
 void RendererOutputShader::InitializeStatic()
 {
-	switch(g_renderer->GetType())
+	switch (g_renderer->GetType())
 	{
 #ifdef ENABLE_METAL
-    case RendererAPI::Metal:
-    {
-        std::string vertex_source = GetMetalVertexSource(false);
-        std::string vertex_source_ud = GetMetalVertexSource(true);
+	case RendererAPI::Metal:
+	{
+		std::string vertex_source = GetMetalVertexSource(false);
+		std::string vertex_source_ud = GetMetalVertexSource(true);
 
-       	s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source_mtl);
-       	s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source_mtl);
+		s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source_mtl);
+		s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source_mtl);
 
-       	s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source_mtl);
-       	s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source_mtl);
+		s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source_mtl);
+		s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source_mtl);
 
-       	s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source_mtl);
-       	s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source_mtl);
+		s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source_mtl);
+		s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source_mtl);
 		break;
-    }
+	}
 #endif
 #ifdef ENABLE_OPENGL
-    case RendererAPI::OpenGL:
-    {
-    	std::string vertex_source, vertex_source_ud;
-    	// vertex shader
+	case RendererAPI::OpenGL:
+	{
+		std::string vertex_source, vertex_source_ud;
+		// vertex shader
 		vertex_source = GetOpenGlVertexSource(false);
 		vertex_source_ud = GetOpenGlVertexSource(true);
 
-    	s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source);
-    	s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source);
+		s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source);
+		s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source);
 
-    	s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source);
-    	s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source);
+		s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source);
+		s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source);
 
-    	s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source);
-    	s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source);
+		s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source);
+		s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source);
 		break;
-    }
+	}
 #endif
 #ifdef ENABLE_VULKAN
-    case RendererAPI::Vulkan:
-    {
-    	std::string vertex_source, vertex_source_ud;
-    	// vertex shader
+	case RendererAPI::Vulkan:
+	{
+		std::string vertex_source, vertex_source_ud;
+		// vertex shader
 		vertex_source = GetVulkanVertexSource(false);
 		vertex_source_ud = GetVulkanVertexSource(true);
-			
-    	s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source);
-    	s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source);
 
-    	s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source);
-    	s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source);
+		s_copy_shader = new RendererOutputShader(vertex_source, s_copy_shader_source);
+		s_copy_shader_ud = new RendererOutputShader(vertex_source_ud, s_copy_shader_source);
 
-    	s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source);
-    	s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source);
+		s_bicubic_shader = new RendererOutputShader(vertex_source, s_bicubic_shader_source);
+		s_bicubic_shader_ud = new RendererOutputShader(vertex_source_ud, s_bicubic_shader_source);
+
+		s_hermit_shader = new RendererOutputShader(vertex_source, s_hermite_shader_source);
+		s_hermit_shader_ud = new RendererOutputShader(vertex_source_ud, s_hermite_shader_source);
 		break;
-    }
+	}
 #endif
 	}
 }

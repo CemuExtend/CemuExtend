@@ -12,7 +12,7 @@ uint32 ppcThreadQuantum = 45000; // execute 45000 instructions before thread res
 void PPCInterpreter_relinquishTimeslice()
 {
 	PPCInterpreter_t* hCPU = PPCInterpreter_getCurrentInstance();
-	if( hCPU->remainingCycles >= 0 )
+	if (hCPU->remainingCycles >= 0)
 	{
 		hCPU->skippedCycles = hCPU->remainingCycles + 1;
 		hCPU->remainingCycles = -1;

@@ -5,12 +5,12 @@ namespace ZirPass
 {
 	class ZpIRPass
 	{
-	public:
-		ZpIRPass(ZpIR::ZpIRFunction* irFunction) : m_irFunction(irFunction) { };
+	  public:
+		ZpIRPass(ZpIR::ZpIRFunction* irFunction) : m_irFunction(irFunction) {};
 
 		virtual void applyPass() = 0;
 
-	protected:
+	  protected:
 		ZpIR::ZpIRFunction* m_irFunction;
 	};
 
@@ -22,7 +22,7 @@ namespace ZirPass
 		enum class SOURCE
 		{
 			NONE,
-			INSTRUCTION, // instruction initializes value
+			INSTRUCTION,	// instruction initializes value
 			PREVIOUS_BLOCK, // imported from previous block(s)
 			PREVIOUS_RANGE, // from previous range within same block
 		};
@@ -70,24 +70,23 @@ namespace ZirPass
 		RABlock_t* m_block;
 		ZpIR::IRReg m_irReg;
 		ZpIR::DataType m_irDataType;
-		sint32 m_startIndex{ -1 };
-		sint32 m_endIndex{ -1 }; // inclusive
+		sint32 m_startIndex{-1};
+		sint32 m_endIndex{-1}; // inclusive
 
-		//std::vector<bool> m_reservedPhysRegisters; // unavailable physical registers
+		// std::vector<bool> m_reservedPhysRegisters; // unavailable physical registers
 		std::vector<RALivenessRange_t*> m_overlappingRanges;
 
 		// state / assigned location
-		LOCATION m_location{ LOCATION::UNASSIGNED };
+		LOCATION m_location{LOCATION::UNASSIGNED};
 		sint32 m_physicalRegister;
 
 		// source
-		SOURCE m_source{ SOURCE::NONE };
+		SOURCE m_source{SOURCE::NONE};
 		std::vector<RALivenessRange_t*> m_sourceRanges;
 
 		// destination
-		//RALivenessRange_t* m_destinationRange{ nullptr };
+		// RALivenessRange_t* m_destinationRange{ nullptr };
 		std::vector<RALivenessRange_t*> m_destinationRanges;
-
 	};
 
 	struct RABlock_t
@@ -104,13 +103,13 @@ namespace ZirPass
 			}
 		};
 
-	public:
+	  public:
 		std::multiset<RALivenessRange_t*, Compare> unassignedRanges;
 	};
 
 	class RARegular : public ZpIRPass
 	{
-	public:
+	  public:
 		RARegular(ZpIR::ZpIRFunction* irFunction) : ZpIRPass(irFunction) {};
 
 		void applyPass()
@@ -123,8 +122,7 @@ namespace ZirPass
 			m_irFunction->state.registersAllocated = true;
 		}
 
-
-	private:
+	  private:
 		void prepareRABlocks();
 		void generateLivenessRanges();
 		void assignPhysicalRegisters();
@@ -138,17 +136,15 @@ namespace ZirPass
 			const sint32 OFFSET_U64 = 0;
 			const sint32 OFFSET_U32 = 16;
 
-			static sint32 _regCandidatesU64[] = { OFFSET_U64 + 0, OFFSET_U64 + 1, OFFSET_U64 + 2, OFFSET_U64 + 3, OFFSET_U64 + 4, OFFSET_U64 + 5, OFFSET_U64 + 6, OFFSET_U64 + 7, OFFSET_U64 + 8, OFFSET_U64 + 9, OFFSET_U64 + 10, OFFSET_U64 + 11, OFFSET_U64 + 12, OFFSET_U64 + 13, OFFSET_U64 + 14, OFFSET_U64 + 15 };
-			static sint32 _regCandidatesU32[] = { OFFSET_U32 + 0, OFFSET_U32 + 1, OFFSET_U32 + 2, OFFSET_U32 + 3, OFFSET_U32 + 4, OFFSET_U32 + 5, OFFSET_U32 + 6, OFFSET_U32 + 7, OFFSET_U32 + 8, OFFSET_U32 + 9, OFFSET_U32 + 10, OFFSET_U32 + 11, OFFSET_U32 + 12, OFFSET_U32 + 13, OFFSET_U32 + 14, OFFSET_U32 + 15 };
-
-
+			static sint32 _regCandidatesU64[] = {OFFSET_U64 + 0, OFFSET_U64 + 1, OFFSET_U64 + 2, OFFSET_U64 + 3, OFFSET_U64 + 4, OFFSET_U64 + 5, OFFSET_U64 + 6, OFFSET_U64 + 7, OFFSET_U64 + 8, OFFSET_U64 + 9, OFFSET_U64 + 10, OFFSET_U64 + 11, OFFSET_U64 + 12, OFFSET_U64 + 13, OFFSET_U64 + 14, OFFSET_U64 + 15};
+			static sint32 _regCandidatesU32[] = {OFFSET_U32 + 0, OFFSET_U32 + 1, OFFSET_U32 + 2, OFFSET_U32 + 3, OFFSET_U32 + 4, OFFSET_U32 + 5, OFFSET_U32 + 6, OFFSET_U32 + 7, OFFSET_U32 + 8, OFFSET_U32 + 9, OFFSET_U32 + 10, OFFSET_U32 + 11, OFFSET_U32 + 12, OFFSET_U32 + 13, OFFSET_U32 + 14, OFFSET_U32 + 15};
 
 			if (dataType == ZpIR::DataType::POINTER || dataType == ZpIR::DataType::U64)
 				return _regCandidatesU64;
 			if (dataType == ZpIR::DataType::U32)
 				return _regCandidatesU32;
 
-			//if (dataType != ZpIRDataType::POINTER)
+			// if (dataType != ZpIRDataType::POINTER)
 			//{
 
 			//}
@@ -163,7 +159,6 @@ namespace ZirPass
 			// so registerToFilter can translate to multiple filtered values
 
 			// but for now we use a simplified placeholder implementation
-
 
 			if (registerToFilter >= 0 && registerToFilter < 16)
 			{
@@ -219,10 +214,8 @@ namespace ZirPass
 			}
 		}
 
-
 		std::vector<RABlock_t> m_raBlockArray;
 	};
-
 
 	class RegisterAllocatorForGLSL : public ZpIRPass
 	{
@@ -233,7 +226,7 @@ namespace ZirPass
 			F32 = 2
 		};
 
-	public:
+	  public:
 		RegisterAllocatorForGLSL(ZpIR::ZpIRFunction* irFunction) : ZpIRPass(irFunction) {};
 
 		void applyPass()
@@ -264,7 +257,7 @@ namespace ZirPass
 
 		static std::string DebugPrintHelper_getPhysRegisterName(ZpIR::ZpIRBasicBlock* block, ZpIR::ZpIRPhysicalReg r);
 
-	private:
+	  private:
 		void assignPhysicalRegisters();
 
 		void assignPhysicalRegistersForBlock(ZpIR::ZpIRBasicBlock* basicBlock);
@@ -281,4 +274,4 @@ namespace ZirPass
 		}
 	};
 
-};
+}; // namespace ZirPass

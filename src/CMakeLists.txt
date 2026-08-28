@@ -60,7 +60,11 @@ endfunction()
 
 add_subdirectory(Common)
 add_subdirectory(frontend)
-add_subdirectory(gui)
+if(CEMU_FRONTEND STREQUAL "wx")
+	add_subdirectory(gui)
+elseif(CEMU_FRONTEND STREQUAL "cef")
+	add_subdirectory(webview)
+endif()
 add_subdirectory(Cafe)
 add_subdirectory(application)
 add_subdirectory(Cemu)
@@ -68,8 +72,10 @@ add_subdirectory(config)
 add_subdirectory(input)
 add_subdirectory(audio)
 add_subdirectory(util)
-add_subdirectory(imgui)
 add_subdirectory(resource)
+if(NOT CEMU_FRONTEND STREQUAL "headless" AND CEMU_OVERLAY_BACKEND STREQUAL "imgui")
+	add_subdirectory(imgui)
+endif()
 
 function(cemu_collect_target_link_closure root_target out_var)
 	set(queue "${root_target}")
@@ -151,6 +157,10 @@ cemu_assert_target_has_no_edge(CemuInput CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuComponents CemuCafe CemuConfig CemuInput CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuCafe CemuApplication CemuWxGui)
 cemu_assert_target_has_no_edge(CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuWebRpc CemuCafe CemuApplication CemuWxGui)
+cemu_assert_target_has_no_edge(CemuWebFrontend CemuWxGui CemuWxFrontend
+	CemuWxRendererAdapters CemuWxDebuggerAdapters CemuWxDeviceAdapters)
+cemu_assert_target_has_no_edge(CemuWebRendererAdapters CemuApplication CemuWxGui)
 # The normal GUI sees declarations only. The composition target is the sole
 # owner of implementation archive wiring.
 cemu_assert_target_has_direct_edges(CemuWxGui CemuWxAdapterContracts)
@@ -186,11 +196,19 @@ cemu_assert_target_internal_edges_allowed(CemuInput
 cemu_assert_target_internal_edges_allowed(CemuConfig
 	CemuCommon CemuComponents)
 cemu_assert_target_internal_edges_allowed(CemuCafe
-	CemuCommon CemuComponents CemuConfig CemuHostContracts CemuInput CemuExtendDomain CemuResource CemuUtil CemuWaylandProtocols)
+	CemuCommon CemuComponents CemuConfig CemuHostContracts CemuInput CemuExtendDomain CemuResource CemuRuntimeOverlay CemuUtil CemuWaylandProtocols)
 cemu_assert_target_internal_edges_allowed(CemuDownloadManager
 	CemuCafe CemuCommon CemuComponents CemuConfig CemuHostContracts CemuUtil)
 cemu_assert_target_internal_edges_allowed(CemuApplication
-	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuUtil)
+	CemuAudio CemuCafe CemuCommon CemuConfig CemuInput CemuComponents CemuDownloadManager CemuRuntimeOverlay CemuUtil)
+cemu_assert_target_internal_edges_allowed(CemuWebRpc)
+cemu_assert_target_internal_edges_allowed(CemuWebFrontend
+	CemuApplication CemuCefRuntime CemuCommon CemuFrontendModel CemuHostContracts CemuInput CemuRuntimeOverlay CemuUtil CemuWebRpc
+	CemuWebRendererAdapters)
+cemu_assert_target_internal_edges_allowed(CemuCefRuntime)
+cemu_assert_target_internal_edges_allowed(CemuRuntimeOverlay)
+cemu_assert_target_internal_edges_allowed(CemuWebRendererAdapters
+	CemuCafe CemuCommon CemuConfig CemuHostContracts)
 cemu_assert_target_internal_edges_allowed(CemuWxAdapterContracts CemuHostContracts)
 cemu_assert_target_internal_edges_allowed(CemuWxGuiCommon CemuCommon)
 cemu_assert_target_internal_edges_allowed(CemuWxRendererAdapters
@@ -329,7 +347,7 @@ add_executable(CemuBin
 	mainLLE.cpp
 )
 
-if(NOT ENABLE_WXWIDGETS)
+if(CEMU_FRONTEND STREQUAL "headless")
 	target_sources(CemuBin PRIVATE headless/HeadlessWindowSystem.cpp)
 endif()
 
@@ -493,8 +511,52 @@ target_link_libraries(CemuBin PRIVATE
 	CemuUtil
 )
 
-if(ENABLE_WXWIDGETS)
+if(CEMU_FRONTEND STREQUAL "wx")
 	target_link_libraries(CemuBin PRIVATE CemuWxFrontend)
+elseif(CEMU_FRONTEND STREQUAL "cef")
+	target_link_libraries(CemuBin PRIVATE CemuWebFrontend)
+endif()
+
+if(APPLE AND CEMU_FRONTEND STREQUAL "cef")
+	foreach(_suffix_list ${CEMU_CEF_MACOS_HELPER_SUFFIXES})
+		string(REPLACE ":" ";" _suffix_list "${_suffix_list}")
+		list(GET _suffix_list 0 _name_suffix)
+		list(GET _suffix_list 1 _target_suffix)
+		list(GET _suffix_list 2 _plist_suffix)
+		set(_helper_target "CemuCefHelper${_target_suffix}")
+		set(_helper_output_name "Cemu Helper${_name_suffix}")
+		set(_helper_info_plist
+			"${CMAKE_CURRENT_BINARY_DIR}/CefHelperInfo${_target_suffix}.plist")
+		file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resource/CefHelperInfo.plist.in"
+			_helper_plist_contents)
+		string(REPLACE "\${EXECUTABLE_NAME}" "${_helper_output_name}"
+			_helper_plist_contents "${_helper_plist_contents}")
+		string(REPLACE "\${PRODUCT_NAME}" "${_helper_output_name}"
+			_helper_plist_contents "${_helper_plist_contents}")
+		string(REPLACE "\${BUNDLE_ID_SUFFIX}" "${_plist_suffix}"
+			_helper_plist_contents "${_helper_plist_contents}")
+		file(WRITE "${_helper_info_plist}" "${_helper_plist_contents}")
+		add_executable(${_helper_target} MACOSX_BUNDLE
+			webview/cef/CefMacHelperMain.cpp)
+		target_link_libraries(${_helper_target} PRIVATE CemuWebFrontend)
+		set_target_properties(${_helper_target} PROPERTIES
+			MACOSX_BUNDLE_INFO_PLIST "${_helper_info_plist}"
+			OUTPUT_NAME "${_helper_output_name}"
+			RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../bin/$<1:>")
+		cemu_stage_cef_macos_helper(CemuBin ${_helper_target} "${_helper_output_name}")
+	endforeach()
+	unset(_helper_info_plist)
+	unset(_helper_output_name)
+	unset(_helper_plist_contents)
+	unset(_helper_target)
+	unset(_name_suffix)
+	unset(_plist_suffix)
+	unset(_suffix_list)
+	unset(_target_suffix)
+endif()
+
+if(CEMU_OVERLAY_ENABLED AND CEMU_OVERLAY_BACKEND STREQUAL "cef")
+	cemu_stage_cef_runtime(CemuBin)
 endif()
 
 if(UNIX AND NOT APPLE)

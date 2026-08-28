@@ -18,7 +18,7 @@ namespace iosu
 	struct
 	{
 		bool isInitialized;
-	}iosuMcp = { 0 };
+	} iosuMcp = {0};
 
 	std::recursive_mutex sTitleInfoMutex;
 
@@ -146,7 +146,7 @@ namespace iosu
 		return 0;
 	}
 
-    // deprecated
+	// deprecated
 	void iosuMcp_init()
 	{
 		if (iosuMcp.isInitialized)
@@ -165,7 +165,7 @@ namespace iosu
 		struct MCPClient
 		{
 			std::string workingDirectory;
-			bool isAllocated{ false };
+			bool isAllocated{false};
 
 			void AllocateAndInitialize()
 			{
@@ -235,10 +235,10 @@ namespace iosu
 				else if (cmd->cmdId == IPCCommandId::IOS_IOCTLV)
 				{
 					cemu_assert_unimplemented();
-					//uint32 requestId = cmd->args[0];
-					//uint32 numIn = cmd->args[1];
-					//uint32 numOut = cmd->args[2];
-					//IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{ cmd->args[3] }.GetPtr();
+					// uint32 requestId = cmd->args[0];
+					// uint32 numIn = cmd->args[1];
+					// uint32 numOut = cmd->args[2];
+					// IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{ cmd->args[3] }.GetPtr();
 					IOS_ResourceReply(cmd, IOS_ERROR_INVALID);
 					continue;
 				}
@@ -267,5 +267,5 @@ namespace iosu
 			IOS_SendMessage(sMCPIoMsgQueue, 0, 0);
 			sMCPIoThread.join();
 		}
-	};
-}
+	}; // namespace mcp
+} // namespace iosu

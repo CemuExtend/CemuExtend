@@ -11,7 +11,7 @@ namespace NAPI
 {
 	struct IDBEIconDataV0;
 	struct AuthInfo;
-}
+} // namespace NAPI
 
 namespace NCrypto
 {
@@ -22,16 +22,16 @@ struct DlMgrTitleReport
 {
 	enum class STATUS
 	{
-		INSTALLABLE, // not a package
+		INSTALLABLE,			// not a package
 		INSTALLABLE_UNFINISHED, // same as INSTALLABLE, but a previous unfinished package was detected
-		INSTALLABLE_UPDATE, // same as INSTALLABLE, but an older version is already installed (used for DLC updates after purchasing more content)
+		INSTALLABLE_UPDATE,		// same as INSTALLABLE, but an older version is already installed (used for DLC updates after purchasing more content)
 		// below are packages
 		QUEUED,
 		PAUSED,
 		INITIALIZING, // not active yet, downloading TMD
-		CHECKING, // checking for previously downloaded files
-		DOWNLOADING, // downloading content files
-		VERIFYING, // verifying downloaded files
+		CHECKING,	  // checking for previously downloaded files
+		DOWNLOADING,  // downloading content files
+		VERIFYING,	  // verifying downloaded files
 		INSTALLING,
 		INSTALLED,
 		HAS_ERROR
@@ -59,7 +59,7 @@ enum class DLMGR_STATUS_CODE
 
 class DownloadManager
 {
-public:
+  public:
 	using GameListRefreshCallback = std::function<void()>;
 	static void SetGameListRefreshCallback(GameListRefreshCallback callback);
 
@@ -77,8 +77,8 @@ public:
 
 	// login
 	void connect(
-		std::string_view nnidAccountName, 
-		const std::array<uint8, 32>& passwordHash, 
+		std::string_view nnidAccountName,
+		const std::array<uint8, 32>& passwordHash,
 		CafeConsoleRegion region,
 		std::string_view country,
 		uint32 deviceId,
@@ -87,19 +87,19 @@ public:
 
 	bool IsConnected() const;
 
-private:
+  private:
 	/* connect / login */
-	
+
 	enum class CONNECT_STATE
 	{
 		UNINITIALIZED = 0, // connect() not called
-		REQUESTED = 1, // connect() requested, but not being processed yet
-		PROCESSING = 2, // processing login request
-		COMPLETE = 3, // login complete / succeeded
-		FAILED = 4, // failed to login
+		REQUESTED = 1,	   // connect() requested, but not being processed yet
+		PROCESSING = 2,	   // processing login request
+		COMPLETE = 3,	   // login complete / succeeded
+		FAILED = 4,		   // failed to login
 	};
 
-	struct 
+	struct
 	{
 		std::string cachefileName;
 		std::string nnidAccountName;
@@ -109,16 +109,16 @@ private:
 		std::string country;
 		uint32 deviceId; // deviceId without platform (0x5<<32 for WiiU)
 		std::string serial;
-	}m_authInfo{};
+	} m_authInfo{};
 
-	struct  
+	struct
 	{
 		// auth info we have to request from the server
 		std::string serviceAccountId; // internal account id (integer) provided by server when registering account (GetRegistrationInfo)
 		std::string deviceToken;
-	}m_iasToken{};
+	} m_iasToken{};
 
-	std::atomic<CONNECT_STATE> m_connectState{ CONNECT_STATE::UNINITIALIZED };
+	std::atomic<CONNECT_STATE> m_connectState{CONNECT_STATE::UNINITIALIZED};
 
 	void _handle_connect();
 	bool _connect_refreshIASAccountIdAndDeviceToken();
@@ -128,23 +128,22 @@ private:
 	NAPI::AuthInfo GetAuthInfo(bool withIasToken);
 
 	/* idbe cache */
-public:
+  public:
 	void prepareIDBE(uint64 titleId);
 	std::string getNameFromCachedIDBE(uint64 titleId);
 
-private:
+  private:
 	NAPI::IDBEIconDataV0* getIDBE(uint64 titleId);
 
 	/* ticket cache */
-public:
-
+  public:
 	struct ETicketInfo
 	{
 		enum class SOURCE : uint8
 		{
-			ECS_TICKET = 0, // personalized ticket of owned title
+			ECS_TICKET = 0,	   // personalized ticket of owned title
 			PUBLIC_TICKET = 1, // public ticket file (available as /CETK from NUS server or via SOAP GetSystemCommonETicket. The former is from Wii era while the latter is how Wii U requests public tickets?)
-			// note: These ids are baked into the serialized cache format. Do not modify
+							   // note: These ids are baked into the serialized cache format. Do not modify
 		};
 
 		ETicketInfo(SOURCE source, uint64 ticketId, uint32 ticketVersion, std::vector<uint8>& eTicket);
@@ -185,7 +184,7 @@ public:
 
 	void reportAvailableTitles();
 
-private:
+  private:
 	ETicketInfo* findTicketByTicketId(uint64 ticketId)
 	{
 		for (auto& itr : m_ticketCache)
@@ -256,9 +255,9 @@ private:
 	}
 
 	/* packages / downloading */
-	struct Package 
+	struct Package
 	{
-		Package(uint64 titleId, uint16 version, std::span<uint8> ticketData) : titleId(titleId), version(version), eTicketData(ticketData.data(), ticketData.data() + ticketData.size()) 
+		Package(uint64 titleId, uint16 version, std::span<uint8> ticketData) : titleId(titleId), version(version), eTicketData(ticketData.data(), ticketData.data() + ticketData.size())
 		{
 			NCrypto::ETicketParser eTicketParser;
 			cemu_assert(eTicketParser.parse(ticketData.data(), ticketData.size()));
@@ -322,7 +321,7 @@ private:
 			// progress tracking
 			uint64 amountDownloaded{};
 
-		private:
+		  private:
 			void CalcPaddedSize()
 			{
 				if (HAS_FLAG(contentFlags, NCrypto::TMDParser::TMDContentFlags::FLAG_HASHED_CONTENT))
@@ -340,9 +339,9 @@ private:
 
 		struct
 		{
-			bool isActive{}; // actively downloading 
+			bool isActive{}; // actively downloading
 			bool isPaused{};
-			STATE currentState{ STATE::INITIAL };
+			STATE currentState{STATE::INITIAL};
 			// tmd
 			bool isDownloadingTMD{};
 			std::vector<uint8> tmdData;
@@ -350,24 +349,24 @@ private:
 			// app/h3 tracking
 			std::unordered_map<uint16, ContentFile> contentFiles;
 			// progress of current operation
-			uint32 progress{}; // for downloading: in 1/10th of a percent (0-1000), for installing: number of files
+			uint32 progress{};	  // for downloading: in 1/10th of a percent (0-1000), for installing: number of files
 			uint32 progressMax{}; // maximum (downloading: unused, installing: total number of files)
 			// installing
 			bool isInstalling{};
 			// error state
 			bool hasError{};
 			std::string errorMsg;
-		}state;
+		} state;
 	};
 
 	std::recursive_mutex m_mutex;
 	std::vector<Package*> m_packageList;
 
-public:
+  public:
 	void initiateDownload(uint64 titleId, uint16 version);
 	void pauseDownload(uint64 titleId, uint16 version);
 
-private:
+  private:
 	Package* getPackage(uint64 titleId, uint16 version);
 	fs::path getPackageDownloadPath(Package* package);
 	fs::path getPackageInstallPath(Package* package);
@@ -386,7 +385,7 @@ private:
 	bool asyncPackageInstallRecursiveExtractFiles(Package* package, class FSTVolume* fstVolume, const std::string& sourcePath, const fs::path& destinationPath);
 
 	/* callback interface */
-public:
+  public:
 	void setUserData(void* ptr)
 	{
 		m_userData = ptr;
@@ -400,10 +399,9 @@ public:
 	// register/unregister callbacks
 	// setting valid callbacks will also trigger transfer of the entire title/package state and the current status message
 	void registerCallbacks(
-		void(*cbUpdateConnectStatus)(std::string statusText, DLMGR_STATUS_CODE statusCode),
-		void(*cbAddDownloadableTitle)(const DlMgrTitleReport& titleInfo),
-		void(*cbRemoveDownloadableTitle)(uint64 titleId, uint16 version)
-	)
+		void (*cbUpdateConnectStatus)(std::string statusText, DLMGR_STATUS_CODE statusCode),
+		void (*cbAddDownloadableTitle)(const DlMgrTitleReport& titleInfo),
+		void (*cbRemoveDownloadableTitle)(uint64 titleId, uint16 version))
 	{
 		std::unique_lock<std::recursive_mutex> _l(m_mutex);
 		m_cbUpdateConnectStatus = cbUpdateConnectStatus;
@@ -429,7 +427,7 @@ public:
 	}
 
 	std::string m_statusMessage{};
-	DLMGR_STATUS_CODE m_statusCode{ DLMGR_STATUS_CODE::UNINITIALIZED };
+	DLMGR_STATUS_CODE m_statusCode{DLMGR_STATUS_CODE::UNINITIALIZED};
 
 	bool hasActiveDownloads()
 	{
@@ -453,10 +451,10 @@ public:
 		m_statusMessage.clear();
 	}
 
-private:
-	void(*m_cbUpdateConnectStatus)(std::string statusText, DLMGR_STATUS_CODE statusCode) { nullptr };
-	void(*m_cbAddDownloadableTitle)(const DlMgrTitleReport& titleInfo);
-	void(*m_cbRemoveDownloadableTitle)(uint64 titleId, uint16 version);
+  private:
+	void (*m_cbUpdateConnectStatus)(std::string statusText, DLMGR_STATUS_CODE statusCode){nullptr};
+	void (*m_cbAddDownloadableTitle)(const DlMgrTitleReport& titleInfo);
+	void (*m_cbRemoveDownloadableTitle)(uint64 titleId, uint16 version);
 	void* m_userData{};
 
 	/* title version list */
@@ -499,7 +497,7 @@ private:
 	void notifyManager();
 	void queueManagerJob(const std::function<void()>& callback);
 
-	std::atomic_bool m_threadLaunched{ false };
+	std::atomic_bool m_threadLaunched{false};
 	CounterSemaphore m_queuedEvents;
 
 	ConcurrentQueue<std::function<void()>> m_jobQueue;

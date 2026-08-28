@@ -107,13 +107,13 @@ void LattePerformanceMonitor_frameEnd()
 		{
 			LatteOverlay_updateStats(0.0, 0, 0);
 			CafeSystem::EmitEvent({.type = CafeSystem::EventType::PerformanceUpdated,
-				.framesPerSecond = 0.0});
+								   .framesPerSecond = 0.0});
 		}
 		else
 		{
 			LatteOverlay_updateStats(fps, drawCallCounter / elapsedFrames, fastDrawCallCounter / elapsedFrames);
 			CafeSystem::EmitEvent({.type = CafeSystem::EventType::PerformanceUpdated,
-				.framesPerSecond = fps});
+								   .framesPerSecond = fps});
 		}
 	}
 }

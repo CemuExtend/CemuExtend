@@ -3,10 +3,10 @@
 #include "config/ActiveSettings.h"
 #include "Cafe/CafeSystem.h"
 
-//#define BENCHMARK_TEXTURE_DECODING		// if defined, time it takes to decode textures will be measured and logged to log.txt
+// #define BENCHMARK_TEXTURE_DECODING		// if defined, time it takes to decode textures will be measured and logged to log.txt
 
 #ifdef BENCHMARK_TEXTURE_DECODING
-uint64 textureDecodeBenchmark_perFormatSum[0x40] = { 0 }; // duration sum per texture format (hw format) - in microseconds
+uint64 textureDecodeBenchmark_perFormatSum[0x40] = {0}; // duration sum per texture format (hw format) - in microseconds
 uint64 textureDecodeBenchmark_totalSum = 0;
 #endif
 
@@ -39,7 +39,7 @@ void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 slice
 		LatteAddrLib::GX2CalculateSurfaceInfo(format, width, height, depth, dim, Latte::MakeGX2TileMode(tileMode), surfaceAA, 1, &surfaceInfo);
 		if (Latte::TM_IsMacroTiled(surfaceInfo.hwTileMode))
 		{
-			uint32 mipSwizzle = physMipPtr&0x700;
+			uint32 mipSwizzle = physMipPtr & 0x700;
 			physMipPtr &= ~0x700;
 			textureLoader->physMipAddress = physMipPtr;
 			textureLoader->pipeSwizzle = (mipSwizzle >> 8) & 1;
@@ -61,7 +61,7 @@ void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 slice
 	textureLoader->surfaceInfoDepth = surfaceInfo.depth;
 
 	// correct handling for LINEAR_ALIGNED pitch alignment is still not fully understood:
-	//seems like sometimes there is a conditional pitch alignment to 0x40 OR there is no pitch alignment at all and we have a bug somewhere else
+	// seems like sometimes there is a conditional pitch alignment to 0x40 OR there is no pitch alignment at all and we have a bug somewhere else
 
 	uint64 titleId = CafeSystem::GetForegroundTitleId();
 	titleId &= ~0x300ULL;
@@ -74,7 +74,6 @@ void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 slice
 		// BotW - uses linear textures as render targets. With the smallest resolution being 3x3 with no pitch alignment expected at all (pitch = 3)? -> Not possible because both textures and rendertargets require a minimum alignment of 8 for pitch?
 		surfaceInfo.pitch = std::max<uint32>(1, pitch >> mipIndex);
 	}
-
 
 	textureLoader->width = width >> (mipIndex);
 	textureLoader->width = std::max(textureLoader->width, 1);
@@ -118,7 +117,7 @@ uint8* LatteTextureLoader_getInputLinearOptimized(LatteTextureLoaderCtx* texture
 	return textureLoader->inputData + offset;
 }
 
-#define LatteTextureLoader_getInputLinearOptimized_(__textureLoader,__x,__y,__stepX,__stepY,__bpp,__sliceIndex,__numSlices,__sample,__pitch,__height) (textureLoader->inputData+((__x/__stepX) + __pitch * (__y/__stepY) + (__sliceIndex + __numSlices * __sample) * __height * __pitch)*(__bpp/8))
+#define LatteTextureLoader_getInputLinearOptimized_(__textureLoader, __x, __y, __stepX, __stepY, __bpp, __sliceIndex, __numSlices, __sample, __pitch, __height) (textureLoader->inputData + ((__x / __stepX) + __pitch * (__y / __stepY) + (__sliceIndex + __numSlices * __sample) * __height * __pitch) * (__bpp / 8))
 
 void decodeBC1Block(uint8* inputData, float* output4x4RGBA)
 {
@@ -289,14 +288,14 @@ void decodeBC3Block_UNORM(uint8* inputData, float* imageRGBA)
 			imageRGBA[pixelOffset + 0] = r[colorIndex];
 			imageRGBA[pixelOffset + 1] = g[colorIndex];
 			imageRGBA[pixelOffset + 2] = b[colorIndex];
-			//imageRGBA[pixelOffset+3] = 1.0f; // alpha
+			// imageRGBA[pixelOffset+3] = 1.0f; // alpha
 		}
 	}
 
 	// decode alpha
 	uint8 alpha0 = *(uint8*)(inputData + 0);
 	uint8 alpha1 = *(uint8*)(inputData + 1);
-	uint32 alphaCodeRow[2] = { 0 };
+	uint32 alphaCodeRow[2] = {0};
 	alphaCodeRow[0] |= ((*(uint8*)(inputData + 2)) << 0);
 	alphaCodeRow[0] |= ((*(uint8*)(inputData + 3)) << 8);
 	alphaCodeRow[0] |= ((*(uint8*)(inputData + 4)) << 16);
@@ -365,8 +364,8 @@ void decodeBC4Block_UNORM(uint8* blockStorage, float* rOutput)
 		red[3] = (3 * red[0] + 2 * red[1]) / 5.0f; // bit code 011
 		red[4] = (2 * red[0] + 3 * red[1]) / 5.0f; // bit code 100
 		red[5] = (1 * red[0] + 4 * red[1]) / 5.0f; // bit code 101
-		red[6] = 0.0f;                       // bit code 110
-		red[7] = 1.0f;                       // bit code 111
+		red[6] = 0.0f;							   // bit code 110
+		red[7] = 1.0f;							   // bit code 111
 	}
 
 	uint8* bitIndices = blockInput + 2;
@@ -418,8 +417,8 @@ void decodeBC5Block_UNORM(uint8* blockStorage, float* rgOutput)
 		red[3] = (3 * red[0] + 2 * red[1]) / 5.0f; // bit code 011
 		red[4] = (2 * red[0] + 3 * red[1]) / 5.0f; // bit code 100
 		red[5] = (1 * red[0] + 4 * red[1]) / 5.0f; // bit code 101
-		red[6] = 0.0f;                       // bit code 110
-		red[7] = 1.0f;                       // bit code 111
+		red[6] = 0.0f;							   // bit code 110
+		red[7] = 1.0f;							   // bit code 111
 	}
 
 	green[0] = ((float)(*(uint8*)(blockInput + 8))) / 255.0f;
@@ -442,10 +441,9 @@ void decodeBC5Block_UNORM(uint8* blockStorage, float* rgOutput)
 		green[3] = (3 * green[0] + 2 * green[1]) / 5.0f; // bit code 011
 		green[4] = (2 * green[0] + 3 * green[1]) / 5.0f; // bit code 100
 		green[5] = (1 * green[0] + 4 * green[1]) / 5.0f; // bit code 101
-		green[6] = 0.0f;						   // bit code 110
-		green[7] = 1.0f;                           // bit code 111
+		green[6] = 0.0f;								 // bit code 110
+		green[7] = 1.0f;								 // bit code 111
 	}
-
 
 	uint8* bitIndices = blockInput + 2;
 	uint32 redRow0 = (((uint32)bitIndices[2]) << 16) | (((uint32)bitIndices[1]) << 8) | (((uint32)bitIndices[0]) << 0);
@@ -507,8 +505,8 @@ void decodeBC5Block_SNORM(uint8* blockStorage, float* rgOutput) // todo - can me
 		red[3] = (3 * red[0] + 2 * red[1]) / 5.0f; // bit code 011
 		red[4] = (2 * red[0] + 3 * red[1]) / 5.0f; // bit code 100
 		red[5] = (1 * red[0] + 4 * red[1]) / 5.0f; // bit code 101
-		red[6] = -1.0f;                       // bit code 110
-		red[7] = 1.0f;                       // bit code 111
+		red[6] = -1.0f;							   // bit code 110
+		red[7] = 1.0f;							   // bit code 111
 	}
 
 	green[0] = ((float)(*(sint8*)(blockInput + 8)) + 128.0f) / 255.0f;
@@ -533,10 +531,9 @@ void decodeBC5Block_SNORM(uint8* blockStorage, float* rgOutput) // todo - can me
 		green[3] = (3 * green[0] + 2 * green[1]) / 5.0f; // bit code 011
 		green[4] = (2 * green[0] + 3 * green[1]) / 5.0f; // bit code 100
 		green[5] = (1 * green[0] + 4 * green[1]) / 5.0f; // bit code 101
-		green[6] = -1.0f;                       // bit code 110
-		green[7] = 1.0f;                       // bit code 111
+		green[6] = -1.0f;								 // bit code 110
+		green[7] = 1.0f;								 // bit code 111
 	}
-
 
 	uint8* bitIndices = blockInput + 2;
 	uint32 redRow0 = (((uint32)bitIndices[2]) << 16) | (((uint32)bitIndices[1]) << 8) | (((uint32)bitIndices[0]) << 0);
@@ -591,7 +588,7 @@ void LatteTextureLoader_loadTextureDataIntoSlice(LatteTexture* hostTexture, sint
 
 void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIndex, uint32 mipIndex, MPTR physImagePtr, MPTR physMipPtr, Latte::E_DIM dim, uint32 width, uint32 height, uint32 depth, uint32 mipLevels, uint32 pitch, Latte::E_HWTILEMODE tileMode, uint32 swizzle, bool dumpTex)
 {
-	LatteTextureLoaderCtx textureLoader = { 0 };
+	LatteTextureLoaderCtx textureLoader = {0};
 
 	Latte::E_GX2SURFFMT format = tex->format;
 	LatteTextureLoader_begin(&textureLoader, sliceIndex, mipIndex, physImagePtr, physMipPtr, format, dim, width, height, depth, mipLevels, pitch, tileMode, swizzle);
@@ -600,7 +597,7 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	textureLoader.dump = ActiveSettings::DumpTexturesEnabled();
 	if (textureLoader.dump)
 	{
-		uint32 dumpSize = (((textureLoader.width + 4)&~4) * ((textureLoader.height + 4)&~4)) * 4;
+		uint32 dumpSize = (((textureLoader.width + 4) & ~4) * ((textureLoader.height + 4) & ~4)) * 4;
 		textureLoader.dumpRGBA = (uint8*)malloc(dumpSize);
 		memset(textureLoader.dumpRGBA, 0x00, dumpSize);
 	}
@@ -617,7 +614,7 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 		// on Vulkan this is used to make sure the texture is no longer in UNDEFINED layout
 		if (!texDecoder)
 		{
-			if(tex->isDepth)
+			if (tex->isDepth)
 				g_renderer->texture_clearDepthSlice(tex, 0, 0, true, tex->hasStencil, 0.0f, 0);
 			else
 				g_renderer->texture_clearColorSlice(tex, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -674,12 +671,12 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	// this has to be done before the texture data is decoded & uploaded to prevent a race condition where updates during upload are missed
 	if (mipIndex == 0 || (tex->texDataPtrLow == 0 && tex->texDataPtrHigh == 0))
 	{
-		tex->texDataPtrLow = physImagePtr + textureLoader.minOffsetOutdated; // always zero
+		tex->texDataPtrLow = physImagePtr + textureLoader.minOffsetOutdated;  // always zero
 		tex->texDataPtrHigh = physImagePtr + textureLoader.maxOffsetOutdated; // currently set to surface size
 		LatteTC_ResetTextureChangeTracker(tex, true);
 	}
 	// load slice
-	//debug_printf("[Load Slice] Addr: %08x MIP: %02d Slice: %02d Res %04x/%04x Texel Res %04x/%04x Fmt %04x Tm %d\n", textureLoader.physAddress, mipIndex, sliceIndex, textureLoader.width, textureLoader.height, textureLoader.texelCountX, textureLoader.texelCountY, (int)format, tileMode);
+	// debug_printf("[Load Slice] Addr: %08x MIP: %02d Slice: %02d Res %04x/%04x Texel Res %04x/%04x Fmt %04x Tm %d\n", textureLoader.physAddress, mipIndex, sliceIndex, textureLoader.width, textureLoader.height, textureLoader.texelCountX, textureLoader.texelCountY, (int)format, tileMode);
 	LatteTextureLoader_loadTextureDataIntoSlice(tex, textureLoader.width, textureLoader.height, depth, mipLevels, pixelData, sliceIndex, mipIndex, imageSize);
 	// write texture dump
 	if (textureLoader.dump)
@@ -723,7 +720,7 @@ void optimizedLinearReadbackWriteLoop(LatteTextureLoaderCtx* textureLoader, uint
 
 void LatteTextureLoader_writeReadbackTextureToMemory(LatteTextureDefinition* textureData, uint32 sliceIndex, uint32 mipIndex, uint8* linearPixelData)
 {
-	LatteTextureLoaderCtx textureLoader = { 0 };
+	LatteTextureLoaderCtx textureLoader = {0};
 	LatteTextureLoader_begin(&textureLoader, sliceIndex, mipIndex, textureData->physAddress, textureData->physMipAddress, textureData->format, textureData->dim, textureData->width, textureData->height, textureData->depth, textureData->mipLevels, textureData->pitch, textureData->tileMode, textureData->swizzle);
 
 #ifdef CEMU_DEBUG_ASSERT
@@ -848,12 +845,11 @@ void LatteTextureLoader_writeReadbackTextureToMemory(LatteTextureDefinition* tex
 	{
 		cemuLog_logDebug(LogType::Force, "Texture readback unsupported format {:04x} for tileMode 0x{:02x}", (uint32)textureData->format, textureData->tileMode);
 	}
-
 }
 
 void LatteTextureLoader_estimateAccessedDataRange(LatteTexture* texture, sint32 sliceIndex, sint32 mipIndex, uint32& addrStart, uint32& addrEnd)
 {
-	LatteTextureLoaderCtx textureLoader = { 0 };
+	LatteTextureLoaderCtx textureLoader = {0};
 	LatteTextureLoader_begin(&textureLoader, sliceIndex, mipIndex, texture->physAddress, texture->physMipAddress, texture->format, texture->dim, texture->width, texture->height, texture->depth, texture->mipLevels, texture->pitch, texture->tileMode, texture->swizzle);
 
 	cemu_assert_debug(textureLoader.width > 0);

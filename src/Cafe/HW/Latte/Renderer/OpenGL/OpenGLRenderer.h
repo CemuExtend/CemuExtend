@@ -4,7 +4,7 @@
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cafe/HW/Latte/Renderer/RendererOuputShader.h"
 
-#define GPU_GL_MAX_NUM_ATTRIBUTE		(16) // Wii U GPU supports more than 16 but not all desktop GPUs do. Have to keep this at 16 until we find a better solution
+#define GPU_GL_MAX_NUM_ATTRIBUTE (16) // Wii U GPU supports more than 16 but not all desktop GPUs do. Have to keep this at 16 until we find a better solution
 
 class OpenGLCanvasCallbacks
 {
@@ -31,9 +31,10 @@ void GLCanvas_SwapBuffers(bool swapTV, bool swapDRC);
 class OpenGLRenderer : public Renderer
 {
 	friend class OpenGLCanvas;
-public:
+
+  public:
 	OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+				   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
 	~OpenGLRenderer();
 
 	static OpenGLRenderer* GetInstance();
@@ -174,7 +175,7 @@ public:
 	void occlusionQuery_flush() override;
 	void occlusionQuery_updateState() override {};
 
-private:
+  private:
 	void GetVendorInformation() override;
 
 	void texture_setActiveTextureUnit(sint32 index);
@@ -223,10 +224,10 @@ private:
 	GLuint glId_fbo = 0;
 
 	// renderstate
-	uint32 prevBlendControlReg[8] = { 0 };
+	uint32 prevBlendControlReg[8] = {0};
 	uint32 prevBlendMask = 0;
 	uint32 prevLogicOp = 0;
-	uint32 prevBlendColorConstant[4] = { 0 };
+	uint32 prevBlendColorConstant[4] = {0};
 	uint8 prevAlphaTestEnable = 0;
 	bool prevDepthEnable = 0;
 	bool prevDepthWriteEnable = 0;
@@ -290,6 +291,5 @@ private:
 	{
 		sint32 index;
 		std::vector<BufferCacheReleaseQueueEntry> bufferCacheEntries;
-	}m_destructionQueues;
-
+	} m_destructionQueues;
 };

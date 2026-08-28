@@ -4,14 +4,14 @@
 #include "Cafe/OS/libs/coreinit/coreinit_IOS.h"
 #include "Cafe/OS/libs/nn_common.h"
 
-#define nimPrepareRequest() \
-StackAllocator<iosu::nim::iosuNimCemuRequest_t> _buf_nimRequest; \
-StackAllocator<ioBufferVector_t> _buf_bufferVector; \
-iosu::nim::iosuNimCemuRequest_t* nimRequest = _buf_nimRequest.GetPointer(); \
-ioBufferVector_t* nimBufferVector = _buf_bufferVector.GetPointer(); \
-memset(nimRequest, 0, sizeof(iosu::nim::iosuNimCemuRequest_t)); \
-memset(nimBufferVector, 0, sizeof(ioBufferVector_t)); \
-nimBufferVector->buffer = (uint8*)nimRequest;
+#define nimPrepareRequest()                                                     \
+	StackAllocator<iosu::nim::iosuNimCemuRequest_t> _buf_nimRequest;            \
+	StackAllocator<ioBufferVector_t> _buf_bufferVector;                         \
+	iosu::nim::iosuNimCemuRequest_t* nimRequest = _buf_nimRequest.GetPointer(); \
+	ioBufferVector_t* nimBufferVector = _buf_bufferVector.GetPointer();         \
+	memset(nimRequest, 0, sizeof(iosu::nim::iosuNimCemuRequest_t));             \
+	memset(nimBufferVector, 0, sizeof(ioBufferVector_t));                       \
+	nimBufferVector->buffer = (uint8*)nimRequest;
 
 namespace nn
 {
@@ -28,7 +28,7 @@ namespace nn
 			osLib_returnFromFunction(hCPU, 0);
 		}
 
-		typedef struct  
+		typedef struct
 		{
 			uint32be ukn00;
 			uint32be ukn04;
@@ -37,7 +37,7 @@ namespace nn
 			uint32be ukn10;
 			uint32be ukn14;
 			uint32be ukn18;
-		}updatePackageProgress_t;
+		} updatePackageProgress_t;
 
 		void export_GetUpdatePackageProgress(PPCInterpreter_t* hCPU)
 		{
@@ -83,7 +83,7 @@ namespace nn
 			ppcDefineParamS32(maxCount, 1);
 
 			nimPrepareRequest();
-			
+
 			nimRequest->requestCode = IOSU_NIM_GET_PACKAGES_TITLEID;
 			nimRequest->maxCount = maxCount;
 			nimRequest->ptr = (uint8*)(titleIdList);
@@ -140,9 +140,7 @@ namespace nn
 				nimRequest->ptr = (uint8*)(iconDatabaseEntries + i);
 
 				__depr__IOS_Ioctlv(IOS_DEVICE_NIM, IOSU_NIM_REQUEST_CEMU, 1, 1, nimBufferVector);
-
 			}
-
 
 			osLib_returnFromFunction(hCPU, 0);
 		}
@@ -156,7 +154,7 @@ namespace nn
 			// men.rpx checks the first byte for == 1 and if true, it will show the download manager icon as downloading
 
 			// downloads disabled:
-			//memory_writeU32(hCPU->gpr[3], (0x00010000));
+			// memory_writeU32(hCPU->gpr[3], (0x00010000));
 			// downloads enabled:
 			memory_writeU32(hCPU->gpr[3], (0x00000000));
 
@@ -182,7 +180,7 @@ namespace nn
 			}
 
 			// IOS errors need to be translated
-			if ( (nnResultCode&0x18000000) == 0x18000000)
+			if ((nnResultCode & 0x18000000) == 0x18000000)
 			{
 				// alternative error format
 				cemu_assert_unimplemented();
@@ -224,11 +222,11 @@ namespace nn
 			uint8 uknByte0E;
 			uint8 applicationBoxDevice2;
 			uint32 ukn10;
-			uint8 uknByte14; // set to 0
-			uint8 uknByte15; // set to 1
+			uint8 uknByte14;		  // set to 0
+			uint8 uknByte15;		  // set to 1
 			uint8 postDownloadAction; // 0 -> ?, 1 -> ?, 2 -> Use bg install policy
 			uint8 uknBytes17;
-		}TitlePackageTaskConfig_t;
+		} TitlePackageTaskConfig_t;
 
 		static_assert(sizeof(TitlePackageTaskConfig_t) == 0x18, "");
 
@@ -249,7 +247,7 @@ namespace nn
 			titlePackageTastConfig->applicationBoxDevice2 = 1; // 1 -> mlc
 
 			titlePackageTastConfig->uknByte0E = 0; // ?
-			titlePackageTastConfig->ukn10 = 0; // ?
+			titlePackageTastConfig->ukn10 = 0;	   // ?
 			titlePackageTastConfig->uknByte14 = 0; // ?
 			titlePackageTastConfig->uknByte15 = 1; // ?
 
@@ -275,7 +273,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_nim";
@@ -295,7 +293,6 @@ namespace nn
 
 				osLib_addFunction("nn_nim", "GetECommerceInfrastructureCountry__Q2_2nn3nimFPQ3_2nn3nim7Country", export_GetECommerceInfrastructureCountry);
 
-
 				osLib_addFunction("nn_nim", "QuerySchedulerStatus__Q2_2nn3nimFPQ3_2nn3nim15SchedulerStatus", export_QuerySchedulerStatus);
 
 				osLib_addFunction("nn_nim", "GetIconDatabaseEntries__Q2_2nn3nimFPQ3_2nn3nim17IconDatabaseEntryPCULUi", export_GetIconDatabaseEntries);
@@ -306,12 +303,12 @@ namespace nn
 				osLib_addFunction("nn_nim", "CalculateTitleInstallSize__Q2_2nn3nimFPLRCQ3_2nn3nim22TitlePackageTaskConfigPCUsUi", export_CalculateTitleInstallSize);
 			};
 
-		}s_COSnnNimModule;
+		} s_COSnnNimModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnNimModule;
 		}
 
-	}
-}
+	} // namespace nim
+} // namespace nn

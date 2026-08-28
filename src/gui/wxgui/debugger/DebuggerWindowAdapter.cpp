@@ -10,7 +10,7 @@ namespace
 	{
 		return static_cast<DebuggerWindow2&>(window);
 	}
-}
+} // namespace
 
 namespace WxDebuggerAdapters
 {
@@ -82,4 +82,4 @@ namespace WxDebuggerAdapters
 	{
 		return g_gdbstub != nullptr;
 	}
-}
+} // namespace WxDebuggerAdapters

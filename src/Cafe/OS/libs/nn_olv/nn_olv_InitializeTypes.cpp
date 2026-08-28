@@ -126,7 +126,6 @@ namespace nn
 			if (httpCode != 200)
 				return OLV_RESULT_STATUS(httpCode + 4000);
 
-
 			/*
 				<result>
 					<has_error>0</has_error>
@@ -181,19 +180,19 @@ namespace nn
 			std::string requestUrl;
 			switch (ActiveSettings::GetNetworkService())
 			{
-				case NetworkService::Pretendo:
-					requestUrl = PretendoURLs::OLVURL;
-					break;
-				case NetworkService::Plasma:
-					requestUrl = PlasmaURLs::OLVURL;
-					break;
-				case NetworkService::Custom:
-					requestUrl = GetNetworkConfig().urls.OLV.GetValue();
-					break;
-				case NetworkService::Nintendo:
-				default:
-					requestUrl = NintendoURLs::OLVURL;
-					break;
+			case NetworkService::Pretendo:
+				requestUrl = PretendoURLs::OLVURL;
+				break;
+			case NetworkService::Plasma:
+				requestUrl = PlasmaURLs::OLVURL;
+				break;
+			case NetworkService::Custom:
+				requestUrl = GetNetworkConfig().urls.OLV.GetValue();
+				break;
+			case NetworkService::Nintendo:
+			default:
+				requestUrl = NintendoURLs::OLVURL;
+				break;
 			}
 
 			req.initate(ActiveSettings::GetNetworkService(), requestUrl, CurlRequestHelper::SERVER_SSL_CONTEXT::OLIVE);
@@ -242,7 +241,7 @@ namespace nn
 
 			g_IsInitialized = true;
 
-			if(ActiveSettings::GetNetworkService() == NetworkService::Nintendo)
+			if (ActiveSettings::GetNetworkService() == NetworkService::Nintendo)
 			{
 				// since the official Miiverse was shut down, use local post archive instead
 				g_IsOnlineMode = true;
@@ -290,7 +289,7 @@ namespace nn
 			memcpy(pPortalAppParam->m_ServiceToken, g_DiscoveryResults.serviceToken, sizeof(g_DiscoveryResults.serviceToken));
 
 			snprintf(reinterpret_cast<char*>(pPortalAppParam->m_StartUrl), sizeof(pPortalAppParam->m_StartUrl),
-				"%s/titles/show?src=menu", g_DiscoveryResults.portalEndpoint);
+					 "%s/titles/show?src=menu", g_DiscoveryResults.portalEndpoint);
 
 			return OLV_RESULT_SUCCESS;
 		}
@@ -306,11 +305,11 @@ namespace nn
 			{
 				g_ReportTypes = reportTypes | 0x1000;
 			}
-		}
+		} // namespace Report
 
 		bool IsInitialized()
 		{
 			return g_IsInitialized;
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

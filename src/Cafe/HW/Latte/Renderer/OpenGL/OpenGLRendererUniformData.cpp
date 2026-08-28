@@ -10,7 +10,8 @@ void OpenGLRenderer::uniformData_update()
 	LatteDecompilerShader* shaderArray[3];
 	shaderArray[0] = LatteSHRC_GetActiveVertexShader();
 	shaderArray[1] = LatteSHRC_GetActivePixelShader();
-	shaderArray[2] = LatteSHRC_GetActiveGeometryShader();;
+	shaderArray[2] = LatteSHRC_GetActiveGeometryShader();
+	;
 
 	uint32 shaderBlockUniformRegisterOffset[3];
 	shaderBlockUniformRegisterOffset[0] = mmSQ_VTX_UNIFORM_BLOCK_START;
@@ -36,11 +37,11 @@ void OpenGLRenderer::uniformData_update()
 			auto& list_uniformMapping = shader->list_remappedUniformEntries;
 			cemu_assert_debug(list_uniformMapping.size() <= 256);
 			sint32 remappedArraySize = (sint32)list_uniformMapping.size();
-			LatteBufferCache_LoadRemappedUniforms(shader, (float*)(_gl_remappedUniformData), true, (1<<LATTE_NUM_MAX_UNIFORM_BUFFERS)-1);
+			LatteBufferCache_LoadRemappedUniforms(shader, (float*)(_gl_remappedUniformData), true, (1 << LATTE_NUM_MAX_UNIFORM_BUFFERS) - 1);
 			// update values only when the hash changed
 			if (remappedArraySize > 0)
 			{
-				uint64 uniformDataHash[2] = { 0 };
+				uint64 uniformDataHash[2] = {0};
 				uint64* remappedUniformData64 = (uint64*)_gl_remappedUniformData;
 				for (sint32 f = 0; f < remappedArraySize; f++)
 				{

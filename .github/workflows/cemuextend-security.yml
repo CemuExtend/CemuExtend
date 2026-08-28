@@ -17,7 +17,11 @@ on:
       - 'src/Cafe/tests/PPCSandbox*'
       - 'src/Cafe/CMakeLists.txt'
       - 'src/config/CemuConfig*'
+      - 'src/application/**'
+      - 'src/frontend/**'
       - 'src/gui/wxgui/GeneralSettings2*'
+      - 'src/webview/**'
+      - 'ui/**'
       - 'src/util/MemMapper/MemMapper*'
       - 'dependencies/libcemuextend/**'
       - 'README.md'
@@ -57,6 +61,7 @@ jobs:
           -DCMAKE_C_COMPILER=/usr/bin/clang-15
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15
           -DCEMU_SANITIZER=${{ matrix.sanitizer }}
+          -DCEMU_FRONTEND=wx
           ${{ matrix.sanitizer == 'address-undefined' && '-DCEMU_ENABLE_FUZZING=ON' || '' }}
       - name: Build isolation tests
         run: >-

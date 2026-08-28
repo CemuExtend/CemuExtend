@@ -5,7 +5,10 @@
 
 #include <memory>
 
-namespace Host { class ICanvasHost; }
+namespace Host
+{
+	class ICanvasHost;
+}
 
 enum class CosCapabilityBits : uint64;
 enum class CosCapabilityGroup : uint32;
@@ -71,7 +74,7 @@ namespace CafeSystem
 	[[nodiscard]] bool RequestRecreateCanvas();
 	void NotifyPPCProcessExit(sint32 status);
 
-};
+}; // namespace CafeSystem
 
 extern RPLModule* applicationRPX;
 

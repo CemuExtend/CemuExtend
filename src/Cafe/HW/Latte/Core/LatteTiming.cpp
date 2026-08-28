@@ -58,10 +58,10 @@ void LatteTiming_EnableHostDrivenVSync()
 {
 	if (s_usingHostDrivenVSync)
 		return;
-	#ifdef ENABLE_VULKAN
+#ifdef ENABLE_VULKAN
 	VsyncDriver_startThread(LatteTiming_NotifyHostVSync);
 	s_usingHostDrivenVSync = true;
-	#endif
+#endif
 }
 
 bool LatteTiming_IsUsingHostDrivenVSync()
@@ -107,7 +107,6 @@ void LatteTiming_signalVsync()
 				}
 
 				LatteGPUState.flipCounter++;
-
 			}
 			else
 			{
@@ -117,7 +116,6 @@ void LatteTiming_signalVsync()
 					LatteGPUState.flipRequestCount.fetch_sub(1);
 					LatteGPUState.sharedArea->flipExecuteCountBE = _swapEndianU32(_swapEndianU32(LatteGPUState.sharedArea->flipExecuteCountBE) + 1);
 				}
-
 			}
 		}
 		GX2::__GX2NotifyEvent(GX2::GX2CallbackEventType::FLIP);
@@ -137,7 +135,6 @@ void LatteTiming_NotifyHostVSync()
 	auto nowTimePoint = HighResolutionTimer::now().getTick();
 	auto dif = nowTimePoint - s_lastHostVsync;
 	auto vsyncPeriod = LatteTime_CalculateTimeBetweenVSync();
-
 
 	if (dif < vsyncPeriod)
 	{
@@ -160,9 +157,9 @@ void LatteTiming_HandleTimedVsync()
 {
 	// simulate VSync
 	uint64 currentTimer = HighResolutionTimer::now().getTick();
-	if( currentTimer >= LatteGPUState.timer_nextVSync )
+	if (currentTimer >= LatteGPUState.timer_nextVSync)
 	{
-		if(!LatteTiming_IsUsingHostDrivenVSync())
+		if (!LatteTiming_IsUsingHostDrivenVSync())
 			LatteTiming_signalVsync();
 		// even if vsync is delegated to the host device, we still use this virtual vsync timer to check finished states
 		LatteQuery_UpdateFinishedQueries();
@@ -172,9 +169,9 @@ void LatteTiming_HandleTimedVsync()
 		uint64 missedVsyncCount = (currentTimer - LatteGPUState.timer_nextVSync) / vsyncTime;
 		if (missedVsyncCount >= 2)
 		{
-			LatteGPUState.timer_nextVSync += vsyncTime*(missedVsyncCount+1ULL);
+			LatteGPUState.timer_nextVSync += vsyncTime * (missedVsyncCount + 1ULL);
 		}
-		else	
+		else
 			LatteGPUState.timer_nextVSync += vsyncTime;
 	}
 }

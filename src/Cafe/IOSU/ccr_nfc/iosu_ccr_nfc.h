@@ -1,9 +1,9 @@
 #pragma once
 #include "Cafe/IOSU/iosu_types_common.h"
 
-#define CCR_NFC_ERROR 					(-0x2F001E)
-#define CCR_NFC_INVALID_LOCKED_SECRET	(-0x2F0029)
-#define CCR_NFC_INVALID_UNFIXED_INFOS	(-0x2F002A)
+#define CCR_NFC_ERROR (-0x2F001E)
+#define CCR_NFC_INVALID_LOCKED_SECRET (-0x2F0029)
+#define CCR_NFC_INVALID_UNFIXED_INFOS (-0x2F002A)
 
 namespace iosu
 {
@@ -27,5 +27,5 @@ namespace iosu
 		static_assert(sizeof(CCRNFCCryptData) == 0x248);
 
 		IOSUModule* GetModule();
-	}
-}
+	} // namespace ccr_nfc
+} // namespace iosu

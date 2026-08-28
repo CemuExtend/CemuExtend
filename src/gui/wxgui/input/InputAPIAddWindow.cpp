@@ -28,7 +28,7 @@ namespace
 		std::string selectedUuid;
 		std::vector<ControllerPtr> controllers;
 	};
-}
+} // namespace
 
 struct InputAPIAddWindow::AsyncThreadData
 {
@@ -40,7 +40,7 @@ struct InputAPIAddWindow::AsyncThreadData
 };
 
 InputAPIAddWindow::InputAPIAddWindow(wxWindow* parent, const wxPoint& position,
-                                     const std::vector<ControllerPtr>& controllers)
+									 const std::vector<ControllerPtr>& controllers)
 	: wxDialog(parent, wxID_ANY, "Add input API", position, wxDefaultSize, wxCAPTION),
 	  m_controllers(controllers), m_search_timer(this)
 {
@@ -72,7 +72,7 @@ InputAPIAddWindow::InputAPIAddWindow(wxWindow* parent, const wxPoint& position,
 		api_row->Add(new wxStaticText(this, wxID_ANY, _("Controller")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
 		m_controller_list = new wxComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, nullptr,
-		                                   wxCB_READONLY);
+										   wxCB_READONLY);
 		m_controller_list->Bind(wxEVT_COMBOBOX_DROPDOWN, &InputAPIAddWindow::on_controller_dropdown, this);
 		m_controller_list->Bind(wxEVT_COMBOBOX, &InputAPIAddWindow::on_controller_selected, this);
 		m_controller_list->SetMinSize(wxSize(240, -1));
@@ -180,7 +180,7 @@ std::unique_ptr<ControllerProviderSettings> InputAPIAddWindow::get_settings() co
 		return {};
 
 	return std::make_unique<DSUProviderSettings>(m_ip->GetValue().ToStdString(),
-	                                             ConvertString<uint16>(m_port->GetValue().ToStdString()));
+												 ConvertString<uint16>(m_port->GetValue().ToStdString()));
 }
 
 void InputAPIAddWindow::on_api_selected(wxCommandEvent& event)
@@ -193,7 +193,7 @@ void InputAPIAddWindow::on_api_selected(wxCommandEvent& event)
 	m_controller_list->Enable();
 	m_controller_list->SetSelection(wxNOT_FOUND);
 
-    const auto selection = m_input_api->GetStringSelection();
+	const auto selection = m_input_api->GetStringSelection();
 	// keyboard is a special case, as theres only one device supported atm
 	if (selection == wxString::FromUTF8(to_string(InputAPI::Keyboard)))
 	{
@@ -209,16 +209,16 @@ void InputAPIAddWindow::on_api_selected(wxCommandEvent& event)
 			m_controller_list->SetSelection(index);
 		}
 	}
-    else
-    {
+	else
+	{
 #if BOOST_OS_LINUX || BOOST_OS_BSD
-        // We rely on the wxEVT_COMBOBOX_DROPDOWN event to trigger filling the controller list,
-        // but on wxGTK the dropdown button cannot be clicked if the list is empty
-        // so as a quick and dirty workaround we fill the list here
-        wxCommandEvent tmpCmdEvt;
-        on_controller_dropdown(tmpCmdEvt);
+		// We rely on the wxEVT_COMBOBOX_DROPDOWN event to trigger filling the controller list,
+		// but on wxGTK the dropdown button cannot be clicked if the list is empty
+		// so as a quick and dirty workaround we fill the list here
+		wxCommandEvent tmpCmdEvt;
+		on_controller_dropdown(tmpCmdEvt);
 #endif
-    }
+	}
 
 	const auto show_settings = has_custom_settings();
 	// dsu has special settings for ip/port
@@ -269,32 +269,30 @@ void InputAPIAddWindow::on_controller_dropdown(wxCommandEvent& event)
 	m_controller_list->SetSelection(wxNOT_FOUND);
 
 	m_search_thread_data = std::make_unique<AsyncThreadData>();
-	m_search_thread = std::thread([provider, selected_uuid, generation](std::shared_ptr<AsyncThreadData> data)
-	{
+	m_search_thread = std::thread([provider, selected_uuid, generation](std::shared_ptr<AsyncThreadData> data) {
 		try
 		{
 			auto availableControllers = provider->get_controllers();
 			std::lock_guard lock{data->mutex};
 			if (!data->canceled)
 				data->result = AsyncSearchResult{generation, provider->api(), selected_uuid,
-					std::move(availableControllers)};
+												 std::move(availableControllers)};
 			data->complete = true;
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			std::lock_guard lock{data->mutex};
 			if (!data->canceled)
 				data->error = error.what();
 			data->complete = true;
-		}
-		catch (...)
+		} catch (...)
 		{
 			std::lock_guard lock{data->mutex};
 			if (!data->canceled)
 				data->error = "Unknown controller enumeration error";
 			data->complete = true;
 		}
-	}, m_search_thread_data);
+	},
+								  m_search_thread_data);
 }
 
 void InputAPIAddWindow::on_controller_selected(wxCommandEvent& event)
@@ -320,7 +318,8 @@ void InputAPIAddWindow::on_controller_selected(wxCommandEvent& event)
 void InputAPIAddWindow::on_controllers_refreshed(wxCommandEvent& event)
 {
 	const auto result = static_cast<wxCustomData<AsyncSearchResult>*>(
-		event.GetClientObject())->get();
+							event.GetClientObject())
+							->get();
 	if (result.generation != m_search_generation)
 		return;
 	wxASSERT(0 <= result.type && result.type < InputAPI::MAX);
@@ -381,7 +380,7 @@ void InputAPIAddWindow::discard_thread_result()
 {
 	m_search_running = false;
 	++m_search_generation;
-	if(m_search_thread_data)
+	if (m_search_thread_data)
 	{
 		std::lock_guard lock{m_search_thread_data->mutex};
 		m_search_thread_data->canceled = true;

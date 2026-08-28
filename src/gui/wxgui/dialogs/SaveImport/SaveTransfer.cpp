@@ -13,11 +13,10 @@
 #include "wxgui/helpers/wxHelpers.h"
 
 SaveTransfer::SaveTransfer(wxWindow* parent,
-	Application::EmulationController& emulationController, uint64 title_id,
-	const wxString& source_account, uint32 source_id)
+						   Application::EmulationController& emulationController, uint64 title_id,
+						   const wxString& source_account, uint32 source_id)
 	: wxDialog(parent, wxID_ANY, _("Save transfer"), wxDefaultPosition,
-		wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU |
-		wxTAB_TRAVERSAL | wxCLOSE_BOX),
+			   wxDefaultSize, wxCAPTION | wxFRAME_TOOL_WINDOW | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
 	  m_title_id(title_id), m_source_id(source_id),
 	  m_emulationController(emulationController)
 {
@@ -25,7 +24,7 @@ SaveTransfer::SaveTransfer(wxWindow* parent,
 	auto* row1 = new wxFlexGridSizer(0, 2, 0, 0);
 	row1->AddGrowableCol(1);
 	row1->Add(new wxStaticText(this, wxID_ANY, _("Source")), 0,
-		wxALIGN_CENTER_VERTICAL | wxALL, 5);
+			  wxALIGN_CENTER_VERTICAL | wxALL, 5);
 	auto* sourceChoice = new wxChoice(this, wxID_ANY);
 	sourceChoice->SetMinSize({170, -1});
 	sourceChoice->Append(source_account);
@@ -33,15 +32,15 @@ SaveTransfer::SaveTransfer(wxWindow* parent,
 	row1->Add(sourceChoice, 1, wxALL | wxEXPAND, 5);
 
 	row1->Add(new wxStaticText(this, wxID_ANY, _("Target")), 0,
-		wxALIGN_CENTER_VERTICAL | wxALL, 5);
+			  wxALIGN_CENTER_VERTICAL | wxALL, 5);
 	m_target_selection = new wxComboBox(this, wxID_ANY);
 	for (const auto& account : m_emulationController.ListAccounts())
 	{
 		if (account.persistentId == m_source_id)
 			continue;
 		m_target_selection->Append(fmt::format("{:x} ({})", account.persistentId,
-			boost::nowide::narrow(account.miiName)),
-			(void*)(uintptr_t)account.persistentId);
+											   boost::nowide::narrow(account.miiName)),
+								   (void*)(uintptr_t)account.persistentId);
 	}
 	row1->Add(m_target_selection, 1, wxALL | wxEXPAND, 5);
 	sizer->Add(row1, 0, wxEXPAND, 5);
@@ -81,9 +80,10 @@ void SaveTransfer::OnTransfer(wxCommandEvent& event)
 		if (targetId < Application::kMinimumPersistentId)
 		{
 			wxMessageBox(formatWxString(
-				_("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"),
-				Application::kMinimumPersistentId), _("Error"),
-				wxOK | wxCENTRE | wxICON_ERROR, this);
+							 _("The given account id is not valid!\nIt must be a hex number bigger or equal than {:08x}"),
+							 Application::kMinimumPersistentId),
+						 _("Error"),
+						 wxOK | wxCENTRE | wxICON_ERROR, this);
 			return;
 		}
 	}
@@ -92,26 +92,26 @@ void SaveTransfer::OnTransfer(wxCommandEvent& event)
 	if (target.state == Application::SaveEntryState::NonDirectory)
 	{
 		wxMessageBox(formatWxString(_("There's already a file at the target directory:\n{}"),
-			_pathToUtf8(target.path)), _("Error"), wxOK | wxCENTRE |
-			wxICON_ERROR, this);
+									_pathToUtf8(target.path)),
+					 _("Error"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 	bool overwrite{};
 	if (target.state == Application::SaveEntryState::Directory)
 	{
 		const auto message = _("There's already a save game available for the target account, do you want to overwrite it?\nThis will delete the existing save files for the account and replace them.");
-		if (wxMessageBox(message, _("Error"), wxYES_NO | wxCENTRE |
-			wxICON_WARNING, this) == wxNO)
+		if (wxMessageBox(message, _("Error"), wxYES_NO | wxCENTRE | wxICON_WARNING, this) == wxNO)
 			return;
 		overwrite = true;
 	}
 
 	const auto transferred = m_emulationController.TransferSave(m_title_id,
-		m_source_id, targetId, overwrite);
+																m_source_id, targetId, overwrite);
 	if (!transferred)
 	{
 		wxMessageBox(formatWxString(_("Error when trying to move the save game:\n{}"),
-			transferred.diagnostic), _("Error"), wxOK | wxCENTRE, this);
+									transferred.diagnostic),
+					 _("Error"), wxOK | wxCENTRE, this);
 		return;
 	}
 

@@ -14,7 +14,7 @@ namespace
 		}
 	}
 #define CHECK(condition) Check((condition), #condition, __LINE__)
-}
+} // namespace
 
 int main()
 {
@@ -23,9 +23,9 @@ int main()
 	CHECK(functionPatch != 0);
 	CHECK(CemodGuiAdapter::PermissionName(CemodGuiPermission::Modules) == "Aroma/WUMS modules");
 	CHECK(CemodGuiAdapter::PermissionName(CemodGuiPermission::PluginManagement) ==
-		"WUPS plugin management");
+		  "WUPS plugin management");
 	CHECK(CemodGuiAdapter::MakeApprovalKey("org.example.plugin", "abc") ==
-		"org.example.plugin|sha256:abc");
+		  "org.example.plugin|sha256:abc");
 	CHECK(CemodGuiAdapter::DefaultGrantedPermissions(functionPatch | notifications) == notifications);
 
 	const auto missing = CemodGuiAdapter::EvaluateApproval(functionPatch, std::nullopt, false);
@@ -39,7 +39,7 @@ int main()
 	const auto accepted = CemodGuiAdapter::EvaluateApproval(functionPatch, approval, false);
 	CHECK(accepted.result == CemodGuiApprovalResult::Approved);
 	const auto changed = CemodGuiAdapter::EvaluateApproval(functionPatch | notifications,
-		approval, false);
+														   approval, false);
 	CHECK(changed.result == CemodGuiApprovalResult::NeedsReapproval);
 	const auto config = CemodGuiAdapter::UnavailableConfig();
 	CHECK(config.size() == 1 && !config.front().available);

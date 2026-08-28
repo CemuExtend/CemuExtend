@@ -14,7 +14,7 @@ enum class GfxVendor;
 
 class GraphicPack2
 {
-public:
+  public:
 	enum class GP_SHADER_TYPE : uint8
 	{
 		PIXEL = 0,
@@ -35,7 +35,8 @@ public:
 		// filter (texture must match these settings)
 		struct FILTER_SETTINGS
 		{
-			enum class MEM1_FILTER {
+			enum class MEM1_FILTER
+			{
 				BOTH,
 				INSIDE,
 				OUTSIDE,
@@ -56,9 +57,9 @@ public:
 			sint32 height = -1;
 			sint32 depth = -1;
 			sint32 format = -1;
-			sint32 lod_bias = -1; // in 1/64th steps
+			sint32 lod_bias = -1;		   // in 1/64th steps
 			sint32 relative_lod_bias = -1; // in 1/64th steps
-			sint32 anistropic_value = -1; // 1<<n
+			sint32 anistropic_value = -1;  // 1<<n
 		} overwrite_settings;
 	};
 
@@ -69,7 +70,7 @@ public:
 		uint64 shader_aux_hash;
 		GP_SHADER_TYPE type;
 		bool isPreVulkanShader{}; // set to true for V3 packs since the shaders are not compatible with the Vulkan renderer
-		bool isMetalShader{}; // set to true if the shader is written in Metal Shading Language
+		bool isMetalShader{};	  // set to true if the shader is written in Metal Shading Language
 	};
 
 	enum VarType
@@ -82,11 +83,11 @@ public:
 	struct Preset
 	{
 		std::string category; // preset category (empty for default)
-		std::string name; // displayed name
+		std::string name;	  // displayed name
 		std::string condition;
 		std::unordered_map<std::string, PresetVar> variables;
-		bool active = false; // selected/active preset
-		bool visible = true; // set by condition or true
+		bool active = false;	 // selected/active preset
+		bool visible = true;	 // set by condition or true
 		bool is_default = false; // selected by default
 
 		Preset(std::string_view name, std::unordered_map<std::string, PresetVar> vars)
@@ -102,34 +103,85 @@ public:
 
 	GraphicPack2(fs::path rulesPath, class IniParser& rules);
 
-	bool IsEnabled() const { return m_enabled; }
-	bool IsActivated() const { return m_activated; }
-	sint32 GetVersion() const { return m_version; }
-	const fs::path GetRulesPath() const { return m_rulesPath; }
+	bool IsEnabled() const
+	{
+		return m_enabled;
+	}
+	bool IsActivated() const
+	{
+		return m_activated;
+	}
+	sint32 GetVersion() const
+	{
+		return m_version;
+	}
+	const fs::path GetRulesPath() const
+	{
+		return m_rulesPath;
+	}
 	std::string GetNormalizedPathString() const;
 	bool RequiresRestart(bool changeEnableState, bool changePreset);
 	bool Reload();
 
-	bool HasName() const { return !m_name.empty();  }
-	bool IsUniversal() const { return m_universal; }
+	bool HasName() const
+	{
+		return !m_name.empty();
+	}
+	bool IsUniversal() const
+	{
+		return m_universal;
+	}
 
-	const std::string& GetName() const { return m_name.empty() ? m_virtualPath : m_name; }
-	const std::string& GetVirtualPath() const { return m_virtualPath; } // returns the path in the gfx tree hierarchy
-	const std::string& GetDescription() const { return m_description; }
-	bool IsDefaultEnabled() const {	return m_default_enabled; }
-	bool AllowRendertargetSizeOptimization() const { return m_allowRendertargetSizeOptimization; }
+	const std::string& GetName() const
+	{
+		return m_name.empty() ? m_virtualPath : m_name;
+	}
+	const std::string& GetVirtualPath() const
+	{
+		return m_virtualPath;
+	} // returns the path in the gfx tree hierarchy
+	const std::string& GetDescription() const
+	{
+		return m_description;
+	}
+	bool IsDefaultEnabled() const
+	{
+		return m_default_enabled;
+	}
+	bool AllowRendertargetSizeOptimization() const
+	{
+		return m_allowRendertargetSizeOptimization;
+	}
 
-	void SetEnabled(bool state) { m_enabled = state; }
+	void SetEnabled(bool state)
+	{
+		m_enabled = state;
+	}
 
 	bool ContainsTitleId(uint64_t title_id) const;
-	const std::vector<uint64_t>& GetTitleIds() const { return m_title_ids; }
-	bool HasCustomVSyncFrequency() const { return m_vsync_frequency >= 1; }
-	sint32 GetCustomVSyncFrequency() const { return m_vsync_frequency; }
-	
-	const std::vector<std::pair<MPTR, GPCallbackType>>& GetCallbacks() const { return m_callbacks; }
+	const std::vector<uint64_t>& GetTitleIds() const
+	{
+		return m_title_ids;
+	}
+	bool HasCustomVSyncFrequency() const
+	{
+		return m_vsync_frequency >= 1;
+	}
+	sint32 GetCustomVSyncFrequency() const
+	{
+		return m_vsync_frequency;
+	}
+
+	const std::vector<std::pair<MPTR, GPCallbackType>>& GetCallbacks() const
+	{
+		return m_callbacks;
+	}
 
 	// texture rules
-	const std::vector<TextureRule>& GetTextureRules() const { return m_texture_rules; }
+	const std::vector<TextureRule>& GetTextureRules() const
+	{
+		return m_texture_rules;
+	}
 
 	// presets
 	[[nodiscard]] bool HasActivePreset() const;
@@ -146,33 +198,63 @@ public:
 	void AddConstantsForCurrentPreset(ExpressionParser& ep);
 	bool ResolvePresetConstant(const std::string& varname, double& value) const;
 
-	[[nodiscard]] const std::vector<PresetPtr>& GetPresets() const { return m_presets; }
+	[[nodiscard]] const std::vector<PresetPtr>& GetPresets() const
+	{
+		return m_presets;
+	}
 	[[nodiscard]] std::unordered_map<std::string, std::vector<PresetPtr>> GetCategorizedPresets(std::vector<std::string>& order) const;
-	
+
 	// permissions
-	const std::vector<std::pair<CosCapabilityGroup, uint64>>& GetPermissionOverrides() { return m_permissions; }
+	const std::vector<std::pair<CosCapabilityGroup, uint64>>& GetPermissionOverrides()
+	{
+		return m_permissions;
+	}
 
 	// shaders
 	void LoadShaders();
 	bool HasShaders() const;
-	const std::vector<CustomShader>& GetCustomShaders() const { return m_custom_shaders; }
+	const std::vector<CustomShader>& GetCustomShaders() const
+	{
+		return m_custom_shaders;
+	}
 
 	static const std::string* FindCustomShaderSource(uint64 shaderBaseHash, uint64 shaderAuxHash, GP_SHADER_TYPE type, bool isVulkanRenderer, bool isMetalRenderer);
 
-	const std::string& GetOutputShaderSource() const { return m_output_shader_source; }
-	const std::string& GetDownscalingShaderSource() const { return m_downscaling_shader_source; }
-	const std::string& GetUpscalingShaderSource() const { return m_upscaling_shader_source; }
+	const std::string& GetOutputShaderSource() const
+	{
+		return m_output_shader_source;
+	}
+	const std::string& GetDownscalingShaderSource() const
+	{
+		return m_downscaling_shader_source;
+	}
+	const std::string& GetUpscalingShaderSource() const
+	{
+		return m_upscaling_shader_source;
+	}
 	RendererOutputShader* GetOuputShader(bool render_upside_down);
 	RendererOutputShader* GetUpscalingShader(bool render_upside_down);
 	RendererOutputShader* GetDownscalingShader(bool render_upside_down);
-	LatteTextureView::MagFilter GetUpscalingMagFilter() const { return m_output_settings.upscale_filter; }
-	LatteTextureView::MagFilter GetDownscalingMagFilter() const { return m_output_settings.downscale_filter; }
+	LatteTextureView::MagFilter GetUpscalingMagFilter() const
+	{
+		return m_output_settings.upscale_filter;
+	}
+	LatteTextureView::MagFilter GetDownscalingMagFilter() const
+	{
+		return m_output_settings.downscale_filter;
+	}
 
 	// static methods
 	static void LoadAll();
 
-	static const std::vector<std::shared_ptr<GraphicPack2>>& GetGraphicPacks() { return s_graphic_packs; }
-	static const std::vector<std::shared_ptr<GraphicPack2>>& GetActiveGraphicPacks() { return s_active_graphic_packs; }
+	static const std::vector<std::shared_ptr<GraphicPack2>>& GetGraphicPacks()
+	{
+		return s_graphic_packs;
+	}
+	static const std::vector<std::shared_ptr<GraphicPack2>>& GetActiveGraphicPacks()
+	{
+		return s_active_graphic_packs;
+	}
 	static void LoadGraphicPack(fs::path graphicPackPath);
 	static bool LoadGraphicPack(const fs::path& rulesPath, class IniParser& rules);
 	static bool ActivateGraphicPack(const std::shared_ptr<GraphicPack2>& graphic_pack);
@@ -183,7 +265,7 @@ public:
 	static void ActivateForCurrentTitle();
 	static void Reset();
 
-private:
+  private:
 	bool Activate();
 	bool Deactivate();
 
@@ -197,17 +279,17 @@ private:
 		// fils preset variables with priority
 		// active && visible > active > default
 		const auto active_presets = GetActivePresets();
-		for(const auto& preset : active_presets)
+		for (const auto& preset : active_presets)
 		{
-			if(preset->visible)
+			if (preset->visible)
 			{
 				for (auto& var : preset->variables)
 					parser.AddConstant(var.first, (TType)var.second.second);
 			}
 		}
-		for(const auto& preset : active_presets)
+		for (const auto& preset : active_presets)
 		{
-			if(!preset->visible)
+			if (!preset->visible)
 			{
 				for (auto& var : preset->variables)
 					parser.TryAddConstant(var.first, (TType)var.second.second);
@@ -237,7 +319,7 @@ private:
 	bool m_activated = false; // set if the graphic pack is currently used by the running game
 	std::vector<uint64_t> m_title_ids;
 	bool m_patchedFilesLoaded = false; // set to true once patched files are loaded
-	bool m_universal = false; // set if this pack applies to every title id
+	bool m_universal = false;		   // set if this pack applies to every title id
 
 	sint32 m_vsync_frequency = -1;
 	sint32 m_fs_priority = 100;
@@ -268,7 +350,7 @@ private:
 
 	// ram mappings
 	std::vector<std::pair<MPTR, MPTR>> m_ramMappings;
-	
+
 	// permissions
 	std::vector<std::pair<CosCapabilityGroup, uint64>> m_permissions;
 
@@ -288,13 +370,13 @@ private:
 	void LogPatchesSyntaxError(sint32 lineNumber, std::string_view errorMsg);
 
 	std::vector<PatchGroup*> list_patchGroups;
-	
+
 	std::vector<std::pair<MPTR, GPCallbackType>> m_callbacks;
 
 	static std::recursive_mutex mtx_patches;
 	static std::vector<const RPLModule*> list_modules;
 
-public:
+  public:
 	static std::vector<std::pair<MPTR, MPTR>> GetActiveRAMMappings();
 	void EnablePatches();
 	void UnloadPatches();

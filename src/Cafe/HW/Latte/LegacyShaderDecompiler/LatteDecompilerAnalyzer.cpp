@@ -26,13 +26,13 @@ sint32 LatteDecompiler_getColorOutputIndexFromExportIndex(LatteDecompilerShaderC
 	sint32 outputCounter = 0;
 	uint32 cbShaderMask = shaderContext->contextRegisters[mmCB_SHADER_MASK];
 	uint32 cbShaderControl = shaderContext->contextRegisters[mmCB_SHADER_CONTROL];
-	for(sint32 m=0; m<8; m++)
+	for (sint32 m = 0; m < 8; m++)
 	{
-		uint32 outputMask = (cbShaderMask>>(m*4))&0xF;
-		if( outputMask == 0 )
+		uint32 outputMask = (cbShaderMask >> (m * 4)) & 0xF;
+		if (outputMask == 0)
 			continue;
 		cemu_assert_debug(outputMask == 0xF); // mask is unsupported
-		if( outputCounter == exportIndex )
+		if (outputCounter == exportIndex)
 		{
 			colorOutputIndex = m;
 			break;
@@ -46,19 +46,19 @@ sint32 LatteDecompiler_getColorOutputIndexFromExportIndex(LatteDecompilerShaderC
 void _remapUniformAccess(LatteDecompilerShaderContext* shaderContext, bool isRegisterUniform, uint32 kcacheBankId, uint32 uniformIndex)
 {
 	auto& list_uniformMapping = shaderContext->shader->list_remappedUniformEntries;
-	for(uint32 i=0; i<list_uniformMapping.size(); i++)
+	for (uint32 i = 0; i < list_uniformMapping.size(); i++)
 	{
-		LatteDecompilerRemappedUniformEntry_t* ufMapping = list_uniformMapping.data()+i;
-		if( isRegisterUniform )
+		LatteDecompilerRemappedUniformEntry_t* ufMapping = list_uniformMapping.data() + i;
+		if (isRegisterUniform)
 		{
-			if( ufMapping->isRegister == true && ufMapping->index == uniformIndex )
+			if (ufMapping->isRegister == true && ufMapping->index == uniformIndex)
 			{
 				return;
 			}
 		}
 		else
 		{
-			if( ufMapping->isRegister == false && ufMapping->kcacheBankId == kcacheBankId && ufMapping->index == uniformIndex )
+			if (ufMapping->isRegister == false && ufMapping->kcacheBankId == kcacheBankId && ufMapping->index == uniformIndex)
 			{
 				return;
 			}
@@ -66,7 +66,7 @@ void _remapUniformAccess(LatteDecompilerShaderContext* shaderContext, bool isReg
 	}
 	// add new mapping
 	LatteDecompilerRemappedUniformEntry_t newMapping = {0};
-	if( isRegisterUniform )
+	if (isRegisterUniform)
 	{
 		newMapping.isRegister = true;
 		newMapping.index = uniformIndex;
@@ -200,7 +200,7 @@ bool _isIntegerInstruction(const LatteDecompilerALUInstruction& aluInstruction)
 			return true;
 		default:
 #ifdef CEMU_DEBUG_ASSERT
-			debug_printf("_isIntegerInstruction(): OP3=%s opcode=%02x\n", aluInstruction.isOP3?"true":"false", aluInstruction.opcode);
+			debug_printf("_isIntegerInstruction(): OP3=%s opcode=%02x\n", aluInstruction.isOP3 ? "true" : "false", aluInstruction.opcode);
 #endif
 			break;
 		}
@@ -214,18 +214,18 @@ bool _isIntegerInstruction(const LatteDecompilerALUInstruction& aluInstruction)
 void LatteDecompiler_analyzeALUClause(LatteDecompilerShaderContext* shaderContext, LatteDecompilerCFInstruction* cfInstruction)
 {
 	// check if this shader has any clause that potentially modifies the pixel execution state
-	if( cfInstruction->type == GPU7_CF_INST_ALU_PUSH_BEFORE || cfInstruction->type == GPU7_CF_INST_ALU_POP_AFTER || cfInstruction->type == GPU7_CF_INST_ALU_POP2_AFTER || cfInstruction->type == GPU7_CF_INST_ALU_BREAK || cfInstruction->type == GPU7_CF_INST_ALU_ELSE_AFTER )
+	if (cfInstruction->type == GPU7_CF_INST_ALU_PUSH_BEFORE || cfInstruction->type == GPU7_CF_INST_ALU_POP_AFTER || cfInstruction->type == GPU7_CF_INST_ALU_POP2_AFTER || cfInstruction->type == GPU7_CF_INST_ALU_BREAK || cfInstruction->type == GPU7_CF_INST_ALU_ELSE_AFTER)
 	{
 		shaderContext->analyzer.modifiesPixelActiveState = true;
 	}
 	// analyze ALU instructions
-	for(auto& aluInstruction : cfInstruction->instructionsALU)
+	for (auto& aluInstruction : cfInstruction->instructionsALU)
 	{
 		// ignore NOP instruction
-		if( !aluInstruction.isOP3 && aluInstruction.opcode == ALU_OP2_INST_NOP )
+		if (!aluInstruction.isOP3 && aluInstruction.opcode == ALU_OP2_INST_NOP)
 			continue;
 		// check for CUBE instruction
-		if( !aluInstruction.isOP3 && aluInstruction.opcode == ALU_OP2_INST_CUBE )
+		if (!aluInstruction.isOP3 && aluInstruction.opcode == ALU_OP2_INST_CUBE)
 		{
 			shaderContext->analyzer.hasRedcCUBE = true;
 		}
@@ -233,16 +233,16 @@ void LatteDecompiler_analyzeALUClause(LatteDecompilerShaderContext* shaderContex
 		if (_isIntegerInstruction(aluInstruction))
 			shaderContext->analyzer.usesIntegerValues = true;
 		// process all available operands (inputs)
-		for(sint32 f=0; f<3; f++)
+		for (sint32 f = 0; f < 3; f++)
 		{
 			// check input for uniform access
-			if( aluInstruction.sourceOperand[f].sel == 0xFFFFFFFF )
+			if (aluInstruction.sourceOperand[f].sel == 0xFFFFFFFF)
 				continue; // source operand not set/used
 			// about uniform register and buffer access tracking:
 			// for absolute indices we can determine a maximum size that is accessed
 			// relative accesses are tricky because the upper bound of accessed indices is unknown
 			// worst case we have to load the full file (256 * 16 byte entries) or for buffers an arbitrary upper bound (64KB in our case)
-			if( GPU7_ALU_SRC_IS_CFILE(aluInstruction.sourceOperand[f].sel) )
+			if (GPU7_ALU_SRC_IS_CFILE(aluInstruction.sourceOperand[f].sel))
 			{
 				if (aluInstruction.sourceOperand[f].rel)
 				{
@@ -254,40 +254,39 @@ void LatteDecompiler_analyzeALUClause(LatteDecompilerShaderContext* shaderContex
 					shaderContext->analyzer.uniformRegisterAccessTracker.TrackAccess(GPU7_ALU_SRC_GET_CFILE_INDEX(aluInstruction.sourceOperand[f].sel), false);
 				}
 			}
-			else if( GPU7_ALU_SRC_IS_CBANK0(aluInstruction.sourceOperand[f].sel) )
+			else if (GPU7_ALU_SRC_IS_CBANK0(aluInstruction.sourceOperand[f].sel))
 			{
 				// uniform bank 0 (uniform buffer with index cfInstruction->cBank0Index)
 				uint32 uniformBufferIndex = cfInstruction->cBank0Index;
 				cemu_assert(uniformBufferIndex < LATTE_NUM_MAX_UNIFORM_BUFFERS);
-				uint32 offset = GPU7_ALU_SRC_GET_CBANK0_INDEX(aluInstruction.sourceOperand[f].sel)+cfInstruction->cBank0AddrBase;
+				uint32 offset = GPU7_ALU_SRC_GET_CBANK0_INDEX(aluInstruction.sourceOperand[f].sel) + cfInstruction->cBank0AddrBase;
 				_remapUniformAccess(shaderContext, false, uniformBufferIndex, offset);
 				shaderContext->analyzer.uniformBufferAccessTracker[uniformBufferIndex].TrackAccess(offset, aluInstruction.sourceOperand[f].rel);
 			}
-			else if( GPU7_ALU_SRC_IS_CBANK1(aluInstruction.sourceOperand[f].sel) )
+			else if (GPU7_ALU_SRC_IS_CBANK1(aluInstruction.sourceOperand[f].sel))
 			{
 				// uniform bank 1 (uniform buffer with index cfInstruction->cBank1Index)
 				uint32 uniformBufferIndex = cfInstruction->cBank1Index;
 				cemu_assert(uniformBufferIndex < LATTE_NUM_MAX_UNIFORM_BUFFERS);
-				uint32 offset = GPU7_ALU_SRC_GET_CBANK1_INDEX(aluInstruction.sourceOperand[f].sel)+cfInstruction->cBank1AddrBase;
+				uint32 offset = GPU7_ALU_SRC_GET_CBANK1_INDEX(aluInstruction.sourceOperand[f].sel) + cfInstruction->cBank1AddrBase;
 				_remapUniformAccess(shaderContext, false, uniformBufferIndex, offset);
 				shaderContext->analyzer.uniformBufferAccessTracker[uniformBufferIndex].TrackAccess(offset, aluInstruction.sourceOperand[f].rel);
 			}
-			else if( GPU7_ALU_SRC_IS_GPR(aluInstruction.sourceOperand[f].sel) )
+			else if (GPU7_ALU_SRC_IS_GPR(aluInstruction.sourceOperand[f].sel))
 			{
 				sint32 gprIndex = GPU7_ALU_SRC_GET_GPR_INDEX(aluInstruction.sourceOperand[f].sel);
-				shaderContext->analyzer.gprUseMask[gprIndex/8] |= (1<<(gprIndex%8));
-				if( aluInstruction.sourceOperand[f].rel != 0 )
+				shaderContext->analyzer.gprUseMask[gprIndex / 8] |= (1 << (gprIndex % 8));
+				if (aluInstruction.sourceOperand[f].rel != 0)
 				{
 					// if indexed register access is used, all possibly referenced registers are stored to a separate array at the beginning of the group
 					shaderContext->analyzer.usesRelativeGPRRead = true;
 					continue;
 				}
-
 			}
 		}
-		if( aluInstruction.destRel != 0 )
+		if (aluInstruction.destRel != 0)
 			shaderContext->analyzer.usesRelativeGPRWrite = true;
-		shaderContext->analyzer.gprUseMask[aluInstruction.destGpr/8] |= (1<<(aluInstruction.destGpr%8));
+		shaderContext->analyzer.gprUseMask[aluInstruction.destGpr / 8] |= (1 << (aluInstruction.destGpr % 8));
 	}
 }
 
@@ -295,9 +294,9 @@ void LatteDecompiler_analyzeALUClause(LatteDecompilerShaderContext* shaderContex
 void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContext, LatteDecompilerCFInstruction* cfInstruction)
 {
 	LatteDecompilerShader* shader = shaderContext->shader;
-	for(auto& texInstruction : cfInstruction->instructionsTEX)
+	for (auto& texInstruction : cfInstruction->instructionsTEX)
 	{
-		if( texInstruction.opcode == GPU7_TEX_INST_SAMPLE ||
+		if (texInstruction.opcode == GPU7_TEX_INST_SAMPLE ||
 			texInstruction.opcode == GPU7_TEX_INST_SAMPLE_L ||
 			texInstruction.opcode == GPU7_TEX_INST_SAMPLE_LB ||
 			texInstruction.opcode == GPU7_TEX_INST_SAMPLE_LZ ||
@@ -306,22 +305,22 @@ void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContex
 			texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C_LZ ||
 			texInstruction.opcode == GPU7_TEX_INST_FETCH4 ||
 			texInstruction.opcode == GPU7_TEX_INST_SAMPLE_G ||
-			texInstruction.opcode == GPU7_TEX_INST_LD )
+			texInstruction.opcode == GPU7_TEX_INST_LD)
 		{
 			if (texInstruction.textureFetch.textureIndex < 0 || texInstruction.textureFetch.textureIndex >= LATTE_NUM_MAX_TEX_UNITS)
 			{
 				cemuLog_logDebug(LogType::Force, "Shader {:16x} has out of bounds texture access (texture {})", shaderContext->shader->baseHash, (sint32)texInstruction.textureFetch.textureIndex);
 				continue;
 			}
-			if( texInstruction.textureFetch.samplerIndex < 0 || texInstruction.textureFetch.samplerIndex >= 0x12 )
+			if (texInstruction.textureFetch.samplerIndex < 0 || texInstruction.textureFetch.samplerIndex >= 0x12)
 				cemu_assert_debug(false);
-			if(shaderContext->output->textureUnitMask[texInstruction.textureFetch.textureIndex] && shader->textureUnitSamplerAssignment[texInstruction.textureFetch.textureIndex] != texInstruction.textureFetch.samplerIndex && shader->textureUnitSamplerAssignment[texInstruction.textureFetch.textureIndex] != LATTE_DECOMPILER_SAMPLER_NONE )
+			if (shaderContext->output->textureUnitMask[texInstruction.textureFetch.textureIndex] && shader->textureUnitSamplerAssignment[texInstruction.textureFetch.textureIndex] != texInstruction.textureFetch.samplerIndex && shader->textureUnitSamplerAssignment[texInstruction.textureFetch.textureIndex] != LATTE_DECOMPILER_SAMPLER_NONE)
 			{
 				cemu_assert_debug(false);
 			}
 			shaderContext->output->textureUnitMask[texInstruction.textureFetch.textureIndex] = true;
 			shader->textureUnitSamplerAssignment[texInstruction.textureFetch.textureIndex] = texInstruction.textureFetch.samplerIndex;
-			if( texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C || texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C_L || texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C_LZ)
+			if (texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C || texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C_L || texInstruction.opcode == GPU7_TEX_INST_SAMPLE_C_LZ)
 				shader->textureUsesDepthCompare[texInstruction.textureFetch.textureIndex] = true;
 
 			bool useTexelCoords = false;
@@ -334,15 +333,15 @@ void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContex
 				shaderContext->analyzer.texUnitUsesTexelCoordinates.set(texInstruction.textureFetch.textureIndex);
 			}
 		}
-		else if( texInstruction.opcode == GPU7_TEX_INST_GET_COMP_TEX_LOD || texInstruction.opcode == GPU7_TEX_INST_GET_TEXTURE_RESINFO )
+		else if (texInstruction.opcode == GPU7_TEX_INST_GET_COMP_TEX_LOD || texInstruction.opcode == GPU7_TEX_INST_GET_TEXTURE_RESINFO)
 		{
-			if( texInstruction.textureFetch.textureIndex < 0 || texInstruction.textureFetch.textureIndex >= LATTE_NUM_MAX_TEX_UNITS )
+			if (texInstruction.textureFetch.textureIndex < 0 || texInstruction.textureFetch.textureIndex >= LATTE_NUM_MAX_TEX_UNITS)
 				debugBreakpoint();
-			if( texInstruction.textureFetch.samplerIndex != 0 )
+			if (texInstruction.textureFetch.samplerIndex != 0)
 				debugBreakpoint(); // sampler is ignored and should be 0
 			shaderContext->output->textureUnitMask[texInstruction.textureFetch.textureIndex] = true;
 		}
-		else if( texInstruction.opcode == GPU7_TEX_INST_SET_CUBEMAP_INDEX )
+		else if (texInstruction.opcode == GPU7_TEX_INST_SET_CUBEMAP_INDEX)
 		{
 			// no analysis required
 		}
@@ -354,15 +353,15 @@ void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContex
 		{
 			shaderContext->analyzer.hasGradientLookup = true;
 		}
-		else if( texInstruction.opcode == GPU7_TEX_INST_VFETCH )
+		else if (texInstruction.opcode == GPU7_TEX_INST_VFETCH)
 		{
 			// VFETCH is used to access uniform buffers dynamically
-			if( texInstruction.textureFetch.textureIndex >= 0x80 && texInstruction.textureFetch.textureIndex <= 0x8F )
+			if (texInstruction.textureFetch.textureIndex >= 0x80 && texInstruction.textureFetch.textureIndex <= 0x8F)
 			{
 				uint32 uniformBufferIndex = texInstruction.textureFetch.textureIndex - 0x80;
 				shaderContext->analyzer.uniformBufferAccessTracker[uniformBufferIndex].TrackAccess(0, true);
 			}
-			else if( texInstruction.textureFetch.textureIndex == 0x9F && shader->shaderType == LatteConst::ShaderType::Geometry )
+			else if (texInstruction.textureFetch.textureIndex == 0x9F && shader->shaderType == LatteConst::ShaderType::Geometry)
 			{
 				// instruction to read geometry shader input from ringbuffer
 			}
@@ -377,10 +376,10 @@ void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContex
 		else
 			debugBreakpoint();
 		// mark read and written registers as used
-		if(texInstruction.dstGpr < LATTE_NUM_GPR)
-			shaderContext->analyzer.gprUseMask[texInstruction.dstGpr/8] |= (1<<(texInstruction.dstGpr%8));
-		if(texInstruction.srcGpr < LATTE_NUM_GPR)
-			shaderContext->analyzer.gprUseMask[texInstruction.srcGpr/8] |= (1<<(texInstruction.srcGpr%8));
+		if (texInstruction.dstGpr < LATTE_NUM_GPR)
+			shaderContext->analyzer.gprUseMask[texInstruction.dstGpr / 8] |= (1 << (texInstruction.dstGpr % 8));
+		if (texInstruction.srcGpr < LATTE_NUM_GPR)
+			shaderContext->analyzer.gprUseMask[texInstruction.srcGpr / 8] |= (1 << (texInstruction.srcGpr % 8));
 	}
 }
 
@@ -390,15 +389,15 @@ void LatteDecompiler_analyzeTEXClause(LatteDecompilerShaderContext* shaderContex
 void LatteDecompiler_analyzeExport(LatteDecompilerShaderContext* shaderContext, LatteDecompilerCFInstruction* cfInstruction)
 {
 	LatteDecompilerShader* shader = shaderContext->shader;
-	if( shader->shaderType == LatteConst::ShaderType::Pixel )
+	if (shader->shaderType == LatteConst::ShaderType::Pixel)
 	{
 		if (cfInstruction->exportType == 0 && cfInstruction->exportArrayBase < 8)
 		{
 			// remember color outputs that are written
-			for(uint32 i=0; i<(cfInstruction->exportBurstCount+1); i++)
+			for (uint32 i = 0; i < (cfInstruction->exportBurstCount + 1); i++)
 			{
-				sint32 colorOutputIndex = LatteDecompiler_getColorOutputIndexFromExportIndex(shaderContext, cfInstruction->exportArrayBase+i);
-				shader->pixelColorOutputMask |= (1<<colorOutputIndex);
+				sint32 colorOutputIndex = LatteDecompiler_getColorOutputIndexFromExportIndex(shaderContext, cfInstruction->exportArrayBase + i);
+				shader->pixelColorOutputMask |= (1 << colorOutputIndex);
 			}
 		}
 		else if (cfInstruction->exportType == 0 && cfInstruction->exportArrayBase == 61)
@@ -414,7 +413,7 @@ void LatteDecompiler_analyzeExport(LatteDecompilerShaderContext* shaderContext, 
 	{
 		if (cfInstruction->exportType == 2 && cfInstruction->exportArrayBase < 32)
 		{
-			shaderContext->shader->outputParameterMask |= (1<<cfInstruction->exportArrayBase);
+			shaderContext->shader->outputParameterMask |= (1 << cfInstruction->exportArrayBase);
 		}
 		else if (cfInstruction->exportType == 1 && cfInstruction->exportArrayBase == GPU7_DECOMPILER_CF_EXPORT_POINT_SIZE)
 		{
@@ -422,9 +421,9 @@ void LatteDecompiler_analyzeExport(LatteDecompilerShaderContext* shaderContext, 
 		}
 	}
 	// mark input GPRs as used
-	for(uint32 i=0; i<(cfInstruction->exportBurstCount+1); i++)
+	for (uint32 i = 0; i < (cfInstruction->exportBurstCount + 1); i++)
 	{
-		shaderContext->analyzer.gprUseMask[(cfInstruction->exportSourceGPR+i)/8] |= (1<<((cfInstruction->exportSourceGPR+i)%8));
+		shaderContext->analyzer.gprUseMask[(cfInstruction->exportSourceGPR + i) / 8] |= (1 << ((cfInstruction->exportSourceGPR + i) % 8));
 	}
 }
 
@@ -435,7 +434,7 @@ void LatteDecompiler_analyzeSubroutine(LatteDecompilerShaderContext* shaderConte
 	// todo - find cfInstruction index from cfAddr
 	cemu_assert_debug(false);
 
-	for(auto& cfInstruction : shaderContext->cfInstructions)
+	for (auto& cfInstruction : shaderContext->cfInstructions)
 	{
 		if (cfInstruction.type == GPU7_CF_INST_ALU || cfInstruction.type == GPU7_CF_INST_ALU_PUSH_BEFORE || cfInstruction.type == GPU7_CF_INST_ALU_POP_AFTER || cfInstruction.type == GPU7_CF_INST_ALU_POP2_AFTER || cfInstruction.type == GPU7_CF_INST_ALU_BREAK || cfInstruction.type == GPU7_CF_INST_ALU_ELSE_AFTER)
 		{
@@ -513,7 +512,7 @@ namespace LatteDecompiler
 			decompilerContext->output->resourceMappingVK.textureUnitCount++;
 			decompilerContext->currentBindingPointVK++;
 		}
-		if (relBindingPointIndex==0)
+		if (relBindingPointIndex == 0)
 			decompilerContext->output->resourceMappingVK.textureUnitBaseBindingPoint = -1;
 	}
 
@@ -532,7 +531,7 @@ namespace LatteDecompiler
 			decompilerContext->output->resourceMappingMTL.textureUnitCount++;
 			decompilerContext->currentTextureBindingPointMTL++;
 		}
-		if (relBindingPointIndex==0)
+		if (relBindingPointIndex == 0)
 			decompilerContext->output->resourceMappingMTL.textureUnitBaseBindingPoint = -1;
 	}
 #endif
@@ -569,7 +568,7 @@ namespace LatteDecompiler
 		if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry && decompilerContext->analyzer.outputPointSize && decompilerContext->analyzer.writesPointSize == false)
 			decompilerContext->hasUniformVarBlock = true; // uf_pointSize
 		if (decompilerContext->analyzer.useSSBOForStreamout &&
-			(decompilerContext->shaderType == LatteConst::ShaderType::Vertex && !decompilerContext->options->usesGeometryShader) ||
+				(decompilerContext->shaderType == LatteConst::ShaderType::Vertex && !decompilerContext->options->usesGeometryShader) ||
 			(decompilerContext->shaderType == LatteConst::ShaderType::Geometry))
 		{
 			decompilerContext->hasUniformVarBlock = true; // uf_verticesPerInstance and uf_streamoutBufferBase*
@@ -577,9 +576,9 @@ namespace LatteDecompiler
 #ifdef ENABLE_METAL
 		if (g_renderer->GetType() == RendererAPI::Metal)
 		{
-            bool usesGeometryShader = UseGeometryShader(*decompilerContext->contextRegistersNew, decompilerContext->options->usesGeometryShader);
+			bool usesGeometryShader = UseGeometryShader(*decompilerContext->contextRegistersNew, decompilerContext->options->usesGeometryShader);
 
-		    if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex && usesGeometryShader)
+			if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex && usesGeometryShader)
 				decompilerContext->hasUniformVarBlock = true; // uf_verticesPerInstance
 		}
 #endif
@@ -677,7 +676,7 @@ namespace LatteDecompiler
 		}
 	}
 
-}
+} // namespace LatteDecompiler
 
 /*
  * Analyze the shader program
@@ -703,10 +702,10 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	// analyze input attributes for vertex/geometry shader
 	if (shader->shaderType == LatteConst::ShaderType::Vertex || shader->shaderType == LatteConst::ShaderType::Geometry)
 	{
-		if(shaderContext->fetchShader)
+		if (shaderContext->fetchShader)
 		{
 			LatteFetchShader* parsedFetchShader = shaderContext->fetchShader;
-			for(auto& bufferGroup : parsedFetchShader->bufferGroups)
+			for (auto& bufferGroup : parsedFetchShader->bufferGroups)
 			{
 				for (sint32 i = 0; i < bufferGroup.attribCount; i++)
 				{
@@ -725,7 +724,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	// list of subroutines (call destinations)
 	std::vector<uint32> list_subroutineAddrs;
 	// analyze CF and clauses
-	for(auto& cfInstruction : shaderContext->cfInstructions)
+	for (auto& cfInstruction : shaderContext->cfInstructions)
 	{
 		if (cfInstruction.type == GPU7_CF_INST_ALU || cfInstruction.type == GPU7_CF_INST_ALU_PUSH_BEFORE || cfInstruction.type == GPU7_CF_INST_ALU_POP_AFTER || cfInstruction.type == GPU7_CF_INST_ALU_POP2_AFTER || cfInstruction.type == GPU7_CF_INST_ALU_BREAK || cfInstruction.type == GPU7_CF_INST_ALU_ELSE_AFTER)
 		{
@@ -755,7 +754,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 			shaderContext->analyzer.hasLoops = true;
 		}
 		else if (cfInstruction.type == GPU7_CF_INST_MEM_STREAM0_WRITE ||
-			cfInstruction.type == GPU7_CF_INST_MEM_STREAM1_WRITE)
+				 cfInstruction.type == GPU7_CF_INST_MEM_STREAM1_WRITE)
 		{
 			uint32 streamoutBufferIndex;
 			if (cfInstruction.type == GPU7_CF_INST_MEM_STREAM0_WRITE)
@@ -815,22 +814,22 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	// decide which uniform mode to use
 	bool hasAnyDynamicBufferAccess = false;
 	bool hasAnyBufferAccess = false;
-	for(auto& it : shaderContext->analyzer.uniformBufferAccessTracker)
+	for (auto& it : shaderContext->analyzer.uniformBufferAccessTracker)
 	{
-		if( it.HasRelativeAccess() )
+		if (it.HasRelativeAccess())
 			hasAnyDynamicBufferAccess = true;
-		if( it.HasAccess() )
+		if (it.HasAccess())
 			hasAnyBufferAccess = true;
 	}
 	if (hasAnyDynamicBufferAccess)
 	{
 		shader->uniformMode = LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK;
 	}
-	else if(shaderContext->analyzer.uniformRegisterAccessTracker.HasRelativeAccess() )
+	else if (shaderContext->analyzer.uniformRegisterAccessTracker.HasRelativeAccess())
 	{
 		shader->uniformMode = LATTE_DECOMPILER_UNIFORM_MODE_FULL_CFILE;
 	}
-	else if(hasAnyBufferAccess || shaderContext->analyzer.uniformRegisterAccessTracker.HasAccess() )
+	else if (hasAnyBufferAccess || shaderContext->analyzer.uniformRegisterAccessTracker.HasAccess())
 	{
 		shader->uniformMode = LATTE_DECOMPILER_UNIFORM_MODE_REMAPPED;
 	}
@@ -842,7 +841,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	cemu_assert_debug(shader->list_quickBufferList.empty());
 	for (uint32 i = 0; i < LATTE_NUM_MAX_UNIFORM_BUFFERS; i++)
 	{
-		if( !shaderContext->analyzer.uniformBufferAccessTracker[i].HasAccess() )
+		if (!shaderContext->analyzer.uniformBufferAccessTracker[i].HasAccess())
 			continue;
 		LatteDecompilerShader::QuickBufferEntry entry;
 		entry.index = i;
@@ -851,14 +850,14 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	}
 	// get dimension of each used texture
 	_LatteRegisterSetTextureUnit* texRegs = nullptr;
-	if( shader->shaderType == LatteConst::ShaderType::Vertex )
+	if (shader->shaderType == LatteConst::ShaderType::Vertex)
 		texRegs = shaderContext->contextRegistersNew->SQ_TEX_START_VS;
-	else if( shader->shaderType == LatteConst::ShaderType::Pixel )
+	else if (shader->shaderType == LatteConst::ShaderType::Pixel)
 		texRegs = shaderContext->contextRegistersNew->SQ_TEX_START_PS;
-	else if( shader->shaderType == LatteConst::ShaderType::Geometry )
+	else if (shader->shaderType == LatteConst::ShaderType::Geometry)
 		texRegs = shaderContext->contextRegistersNew->SQ_TEX_START_GS;
 
-	for(sint32 i=0; i<LATTE_NUM_MAX_TEX_UNITS; i++)
+	for (sint32 i = 0; i < LATTE_NUM_MAX_TEX_UNITS; i++)
 	{
 		if (!shaderContext->output->textureUnitMask[i])
 		{
@@ -869,7 +868,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 		auto& texUnit = texRegs[i];
 		auto dim = texUnit.word0.get_DIM();
 		shader->textureUnitDim[i] = dim;
-		if(dim == Latte::E_DIM::DIM_CUBEMAP)
+		if (dim == Latte::E_DIM::DIM_CUBEMAP)
 			shaderContext->analyzer.hasCubeMapTexture = true;
 		shader->textureIsIntegerFormat[i] = texUnit.word4.get_NUM_FORM_ALL() == Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N::E_NUM_FORMAT_ALL::NUM_FORMAT_INT;
 	}
@@ -887,73 +886,74 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	// check if textures are used as render targets
 	if (shader->shaderType == LatteConst::ShaderType::Pixel)
 	{
-		struct {
-		    sint32 index;
-		    MPTR physAddr;
+		struct
+		{
+			sint32 index;
+			MPTR physAddr;
 			Latte::E_GX2SURFFMT format;
 			Latte::E_HWTILEMODE tileMode;
 		} colorBuffers[LATTE_NUM_COLOR_TARGET]{};
 
-        uint8 colorBufferMask = LatteMRT::GetActiveColorBufferMask(shader, *shaderContext->contextRegistersNew);
-        sint32 colorBufferCount = 0;
+		uint8 colorBufferMask = LatteMRT::GetActiveColorBufferMask(shader, *shaderContext->contextRegistersNew);
+		sint32 colorBufferCount = 0;
 		for (sint32 i = 0; i < LATTE_NUM_COLOR_TARGET; i++)
-        {
-            auto& colorBuffer = colorBuffers[colorBufferCount];
-            if (((colorBufferMask) & (1 << i)) == 0)
-                continue; // color buffer not enabled
+		{
+			auto& colorBuffer = colorBuffers[colorBufferCount];
+			if (((colorBufferMask) & (1 << i)) == 0)
+				continue; // color buffer not enabled
 
-            uint32* colorBufferRegBase = shaderContext->contextRegisters + (mmCB_COLOR0_BASE + i);
-           	uint32 regColorBufferBase = colorBufferRegBase[mmCB_COLOR0_BASE - mmCB_COLOR0_BASE] & 0xFFFFFF00; // the low 8 bits are ignored? How to Survive seems to rely on this
+			uint32* colorBufferRegBase = shaderContext->contextRegisters + (mmCB_COLOR0_BASE + i);
+			uint32 regColorBufferBase = colorBufferRegBase[mmCB_COLOR0_BASE - mmCB_COLOR0_BASE] & 0xFFFFFF00; // the low 8 bits are ignored? How to Survive seems to rely on this
 
-            uint32 regColorInfo = colorBufferRegBase[mmCB_COLOR0_INFO - mmCB_COLOR0_BASE];
+			uint32 regColorInfo = colorBufferRegBase[mmCB_COLOR0_INFO - mmCB_COLOR0_BASE];
 
-           	MPTR colorBufferPhysMem = regColorBufferBase;
-            Latte::E_HWTILEMODE colorBufferTileMode = (Latte::E_HWTILEMODE)((regColorInfo >> 8) & 0xF);
+			MPTR colorBufferPhysMem = regColorBufferBase;
+			Latte::E_HWTILEMODE colorBufferTileMode = (Latte::E_HWTILEMODE)((regColorInfo >> 8) & 0xF);
 
-            Latte::E_GX2SURFFMT colorBufferFormat = LatteMRT::GetColorBufferFormat(i, *shaderContext->contextRegistersNew);
+			Latte::E_GX2SURFFMT colorBufferFormat = LatteMRT::GetColorBufferFormat(i, *shaderContext->contextRegistersNew);
 
-            colorBuffer = {i, colorBufferPhysMem, colorBufferFormat, colorBufferTileMode};
-            colorBufferCount++;
-        }
+			colorBuffer = {i, colorBufferPhysMem, colorBufferFormat, colorBufferTileMode};
+			colorBufferCount++;
+		}
 
-	    for (sint32 i = 0; i < shader->textureUnitListCount; i++)
-        {
-            sint32 textureIndex = shader->textureUnitList[i];
-      		const auto& texRegister = texRegs[textureIndex];
+		for (sint32 i = 0; i < shader->textureUnitListCount; i++)
+		{
+			sint32 textureIndex = shader->textureUnitList[i];
+			const auto& texRegister = texRegs[textureIndex];
 
-      		// get physical address of texture data
-      		MPTR physAddr = (texRegister.word2.get_BASE_ADDRESS() << 8);
-      		if (physAddr == MPTR_NULL)
-                continue; // invalid data
+			// get physical address of texture data
+			MPTR physAddr = (texRegister.word2.get_BASE_ADDRESS() << 8);
+			if (physAddr == MPTR_NULL)
+				continue; // invalid data
 
-            auto tileMode = texRegister.word0.get_TILE_MODE();
+			auto tileMode = texRegister.word0.get_TILE_MODE();
 
-            // Check for dimension
-            auto dim = shader->textureUnitDim[textureIndex];
-            // TODO: 2D arrays could be supported as well
-            if (dim != Latte::E_DIM::DIM_2D)
-                continue;
+			// Check for dimension
+			auto dim = shader->textureUnitDim[textureIndex];
+			// TODO: 2D arrays could be supported as well
+			if (dim != Latte::E_DIM::DIM_2D)
+				continue;
 
-            // Check for mip level
-            auto lastMip = texRegister.word5.get_LAST_LEVEL();
-            // TODO: multiple mip levels could be supported as well
-            if (lastMip != 0)
-                continue;
+			// Check for mip level
+			auto lastMip = texRegister.word5.get_LAST_LEVEL();
+			// TODO: multiple mip levels could be supported as well
+			if (lastMip != 0)
+				continue;
 
-            Latte::E_GX2SURFFMT format = LatteTexture_ReconstructGX2Format(texRegister.word1, texRegister.word4);
+			Latte::E_GX2SURFFMT format = LatteTexture_ReconstructGX2Format(texRegister.word1, texRegister.word4);
 
-            // Check if the texture is used as render target
-            for (sint32 j = 0; j < colorBufferCount; j++)
-            {
-                const auto& colorBuffer = colorBuffers[j];
+			// Check if the texture is used as render target
+			for (sint32 j = 0; j < colorBufferCount; j++)
+			{
+				const auto& colorBuffer = colorBuffers[j];
 
-                if (physAddr == colorBuffer.physAddr && format == colorBuffer.format && tileMode == colorBuffer.tileMode)
-                {
-                    shader->textureRenderTargetIndex[textureIndex] = colorBuffer.index;
-                    break;
-                }
-            }
-        }
+				if (physAddr == colorBuffer.physAddr && format == colorBuffer.format && tileMode == colorBuffer.tileMode)
+				{
+					shader->textureRenderTargetIndex[textureIndex] = colorBuffer.index;
+					break;
+				}
+			}
+		}
 	}
 	// for geometry shaders check the copy shader for stream writes
 	if (shader->shaderType == LatteConst::ShaderType::Geometry && shaderContext->parsedGSCopyShader->list_streamWrites.empty() == false)
@@ -967,19 +967,19 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 			uint32 vectorWriteSize = 0;
 			for (sint32 f = 0; f < 4; f++)
 			{
-				if ((it.memWriteCompMask&(1 << f)) != 0)
+				if ((it.memWriteCompMask & (1 << f)) != 0)
 					vectorWriteSize = (f + 1) * 4;
 			}
 			shaderContext->output->streamoutBufferStride[it.bufferIndex] = std::max(shaderContext->output->streamoutBufferStride[it.bufferIndex], it.exportArrayBase * 4 + vectorWriteSize);
 		}
 	}
 	// analyze input attributes again (if shader has relative GPR read)
-	if(shaderContext->analyzer.usesRelativeGPRRead && (shader->shaderType == LatteConst::ShaderType::Vertex || shader->shaderType == LatteConst::ShaderType::Geometry) )
+	if (shaderContext->analyzer.usesRelativeGPRRead && (shader->shaderType == LatteConst::ShaderType::Vertex || shader->shaderType == LatteConst::ShaderType::Geometry))
 	{
-		if(shaderContext->fetchShader)
+		if (shaderContext->fetchShader)
 		{
 			LatteFetchShader* parsedFetchShader = shaderContext->fetchShader;
-			for(auto& bufferGroup : parsedFetchShader->bufferGroups)
+			for (auto& bufferGroup : parsedFetchShader->bufferGroups)
 			{
 				for (sint32 i = 0; i < bufferGroup.attribCount; i++)
 				{
@@ -1030,13 +1030,27 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 		// some existing graphic pack replacement shaders rely on uf_fragCoordScale despite the original shader not needing it. We handle these exceptions here
 		switch (shaderContext->shaderBaseHash)
 		{
-		case 0x21e6bc9b0cdbe8d7: case 0x37040a485a29d54e: case 0x37a4ec1a7dbc7391:
-		case 0x50e29e8929cea348: case 0x572a6cfa3943923d: case 0x59df1c7e1806366c:
-		case 0x6ea8b1aa69c0b6f7: case 0x88133ee405eaae28: case 0x95a5a89d62998e0d:
-		case 0x998a9f67e353657b: case 0x9f6adb9a651f84b9: case 0xa5e9d150276a805c:
-		case 0xa7f4801a8d29e333: case 0xbe99d80628d31127: case 0xc14019840473ff86:
-		case 0xc612390d4c70f430: case 0xcb0e6e8cbec4502a: case 0xe334517825fdd599:
-		case 0xe39a2a718bc419fe: case 0xfdf33c607cd1d737: case 0xff71dcd2ad4defdc:
+		case 0x21e6bc9b0cdbe8d7:
+		case 0x37040a485a29d54e:
+		case 0x37a4ec1a7dbc7391:
+		case 0x50e29e8929cea348:
+		case 0x572a6cfa3943923d:
+		case 0x59df1c7e1806366c:
+		case 0x6ea8b1aa69c0b6f7:
+		case 0x88133ee405eaae28:
+		case 0x95a5a89d62998e0d:
+		case 0x998a9f67e353657b:
+		case 0x9f6adb9a651f84b9:
+		case 0xa5e9d150276a805c:
+		case 0xa7f4801a8d29e333:
+		case 0xbe99d80628d31127:
+		case 0xc14019840473ff86:
+		case 0xc612390d4c70f430:
+		case 0xcb0e6e8cbec4502a:
+		case 0xe334517825fdd599:
+		case 0xe39a2a718bc419fe:
+		case 0xfdf33c607cd1d737:
+		case 0xff71dcd2ad4defdc:
 			shaderContext->analyzer.hasFragCoordAccess = true;
 			break;
 		default:
@@ -1046,14 +1060,14 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 	// analyze CF stack
 	sint32 cfCurrentStackDepth = 0;
 	sint32 cfCurrentMaxStackDepth = 0;
-	for(auto& cfInstruction : shaderContext->cfInstructions)
+	for (auto& cfInstruction : shaderContext->cfInstructions)
 	{
 		if (cfInstruction.type == GPU7_CF_INST_ALU)
 		{
 			// no effect on stack depth
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 		}
-		else if (cfInstruction.type == GPU7_CF_INST_ALU_PUSH_BEFORE )
+		else if (cfInstruction.type == GPU7_CF_INST_ALU_PUSH_BEFORE)
 		{
 			cfCurrentStackDepth++;
 			cfCurrentMaxStackDepth = std::max(cfCurrentMaxStackDepth, cfCurrentStackDepth);
@@ -1069,7 +1083,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 			cfCurrentStackDepth -= 2;
 		}
-		else if (cfInstruction.type == GPU7_CF_INST_ALU_BREAK )
+		else if (cfInstruction.type == GPU7_CF_INST_ALU_BREAK)
 		{
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 		}
@@ -1079,9 +1093,9 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 				debugBreakpoint();
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 		}
-		else if (cfInstruction.type == GPU7_CF_INST_ELSE )
+		else if (cfInstruction.type == GPU7_CF_INST_ELSE)
 		{
-			//if (cfInstruction.popCount != 0)
+			// if (cfInstruction.popCount != 0)
 			//	debugBreakpoint(); -> Only relevant when ELSE jump is taken
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 		}
@@ -1114,7 +1128,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
 		}
 		else if (cfInstruction.type == GPU7_CF_INST_MEM_STREAM0_WRITE ||
-			cfInstruction.type == GPU7_CF_INST_MEM_STREAM1_WRITE)
+				 cfInstruction.type == GPU7_CF_INST_MEM_STREAM1_WRITE)
 		{
 			// no effect on stack depth
 			cfInstruction.activeStackDepth = cfCurrentStackDepth;
@@ -1145,7 +1159,7 @@ void LatteDecompiler_analyze(LatteDecompilerShaderContext* shaderContext, LatteD
 		debug_printf("cfCurrentStackDepth is not zero after all CF instructions. depth is %d\n", cfCurrentStackDepth);
 		cemu_assert_debug(false);
 	}
-	if(list_subroutineAddrs.empty() == false)
+	if (list_subroutineAddrs.empty() == false)
 		cemuLog_logDebug(LogType::Force, "Todo - analyze shader subroutine CF stack");
 	// TF mode
 	if (shaderContext->options->useTFViaSSBO && shaderContext->output->streamoutBufferWriteMask.any())

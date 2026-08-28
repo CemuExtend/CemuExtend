@@ -8,7 +8,7 @@
 #include "Cafe/OS/libs/nn_acp/nn_acp.h"
 #include "Cafe/OS/libs/coreinit/coreinit_FS.h"
 #include "Cafe/Filesystem/fsc.h"
-//#include "Cafe/HW/Espresso/PPCState.h"
+// #include "Cafe/HW/Espresso/PPCState.h"
 
 #include "Cafe/IOSU/iosu_types_common.h"
 #include "Cafe/IOSU/nn/iosu_nn_service.h"
@@ -47,7 +47,7 @@ namespace iosu
 	struct
 	{
 		bool isInitialized;
-	}iosuAcp = { 0 };
+	} iosuAcp = {0};
 
 	void _xml_parseU32(tinyxml2::XMLElement* xmlElement, const char* name, uint32be* v)
 	{
@@ -284,12 +284,12 @@ namespace iosu
 		FSCVirtualFile* fscDirIteratorTitleIdHigh = fsc_openDirIterator(searchPath, &fscStatus);
 		FSCDirEntry dirEntryTitleIdHigh;
 		FSCDirEntry dirEntryTitleIdLow;
-		if(fscDirIteratorTitleIdHigh)
-		{ 
+		if (fscDirIteratorTitleIdHigh)
+		{
 			while (fsc_nextDir(fscDirIteratorTitleIdHigh, &dirEntryTitleIdHigh))
 			{
 				// is 8-digit hex?
-				if(_is8DigitHex(dirEntryTitleIdHigh.path) == false)
+				if (_is8DigitHex(dirEntryTitleIdHigh.path) == false)
 					continue;
 				uint32 titleIdHigh;
 				sscanf(dirEntryTitleIdHigh.path, "%x", &titleIdHigh);
@@ -337,7 +337,7 @@ namespace iosu
 			assert_dbg();
 
 		char xmlPath[FSA_CMD_PATH_MAX_LENGTH];
-		sprintf(xmlPath, "%susr/save/%08x/%08x/meta/meta.xml", "/vol/storage_mlc01/", (uint32)(titleId>>32), (uint32)(titleId&0xFFFFFFFF));
+		sprintf(xmlPath, "%susr/save/%08x/%08x/meta/meta.xml", "/vol/storage_mlc01/", (uint32)(titleId >> 32), (uint32)(titleId & 0xFFFFFFFF));
 
 		uint32 saveMetaXmlSize = 0;
 		uint8* saveMetaXmlData = fsc_extractFile(xmlPath, &saveMetaXmlSize);
@@ -369,7 +369,6 @@ namespace iosu
 			sprintf(titlePath, "/vol/storage_mlc01/usr/title/%08x/%08x/", (uint32)(titleId >> 32), (uint32)(titleId & 0xFFFFFFFF));
 		}
 
-
 		char filePath[FSA_CMD_PATH_MAX_LENGTH];
 		sprintf(filePath, "%smeta/bootMovie.h264", titlePath);
 
@@ -395,7 +394,6 @@ namespace iosu
 		else
 			cemuLog_log(LogType::Force, "ACPGetTitleMetaData(): Unable to load \"{}\"", filePath);
 
-
 		return 0;
 	}
 
@@ -413,7 +411,6 @@ namespace iosu
 		{
 			sprintf(titlePath, "/vol/storage_mlc01/usr/title/%08x/%08x/", (uint32)(titleId >> 32), (uint32)(titleId & 0xFFFFFFFF));
 		}
-
 
 		char filePath[FSA_CMD_PATH_MAX_LENGTH];
 		sprintf(filePath, "%smeta/meta.xml", titlePath);
@@ -463,8 +460,8 @@ namespace iosu
 				}
 
 				memset(entry, 0, sizeof(acpSaveDirInfo_t));
-				entry->ukn00 = (uint32)(titleId>>32);
-				entry->ukn04 = (uint32)(titleId&0xFFFFFFFF);
+				entry->ukn00 = (uint32)(titleId >> 32);
+				entry->ukn04 = (uint32)(titleId & 0xFFFFFFFF);
 				entry->persistentId = 0; // 0 -> common save
 				entry->ukn0C = 0;
 				entry->sizeA = _swapEndianU64(0); // ukn
@@ -485,12 +482,12 @@ namespace iosu
 		else
 		{
 			FSCDirEntry dirEntry;
-			while( fsc_nextDir(fscDirIterator, &dirEntry) )
+			while (fsc_nextDir(fscDirIterator, &dirEntry))
 			{
-				if(dirEntry.isDirectory == false)
+				if (dirEntry.isDirectory == false)
 					continue;
 				// is 8-digit hex name? (persistent id)
-				if(_is8DigitHex(dirEntry.path) == false )
+				if (_is8DigitHex(dirEntry.path) == false)
 					continue;
 				uint32 persistentId = 0;
 				sscanf(dirEntry.path, "%x", &persistentId);
@@ -498,9 +495,9 @@ namespace iosu
 				if (count < maxCount)
 				{
 					memset(entry, 0, sizeof(acpSaveDirInfo_t));
-					entry->ukn00 = (uint32)(titleId >> 32); // titleId?
+					entry->ukn00 = (uint32)(titleId >> 32);		   // titleId?
 					entry->ukn04 = (uint32)(titleId & 0xFFFFFFFF); // titleId?
-					entry->persistentId = persistentId; // 0 -> common save
+					entry->persistentId = persistentId;			   // 0 -> common save
 					entry->ukn0C = 0;
 					entry->sizeA = _swapEndianU64(0);
 					entry->sizeB = _swapEndianU64(0);
@@ -716,7 +713,6 @@ namespace iosu
 			ACPUpdateSaveTimeStamp(persistentId, titleId, iosu::acp::ACPDeviceType::InternalDeviceType);
 		}
 
-
 		sint32 _ACPCreateSaveDir(uint32 persistentId, uint64 titleId, ACPDeviceType type)
 		{
 			uint32 high = GetTitleIdHigh(titleId) & (~0xC);
@@ -803,7 +799,7 @@ namespace iosu
 			{
 				gACPMainService.Stop();
 			}
-		}sIOSUModuleNNACP;
+		} sIOSUModuleNNACP;
 
 		IOSUModule* GetModule()
 		{

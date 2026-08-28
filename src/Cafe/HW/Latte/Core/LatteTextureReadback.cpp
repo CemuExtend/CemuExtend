@@ -13,7 +13,7 @@ struct LatteTextureReadbackQueueEntry
 };
 
 std::vector<LatteTextureReadbackQueueEntry> sTextureScheduledReadbacks; // readbacks that have been queued but the actual transfer has not yet been started
-std::queue<LatteTextureReadbackInfo*> sTextureActiveReadbackQueue; // readbacks in flight
+std::queue<LatteTextureReadbackInfo*> sTextureActiveReadbackQueue;		// readbacks in flight
 
 void LatteTextureReadback_StartTransfer(LatteTextureView* textureView)
 {
@@ -44,7 +44,7 @@ bool LatteTextureReadback_Update(bool forceStart)
 		{
 #ifdef LOG_READBACK_TIME
 			double elapsedSecondsSinceInitiate = HighResolutionTimer::getTimeDiff(entry.initiateTime, HighResolutionTimer().now().getTick());
-			cemuLog_log(LogType::TextureReadback, "[TextureReadback-Update] Starting transfer for {:08x} after {} elapsed drawcalls. Time since initiate: {:.4} Force-start: {}", entry.textureView->baseTexture->physAddress, numElapsedDrawcalls, elapsedSecondsSinceInitiate, forceStart?"yes":"no");
+			cemuLog_log(LogType::TextureReadback, "[TextureReadback-Update] Starting transfer for {:08x} after {} elapsed drawcalls. Time since initiate: {:.4} Force-start: {}", entry.textureView->baseTexture->physAddress, numElapsedDrawcalls, elapsedSecondsSinceInitiate, forceStart ? "yes" : "no");
 #endif
 			LatteTextureReadback_StartTransfer(entry.textureView);
 			// remove element

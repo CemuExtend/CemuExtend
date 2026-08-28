@@ -11,14 +11,13 @@
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/components/wxInputDraw.h"
 
-constexpr ClassicController::ButtonId g_kFirstColumnItems[] = { ClassicController::kButtonId_A, ClassicController::kButtonId_B, ClassicController::kButtonId_X, ClassicController::kButtonId_Y, ClassicController::kButtonId_L, ClassicController::kButtonId_R, ClassicController::kButtonId_ZL, ClassicController::kButtonId_ZR, ClassicController::kButtonId_Plus, ClassicController::kButtonId_Minus };
-constexpr ClassicController::ButtonId g_kSecondColumnItems[] = { ClassicController::kButtonId_StickL_Up, ClassicController::kButtonId_StickL_Down, ClassicController::kButtonId_StickL_Left, ClassicController::kButtonId_StickL_Right };
-constexpr ClassicController::ButtonId g_kThirdColumnItems[] = { ClassicController::kButtonId_StickR_Up, ClassicController::kButtonId_StickR_Down, ClassicController::kButtonId_StickR_Left, ClassicController::kButtonId_StickR_Right };
-constexpr ClassicController::ButtonId g_kFourthRowItems[] = { ClassicController::kButtonId_Up, ClassicController::kButtonId_Down, ClassicController::kButtonId_Left, ClassicController::kButtonId_Right };
-
+constexpr ClassicController::ButtonId g_kFirstColumnItems[] = {ClassicController::kButtonId_A, ClassicController::kButtonId_B, ClassicController::kButtonId_X, ClassicController::kButtonId_Y, ClassicController::kButtonId_L, ClassicController::kButtonId_R, ClassicController::kButtonId_ZL, ClassicController::kButtonId_ZR, ClassicController::kButtonId_Plus, ClassicController::kButtonId_Minus};
+constexpr ClassicController::ButtonId g_kSecondColumnItems[] = {ClassicController::kButtonId_StickL_Up, ClassicController::kButtonId_StickL_Down, ClassicController::kButtonId_StickL_Left, ClassicController::kButtonId_StickL_Right};
+constexpr ClassicController::ButtonId g_kThirdColumnItems[] = {ClassicController::kButtonId_StickR_Up, ClassicController::kButtonId_StickR_Down, ClassicController::kButtonId_StickR_Left, ClassicController::kButtonId_StickR_Right};
+constexpr ClassicController::ButtonId g_kFourthRowItems[] = {ClassicController::kButtonId_Up, ClassicController::kButtonId_Down, ClassicController::kButtonId_Left, ClassicController::kButtonId_Right};
 
 ClassicControllerInputPanel::ClassicControllerInputPanel(wxWindow* parent,
-	std::function<bool()> escapeDown)
+														 std::function<bool()> escapeDown)
 	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
@@ -51,9 +50,9 @@ ClassicControllerInputPanel::ClassicControllerInputPanel(wxWindow* parent,
 	}
 
 	row++;
-	
+
 	// input drawer
-	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_left_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
@@ -76,7 +75,7 @@ ClassicControllerInputPanel::ClassicControllerInputPanel(wxWindow* parent,
 	row++;
 
 	// input drawer
-	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_right_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
@@ -102,7 +101,8 @@ ClassicControllerInputPanel::ClassicControllerInputPanel(wxWindow* parent,
 	Layout();
 }
 
-void ClassicControllerInputPanel::add_button_row(wxGridBagSizer *sizer, sint32 row, sint32 column, const ClassicController::ButtonId &button_id) {
+void ClassicControllerInputPanel::add_button_row(wxGridBagSizer* sizer, sint32 row, sint32 column, const ClassicController::ButtonId& button_id)
+{
 	sizer->Add(
 		new wxStaticText(this, wxID_ANY, wxGetTranslation(wxString::FromUTF8(ClassicController::get_button_name(button_id)))),
 		wxGBPosition(row, column),

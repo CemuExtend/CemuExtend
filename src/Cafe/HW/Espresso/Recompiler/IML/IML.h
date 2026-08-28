@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include "IMLInstruction.h"
 #include "IMLSegment.h"

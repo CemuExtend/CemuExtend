@@ -141,11 +141,44 @@ From the CemuExtend directory:
 
 ```
 nix develop
-cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF
+cmake -S . -B build/nix -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF -DCEMU_FRONTEND=cef
 cmake --build build/nix --parallel
 ```
 
-The development build is written to `bin/Cemu_debug`. To build the packaged Nix output instead, run `nix build .#cemu-extend`; the executable is available as `result/bin/cemu`.
+The development build is written to `bin/Cemu_debug`. Set `CEMU_FRONTEND` to `cef`, `wx`, or `headless`. The CEF frontend uses Chromium for the React launcher and tool windows and CEF OSR for the Vulkan-composited Main/Pad overlays. The legacy `webview` value remains a deprecated alias for `cef`; wx builds use ImGui.
+
+CEF is pinned in `cmake/CefVersion.cmake`. Before a native configure, fetch and verify the official Linux x86-64 archive:
+
+```bash
+./scripts/fetch-cef-linux-x64.sh
+```
+
+It extracts to `dependencies/cef` by default; set `CEF_ROOT` to use another extraction. Platform wrappers are also provided for Linux ARM64, Windows x64, and macOS x64/ARM64. Linux builds require NSS development files (`libnss3-dev` on Ubuntu). Runtime resources, subprocess helpers, and licenses are staged with the executable.
+
+For example, to validate both desktop overlay implementations:
+
+```bash
+nix develop --command cmake -S . -B build/nix-cef -G Ninja \
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=cef
+nix develop --command cmake -S . -B build/nix-imgui -G Ninja \
+  -DENABLE_VCPKG=OFF -DCEMU_FRONTEND=wx -DCEMU_OVERLAY_BACKEND=imgui
+```
+
+To produce a Nix-linked Release executable directly at `bin/Cemu_release`, configure a Release build inside the development shell:
+
+```bash
+nix develop --command cmake -S . -B build/nix-release -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DENABLE_VCPKG=OFF -DALLOW_PORTABLE=OFF \
+  -DCEMU_FRONTEND=cef
+nix develop --command cmake --build build/nix-release --parallel
+steam-run ./bin/Cemu_release
+```
+
+Unlike the Ubuntu artifact emitted by Docker, this executable records the Nix
+GTK/CEF runtime paths in its ELF RUNPATH and can therefore be launched
+directly by `steam-run`. To build a packaged Nix output instead, use `nix build
+.#cemu-extend-webview` (compatibility package), `nix build .#cemu-extend-wx`, or `nix build
+.#cemu-extend-headless`; the executable is available as `result/bin/cemu`.
 
 ## Docker
 
@@ -179,11 +212,46 @@ of vcpkg's own continuous integration matrix. This repository therefore pins
 the vcpkg revision, uses a project-specific static triplet, and treats the Wine
 test suite and imported-DLL check as required build steps.
 
-`CEMU_DOCKER_IMAGE` overrides the generated image name and
-`CEMU_ENABLE_WXWIDGETS=OFF` retains the existing headless build behavior. For
-lower-level Docker usage, the native Linux stage is named `build`, the Windows
-cross-build stage is named `build-windows`, and the development stage remains
-`dev`.
+`CEMU_DOCKER_IMAGE` overrides the generated image name. For lower-level Docker
+usage, the native Linux stage is named `build`, the Windows cross-build stage is
+named `build-windows`, and the development stage remains `dev`.
+
+The default image downloads and verifies the pinned CEF SDK into a persistent
+BuildKit cache, then performs an incremental CEF Release build. Its persistent
+CMake/Ninja cache means regenerating `src/webview/generated/WebAssets.h` only
+recompiles the affected frontend target and relinks Cemu. Use
+`CEMU_CLEAN_BUILD=1 ./docker-build.sh` only when a dependency, toolchain, or
+configuration change requires `--clean-first`. Use `--build-arg
+CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another
+frontend, and `--build-arg BUILD_TYPE=Debug` for a Debug
+build. The `docker-build.sh` wrapper accepts the frontend and overlay selections
+through `CEMU_FRONTEND` and `CEMU_OVERLAY_BACKEND`. The compiled executable is at
+`/workspace/CemuExtend/bin/Cemu_release` (or `Cemu_debug`) inside the container.
+To create only the dependency-enabled development image without compiling, use
+`docker build --target dev -t cemu-extend:dev .`.
+
+To build and launch the desktop frontend with its GTK/CEF runtime, use:
+
+```bash
+./docker-run.sh
+```
+
+The launcher and tool windows use native CEF child browsers and therefore require an X11 or XWayland display on Linux. The in-game Main/Pad overlays use CEF OSR and are composited into Vulkan without XComposite or Cairo child-window composition. For sandboxed local installation, install the staged `chrome-sandbox` helper as root with mode 4755. An explicitly unsandboxed development run can set `CEMU_CEF_NO_SANDBOX=1`.
+
+The launcher forwards the current X11/XWayland display, PulseAudio socket, and
+`/dev/dri`. It persists data in dedicated `Cemu-Docker` XDG directories so a
+container never rewrites the native frontend's settings. Override
+`CEMU_DOCKER_DATA_DIR`, `CEMU_DOCKER_CONFIG_DIR`, or `CEMU_DOCKER_CACHE_DIR`
+when another location is desired. Set `CEMU_FRONTEND=wx` to run the wxWidgets
+frontend instead.
+
+`docker-build.sh` extracts a relocatable Linux runtime beside `Cemu_release`.
+The launcher uses only paths relative to that output directory, so the result
+can also be started on NixOS without using a Nix-built Cemu binary:
+
+```bash
+steam-run ./bin/Cemu_release
+```
 
 
 ##### Building Errors

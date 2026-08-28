@@ -13,16 +13,22 @@ enum class AccountErrc
 };
 namespace std
 {
-	template <> struct is_error_code_enum<AccountErrc> : true_type {};
-}
+	template<>
+	struct is_error_code_enum<AccountErrc> : true_type
+	{
+	};
+} // namespace std
 namespace detail
 {
 	// Define a custom error code category derived from std::error_category
 	class AccountErrc_category : public std::error_category
 	{
-	public:
+	  public:
 		// Return a short descriptive name for the category
-		[[nodiscard]] const char* name() const noexcept override final { return "AccountError"; }
+		[[nodiscard]] const char* name() const noexcept override final
+		{
+			return "AccountError";
+		}
 
 		// Return what each enum means in text
 		[[nodiscard]] std::string message(int c) const override final
@@ -51,10 +57,10 @@ namespace detail
 			}
 		}
 	};
-}
+} // namespace detail
 
 inline std::error_code make_error_code(AccountErrc e)
 {
 	static detail::AccountErrc_category c;
-	return { static_cast<int>(e), c };
+	return {static_cast<int>(e), c};
 }

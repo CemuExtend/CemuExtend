@@ -98,7 +98,7 @@ struct LatteTexViewBucket
 	std::vector<LatteTexViewLookupDesc> list;
 };
 
-#define TEXTURE_VIEW_BUCKETS	(1061)
+#define TEXTURE_VIEW_BUCKETS (1061)
 
 inline uint32 _getViewBucketKey(MPTR physAddress, uint32 width, uint32 height, uint32 pitch)
 {
@@ -110,8 +110,8 @@ inline uint32 _getViewBucketKeyNoRes(MPTR physAddress, uint32 pitch)
 	return (physAddress + pitch * 13) % TEXTURE_VIEW_BUCKETS;
 }
 
-LatteTexViewBucket texViewBucket[TEXTURE_VIEW_BUCKETS] = { };
-LatteTexViewBucket texViewBucket_nores[TEXTURE_VIEW_BUCKETS] = { };
+LatteTexViewBucket texViewBucket[TEXTURE_VIEW_BUCKETS] = {};
+LatteTexViewBucket texViewBucket_nores[TEXTURE_VIEW_BUCKETS] = {};
 
 void LatteTextureViewLookupCache::Add(LatteTextureView* view, uint32 baseMip, uint32 baseSlice)
 {
@@ -133,14 +133,12 @@ void LatteTextureViewLookupCache::RemoveAll(LatteTextureView* view)
 	for (auto& key : view->viewLookUpCacheKeys)
 	{
 		auto& bucket = texViewBucket[key].list;
-		bucket.erase(std::remove_if(bucket.begin(), bucket.end(), [view](const LatteTexViewLookupDesc& v) {
-			return v.view == view; }), bucket.end());
+		bucket.erase(std::remove_if(bucket.begin(), bucket.end(), [view](const LatteTexViewLookupDesc& v) { return v.view == view; }), bucket.end());
 	}
 	for (auto& key : view->viewLookUpCacheKeysNoRes)
 	{
 		auto& bucket = texViewBucket_nores[key].list;
-		bucket.erase(std::remove_if(bucket.begin(), bucket.end(), [view](const LatteTexViewLookupDesc& v) {
-			return v.view == view; }), bucket.end());
+		bucket.erase(std::remove_if(bucket.begin(), bucket.end(), [view](const LatteTexViewLookupDesc& v) { return v.view == view; }), bucket.end());
 	}
 }
 
@@ -152,10 +150,7 @@ LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 widt
 	for (auto& it : texViewBucket[key].list)
 	{
 		if (it.format == format && it.dim == dim &&
-			it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
-			&& it.firstMip == firstMip && it.numMip == numMip
-			&& it.firstSlice == firstSlice && it.numSlice == numSlice
-			)
+			it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice)
 		{
 			return it.view;
 		}
@@ -170,11 +165,8 @@ LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR p
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
-			&& it.firstMip == firstMip && it.numMip == numMip
-			&& it.firstSlice == firstSlice && it.numSlice == numSlice &&
-			it.isDepth == isDepth
-			)
+		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice &&
+			it.isDepth == isDepth)
 		{
 			return it.view;
 		}

@@ -16,29 +16,29 @@ namespace nn
 			// painting with url?
 
 			pugi::xml_node tokenNode;
-			if(tokenNode = xmlNode.child("body"); tokenNode)
+			if (tokenNode = xmlNode.child("body"); tokenNode)
 			{
 				obj.bodyTextLength = SetStringUC2(obj.bodyText, tokenNode.child_value(), true);
-				if(obj.bodyTextLength > 0)
+				if (obj.bodyTextLength > 0)
 					obj.SetFlag(DownloadedDataBase::FLAGS::HAS_BODY_TEXT);
 			}
-			if(tokenNode = xmlNode.child("topic_tag"); tokenNode)
+			if (tokenNode = xmlNode.child("topic_tag"); tokenNode)
 			{
 				SetStringUC2(obj.topicTag, tokenNode.child_value(), true);
 			}
-			if(tokenNode = xmlNode.child("feeling_id"); tokenNode)
+			if (tokenNode = xmlNode.child("feeling_id"); tokenNode)
 			{
 				obj.feeling = ConvertString<sint8>(tokenNode.child_value());
-				if(obj.feeling < 0 || obj.feeling >= 5)
+				if (obj.feeling < 0 || obj.feeling >= 5)
 				{
 					cemuLog_log(LogType::Force, "[Olive-XML] DownloadedDataBase::ParseXml: feeling_id out of range");
 					return false;
 				}
 			}
-			if(tokenNode = xmlNode.child("id"); tokenNode)
+			if (tokenNode = xmlNode.child("id"); tokenNode)
 			{
 				std::string_view id_sv = tokenNode.child_value();
-				if(id_sv.size() > 22)
+				if (id_sv.size() > 22)
 				{
 					cemuLog_log(LogType::Force, "[Olive-XML] DownloadedDataBase::ParseXml: id too long");
 					return false;
@@ -46,12 +46,12 @@ namespace nn
 				memcpy(obj.postId, id_sv.data(), id_sv.size());
 				obj.postId[id_sv.size()] = '\0';
 			}
-			if(tokenNode = xmlNode.child("is_autopost"); tokenNode)
+			if (tokenNode = xmlNode.child("is_autopost"); tokenNode)
 			{
 				uint8 isAutopost = ConvertString<sint8>(tokenNode.child_value());
-				if(isAutopost == 1)
+				if (isAutopost == 1)
 					obj.SetFlag(DownloadedDataBase::FLAGS::IS_AUTOPOST);
-				else if(isAutopost == 0)
+				else if (isAutopost == 0)
 					obj.SetFlag(DownloadedDataBase::FLAGS::IS_NOT_AUTOPOST);
 				else
 				{
@@ -59,20 +59,20 @@ namespace nn
 					return false;
 				}
 			}
-			if(tokenNode = xmlNode.child("empathy_added"); tokenNode)
+			if (tokenNode = xmlNode.child("empathy_added"); tokenNode)
 			{
-				if(ConvertString<sint32>(tokenNode.child_value()) > 0)
+				if (ConvertString<sint32>(tokenNode.child_value()) > 0)
 					obj.SetFlag(DownloadedDataBase::FLAGS::HAS_EMPATHY_ADDED);
 			}
-			if(tokenNode = xmlNode.child("is_spoiler"); tokenNode)
+			if (tokenNode = xmlNode.child("is_spoiler"); tokenNode)
 			{
-				if(ConvertString<sint32>(tokenNode.child_value()) > 0)
+				if (ConvertString<sint32>(tokenNode.child_value()) > 0)
 					obj.SetFlag(DownloadedDataBase::FLAGS::IS_SPOILER);
 			}
-			if(tokenNode = xmlNode.child("mii"); tokenNode)
+			if (tokenNode = xmlNode.child("mii"); tokenNode)
 			{
 				std::vector<uint8> miiData = NCrypto::base64Decode(tokenNode.child_value());
-				if(miiData.size() != 96)
+				if (miiData.size() != 96)
 				{
 					cemuLog_log(LogType::Force, "[Olive-XML] DownloadedSystemTopicData mii data is not valid (incorrect size)");
 					return false;
@@ -80,33 +80,33 @@ namespace nn
 				memcpy(obj.miiData, miiData.data(), miiData.size());
 				obj.SetFlag(DownloadedDataBase::FLAGS::HAS_MII_DATA);
 			}
-			if(tokenNode = xmlNode.child("pid"); tokenNode)
+			if (tokenNode = xmlNode.child("pid"); tokenNode)
 			{
 				obj.userPid = ConvertString<uint32>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("screen_name"); tokenNode)
+			if (tokenNode = xmlNode.child("screen_name"); tokenNode)
 			{
 				SetStringUC2(obj.miiNickname, tokenNode.child_value(), true);
 			}
-			if(tokenNode = xmlNode.child("region_id"); tokenNode)
+			if (tokenNode = xmlNode.child("region_id"); tokenNode)
 			{
 				obj.regionId = ConvertString<uint32>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("platform_id"); tokenNode)
+			if (tokenNode = xmlNode.child("platform_id"); tokenNode)
 			{
 				obj.platformId = ConvertString<uint8>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("language_id"); tokenNode)
+			if (tokenNode = xmlNode.child("language_id"); tokenNode)
 			{
 				obj.languageId = ConvertString<uint8>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("country_id"); tokenNode)
+			if (tokenNode = xmlNode.child("country_id"); tokenNode)
 			{
 				obj.countryId = ConvertString<uint8>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("painting"); tokenNode)
+			if (tokenNode = xmlNode.child("painting"); tokenNode)
 			{
-				if(pugi::xml_node subNode = tokenNode.child("content"); subNode)
+				if (pugi::xml_node subNode = tokenNode.child("content"); subNode)
 				{
 					std::vector<uint8> paintingData = NCrypto::base64Decode(subNode.child_value());
 					if (paintingData.size() > 0xA000)
@@ -117,12 +117,12 @@ namespace nn
 					memcpy(obj.compressedMemoBody, paintingData.data(), paintingData.size());
 					obj.SetFlag(DownloadedDataBase::FLAGS::HAS_BODY_MEMO);
 				}
-				if(pugi::xml_node subNode = tokenNode.child("size"); subNode)
+				if (pugi::xml_node subNode = tokenNode.child("size"); subNode)
 				{
 					obj.compressedMemoBodySize = ConvertString<uint32>(subNode.child_value());
 				}
 			}
-			if(tokenNode = xmlNode.child("app_data"); tokenNode)
+			if (tokenNode = xmlNode.child("app_data"); tokenNode)
 			{
 				std::vector<uint8> appData = NCrypto::base64Decode(tokenNode.child_value());
 				if (appData.size() > 0x400)
@@ -140,11 +140,11 @@ namespace nn
 		bool ParseXML_DownloadedPostData(DownloadedPostData& obj, pugi::xml_node& xmlNode)
 		{
 			pugi::xml_node tokenNode;
-			if(tokenNode = xmlNode.child("community_id"); tokenNode)
+			if (tokenNode = xmlNode.child("community_id"); tokenNode)
 				obj.communityId = ConvertString<uint32>(tokenNode.child_value());
-			if(tokenNode = xmlNode.child("empathy_count"); tokenNode)
+			if (tokenNode = xmlNode.child("empathy_count"); tokenNode)
 				obj.empathyCount = ConvertString<uint32>(tokenNode.child_value());
-			if(tokenNode = xmlNode.child("reply_count"); tokenNode)
+			if (tokenNode = xmlNode.child("reply_count"); tokenNode)
 				obj.commentCount = ConvertString<uint32>(tokenNode.child_value());
 			return ParseXml_DownloadedDataBase(obj.downloadedDataBase, xmlNode);
 		}
@@ -152,7 +152,7 @@ namespace nn
 		bool ParseXML_DownloadedSystemPostData(hidden::DownloadedSystemPostData& obj, pugi::xml_node& xmlNode)
 		{
 			pugi::xml_node tokenNode;
-			if(tokenNode = xmlNode.child("title_id"); tokenNode)
+			if (tokenNode = xmlNode.child("title_id"); tokenNode)
 				obj.titleId = ConvertString<uint64>(tokenNode.child_value());
 			return ParseXML_DownloadedPostData(obj.downloadedPostData, xmlNode);
 		}
@@ -160,39 +160,39 @@ namespace nn
 		bool ParseXML_DownloadedTopicData(DownloadedTopicData& obj, pugi::xml_node& xmlNode)
 		{
 			pugi::xml_node tokenNode;
-			if(tokenNode = xmlNode.child("community_id"); tokenNode)
+			if (tokenNode = xmlNode.child("community_id"); tokenNode)
 				obj.communityId = ConvertString<uint32>(tokenNode.child_value());
 			return true;
 		}
 
 		bool Parse_DownloadedSystemTopicData(hidden::DownloadedSystemTopicData& obj, pugi::xml_node& xmlNode)
 		{
-			if(!ParseXML_DownloadedTopicData(obj.downloadedTopicData, xmlNode))
+			if (!ParseXML_DownloadedTopicData(obj.downloadedTopicData, xmlNode))
 				return false;
 			pugi::xml_node tokenNode;
-			if(tokenNode = xmlNode.child("name"); tokenNode)
+			if (tokenNode = xmlNode.child("name"); tokenNode)
 			{
 				SetStringUC2(obj.titleText, tokenNode.child_value(), true);
 				obj.downloadedTopicData.SetFlag(DownloadedTopicData::FLAGS::HAS_TITLE);
 			}
-			if(tokenNode = xmlNode.child("is_recommended"); tokenNode)
+			if (tokenNode = xmlNode.child("is_recommended"); tokenNode)
 			{
 				uint32 isRecommended = ConvertString<uint32>(tokenNode.child_value());
-				if(isRecommended != 0)
+				if (isRecommended != 0)
 					obj.downloadedTopicData.SetFlag(DownloadedTopicData::FLAGS::IS_RECOMMENDED);
 			}
-			if(tokenNode = xmlNode.child("title_id"); tokenNode)
+			if (tokenNode = xmlNode.child("title_id"); tokenNode)
 			{
 				obj.titleId = ConvertString<uint64>(tokenNode.child_value());
 			}
-			if(tokenNode = xmlNode.child("title_ids"); tokenNode)
+			if (tokenNode = xmlNode.child("title_ids"); tokenNode)
 			{
 				cemu_assert_unimplemented();
 			}
-			if(tokenNode = xmlNode.child("icon"); tokenNode)
+			if (tokenNode = xmlNode.child("icon"); tokenNode)
 			{
 				std::vector<uint8> iconData = NCrypto::base64Decode(tokenNode.child_value());
-				if(iconData.size() > sizeof(obj.iconData))
+				if (iconData.size() > sizeof(obj.iconData))
 				{
 					cemuLog_log(LogType::Force, "[Olive-XML] DownloadedSystemTopicData icon data is not valid");
 					return false;
@@ -216,7 +216,7 @@ namespace nn
 
 			memset(downloadedSystemTopicDataList, 0, sizeof(hidden::DownloadedSystemTopicDataList));
 			downloadedSystemTopicDataList->topicDataNum = 0;
-		
+
 			cemu_assert_debug(doc.child("result").child("topics"));
 
 			size_t postCount = 0;
@@ -229,7 +229,7 @@ namespace nn
 				if (strcmp(topicsChildNode.name(), "topic"))
 					continue;
 				// parse topic
-				if(downloadedSystemTopicDataList->topicDataNum > 10)
+				if (downloadedSystemTopicDataList->topicDataNum > 10)
 				{
 					cemuLog_log(LogType::Force, "[Olive-XML] DownloadedSystemTopicDataList exceeded maximum topic count (10)");
 					return false;
@@ -245,7 +245,7 @@ namespace nn
 				{
 					for (pugi::xml_node postNode : personNode.child("posts").children("post"))
 					{
-						if(postCount >= postCountMax)
+						if (postCount >= postCountMax)
 						{
 							cemuLog_log(LogType::Force, "[Olive-XML] GetSystemTopicDataListFromRawData exceeded maximum post count");
 							return false;
@@ -253,14 +253,14 @@ namespace nn
 						auto& postEntry = downloadedSystemPostData[postCount];
 						memset(&postEntry, 0, sizeof(hidden::DownloadedSystemPostData));
 						bool r = ParseXML_DownloadedSystemPostData(postEntry, postNode);
-						if(!r)
+						if (!r)
 						{
 							cemuLog_log(LogType::Force, "[Olive-XML] DownloadedSystemPostData parsing failed");
 							return false;
 						}
 						postCount++;
 						// add post to topic
-						if(topicEntry.postDataNum >= hidden::DownloadedSystemTopicDataList::MAX_POSTS_PER_TOPIC)
+						if (topicEntry.postDataNum >= hidden::DownloadedSystemTopicDataList::MAX_POSTS_PER_TOPIC)
 						{
 							cemuLog_log(LogType::Force, "[Olive-XML] DownloadedSystemTopicDataList has too many posts for a single topic (up to {})", hidden::DownloadedSystemTopicDataList::MAX_POSTS_PER_TOPIC);
 							return false;
@@ -276,10 +276,10 @@ namespace nn
 
 		nnResult DownloadedDataBase::DownloadExternalImageData(DownloadedDataBase* _this, void* imageDataOut, uint32be* imageSizeOut, uint32 maxSize)
 		{
-			if(g_IsOfflineDBMode)
+			if (g_IsOfflineDBMode)
 				return OfflineDB_DownloadPostDataListParam_DownloadExternalImageData(_this, imageDataOut, imageSizeOut, maxSize);
 
-			if(!g_IsOnlineMode)
+			if (!g_IsOnlineMode)
 				return OLV_RESULT_OFFLINE_MODE_REQUEST;
 			if (!TestFlags(_this, FLAGS::HAS_EXTERNAL_IMAGE))
 				return OLV_RESULT_MISSING_DATA;
@@ -290,15 +290,15 @@ namespace nn
 
 		nnResult DownloadPostDataListParam::GetRawDataUrl(DownloadPostDataListParam* _this, char* urlOut, uint32 urlMaxSize)
 		{
-			if(!g_IsOnlineMode)
+			if (!g_IsOnlineMode)
 				return OLV_RESULT_OFFLINE_MODE_REQUEST;
-			//if(_this->communityId == 0)
+			// if(_this->communityId == 0)
 			//	cemuLog_log(LogType::Force, "DownloadPostDataListParam::GetRawDataUrl called with invalid communityId");
 
 			// get base url
 			std::string baseUrl;
 			baseUrl.append(g_DiscoveryResults.apiEndpoint);
-			//baseUrl.append(fmt::format("/v1/communities/{}/posts", (uint32)_this->communityId));
+			// baseUrl.append(fmt::format("/v1/communities/{}/posts", (uint32)_this->communityId));
 			cemu_assert_debug(_this->communityId == 0);
 			baseUrl.append(fmt::format("/v1/posts.search", (uint32)_this->communityId));
 
@@ -308,7 +308,7 @@ namespace nn
 			std::string params;
 
 			// this function behaves differently for the Wii U menu? Where it can lookup posts by titleId?
-			if(_this->titleId != 0)
+			if (_this->titleId != 0)
 			{
 				cemu_assert_unimplemented(); // Wii U menu mode
 			}
@@ -316,22 +316,22 @@ namespace nn
 			// todo: Generic parameters. Which includes: language_id, limit, type=text/memo
 
 			// handle postIds
-			for(size_t i=0; i<_this->MAX_NUM_POST_ID; i++)
+			for (size_t i = 0; i < _this->MAX_NUM_POST_ID; i++)
 			{
-				if(_this->searchPostId[i].str[0] == '\0')
+				if (_this->searchPostId[i].str[0] == '\0')
 					continue;
 				cemu_assert_unimplemented(); // todo
 				// todo - postId parameter
 				// handle filters
-				if(_this->_HasFlag(DownloadPostDataListParam::FLAGS::WITH_MII))
+				if (_this->_HasFlag(DownloadPostDataListParam::FLAGS::WITH_MII))
 					params.append("&with_mii=1");
-				if(_this->_HasFlag(DownloadPostDataListParam::FLAGS::WITH_EMPATHY))
+				if (_this->_HasFlag(DownloadPostDataListParam::FLAGS::WITH_EMPATHY))
 					params.append("&with_empathy_added=1");
-				if(_this->bodyTextMaxLength != 0)
+				if (_this->bodyTextMaxLength != 0)
 					params.append(fmt::format("&max_body_length={}", _this->bodyTextMaxLength));
 			}
 
-			if(_this->titleId != 0)
+			if (_this->titleId != 0)
 				params.append(fmt::format("&title_id={}", (uint64)_this->titleId));
 
 			if (_this->_HasFlag(DownloadPostDataListParam::FLAGS::FRIENDS_ONLY))
@@ -341,11 +341,11 @@ namespace nn
 			if (_this->_HasFlag(DownloadPostDataListParam::FLAGS::SELF_ONLY))
 				params.append("&by=self");
 
-			if(!params.empty())
+			if (!params.empty())
 				params[0] = '?'; // replace the leading ampersand
 
 			baseUrl.append(params);
-			if(baseUrl.size()+1 > urlMaxSize)
+			if (baseUrl.size() + 1 > urlMaxSize)
 				return OLV_RESULT_NOT_ENOUGH_SIZE;
 			strncpy(urlOut, baseUrl.c_str(), urlMaxSize);
 			return OLV_RESULT_SUCCESS;
@@ -353,7 +353,7 @@ namespace nn
 
 		nnResult DownloadPostDataList(DownloadedTopicData* downloadedTopicData, DownloadedPostData* downloadedPostData, uint32be* postCountOut, uint32 maxCount, DownloadPostDataListParam* param)
 		{
-			if(g_IsOfflineDBMode)
+			if (g_IsOfflineDBMode)
 				return OfflineDB_DownloadPostDataListParam_DownloadPostDataList(downloadedTopicData, downloadedPostData, postCountOut, maxCount, param);
 			memset(downloadedTopicData, 0, sizeof(DownloadedTopicData));
 			downloadedTopicData->communityId = param->communityId;
@@ -456,8 +456,7 @@ namespace nn
 			// URL and downloading functions
 			cafeExportRegisterFunc(DownloadPostDataListParam::GetRawDataUrl, "nn_olv", "GetRawDataUrl__Q3_2nn3olv25DownloadPostDataListParamCFPcUi", LogType::NN_OLV);
 			cafeExportRegisterFunc(DownloadPostDataList, "nn_olv", "DownloadPostDataList__Q2_2nn3olvFPQ3_2nn3olv19DownloadedTopicDataPQ3_2nn3olv18DownloadedPostDataPUiUiPCQ3_2nn3olv25DownloadPostDataListParam", LogType::NN_OLV);
-
 		}
 
-	}
-}
+	} // namespace olv
+} // namespace nn

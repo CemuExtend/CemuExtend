@@ -15,15 +15,15 @@ int main()
 	assert(NormalizeRelativePath("pack/rules.txt") == fs::path("pack/rules.txt"));
 	assert(NormalizeRelativePath("pack/./rules.txt") == fs::path("pack/rules.txt"));
 	for (const std::string_view unsafe : {
-		"", "../escape", "foo/../../escape", "foo/../escape", "/absolute",
-		"\\absolute", "C:\\Windows\\escape", "C:drive-relative", "..\\escape"})
+			 "", "../escape", "foo/../../escape", "foo/../escape", "/absolute",
+			 "\\absolute", "C:\\Windows\\escape", "C:drive-relative", "..\\escape"})
 	{
 		assert(!NormalizeRelativePath(unsafe));
 	}
 
 	const auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
 	const fs::path root = fs::temp_directory_path() /
-		("cemu-archive-policy-" + std::to_string(seed));
+						  ("cemu-archive-policy-" + std::to_string(seed));
 	const fs::path target = root / "target";
 	const fs::path staging = root / "staging";
 	const fs::path backup = root / "backup";

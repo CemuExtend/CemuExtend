@@ -74,4 +74,4 @@ namespace GX2
 	{
 		osLib_addFunction("gx2", "GX2SetDefaultAllocator", gx2Export_GX2SetDefaultAllocator);
 	}
-};
+}; // namespace GX2

@@ -44,7 +44,7 @@ class fscDeviceTypeRedirect : public fscDeviceC
 		return nullptr;
 	}
 
-public:
+  public:
 	static fscDeviceTypeRedirect& instance()
 	{
 		static fscDeviceTypeRedirect _instance;

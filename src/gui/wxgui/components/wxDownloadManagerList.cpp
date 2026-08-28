@@ -22,7 +22,7 @@
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
 wxDownloadManagerList::wxDownloadManagerList(wxWindow* parent,
-	std::function<void()> requestGameListRefresh, wxWindowID id)
+											 std::function<void()> requestGameListRefresh, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
 	  m_requestGameListRefresh(std::move(requestGameListRefresh))
 {
@@ -33,7 +33,7 @@ wxDownloadManagerList::wxDownloadManagerList(wxWindow* parent,
 	m_tooltip_window = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNO_BORDER);
 	auto* tooltip_sizer = new wxBoxSizer(wxVERTICAL);
 	m_tooltip_text = new wxStaticText(m_tooltip_window, wxID_ANY, wxEmptyString);
-	tooltip_sizer->Add(m_tooltip_text , 0, wxALL, 5);
+	tooltip_sizer->Add(m_tooltip_text, 0, wxALL, 5);
 	m_tooltip_window->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INFOBK));
 	m_tooltip_window->SetSizerAndFit(tooltip_sizer);
 	m_tooltip_window->Hide();
@@ -78,7 +78,7 @@ boost::optional<wxDownloadManagerList::TitleEntry&> wxDownloadManagerList::GetSe
 
 boost::optional<wxDownloadManagerList::TitleEntry&> wxDownloadManagerList::GetTitleEntry(uint64 titleId, uint16 titleVersion)
 {
-	for(const auto& v : m_data)
+	for (const auto& v : m_data)
 	{
 		if (v->entry.titleId == titleId && v->entry.version == titleVersion)
 			return v->entry;
@@ -118,7 +118,7 @@ void wxDownloadManagerList::AddColumns()
 	col4.SetText(_("Progress"));
 	col4.SetWidth(wxLIST_AUTOSIZE_USEHEADER);
 	InsertColumn(ColumnProgress, col4);
-	
+
 	wxListItem col5;
 	col5.SetId(ColumnStatus);
 	col5.SetText(_("Status"));
@@ -200,7 +200,7 @@ boost::optional<wxDownloadManagerList::TitleEntry&> wxDownloadManagerList::GetTi
 
 		return data.get().entry;
 	}
-	
+
 	return {};
 }
 
@@ -244,7 +244,7 @@ void wxDownloadManagerList::RemoveItem(long item)
 
 	const ItemData* ref = nullptr;
 	long counter = 0;
-	for(auto it = m_sorted_data.begin(); it != m_sorted_data.end(); ++it)
+	for (auto it = m_sorted_data.begin(); it != m_sorted_data.end(); ++it)
 	{
 		if (!it->get().visible)
 			continue;
@@ -260,12 +260,12 @@ void wxDownloadManagerList::RemoveItem(long item)
 	// shouldn't happen
 	if (ref == nullptr)
 		return;
-	
-	for(auto it = m_data.begin(); it != m_data.end(); ++it)
+
+	for (auto it = m_data.begin(); it != m_data.end(); ++it)
 	{
 		if (ref != (*it).get())
 			continue;
-		
+
 		m_data.erase(it);
 		break;
 	}
@@ -312,7 +312,6 @@ void wxDownloadManagerList::OnItemSelected(wxListEvent& event)
 		m_tooltip_window->Hide();
 		return;
 	}
-
 }
 
 enum DownloadContextMenuEntries
@@ -327,7 +326,7 @@ void wxDownloadManagerList::OnContextMenu(wxContextMenuEvent& event)
 	// still doing work
 	if (m_context_worker.valid() && !future_is_ready(m_context_worker))
 		return;
-	
+
 	wxMenu menu;
 	menu.Bind(wxEVT_COMMAND_MENU_SELECTED, &wxDownloadManagerList::OnContextMenuSelected, this);
 
@@ -343,13 +342,13 @@ void wxDownloadManagerList::OnContextMenu(wxContextMenuEvent& event)
 		menu.Append(kContextMenuResume, _("&Resume"));
 	else if (entry->status == TitleDownloadStatus::Error)
 		menu.Append(kContextMenuRetry, _("&Retry"));
-	else if(entry->status == TitleDownloadStatus::Available)
+	else if (entry->status == TitleDownloadStatus::Available)
 		menu.Append(kContextMenuDownload, _("&Download"));
-	//else if(entry->status == TitleDownloadStatus::Downloading || entry->status == TitleDownloadStatus::Initializing)
+	// else if(entry->status == TitleDownloadStatus::Downloading || entry->status == TitleDownloadStatus::Initializing)
 	//	menu.Append(kContextMenuPause, _("&Pause")); buggy!
 
 	PopupMenu(&menu);
-	
+
 	// TODO: fix tooltip position
 }
 
@@ -394,7 +393,7 @@ void wxDownloadManagerList::OnContextMenuSelected(wxCommandEvent& event)
 	const auto entry = GetTitleEntry(selection);
 	if (!entry.has_value())
 		return;
-	
+
 	switch (event.GetId())
 	{
 	case kContextMenuDownload:
@@ -414,7 +413,7 @@ void wxDownloadManagerList::OnContextMenuSelected(wxCommandEvent& event)
 
 void wxDownloadManagerList::OnTimer(wxTimerEvent& event)
 {
-	if(event.GetTimer().GetId() != m_tooltip_timer->GetId())
+	if (event.GetTimer().GetId() != m_tooltip_timer->GetId())
 	{
 		event.Skip();
 		return;
@@ -439,7 +438,7 @@ wxString wxDownloadManagerList::GetTitleEntryText(const TitleEntry& entry, ItemC
 	switch (column)
 	{
 	case ColumnTitleId:
-		return formatWxString("{:08x}-{:08x}", (uint32) (entry.titleId >> 32), (uint32) (entry.titleId & 0xFFFFFFFF));
+		return formatWxString("{:08x}-{:08x}", (uint32)(entry.titleId >> 32), (uint32)(entry.titleId & 0xFFFFFFFF));
 	case ColumnName:
 		return entry.name;
 	case ColumnType:
@@ -459,7 +458,7 @@ wxString wxDownloadManagerList::GetTitleEntryText(const TitleEntry& entry, ItemC
 		{
 			if (entry.progress >= 1000)
 				return "100%";
-			return formatWxString("{:.1f}%", (float) entry.progress / 10.0f); // one decimal
+			return formatWxString("{:.1f}%", (float)entry.progress / 10.0f); // one decimal
 		}
 		else if (entry.status == TitleDownloadStatus::Installing || entry.status == TitleDownloadStatus::Checking || entry.status == TitleDownloadStatus::Verifying)
 		{
@@ -504,7 +503,7 @@ wxString wxDownloadManagerList::GetTitleEntryText(const TitleEntry& entry, ItemC
 			return "Unknown status";
 	}
 	}
-	
+
 	return wxEmptyString;
 }
 
@@ -512,14 +511,14 @@ wxString wxDownloadManagerList::GetTranslatedTitleEntryType(EntryType type)
 {
 	switch (type)
 	{
-		case EntryType::Base:
-			return _("base");
-		case EntryType::Update:
-			return _("update");
-		case EntryType::DLC:
-			return _("DLC");
-		default:
-			return std::to_string(static_cast<std::underlying_type_t<EntryType>>(type));
+	case EntryType::Base:
+		return _("base");
+	case EntryType::Update:
+		return _("update");
+	case EntryType::DLC:
+		return _("DLC");
+	default:
+		return std::to_string(static_cast<std::underlying_type_t<EntryType>>(type));
 	}
 }
 
@@ -554,7 +553,7 @@ void wxDownloadManagerList::UpdateTitleStatusDepr(TitleEntryData_t* obj, const w
 		return;
 
 	// update gamelist text
-	for(size_t i = 0; i < m_sorted_data.size(); ++i)
+	for (size_t i = 0; i < m_sorted_data.size(); ++i)
 	{
 		if (m_sorted_data[i].get().entry == data)
 		{
@@ -584,7 +583,7 @@ bool wxDownloadManagerList::SortFunc(std::span<int> sortColumnOrder, const Type_
 
 	const auto& entry1 = v1.get().entry;
 	const auto& entry2 = v2.get().entry;
-	
+
 	for (size_t i = 0; i < sortColumnOrder.size(); i++)
 	{
 		int sortByColumn = sortColumnOrder[i];
@@ -613,14 +612,13 @@ bool wxDownloadManagerList::SortFunc(std::span<int> sortColumnOrder, const Type_
 		else if (sortByColumn == ColumnProgress)
 		{
 			if (entry1.progress != entry2.progress)
-			return entry1.progress < entry2.progress;
+				return entry1.progress < entry2.progress;
 		}
 		else
 		{
 			cemu_assert_debug(false);
 			return (uintptr_t)&entry1 < (uintptr_t)&entry2;
 		}
-
 	}
 
 	return false;
@@ -630,7 +628,7 @@ bool wxDownloadManagerList::SortFunc(std::span<int> sortColumnOrder, const Type_
 
 void wxDownloadManagerList::SortEntries(int column)
 {
-	boost::container::small_vector<int, 12> s_SortColumnOrder{ ColumnName, ColumnType, ColumnVersion, ColumnTitleId, ColumnProgress };
+	boost::container::small_vector<int, 12> s_SortColumnOrder{ColumnName, ColumnType, ColumnVersion, ColumnTitleId, ColumnProgress};
 
 	bool ascending;
 	if (column == -1)
@@ -668,7 +666,7 @@ int wxDownloadManagerList::Filter(const wxString& filter, const wxString& prefix
 {
 	if (prefix.empty())
 		return -1;
-	
+
 	if (!filter.StartsWith(prefix))
 		return -1;
 
@@ -689,7 +687,7 @@ int wxDownloadManagerList::Filter(const wxString& filter, const wxString& prefix
 
 void wxDownloadManagerList::Filter(const wxString& filter)
 {
-	if(filter.empty())
+	if (filter.empty())
 	{
 		std::for_each(m_data.begin(), m_data.end(), [](ItemDataPtr& data) { data->visible = true; });
 		SetItemCount(m_data.size());
@@ -699,23 +697,23 @@ void wxDownloadManagerList::Filter(const wxString& filter)
 
 	const auto filter_upper = filter.Upper().Trim(false).Trim(true);
 	int counter = 0;
-	
+
 	if (const auto result = Filter(filter_upper, "TITLEID:", ColumnTitleId) != -1)
 		counter = result;
 	else if (const auto result = Filter(filter_upper, "NAME:", ColumnName) != -1)
 		counter = result;
 	else if (const auto result = Filter(filter_upper, "TYPE:", ColumnType) != -1)
 		counter = result;
-	//else if (const auto result = Filter(filter_upper, "REGION:", ColumnRegion) != -1)
+	// else if (const auto result = Filter(filter_upper, "REGION:", ColumnRegion) != -1)
 	//	counter = result;
 	else if (const auto result = Filter(filter_upper, "VERSION:", ColumnVersion) != -1)
 		counter = result;
-	else if(filter_upper == "ERROR")
+	else if (filter_upper == "ERROR")
 	{
 		for (auto&& data : m_data)
 		{
 			bool visible = false;
-			//if (data->entry.error != TitleError::None)
+			// if (data->entry.error != TitleError::None)
 			//	visible = true;
 
 			data->visible = visible;
@@ -740,7 +738,7 @@ void wxDownloadManagerList::Filter(const wxString& filter)
 				++counter;
 		}
 	}
-	
+
 	SetItemCount(counter);
 	RefreshPage();
 }
@@ -775,7 +773,7 @@ void wxDownloadManagerList::Filter2(bool showTitles, bool showUpdates, bool show
 			if (showTitles && (showInstalled || !isInstalled))
 				visible = true;
 		}
-	
+
 		data->visible = visible;
 		if (visible)
 			++counter;
@@ -788,7 +786,7 @@ void wxDownloadManagerList::Filter2(bool showTitles, bool showUpdates, bool show
 size_t wxDownloadManagerList::GetCountByType(EntryType type) const
 {
 	size_t result = 0;
-	for(const auto& data : m_data)
+	for (const auto& data : m_data)
 	{
 		if (data->entry.type == type)
 			++result;

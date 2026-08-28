@@ -14,7 +14,7 @@ namespace
 {
 	class CemuWupsPatchPlatform final : public IWupsPatchPlatform
 	{
-	public:
+	  public:
 		~CemuWupsPatchPlatform() override
 		{
 			std::map<std::uint32_t, std::uint32_t> allocations;
@@ -43,7 +43,7 @@ namespace
 			error.clear();
 			RPLResolvedExport resolved;
 			if (!RPLLoader_FindLoadedExport(
-				moduleName, functionName, false, resolved))
+					moduleName, functionName, false, resolved))
 				return std::nullopt;
 			return WupsResolvedPatchTarget{
 				resolved.address, std::move(resolved.moduleName),
@@ -66,32 +66,32 @@ namespace
 		}
 
 		bool IsExecutable(std::uint32_t address,
-			std::uint32_t size) const override
+						  std::uint32_t size) const override
 		{
 			RPLMappedAddressInfo info;
 			if (RPLLoader_QueryMappedAddress(address, size, info))
 				return (info.sectionFlags & 4U) != 0;
 			const auto inRange = [address, size](
-				std::uint32_t base, std::uint32_t rangeSize) {
+									 std::uint32_t base, std::uint32_t rangeSize) {
 				return address >= base && address - base <= rangeSize &&
-					size <= rangeSize - (address - base);
+					   size <= rangeSize - (address - base);
 			};
 			return inRange(MEMORY_CODE_TRAMPOLINE_AREA_ADDR,
-				MEMORY_CODE_TRAMPOLINE_AREA_SIZE) ||
-				inRange(MEMORY_CODECAVEAREA_ADDR,
-					MEMORY_CODECAVEAREA_SIZE);
+						   MEMORY_CODE_TRAMPOLINE_AREA_SIZE) ||
+				   inRange(MEMORY_CODECAVEAREA_ADDR,
+						   MEMORY_CODECAVEAREA_SIZE);
 		}
 
 		bool IsWritable(std::uint32_t address,
-			std::uint32_t size) const override
+						std::uint32_t size) const override
 		{
 			RPLMappedAddressInfo info;
 			return RPLLoader_QueryMappedAddress(address, size, info) &&
-				(info.sectionFlags & 1U) != 0;
+				   (info.sectionFlags & 1U) != 0;
 		}
 
 		bool ReadWords(std::uint32_t address,
-			std::span<std::uint32_t> words, std::string& error) override
+					   std::span<std::uint32_t> words, std::string& error) override
 		{
 			const auto bytes = static_cast<std::uint64_t>(words.size()) * 4;
 			if (bytes > std::numeric_limits<std::uint32_t>::max() ||
@@ -110,7 +110,7 @@ namespace
 		}
 
 		bool WriteWords(std::uint32_t address,
-			std::span<const std::uint32_t> words, std::string& error) override
+						std::span<const std::uint32_t> words, std::string& error) override
 		{
 			const auto bytes = static_cast<std::uint64_t>(words.size()) * 4;
 			if (bytes > std::numeric_limits<std::uint32_t>::max() ||
@@ -130,8 +130,8 @@ namespace
 		}
 
 		bool AllocateExecutableNear(std::uint32_t,
-			std::uint32_t size, std::uint32_t alignment,
-			std::uint32_t& address, std::string& error) override
+									std::uint32_t size, std::uint32_t alignment,
+									std::uint32_t& address, std::string& error) override
 		{
 			error.clear();
 			address = 0;
@@ -165,7 +165,7 @@ namespace
 		}
 
 		void FreeExecutable(std::uint32_t address,
-			std::uint32_t size) override
+							std::uint32_t size) override
 		{
 			std::lock_guard lock(m_mutex);
 			const auto found = m_allocations.find(address);
@@ -177,19 +177,19 @@ namespace
 		}
 
 		void InvalidateCode(std::uint32_t address,
-			std::uint32_t size) override
+							std::uint32_t size) override
 		{
 			if (size != 0 && address <=
-				std::numeric_limits<std::uint32_t>::max() - size)
+								 std::numeric_limits<std::uint32_t>::max() - size)
 				PPCRecompiler_invalidateRange(address, address + size);
 		}
 
-	private:
+	  private:
 		std::atomic<WupsPatchProcess> m_process{WupsPatchProcess::Game};
 		std::mutex m_mutex;
 		std::map<std::uint32_t, std::uint32_t> m_allocations;
 	};
-}
+} // namespace
 
 std::shared_ptr<IWupsPatchPlatform> CreateCemuWupsPatchPlatform()
 {

@@ -38,9 +38,9 @@ namespace Espresso
 		ADDIC_ = 13,
 		ADDI = 14,
 		ADDIS = 15,
-		BC = 16, // conditional branch
+		BC = 16,	   // conditional branch
 		GROUP_17 = 17, // SC
-		B = 18, // unconditional branch
+		B = 18,		   // unconditional branch
 		GROUP_19 = 19,
 		RLWIMI = 20,
 		RLWINM = 21,
@@ -109,11 +109,20 @@ namespace Espresso
 		MFTB = 371,
 	};
 
-	inline PrimaryOpcode GetPrimaryOpcode(uint32 opcode) { return (PrimaryOpcode)(opcode >> 26); };
-	inline Opcode19 GetGroup19Opcode(uint32 opcode) { return (Opcode19)((opcode >> 1) & 0x3FF); };
-	inline Opcode31 GetGroup31Opcode(uint32 opcode) { return (Opcode31)((opcode >> 1) & 0x3FF); };
+	inline PrimaryOpcode GetPrimaryOpcode(uint32 opcode)
+	{
+		return (PrimaryOpcode)(opcode >> 26);
+	};
+	inline Opcode19 GetGroup19Opcode(uint32 opcode)
+	{
+		return (Opcode19)((opcode >> 1) & 0x3FF);
+	};
+	inline Opcode31 GetGroup31Opcode(uint32 opcode)
+	{
+		return (Opcode31)((opcode >> 1) & 0x3FF);
+	};
 
-	struct BOField 
+	struct BOField
 	{
 		BOField() = default;
 		BOField(uint8 bo) : bo(bo) {};
@@ -166,7 +175,7 @@ namespace Espresso
 		BD = opcode & 0xfffc;
 		if (BD & 0x8000)
 			BD |= 0xffff0000;
-		BO = { (uint8)((opcode >> 21) & 0x1F) };
+		BO = {(uint8)((opcode >> 21) & 0x1F)};
 		BI = (opcode >> 16) & 0x1F;
 		AA = (opcode & 2) != 0;
 		LK = (opcode & 1) != 0;
@@ -181,7 +190,7 @@ namespace Espresso
 
 	inline void _decodeForm_XL(uint32 opcode, BOField& BO, uint32& BI, bool& LK)
 	{
-		BO = { (uint8)((opcode >> 21) & 0x1F) };
+		BO = {(uint8)((opcode >> 21) & 0x1F)};
 		BI = (opcode >> 16) & 0x1F;
 		LK = (opcode & 1) != 0;
 	}
@@ -208,4 +217,4 @@ namespace Espresso
 		// form XL (with BD field expected to be zero)
 		_decodeForm_XL(opcode, BO, BI, LK);
 	}
-}
+} // namespace Espresso

@@ -42,16 +42,16 @@ namespace
 		for (std::uint32_t attempt = 0; attempt < 1000; ++attempt)
 		{
 			const auto candidate = target.parent_path() /
-				fmt::format(".{}.staging.{}.{}", _pathToUtf8(target.filename()), seed, attempt);
+								   fmt::format(".{}.staging.{}.{}", _pathToUtf8(target.filename()), seed, attempt);
 			std::error_code error;
 			if (!fs::exists(candidate, error) && !error)
 				return candidate;
 		}
 		throw std::runtime_error("Unable to allocate custom graphic-pack transaction path");
 	}
-}
+} // namespace
 
-static size_t curlDownloadFile_writeData(void *ptr, size_t size, size_t nmemb, DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState)
+static size_t curlDownloadFile_writeData(void* ptr, size_t size, size_t nmemb, DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState)
 {
 	const size_t writeSize = size * nmemb;
 	const size_t currentSize = downloadState->fileData.size();
@@ -64,9 +64,9 @@ static size_t curlDownloadFile_writeData(void *ptr, size_t size, size_t nmemb, D
 
 static int progress_callback(DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
 {
-    if (downloadState->isCanceled)
-        return 1;
-    
+	if (downloadState->isCanceled)
+		return 1;
+
 	if (dltotal > 1.0)
 		downloadState->progress = dlnow / dltotal;
 	else
@@ -74,12 +74,12 @@ static int progress_callback(DownloadCustomGraphicPackWindow::curlDownloadFileSt
 	return 0;
 }
 
-static bool curlDownloadFile(const char *url, DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState)
+static bool curlDownloadFile(const char* url, DownloadCustomGraphicPackWindow::curlDownloadFileState_t* downloadState)
 {
 	CURL* curl = curl_easy_init();
 	if (curl == nullptr)
 		return false;
-	
+
 	downloadState->progress = 0.0;
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlDownloadFile_writeData);
@@ -89,7 +89,7 @@ static bool curlDownloadFile(const char *url, DownloadCustomGraphicPackWindow::c
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 15L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
@@ -103,62 +103,62 @@ static bool curlDownloadFile(const char *url, DownloadCustomGraphicPackWindow::c
 }
 
 DownloadCustomGraphicPackWindow::DownloadCustomGraphicPackWindow(wxWindow* parent,
-    std::shared_ptr<Host::IPathProvider> pathProvider)
-    : wxDialog(parent, wxID_ANY, _("Download Graphic Pack from URL"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-    m_stage(StageDone), m_currentStage(StageDone),
-    m_pathProvider(std::move(pathProvider))
+																 std::shared_ptr<Host::IPathProvider> pathProvider)
+	: wxDialog(parent, wxID_ANY, _("Download Graphic Pack from URL"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
+	  m_stage(StageDone), m_currentStage(StageDone),
+	  m_pathProvider(std::move(pathProvider))
 {
 	cemu_assert(m_pathProvider != nullptr);
-    auto* sizer = new wxBoxSizer(wxVERTICAL);
-    
-    m_urlField = new wxTextCtrl(this, wxID_ANY, wxEmptyString);
-    m_urlField->SetHint(_("Enter download URL..."));
-    sizer->Add(m_urlField, 0, wxALL | wxEXPAND, 5);
-    
-    m_processBar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_HORIZONTAL);
-    m_processBar->SetValue(0);
-    m_processBar->SetRange(100);
-    sizer->Add(m_processBar, 0, wxALL | wxEXPAND, 5);
-    
-    auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    
-    m_statusText = new wxStaticText(this, wxID_ANY, _("Ready..."));
-    buttonSizer->Add(m_statusText, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-    
-    buttonSizer->AddStretchSpacer(1);
-    
-    auto* m_closeButton = new wxButton(this, wxID_ANY, _("Close"));
-    m_closeButton->Bind(wxEVT_BUTTON, &DownloadCustomGraphicPackWindow::OnCancelButton, this);
-    buttonSizer->Add(m_closeButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-    
-    m_downloadButton = new wxButton(this, wxID_ANY, _("Download"));
-    m_downloadButton->Bind(wxEVT_BUTTON, &DownloadCustomGraphicPackWindow::OnDownloadButton, this);
-    buttonSizer->Add(m_downloadButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-    
-    sizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
-    
-    this->SetSizer(sizer);
-    this->Centre(wxBOTH);
-    
-    wxWindowBase::Layout();
-    wxWindowBase::Fit();
-    
-    m_timer = new wxTimer(this);
-    this->Bind(wxEVT_TIMER, &DownloadCustomGraphicPackWindow::OnUpdate, this);
-    this->Bind(wxEVT_CLOSE_WINDOW, &DownloadCustomGraphicPackWindow::OnClose, this);
-    m_timer->Start(100);
-    
-    m_downloadState = std::make_unique<curlDownloadFileState_t>();
+	auto* sizer = new wxBoxSizer(wxVERTICAL);
+
+	m_urlField = new wxTextCtrl(this, wxID_ANY, wxEmptyString);
+	m_urlField->SetHint(_("Enter download URL..."));
+	sizer->Add(m_urlField, 0, wxALL | wxEXPAND, 5);
+
+	m_processBar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_HORIZONTAL);
+	m_processBar->SetValue(0);
+	m_processBar->SetRange(100);
+	sizer->Add(m_processBar, 0, wxALL | wxEXPAND, 5);
+
+	auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+
+	m_statusText = new wxStaticText(this, wxID_ANY, _("Ready..."));
+	buttonSizer->Add(m_statusText, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+	buttonSizer->AddStretchSpacer(1);
+
+	auto* m_closeButton = new wxButton(this, wxID_ANY, _("Close"));
+	m_closeButton->Bind(wxEVT_BUTTON, &DownloadCustomGraphicPackWindow::OnCancelButton, this);
+	buttonSizer->Add(m_closeButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+	m_downloadButton = new wxButton(this, wxID_ANY, _("Download"));
+	m_downloadButton->Bind(wxEVT_BUTTON, &DownloadCustomGraphicPackWindow::OnDownloadButton, this);
+	buttonSizer->Add(m_downloadButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+	sizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+
+	this->SetSizer(sizer);
+	this->Centre(wxBOTH);
+
+	wxWindowBase::Layout();
+	wxWindowBase::Fit();
+
+	m_timer = new wxTimer(this);
+	this->Bind(wxEVT_TIMER, &DownloadCustomGraphicPackWindow::OnUpdate, this);
+	this->Bind(wxEVT_CLOSE_WINDOW, &DownloadCustomGraphicPackWindow::OnClose, this);
+	m_timer->Start(100);
+
+	m_downloadState = std::make_unique<curlDownloadFileState_t>();
 }
 
 DownloadCustomGraphicPackWindow::~DownloadCustomGraphicPackWindow()
 {
-    if (m_downloadState)
-        m_downloadState->isCanceled = true;
-    
-    m_timer->Stop();
-    if (m_thread.joinable())
-        m_thread.join();
+	if (m_downloadState)
+		m_downloadState->isCanceled = true;
+
+	m_timer->Stop();
+	if (m_thread.joinable())
+		m_thread.join();
 }
 
 int DownloadCustomGraphicPackWindow::ShowModal()
@@ -169,118 +169,118 @@ int DownloadCustomGraphicPackWindow::ShowModal()
 
 void DownloadCustomGraphicPackWindow::OnClose(wxCloseEvent& event)
 {
-    if (m_downloadState)
-    {
-        m_downloadState->isCanceled = true; 
-    }
-    
-    m_timer->Stop();
-    if (m_thread.joinable())
-        m_thread.join();
-    
-    event.Skip();
+	if (m_downloadState)
+	{
+		m_downloadState->isCanceled = true;
+	}
+
+	m_timer->Stop();
+	if (m_thread.joinable())
+		m_thread.join();
+
+	event.Skip();
 }
 
 void DownloadCustomGraphicPackWindow::OnUpdate(const wxTimerEvent& event)
 {
-    if (m_currentStage >= StageDone)
-    {
-        m_downloadButton->Enable();
-        m_urlField->Enable();
-    }
-    else
-    {
-        m_downloadButton->Disable();
-        m_urlField->Disable();
-    }
-    
-    if (m_currentStage == StageDownloading)
-    {
-        const sint32 processedSize = (sint32)(m_downloadState->progress * 100.0f);
+	if (m_currentStage >= StageDone)
+	{
+		m_downloadButton->Enable();
+		m_urlField->Enable();
+	}
+	else
+	{
+		m_downloadButton->Disable();
+		m_urlField->Disable();
+	}
+
+	if (m_currentStage == StageDownloading)
+	{
+		const sint32 processedSize = (sint32)(m_downloadState->progress * 100.0f);
 		if (m_processBar->GetValue() != processedSize)
 			m_processBar->SetValue(processedSize);
-    }
-   	else if (m_currentStage == StageExtracting)
+	}
+	else if (m_currentStage == StageExtracting)
 	{
 		const sint32 processedSize = (sint32)(m_extractionProgress * 100.0f);
 		if (m_processBar->GetValue() != processedSize)
 			m_processBar->SetValue(processedSize);
 	}
-    
-    if (m_currentStage != m_stage)
-    {
-        wxString status = "...";
-        const wxColour* colour = wxWHITE;
-        
-        switch (m_stage)
-        {
-        case StageDownloading:
-            status = "Downloading...";
-            colour = wxWHITE;
-            break;
-        case StageVerifying:
-            status = "Verifying...";
-            colour = wxWHITE;
-            break;
-        case StageExtracting:
-            status = "Extracting...";
-            colour = wxWHITE;
-            break;
-        case StageDone:
-            status = "Done!";
-            colour = wxGREEN;
-            m_processBar->SetValue(100.0);
-            break;
-        case StageErrConnectFailed:
-            if (m_urlField->GetValue().empty())
-            {
-                status = "Please enter a valid URL.";
-                colour = wxWHITE;
-            }
-            else
-            {
-                status = "ERROR: Connection failed.";
-                colour = wxRED;
-            }
-            m_processBar->SetValue(0.0);
-            break;
-        case StageErrInvalidPack:
-            status = "ERROR: Invalid pack.";
-            colour = wxRED;
-            m_processBar->SetValue(0.0);
-            break;
-        case StageErrSourceFailed:
-            status = "ERROR: Failed to create ZIP source.";
-            colour = wxRED;
-            m_processBar->SetValue(0.0);
-            break;
-        case StageErrOpenFailed:
-            status = "ERROR: Failed to open downloaded ZIP.";
-            colour = wxRED;
-            m_processBar->SetValue(0.0);
-            break;
-        case StageErrConflict:
-            status = "ERROR: File conflict. Pack already installed?";
-            colour = wxRED;
-            m_processBar->SetValue(0.0);
-            break;
-        }
-        
-        m_currentStage = m_stage;
-        m_statusText->SetLabel(status);
-        m_statusText->SetForegroundColour(*colour);
-    }
+
+	if (m_currentStage != m_stage)
+	{
+		wxString status = "...";
+		const wxColour* colour = wxWHITE;
+
+		switch (m_stage)
+		{
+		case StageDownloading:
+			status = "Downloading...";
+			colour = wxWHITE;
+			break;
+		case StageVerifying:
+			status = "Verifying...";
+			colour = wxWHITE;
+			break;
+		case StageExtracting:
+			status = "Extracting...";
+			colour = wxWHITE;
+			break;
+		case StageDone:
+			status = "Done!";
+			colour = wxGREEN;
+			m_processBar->SetValue(100.0);
+			break;
+		case StageErrConnectFailed:
+			if (m_urlField->GetValue().empty())
+			{
+				status = "Please enter a valid URL.";
+				colour = wxWHITE;
+			}
+			else
+			{
+				status = "ERROR: Connection failed.";
+				colour = wxRED;
+			}
+			m_processBar->SetValue(0.0);
+			break;
+		case StageErrInvalidPack:
+			status = "ERROR: Invalid pack.";
+			colour = wxRED;
+			m_processBar->SetValue(0.0);
+			break;
+		case StageErrSourceFailed:
+			status = "ERROR: Failed to create ZIP source.";
+			colour = wxRED;
+			m_processBar->SetValue(0.0);
+			break;
+		case StageErrOpenFailed:
+			status = "ERROR: Failed to open downloaded ZIP.";
+			colour = wxRED;
+			m_processBar->SetValue(0.0);
+			break;
+		case StageErrConflict:
+			status = "ERROR: File conflict. Pack already installed?";
+			colour = wxRED;
+			m_processBar->SetValue(0.0);
+			break;
+		}
+
+		m_currentStage = m_stage;
+		m_statusText->SetLabel(status);
+		m_statusText->SetForegroundColour(*colour);
+	}
 }
 
 void DownloadCustomGraphicPackWindow::OnCancelButton(const wxCommandEvent& event)
 {
-    Close();
+	Close();
 }
 
 void DownloadCustomGraphicPackWindow::OnDownloadButton(const wxCommandEvent& event)
 {
-    m_downloadButton->Disable();
-    m_urlField->Disable();
+	m_downloadButton->Disable();
+	m_urlField->Disable();
 
 	const wxString urlText = m_urlField->GetValue();
 	const auto urlUtf8 = urlText.utf8_string();
@@ -294,23 +294,21 @@ void DownloadCustomGraphicPackWindow::OnDownloadButton(const wxCommandEvent& eve
 	fileNameBase.Trim(true).Trim(false);
 	if (!fileNameBase.IsEmpty())
 		folderName = fileNameBase.ToStdString();
-    
-    if (m_thread.joinable())
-        m_thread.join();
-    
+
+	if (m_thread.joinable())
+		m_thread.join();
+
 	m_thread = std::thread([this, downloadUrl = std::move(downloadUrl),
-		folderName = std::move(folderName)]() mutable {
+							folderName = std::move(folderName)]() mutable {
 		try
 		{
 			UpdateThread(std::move(downloadUrl), std::move(folderName));
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			cemuLog_log(LogType::Force, "Custom graphic-pack worker failed: {}", error.what());
 			if (!m_downloadState->isCanceled)
 				m_stage = StageErrInvalidPack;
-		}
-		catch (...)
+		} catch (...)
 		{
 			cemuLog_log(LogType::Force, "Custom graphic-pack worker failed with an unknown error");
 			if (!m_downloadState->isCanceled)
@@ -337,7 +335,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 	zip_error_t zipError;
 	zip_error_init(&zipError);
 	zip_source_t* source = zip_source_buffer_create(m_downloadState->fileData.data(),
-		m_downloadState->fileData.size(), 0, &zipError);
+													m_downloadState->fileData.size(), 0, &zipError);
 	if (!source)
 	{
 		zip_error_fini(&zipError);
@@ -402,7 +400,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 		}
 		const auto nameLength = std::strlen(stat.name);
 		const bool directory = nameLength > 0 &&
-			(stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
+							   (stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
 		if (!directory)
 		{
 			if (stat.size > kMaximumCustomPackFileSize ||
@@ -452,8 +450,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 			failed = true;
 			break;
 		}
-		m_extractionProgress = plan.empty() ? 1.0 :
-			static_cast<double>(planIndex) / static_cast<double>(plan.size());
+		m_extractionProgress = plan.empty() ? 1.0 : static_cast<double>(planIndex) / static_cast<double>(plan.size());
 		const auto& entry = plan[planIndex];
 		const auto destination = staging / entry.relativePath;
 		if (entry.directory)
@@ -519,8 +516,7 @@ void DownloadCustomGraphicPackWindow::UpdateThread(std::string downloadUrl, std:
 	if (!commit.committed)
 	{
 		cleanupStaging();
-		m_stage = commit.error == Frontend::ArchiveInstallPolicy::CommitError::TargetExists ?
-			StageErrConflict : StageErrInvalidPack;
+		m_stage = commit.error == Frontend::ArchiveInstallPolicy::CommitError::TargetExists ? StageErrConflict : StageErrInvalidPack;
 		return;
 	}
 	m_extractionProgress = 1.0;

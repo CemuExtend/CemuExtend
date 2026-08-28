@@ -17,15 +17,28 @@
 #include "Cafe/TitleList/SaveList.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/cemuextend.h"
+#include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/BridgeHost.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Scheduler.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/OS/libs/nfc/nfc.h"
 #include "Cafe/OS/libs/swkbd/swkbd.h"
+#include "Cafe/OS/libs/erreula/erreula.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
+#include "config/LaunchSettings.h"
 #include "input/InputManager.h"
+#include "input/api/Controller.h"
+#include "input/emulated/ClassicController.h"
+#include "input/emulated/ProController.h"
+#include "input/emulated/WiimoteController.h"
+#ifdef SUPPORTS_WIIMOTE
+#include "input/api/Wiimote/NativeWiimoteController.h"
+#endif
 #include "Cemu/Tools/DownloadManager/DownloadManager.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "Common/FileStream.h"
+#include "Common/socket.h"
 #include "util/helpers/helpers.h"
 
 #include <zarchive/zarchivereader.h>
@@ -35,6 +48,8 @@
 #include <openssl/sha.h>
 
 #include <pugixml.hpp>
+#include <curl/curl.h>
+#include <rapidjson/document.h>
 #include <zip.h>
 
 #include <condition_variable>
@@ -125,6 +140,7 @@ namespace Application
 					.grantedPermissions = request.grantedPermissions,
 					.executionMode = request.executionMode == ::CemodExecutionMode::TrustedNative ? CemodExecutionMode::TrustedNative : CemodExecutionMode::Isolated,
 					.signedPackage = request.signedPackage,
+					.headless = request.headless,
 				});
 			}
 			return result;
@@ -142,6 +158,39 @@ namespace Application
 				.titleIds = std::move(package.titleIds),
 				.error = std::move(package.error),
 			};
+		}
+
+		std::uint64_t CemodCatalogFingerprint(std::span<const CemodManagerPackage> packages)
+		{
+			std::uint64_t value = 1469598103934665603ULL;
+			auto append = [&value](std::string_view text) {
+				for (const auto byte : text)
+				{
+					value ^= static_cast<unsigned char>(byte);
+					value *= 1099511628211ULL;
+				}
+			};
+			for (const auto& package : packages)
+			{
+				append(package.packageKey);
+				append(package.modIdentity);
+				append(package.status);
+				auto appendInteger = [&value](std::uint64_t integer) {
+					for (unsigned shift = 0; shift < 64; shift += 8)
+					{
+						value ^= static_cast<std::uint8_t>(integer >> shift);
+						value *= 1099511628211ULL;
+					}
+				};
+				appendInteger(package.requestedPermissions);
+				appendInteger(package.grantedPermissions);
+				appendInteger(package.approved);
+				appendInteger(package.headless);
+				appendInteger(package.valid);
+				for (const auto titleId : package.titleIds)
+					appendInteger(titleId);
+			}
+			return value == 0 ? 1 : value;
 		}
 
 		AccountOnlineError TranslateAccountOnlineError(::OnlineAccountError error)
@@ -189,6 +238,40 @@ namespace Application
 				.country = account.GetCountry(),
 				.validOnlineAccount = account.IsValidOnlineAccount(),
 			};
+		}
+
+		AccountNetworkService TranslateNetworkService(NetworkService service)
+		{
+			switch (service)
+			{
+			case NetworkService::Nintendo:
+				return AccountNetworkService::Nintendo;
+			case NetworkService::Pretendo:
+				return AccountNetworkService::Pretendo;
+			case NetworkService::Custom:
+				return AccountNetworkService::Custom;
+			case NetworkService::Plasma:
+				return AccountNetworkService::Plasma;
+			default:
+				return AccountNetworkService::Offline;
+			}
+		}
+
+		NetworkService TranslateNetworkService(AccountNetworkService service)
+		{
+			switch (service)
+			{
+			case AccountNetworkService::Nintendo:
+				return NetworkService::Nintendo;
+			case AccountNetworkService::Pretendo:
+				return NetworkService::Pretendo;
+			case AccountNetworkService::Custom:
+				return NetworkService::Custom;
+			case AccountNetworkService::Plasma:
+				return NetworkService::Plasma;
+			default:
+				return NetworkService::Offline;
+			}
 		}
 
 		const ::Account* FindAccount(std::uint32_t persistentId)
@@ -302,6 +385,19 @@ namespace Application
 				return false;
 			const auto unixMode = attributes >> 16;
 			return (unixMode & S_IFMT) == S_IFLNK;
+		}
+
+		bool IsSafeGraphicPackZipEntry(zip_t* archive, zip_uint64_t index)
+		{
+			zip_uint8_t operatingSystem{};
+			zip_uint32_t attributes{};
+			if (zip_file_get_external_attributes(archive, index, 0, &operatingSystem,
+												 &attributes) != 0)
+				return false;
+			if (operatingSystem != ZIP_OPSYS_UNIX)
+				return true;
+			const auto type = (attributes >> 16) & S_IFMT;
+			return type == 0 || type == S_IFREG || type == S_IFDIR;
 		}
 
 		SaveArchivePlan BuildSaveArchivePlan(const fs::path& archivePath)
@@ -454,6 +550,633 @@ namespace Application
 				return;
 			std::error_code ec;
 			fs::remove_all(path, ec);
+		}
+
+		FrontendSettingsResult EnsureDefaultMlcFiles(const fs::path& mlc,
+													 std::span<const AccountCountry> countries, FrontendSettingsSnapshot snapshot)
+		{
+			const std::array directories{
+				mlc,
+				mlc / "sys",
+				mlc / "usr",
+				mlc / "usr/title/00050000",
+				mlc / "usr/title/0005000c",
+				mlc / "usr/title/0005000e",
+				mlc / "usr/save/00050010/1004a000/user/common/db",
+				mlc / "usr/save/00050010/1004a100/user/common/db",
+				mlc / "usr/save/00050010/1004a200/user/common/db",
+				mlc / "sys/title/0005001b/1005c000/content",
+			};
+			std::error_code ec;
+			for (const auto& directory : directories)
+			{
+				fs::create_directories(directory, ec);
+				if (ec || !fs::is_directory(directory, ec) || ec)
+					return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+							fmt::format("unable to create MLC directory {}: {}", _pathToUtf8(directory),
+										ec ? ec.message() : "path is not a directory")};
+			}
+			const auto content = mlc / "sys/title/0005001b/1005c000/content";
+			auto writeIfMissing = [&](const fs::path& path, std::string_view data) -> bool {
+				if (fs::exists(path, ec))
+					return !ec && fs::is_regular_file(path, ec) && !ec;
+				if (ec)
+					return false;
+				auto temporary = path;
+				temporary += fmt::format(".{}.tmp",
+										 std::chrono::steady_clock::now().time_since_epoch().count());
+				{
+					std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+					output.write(data.data(), static_cast<std::streamsize>(data.size()));
+					output.flush();
+					if (!output)
+					{
+						RemovePathQuietly(temporary);
+						return false;
+					}
+				}
+				fs::rename(temporary, path, ec);
+				if (ec)
+				{
+					RemovePathQuietly(temporary);
+					return false;
+				}
+				return true;
+			};
+			constexpr std::string_view languages =
+				R"("ja",
+"en",
+"fr",
+"de",
+"it",
+"es",
+"zh",
+"ko",
+"nl",
+"pt",
+"ru",
+"zh",
+)";
+			if (!writeIfMissing(content / "language.txt", languages))
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+						"unable to initialize the MLC language table"};
+			std::string countryTable;
+			for (const auto& country : countries)
+				countryTable += boost::iequals(country.name, "NN") ? "NULL,\n" : fmt::format("\"{}\",\n", country.name);
+			if (!writeIfMissing(content / "country.txt", countryTable))
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+						"unable to initialize the MLC country table"};
+			const auto writeTest = mlc / fmt::format(".cemu-write-test-{}",
+													 std::chrono::steady_clock::now().time_since_epoch().count());
+			{
+				std::ofstream output(writeTest, std::ios::binary | std::ios::trunc);
+				output << "ok";
+				if (!output)
+				{
+					RemovePathQuietly(writeTest);
+					return {
+						FrontendSettingsError::StorageFailed, std::move(snapshot),
+						"the MLC directory is not writable"};
+				}
+			}
+			fs::remove(writeTest, ec);
+			if (ec)
+				return {FrontendSettingsError::StorageFailed, std::move(snapshot),
+						"unable to remove the MLC write test"};
+			return {FrontendSettingsError::None, std::move(snapshot), {}};
+		}
+
+		EmulatedControllerType TranslateEmulatedControllerType(EmulatedController::Type type)
+		{
+			switch (type)
+			{
+			case EmulatedController::VPAD:
+				return EmulatedControllerType::GamePad;
+			case EmulatedController::Pro:
+				return EmulatedControllerType::ProController;
+			case EmulatedController::Classic:
+				return EmulatedControllerType::ClassicController;
+			case EmulatedController::Wiimote:
+				return EmulatedControllerType::Wiimote;
+			default:
+				return EmulatedControllerType::Disabled;
+			}
+		}
+
+		std::optional<EmulatedController::Type> TranslateEmulatedControllerType(
+			EmulatedControllerType type)
+		{
+			switch (type)
+			{
+			case EmulatedControllerType::GamePad:
+				return EmulatedController::VPAD;
+			case EmulatedControllerType::ProController:
+				return EmulatedController::Pro;
+			case EmulatedControllerType::ClassicController:
+				return EmulatedController::Classic;
+			case EmulatedControllerType::Wiimote:
+				return EmulatedController::Wiimote;
+			default:
+				return std::nullopt;
+			}
+		}
+
+		std::string InputMappingLabel(const EmulatedController& controller,
+									  std::uint64_t mapping)
+		{
+			switch (controller.type())
+			{
+			case EmulatedController::VPAD:
+				if (mapping == VPADController::kButtonId_Mic)
+					return "Blow microphone";
+				if (mapping == VPADController::kButtonId_Screen)
+					return "Show screen";
+				return std::string(VPADController::get_button_name(
+					static_cast<VPADController::ButtonId>(mapping)));
+			case EmulatedController::Pro:
+				return std::string(ProController::get_button_name(
+					static_cast<ProController::ButtonId>(mapping)));
+			case EmulatedController::Classic:
+				return std::string(ClassicController::get_button_name(
+					static_cast<ClassicController::ButtonId>(mapping)));
+			case EmulatedController::Wiimote:
+				return std::string(WiimoteController::get_button_name(
+					static_cast<WiimoteController::ButtonId>(mapping)));
+			default:
+				return fmt::format("Mapping {}", mapping);
+			}
+		}
+
+		constexpr std::size_t kMaximumGraphicPackDownloadSize = 512ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackEntries = 20000;
+		constexpr zip_uint64_t kMaximumGraphicPackFileSize = 128ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackTotalSize = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+		constexpr zip_uint64_t kMaximumGraphicPackCompressionRatio = 1000;
+
+		struct GraphicPackInstallTransaction
+		{
+			fs::path target;
+			fs::path backup;
+			bool replacedExisting{};
+
+			void Commit() const
+			{
+				RemovePathQuietly(backup);
+			}
+
+			GraphicPackInstallResult Rollback() const
+			{
+				RemovePathQuietly(target);
+				if (!replacedExisting)
+					return {};
+				std::error_code ec;
+				fs::rename(backup, target, ec);
+				return ec ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
+													 fmt::format("graphic-pack rollback failed: {}", ec.message())}
+						  : GraphicPackInstallResult{};
+			}
+		};
+
+		struct GraphicPackDownloadBuffer
+		{
+			std::vector<std::uint8_t> bytes;
+			GraphicPackInstallProgressHandler progress;
+			GraphicPackInstallCancellationCheck cancelled;
+			GraphicPackInstallPhase phase{GraphicPackInstallPhase::Checking};
+		};
+
+		bool IsPublicGraphicPackAddress(const sockaddr& address)
+		{
+			if (address.sa_family == AF_INET)
+			{
+				const auto& ipv4 = reinterpret_cast<const sockaddr_in&>(address);
+				const auto value = ntohl(ipv4.sin_addr.s_addr);
+				const auto first = value >> 24;
+				const auto second = (value >> 16) & 0xff;
+				if (first == 0 || first == 10 || first == 127 || first >= 224)
+					return false;
+				if (first == 100 && second >= 64 && second <= 127)
+					return false;
+				if (first == 169 && second == 254)
+					return false;
+				if (first == 172 && second >= 16 && second <= 31)
+					return false;
+				if (first == 192 && (second == 0 || second == 168))
+					return false;
+				if (first == 198 && (second == 18 || second == 19))
+					return false;
+				// Documentation networks are never valid download origins.
+				if ((first == 192 && second == 0 && ((value >> 8) & 0xff) == 2) ||
+					(first == 198 && second == 51 && ((value >> 8) & 0xff) == 100) ||
+					(first == 203 && second == 0 && ((value >> 8) & 0xff) == 113))
+					return false;
+				return true;
+			}
+			if (address.sa_family == AF_INET6)
+			{
+				const auto& ipv6 = reinterpret_cast<const sockaddr_in6&>(address);
+				const auto* bytes = ipv6.sin6_addr.s6_addr;
+				const bool allZeroPrefix = std::all_of(bytes, bytes + 12,
+													   [](std::uint8_t byte) { return byte == 0; });
+				if (allZeroPrefix)
+					return false;
+				const bool mappedIpv4 = std::all_of(bytes, bytes + 10,
+													[](std::uint8_t byte) { return byte == 0; }) &&
+										bytes[10] == 0xff && bytes[11] == 0xff;
+				if (mappedIpv4)
+				{
+					sockaddr_in mapped{};
+					mapped.sin_family = AF_INET;
+					std::memcpy(&mapped.sin_addr.s_addr, bytes + 12, sizeof(mapped.sin_addr.s_addr));
+					return IsPublicGraphicPackAddress(reinterpret_cast<const sockaddr&>(mapped));
+				}
+				if ((bytes[0] & 0xfe) == 0xfc ||
+					(bytes[0] == 0xfe && ((bytes[1] & 0xc0) == 0x80 ||
+										  (bytes[1] & 0xc0) == 0xc0)) ||
+					bytes[0] == 0xff)
+					return false;
+				if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8)
+					return false;
+				// Reject transition mechanisms that can hide an IPv4 destination from
+				// the socket address policy (Teredo, NAT64, and 6to4).
+				if ((bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0 && bytes[3] == 0) ||
+					(bytes[0] == 0 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b) ||
+					(bytes[0] == 0x20 && bytes[1] == 0x02))
+					return false;
+				return true;
+			}
+			return false;
+		}
+
+		curl_socket_t OpenPublicGraphicPackSocket(void*, curlsocktype purpose,
+												  curl_sockaddr* address)
+		{
+			if (purpose != CURLSOCKTYPE_IPCXN || !address ||
+				!IsPublicGraphicPackAddress(address->addr))
+				return CURL_SOCKET_BAD;
+			return ::socket(address->family, address->socktype, address->protocol);
+		}
+
+		bool IsValidGraphicPackHttpsUrl(std::string_view url)
+		{
+			if (url.empty() || url.size() > 4096)
+				return false;
+			std::unique_ptr<CURLU, decltype(&curl_url_cleanup)> parsed(curl_url(), &curl_url_cleanup);
+			if (!parsed || curl_url_set(parsed.get(), CURLUPART_URL, std::string(url).c_str(), 0) != CURLUE_OK)
+				return false;
+			auto readPart = [&](CURLUPart part) -> std::optional<std::string> {
+				char* raw{};
+				if (curl_url_get(parsed.get(), part, &raw, 0) != CURLUE_OK)
+					return std::nullopt;
+				std::unique_ptr<char, decltype(&curl_free)> value(raw, &curl_free);
+				return std::string(value.get());
+			};
+			const auto scheme = readPart(CURLUPART_SCHEME);
+			const auto host = readPart(CURLUPART_HOST);
+			if (!scheme || !boost::iequals(*scheme, "https") || !host || host->empty())
+				return false;
+			if (boost::iequals(*host, "localhost") || boost::iends_with(*host, ".localhost"))
+				return false;
+			return !readPart(CURLUPART_USER) && !readPart(CURLUPART_PASSWORD);
+		}
+
+		size_t WriteGraphicPackDownload(void* data, size_t size, size_t count, void* context)
+		{
+			auto& buffer = *static_cast<GraphicPackDownloadBuffer*>(context);
+			if (size != 0 && count > std::numeric_limits<size_t>::max() / size)
+				return 0;
+			const auto byteCount = size * count;
+			if (buffer.cancelled && buffer.cancelled())
+				return 0;
+			if (byteCount > kMaximumGraphicPackDownloadSize -
+								std::min(buffer.bytes.size(), kMaximumGraphicPackDownloadSize))
+				return 0;
+			const auto* source = static_cast<const std::uint8_t*>(data);
+			buffer.bytes.insert(buffer.bytes.end(), source, source + byteCount);
+			return byteCount;
+		}
+
+		int ReportGraphicPackDownload(void* context, curl_off_t total, curl_off_t current,
+									  curl_off_t, curl_off_t)
+		{
+			auto& buffer = *static_cast<GraphicPackDownloadBuffer*>(context);
+			if (buffer.cancelled && buffer.cancelled())
+				return 1;
+			if (buffer.progress)
+				buffer.progress({buffer.phase, static_cast<std::uint64_t>(std::max<curl_off_t>(0, current)), static_cast<std::uint64_t>(std::max<curl_off_t>(0, total)), {}});
+			return 0;
+		}
+
+		GraphicPackInstallResult DownloadGraphicPackUrl(std::string_view url,
+														GraphicPackDownloadBuffer& buffer, GraphicPackInstallPhase phase)
+		{
+			if (!IsValidGraphicPackHttpsUrl(url))
+				return {GraphicPackInstallError::InvalidUrl, "graphic-pack URL must use HTTPS"};
+			if (buffer.cancelled && buffer.cancelled())
+				return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+			std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(),
+																	 &curl_easy_cleanup);
+			if (!curl)
+				return {GraphicPackInstallError::ConnectionFailed, "unable to initialize HTTPS client"};
+			buffer.bytes.clear();
+			buffer.phase = phase;
+			const std::string ownedUrl(url);
+			curl_easy_setopt(curl.get(), CURLOPT_URL, ownedUrl.c_str());
+			// Environment proxies would make the socket callback inspect the proxy
+			// rather than the ultimate URL target, bypassing the private-address ban.
+			curl_easy_setopt(curl.get(), CURLOPT_PROXY, "");
+			curl_easy_setopt(curl.get(), CURLOPT_NOPROXY, "*");
+			curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, &WriteGraphicPackDownload);
+			curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &buffer);
+			curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, &ReportGraphicPackDownload);
+			curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, &buffer);
+			curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
+			curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+			curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 5L);
+			curl_easy_setopt(curl.get(), CURLOPT_OPENSOCKETFUNCTION, &OpenPublicGraphicPackSocket);
+			curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 10L);
+			curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 900L);
+			curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 30L);
+			curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, 15L);
+			curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+			curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+			curl_easy_setopt(curl.get(), CURLOPT_PROTOCOLS_STR, "https");
+			curl_easy_setopt(curl.get(), CURLOPT_REDIR_PROTOCOLS_STR, "https");
+			curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, BUILD_VERSION_WITH_NAME_STRING);
+			const auto code = curl_easy_perform(curl.get());
+			if (buffer.cancelled && buffer.cancelled())
+				return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+			if (code != CURLE_OK)
+				return {GraphicPackInstallError::ConnectionFailed, curl_easy_strerror(code)};
+			long status{};
+			curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
+			if (status < 200 || status >= 300)
+				return {GraphicPackInstallError::ConnectionFailed,
+						fmt::format("graphic-pack server returned HTTP {}", status)};
+			return {};
+		}
+
+		GraphicPackInstallResult ExtractGraphicPackArchive(
+			const std::vector<std::uint8_t>& bytes, const fs::path& target,
+			bool replaceExisting, bool requireRootRules, std::string_view version,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled,
+			GraphicPackInstallTransaction* transaction)
+		{
+			zip_error_t zipError;
+			zip_error_init(&zipError);
+			zip_source_t* source = zip_source_buffer_create(bytes.data(), bytes.size(), 0, &zipError);
+			if (!source)
+			{
+				zip_error_fini(&zipError);
+				return {GraphicPackInstallError::InvalidArchive, "unable to read graphic-pack archive"};
+			}
+			zip_t* rawArchive = zip_open_from_source(source, ZIP_RDONLY, &zipError);
+			if (!rawArchive)
+			{
+				zip_source_free(source);
+				zip_error_fini(&zipError);
+				return {GraphicPackInstallError::InvalidArchive, "download is not a valid ZIP archive"};
+			}
+			std::unique_ptr<zip_t, decltype(&zip_discard)> archive(rawArchive, &zip_discard);
+			zip_error_fini(&zipError);
+			if (requireRootRules)
+			{
+				zip_stat_t rules{};
+				if (zip_stat(archive.get(), "rules.txt", 0, &rules) != 0)
+					return {GraphicPackInstallError::InvalidArchive,
+							"custom graphic-pack archive must contain rules.txt at its root"};
+			}
+
+			struct Entry
+			{
+				zip_uint64_t index;
+				fs::path path;
+				zip_uint64_t size;
+				bool directory;
+			};
+			std::vector<Entry> entries;
+			std::set<std::string> names;
+			zip_uint64_t totalBytes{};
+			const auto entryCount = zip_get_num_entries(archive.get(), 0);
+			if (entryCount < 0 || static_cast<zip_uint64_t>(entryCount) > kMaximumGraphicPackEntries)
+				return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive has too many entries"};
+			for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(entryCount); ++index)
+			{
+				zip_stat_t stat{};
+				if (zip_stat_index(archive.get(), index, 0, &stat) != 0 || !stat.name ||
+					!IsSafeGraphicPackZipEntry(archive.get(), index))
+					return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive contains an invalid entry"};
+				auto relative = NormalizeSaveArchivePath(stat.name);
+				if (!relative || !names.emplace(relative->generic_string()).second)
+					return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive contains an unsafe or duplicate path"};
+				const std::string_view rawName(stat.name);
+				const bool directory = rawName.ends_with('/') || rawName.ends_with('\\');
+				if (!directory)
+				{
+					if (stat.size > kMaximumGraphicPackFileSize ||
+						totalBytes > kMaximumGraphicPackTotalSize - stat.size ||
+						(stat.comp_size > 0 && stat.size / stat.comp_size > kMaximumGraphicPackCompressionRatio))
+						return {GraphicPackInstallError::InvalidArchive, "graphic-pack archive exceeds extraction limits"};
+					totalBytes += stat.size;
+				}
+				entries.push_back({index, std::move(*relative), stat.size, directory});
+			}
+
+			std::error_code ec;
+			const bool targetExists = fs::exists(target, ec);
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
+			if (targetExists && !replaceExisting)
+				return {GraphicPackInstallError::ConfirmationRequired,
+						"existing graphic packs must be replaced to continue"};
+			fs::create_directories(target.parent_path(), ec);
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
+			const auto staging = UniqueSiblingPath(target, "graphic-pack-staging");
+			const auto backup = targetExists ? UniqueSiblingPath(target, "graphic-pack-backup") : fs::path{};
+			if (staging.empty() || (targetExists && backup.empty()))
+				return {GraphicPackInstallError::IoFailure, "unable to reserve graphic-pack transaction paths"};
+			fs::create_directories(staging, ec);
+			if (ec)
+				return {GraphicPackInstallError::IoFailure, ec.message()};
+
+			std::array<char, 1024 * 1024> copyBuffer{};
+			std::uint64_t completed{};
+			for (const auto& entry : entries)
+			{
+				if (cancelled && cancelled())
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+				}
+				const auto destination = staging / entry.path;
+				if (entry.directory)
+				{
+					fs::create_directories(destination, ec);
+					if (ec)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::IoFailure, ec.message()};
+					}
+					continue;
+				}
+				fs::create_directories(destination.parent_path(), ec);
+				if (ec)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, ec.message()};
+				}
+				std::unique_ptr<zip_file_t, decltype(&zip_fclose)> file(
+					zip_fopen_index(archive.get(), entry.index, 0), &zip_fclose);
+				std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+				if (!file || !output)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, "unable to create extracted graphic-pack file"};
+				}
+				zip_uint64_t remaining = entry.size;
+				while (remaining > 0)
+				{
+					if (cancelled && cancelled())
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::Cancelled, "graphic-pack installation was cancelled"};
+					}
+					const auto request = std::min<zip_uint64_t>(copyBuffer.size(), remaining);
+					const auto read = zip_fread(file.get(), copyBuffer.data(), request);
+					if (read <= 0 || static_cast<zip_uint64_t>(read) > remaining)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::InvalidArchive, "unable to extract graphic-pack archive"};
+					}
+					output.write(copyBuffer.data(), static_cast<std::streamsize>(read));
+					if (!output)
+					{
+						RemovePathQuietly(staging);
+						return {GraphicPackInstallError::IoFailure, "unable to write extracted graphic-pack file"};
+					}
+					remaining -= static_cast<zip_uint64_t>(read);
+					completed += static_cast<std::uint64_t>(read);
+					if (progress)
+						progress({GraphicPackInstallPhase::Extracting, completed,
+								  totalBytes, _pathToUtf8(entry.path)});
+				}
+			}
+			if (!version.empty())
+			{
+				std::ofstream versionFile(staging / "version.txt", std::ios::binary | std::ios::trunc);
+				versionFile << version;
+				if (!versionFile)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, "unable to write graphic-pack version"};
+				}
+			}
+			if (targetExists)
+			{
+				fs::rename(target, backup, ec);
+				if (ec)
+				{
+					RemovePathQuietly(staging);
+					return {GraphicPackInstallError::IoFailure, ec.message()};
+				}
+			}
+			fs::rename(staging, target, ec);
+			if (ec)
+			{
+				if (targetExists)
+				{
+					std::error_code restoreError;
+					fs::rename(backup, target, restoreError);
+					if (restoreError)
+						return {GraphicPackInstallError::IoFailure,
+								fmt::format("{}; rollback failed: {}", ec.message(), restoreError.message())};
+				}
+				RemovePathQuietly(staging);
+				return {GraphicPackInstallError::IoFailure, ec.message()};
+			}
+			if (transaction)
+				*transaction = {target, backup, targetExists};
+			else
+				RemovePathQuietly(backup);
+			return {};
+		}
+
+		GraphicPackInstallResult InstallGraphicPackFiles(
+			const GraphicPackInstallRequest& request,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled,
+			GraphicPackInstallTransaction* transaction)
+		{
+			GraphicPackDownloadBuffer download{{}, progress, cancelled};
+			if (progress)
+				progress({GraphicPackInstallPhase::Checking, 0, 0, {}});
+			std::string archiveUrl = request.url;
+			std::string releaseName;
+			fs::path target;
+			bool rootRules{};
+			if (request.kind == GraphicPackInstallKind::Community)
+			{
+				auto result = DownloadGraphicPackUrl(
+					"https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest",
+					download, GraphicPackInstallPhase::Checking);
+				if (!result)
+					return result;
+				rapidjson::Document document;
+				document.Parse(reinterpret_cast<const char*>(download.bytes.data()), download.bytes.size());
+				if (document.HasParseError() || !document.IsObject() ||
+					!document.HasMember("name") || !document["name"].IsString() ||
+					!document.HasMember("assets") || !document["assets"].IsArray())
+					return {GraphicPackInstallError::ConnectionFailed, "community graphic-pack metadata is invalid"};
+				releaseName = document["name"].GetString();
+				for (const auto& asset : document["assets"].GetArray())
+				{
+					if (asset.IsObject() && asset.HasMember("browser_download_url") &&
+						asset["browser_download_url"].IsString())
+					{
+						archiveUrl = asset["browser_download_url"].GetString();
+						if (archiveUrl.starts_with("https://"))
+							break;
+						archiveUrl.clear();
+					}
+				}
+				if (archiveUrl.empty())
+					return {GraphicPackInstallError::ConnectionFailed, "community release has no HTTPS archive"};
+				target = ActiveSettings::GetUserDataPath("graphicPacks/downloadedGraphicPacks");
+				std::ifstream versionFile(target / "version.txt", std::ios::binary);
+				std::string installedVersion;
+				std::getline(versionFile, installedVersion);
+				if (boost::iequals(installedVersion, releaseName))
+					return {GraphicPackInstallError::None, {}, true};
+				if (!installedVersion.empty() && !request.replaceExisting)
+					return {GraphicPackInstallError::ConfirmationRequired,
+							fmt::format("replace installed community packs {} with {}?", installedVersion, releaseName)};
+			}
+			else
+			{
+				if (!archiveUrl.starts_with("https://") || archiveUrl.size() > 4096)
+					return {GraphicPackInstallError::InvalidUrl, "custom graphic-pack URL must be a valid HTTPS URL"};
+				auto fileName = archiveUrl.substr(archiveUrl.find_last_of('/') + 1);
+				if (const auto query = fileName.find_first_of("?#"); query != std::string::npos)
+					fileName.resize(query);
+				if (const auto extension = fileName.find_last_of('.'); extension != std::string::npos)
+					fileName.resize(extension);
+				if (fileName.empty())
+					fileName = "NewCustomPack";
+				auto folder = NormalizeSaveArchivePath(fileName);
+				if (!folder || folder->has_parent_path())
+					return {GraphicPackInstallError::InvalidUrl, "custom graphic-pack URL has an unsafe file name"};
+				target = ActiveSettings::GetUserDataPath("graphicPacks/customGraphicPacks") / *folder;
+				rootRules = true;
+			}
+
+			auto result = DownloadGraphicPackUrl(archiveUrl, download,
+												 GraphicPackInstallPhase::Downloading);
+			if (!result)
+				return result;
+			return ExtractGraphicPackArchive(download.bytes, target, request.replaceExisting,
+											 rootRules, releaseName, std::move(progress), std::move(cancelled), transaction);
 		}
 
 		struct SaveMetadataStage
@@ -698,6 +1421,86 @@ namespace Application
 			return result;
 		}
 
+		std::uint64_t ManagedContentFingerprint(const ManagedContentEntry& entry,
+												const fs::path* identityPath = nullptr)
+		{
+			auto mix = [](std::uint64_t seed, std::uint64_t value) {
+				return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
+			};
+			std::uint64_t result = std::hash<std::string>{}(
+				_pathToUtf8(identityPath ? *identityPath : entry.path));
+			result = mix(result, entry.locationUid);
+			result = mix(result, entry.titleId);
+			result = mix(result, entry.version);
+			result = mix(result, static_cast<std::uint64_t>(entry.type));
+			result = mix(result, static_cast<std::uint64_t>(entry.format));
+			std::error_code error;
+			const auto status = fs::symlink_status(entry.path, error);
+			if (!error)
+				result = mix(result, static_cast<std::uint64_t>(status.type()));
+			error.clear();
+			const auto timestamp = fs::last_write_time(entry.path, error);
+			if (!error)
+				result = mix(result, static_cast<std::uint64_t>(timestamp.time_since_epoch().count()));
+			error.clear();
+			if (fs::is_regular_file(entry.path, error) && !error)
+			{
+				const auto size = fs::file_size(entry.path, error);
+				if (!error)
+					result = mix(result, size);
+			}
+			error.clear();
+			if (fs::is_directory(entry.path, error) && !error)
+			{
+				std::vector<std::string> identities;
+				fs::recursive_directory_iterator iterator(entry.path,
+														  fs::directory_options::skip_permission_denied, error),
+					end;
+				while (!error && iterator != end)
+				{
+					const auto relative = fs::relative(iterator->path(), entry.path, error);
+					if (error)
+						break;
+					const auto status = iterator->symlink_status(error);
+					if (error)
+						break;
+					std::string identity = _pathToUtf8(relative);
+					identity.append("|").append(std::to_string(static_cast<unsigned>(status.type())));
+					const auto modified = fs::last_write_time(iterator->path(), error);
+					if (error)
+						break;
+					identity.append("|").append(std::to_string(modified.time_since_epoch().count()));
+					if (status.type() == fs::file_type::regular)
+					{
+						const auto size = fs::file_size(iterator->path(), error);
+						if (error)
+							break;
+						identity.append("|").append(std::to_string(size));
+					}
+					identities.push_back(std::move(identity));
+					iterator.increment(error);
+				}
+				if (error)
+					result = mix(result, std::numeric_limits<std::uint64_t>::max());
+				else
+				{
+					std::ranges::sort(identities);
+					for (const auto& identity : identities)
+						result = mix(result, std::hash<std::string>{}(identity));
+				}
+			}
+			return result;
+		}
+
+		ManagedContentPathValidation ValidateCatalogDeletePath(const fs::path& path)
+		{
+			std::vector<fs::path> roots{ActiveSettings::GetMlcPath()};
+			roots.reserve(GetConfig().game_paths.size() + 1);
+			for (const auto& root : GetConfig().game_paths)
+				roots.push_back(_utf8ToPath(root));
+			return ValidateManagedContentPath(path, roots);
+		}
+
 		std::optional<ManagedContentEntry> TranslateManagedSave(SaveInfo& save)
 		{
 			auto* meta = save.GetMetaInfo();
@@ -723,8 +1526,7 @@ namespace Application
 		class TitleListLease final
 		{
 		  public:
-			TitleListLease()
-				: titles(CafeTitleList::AcquireInternalList()) {}
+			TitleListLease() : titles(CafeTitleList::AcquireInternalList()) {}
 			~TitleListLease()
 			{
 				CafeTitleList::ReleaseInternalList();
@@ -768,6 +1570,7 @@ namespace Application
 					.locationUid = title->GetUID(),
 					.titleId = title->GetAppTitleId(),
 					.version = title->GetAppTitleVersion(),
+					.fingerprint = ManagedContentFingerprint(TranslateManagedTitle(*title, false)),
 					.role = role,
 					.displayPath = title->GetPrintPath(),
 				});
@@ -1406,8 +2209,7 @@ namespace Application
 										   public Input::IEmulationInputContext
 		{
 		  public:
-			explicit CafeEmulationBackend(ApplicationEvents& events)
-				: m_events(events)
+			explicit CafeEmulationBackend(ApplicationEvents& events) : m_events(events)
 			{
 				CafeSystem::SetEventSink(this);
 				InputManager::instance().ConfigureEmulationContext(*this);
@@ -1443,6 +2245,1058 @@ namespace Application
 			{
 				std::shared_lock lock(m_inputLifecycleMutex);
 				return m_inputAvailable && CafeSystem::IsTitleRunning();
+			}
+
+			PpcThreadsSnapshot CapturePpcThreads() override
+			{
+				struct SchedulerLock
+				{
+					SchedulerLock()
+					{
+						__OSLockScheduler();
+					}
+					~SchedulerLock()
+					{
+						__OSUnlockScheduler();
+					}
+				} schedulerLock;
+				struct ActiveListLock
+				{
+					ActiveListLock()
+					{
+						srwlock_activeThreadList.LockWrite();
+					}
+					~ActiveListLock()
+					{
+						srwlock_activeThreadList.UnlockWrite();
+					}
+				} activeListLock;
+
+				PpcThreadsSnapshot result;
+				result.available = true;
+				std::vector<std::pair<std::uint32_t, std::uint64_t>> currentThreads;
+				currentThreads.reserve(static_cast<std::size_t>(
+					std::max<sint32>(activeThreadCount, 0)));
+				for (sint32 index = 0; index < activeThreadCount; ++index)
+				{
+					const auto address = activeThread[index];
+					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address))
+						continue;
+					const auto* thread = MEMPTR<OSThread_t>{address}.GetPtr();
+					if (thread)
+						currentThreads.emplace_back(address, PpcThreadIdentity(*thread));
+				}
+				if (currentThreads != m_diagnosticsThreads)
+				{
+					m_diagnosticsThreads = currentThreads;
+					m_diagnosticsGeneration.fetch_add(1, std::memory_order_acq_rel);
+				}
+				std::erase_if(m_diagnosticsSuspensions, [&currentThreads](const auto& entry) {
+					return std::ranges::none_of(currentThreads, [&entry](const auto& active) {
+						return active.first == entry.first && active.second == entry.second.identity;
+					});
+				});
+				result.generation = m_diagnosticsGeneration.load(std::memory_order_acquire);
+				result.threads.reserve(static_cast<std::size_t>(
+					std::max<sint32>(activeThreadCount, 0)));
+				for (sint32 index = 0; index < activeThreadCount; ++index)
+				{
+					const auto address = activeThread[index];
+					if (!coreinit::OSThreadQueue_IsThreadPointerValid(address))
+						continue;
+					auto* thread = MEMPTR<OSThread_t>{address}.GetPtr();
+					if (!thread)
+						continue;
+
+					PpcThreadSnapshot item;
+					item.address = address;
+					item.identity = PpcThreadIdentity(*thread);
+					item.entryPoint = thread->entrypoint.GetMPTR();
+					item.stackLow = thread->stackEnd.GetMPTR();
+					item.stackHigh = thread->stackBase.GetMPTR();
+					item.instructionPointer = thread->context.srr0;
+					item.linkRegister = _swapEndianU32(thread->context.lr);
+					if (thread->suspendCounter != 0)
+						item.state = PpcThreadState::Suspended;
+					else
+					{
+						switch (thread->state)
+						{
+						case OSThread_t::THREAD_STATE::STATE_NONE:
+							item.state = PpcThreadState::None;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_READY:
+							item.state = PpcThreadState::Ready;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_RUNNING:
+							item.state = PpcThreadState::Running;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_WAITING:
+							item.state = PpcThreadState::Waiting;
+							break;
+						case OSThread_t::THREAD_STATE::STATE_MORIBUND:
+							item.state = PpcThreadState::Moribund;
+							break;
+						default:
+							item.state = PpcThreadState::Unknown;
+							break;
+						}
+					}
+					item.requestedAffinity = thread->attr & 7;
+					item.effectiveAffinity = thread->context.affinity;
+					item.basePriority = thread->basePriority;
+					item.effectivePriority = thread->effectivePriority;
+					item.wakeUpTime = thread->wakeUpTime;
+					item.totalCycles = thread->totalCycles;
+					if (!thread->threadName.IsNull())
+					{
+						const char* name = thread->threadName.GetPtr();
+						if (name)
+						{
+							std::size_t length{};
+							while (length < 128 && name[length] != '\0')
+								++length;
+							item.name.assign(name, length);
+						}
+					}
+					item.gpr3 = _swapEndianU32(thread->context.gpr[3]);
+					item.gpr4 = _swapEndianU32(thread->context.gpr[4]);
+					item.gpr5 = _swapEndianU32(thread->context.gpr[5]);
+					item.gpr6 = _swapEndianU32(thread->context.gpr[6]);
+					item.gpr7 = _swapEndianU32(thread->context.gpr[7]);
+					item.cancelRequested = thread->requestFlags & OSThread_t::REQUEST_FLAG_CANCEL;
+					if (const auto owned = m_diagnosticsSuspensions.find(address);
+						owned != m_diagnosticsSuspensions.end() && owned->second.identity == item.identity &&
+						owned->second.expectedCounter == static_cast<std::int32_t>(thread->suspendCounter))
+						item.suspensionOwnedByFacade = true;
+					if (coreinit::OSMutex* mutex = thread->waitingForMutex)
+					{
+						item.waitingMutex = memory_getVirtualOffsetFromPointer(mutex);
+						item.mutexOwner = mutex->owner.GetMPTR();
+						item.mutexLockCount = mutex->lockCount;
+					}
+					result.threads.emplace_back(std::move(item));
+				}
+				return result;
+			}
+
+			PpcThreadCommandResult ExecutePpcThreadCommand(
+				const PpcThreadCommandRequest& request) override
+			{
+				if (request.generation == 0 ||
+					request.generation != m_diagnosticsGeneration.load(std::memory_order_acquire))
+					return {false, "the PPC thread snapshot is stale; refresh before retrying"};
+				if (std::ranges::none_of(m_diagnosticsThreads, [&request](const auto& active) {
+						return active.first == request.threadAddress && active.second == request.threadIdentity;
+					}))
+					return {false, "the selected PPC thread was not part of this diagnostic snapshot"};
+				if (request.command == PpcThreadCommand::AdjustPriority &&
+					(request.priorityDelta < -5 || request.priorityDelta > 5 ||
+					 request.priorityDelta == 0))
+					return {false, "priorityDelta must be between -5 and 5 and cannot be zero"};
+
+				struct SchedulerLock
+				{
+					SchedulerLock()
+					{
+						__OSLockScheduler();
+					}
+					~SchedulerLock()
+					{
+						__OSUnlockScheduler();
+					}
+				} schedulerLock;
+				if (!coreinit::OSThreadQueue_IsThreadPointerValid(request.threadAddress))
+					return {false, "the selected PPC thread address is no longer valid"};
+				auto* thread = MEMPTR<OSThread_t>{request.threadAddress}.GetPtr();
+				if (!thread || !coreinit::__OSIsThreadActive(thread) ||
+					PpcThreadIdentity(*thread) != request.threadIdentity ||
+					thread->state == OSThread_t::THREAD_STATE::STATE_NONE ||
+					thread->state == OSThread_t::THREAD_STATE::STATE_MORIBUND)
+					return {false, "the selected PPC thread is no longer active"};
+
+				switch (request.command)
+				{
+				case PpcThreadCommand::Suspend:
+					if (thread->suspendCounter > 0)
+						return {false, "the selected PPC thread is already suspended"};
+					coreinit::__OSSuspendThreadNolock(thread);
+					m_diagnosticsSuspensions[request.threadAddress] = {
+						request.threadIdentity, static_cast<std::int32_t>(thread->suspendCounter)};
+					break;
+				case PpcThreadCommand::Resume:
+				{
+					const auto owned = m_diagnosticsSuspensions.find(request.threadAddress);
+					if (owned == m_diagnosticsSuspensions.end() ||
+						owned->second.identity != request.threadIdentity ||
+						owned->second.expectedCounter != static_cast<std::int32_t>(thread->suspendCounter))
+						return {false, "this window does not own the selected thread suspension"};
+					coreinit::__OSResumeThreadInternal(thread, 1);
+					m_diagnosticsSuspensions.erase(owned);
+					break;
+				}
+				case PpcThreadCommand::AdjustPriority:
+					thread->basePriority = std::clamp<std::int32_t>(
+						static_cast<std::int32_t>(thread->basePriority) + request.priorityDelta, 0, 31);
+					coreinit::__OSUpdateThreadEffectivePriority(thread);
+					break;
+				}
+				return {true, {}};
+			}
+
+			FrontendSettingsSnapshot GetFrontendSettings() const override
+			{
+				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
+				FrontendSettingsSnapshot snapshot;
+				std::string fingerprint;
+				for (const auto& path : GetConfig().game_paths)
+				{
+					auto displayPath = _utf8ToPath(path);
+					std::error_code pathError;
+					if (displayPath.is_relative())
+						displayPath = fs::absolute(displayPath, pathError);
+					if (!pathError && fs::exists(displayPath, pathError) && !pathError)
+					{
+						auto canonical = fs::canonical(displayPath, pathError);
+						if (!pathError)
+							displayPath = std::move(canonical);
+					}
+					snapshot.gamePaths.emplace_back(std::move(displayPath));
+					fingerprint.append(path).push_back('\0');
+				}
+				snapshot.startFullscreen = GetConfig().frontend.start_fullscreen.GetValue();
+				snapshot.openPad = GetConfig().frontend.open_pad.GetValue();
+				snapshot.checkUpdates = GetConfig().frontend.check_updates.GetValue();
+				snapshot.saveScreenshots = GetConfig().frontend.save_screenshots.GetValue();
+#if BOOST_OS_LINUX
+				snapshot.updateChecksSupported = std::getenv("APPIMAGE") != nullptr;
+#else
+				snapshot.updateChecksSupported = true;
+#endif
+				snapshot.portableMode = ActiveSettings::IsPortableMode();
+				snapshot.titleRunning = IsTitleRunning();
+				snapshot.setupCompleted = GetConfig().frontend.setup_completed.GetValue();
+				snapshot.fullscreenOverride = LaunchSettings::FullscreenEnabled();
+				fingerprint.append(snapshot.startFullscreen ? "1" : "0");
+				fingerprint.append(snapshot.openPad ? "1" : "0");
+				fingerprint.append(snapshot.checkUpdates ? "1" : "0");
+				fingerprint.append(snapshot.saveScreenshots ? "1" : "0");
+				fingerprint.append(snapshot.setupCompleted ? "1" : "0");
+				{
+					std::scoped_lock stateLock(m_frontendSettingsStateMutex);
+					if (m_frontendSettingsFingerprint.empty())
+						m_frontendSettingsFingerprint = fingerprint;
+					else if (m_frontendSettingsFingerprint != fingerprint)
+					{
+						m_frontendSettingsFingerprint = fingerprint;
+						++m_frontendSettingsRevision;
+					}
+					snapshot.revision = m_frontendSettingsRevision;
+				}
+				return snapshot;
+			}
+
+			FrontendSettingsResult ApplyFrontendSettings(
+				const FrontendSettingsUpdate& update) override
+			{
+				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
+				auto current = GetFrontendSettings();
+				if (current.titleRunning)
+					return {FrontendSettingsError::TitleRunning, std::move(current),
+							"frontend settings cannot be changed while a title is running"};
+				if (update.expectedRevision != current.revision)
+					return {FrontendSettingsError::Conflict, std::move(current),
+							"frontend settings changed in another window"};
+				if (current.fullscreenOverride && update.startFullscreen != current.startFullscreen)
+					return {FrontendSettingsError::FullscreenOverride, std::move(current),
+							"fullscreen startup is controlled by the command line"};
+				if (!current.updateChecksSupported && update.checkUpdates != current.checkUpdates)
+					return {FrontendSettingsError::UpdateUnsupported, std::move(current),
+							"automatic update checks are unavailable in this package"};
+				if (update.gamePaths.size() > 64)
+					return {FrontendSettingsError::InvalidPath, std::move(current),
+							"at most 64 game paths are supported"};
+
+				std::vector<fs::path> normalizedPaths;
+				std::set<std::string> normalizedKeys;
+				std::set<std::string> existingPathKeys;
+				for (const auto& path : current.gamePaths)
+				{
+					auto key = _pathToUtf8(path.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(key);
+#endif
+					existingPathKeys.emplace(std::move(key));
+				}
+				for (const auto& path : update.gamePaths)
+				{
+					if (!path.is_absolute() || _pathToUtf8(path).find('\0') != std::string::npos)
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+								"game paths must be absolute paths"};
+					std::error_code ec;
+					auto requestedKey = _pathToUtf8(path.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(requestedKey);
+#endif
+					auto normalized = fs::canonical(path, ec);
+					if (ec || !fs::is_directory(normalized, ec) || ec)
+					{
+						if (existingPathKeys.contains(requestedKey))
+						{
+							if (normalizedKeys.emplace(std::move(requestedKey)).second)
+								normalizedPaths.emplace_back(path.lexically_normal());
+							continue;
+						}
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+								fmt::format("game path is not an accessible directory: {}", _pathToUtf8(path))};
+					}
+					fs::directory_iterator readable(normalized, ec);
+					if (ec)
+						return {FrontendSettingsError::InvalidPath, std::move(current),
+								fmt::format("game path cannot be read: {}", _pathToUtf8(path))};
+					auto key = _pathToUtf8(normalized.lexically_normal());
+#if BOOST_OS_WINDOWS
+					boost::to_lower(key);
+#endif
+					if (normalizedKeys.emplace(std::move(key)).second)
+						normalizedPaths.emplace_back(std::move(normalized));
+				}
+				if (update.completeSetup && !current.setupCompleted)
+				{
+					auto storage = EnsureDefaultMlcFiles(ActiveSettings::GetMlcPath(),
+														 ListAccountCountries(), current);
+					if (!storage)
+						return storage;
+				}
+
+				auto& config = GetConfig();
+				const auto oldPaths = config.game_paths;
+				const bool oldFullscreen = config.frontend.start_fullscreen.GetValue();
+				const bool oldPad = config.frontend.open_pad.GetValue();
+				const bool oldUpdates = config.frontend.check_updates.GetValue();
+				const bool oldSaveScreenshots = config.frontend.save_screenshots.GetValue();
+				const bool oldSetup = config.frontend.setup_completed.GetValue();
+				auto restore = [&] {
+					config.game_paths = oldPaths;
+					config.frontend.start_fullscreen = oldFullscreen;
+					config.frontend.open_pad = oldPad;
+					config.frontend.check_updates = oldUpdates;
+					config.frontend.save_screenshots = oldSaveScreenshots;
+					config.frontend.setup_completed = oldSetup;
+					CafeTitleList::ClearScanPaths();
+					for (const auto& path : oldPaths)
+						CafeTitleList::AddScanPath(_utf8ToPath(path));
+					(void)GetConfigHandle().Save();
+				};
+
+				try
+				{
+					config.game_paths.clear();
+					for (const auto& path : normalizedPaths)
+						config.game_paths.emplace_back(_pathToUtf8(path));
+					config.frontend.start_fullscreen = update.startFullscreen;
+					config.frontend.open_pad = update.openPad;
+					config.frontend.check_updates = update.checkUpdates;
+					config.frontend.save_screenshots = update.saveScreenshots;
+					if (update.completeSetup)
+						config.frontend.setup_completed = true;
+					CafeTitleList::ClearScanPaths();
+					for (const auto& path : normalizedPaths)
+						CafeTitleList::AddScanPath(path);
+					if (!GetConfigHandle().Save())
+					{
+						restore();
+						return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
+								"unable to save frontend settings"};
+					}
+					CafeTitleList::Refresh();
+				} catch (const std::exception& error)
+				{
+					restore();
+					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(), error.what()};
+				} catch (...)
+				{
+					restore();
+					return {FrontendSettingsError::SaveFailed, GetFrontendSettings(),
+							"unknown error while applying frontend settings"};
+				}
+				return {FrontendSettingsError::None, GetFrontendSettings(), {}};
+			}
+
+			HotkeySettingsModel GetHotkeySettings() const override
+			{
+				std::scoped_lock hotkeyLock(m_hotkeySettingsMutex);
+				HotkeySettingsModel model;
+				model.revision = m_hotkeySettingsRevision;
+				const auto& settings = GetConfig().frontend.hotkeys;
+				if (settings.controller_modifier >= 0)
+					model.controllerModifier = static_cast<std::uint32_t>(
+						settings.controller_modifier);
+				auto append = [&model](HotkeyAction action,
+									   const FrontendHotkeyBindingConfig& binding) {
+					model.bindings.push_back({
+						.action = action,
+						.keyboardUsage = binding.keyboard_usage,
+						.keyboardModifiers = binding.keyboard_modifiers,
+						.controllerButton = binding.controller_button >= 0 ? std::optional<std::uint32_t>(binding.controller_button) : std::nullopt,
+					});
+				};
+				append(HotkeyAction::ToggleFullscreen, settings.toggle_fullscreen);
+				append(HotkeyAction::ToggleFullscreenAlternative,
+					   settings.toggle_fullscreen_alternative);
+				append(HotkeyAction::ExitFullscreen, settings.exit_fullscreen);
+				append(HotkeyAction::TakeScreenshot, settings.take_screenshot);
+				append(HotkeyAction::ToggleFastForward, settings.toggle_fast_forward);
+#ifdef CEMU_DEBUG_ASSERT
+				append(HotkeyAction::EndEmulation, settings.end_emulation);
+#endif
+				append(HotkeyAction::ExitApplication, settings.exit_application);
+				std::scoped_lock inputLock(m_inputSettingsMutex);
+				InputManager::instance().RunOnInputThread([this, &model] {
+					const auto emulated = InputManager::instance().get_controller(0);
+					if (!emulated)
+						return;
+					const auto controllers = emulated->copy_controllers();
+					if (controllers.empty())
+						return;
+					model.controller = HotkeyController{
+						.token = TokenForInputController(controllers.front()),
+						.displayName = controllers.front()->display_name(),
+					};
+					if (model.controllerModifier)
+						model.controllerModifierLabel = controllers.front()->get_button_name(
+							*model.controllerModifier);
+					for (auto& binding : model.bindings)
+						if (binding.controllerButton)
+							binding.controllerLabel = controllers.front()->get_button_name(
+								*binding.controllerButton);
+				});
+				return model;
+			}
+
+			HotkeySettingsResult ApplyHotkeySettings(
+				const HotkeySettingsUpdate& update) override
+			{
+				static_assert(FrontendHotkeyBindingConfig::kControllerButtonCount == kButtonMAX);
+				std::scoped_lock hotkeyLock(m_hotkeySettingsMutex);
+				if (update.revision != m_hotkeySettingsRevision)
+					return {HotkeySettingsError::Conflict, GetHotkeySettings(),
+							"hotkey settings changed in another window"};
+#ifdef CEMU_DEBUG_ASSERT
+				constexpr bool endEmulationAvailable = true;
+#else
+				constexpr bool endEmulationAvailable = false;
+#endif
+				std::string validationDiagnostic;
+				if (const auto validation = ValidateHotkeySettingsUpdate(update,
+																		 endEmulationAvailable, validationDiagnostic);
+					validation != HotkeySettingsError::None)
+					return {validation, GetHotkeySettings(), std::move(validationDiagnostic)};
+
+				auto configLock = GetConfigHandle().Lock();
+				auto& config = GetConfig().frontend.hotkeys;
+				const auto previous = config;
+				config.controller_modifier = update.controllerModifier ? static_cast<std::int16_t>(*update.controllerModifier) : -1;
+				auto assign = [&config](const HotkeyBinding& binding) {
+					FrontendHotkeyBindingConfig* target{};
+					switch (binding.action)
+					{
+					case HotkeyAction::ToggleFullscreen:
+						target = &config.toggle_fullscreen;
+						break;
+					case HotkeyAction::ToggleFullscreenAlternative:
+						target = &config.toggle_fullscreen_alternative;
+						break;
+					case HotkeyAction::ExitFullscreen:
+						target = &config.exit_fullscreen;
+						break;
+					case HotkeyAction::TakeScreenshot:
+						target = &config.take_screenshot;
+						break;
+					case HotkeyAction::ToggleFastForward:
+						target = &config.toggle_fast_forward;
+						break;
+					case HotkeyAction::EndEmulation:
+						target = &config.end_emulation;
+						break;
+					case HotkeyAction::ExitApplication:
+						target = &config.exit_application;
+						break;
+					}
+					*target = {binding.keyboardUsage, binding.keyboardModifiers,
+							   binding.controllerButton ? static_cast<std::int16_t>(
+															  *binding.controllerButton)
+														: static_cast<std::int16_t>(-1)};
+				};
+				for (const auto& binding : update.bindings)
+					assign(binding);
+				if (!GetConfigHandle().Save())
+				{
+					config = previous;
+					return {HotkeySettingsError::SaveFailed, GetHotkeySettings(),
+							"hotkey settings could not be saved"};
+				}
+				++m_hotkeySettingsRevision;
+				return {HotkeySettingsError::None, GetHotkeySettings(), {}};
+			}
+
+			InputSettingsModel GetInputSettings() const override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsModel model;
+				InputManager::instance().RunOnInputThread([this, &model] {
+					model.profiles = InputManager::instance().get_profiles();
+					for (const auto api : {
+							 InputAPI::Keyboard,
+							 InputAPI::SDLController,
+#if BOOST_OS_WINDOWS
+							 InputAPI::XInput,
+							 InputAPI::DirectInput,
+#endif
+							 InputAPI::DSUClient,
+							 InputAPI::GameCube,
+#ifdef SUPPORTS_WIIMOTE
+							 InputAPI::Wiimote,
+#endif
+						 })
+						if (InputManager::instance().is_api_available(api))
+							model.availableApis.emplace_back(InputAPI::to_string(api));
+					for (std::uint32_t player = 0; player < InputManager::kMaxController; ++player)
+					{
+						InputPlayerInfo info;
+						info.player = player;
+						info.gameProfileLocked = InputManager::instance().is_gameprofile_set(player);
+						auto emulated = InputManager::instance().get_controller(player);
+						if (!emulated)
+						{
+							model.players.emplace_back(std::move(info));
+							continue;
+						}
+						info.type = TranslateEmulatedControllerType(emulated->type());
+						info.profileName = emulated->get_profile_name();
+						for (const auto& controller : emulated->copy_controllers())
+						{
+							const auto token = TokenForInputController(controller);
+							const auto settings = controller->get_settings();
+							PhysicalControllerInfo physical{
+								.token = token,
+								.api = std::string(controller->api_name()),
+								.displayName = controller->display_name(),
+								.connected = controller->is_connected(),
+								.hasBattery = controller->has_battery(),
+								.lowBattery = controller->has_low_battery(),
+								.hasMotion = controller->has_motion(),
+								.hasRumble = controller->has_rumble(),
+								.settings = {
+									.axis = {settings.axis.deadzone, settings.axis.range},
+									.rotation = {settings.rotation.deadzone, settings.rotation.range},
+									.trigger = {settings.trigger.deadzone, settings.trigger.range},
+									.rumble = settings.rumble,
+									.motion = settings.motion,
+								},
+							};
+#ifdef SUPPORTS_WIIMOTE
+							if (const auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller))
+							{
+								physical.settings.packetDelay = wiimote->get_packet_delay();
+								switch (wiimote->get_extension())
+								{
+								case NativeWiimoteController::Nunchuck:
+									physical.wiimoteExtension = "nunchuck";
+									break;
+								case NativeWiimoteController::Classic:
+									physical.wiimoteExtension = "classic";
+									break;
+								case NativeWiimoteController::MotionPlus:
+									physical.wiimoteExtension = "motionPlus";
+									break;
+								default:
+									physical.wiimoteExtension = "none";
+									break;
+								}
+							}
+#endif
+							info.controllers.emplace_back(std::move(physical));
+						}
+						for (std::uint64_t mapping = 1;
+							 mapping < emulated->get_highest_mapping_id(); ++mapping)
+						{
+							auto controller = emulated->get_mapping_controller(mapping);
+							info.mappings.push_back({
+								.mappingId = mapping,
+								.label = InputMappingLabel(*emulated, mapping),
+								.binding = emulated->get_mapping_name(mapping),
+								.controllerToken = controller ? std::optional<std::uint64_t>(TokenForInputController(controller)) : std::nullopt,
+							});
+						}
+						model.players.emplace_back(std::move(info));
+					}
+				});
+				std::string fingerprint;
+				for (const auto& player : model.players)
+				{
+					fingerprint += fmt::format("{}:{}:{}:{}|", player.player,
+											   static_cast<unsigned>(player.type), player.gameProfileLocked,
+											   player.profileName);
+					for (const auto& controller : player.controllers)
+						fingerprint += fmt::format("{}:{}:{}:{}:{}:{}|", controller.token,
+												   controller.connected, controller.settings.axis.deadzone,
+												   controller.settings.axis.range, controller.settings.rumble,
+												   controller.settings.motion);
+					for (const auto& mapping : player.mappings)
+						fingerprint += fmt::format("{}:{}:{}|", mapping.mappingId,
+												   mapping.controllerToken.value_or(0), mapping.binding);
+				}
+				for (const auto& profile : model.profiles)
+					fingerprint += "p:" + profile + "|";
+				if (m_inputSettingsFingerprint.empty())
+				{
+					m_inputSettingsFingerprint = fingerprint;
+					m_inputSettingsFingerprintGeneration = m_inputSettingsGeneration;
+				}
+				else if (m_inputSettingsFingerprint != fingerprint)
+				{
+					if (m_inputSettingsFingerprintGeneration == m_inputSettingsGeneration)
+						++m_inputSettingsGeneration;
+					m_inputSettingsFingerprint = std::move(fingerprint);
+					m_inputSettingsFingerprintGeneration = m_inputSettingsGeneration;
+				}
+				model.generation = m_inputSettingsGeneration;
+				return model;
+			}
+
+			InputDeviceEnumerationResult EnumerateInputDevices(
+				std::string_view apiName) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputDeviceEnumerationResult result;
+				InputManager::instance().RunOnInputThread([this, &result, apiName = std::string(apiName)] {
+					PruneUnassignedInputTokens();
+					InputAPI::Type api;
+					try
+					{
+						api = InputAPI::from_string(apiName);
+					} catch (...)
+					{
+						result.error = InputSettingsError::UnsupportedApi;
+						result.diagnostic = "input API is unknown";
+						return;
+					}
+					if (api == InputAPI::WGIGamepad || api == InputAPI::WGIRawController ||
+						!InputManager::instance().is_api_available(api))
+					{
+						result.error = InputSettingsError::UnsupportedApi;
+						result.diagnostic = "input API is unavailable";
+						return;
+					}
+					auto provider = InputManager::instance().get_api_provider(api);
+					if (!provider)
+					{
+						result.error = InputSettingsError::OperationFailed;
+						result.diagnostic = "input provider is unavailable";
+						return;
+					}
+					for (auto& controller : provider->get_controllers())
+						if (controller)
+							result.devices.push_back({TokenForInputController(controller),
+													  std::string(controller->api_name()), controller->display_name(),
+													  controller->is_connected()});
+				});
+				return result;
+			}
+
+			InputSettingsResult SetEmulatedController(std::uint32_t player,
+													  EmulatedControllerType type, bool preserveDevices) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+					{
+						result = {InputSettingsError::ProfileLocked,
+								  "this player is controlled by the running game's profile"};
+						return;
+					}
+					if (type == EmulatedControllerType::Disabled)
+					{
+						InputManager::instance().delete_controller(player, false);
+						++m_inputSettingsGeneration;
+						return;
+					}
+					const auto nativeType = TranslateEmulatedControllerType(type);
+					if (!nativeType)
+					{
+						result = {InputSettingsError::UnsupportedType,
+								  "emulated controller type is unsupported"};
+						return;
+					}
+					const auto existing = InputManager::instance().get_controller(player);
+					const auto [vpadCount, wpadCount] = InputManager::instance().get_controller_count();
+					if ((*nativeType == EmulatedController::VPAD &&
+						 (!existing || existing->type() != EmulatedController::VPAD) &&
+						 vpadCount >= InputManager::kMaxVPADControllers) ||
+						(*nativeType != EmulatedController::VPAD &&
+						 (!existing || existing->type() == EmulatedController::VPAD) &&
+						 wpadCount >= InputManager::kMaxWPADControllers))
+					{
+						result = {InputSettingsError::UnsupportedType,
+								  "all slots for this emulated controller type are already in use"};
+						return;
+					}
+					if (!preserveDevices)
+						InputManager::instance().delete_controller(player, false);
+					if (!InputManager::instance().set_controller(player, *nativeType))
+						result = {InputSettingsError::UnsupportedType,
+								  "the requested emulated controller slot is unavailable"};
+					else
+						++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult AddInputDevice(std::uint32_t player,
+											   std::uint64_t token) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(token);
+					if (!emulated || !controller)
+					{
+						result = {InputSettingsError::DeviceNotFound,
+								  "emulated controller or physical device was not found"};
+						return;
+					}
+					const auto controllers = emulated->copy_controllers();
+					if (std::ranges::find(controllers, controller) == controllers.end())
+					{
+						emulated->add_controller(controller);
+						emulated->set_default_mapping(controller);
+						++m_inputSettingsGeneration;
+					}
+				});
+				return result;
+			}
+
+			InputSettingsResult RemoveInputDevice(std::uint32_t player,
+												  std::uint64_t token) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(token);
+					const auto controllers = emulated ? emulated->copy_controllers() : std::vector<std::shared_ptr<ControllerBase>>{};
+					if (!emulated || !controller ||
+						std::ranges::find(controllers, controller) == controllers.end())
+					{
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device is not assigned to this player"};
+						return;
+					}
+					emulated->remove_controller(controller);
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult ConnectInputDevice(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device was not found"};
+					else if (!controller->connect())
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device could not be connected"};
+					else
+						++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			std::optional<CapturedInputButton> CaptureInputButton(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				std::optional<CapturedInputButton> captured;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+						return;
+					const auto state = controller->raw_state();
+					const auto buttons = state.buttons.GetButtonList();
+					std::optional<CapturedInputButton> active;
+					if (!buttons.empty())
+					{
+						active = CapturedInputButton{buttons.front(),
+													 controller->get_button_name(buttons.front())};
+					}
+					auto axisValue = [&state](std::uint64_t button) {
+						switch (button)
+						{
+						case kAxisXP:
+							return state.axis.x;
+						case kAxisXN:
+							return -state.axis.x;
+						case kAxisYP:
+							return state.axis.y;
+						case kAxisYN:
+							return -state.axis.y;
+						case kRotationXP:
+							return state.rotation.x;
+						case kRotationXN:
+							return -state.rotation.x;
+						case kRotationYP:
+							return state.rotation.y;
+						case kRotationYN:
+							return -state.rotation.y;
+						case kTriggerXP:
+							return state.trigger.x;
+						case kTriggerXN:
+							return -state.trigger.x;
+						case kTriggerYP:
+							return state.trigger.y;
+						case kTriggerYN:
+							return -state.trigger.y;
+						default:
+							return 0.0F;
+						}
+					};
+					for (std::uint64_t button = kButtonAxisStart;
+						 !active && button < kButtonMAX; ++button)
+						if (axisValue(button) >= 0.33F)
+						{
+							active = CapturedInputButton{button,
+														 controller->get_button_name(button)};
+						}
+					if (!active)
+					{
+						m_armedInputCaptures.emplace(token);
+						return;
+					}
+					if (m_armedInputCaptures.erase(token))
+						captured = std::move(active);
+				});
+				return captured;
+			}
+
+			InputSettingsResult SetInputMapping(std::uint32_t player,
+												std::uint64_t mappingId, std::uint64_t controllerToken,
+												std::uint64_t buttonId) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				if (buttonId >= kButtonMAX)
+					return {InputSettingsError::InvalidMapping, "physical button is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					auto controller = InputControllerForToken(controllerToken);
+					const auto controllers = emulated ? emulated->copy_controllers() : std::vector<std::shared_ptr<ControllerBase>>{};
+					if (!emulated || !controller ||
+						std::ranges::find(controllers, controller) == controllers.end())
+					{
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device is not assigned to this player"};
+						return;
+					}
+					if (mappingId == 0 || mappingId >= emulated->get_highest_mapping_id())
+					{
+						result = {InputSettingsError::InvalidMapping,
+								  "emulated mapping is out of range"};
+						return;
+					}
+					emulated->set_mapping(mappingId, controller, buttonId);
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult ClearInputMapping(std::uint32_t player,
+												  std::optional<std::uint64_t> mappingId) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto emulated = InputManager::instance().get_controller(player);
+					if (!emulated)
+					{
+						result = {InputSettingsError::InvalidPlayer,
+								  "player has no emulated controller"};
+						return;
+					}
+					if (mappingId)
+					{
+						if (*mappingId == 0 || *mappingId >= emulated->get_highest_mapping_id())
+						{
+							result = {InputSettingsError::InvalidMapping,
+									  "emulated mapping is out of range"};
+							return;
+						}
+						emulated->delete_mapping(*mappingId);
+					}
+					else
+						emulated->clear_mappings();
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult SetPhysicalControllerSettings(std::uint64_t token,
+															  const PhysicalControllerSettings& requested) override
+			{
+				auto validAxis = [](const ControllerAxisSettings& value) {
+					return std::isfinite(value.deadzone) && std::isfinite(value.range) &&
+						   value.deadzone >= 0.0F && value.deadzone <= 1.0F &&
+						   value.range >= 0.5F && value.range <= 2.0F;
+				};
+				if (!validAxis(requested.axis) || !validAxis(requested.rotation) ||
+					!validAxis(requested.trigger) || !std::isfinite(requested.rumble) ||
+					requested.rumble < 0.0F || requested.rumble > 1.0F ||
+					(requested.packetDelay && (*requested.packetDelay < 1 || *requested.packetDelay > 100)))
+					return {InputSettingsError::InvalidSettings,
+							"controller settings are outside their supported range"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+					{
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device was not found"};
+						return;
+					}
+					if ((requested.motion && !controller->has_motion()) ||
+						(requested.rumble > 0.0F && !controller->has_rumble()))
+					{
+						result = {InputSettingsError::InvalidSettings,
+								  "the physical device does not support the requested feature"};
+						return;
+					}
+#ifdef SUPPORTS_WIIMOTE
+					auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller);
+					if (requested.packetDelay && !wiimote)
+					{
+						result = {InputSettingsError::InvalidSettings,
+								  "packet delay is only supported by native Wiimotes"};
+						return;
+					}
+#else
+					if (requested.packetDelay)
+					{
+						result = {InputSettingsError::InvalidSettings,
+								  "native Wiimotes are unavailable in this build"};
+						return;
+					}
+#endif
+					ControllerBase::Settings settings;
+					settings.axis.deadzone = requested.axis.deadzone;
+					settings.axis.range = requested.axis.range;
+					settings.rotation.deadzone = requested.rotation.deadzone;
+					settings.rotation.range = requested.rotation.range;
+					settings.trigger.deadzone = requested.trigger.deadzone;
+					settings.trigger.range = requested.trigger.range;
+					settings.rumble = requested.rumble;
+					settings.motion = requested.motion;
+					controller->set_settings(settings);
+#ifdef SUPPORTS_WIIMOTE
+					if (requested.packetDelay)
+						wiimote->set_packet_delay(*requested.packetDelay);
+#endif
+					++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult CalibrateInputDevice(std::uint64_t token) override
+			{
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					auto controller = InputControllerForToken(token);
+					if (!controller)
+						result = {InputSettingsError::DeviceNotFound,
+								  "physical device was not found"};
+					else
+						controller->calibrate();
+				});
+				return result;
+			}
+
+			InputSettingsResult LoadInputProfile(std::uint32_t player,
+												 std::string_view profile) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+						result = {InputSettingsError::ProfileLocked,
+								  "this player is controlled by the running game's profile"};
+					else if (!InputManager::instance().load(player, name))
+						result = {InputSettingsError::PersistenceFailed,
+								  "input profile could not be loaded"};
+					else
+						++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult SaveInputProfile(std::uint32_t player,
+												 std::string_view profile) override
+			{
+				if (player >= InputManager::kMaxController)
+					return {InputSettingsError::InvalidPlayer, "player index is out of range"};
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (InputManager::instance().is_gameprofile_set(player))
+						result = {InputSettingsError::ProfileLocked,
+								  "this player is controlled by the running game's profile"};
+					else if (!InputManager::instance().save(player, name))
+						result = {InputSettingsError::PersistenceFailed,
+								  "input profile could not be saved"};
+					else
+						++m_inputSettingsGeneration;
+				});
+				return result;
+			}
+
+			InputSettingsResult DeleteInputProfile(std::string_view profile) override
+			{
+				const std::string name(profile);
+				if (!InputManager::is_valid_profilename(name))
+					return {InputSettingsError::InvalidProfile, "profile name is invalid"};
+				std::scoped_lock settingsLock(m_inputSettingsMutex);
+				InputSettingsResult result;
+				InputManager::instance().RunOnInputThread([&] {
+					if (!InputManager::instance().delete_profile(name))
+						result = {InputSettingsError::PersistenceFailed,
+								  "input profile could not be deleted"};
+					else
+						++m_inputSettingsGeneration;
+				});
+				return result;
 			}
 
 			std::optional<std::uint64_t> RunningTitleId() const override
@@ -1624,6 +3478,9 @@ namespace Application
 				std::unique_lock lock(m_inputLifecycleMutex);
 				CafeSystem::LaunchForegroundTitle();
 				m_inputAvailable = true;
+				m_diagnosticsThreads.clear();
+				m_diagnosticsSuspensions.clear();
+				m_diagnosticsGeneration.fetch_add(1, std::memory_order_acq_rel);
 			}
 			bool AbortPrepared() override
 			{
@@ -1675,6 +3532,25 @@ namespace Application
 					return false;
 				swkbd_keyInput(keyCode);
 				return true;
+			}
+
+			RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot() override
+			{
+				return RuntimeOverlay::Model::Instance().GetSnapshot();
+			}
+
+			bool SubmitRuntimeOverlayKeyboardKey(std::uint64_t generation,
+												 std::uint32_t keyCode) override
+			{
+				if (generation != swkbd_overlayGeneration())
+					return false;
+				return SubmitSoftwareKeyboardKey(keyCode);
+			}
+
+			bool SelectRuntimeOverlayErrorButton(std::uint64_t generation,
+												 bool rightButton) override
+			{
+				return nn::erreula::SelectRuntimeOverlayButton(generation, rightButton);
 			}
 
 			NfcTouchResult TouchNfcTagFromFile(
@@ -1744,8 +3620,31 @@ namespace Application
 											  std::span<const CemodPermissionDecision> decisions) override
 			{
 				for (const auto& decision : decisions)
+				{
 					GetConfig().SetCemuExtendModGrant(titleId, decision.principal,
 													  {decision.grantedPermissions, decision.requestedPermissions, true});
+					// Bind the old launch dialog's decision to every currently installed
+					// isolated package for this principal.  Native packages use a different
+					// permission namespace and must be approved in the package manager.
+					for (const auto& package : cemuextend_hle::DiscoverCemods(titleId))
+					{
+						if (package.principal != decision.principal || !package.error.empty() ||
+							package.executionMode != ::CemodExecutionMode::Isolated)
+							continue;
+						const auto inspected = cemuextend_hle::InspectCemodPackage(package);
+						if (!inspected.valid || inspected.packageDigest.empty() ||
+							inspected.modIdentity.empty() ||
+							(inspected.requestedPermissions & ~cemuextend_hle::kCemodPermissionMask) != 0)
+							continue;
+						const auto key = cemuextend_hle::MakeCemodApprovalKey(
+							inspected.modIdentity, inspected.packageDigest);
+						GetConfig().SetCemuExtendPermissionApproval(titleId, key,
+																	{inspected.packageDigest, inspected.modIdentity,
+																	 inspected.requestedPermissions,
+																	 decision.grantedPermissions & inspected.requestedPermissions,
+																	 true, false});
+					}
+				}
 				GetConfigHandle().Save();
 			}
 
@@ -1785,6 +3684,130 @@ namespace Application
 				return cemuextend_hle::ImportLegacyData(titleId, principal, error);
 			}
 
+			CemodManagerSnapshot GetCemodManagerSnapshot(
+				std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled = {}) override
+			{
+				CemodManagerSnapshot snapshot;
+				snapshot.selectedTitleId = titleId;
+				auto discovered = titleId ? cemuextend_hle::DiscoverCemods(*titleId) : cemuextend_hle::DiscoverCemodCatalog();
+				snapshot.packages.reserve(discovered.size());
+				for (const auto& package : discovered)
+				{
+					if (cancelled && cancelled())
+					{
+						snapshot.packages.clear();
+						snapshot.generation = 0;
+						snapshot.cancelled = true;
+						return snapshot;
+					}
+					auto inspection = titleId ? cemuextend_hle::InspectConfiguredCemodPackage(*titleId, package)
+													.value_or(cemuextend_hle::InspectCemodPackage(package))
+											  : cemuextend_hle::InspectCemodPackage(package);
+					CemodManagerPackage model;
+					model.packageKey = inspection.packageDigest;
+					if (model.packageKey.empty())
+					{
+						const auto path = _pathToUtf8(package.path);
+						std::uint64_t hash = 1469598103934665603ULL;
+						for (const auto byte : path)
+						{
+							hash ^= static_cast<unsigned char>(byte);
+							hash *= 1099511628211ULL;
+						}
+						model.packageKey = fmt::format("invalid-{:016x}", hash);
+					}
+					model.titleIds = package.titleIds;
+					model.modId = inspection.modId;
+					model.principal = inspection.principal;
+					model.modIdentity = inspection.modIdentity;
+					model.packageDigest = inspection.packageDigest;
+					model.pluginName = inspection.pluginName;
+					model.author = inspection.author;
+					model.version = inspection.version;
+					model.description = inspection.description;
+					model.scope = inspection.scope;
+					model.approvalReason = inspection.approvalReason;
+					model.requestedPermissions = inspection.requestedPermissions;
+					model.grantedPermissions = inspection.grantedPermissions;
+					model.approved = inspection.approved;
+					model.signedPackage = inspection.signedPackage;
+					model.trustedNative = package.executionMode == ::CemodExecutionMode::TrustedNative;
+					model.wups = inspection.wups;
+					model.headless = inspection.headless;
+					model.runtimeAvailable = true;
+					model.valid = inspection.valid;
+					model.status = !model.valid ? "rejected" : model.approved ? "ready"
+																			  : "disabled";
+					model.warnings = inspection.warnings;
+					for (const auto& permission : inspection.permissions)
+						model.permissions.push_back({permission.name,
+													 permission.bit, permission.requested, permission.granted,
+													 permission.dangerous, permission.manifestMismatch});
+					snapshot.packages.push_back(std::move(model));
+				}
+				if (cancelled && cancelled())
+				{
+					snapshot.packages.clear();
+					snapshot.generation = 0;
+					snapshot.cancelled = true;
+					return snapshot;
+				}
+				std::ranges::sort(snapshot.packages, {}, &CemodManagerPackage::packageKey);
+				snapshot.generation = CemodCatalogFingerprint(snapshot.packages);
+				return snapshot;
+			}
+
+			CemodManagerResult SaveCemodApproval(const CemodApprovalUpdate& update) override
+			{
+				auto snapshot = GetCemodManagerSnapshot(update.titleId);
+				if (snapshot.generation != update.generation)
+					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
+				const auto found = std::ranges::find(snapshot.packages, update.packageKey,
+													 &CemodManagerPackage::packageKey);
+				if (found == snapshot.packages.end() || !found->valid ||
+					std::ranges::find(found->titleIds, update.titleId) == found->titleIds.end())
+					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
+				constexpr std::uint64_t kKnownPermissions = (1ULL << 11) - 1;
+				if ((found->requestedPermissions & ~kKnownPermissions) != 0 ||
+					(update.grantedPermissions & ~found->requestedPermissions) != 0)
+					return {CemodManagerError::InvalidPermissions, "The permission selection is invalid", std::move(snapshot)};
+				const auto approvalKey = cemuextend_hle::MakeCemodApprovalKey(
+					found->modIdentity, found->packageDigest);
+				auto configLock = GetConfigHandle().Lock();
+				const auto previous = GetConfig().GetCemuExtendPermissionApproval(update.titleId, approvalKey);
+				GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey,
+															{found->packageDigest, found->modIdentity, found->requestedPermissions,
+															 update.approved ? update.grantedPermissions : 0, update.approved, false});
+				if (!GetConfigHandle().Save())
+				{
+					if (previous)
+						GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey, *previous);
+					else
+						GetConfig().RemoveCemuExtendPermissionApproval(update.titleId, approvalKey);
+					return {CemodManagerError::SaveFailed, "The approval could not be persisted", std::move(snapshot)};
+				}
+				configLock.unlock();
+				cemuextend_hle::ReloadCemodPermissions(update.titleId, found->principal);
+				return {CemodManagerError::None, {}, GetCemodManagerSnapshot(update.titleId)};
+			}
+
+			CemodManagerResult ImportLegacyCemodPackageData(std::uint64_t generation,
+															std::uint64_t titleId, std::string_view packageKey) override
+			{
+				auto snapshot = GetCemodManagerSnapshot(titleId);
+				if (snapshot.generation != generation)
+					return {CemodManagerError::Conflict, "The installed package catalog changed", std::move(snapshot)};
+				const auto found = std::ranges::find(snapshot.packages, packageKey,
+													 &CemodManagerPackage::packageKey);
+				if (found == snapshot.packages.end() || !found->valid ||
+					std::ranges::find(found->titleIds, titleId) == found->titleIds.end())
+					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
+				std::string error;
+				if (!cemuextend_hle::ImportLegacyData(titleId, found->principal, error))
+					return {CemodManagerError::ImportFailed, std::move(error), std::move(snapshot)};
+				return {CemodManagerError::None, {}, GetCemodManagerSnapshot(titleId)};
+			}
+
 			std::vector<TitleSummary> ListTitles() const override
 			{
 				std::vector<TitleSummary> result;
@@ -1794,6 +3817,26 @@ namespace Application
 					if (!CafeTitleList::GetFirstByTitleId(titleId, title))
 						continue;
 					result.push_back({titleId, title.GetMetaTitleName(), title.GetPath()});
+				}
+				return result;
+			}
+
+			std::vector<ManagedContentEntry> ListManagedContent() const override
+			{
+				struct ListLease final
+				{
+					std::span<TitleInfo*> titles{CafeTitleList::AcquireInternalList()};
+					~ListLease()
+					{
+						CafeTitleList::ReleaseInternalList();
+					}
+				} lease;
+				std::vector<ManagedContentEntry> result;
+				result.reserve(lease.titles.size());
+				for (auto* title : lease.titles)
+				{
+					if (title)
+						result.push_back(TranslateManagedTitle(*title, true));
 				}
 				return result;
 			}
@@ -1882,25 +3925,44 @@ namespace Application
 			}
 
 			ContentOperationResult ConvertToWua(
-				std::span<const std::uint64_t> locationUids,
+				const WuaConversionPlan& plan,
 				const std::filesystem::path& outputPath,
 				ContentProgressHandler progress,
 				ContentCancellationCheck cancelled) override
 			{
-				if (locationUids.empty())
+				if (plan.items.empty())
 					return {ContentOperationError::NotFound, "No title content selected"};
 				if (outputPath.empty())
 					return {ContentOperationError::UnableToCreateOutput,
 							"Archive output path is empty"};
 
+				const auto current = BuildWuaConversionPlan(plan.items.front().titleId,
+															plan.items.front().locationUid);
+				auto samePlan = [](const WuaConversionPlan& left, const WuaConversionPlan& right) {
+					if (left.items.size() != right.items.size())
+						return false;
+					for (std::size_t index = 0; index < left.items.size(); ++index)
+					{
+						const auto& a = left.items[index];
+						const auto& b = right.items[index];
+						if (a.locationUid != b.locationUid || a.titleId != b.titleId ||
+							a.version != b.version || a.fingerprint != b.fingerprint || a.role != b.role)
+							return false;
+					}
+					return true;
+				};
+				if (!current || !samePlan(plan, *current))
+					return {ContentOperationError::VerificationFailure,
+							"Installed content changed after the WUA conversion was confirmed"};
+
 				std::vector<TitleInfo> titles;
-				titles.reserve(locationUids.size());
-				for (const auto uid : locationUids)
+				titles.reserve(plan.items.size());
+				for (const auto& item : plan.items)
 				{
-					auto title = CafeTitleList::GetTitleInfoByUID(uid);
+					auto title = CafeTitleList::GetTitleInfoByUID(item.locationUid);
 					if (!title.IsValid())
 						return {ContentOperationError::NotFound,
-								fmt::format("Title content {:016x} is no longer available", uid)};
+								fmt::format("Title content {:016x} is no longer available", item.locationUid)};
 					titles.push_back(std::move(title));
 				}
 
@@ -1948,6 +4010,15 @@ namespace Application
 							return {wasCancelled ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
 									wasCancelled ? "Conversion cancelled" : "Unable to read title files"};
 						}
+					}
+					const auto afterRead = BuildWuaConversionPlan(plan.items.front().titleId,
+																  plan.items.front().locationUid);
+					if (!afterRead || !samePlan(plan, *afterRead))
+					{
+						context.Close();
+						removeTemporary();
+						return {ContentOperationError::VerificationFailure,
+								"Installed content changed while the WUA archive was being created"};
 					}
 					if (!context.valid)
 					{
@@ -2050,7 +4121,7 @@ namespace Application
 							"Title content is no longer available", std::nullopt};
 
 				ContentChecksum checksum{
-					.titleId = static_cast<std::uint64_t>(title.GetAppTitleId()),
+					.titleId = title.GetAppTitleId(),
 					.version = title.GetAppTitleVersion(),
 					.region = static_cast<std::uint32_t>(title.GetMetaRegion()),
 				};
@@ -2103,7 +4174,7 @@ namespace Application
 								return {ContentOperationError::ReadFailure,
 										"Game image ended before its declared size", std::nullopt};
 							offset += read;
-							publish({ContentOperationPhase::Hashing, 0, 0, offset, static_cast<std::uint64_t>(total)});
+							publish({ContentOperationPhase::Hashing, 0, 0, offset, total});
 						}
 						unsigned int digestLength{};
 						if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||
@@ -2129,37 +4200,73 @@ namespace Application
 						} unmount{title, mountPath};
 
 						std::vector<std::pair<std::string, std::uint64_t>> files;
-						std::function<bool(const std::string&)> collect = [&](const std::string& relative) {
-							if (isCancelled())
-								return false;
-							sint32 status{};
-							std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> directory(
-								fsc_openDirIterator((mountPath + relative).c_str(), &status),
-								&fsc_close);
-							if (!directory)
-								return false;
-							FSCDirEntry entry;
-							while (fsc_nextDir(directory.get(), &entry))
-							{
-								const auto child = relative + entry.path;
-								if (entry.isDirectory)
+						constexpr std::size_t kMaximumChecksumFiles = 20000;
+						constexpr std::size_t kMaximumChecksumPath = 4096;
+						constexpr std::uint64_t kMaximumChecksumBytes = 2ULL * 1024 * 1024 * 1024 * 1024;
+						std::uint64_t collectedBytes{};
+						std::size_t collectedPathBytes{};
+						std::size_t collectedDirectories{};
+						std::string collectionLimitError;
+						std::function<bool(const std::string&, std::size_t)> collect =
+							[&](const std::string& relative, std::size_t depth) {
+								if (isCancelled())
+									return false;
+								sint32 status{};
+								std::unique_ptr<FSCVirtualFile, decltype(&fsc_close)> directory(
+									fsc_openDirIterator((mountPath + relative).c_str(), &status),
+									&fsc_close);
+								if (!directory)
+									return false;
+								FSCDirEntry entry;
+								while (fsc_nextDir(directory.get(), &entry))
 								{
-									if (!collect(child + "/"))
+									const std::string_view component(entry.path);
+									if (component.empty() || component == "." || component == ".." ||
+										component.find_first_of("/\\\0") != std::string_view::npos)
+									{
+										collectionLimitError = "Title contains an invalid checksum path component";
 										return false;
+									}
+									const auto child = relative + entry.path;
+									if (entry.isDirectory)
+									{
+										if (depth >= 256 || collectedDirectories >= 20000 ||
+											child.size() > kMaximumChecksumPath ||
+											child.size() > 4 * 1024 * 1024 - collectedPathBytes)
+										{
+											collectionLimitError = "Title exceeds the safe checksum directory depth or size limit";
+											return false;
+										}
+										++collectedDirectories;
+										collectedPathBytes += child.size();
+										if (!collect(child + "/", depth + 1))
+											return false;
+									}
+									else if (entry.isFile)
+									{
+										if (child.size() > kMaximumChecksumPath || files.size() >= kMaximumChecksumFiles ||
+											child.size() > 4 * 1024 * 1024 - collectedPathBytes ||
+											entry.fileSize > kMaximumChecksumBytes - collectedBytes)
+										{
+											collectionLimitError = "Title exceeds the safe checksum file, path, or size limit";
+											return false;
+										}
+										collectedBytes += static_cast<std::uint64_t>(entry.fileSize);
+										collectedPathBytes += child.size();
+										files.emplace_back(child,
+														   static_cast<std::uint64_t>(entry.fileSize));
+										publish({ContentOperationPhase::Collecting, 0,
+												 static_cast<std::uint32_t>(files.size()), 0, 0});
+									}
 								}
-								else if (entry.isFile)
-								{
-									files.emplace_back(child,
-													   static_cast<std::uint64_t>(entry.fileSize));
-									publish({ContentOperationPhase::Collecting, 0,
-											 static_cast<std::uint32_t>(files.size()), 0, 0});
-								}
-							}
-							return true;
-						};
-						if (!collect(""))
-							return {isCancelled() ? ContentOperationError::Cancelled : ContentOperationError::ReadFailure,
-									isCancelled() ? "Checksum cancelled" : "Unable to enumerate title files", std::nullopt};
+								return true;
+							};
+						if (!collect("", 0))
+							return {isCancelled() ? ContentOperationError::Cancelled : collectionLimitError.empty() ? ContentOperationError::ReadFailure
+																													: ContentOperationError::VerificationFailure,
+									isCancelled() ? "Checksum cancelled" : !collectionLimitError.empty() ? collectionLimitError
+																										 : "Unable to enumerate title files",
+									std::nullopt};
 						std::ranges::sort(files, {}, &decltype(files)::value_type::first);
 						for (std::size_t index = 0; index < files.size(); ++index)
 						{
@@ -2611,6 +4718,100 @@ namespace Application
 				}
 			}
 
+			ManagedContentDeletePlanResult PlanManagedContentDelete(
+				std::uint64_t locationUid) const override
+			{
+				if (IsTitleRunning())
+					return {ManagedContentDeleteError::TitleRunning,
+							"Managed content cannot be deleted while a title is running", std::nullopt};
+				if (CafeTitleList::IsScanning())
+					return {ManagedContentDeleteError::Scanning,
+							"Managed content cannot be deleted while the title catalog is scanning", std::nullopt};
+				const auto title = CafeTitleList::GetTitleInfoByUID(locationUid);
+				if (!title.IsValid())
+					return {ManagedContentDeleteError::NotFound,
+							"The selected managed-content installation is no longer available", std::nullopt};
+				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), true);
+				if (!IsManagedContentDeletionSupported(entry.type))
+					return {ManagedContentDeleteError::Unsupported,
+							"System titles cannot be deleted from Title Manager", std::nullopt};
+				if (entry.path.empty())
+					return {ManagedContentDeleteError::Unsupported,
+							"The selected installation does not have a deletable catalog location", std::nullopt};
+				const auto safePath = ValidateCatalogDeletePath(entry.path);
+				if (!safePath)
+					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic, std::nullopt};
+				entry.path = safePath.canonicalPath;
+				return {ManagedContentDeleteError::None, {}, ManagedContentDeletePlan{
+																 .locationUid = entry.locationUid,
+																 .titleId = entry.titleId,
+																 .fingerprint = ManagedContentFingerprint(entry),
+																 .name = entry.name,
+																 .displayPath = _pathToUtf8(entry.path),
+																 .type = entry.type,
+																 .format = entry.format,
+															 }};
+			}
+
+			ManagedContentDeleteResult DeleteManagedContent(
+				const ManagedContentDeletePlan& plan) override
+			{
+				if (IsTitleRunning())
+					return {ManagedContentDeleteError::TitleRunning,
+							"Managed content cannot be deleted while a title is running"};
+				if (CafeTitleList::IsScanning())
+					return {ManagedContentDeleteError::Scanning,
+							"Managed content cannot be deleted while the title catalog is scanning"};
+				const auto title = CafeTitleList::GetTitleInfoByUID(plan.locationUid);
+				if (!title.IsValid())
+					return {ManagedContentDeleteError::NotFound,
+							"The selected managed-content installation is no longer available"};
+				auto entry = TranslateManagedTitle(const_cast<TitleInfo&>(title), false);
+				if (!IsManagedContentDeletionSupported(entry.type))
+					return {ManagedContentDeleteError::Unsupported,
+							"System titles cannot be deleted from Title Manager"};
+				const auto safePath = ValidateCatalogDeletePath(entry.path);
+				if (!safePath)
+					return {ManagedContentDeleteError::Unsupported, safePath.diagnostic};
+				entry.path = safePath.canonicalPath;
+				if (entry.titleId != plan.titleId || entry.type != plan.type ||
+					entry.format != plan.format || ManagedContentFingerprint(entry) != plan.fingerprint)
+					return {ManagedContentDeleteError::StalePlan,
+							"The selected installation changed after deletion was confirmed"};
+				std::error_code error;
+				const auto status = fs::symlink_status(entry.path, error);
+				if (error || status.type() == fs::file_type::not_found)
+					return {ManagedContentDeleteError::NotFound,
+							error ? error.message() : "The selected installation no longer exists"};
+				if (status.type() == fs::file_type::symlink)
+					return {ManagedContentDeleteError::Unsupported,
+							"Managed-content catalog roots may not be symbolic links"};
+				const auto quarantine = UniqueInstallSibling(entry.path, "deleting");
+				if (quarantine.empty())
+					return {ManagedContentDeleteError::DeleteFailure,
+							"Unable to reserve a deletion quarantine path"};
+				fs::rename(entry.path, quarantine, error);
+				if (error)
+					return {ManagedContentDeleteError::DeleteFailure, error.message()};
+				auto moved = entry;
+				moved.path = quarantine;
+				if (ManagedContentFingerprint(moved, &entry.path) != plan.fingerprint)
+				{
+					std::error_code restoreError;
+					fs::rename(quarantine, entry.path, restoreError);
+					return {ManagedContentDeleteError::StalePlan, restoreError ? fmt::format("The selected installation changed; it was quarantined at {} because restore failed: {}",
+																							 _pathToUtf8(quarantine), restoreError.message())
+																			   : "The selected installation changed while deletion was starting"};
+				}
+				fs::remove_all(quarantine, error);
+				if (error)
+					return {ManagedContentDeleteError::DeleteFailure,
+							fmt::format("Content was quarantined at {}, but deletion failed: {}",
+										_pathToUtf8(quarantine), error.message())};
+				CafeTitleList::Refresh();
+				return {};
+			}
+
 			std::vector<AccountInfo> ListAccounts() const override
 			{
 				std::vector<AccountInfo> result;
@@ -2641,8 +4842,7 @@ namespace Application
 			std::vector<AccountCountry> ListAccountCountries() const override
 			{
 				std::vector<AccountCountry> result;
-				for (std::uint32_t index = 0;
-					 index < static_cast<std::uint32_t>(NCrypto::GetCountryCount()); ++index)
+				for (std::uint32_t index = 0; index <= std::numeric_limits<std::uint8_t>::max(); ++index)
 				{
 					const char* country = NCrypto::GetCountryAsString(index);
 					if (country && (index == 0 || !boost::equals(country, "NN")))
@@ -2659,6 +4859,58 @@ namespace Application
 					.seepromPresent = NCrypto::SEEPROM_IsPresent(),
 					.consoleCertificateAvailable = NCrypto::HasDataForConsoleCert(),
 				};
+			}
+
+			AccountManagerSnapshot GetAccountManagerSnapshot() const override
+			{
+				AccountManagerSnapshot snapshot;
+				snapshot.accounts = ListAccounts();
+				snapshot.countries = ListAccountCountries();
+				snapshot.onlineEnvironment = GetOnlineEnvironmentStatus();
+				snapshot.activePersistentId = ActiveSettings::GetPersistentId();
+				snapshot.nextPersistentId = NextPersistentId();
+				snapshot.hasFreeSlots = HasFreeAccountSlots();
+				snapshot.titleRunning = IsTitleRunning();
+				snapshot.networkSettings.reserve(snapshot.accounts.size());
+				for (const auto& account : snapshot.accounts)
+				{
+					snapshot.networkSettings.push_back({account.persistentId,
+														TranslateNetworkService(
+															GetConfig().GetAccountNetworkService(account.persistentId)),
+														ValidateOnlineAccount(account.persistentId)});
+				}
+				return snapshot;
+			}
+
+			AccountOperationResult SetActiveAccount(std::uint32_t persistentId) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+							"the active account cannot be changed while a title is running"};
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				GetConfig().account.m_persistent_id = persistentId;
+				GetConfigHandle().Save();
+				return {AccountOperationError::None, {}, TranslateAccount(*account)};
+			}
+
+			AccountOperationResult SetAccountNetworkService(std::uint32_t persistentId,
+															AccountNetworkService service) override
+			{
+				if (IsTitleRunning())
+					return {AccountOperationError::TitleRunning,
+							"network service cannot be changed while a title is running"};
+				const auto* account = FindAccount(persistentId);
+				if (!account)
+					return {AccountOperationError::NotFound, "account no longer exists"};
+				if (service != AccountNetworkService::Offline && !account->IsValidOnlineAccount())
+					return {AccountOperationError::BackendFailure,
+							"online account files must be valid before enabling a network service"};
+				GetConfig().SetAccountSelectedService(persistentId,
+													  TranslateNetworkService(service));
+				GetConfigHandle().Save();
+				return {AccountOperationError::None, {}, TranslateAccount(*account)};
 			}
 
 			DownloadAccountContext GetDownloadAccountContext(
@@ -2724,9 +4976,9 @@ namespace Application
 				if (persistentId < kMinimumPersistentId)
 					return {AccountOperationError::InvalidPersistentId,
 							"persistent id is below the supported range"};
-				if (miiName.empty())
+				if (miiName.empty() || miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-							"account name may not be empty"};
+							"account name must contain between 1 and 10 characters"};
 				if (!::Account::HasFreeAccountSlots())
 					return {AccountOperationError::NoFreeSlots,
 							"all account slots are occupied"};
@@ -2756,9 +5008,17 @@ namespace Application
 				const auto* existing = FindAccount(persistentId);
 				if (!existing)
 					return {AccountOperationError::NotFound, "account no longer exists"};
-				if (update.miiName.empty())
+				if (update.miiName.empty() || update.miiName.size() > 10)
 					return {AccountOperationError::InvalidMiiName,
-							"account name may not be empty"};
+							"account name must contain between 1 and 10 characters"};
+				if (update.birthYear > 2100 || update.birthMonth > 12 ||
+					update.birthDay > 31 || update.gender > 2 || update.email.size() > 320)
+					return {AccountOperationError::BackendFailure,
+							"account profile fields are outside the supported range"};
+				const char* country = update.country <= std::numeric_limits<std::uint8_t>::max() ? NCrypto::GetCountryAsString(update.country) : nullptr;
+				if (!country || (update.country != 0 && boost::equals(country, "NN")))
+					return {AccountOperationError::BackendFailure,
+							"account country is not supported"};
 				try
 				{
 					::Account account = *existing;
@@ -2793,11 +5053,19 @@ namespace Application
 				const auto* account = FindAccount(persistentId);
 				if (!account)
 					return {AccountOperationError::NotFound, "account no longer exists"};
+				const bool deletingActive =
+					GetConfig().account.m_persistent_id.GetValue() == persistentId;
 				std::error_code error;
 				fs::remove_all(account->GetFileName().parent_path(), error);
 				if (error)
 					return {AccountOperationError::IoFailure, error.message()};
-				::Account::RefreshAccounts();
+				const auto& remainingAccounts = ::Account::RefreshAccounts();
+				if (deletingActive && !remainingAccounts.empty())
+				{
+					GetConfig().account.m_persistent_id =
+						remainingAccounts.front().GetPersistentId();
+					GetConfigHandle().Save();
+				}
 				return {};
 			}
 
@@ -3508,6 +5776,57 @@ namespace Application
 				return result;
 			}
 
+			GraphicPackInstallResult InstallGraphicPacks(
+				const GraphicPackInstallRequest& request,
+				GraphicPackInstallProgressHandler progress,
+				GraphicPackInstallCancellationCheck cancelled) override
+			{
+				if (IsTitleRunning())
+					return {GraphicPackInstallError::Conflict,
+							"graphic packs cannot be installed while a title is running"};
+				GraphicPackInstallTransaction transaction;
+				auto result = InstallGraphicPackFiles(request, progress, cancelled, &transaction);
+				if (!result || result.upToDate)
+					return result;
+				try
+				{
+					if (cancelled && cancelled())
+					{
+						const auto rollback = transaction.Rollback();
+						return rollback ? GraphicPackInstallResult{GraphicPackInstallError::Cancelled,
+																   "graphic-pack installation was cancelled"}
+										: rollback;
+					}
+					if (progress)
+						progress({GraphicPackInstallPhase::Refreshing, 0, 0, {}});
+					const auto refresh = RefreshGraphicPacks();
+					if (!refresh)
+					{
+						const auto rollback = transaction.Rollback();
+						if (!rollback)
+							return rollback;
+						return {GraphicPackInstallError::IoFailure,
+								refresh.diagnostic.empty() ? "installed packs could not be refreshed" : refresh.diagnostic};
+					}
+					transaction.Commit();
+					result.removedEnabledPaths = refresh.removedEnabledPaths;
+					return result;
+				} catch (const std::exception& error)
+				{
+					const auto rollback = transaction.Rollback();
+					if (!rollback)
+						return rollback;
+					return {GraphicPackInstallError::IoFailure,
+							fmt::format("graphic-pack refresh failed and was rolled back: {}", error.what())};
+				} catch (...)
+				{
+					const auto rollback = transaction.Rollback();
+					return rollback ? GraphicPackInstallResult{GraphicPackInstallError::IoFailure,
+															   "graphic-pack refresh failed and was rolled back"}
+									: rollback;
+				}
+			}
+
 			void SaveGraphicPackState() override
 			{
 				auto& entries = GetConfigHandle().data().graphic_pack_entries;
@@ -3531,9 +5850,81 @@ namespace Application
 			}
 
 		  private:
+			struct DiagnosticSuspension
+			{
+				std::uint64_t identity{};
+				std::int32_t expectedCounter{};
+			};
+
+			static std::uint64_t PpcThreadIdentity(const OSThread_t& thread)
+			{
+				std::uint64_t value = thread.entrypoint.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.stackEnd.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.stackBase.GetMPTR();
+				value = (value * 0x9e3779b185ebca87ULL) ^ thread.threadName.GetMPTR();
+				return value == 0 ? 1 : value;
+			}
+
+			std::uint64_t TokenForInputController(
+				const std::shared_ptr<ControllerBase>& controller) const
+			{
+				if (!controller)
+					return 0;
+				if (const auto found = m_inputTokensByPointer.find(controller.get());
+					found != m_inputTokensByPointer.end())
+					return found->second;
+				const auto token = ++m_nextInputDeviceToken;
+				m_inputDeviceTokens.emplace(token, controller);
+				m_inputTokensByPointer.emplace(controller.get(), token);
+				return token;
+			}
+
+			std::shared_ptr<ControllerBase> InputControllerForToken(
+				std::uint64_t token) const
+			{
+				const auto found = m_inputDeviceTokens.find(token);
+				if (found == m_inputDeviceTokens.end())
+					return {};
+				return found->second;
+			}
+
+			void PruneUnassignedInputTokens() const
+			{
+				for (auto it = m_inputDeviceTokens.begin(); it != m_inputDeviceTokens.end();)
+				{
+					if (it->second.use_count() == 1)
+					{
+						m_inputTokensByPointer.erase(it->second.get());
+						m_armedInputCaptures.erase(it->first);
+						it = m_inputDeviceTokens.erase(it);
+					}
+					else
+						++it;
+				}
+			}
+
 			ApplicationEvents& m_events;
 			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
 			mutable std::shared_mutex m_inputLifecycleMutex;
+			mutable std::mutex m_frontendSettingsStateMutex;
+			mutable std::recursive_mutex m_frontendSettingsTransactionMutex;
+			mutable std::string m_frontendSettingsFingerprint;
+			mutable std::uint64_t m_frontendSettingsRevision{1};
+			mutable std::recursive_mutex m_inputSettingsMutex;
+			mutable std::recursive_mutex m_hotkeySettingsMutex;
+			mutable std::uint64_t m_hotkeySettingsRevision{1};
+			mutable std::unordered_map<std::uint64_t, std::shared_ptr<ControllerBase>>
+				m_inputDeviceTokens;
+			mutable std::unordered_map<const ControllerBase*, std::uint64_t>
+				m_inputTokensByPointer;
+			mutable std::uint64_t m_nextInputDeviceToken{};
+			mutable std::uint64_t m_inputSettingsGeneration{1};
+			mutable std::uint64_t m_inputSettingsFingerprintGeneration{};
+			std::atomic_uint64_t m_diagnosticsGeneration{};
+			std::vector<std::pair<std::uint32_t, std::uint64_t>> m_diagnosticsThreads;
+			std::unordered_map<std::uint32_t, DiagnosticSuspension> m_diagnosticsSuspensions;
+			mutable std::string m_inputSettingsFingerprint;
+			mutable std::unordered_set<std::uint64_t> m_armedInputCaptures;
 			bool m_inputAvailable{};
 		};
 	} // namespace

@@ -22,7 +22,7 @@ typedef struct
 	MPTR argv[32];
 	uint32be argc;
 	char argStorage[0x1000];
-}coreinitInit_t;
+} coreinitInit_t;
 
 coreinitInit_t* _coreinitInfo = nullptr;
 
@@ -49,7 +49,7 @@ void _AddArg(const char* arg, sint32 len)
 	argStorageIndex += (sint32)strlen(arg) + 1;
 
 	_coreinitInfo->argv[argc] = _swapEndianU32(memory_getVirtualOffsetFromPointer(argStorageStr));
-	_coreinitInfo->argc = argc+1;
+	_coreinitInfo->argc = argc + 1;
 }
 
 sint32 _GetArgLength(const char* arg)
@@ -58,7 +58,7 @@ sint32 _GetArgLength(const char* arg)
 	while (*arg)
 	{
 		if (*arg == ' ')
-			break; // end at whitespace
+			break;										 // end at whitespace
 		cemu_assert_debug(*arg != '\"' && *arg != '\''); // todo
 		arg++;
 		c++;
@@ -69,13 +69,13 @@ sint32 _GetArgLength(const char* arg)
 static std::string GetLaunchArgs()
 {
 	std::string argStr = CafeSystem::GetForegroundTitleArgStr();
-	if(std::vector<std::string> overrideArgs; CafeSystem::GetOverrideArgStr(overrideArgs))
+	if (std::vector<std::string> overrideArgs; CafeSystem::GetOverrideArgStr(overrideArgs))
 	{
 		// args are overriden by launch directive (OSLaunchTitleByPath)
 		// keep the rpx path but use the arguments from the override
 		if (size_t pos = argStr.find(' '); pos != std::string::npos)
 			argStr.resize(pos);
-		for(size_t i=0; i<overrideArgs.size(); i++)
+		for (size_t i = 0; i < overrideArgs.size(); i++)
 		{
 			argStr += " ";
 			argStr += overrideArgs[i];
@@ -90,14 +90,14 @@ void CafeInit()
 	sint32 rpxPathStart = (sint32)_pathToExecutable.size() - 1;
 	if (rpxPathStart > 0)
 	{
-		while (rpxPathStart > 0 && _pathToExecutable[rpxPathStart-1] != '/')
+		while (rpxPathStart > 0 && _pathToExecutable[rpxPathStart - 1] != '/')
 			rpxPathStart--;
 	}
 	else
 	{
 		rpxPathStart = 0;
 	}
-	
+
 	std::string_view rpxFileName(_pathToExecutable.data() + rpxPathStart, _pathToExecutable.size() - rpxPathStart);
 
 	argStorageIndex = 0;
@@ -206,7 +206,7 @@ void coreinit_start(PPCInterpreter_t* hCPU)
 
 	CafeInit();
 	_coreinitTitleEntryPoint = CoreInitEntry(_coreinitInfo->argc, memory_getVirtualOffsetFromPointer(_coreinitInfo->argv));
-	
+
 	RPLLoader_CallEntrypoints();
 
 	// init vpadbase (todo - simulate entrypoints for HLE modules)
@@ -216,11 +216,11 @@ void coreinit_start(PPCInterpreter_t* hCPU)
 	// call entry-type callbacks in graphic packs
 	for (const auto gp : GraphicPack2::GetActiveGraphicPacks())
 	{
-	    for (const auto [callback, type] : gp->GetCallbacks())
+		for (const auto [callback, type] : gp->GetCallbacks())
 		{
-		    if (type == GPCallbackType::Entry)
+			if (type == GPCallbackType::Entry)
 			{
-		        PPCCoreCallback(callback);
+				PPCCoreCallback(callback);
 			}
 		}
 	}

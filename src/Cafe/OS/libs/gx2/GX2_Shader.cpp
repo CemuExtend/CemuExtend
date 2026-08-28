@@ -47,12 +47,27 @@ namespace GX2
 	}
 
 	uint32 rawFormatToFetchFormat[] =
-	{
-		1, 2, 5, 6,
-		7, 0xD, 0xE, 0xF,
-		0x10, 0x16, 0x1A, 0x19,
-		0x1D, 0x1E, 0x1F, 0x20,
-		0x2F, 0x30, 0x22, 0x23,
+		{
+			1,
+			2,
+			5,
+			6,
+			7,
+			0xD,
+			0xE,
+			0xF,
+			0x10,
+			0x16,
+			0x1A,
+			0x19,
+			0x1D,
+			0x1E,
+			0x1F,
+			0x20,
+			0x2F,
+			0x30,
+			0x22,
+			0x23,
 	};
 
 	struct GX2AttribDescription
@@ -100,7 +115,7 @@ namespace GX2
 			LatteCFInstruction_DEFAULT defaultInstr;
 			defaultInstr.setField_Opcode(LatteCFInstruction::INST_VTX_TC);
 			defaultInstr.setField_COUNT(std::min(attributeCount - attributeIndex, 16u));
-			defaultInstr.setField_ADDR(cfSize + attributeIndex*16);
+			defaultInstr.setField_ADDR(cfSize + attributeIndex * 16);
 			memcpy(cfInstructionWriter, &defaultInstr, sizeof(LatteCFInstruction));
 			attributeIndex += 16;
 			cfInstructionWriter++;
@@ -194,7 +209,7 @@ namespace GX2
 
 			LatteClauseInstruction_VTX vtxInstruction;
 			vtxInstruction.setField_VTX_INST(LatteClauseInstruction_VTX::VTX_INST::_VTX_INST_SEMANTIC);
-			vtxInstruction.setFieldSEM_SEMANTIC_ID(attrLocation&0xFF);
+			vtxInstruction.setFieldSEM_SEMANTIC_ID(attrLocation & 0xFF);
 			vtxInstruction.setField_BUFFER_ID(attrBufferId + 0xA0);
 			vtxInstruction.setField_FETCH_TYPE((LatteConst::VertexFetchType2)attrIndexType);
 			vtxInstruction.setField_SRC_SEL_X((LatteClauseInstruction_VTX::SRC_SEL)srcSelX);
@@ -217,7 +232,7 @@ namespace GX2
 	uint32 GX2CalcFetchShaderSizeEx(uint32 attributeCount, GX2FetchShader::FetchShaderType fetchShaderType, uint32 tessellationMode)
 	{
 		cemu_assert_debug(fetchShaderType == GX2FetchShader::FetchShaderType::NO_TESSELATION); // other types are todo
-		cemu_assert_debug(tessellationMode == 0); // other modes are todo
+		cemu_assert_debug(tessellationMode == 0);											   // other modes are todo
 
 		uint32 finalSize =
 			(uint32)_calcFetchShaderCFCodeSize(attributeCount, fetchShaderType, tessellationMode) +
@@ -271,12 +286,12 @@ namespace GX2
 
 	uint32 GX2GetPixelShaderGPRs(GX2PixelShader_t* pixelShader)
 	{
-		return _swapEndianU32(pixelShader->regs[0])&0xFF;
+		return _swapEndianU32(pixelShader->regs[0]) & 0xFF;
 	}
 
 	uint32 GX2GetPixelShaderStackEntries(GX2PixelShader_t* pixelShader)
 	{
-		return (_swapEndianU32(pixelShader->regs[0]>>8))&0xFF;
+		return (_swapEndianU32(pixelShader->regs[0] >> 8)) & 0xFF;
 	}
 
 	void GX2SetFetchShader(GX2FetchShader* fetchShaderPtr)
@@ -285,20 +300,20 @@ namespace GX2
 		cemu_assert_debug((_swapEndianU32(fetchShaderPtr->shaderPtr) & 0xFF) == 0);
 
 		gx2WriteGather_submit(
-				// setup fetch shader
-				pm4HeaderType3(IT_SET_CONTEXT_REG, 1+5),
-				Latte::REGADDR::SQ_PGM_START_FS-0xA000,
-				_swapEndianU32(fetchShaderPtr->shaderPtr)>>8,
-				_swapEndianU32(fetchShaderPtr->shaderSize)>>3,
-				0x10000, // ukn (ring buffer size?)
-				0x10000, // ukn (ring buffer size?)
-				fetchShaderPtr->reg_SQ_PGM_RESOURCES_FS,
+			// setup fetch shader
+			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 5),
+			Latte::REGADDR::SQ_PGM_START_FS - 0xA000,
+			_swapEndianU32(fetchShaderPtr->shaderPtr) >> 8,
+			_swapEndianU32(fetchShaderPtr->shaderSize) >> 3,
+			0x10000, // ukn (ring buffer size?)
+			0x10000, // ukn (ring buffer size?)
+			fetchShaderPtr->reg_SQ_PGM_RESOURCES_FS,
 
-				// write instance step
-				pm4HeaderType3(IT_SET_CONTEXT_REG, 1+2),
-				Latte::REGADDR::VGT_INSTANCE_STEP_RATE_0-0xA000,
-				fetchShaderPtr->divisors[0],
-				fetchShaderPtr->divisors[1]);
+			// write instance step
+			pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 2),
+			Latte::REGADDR::VGT_INSTANCE_STEP_RATE_0 - 0xA000,
+			fetchShaderPtr->divisors[0],
+			fetchShaderPtr->divisors[1]);
 	}
 
 	void GX2SetVertexShader(GX2VertexShader* vertexShader)
@@ -317,7 +332,7 @@ namespace GX2
 			reserveSize += 18;
 			reserveSize += numOutputIds;
 			if (vertexShader->usesStreamOut != 0)
-				reserveSize += 2+12;
+				reserveSize += 2 + 12;
 		}
 		if (vsSemanticTableSize > 0)
 		{
@@ -346,44 +361,43 @@ namespace GX2
 		{
 			// in geometry shader mode the vertex shader is written to _ES register and almost all vs control registers are set by GX2SetGeometryShader
 			gx2WriteGather_submit(
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 6),
-					Latte::REGADDR::SQ_PGM_START_ES-0xA000,
-					memory_virtualToPhysical(shaderProgramAddr)>>8,
-					shaderProgramSize>>3,
-					0x100000,
-					0x100000,
-					vertexShader->regs.SQ_PGM_RESOURCES_VS); // SQ_PGM_RESOURCES_VS/SQ_PGM_RESOURCES_ES
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 6),
+				Latte::REGADDR::SQ_PGM_START_ES - 0xA000,
+				memory_virtualToPhysical(shaderProgramAddr) >> 8,
+				shaderProgramSize >> 3,
+				0x100000,
+				0x100000,
+				vertexShader->regs.SQ_PGM_RESOURCES_VS); // SQ_PGM_RESOURCES_VS/SQ_PGM_RESOURCES_ES
 		}
 		else
 		{
 			gx2WriteGather_submit(
-					/* vertex shader program */
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 6),
-					Latte::REGADDR::SQ_PGM_START_VS-0xA000,
-					memory_virtualToPhysical(shaderProgramAddr)>>8, // physical address
-					shaderProgramSize>>3,
-					0x100000,
-					0x100000,
-					vertexShader->regs.SQ_PGM_RESOURCES_VS, // SQ_PGM_RESOURCES_VS/ES
-					/* primitive id enable */
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-					Latte::REGADDR::VGT_PRIMITIVEID_EN-0xA000,
-					vertexShader->regs.VGT_PRIMITIVEID_EN,
-					/* output config */
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-					Latte::REGADDR::SPI_VS_OUT_CONFIG-0xA000,
-					vertexShader->regs.SPI_VS_OUT_CONFIG,
-					/* PA_CL_VS_OUT_CNTL */
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-					Latte::REGADDR::PA_CL_VS_OUT_CNTL-0xA000,
-					vertexShader->regs.PA_CL_VS_OUT_CNTL
-					);
+				/* vertex shader program */
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 6),
+				Latte::REGADDR::SQ_PGM_START_VS - 0xA000,
+				memory_virtualToPhysical(shaderProgramAddr) >> 8, // physical address
+				shaderProgramSize >> 3,
+				0x100000,
+				0x100000,
+				vertexShader->regs.SQ_PGM_RESOURCES_VS, // SQ_PGM_RESOURCES_VS/ES
+				/* primitive id enable */
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+				Latte::REGADDR::VGT_PRIMITIVEID_EN - 0xA000,
+				vertexShader->regs.VGT_PRIMITIVEID_EN,
+				/* output config */
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+				Latte::REGADDR::SPI_VS_OUT_CONFIG - 0xA000,
+				vertexShader->regs.SPI_VS_OUT_CONFIG,
+				/* PA_CL_VS_OUT_CNTL */
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+				Latte::REGADDR::PA_CL_VS_OUT_CNTL - 0xA000,
+				vertexShader->regs.PA_CL_VS_OUT_CNTL);
 
 			cemu_assert_debug(vertexShader->regs.SPI_VS_OUT_CONFIG.value().get_VS_PER_COMPONENT() == false); // not handled on the GPU side
 
-			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1+numOutputIds));
-			gx2WriteGather_submitU32AsBE(Latte::REGADDR::SPI_VS_OUT_ID_0-0xA000);
-			for(uint32 i=0; i<numOutputIds; i++)
+			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + numOutputIds));
+			gx2WriteGather_submitU32AsBE(Latte::REGADDR::SPI_VS_OUT_ID_0 - 0xA000);
+			for (uint32 i = 0; i < numOutputIds; i++)
 				gx2WriteGather_submitU32AsBE(vertexShader->regs.LATTE_SPI_VS_OUT_ID_N[i].value().getRawValue());
 
 			// todo: SQ_PGM_CF_OFFSET_VS
@@ -393,42 +407,42 @@ namespace GX2
 			{
 				// stride 0
 				gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-				Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_0-0xA000,
-				vertexShader->streamOutVertexStride[0]>>2,
-				// stride 1
-				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-				Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_1-0xA000,
-				vertexShader->streamOutVertexStride[1]>>2,
-				// stride 2
-				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-				Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_2-0xA000,
-				vertexShader->streamOutVertexStride[2]>>2,
-				// stride 3
-				pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
-				Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_3-0xA000,
-				vertexShader->streamOutVertexStride[3]>>2);
+									  Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_0 - 0xA000,
+									  vertexShader->streamOutVertexStride[0] >> 2,
+									  // stride 1
+									  pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+									  Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_1 - 0xA000,
+									  vertexShader->streamOutVertexStride[1] >> 2,
+									  // stride 2
+									  pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+									  Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_2 - 0xA000,
+									  vertexShader->streamOutVertexStride[2] >> 2,
+									  // stride 3
+									  pm4HeaderType3(IT_SET_CONTEXT_REG, 2),
+									  Latte::REGADDR::VGT_STRMOUT_VTX_STRIDE_3 - 0xA000,
+									  vertexShader->streamOutVertexStride[3] >> 2);
 			}
 		}
 		// update semantic table
 		if (vsSemanticTableSize > 0)
 		{
 			gx2WriteGather_submit(
-					pm4HeaderType3(IT_SET_CONTEXT_REG, 1+1),
-					Latte::REGADDR::SQ_VTX_SEMANTIC_CLEAR-0xA000,
-					0xFFFFFFFF);
+				pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
+				Latte::REGADDR::SQ_VTX_SEMANTIC_CLEAR - 0xA000,
+				0xFFFFFFFF);
 			if (vsSemanticTableSize == 0)
 			{
 				gx2WriteGather_submit(
-						pm4HeaderType3(IT_SET_CONTEXT_REG, 1+1),
-						Latte::REGADDR::SQ_VTX_SEMANTIC_0-0xA000,
-						0xFFFFFFFF);
+					pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
+					Latte::REGADDR::SQ_VTX_SEMANTIC_0 - 0xA000,
+					0xFFFFFFFF);
 			}
 			else
 			{
 				uint32* vsSemanticTable = (uint32*)vertexShader->regs.SQ_VTX_SEMANTIC_N;
 				vsSemanticTableSize = std::min<uint32>(vsSemanticTableSize, 32);
-				gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1+vsSemanticTableSize));
-				gx2WriteGather_submitU32AsBE(Latte::REGADDR::SQ_VTX_SEMANTIC_0-0xA000);
+				gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + vsSemanticTableSize));
+				gx2WriteGather_submitU32AsBE(Latte::REGADDR::SQ_VTX_SEMANTIC_0 - 0xA000);
 				gx2WriteGather_submitU32AsLEArray(vsSemanticTable, vsSemanticTableSize);
 			}
 		}
@@ -436,16 +450,16 @@ namespace GX2
 
 	void _GX2SubmitUniformReg(uint32 offsetRegBase, uint32 aluRegisterOffset, uint32be* dataWords, uint32 sizeInU32s)
 	{
-		if(aluRegisterOffset&0x8000)
+		if (aluRegisterOffset & 0x8000)
 		{
 			cemuLog_logDebugOnce(LogType::Force, "_GX2SubmitUniformReg(): Unhandled loop const special case or invalid offset");
 			return;
 		}
-		if((aluRegisterOffset+sizeInU32s) > 0x400)
+		if ((aluRegisterOffset + sizeInU32s) > 0x400)
 		{
 			cemuLog_logOnce(LogType::APIErrors, "GX2SetVertexUniformReg values are out of range (offset {} + size {} must be equal or smaller than 1024)", aluRegisterOffset, sizeInU32s);
 		}
-		if( (sizeInU32s&3) != 0)
+		if ((sizeInU32s & 3) != 0)
 		{
 			cemuLog_logOnce(LogType::APIErrors, "GX2Set*UniformReg must be called with a size that is a multiple of 4 (size: {:})", sizeInU32s);
 			sizeInU32s &= ~3;
@@ -480,4 +494,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2SetVertexUniformReg, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetPixelUniformReg, LogType::GX2);
 	}
-}
+} // namespace GX2

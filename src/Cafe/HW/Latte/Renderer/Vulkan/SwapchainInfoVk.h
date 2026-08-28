@@ -42,9 +42,9 @@ struct SwapchainInfoVk
 	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& modes);
 	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
+	static VkCompositeAlphaFlagBitsKHR ChooseCompositeAlpha(VkCompositeAlphaFlagsKHR supported);
 
 	VkSwapchainCreateInfoKHR CreateSwapchainCreateInfo(VkSurfaceKHR surface, const SwapchainSupportDetails& swapchainSupport, const VkSurfaceFormatKHR& surfaceFormat, uint32 imageCount, const VkExtent2D& extent);
-
 
 	VkExtent2D getExtent() const
 	{
@@ -73,8 +73,7 @@ struct SwapchainInfoVk
 	uint32 swapchainImageIndex = (uint32)-1;
 	uint64 m_presentId = 1;
 	uint64 m_queueDepth = 0; // number of frames with pending presentation requests
-	uint64 m_maxQueued = 0; // the maximum number of frames with presentation requests.
-
+	uint64 m_maxQueued = 0;	 // the maximum number of frames with presentation requests.
 
 	// swapchain image ringbuffer (indexed by swapchainImageIndex)
 	std::vector<VkImage> m_swapchainImages;
@@ -84,7 +83,7 @@ struct SwapchainInfoVk
 
 	VkRenderPass m_swapchainRenderPass = nullptr;
 
-private:
+  private:
 	uint32 m_acquireIndex = 0;
 	std::vector<VkSemaphore> m_acquireSemaphores; // indexed by m_acquireIndex
 	VkFence m_imageAvailableFence{};

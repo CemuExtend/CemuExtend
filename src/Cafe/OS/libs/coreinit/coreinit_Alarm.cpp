@@ -16,11 +16,10 @@ namespace coreinit
 	SysAllocator<uint8, 1024 * 128> _g_alarmThreadStack;
 	SysAllocator<char, 32> _g_alarmThreadName;
 
-
-	class OSHostAlarm 
+	class OSHostAlarm
 	{
-	public:
-		OSHostAlarm(uint64 nextFire, uint64 period, void(*callbackFunc)(uint64 currentTick, void* context), void* context) : m_nextFire(nextFire), m_period(period), m_callbackFunc(callbackFunc), m_context(context)
+	  public:
+		OSHostAlarm(uint64 nextFire, uint64 period, void (*callbackFunc)(uint64 currentTick, void* context), void* context) : m_nextFire(nextFire), m_period(period), m_callbackFunc(callbackFunc), m_context(context)
 		{
 			cemu_assert_debug(__OSHasSchedulerLock()); // must hold lock
 			auto r = g_activeAlarmList.emplace(this);
@@ -103,10 +102,10 @@ namespace coreinit
 				}
 				else
 					break;
-			}	
+			}
 		}
 
-		uint64 getNextFire() const 
+		uint64 getNextFire() const
 		{
 			return m_nextFire;
 		}
@@ -117,16 +116,16 @@ namespace coreinit
 			return currentTick >= g_soonestAlarm;
 		}
 
-        static void Reset()
-        {
-            g_activeAlarmList.clear();
-            g_soonestAlarm = 0;
-        }
+		static void Reset()
+		{
+			g_activeAlarmList.clear();
+			g_soonestAlarm = 0;
+		}
 
-	public:
+	  public:
 		struct ComparatorFireTime
 		{
-			bool operator ()(OSHostAlarm* const & p1, OSHostAlarm* const & p2) const
+			bool operator()(OSHostAlarm* const& p1, OSHostAlarm* const& p2) const
 			{
 				auto p1Fire = p1->getNextFire();
 				auto p2Fire = p2->getNextFire();
@@ -136,10 +135,10 @@ namespace coreinit
 			}
 		};
 
-	private:	
+	  private:
 		uint64 m_nextFire;
-		uint64 m_period; // if zero then repeat is disabled 
-		bool m_isActive{ false };
+		uint64 m_period; // if zero then repeat is disabled
+		bool m_isActive{false};
 
 		void (*m_callbackFunc)(uint64 currentTick, void* context);
 		void* m_context;
@@ -148,11 +147,10 @@ namespace coreinit
 		static std::atomic_uint64_t g_soonestAlarm;
 	};
 
-
 	std::set<class OSHostAlarm*, OSHostAlarm::ComparatorFireTime> OSHostAlarm::g_activeAlarmList;
 	std::atomic_uint64_t OSHostAlarm::g_soonestAlarm{};
 
-	OSHostAlarm* OSHostAlarmCreate(uint64 nextFire, uint64 period, void(*callbackFunc)(uint64 currentTick, void* context), void* context)
+	OSHostAlarm* OSHostAlarmCreate(uint64 nextFire, uint64 period, void (*callbackFunc)(uint64 currentTick, void* context), void* context)
 	{
 		OSHostAlarm* hostAlarm = new OSHostAlarm(nextFire, period, callbackFunc, context);
 		return hostAlarm;
@@ -164,7 +162,7 @@ namespace coreinit
 	}
 
 	void alarm_update()
-	{	
+	{
 		cemu_assert_debug(!__OSHasSchedulerLock());
 		uint64 currentTick = coreinit::OSGetTime();
 		if (!OSHostAlarm::quickCheckForAlarm(currentTick))
@@ -217,7 +215,7 @@ namespace coreinit
 
 	void __OSInitiateAlarm(OSAlarm_t* alarm, uint64 startTime, uint64 period, MPTR handlerFunc, bool isPeriodic)
 	{
-        cemu_assert_debug(MMU_IsInPPCMemorySpace(alarm));
+		cemu_assert_debug(MMU_IsInPPCMemorySpace(alarm));
 		cemu_assert_debug(__OSHasSchedulerLock());
 
 		uint64 nextTime = startTime;
@@ -290,24 +288,24 @@ namespace coreinit
 
 	void OSAlarm_Shutdown()
 	{
-        __OSLockScheduler();
-        if(g_activeAlarms.empty())
-        {
-            __OSUnlockScheduler();
-            return;
-        }
-        for(auto& itr : g_activeAlarms)
-        {
-            OSHostAlarmDestroy(itr.second);
-        }
-        g_activeAlarms.clear();
-        OSHostAlarm::Reset();
-        __OSUnlockScheduler();
+		__OSLockScheduler();
+		if (g_activeAlarms.empty())
+		{
+			__OSUnlockScheduler();
+			return;
+		}
+		for (auto& itr : g_activeAlarms)
+		{
+			OSHostAlarmDestroy(itr.second);
+		}
+		g_activeAlarms.clear();
+		OSHostAlarm::Reset();
+		__OSUnlockScheduler();
 	}
 
 	void _OSAlarmThread(PPCInterpreter_t* hCPU)
 	{
-		while( true )
+		while (true)
 		{
 			OSWaitEvent(g_alarmEvent.GetPtr());
 			uint64 currentTick = OSGetTime();
@@ -317,7 +315,7 @@ namespace coreinit
 				OSAlarm_t* alarm = nullptr;
 				__OSLockScheduler();
 				auto itr = g_activeAlarms.begin();
-				while(itr != g_activeAlarms.end())
+				while (itr != g_activeAlarms.end())
 				{
 					if (currentTick >= _swapEndianU64(itr->first->nextTime))
 					{
@@ -371,4 +369,4 @@ namespace coreinit
 		strcpy(_g_alarmThreadName.GetPtr(), "Alarm Thread");
 		coreinit::OSSetThreadName(g_alarmThread.GetPtr(), _g_alarmThreadName.GetPtr());
 	}
-}
+} // namespace coreinit

@@ -6,41 +6,41 @@
 namespace
 {
 
-constexpr std::size_t kTagSize = 512u;
-constexpr std::size_t kMaxBlockCount = kTagSize / sizeof(TagV0::Block);
+	constexpr std::size_t kTagSize = 512u;
+	constexpr std::size_t kMaxBlockCount = kTagSize / sizeof(TagV0::Block);
 
-constexpr uint8 kLockbyteBlock0 = 0xe;
-constexpr uint8 kLockbytesStart0 = 0x0;
-constexpr uint8 kLockbytesEnd0 = 0x2;
-constexpr uint8 kLockbyteBlock1 = 0xf;
-constexpr uint8 kLockbytesStart1 = 0x2;
-constexpr uint8 kLockbytesEnd1 = 0x8;
+	constexpr uint8 kLockbyteBlock0 = 0xe;
+	constexpr uint8 kLockbytesStart0 = 0x0;
+	constexpr uint8 kLockbytesEnd0 = 0x2;
+	constexpr uint8 kLockbyteBlock1 = 0xf;
+	constexpr uint8 kLockbytesStart1 = 0x2;
+	constexpr uint8 kLockbytesEnd1 = 0x8;
 
-constexpr uint8 kNDEFMagicNumber = 0xe1;
+	constexpr uint8 kNDEFMagicNumber = 0xe1;
 
-// These blocks are not part of the locked area
-constexpr bool IsBlockLockedOrReserved(uint8 blockIdx)
-{
-	// Block 0 is the UID
-	if (blockIdx == 0x0)
+	// These blocks are not part of the locked area
+	constexpr bool IsBlockLockedOrReserved(uint8 blockIdx)
 	{
-		return true;
-	}
+		// Block 0 is the UID
+		if (blockIdx == 0x0)
+		{
+			return true;
+		}
 
-	// Block 0xd is reserved
-	if (blockIdx == 0xd)
-	{
-		return true;
-	}
+		// Block 0xd is reserved
+		if (blockIdx == 0xd)
+		{
+			return true;
+		}
 
-	// Block 0xe and 0xf contains lock / reserved bytes
-	if (blockIdx == 0xe || blockIdx == 0xf)
-	{
-		return true;
-	}
+		// Block 0xe and 0xf contains lock / reserved bytes
+		if (blockIdx == 0xe || blockIdx == 0xf)
+		{
+			return true;
+		}
 
-	return false;
-}
+		return false;
+	}
 
 } // namespace
 
@@ -149,7 +149,7 @@ std::vector<std::byte> TagV0::ToBytes() const
 	}
 
 	// Make sure the dataArea is block size aligned
-	dataArea.resize((dataArea.size() + (sizeof(Block)-1)) & ~(sizeof(Block)-1));
+	dataArea.resize((dataArea.size() + (sizeof(Block) - 1)) & ~(sizeof(Block) - 1));
 
 	// The rest will be the data area
 	auto dataIterator = dataArea.begin();
@@ -221,7 +221,8 @@ bool TagV0::ParseLockedArea(const std::span<const std::byte>& data)
 	}
 
 	// Parse the second set of lock bytes
-	for (uint8 i = kLockbytesStart1; i < kLockbytesEnd1; i++) {
+	for (uint8 i = kLockbytesStart1; i < kLockbytesEnd1; i++)
+	{
 		uint8 lockByte = uint8(data[kLockbyteBlock1 * sizeof(Block) + i]);
 
 		// Iterate over the individual bits in the lock byte

@@ -32,7 +32,7 @@
 // code, so there is no reentrancy hazard through this path.
 class WupsPluginHeap
 {
-public:
+  public:
 	static constexpr std::uint32_t kBackingSize = 32U * 1024U * 1024U; // 32 MiB
 	static constexpr std::uint32_t kBackingAlignment = 0x40;
 	static constexpr std::int32_t kDefaultAlignment = 0x40;
@@ -68,7 +68,7 @@ public:
 	// `alignment` mirrors MEMAllocFromExpHeapEx's own signed alignment ABI
 	// (negative requests a tail allocation).
 	[[nodiscard]] std::uint32_t AllocEx(WupsOwnerToken owner, std::uint32_t size,
-		std::int32_t alignment);
+										std::int32_t alignment);
 	// Frees `address` on behalf of `owner`. If `address` does not fall inside
 	// this heap's backing range the call is rejected and logged instead of
 	// touching the game's own heap - a plugin (or a bug in this redirection)
@@ -82,7 +82,7 @@ public:
 	// EnsureInitialized.
 	void Reset();
 
-private:
+  private:
 	bool CreateBackingLocked(std::string& error);
 
 	mutable std::mutex m_mutex;
@@ -101,6 +101,6 @@ private:
 // Cemu adapter's internals.
 namespace cafe::wups
 {
-void SetActivePluginHeap(std::shared_ptr<WupsPluginHeap> heap);
-std::shared_ptr<WupsPluginHeap> ActivePluginHeap();
+	void SetActivePluginHeap(std::shared_ptr<WupsPluginHeap> heap);
+	std::shared_ptr<WupsPluginHeap> ActivePluginHeap();
 } // namespace cafe::wups

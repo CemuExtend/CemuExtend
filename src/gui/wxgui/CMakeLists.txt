@@ -3,7 +3,6 @@ add_library(CemuWxGui STATIC
   CemuApp.h
   CemuUpdateWindow.cpp
   CemuUpdateWindow.h
-  CemuUpdateWorker.h
 #  CemuExtend GUI models and WUPS/Aroma management UI
   CemodManagementModel.cpp
   CemodManagementModel.h

@@ -18,6 +18,9 @@
 
 build/
 /result/
+dependencies/cef/
+dependencies/.cef-downloads/
+/result-nix
 cmake-build-*/
 out/
 .cache/
@@ -32,6 +35,20 @@ bin/log.txt
 bin/Cemu_*.pdb
 bin/Cemu_*.ilk
 bin/Cemu.exe.backup
+bin/.Cemu_release.bin
+bin/.cemu-runtime/
+bin/cef-swiftshader/
+bin/CEF-LICENSE.txt
+bin/CEF-README.txt
+bin/chrome-sandbox
+bin/chrome_*.pak
+bin/icudtl.dat
+bin/libvulkan.so.1
+bin/locales/
+bin/resources.pak
+bin/snapshot_blob.bin
+bin/v8_context_snapshot.bin
+bin/vk_swiftshader_icd.json
 bin/mlc01/*
 bin/settings.xml
 bin/network_services.xml

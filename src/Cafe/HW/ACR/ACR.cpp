@@ -4,14 +4,14 @@
 namespace HW_ACR
 {
 
-	struct  
+	struct
 	{
 		HWREG::ACR_VI_ADDR viAddr;
 		HWREG::ACR_VI_CTRL viCtrl;
-	}g_acr;
+	} g_acr;
 
-	/* 
-	Is this some kind of VI emulation interface? 
+	/*
+	Is this some kind of VI emulation interface?
 	Pattern seen in Twilight Princess HD:
 	- If Hollywood hardware then read/write old 16bit GC VI register directly
 	- Otherwise these steps are performed:
@@ -56,13 +56,12 @@ namespace HW_ACR
 		g_acr.viCtrl = newValue;
 	}
 
-	RunAtCemuBoot _initACR([]()
-	{
+	RunAtCemuBoot _initACR([]() {
 		MMU::RegisterMMIO_32<HWREG::ACR_VI_DATA, ACR_VIDATA_R32, ACR_VIDATA_W32>(MMU::MMIOInterface::INTERFACE_0D000000, 0x21C);
 		MMU::RegisterMMIO_32<HWREG::ACR_VI_ADDR, ACR_VIADDR_R32, ACR_VIADDR_W32>(MMU::MMIOInterface::INTERFACE_0D000000, 0x224);
 		MMU::RegisterMMIO_32<HWREG::ACR_VI_CTRL, ACR_VICONTROL_R32, ACR_VICONTROL_W32>(MMU::MMIOInterface::INTERFACE_0D000000, 0x228);
 
-		// init 
+		// init
 	});
 
-}
+} // namespace HW_ACR

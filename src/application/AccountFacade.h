@@ -70,7 +70,7 @@ namespace Application
 		[[nodiscard]] explicit operator bool() const
 		{
 			return validAccount && otp == AccountFileState::Ok &&
-				seeprom == AccountFileState::Ok && missingFiles.empty();
+				   seeprom == AccountFileState::Ok && missingFiles.empty();
 		}
 	};
 
@@ -80,6 +80,34 @@ namespace Application
 		bool otpPresent{};
 		bool seepromPresent{};
 		bool consoleCertificateAvailable{};
+	};
+
+	enum class AccountNetworkService : std::uint8_t
+	{
+		Offline,
+		Nintendo,
+		Pretendo,
+		Custom,
+		Plasma,
+	};
+
+	struct AccountNetworkSetting
+	{
+		std::uint32_t persistentId{};
+		AccountNetworkService service{AccountNetworkService::Offline};
+		AccountValidation validation;
+	};
+
+	struct AccountManagerSnapshot
+	{
+		std::vector<AccountInfo> accounts;
+		std::vector<AccountCountry> countries;
+		std::vector<AccountNetworkSetting> networkSettings;
+		OnlineEnvironmentStatus onlineEnvironment;
+		std::uint32_t activePersistentId{};
+		std::uint32_t nextPersistentId{};
+		bool hasFreeSlots{};
+		bool titleRunning{};
 	};
 
 	enum class AccountOperationError : std::uint8_t
@@ -135,7 +163,7 @@ namespace Application
 
 	class IAccountService
 	{
-	public:
+	  public:
 		virtual ~IAccountService() = default;
 		[[nodiscard]] virtual std::vector<AccountInfo> ListAccounts() const = 0;
 		[[nodiscard]] virtual std::optional<AccountInfo> GetAccount(
@@ -144,6 +172,11 @@ namespace Application
 		[[nodiscard]] virtual bool HasFreeAccountSlots() const = 0;
 		[[nodiscard]] virtual std::vector<AccountCountry> ListAccountCountries() const = 0;
 		[[nodiscard]] virtual OnlineEnvironmentStatus GetOnlineEnvironmentStatus() const = 0;
+		[[nodiscard]] virtual AccountManagerSnapshot GetAccountManagerSnapshot() const = 0;
+		[[nodiscard]] virtual AccountOperationResult SetActiveAccount(
+			std::uint32_t persistentId) = 0;
+		[[nodiscard]] virtual AccountOperationResult SetAccountNetworkService(
+			std::uint32_t persistentId, AccountNetworkService service) = 0;
 		[[nodiscard]] virtual DownloadAccountContext GetDownloadAccountContext(
 			std::optional<std::uint32_t> persistentId) const = 0;
 		[[nodiscard]] virtual AccountValidation ValidateOnlineAccount(
@@ -155,4 +188,4 @@ namespace Application
 		[[nodiscard]] virtual AccountOperationResult DeleteAccount(
 			std::uint32_t persistentId) = 0;
 	};
-}
+} // namespace Application

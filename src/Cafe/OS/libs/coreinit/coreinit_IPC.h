@@ -14,4 +14,4 @@ namespace coreinit
 
 	void MapIPCExports();
 	void InitializeIPC();
-};
+}; // namespace coreinit

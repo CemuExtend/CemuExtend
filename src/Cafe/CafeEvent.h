@@ -36,11 +36,11 @@ namespace CafeSystem
 
 	class IEventSink
 	{
-	public:
+	  public:
 		virtual ~IEventSink() = default;
 		// Called on the emitting core thread and sometimes while a Cafe lifecycle
 		// transition is active. Implementations must only enqueue/copy the event;
 		// they must not synchronously re-enter CafeSystem.
 		virtual void OnCafeEvent(const Event& event) = 0;
 	};
-}
+} // namespace CafeSystem

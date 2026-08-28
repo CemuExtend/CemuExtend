@@ -16,7 +16,7 @@
 #include "windows/PPCThreadsViewer/DebugPPCThreadsWindow.h"
 #include "windows/TextureRelationViewer/TextureRelationWindow.h"
 
-//wxgui + misc.
+// wxgui + misc.
 #include "wxgui.h"
 #include "wxCemuConfig.h"
 #include "wxgui/WxFrontendContext.h"
@@ -46,13 +46,13 @@
 #if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
 #include <gamemode_client.h>
 #endif
-#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
+#if (BOOST_OS_LINUX || BOOST_OS_BSD) && HAS_WAYLAND
 #include "helpers/wxWayland.h"
 #endif
 
 #include "canvas/RendererWindowAdapter.h"
 
-//Cafe libs
+// Cafe libs
 
 #include <wx/app.h>
 #include <wx/thread.h>
@@ -66,8 +66,8 @@
 enum
 {
 	// ui elements
-	MAINFRAME_GAMELIST_ID = 20000, //wxID_HIGHEST + 1,
-	// file
+	MAINFRAME_GAMELIST_ID = 20000, // wxID_HIGHEST + 1,
+								   //  file
 	MAINFRAME_MENU_ID_FILE_LOAD = 20100,
 	MAINFRAME_MENU_ID_FILE_INSTALL_UPDATE,
 	MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER,
@@ -161,107 +161,107 @@ wxDEFINE_EVENT(wxEVT_LAUNCH_GAME, wxLaunchGameEvent);
 wxDEFINE_EVENT(wxEVT_REQUEST_GAME_EXIT, wxCommandEvent);
 
 wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
-EVT_TIMER(MAINFRAME_ID_TIMER1, MainWindow::OnTimer)
-EVT_CLOSE(MainWindow::OnClose)
-EVT_SIZE(MainWindow::OnSizeEvent)
-EVT_DPI_CHANGED(MainWindow::OnDPIChangedEvent)
-EVT_MOVE(MainWindow::OnMove)
-// file menu
-EVT_MENU(MAINFRAME_MENU_ID_FILE_LOAD, MainWindow::OnFileMenu)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_INSTALL_UPDATE, MainWindow::OnInstallUpdate)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER, MainWindow::OnOpenFolder)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_MLC_FOLDER, MainWindow::OnOpenFolder)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_SHADERCACHE_FOLDER, MainWindow::OnOpenFolder)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_CLEAR_SPOTPASS_CACHE, MainWindow::OnClearSpotPassCache)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_EXIT, MainWindow::OnFileExit)
-EVT_MENU(MAINFRAME_MENU_ID_FILE_END_EMULATION, MainWindow::OnFileMenu)
-EVT_MENU_RANGE(MAINFRAME_MENU_ID_FILE_RECENT_0 + 0, MAINFRAME_MENU_ID_FILE_RECENT_LAST, MainWindow::OnFileMenu)
-// options -> region menu
-EVT_MENU_RANGE(MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1, MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_12, MainWindow::OnAccountSelect)
-EVT_MENU_RANGE(MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_JAPANESE, MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_TAIWANESE, MainWindow::OnConsoleLanguage)
-// options menu
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_FULLSCREEN, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_SECOND_WINDOW_PADVIEW, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GRAPHIC, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GRAPHIC_PACKS2, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GENERAL, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GENERAL2, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_AUDIO, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_INPUT, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_HOTKEY, MainWindow::OnOptionsInput)
-EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS, MainWindow::OnOptionsInput)
-// tools menu
-EVT_MENU(MAINFRAME_MENU_ID_TOOLS_MEMORY_SEARCHER, MainWindow::OnToolsInput)
-EVT_MENU(MAINFRAME_MENU_ID_TOOLS_TITLE_MANAGER, MainWindow::OnToolsInput)
-EVT_MENU(MAINFRAME_MENU_ID_TOOLS_DOWNLOAD_MANAGER, MainWindow::OnToolsInput)
-EVT_MENU(MAINFRAME_MENU_ID_TOOLS_EMULATED_USB_DEVICES, MainWindow::OnToolsInput)
-// cpu menu
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_8X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_4X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_2X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_1X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_05X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_025X, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_0125X, MainWindow::OnDebugSetting)
-// nfc menu
-EVT_MENU(MAINFRAME_MENU_ID_NFC_TOUCH_NFC_FILE, MainWindow::OnNFCMenu)
-EVT_MENU_RANGE(MAINFRAME_MENU_ID_NFC_RECENT_0 + 0, MAINFRAME_MENU_ID_NFC_RECENT_LAST, MainWindow::OnNFCMenu)
-// debug -> logging menu
-EVT_MENU_RANGE(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + 0, MAINFRAME_MENU_ID_DEBUG_LOGGING0 + 98, MainWindow::OnDebugLoggingToggleFlagGeneric)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_ADVANCED_PPC_INFO, MainWindow::OnPPCInfoToggle)
-// debug -> dump menu
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_TEXTURES, MainWindow::OnDebugDumpGeneric)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_SHADERS, MainWindow::OnDebugDumpGeneric)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_RECOMPILER_FUNCTIONS, MainWindow::OnDebugDumpGeneric)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_CURL_REQUESTS, MainWindow::OnDebugSetting)
-// debug -> Other options
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_RENDER_UPSIDE_DOWN, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_AUDIO_AUX_ONLY, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VK_ACCURATE_BARRIERS, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_GPU_CAPTURE, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_RAM, MainWindow::OnDebugSetting)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_FST, MainWindow::OnDebugSetting)
-// debug -> View ...
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_LOGGING_WINDOW, MainWindow::OnLoggingWindow)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_TOGGLE_GDB_STUB, MainWindow::OnGDBStubToggle)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_PPC_THREADS, MainWindow::OnDebugViewPPCThreads)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_PPC_DEBUGGER, MainWindow::OnDebugViewPPCDebugger)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_AUDIO_DEBUGGER, MainWindow::OnDebugViewAudioDebugger)
-EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_TEXTURE_RELATIONS, MainWindow::OnDebugViewTextureRelations)
-// help menu
-EVT_MENU(MAINFRAME_MENU_ID_HELP_ABOUT, MainWindow::OnHelpAbout)
-EVT_MENU(MAINFRAME_MENU_ID_HELP_UPDATE, MainWindow::OnHelpUpdate)
-// misc
-EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_GAMELIST_REFRESH, MainWindow::OnRequestGameListRefresh)
+	EVT_TIMER(MAINFRAME_ID_TIMER1, MainWindow::OnTimer)
+		EVT_CLOSE(MainWindow::OnClose)
+			EVT_SIZE(MainWindow::OnSizeEvent)
+				EVT_DPI_CHANGED(MainWindow::OnDPIChangedEvent)
+					EVT_MOVE(MainWindow::OnMove)
+	// file menu
+	EVT_MENU(MAINFRAME_MENU_ID_FILE_LOAD, MainWindow::OnFileMenu)
+		EVT_MENU(MAINFRAME_MENU_ID_FILE_INSTALL_UPDATE, MainWindow::OnInstallUpdate)
+			EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER, MainWindow::OnOpenFolder)
+				EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_MLC_FOLDER, MainWindow::OnOpenFolder)
+					EVT_MENU(MAINFRAME_MENU_ID_FILE_OPEN_SHADERCACHE_FOLDER, MainWindow::OnOpenFolder)
+						EVT_MENU(MAINFRAME_MENU_ID_FILE_CLEAR_SPOTPASS_CACHE, MainWindow::OnClearSpotPassCache)
+							EVT_MENU(MAINFRAME_MENU_ID_FILE_EXIT, MainWindow::OnFileExit)
+								EVT_MENU(MAINFRAME_MENU_ID_FILE_END_EMULATION, MainWindow::OnFileMenu)
+									EVT_MENU_RANGE(MAINFRAME_MENU_ID_FILE_RECENT_0 + 0, MAINFRAME_MENU_ID_FILE_RECENT_LAST, MainWindow::OnFileMenu)
+	// options -> region menu
+	EVT_MENU_RANGE(MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1, MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_12, MainWindow::OnAccountSelect)
+		EVT_MENU_RANGE(MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_JAPANESE, MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_TAIWANESE, MainWindow::OnConsoleLanguage)
+	// options menu
+	EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_FULLSCREEN, MainWindow::OnOptionsInput)
+		EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_SECOND_WINDOW_PADVIEW, MainWindow::OnOptionsInput)
+			EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GRAPHIC, MainWindow::OnOptionsInput)
+				EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GRAPHIC_PACKS2, MainWindow::OnOptionsInput)
+					EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GENERAL, MainWindow::OnOptionsInput)
+						EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_GENERAL2, MainWindow::OnOptionsInput)
+							EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_AUDIO, MainWindow::OnOptionsInput)
+								EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_INPUT, MainWindow::OnOptionsInput)
+									EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_HOTKEY, MainWindow::OnOptionsInput)
+										EVT_MENU(MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS, MainWindow::OnOptionsInput)
+	// tools menu
+	EVT_MENU(MAINFRAME_MENU_ID_TOOLS_MEMORY_SEARCHER, MainWindow::OnToolsInput)
+		EVT_MENU(MAINFRAME_MENU_ID_TOOLS_TITLE_MANAGER, MainWindow::OnToolsInput)
+			EVT_MENU(MAINFRAME_MENU_ID_TOOLS_DOWNLOAD_MANAGER, MainWindow::OnToolsInput)
+				EVT_MENU(MAINFRAME_MENU_ID_TOOLS_EMULATED_USB_DEVICES, MainWindow::OnToolsInput)
+	// cpu menu
+	EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_8X, MainWindow::OnDebugSetting)
+		EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_4X, MainWindow::OnDebugSetting)
+			EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_2X, MainWindow::OnDebugSetting)
+				EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_1X, MainWindow::OnDebugSetting)
+					EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_05X, MainWindow::OnDebugSetting)
+						EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_025X, MainWindow::OnDebugSetting)
+							EVT_MENU(MAINFRAME_MENU_ID_TIMER_SPEED_0125X, MainWindow::OnDebugSetting)
+	// nfc menu
+	EVT_MENU(MAINFRAME_MENU_ID_NFC_TOUCH_NFC_FILE, MainWindow::OnNFCMenu)
+		EVT_MENU_RANGE(MAINFRAME_MENU_ID_NFC_RECENT_0 + 0, MAINFRAME_MENU_ID_NFC_RECENT_LAST, MainWindow::OnNFCMenu)
+	// debug -> logging menu
+	EVT_MENU_RANGE(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + 0, MAINFRAME_MENU_ID_DEBUG_LOGGING0 + 98, MainWindow::OnDebugLoggingToggleFlagGeneric)
+		EVT_MENU(MAINFRAME_MENU_ID_DEBUG_ADVANCED_PPC_INFO, MainWindow::OnPPCInfoToggle)
+	// debug -> dump menu
+	EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_TEXTURES, MainWindow::OnDebugDumpGeneric)
+		EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_SHADERS, MainWindow::OnDebugDumpGeneric)
+			EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_RECOMPILER_FUNCTIONS, MainWindow::OnDebugDumpGeneric)
+				EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_CURL_REQUESTS, MainWindow::OnDebugSetting)
+	// debug -> Other options
+	EVT_MENU(MAINFRAME_MENU_ID_DEBUG_RENDER_UPSIDE_DOWN, MainWindow::OnDebugSetting)
+		EVT_MENU(MAINFRAME_MENU_ID_DEBUG_AUDIO_AUX_ONLY, MainWindow::OnDebugSetting)
+			EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VK_ACCURATE_BARRIERS, MainWindow::OnDebugSetting)
+				EVT_MENU(MAINFRAME_MENU_ID_DEBUG_GPU_CAPTURE, MainWindow::OnDebugSetting)
+					EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_RAM, MainWindow::OnDebugSetting)
+						EVT_MENU(MAINFRAME_MENU_ID_DEBUG_DUMP_FST, MainWindow::OnDebugSetting)
+	// debug -> View ...
+	EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_LOGGING_WINDOW, MainWindow::OnLoggingWindow)
+		EVT_MENU(MAINFRAME_MENU_ID_DEBUG_TOGGLE_GDB_STUB, MainWindow::OnGDBStubToggle)
+			EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_PPC_THREADS, MainWindow::OnDebugViewPPCThreads)
+				EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_PPC_DEBUGGER, MainWindow::OnDebugViewPPCDebugger)
+					EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_AUDIO_DEBUGGER, MainWindow::OnDebugViewAudioDebugger)
+						EVT_MENU(MAINFRAME_MENU_ID_DEBUG_VIEW_TEXTURE_RELATIONS, MainWindow::OnDebugViewTextureRelations)
+	// help menu
+	EVT_MENU(MAINFRAME_MENU_ID_HELP_ABOUT, MainWindow::OnHelpAbout)
+		EVT_MENU(MAINFRAME_MENU_ID_HELP_UPDATE, MainWindow::OnHelpUpdate)
+	// misc
+	EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_GAMELIST_REFRESH, MainWindow::OnRequestGameListRefresh)
 
-EVT_COMMAND(wxID_ANY, wxEVT_GAMELIST_BEGIN_UPDATE, MainWindow::OnGameListBeginUpdate)
-EVT_COMMAND(wxID_ANY, wxEVT_GAMELIST_END_UPDATE, MainWindow::OnGameListEndUpdate)
-EVT_COMMAND(wxID_ANY, wxEVT_ACCOUNTLIST_REFRESH, MainWindow::OnAccountListRefresh)
-EVT_COMMAND(wxID_ANY, wxEVT_SET_WINDOW_TITLE, MainWindow::OnSetWindowTitle)
+		EVT_COMMAND(wxID_ANY, wxEVT_GAMELIST_BEGIN_UPDATE, MainWindow::OnGameListBeginUpdate)
+			EVT_COMMAND(wxID_ANY, wxEVT_GAMELIST_END_UPDATE, MainWindow::OnGameListEndUpdate)
+				EVT_COMMAND(wxID_ANY, wxEVT_ACCOUNTLIST_REFRESH, MainWindow::OnAccountListRefresh)
+					EVT_COMMAND(wxID_ANY, wxEVT_SET_WINDOW_TITLE, MainWindow::OnSetWindowTitle)
 
-EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_GAME_EXIT, MainWindow::OnRequestGameExit)
+						EVT_COMMAND(wxID_ANY, wxEVT_REQUEST_GAME_EXIT, MainWindow::OnRequestGameExit)
 
-wxEND_EVENT_TABLE()
+							wxEND_EVENT_TABLE()
 
-class wxGameDropTarget : public wxFileDropTarget
+								class wxGameDropTarget : public wxFileDropTarget
 {
-public:
+  public:
 	wxGameDropTarget(MainWindow* window) : m_window(window) {}
 	bool OnDropFiles(wxCoord x, wxCoord y, const wxArrayString& filenames) override
 	{
-		if(!m_window->IsGameLaunched() && filenames.GetCount() == 1)
+		if (!m_window->IsGameLaunched() && filenames.GetCount() == 1)
 			return m_window->FileLoad(_utf8ToPath(filenames[0].utf8_string()), wxLaunchGameEvent::INITIATED_BY::DRAG_AND_DROP);
 
 		return false;
 	}
 
-private:
+  private:
 	MainWindow* m_window;
 };
 
 class wxAmiiboDropTarget : public wxFileDropTarget
 {
-public:
+  public:
 	wxAmiiboDropTarget(MainWindow* window) : m_window(window) {}
 	bool OnDropFiles(wxCoord x, wxCoord y, const wxArrayString& filenames) override
 	{
@@ -270,7 +270,7 @@ public:
 		return m_window->TouchNfcFile(filenames[0].utf8_string(), true);
 	}
 
-private:
+  private:
 	MainWindow* m_window;
 };
 
@@ -280,10 +280,10 @@ namespace
 	{
 		using Frontend::CemuExtendMouseButton;
 		return (event.LeftIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Left) : 0U) |
-			(event.RightIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Right) : 0U) |
-			(event.MiddleIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Middle) : 0U) |
-			(event.Aux1IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X1) : 0U) |
-			(event.Aux2IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X2) : 0U);
+			   (event.RightIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Right) : 0U) |
+			   (event.MiddleIsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::Middle) : 0U) |
+			   (event.Aux1IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X1) : 0U) |
+			   (event.Aux2IsDown() ? static_cast<std::uint32_t>(CemuExtendMouseButton::X2) : 0U);
 	}
 
 	wxStockCursor CemuExtendCursor(std::uint8_t cursor)
@@ -291,21 +291,30 @@ namespace
 		using Frontend::CemuExtendPointerCursor;
 		switch (static_cast<CemuExtendPointerCursor>(cursor))
 		{
-		case CemuExtendPointerCursor::TextInput: return wxCURSOR_IBEAM;
-		case CemuExtendPointerCursor::ResizeAll: return wxCURSOR_SIZING;
-		case CemuExtendPointerCursor::ResizeNS: return wxCURSOR_SIZENS;
-		case CemuExtendPointerCursor::ResizeEW: return wxCURSOR_SIZEWE;
-		case CemuExtendPointerCursor::ResizeNESW: return wxCURSOR_SIZENESW;
-		case CemuExtendPointerCursor::ResizeNWSE: return wxCURSOR_SIZENWSE;
-		case CemuExtendPointerCursor::Hand: return wxCURSOR_HAND;
-		case CemuExtendPointerCursor::NotAllowed: return wxCURSOR_NO_ENTRY;
-		default: return wxCURSOR_ARROW;
+		case CemuExtendPointerCursor::TextInput:
+			return wxCURSOR_IBEAM;
+		case CemuExtendPointerCursor::ResizeAll:
+			return wxCURSOR_SIZING;
+		case CemuExtendPointerCursor::ResizeNS:
+			return wxCURSOR_SIZENS;
+		case CemuExtendPointerCursor::ResizeEW:
+			return wxCURSOR_SIZEWE;
+		case CemuExtendPointerCursor::ResizeNESW:
+			return wxCURSOR_SIZENESW;
+		case CemuExtendPointerCursor::ResizeNWSE:
+			return wxCURSOR_SIZENWSE;
+		case CemuExtendPointerCursor::Hand:
+			return wxCURSOR_HAND;
+		case CemuExtendPointerCursor::NotAllowed:
+			return wxCURSOR_NO_ENTRY;
+		default:
+			return wxCURSOR_ARROW;
 		}
 	}
-}
+} // namespace
 
 MainWindow::MainWindow(Application::EmulationController& emulationController,
-	std::shared_ptr<WxFrontendContext> frontendContext)
+					   std::shared_ptr<WxFrontendContext> frontendContext)
 	: wxFrame(nullptr, wxID_ANY, GetInitialWindowTitle(), wxDefaultPosition, wxSize(1280, 720), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER),
 	  m_emulationController(emulationController),
 	  m_frontendContext(std::move(frontendContext)),
@@ -323,9 +332,9 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 	  m_applicationEventLifetime(std::make_shared<std::atomic_bool>(true))
 {
 	cemu_assert(m_frontendContext && m_windowMetrics && m_pathProvider && m_nativeSurfaces && m_nativeSurfacePublisher &&
-		m_keyboardState && m_inputHostEvents && m_windowState && m_mainWindowRegistry &&
-		m_uiDispatcher &&
-		m_showErrorDialog && m_updateWindowTitles);
+				m_keyboardState && m_inputHostEvents && m_windowState && m_mainWindowRegistry &&
+				m_uiDispatcher &&
+				m_showErrorDialog && m_updateWindowTitles);
 #ifdef __WXMAC__
 	// Not necessary to set wxApp::s_macExitMenuItemId as automatically handled
 	wxApp::s_macAboutMenuItemId = MAINFRAME_MENU_ID_HELP_ABOUT;
@@ -360,9 +369,9 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 #endif
 
 	auto* main_sizer = new wxBoxSizer(wxVERTICAL);
-    auto load_file = LaunchSettings::GetLoadFile();
-    auto load_title_id = LaunchSettings::GetLoadTitleID();
-    bool quick_launch = false;
+	auto load_file = LaunchSettings::GetLoadFile();
+	auto load_title_id = LaunchSettings::GetLoadTitleID();
+	bool quick_launch = false;
 
 	if (load_file)
 	{
@@ -380,7 +389,6 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 		{
 			wxString errorMsg = fmt::format("Title ID {:016x} not found", load_title_id.value());
 			wxMessageBox(errorMsg, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
-
 		}
 	}
 	SetSizer(main_sizer);
@@ -403,10 +411,10 @@ MainWindow::MainWindow(Application::EmulationController& emulationController,
 
 	LoadSettings();
 
-	#ifdef ENABLE_DISCORD_RPC
+#ifdef ENABLE_DISCORD_RPC
 	if (GetWxGUIConfig().use_discord_presence)
-			m_discord = std::make_unique<DiscordPresence>();
-	#endif
+		m_discord = std::make_unique<DiscordPresence>();
+#endif
 
 	Bind(wxEVT_OPEN_GRAPHIC_PACK, &MainWindow::OnGraphicWindowOpen, this);
 	Bind(wxEVT_LAUNCH_GAME, &MainWindow::OnLaunchFromFile, this);
@@ -439,7 +447,6 @@ MainWindow::~MainWindow()
 	}
 
 	m_timer->Stop();
-
 }
 
 void MainWindow::HandleApplicationEvent(const Application::Event& event)
@@ -462,7 +469,7 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 		break;
 	case EventType::PerformanceUpdated:
 		m_updateWindowTitles(false, false, event.framesPerSecond,
-			m_emulationController.CurrentWindowTitlePresentation());
+							 m_emulationController.CurrentWindowTitlePresentation());
 		break;
 	case EventType::Diagnostic:
 	{
@@ -486,42 +493,37 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 
 void MainWindow::CreateGameListAndStatusBar()
 {
-    if(m_main_panel)
-        return; // already displayed
-    m_main_panel = new wxPanel(this);
-    auto* sizer = new wxBoxSizer(wxVERTICAL);
-    // game list
-    m_game_list = new wxGameList(m_main_panel, m_emulationController,
-		m_uiDispatcher,
-		m_pathProvider,
-		[this](fs::path path) {
-			QueueEvent(new wxLaunchGameEvent(
-				std::move(path), wxLaunchGameEvent::INITIATED_BY::GAME_LIST));
-		}, MAINFRAME_GAMELIST_ID);
-    m_game_list->Bind(wxEVT_OPEN_SETTINGS, [this](auto&) {OpenSettings(); });
-    m_game_list->SetDropTarget(new wxGameDropTarget(this));
-    sizer->Add(m_game_list, 1, wxEXPAND);
+	if (m_main_panel)
+		return; // already displayed
+	m_main_panel = new wxPanel(this);
+	auto* sizer = new wxBoxSizer(wxVERTICAL);
+	// game list
+	m_game_list = new wxGameList(m_main_panel, m_emulationController, m_uiDispatcher, m_pathProvider, [this](fs::path path) { QueueEvent(new wxLaunchGameEvent(
+																																  std::move(path), wxLaunchGameEvent::INITIATED_BY::GAME_LIST)); }, MAINFRAME_GAMELIST_ID);
+	m_game_list->Bind(wxEVT_OPEN_SETTINGS, [this](auto&) { OpenSettings(); });
+	m_game_list->SetDropTarget(new wxGameDropTarget(this));
+	sizer->Add(m_game_list, 1, wxEXPAND);
 
-    // info, warning bar
-    m_info_bar = new wxInfoBar(m_main_panel);
-    m_info_bar->SetShowHideEffects(wxSHOW_EFFECT_BLEND, wxSHOW_EFFECT_BLEND);
-    m_info_bar->SetEffectDuration(500);
-    sizer->Add(m_info_bar, 0, wxALL | wxEXPAND, 5);
+	// info, warning bar
+	m_info_bar = new wxInfoBar(m_main_panel);
+	m_info_bar->SetShowHideEffects(wxSHOW_EFFECT_BLEND, wxSHOW_EFFECT_BLEND);
+	m_info_bar->SetEffectDuration(500);
+	sizer->Add(m_info_bar, 0, wxALL | wxEXPAND, 5);
 
-    m_main_panel->SetSizer(sizer);
+	m_main_panel->SetSizer(sizer);
 
-    auto* main_sizer = this->GetSizer();
-    main_sizer->Add(m_main_panel, 1, wxEXPAND, 0, nullptr);
+	auto* main_sizer = this->GetSizer();
+	main_sizer->Add(m_main_panel, 1, wxEXPAND, 0, nullptr);
 }
 
 void MainWindow::DestroyGameListAndStatusBar()
 {
-    if(!m_main_panel)
-        return;
-    m_main_panel->Destroy();
-    m_main_panel = nullptr;
-    m_game_list = nullptr;
-    m_info_bar = nullptr;
+	if (!m_main_panel)
+		return;
+	m_main_panel->Destroy();
+	m_main_panel = nullptr;
+	m_game_list = nullptr;
+	m_info_bar = nullptr;
 }
 
 wxString MainWindow::GetInitialWindowTitle()
@@ -545,7 +547,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 	if (!shutdownResult.stopped)
 	{
 		cemuLog_log(LogType::Force, "Failed to shut down emulation while closing: {}",
-			shutdownResult.diagnostic);
+					shutdownResult.diagnostic);
 		m_uiDispatcher->ResumeAfterFailedShutdown();
 		event.Veto();
 		return;
@@ -556,7 +558,7 @@ void MainWindow::OnClose(wxCloseEvent& event)
 		m_debugger_window = nullptr;
 	}
 
-	if(m_game_list)
+	if (m_game_list)
 		m_game_list->OnClose(event);
 
 	m_timer->Stop();
@@ -585,12 +587,10 @@ bool MainWindow::InstallUpdate(const fs::path& metaFilePath)
 				throw std::runtime_error(frame.GetExceptionMessage());
 			}
 		}
-	}
-	catch(const AbortException&)
+	} catch (const AbortException&)
 	{
 		// ignored
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		wxMessageBox(ex.what(), _("Update error"));
 	}
@@ -600,34 +600,34 @@ bool MainWindow::InstallUpdate(const fs::path& metaFilePath)
 bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATED_BY initiatedBy)
 {
 	auto beforeStart = [this](const Application::LaunchResult& prepared) {
-			wxWindowUpdateLocker lock(this);
-			DestroyGameListAndStatusBar();
-			m_game_launched = true;
-			m_loadMenuItem->Enable(false);
-			m_installUpdateMenuItem->Enable(false);
-			m_memorySearcherMenuItem->Enable(true);
-			m_launched_game_name = prepared.titleName;
-	#ifdef ENABLE_DISCORD_RPC
-			if (m_discord)
-				m_discord->UpdatePresence(DiscordPresence::Playing, m_launched_game_name);
-	#endif
-			if (GetConfig().disable_screensaver)
-				ScreenSaver::SetInhibit(true);
-			if (FullscreenEnabled())
-				SetFullScreen(true);
-
-			// GameMode support
-#if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
-			if(GetWxGUIConfig().feral_gamemode)
-			{
-				if(gamemode_request_start() < 0)
-					cemuLog_log(LogType::Force, "Could not start GameMode");
-				else
-					cemuLog_log(LogType::Force, "GameMode has been started.");
-			}
+		wxWindowUpdateLocker lock(this);
+		DestroyGameListAndStatusBar();
+		m_game_launched = true;
+		m_loadMenuItem->Enable(false);
+		m_installUpdateMenuItem->Enable(false);
+		m_memorySearcherMenuItem->Enable(true);
+		m_launched_game_name = prepared.titleName;
+#ifdef ENABLE_DISCORD_RPC
+		if (m_discord)
+			m_discord->UpdatePresence(DiscordPresence::Playing, m_launched_game_name);
 #endif
-			CreateCanvas();
-		};
+		if (GetConfig().disable_screensaver)
+			ScreenSaver::SetInhibit(true);
+		if (FullscreenEnabled())
+			SetFullScreen(true);
+
+		// GameMode support
+#if BOOST_OS_LINUX && defined(ENABLE_FERAL_GAMEMODE)
+		if (GetWxGUIConfig().feral_gamemode)
+		{
+			if (gamemode_request_start() < 0)
+				cemuLog_log(LogType::Force, "Could not start GameMode");
+			else
+				cemuLog_log(LogType::Force, "GameMode has been started.");
+		}
+#endif
+		CreateCanvas();
+	};
 	Application::LaunchResult launchResult;
 	for (;;)
 	{
@@ -636,7 +636,7 @@ bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATE
 		if (launchResult.error != Application::LaunchError::PermissionRequired)
 			break;
 		if (!ConfirmCemodPermissions(launchResult.titleId,
-			std::move(launchResult.titleName), std::move(launchResult.permissionRequests)))
+									 std::move(launchResult.titleName), std::move(launchResult.permissionRequests)))
 			return false;
 	}
 
@@ -653,9 +653,9 @@ bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATE
 		else if (launchResult.error == LaunchError::CemodRuntimeBusy)
 			message = _("The CemuExtend mod runtime is still shutting down the previous title. Please try again.");
 		else if (initiatedBy == wxLaunchGameEvent::INITIATED_BY::GAME_LIST &&
-			(launchResult.error == LaunchError::InvalidTitle ||
-			 launchResult.error == LaunchError::MissingDiscKey ||
-			 launchResult.error == LaunchError::MissingTitleTicket))
+				 (launchResult.error == LaunchError::InvalidTitle ||
+				  launchResult.error == LaunchError::MissingDiscKey ||
+				  launchResult.error == LaunchError::MissingTitleTicket))
 			message = _("Unable to launch title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nPath which failed to load:\n");
 		else
 		{
@@ -688,10 +688,10 @@ void MainWindow::RollbackFailedLaunchUi()
 		ShowFullScreen(false);
 		SetMenuVisible(true);
 	}
-	#ifdef ENABLE_DISCORD_RPC
+#ifdef ENABLE_DISCORD_RPC
 	if (m_discord)
 		m_discord->UpdatePresence(DiscordPresence::Idling, "");
-	#endif
+#endif
 	if (GetConfig().disable_screensaver)
 		ScreenSaver::SetInhibit(false);
 	RecreateMenu();
@@ -726,8 +726,7 @@ void MainWindow::OnFileMenu(wxCommandEvent& event)
 			_("Wii U archive (*.wua)"),
 			_("Wii U homebrew bundle (*.wuhb)"),
 			_("Wii U executable (*.rpx, *.elf)"),
-			_("All files (*.*)")
-		);
+			_("All files (*.*)"));
 
 		wxFileDialog openFileDialog(this, _("Open file to launch"), wxEmptyString, wxEmptyString, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
@@ -757,9 +756,9 @@ void MainWindow::OnFileMenu(wxCommandEvent& event)
 void MainWindow::OnOpenFolder(wxCommandEvent& event)
 {
 	const auto id = event.GetId();
-	if(id == MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER)
+	if (id == MAINFRAME_MENU_ID_FILE_OPEN_CEMU_FOLDER)
 		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetUserDataPath("")));
-	else if(id == MAINFRAME_MENU_ID_FILE_OPEN_MLC_FOLDER)
+	else if (id == MAINFRAME_MENU_ID_FILE_OPEN_MLC_FOLDER)
 		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetMlcPath()));
 	else if (id == MAINFRAME_MENU_ID_FILE_OPEN_SHADERCACHE_FOLDER)
 		wxLaunchDefaultApplication(wxHelper::FromPath(m_pathProvider->GetCachePath("shaderCache")));
@@ -784,11 +783,11 @@ void MainWindow::OnInstallUpdate(wxCommandEvent& event)
 			break;
 		if (modalChoice == wxID_OK)
 		{
-			#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
+#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
 			fs::path dirPath((const char*)(openDirDialog.GetPath().fn_str()));
-			#else
+#else
 			fs::path dirPath(openDirDialog.GetPath().fn_str());
-			#endif
+#endif
 
 			if ((dirPath.filename() == "code" || dirPath.filename() == "content" || dirPath.filename() == "meta") && dirPath.has_parent_path())
 			{
@@ -820,7 +819,7 @@ void MainWindow::OnNFCMenu(wxCommandEvent& event)
 	{
 		wxFileDialog
 			openFileDialog(this, _("Open file to load"), "", "",
-				"All NFC files (bin, dat, nfc)|*.bin;*.dat;*.nfc|All files (*.*)|*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); // TRANSLATE
+						   "All NFC files (bin, dat, nfc)|*.bin;*.dat;*.nfc|All files (*.*)|*", wxFD_OPEN | wxFD_FILE_MUST_EXIST); // TRANSLATE
 		if (openFileDialog.ShowModal() == wxID_CANCEL || openFileDialog.GetPath().IsEmpty())
 			return;
 		TouchNfcFile(openFileDialog.GetPath().utf8_string(), false);
@@ -883,7 +882,7 @@ void MainWindow::TogglePadView()
 
 		m_padView->Show(true);
 
-#if ( BOOST_OS_LINUX || BOOST_OS_BSD ) && HAS_WAYLAND
+#if (BOOST_OS_LINUX || BOOST_OS_BSD) && HAS_WAYLAND
 		if (wxWlIsWaylandWindow(m_padView))
 			wxWlSetAppId(m_padView, "info.cemu.Cemu");
 #endif
@@ -915,16 +914,17 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 		}
 	}
 	else if (nMsg == WM_INPUT && m_cemuextend_bridge.RawMouseRequested() &&
-		m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
-			Frontend::CemuExtendPointerMode::CapturedRelative))
+			 m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
+													  Frontend::CemuExtendPointerMode::CapturedRelative))
 	{
 		UINT size{};
 		if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, nullptr,
-			&size, sizeof(RAWINPUTHEADER)) == 0 && size >= sizeof(RAWINPUTHEADER))
+							&size, sizeof(RAWINPUTHEADER)) == 0 &&
+			size >= sizeof(RAWINPUTHEADER))
 		{
 			std::vector<std::byte> storage(size);
 			if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT,
-				storage.data(), &size, sizeof(RAWINPUTHEADER)) == size)
+								storage.data(), &size, sizeof(RAWINPUTHEADER)) == size)
 			{
 				const auto& raw = *reinterpret_cast<const RAWINPUT*>(storage.data());
 				if (raw.header.dwType == RIM_TYPEMOUSE)
@@ -932,8 +932,7 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 					using Frontend::CemuExtendMouseButton;
 					std::uint32_t changed{};
 					const auto updateButton = [this, &changed](USHORT flags,
-						USHORT downFlag, USHORT upFlag, CemuExtendMouseButton button)
-					{
+															   USHORT downFlag, USHORT upFlag, CemuExtendMouseButton button) {
 						const auto mask = static_cast<std::uint32_t>(button);
 						if ((flags & downFlag) != 0 &&
 							(m_cemuextend_bridge.MouseButtons() & mask) == 0)
@@ -952,21 +951,21 @@ WXLRESULT MainWindow::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPara
 					};
 					const auto flags = raw.data.mouse.usButtonFlags;
 					updateButton(flags, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP,
-						CemuExtendMouseButton::Left);
+								 CemuExtendMouseButton::Left);
 					updateButton(flags, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
-						CemuExtendMouseButton::Right);
+								 CemuExtendMouseButton::Right);
 					updateButton(flags, RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP,
-						CemuExtendMouseButton::Middle);
+								 CemuExtendMouseButton::Middle);
 					updateButton(flags, RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP,
-						CemuExtendMouseButton::X1);
+								 CemuExtendMouseButton::X1);
 					updateButton(flags, RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP,
-						CemuExtendMouseButton::X2);
+								 CemuExtendMouseButton::X2);
 
 					if ((raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
 					{
 						m_cemuextend_bridge.MarkRawMouseSeen();
 						EmitCemuExtendRawMouseEvent(raw.data.mouse.lLastX,
-							raw.data.mouse.lLastY, changed);
+													raw.data.mouse.lLastY, changed);
 					}
 				}
 			}
@@ -983,7 +982,7 @@ void MainWindow::OpenSettings()
 	const auto language = config.language;
 
 	GeneralSettings2 frame(this, m_game_launched, m_emulationController,
-		m_nativeSurfaces, m_pathProvider);
+						   m_nativeSurfaces, m_pathProvider);
 	frame.ShowModal();
 	const bool paths_modified = frame.ShouldReloadGamelist();
 	const bool mlc_modified = frame.MLCModified();
@@ -993,7 +992,7 @@ void MainWindow::OpenSettings()
 	else
 		SaveSettings();
 
-	#ifdef ENABLE_DISCORD_RPC
+#ifdef ENABLE_DISCORD_RPC
 	if (config.use_discord_presence)
 	{
 		if (!m_discord)
@@ -1005,9 +1004,9 @@ void MainWindow::OpenSettings()
 	}
 	else
 		m_discord.reset();
-	#endif
+#endif
 
-	if(config.check_update && !m_game_launched)
+	if (config.check_update && !m_game_launched)
 		m_update_available = CemuUpdateWindow::IsUpdateAvailableAsync();
 
 	if (mlc_modified)
@@ -1063,10 +1062,7 @@ void MainWindow::OnOptionsInput(wxCommandEvent& event)
 	}
 	case MAINFRAME_MENU_ID_OPTIONS_INPUT:
 	{
-		auto* frame = new InputSettings2(this,
-			[keyboardState = m_keyboardState] {
-				return keyboardState->IsKeyDown(Host::Key::Escape);
-			}, m_pathProvider);
+		auto* frame = new InputSettings2(this, [keyboardState = m_keyboardState] { return keyboardState->IsKeyDown(Host::Key::Escape); }, m_pathProvider);
 		frame->ShowModal();
 		frame->Destroy();
 		break;
@@ -1143,7 +1139,7 @@ void MainWindow::OnConsoleLanguage(wxCommandEvent& event)
 	GetConfigHandle().Save();
 }
 
-//void MainWindow::OnCPUMode(wxCommandEvent& event)
+// void MainWindow::OnCPUMode(wxCommandEvent& event)
 //{
 //	if (event.GetId() == MAINFRAME_MENU_ID_CPU_MODE_SINGLECORE_INTERPRETER)
 //		GetConfig().cpu_mode = CPUMode::SinglecoreInterpreter;
@@ -1157,7 +1153,7 @@ void MainWindow::OnConsoleLanguage(wxCommandEvent& event)
 //		cemu_assert_debug(false);
 //
 //	GetConfigHandle().Save();
-//}
+// }
 
 void MainWindow::OnDebugSetting(wxCommandEvent& event)
 {
@@ -1166,7 +1162,7 @@ void MainWindow::OnDebugSetting(wxCommandEvent& event)
 	else if (event.GetId() == MAINFRAME_MENU_ID_DEBUG_VK_ACCURATE_BARRIERS)
 	{
 		GetConfig().vk_accurate_barriers = event.IsChecked();
-		if(!GetConfig().vk_accurate_barriers)
+		if (!GetConfig().vk_accurate_barriers)
 			wxMessageBox(_("Warning: Disabling the accurate barriers option will lead to flickering graphics but may improve performance. It is highly recommended to leave it turned on."), _("Accurate barriers are off"), wxOK);
 	}
 #ifdef ENABLE_METAL
@@ -1200,8 +1196,7 @@ void MainWindow::OnDebugSetting(wxCommandEvent& event)
 			{
 				const fs::path path(m_pathProvider->GetUserDataPath(""));
 				fs::create_directories(path / "dump" / "curl");
-			}
-			catch (const std::exception& ex)
+			} catch (const std::exception& ex)
 			{
 				SystemException sys(ex);
 				cemuLog_log(LogType::Force, "error when creating dump curl folder: {}", sys.what());
@@ -1258,7 +1253,7 @@ void MainWindow::OnDebugDumpGeneric(wxCommandEvent& event)
 {
 	std::string dumpSubpath;
 	std::function<void(bool)> setDumpState;
-	switch(event.GetId())
+	switch (event.GetId())
 	{
 	case MAINFRAME_MENU_ID_DEBUG_DUMP_TEXTURES:
 		dumpSubpath = "dump/textures";
@@ -1282,8 +1277,7 @@ void MainWindow::OnDebugDumpGeneric(wxCommandEvent& event)
 		try
 		{
 			fs::create_directories(m_pathProvider->GetUserDataPath(dumpSubpath));
-		}
-		catch (const std::exception & ex)
+		} catch (const std::exception& ex)
 		{
 			SystemException sys(ex);
 			cemuLog_log(LogType::Force, "can't create folder {} in user data folder: {}", dumpSubpath, ex.what());
@@ -1294,15 +1288,15 @@ void MainWindow::OnDebugDumpGeneric(wxCommandEvent& event)
 
 void MainWindow::OnLoggingWindow(wxCommandEvent& event)
 {
-	if(m_logging_window)
+	if (m_logging_window)
 		return;
 
 	m_logging_window = new LoggingWindow(this);
 	m_logging_window->Bind(wxEVT_CLOSE_WINDOW,
-		[this](wxCloseEvent& event) {
-		m_logging_window = nullptr;
-		event.Skip();
-	});
+						   [this](wxCloseEvent& event) {
+							   m_logging_window = nullptr;
+							   event.Skip();
+						   });
 	m_logging_window->Show(true);
 }
 
@@ -1382,7 +1376,7 @@ void MainWindow::OnDebugViewTextureRelations(wxCommandEvent& event)
 
 void MainWindow::ShowCursor(bool state)
 {
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	CURSORINFO info{};
 	info.cbSize = sizeof(CURSORINFO);
 	GetCursorInfo(&info);
@@ -1392,21 +1386,23 @@ void MainWindow::ShowCursor(bool state)
 		return;
 
 	int counter = 0;
-	if(state)
+	if (state)
 	{
 		do
 		{
 			counter = ::ShowCursor(TRUE);
-		} while (counter < 0);
+		}
+		while (counter < 0);
 	}
 	else
 	{
 		do
 		{
 			counter = ::ShowCursor(FALSE);
-		} while (counter >= 0);
+		}
+		while (counter >= 0);
 	}
-	#else
+#else
 	if (state)
 	{
 		wxSetCursor(wxNullCursor); // restore system default cursor
@@ -1415,19 +1411,19 @@ void MainWindow::ShowCursor(bool state)
 	{
 		wxSetCursor(wxCursor(wxCURSOR_BLANK));
 	}
-	#endif
+#endif
 }
 
 uintptr_t MainWindow::GetRenderCanvasHWND()
 {
-	// deprecated. We can use the global cross-platform window info structs now
-	#if BOOST_OS_WINDOWS
+// deprecated. We can use the global cross-platform window info structs now
+#if BOOST_OS_WINDOWS
 	if (!m_render_canvas)
 		return 0;
 	return (uintptr_t)m_render_canvas->GetHWND();
-	#else
+#else
 	return 0;
-	#endif
+#endif
 }
 
 wxRect MainWindow::GetDesktopRect()
@@ -1446,7 +1442,7 @@ wxRect MainWindow::GetDesktopRect()
 		if (geo.x <= middle && middle <= geo.x + geo.width)
 			return geo;
 	}
-	return { 0,0,800,600 };
+	return {0, 0, 800, 600};
 }
 
 void MainWindow::LoadSettings()
@@ -1454,27 +1450,27 @@ void MainWindow::LoadSettings()
 	GetConfigHandle().Load();
 	const auto& config = GetWxGUIConfig();
 
-	if(config.check_update)
+	if (config.check_update)
 		m_update_available = CemuUpdateWindow::IsUpdateAvailableAsync();
 
-	if (config.window_position != Vector2i{ -1,-1 })
-		this->SetPosition({ config.window_position.x, config.window_position.y });
+	if (config.window_position != Vector2i{-1, -1})
+		this->SetPosition({config.window_position.x, config.window_position.y});
 
 	if (config.window_size.x > 0 && config.window_size.y > 0)
 	{
-		this->SetSize({ config.window_size.x, config.window_size.y });
+		this->SetSize({config.window_size.x, config.window_size.y});
 
 		if (config.window_maximized)
 			this->Maximize();
 	}
 
-	if (config.pad_position != Vector2i{ -1,-1 })
+	if (config.pad_position != Vector2i{-1, -1})
 	{
 		m_windowState->restored_pad_x = config.pad_position.x;
 		m_windowState->restored_pad_y = config.pad_position.y;
 	}
 
-	if (config.pad_size != Vector2i{ -1,-1 })
+	if (config.pad_size != Vector2i{-1, -1})
 	{
 		m_windowState->restored_pad_width = config.pad_size.x;
 		m_windowState->restored_pad_height = config.pad_size.y;
@@ -1484,7 +1480,7 @@ void MainWindow::LoadSettings()
 
 	this->TogglePadView();
 
-	if(m_game_list)
+	if (m_game_list)
 		m_game_list->LoadConfig();
 }
 
@@ -1493,12 +1489,12 @@ void MainWindow::SaveSettings()
 	auto lock = GetConfigHandle().Lock();
 	auto& config = GetWxGUIConfig();
 
-	if (config.window_position != Vector2i{ -1,-1 })
+	if (config.window_position != Vector2i{-1, -1})
 	{
 		config.window_position.x = m_restored_position.x;
 		config.window_position.y = m_restored_position.y;
 	}
-	if (config.window_size != Vector2i{ -1,-1 })
+	if (config.window_size != Vector2i{-1, -1})
 	{
 		config.window_size.x = m_restored_size.x;
 		config.window_size.y = m_restored_size.y;
@@ -1511,12 +1507,12 @@ void MainWindow::SaveSettings()
 
 	config.pad_open = m_padView != nullptr;
 
-	if (config.pad_position != Vector2i{ -1,-1 } && m_windowState->restored_pad_x != -1)
+	if (config.pad_position != Vector2i{-1, -1} && m_windowState->restored_pad_x != -1)
 	{
 		config.pad_position.x = m_windowState->restored_pad_x;
 		config.pad_position.y = m_windowState->restored_pad_y;
 	}
-	if (config.pad_size != Vector2i{ -1,-1 } && m_windowState->restored_pad_width != -1)
+	if (config.pad_size != Vector2i{-1, -1} && m_windowState->restored_pad_width != -1)
 	{
 		config.pad_size.x = m_windowState->restored_pad_width;
 		config.pad_size.y = m_windowState->restored_pad_height;
@@ -1527,14 +1523,14 @@ void MainWindow::SaveSettings()
 		config.pad_maximized = false;
 	}
 
-	if(m_game_list)
+	if (m_game_list)
 		m_game_list->SaveConfig();
 
 	g_wxConfig.Save();
 }
 
 void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t wheelX,
-	std::int32_t wheelY, std::uint32_t changedButtons)
+										  std::int32_t wheelY, std::uint32_t changedButtons)
 {
 	if (!m_render_canvas)
 		return;
@@ -1544,7 +1540,7 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 	const auto physicalWidth = ToPhys(clientSize.GetWidth());
 	const auto physicalHeight = ToPhys(clientSize.GetHeight());
 	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
-		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
+						logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
 	// Button callbacks are the authoritative transitions. In particular,
 	// synthetic/private-desktop motion can report wx's aggregate state as
 	// released even while a button is held. Preserve the confirmed mask for
@@ -1560,19 +1556,19 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 	else if (changedButtons != 0)
 		transition = Frontend::CemuExtendMouseTransition::Aggregate;
 	const auto buttonUpdate = m_cemuextend_bridge.UpdateButtons(transition,
-		changedButtons, CemuExtendMouseButtons(event));
+																changedButtons, CemuExtendMouseButtons(event));
 
 	const wxPoint center{clientSize.GetWidth() / 2, clientSize.GetHeight() / 2};
 	const bool rawMouseAvailable = m_cemuextend_bridge.PointerMode() ==
-		static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::CapturedRelative) &&
-		m_cemuextend_bridge.RawMouseRequested() &&
-		EnsureCemuExtendRawMouse();
+									   static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::CapturedRelative) &&
+								   m_cemuextend_bridge.RawMouseRequested() &&
+								   EnsureCemuExtendRawMouse();
 	const auto motion = m_cemuextend_bridge.UpdatePosition(
 		{physicalPosition.x, physicalPosition.y},
 		{ToPhys(center).x, ToPhys(center).y}, rawMouseAvailable);
 	const auto flags = motion.rawRelative
-		? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
-		: static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::None);
+						   ? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
+						   : static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::None);
 	m_emulationController.SubmitMouse({
 		.surface = Application::PointerSurface::Tv,
 		.x = physicalPosition.x,
@@ -1592,7 +1588,7 @@ void MainWindow::EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t whee
 }
 
 void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
-	std::uint32_t changedButtons)
+											 std::uint32_t changedButtons)
 {
 	if (!m_render_canvas)
 		return;
@@ -1602,7 +1598,7 @@ void MainWindow::EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t d
 	const auto physicalWidth = ToPhys(clientSize.GetWidth());
 	const auto physicalHeight = ToPhys(clientSize.GetHeight());
 	const bool inside = logicalPosition.x >= 0 && logicalPosition.y >= 0 &&
-		logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
+						logicalPosition.x < clientSize.GetWidth() && logicalPosition.y < clientSize.GetHeight();
 	m_cemuextend_bridge.RecordRawPosition({physicalPosition.x, physicalPosition.y});
 	m_emulationController.SubmitMouse({
 		.surface = Application::PointerSurface::Tv,
@@ -1681,8 +1677,8 @@ bool MainWindow::ApplyCemuExtendPointerPolicy()
 {
 	const auto policy = m_emulationController.GetPointerPolicy();
 	const auto decision = m_cemuextend_bridge.ApplyPointerPolicy(policy.mode,
-		policy.cursor, policy.flags, m_windowState->app_active.load(),
-		m_render_canvas != nullptr);
+																 policy.cursor, policy.flags, m_windowState->app_active.load(),
+																 m_render_canvas != nullptr);
 	UpdateCemuExtendPointerConfinement(decision.confine);
 
 	if (decision.leavingPolicy)
@@ -1725,11 +1721,12 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 
 	auto physPos = ToPhys(event.GetPosition());
 	m_inputHostEvents->UpdateMousePosition(Host::PointerSurface::Main,
-		{physPos.x, physPos.y});
+										   {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event);
 
 	if (m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
-		Frontend::CemuExtendPointerMode::CapturedRelative) && m_render_canvas)
+												 Frontend::CemuExtendPointerMode::CapturedRelative) &&
+		m_render_canvas)
 	{
 		const auto size = m_render_canvas->GetClientSize();
 		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
@@ -1749,12 +1746,12 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 void MainWindow::OnMouseLeft(wxMouseEvent& event)
 {
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_LEFT) ||
-		event.ButtonDClick(wxMOUSE_BTN_LEFT);
+						 event.ButtonDClick(wxMOUSE_BTN_LEFT);
 	const auto physPos = ToPhys(event.GetPosition());
 	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Main,
-		Host::PointerButton::Left, pressed, {physPos.x, physPos.y});
+										 Host::PointerButton::Left, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Left));
+							 static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Left));
 
 	event.Skip();
 }
@@ -1762,12 +1759,12 @@ void MainWindow::OnMouseLeft(wxMouseEvent& event)
 void MainWindow::OnMouseRight(wxMouseEvent& event)
 {
 	const bool pressed = event.ButtonDown(wxMOUSE_BTN_RIGHT) ||
-		event.ButtonDClick(wxMOUSE_BTN_RIGHT);
+						 event.ButtonDClick(wxMOUSE_BTN_RIGHT);
 	const auto physPos = ToPhys(event.GetPosition());
 	m_inputHostEvents->UpdateMouseButton(Host::PointerSurface::Main,
-		Host::PointerButton::Right, pressed, {physPos.x, physPos.y});
+										 Host::PointerButton::Right, pressed, {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Right));
+							 static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Right));
 
 	event.Skip();
 }
@@ -1775,12 +1772,12 @@ void MainWindow::OnMouseRight(wxMouseEvent& event)
 void MainWindow::OnMouseMiddle(wxMouseEvent& event)
 {
 	cemuLog_log(LogType::Force,
-		"CEX2-PERSPECTIVE wx-middle down={} dclick={} up={} aggregateMiddle={} trackedButtons={}",
-		event.ButtonDown(wxMOUSE_BTN_MIDDLE), event.ButtonDClick(wxMOUSE_BTN_MIDDLE),
-		event.ButtonUp(wxMOUSE_BTN_MIDDLE), event.MiddleIsDown(),
-		m_cemuextend_bridge.MouseButtons());
+				"CEX2-PERSPECTIVE wx-middle down={} dclick={} up={} aggregateMiddle={} trackedButtons={}",
+				event.ButtonDown(wxMOUSE_BTN_MIDDLE), event.ButtonDClick(wxMOUSE_BTN_MIDDLE),
+				event.ButtonUp(wxMOUSE_BTN_MIDDLE), event.MiddleIsDown(),
+				m_cemuextend_bridge.MouseButtons());
 	EmitCemuExtendMouseEvent(event, 0, 0,
-		static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Middle));
+							 static_cast<std::uint32_t>(Frontend::CemuExtendMouseButton::Middle));
 	event.Skip();
 }
 
@@ -1834,22 +1831,22 @@ void MainWindow::OnKeyUp(wxKeyEvent& event)
 void MainWindow::OnKeyDown(wxKeyEvent& event)
 {
 #if defined(__APPLE__)
-       // On macOS, allow Cmd+Q to quit the application
-    if (event.CmdDown() && event.GetKeyCode() == 'Q')
-    {
-        Close(true);
-    }
+	// On macOS, allow Cmd+Q to quit the application
+	if (event.CmdDown() && event.GetKeyCode() == 'Q')
+	{
+		Close(true);
+	}
 #else
-     // On Windows/Linux, only Alt+F4 is allowed for quitting
-    if (event.AltDown() && event.GetKeyCode() == WXK_F4)
-    {
-        Close(true);
-    }
+	// On Windows/Linux, only Alt+F4 is allowed for quitting
+	if (event.AltDown() && event.GetKeyCode() == WXK_F4)
+	{
+		Close(true);
+	}
 #endif
-    else
-    {
-        event.Skip();
-    }
+	else
+	{
+		event.Skip();
+	}
 }
 
 void MainWindow::OnChar(wxKeyEvent& event)
@@ -1872,12 +1869,11 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 		{
 			m_toolWindow = WxDebuggerAdapters::CreateMemorySearcherWindow(*this);
 			auto* const createdWindow = m_toolWindow;
-			m_toolWindow->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event)
-				{
-					if (m_toolWindow == createdWindow)
-						m_toolWindow = nullptr;
-					event.Skip();
-				});
+			m_toolWindow->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event) {
+				if (m_toolWindow == createdWindow)
+					m_toolWindow = nullptr;
+				event.Skip();
+			});
 			m_toolWindow->Show(true);
 		}
 		break;
@@ -1891,18 +1887,12 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 			m_title_manager->SetFocusAndTab(default_tab);
 		else
 		{
-			m_title_manager = new TitleManager(this, m_emulationController,
-				m_uiDispatcher, m_pathProvider,
-				[this](fs::path path) {
-					QueueEvent(new wxLaunchGameEvent(std::move(path),
-						wxLaunchGameEvent::INITIATED_BY::TITLE_MANAGER));
-				},
-				[this] { RequestGameListRefresh(); }, default_tab);
-			m_title_manager->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& event)
-				{
-					m_title_manager = nullptr;
-					event.Skip();
-				});
+			m_title_manager = new TitleManager(this, m_emulationController, m_uiDispatcher, m_pathProvider, [this](fs::path path) { QueueEvent(new wxLaunchGameEvent(std::move(path),
+																																									 wxLaunchGameEvent::INITIATED_BY::TITLE_MANAGER)); }, [this] { RequestGameListRefresh(); }, default_tab);
+			m_title_manager->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& event) {
+				m_title_manager = nullptr;
+				event.Skip();
+			});
 			m_title_manager->Show();
 		}
 		break;
@@ -1919,17 +1909,17 @@ void MainWindow::OnToolsInput(wxCommandEvent& event)
 		{
 			m_usb_devices = WxDeviceAdapters::CreateEmulatedUSBDeviceWindow(*this);
 			auto* createdWindow = m_usb_devices;
-			m_usb_devices->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event)
+			m_usb_devices->Bind(wxEVT_CLOSE_WINDOW, [this, createdWindow](wxCloseEvent& event) {
+				if (event.CanVeto())
 				{
-					if (event.CanVeto()) {
-						createdWindow->Show(false);
-						event.Veto();
-						return;
-					}
-					if (m_usb_devices == createdWindow)
-						m_usb_devices = nullptr;
-					event.Skip();
-				});
+					createdWindow->Show(false);
+					event.Veto();
+					return;
+				}
+				if (m_usb_devices == createdWindow)
+					m_usb_devices = nullptr;
+				event.Skip();
+			});
 			m_usb_devices->Show(true);
 		}
 		break;
@@ -1942,8 +1932,7 @@ void MainWindow::OnGesturePan(wxPanGestureEvent& event)
 {
 	auto physPos = ToPhys(event.GetPosition());
 	m_inputHostEvents->UpdateTouch(Host::PointerSurface::Main,
-		{physPos.x, physPos.y}, event.IsGestureStart() || !event.IsGestureEnd());
-
+								   {physPos.x, physPos.y}, event.IsGestureStart() || !event.IsGestureEnd());
 
 	event.Skip();
 }
@@ -1963,7 +1952,7 @@ void MainWindow::AsyncSetTitle(std::string_view windowTitle)
 bool MainWindow::IsCemuExtendTextInputEvent(const wxEvent& event) const
 {
 	return m_cemuextend_text_input != nullptr &&
-		(HasCemuExtendTextInputNativeFocus() ||
+		   (HasCemuExtendTextInputNativeFocus() ||
 			event.GetEventObject() == m_cemuextend_text_input);
 }
 
@@ -1973,12 +1962,13 @@ bool MainWindow::CanSubmitCemuExtendTextInput() const
 	// active. Once it is committed, a subsequent Enter may be mirrored to the
 	// guest as the single-line field's submit action.
 	return m_cemuextend_text_input != nullptr &&
-		m_cemuextend_bridge.CanSubmitText();
+		   m_cemuextend_bridge.CanSubmitText();
 }
 
 bool MainWindow::HasCemuExtendTextInputNativeFocus() const
 {
-	if (m_cemuextend_text_input == nullptr) return false;
+	if (m_cemuextend_text_input == nullptr)
+		return false;
 #if defined(__WXGTK__)
 	GtkWidget* entry =
 		static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
@@ -2001,7 +1991,7 @@ void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 		{
 			m_cemuextend_text_input_focus_logged = true;
 			cemuLog_log(LogType::Force,
-				"CemuExtend text input: native IME focus acquired");
+						"CemuExtend text input: native IME focus acquired");
 		}
 		return;
 	}
@@ -2025,7 +2015,7 @@ void MainWindow::EnsureCemuExtendTextInputFocus(std::uint64_t sequence)
 		{
 			m_cemuextend_text_input_focus_failure_logged = true;
 			cemuLog_log(LogType::Force,
-				"CemuExtend text input: failed to acquire native IME focus");
+						"CemuExtend text input: failed to acquire native IME focus");
 		}
 		return;
 	}
@@ -2046,11 +2036,12 @@ void MainWindow::PublishCemuExtendTextComposition()
 		m_cemuextend_text_input->GetValue().utf8_string();
 	const long insertion = m_cemuextend_text_input->GetInsertionPoint();
 	const std::string prefix = m_cemuextend_text_input
-		->GetRange(0, insertion).utf8_string();
+								   ->GetRange(0, insertion)
+								   .utf8_string();
 	const auto composition = m_cemuextend_bridge.ComposeText(committed,
-		static_cast<std::uint32_t>(prefix.size()));
+															 static_cast<std::uint32_t>(prefix.size()));
 	m_emulationController.SubmitTextComposition(composition.committed, composition.preedit,
-		composition.cursor, composition.selectionLength);
+												composition.cursor, composition.selectionLength);
 }
 
 void MainWindow::OnCemuExtendTextChanged(wxCommandEvent& event)
@@ -2065,14 +2056,15 @@ void MainWindow::OnCemuExtendTextPreedit(std::string_view preedit)
 	{
 		m_cemuextend_text_input_preedit_logged = true;
 		cemuLog_log(LogType::Force,
-			"CemuExtend text input: native IME preedit received");
+					"CemuExtend text input: native IME preedit received");
 	}
 	PublishCemuExtendTextComposition();
 }
 
 void MainWindow::RefreshCemuExtendTextInput()
 {
-	if (m_cemuextend_text_input == nullptr || m_render_canvas == nullptr) return;
+	if (m_cemuextend_text_input == nullptr || m_render_canvas == nullptr)
+		return;
 	const auto state = m_emulationController.GetTextInputState();
 	if (!state.active)
 	{
@@ -2096,9 +2088,9 @@ void MainWindow::RefreshCemuExtendTextInput()
 	}
 	const wxSize canvas = m_render_canvas->GetClientSize();
 	const int x = std::clamp(state.caretX * canvas.GetWidth() / 1280,
-		0, std::max(0, canvas.GetWidth() - 1));
+							 0, std::max(0, canvas.GetWidth() - 1));
 	const int y = std::clamp(state.caretY * canvas.GetHeight() / 720,
-		0, std::max(0, canvas.GetHeight() - 1));
+							 0, std::max(0, canvas.GetHeight() - 1));
 	// Moving the native widget while an IME owns a preedit can reset some IM
 	// modules. Keep its anchor stable until that composition ends.
 	if (!m_cemuextend_bridge.HasPreedit())
@@ -2147,16 +2139,16 @@ void MainWindow::RefreshCemuExtendTextInput()
 
 void MainWindow::CreateCanvas()
 {
-    // create panel for canvas
-    m_game_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxWANTS_CHARS);
-    auto* sizer = new wxBoxSizer(wxVERTICAL);
+	// create panel for canvas
+	m_game_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxWANTS_CHARS);
+	auto* sizer = new wxBoxSizer(wxVERTICAL);
 
-    // shouldn't be needed, but who knows
-    m_game_panel->Bind(wxEVT_KEY_UP, &MainWindow::OnKeyUp, this);
-    m_game_panel->Bind(wxEVT_CHAR, &MainWindow::OnChar, this);
+	// shouldn't be needed, but who knows
+	m_game_panel->Bind(wxEVT_KEY_UP, &MainWindow::OnKeyUp, this);
+	m_game_panel->Bind(wxEVT_CHAR, &MainWindow::OnChar, this);
 
-    m_game_panel->SetSizer(sizer);
-    this->GetSizer()->Add(m_game_panel, 1, wxEXPAND);
+	m_game_panel->SetSizer(sizer);
+	this->GetSizer()->Add(m_game_panel, 1, wxEXPAND);
 
 	// create canvas
 	m_render_canvas = WxRendererAdapters::CreateRenderCanvas(
@@ -2193,20 +2185,22 @@ void MainWindow::CreateCanvas()
 	m_render_canvas->SetDropTarget(new wxAmiiboDropTarget(this));
 	m_game_panel->GetSizer()->Add(m_render_canvas, 1, wxEXPAND, 0, nullptr);
 	m_cemuextend_text_input = new wxTextCtrl(m_game_panel, wxID_ANY, wxEmptyString,
-		wxPoint(0, 0), wxSize(1, 1), wxBORDER_NONE | wxTE_PROCESS_ENTER);
+											 wxPoint(0, 0), wxSize(1, 1), wxBORDER_NONE | wxTE_PROCESS_ENTER);
 	m_cemuextend_text_input->Hide();
 	m_cemuextend_text_input->Bind(wxEVT_TEXT,
-		&MainWindow::OnCemuExtendTextChanged, this);
+								  &MainWindow::OnCemuExtendTextChanged, this);
 #if defined(__WXGTK__)
 	GtkWidget* entry = static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
 	if (GTK_IS_ENTRY(entry))
 	{
 		GdkDisplay* display = gtk_widget_get_display(entry);
 		const char* backend = display != nullptr
-			? G_OBJECT_TYPE_NAME(display) : "unknown";
+								  ? G_OBJECT_TYPE_NAME(display)
+								  : "unknown";
 		const char* configuredModule = g_getenv("GTK_IM_MODULE");
 		const char* selectedModule = configuredModule != nullptr
-			? configuredModule : "default";
+										 ? configuredModule
+										 : "default";
 		// steam-run and similar game environments commonly force XIM for X11
 		// games. wxGTK may nevertheless select its Wayland backend. XIM cannot
 		// create an input context on a Wayland GdkDisplay, so override only this
@@ -2220,16 +2214,16 @@ void MainWindow::CreateCanvas()
 			g_object_set(entry, "im-module", selectedModule, nullptr);
 		}
 		else if (g_strrstr(backend, "X11") != nullptr &&
-			configuredModule != nullptr &&
-			g_strcmp0(configuredModule, "wayland") == 0)
+				 configuredModule != nullptr &&
+				 g_strcmp0(configuredModule, "wayland") == 0)
 		{
 			selectedModule = "xim";
 			g_object_set(entry, "im-module", selectedModule, nullptr);
 		}
 		cemuLog_log(LogType::Force,
-			"CemuExtend text input: GTK backend {}, IM module {} (environment {})",
-			backend, selectedModule,
-			configuredModule != nullptr ? configuredModule : "unset");
+					"CemuExtend text input: GTK backend {}, IM module {} (environment {})",
+					backend, selectedModule,
+					configuredModule != nullptr ? configuredModule : "unset");
 		gtk_entry_set_has_frame(GTK_ENTRY(entry), FALSE);
 		gtk_entry_set_input_purpose(GTK_ENTRY(entry), GTK_INPUT_PURPOSE_FREE_FORM);
 		gtk_entry_set_input_hints(GTK_ENTRY(entry), GTK_INPUT_HINT_NONE);
@@ -2237,10 +2231,11 @@ void MainWindow::CreateCanvas()
 		// separate native windows and therefore remain visible.
 		gtk_widget_set_opacity(entry, 0.0);
 		g_signal_connect(entry, "preedit-changed",
-			G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
-				static_cast<MainWindow*>(data)->OnCemuExtendTextPreedit(
-					preedit != nullptr ? std::string_view{preedit} : std::string_view{});
-			}), this);
+						 G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
+							 static_cast<MainWindow*>(data)->OnCemuExtendTextPreedit(
+								 preedit != nullptr ? std::string_view{preedit} : std::string_view{});
+						 }),
+						 this);
 	}
 #endif
 
@@ -2276,11 +2271,11 @@ void MainWindow::DestroyCanvas()
 		m_render_canvas->Destroy();
 		m_render_canvas = nullptr;
 	}
-    if(m_game_panel)
-    {
-        m_game_panel->Destroy();
-        m_game_panel = nullptr;
-    }
+	if (m_game_panel)
+	{
+		m_game_panel->Destroy();
+		m_game_panel = nullptr;
+	}
 }
 
 void MainWindow::OnSizeEvent(wxSizeEvent& event)
@@ -2343,10 +2338,10 @@ void MainWindow::OnPadClose(wxCloseEvent& event)
 	}
 	auto& config = GetWxGUIConfig();
 	config.pad_open = false;
-	if (config.pad_position != Vector2i{ -1,-1 })
+	if (config.pad_position != Vector2i{-1, -1})
 		closingPad->GetPosition(&config.pad_position.x, &config.pad_position.y);
 
-	if (config.pad_size != Vector2i{ -1,-1 })
+	if (config.pad_size != Vector2i{-1, -1})
 		closingPad->GetSize(&config.pad_size.x, &config.pad_size.y);
 
 	g_wxConfig.Save();
@@ -2420,16 +2415,16 @@ void MainWindow::EndEmulation() // unfinished - memory leaks and crashes after r
 	if (!stopResult.stopped)
 	{
 		cemuLog_log(LogType::Force, "EmulationController stop request ignored: {}",
-			stopResult.diagnostic);
+					stopResult.diagnostic);
 		return;
 	}
 	DestroyCanvas();
 	m_game_launched = false;
 	m_launched_game_name.clear();
-	#ifdef ENABLE_DISCORD_RPC
+#ifdef ENABLE_DISCORD_RPC
 	if (m_discord)
 		m_discord->UpdatePresence(DiscordPresence::Idling, "");
-	#endif
+#endif
 
 	if (GetConfig().disable_screensaver)
 		ScreenSaver::SetInhibit(false);
@@ -2496,12 +2491,12 @@ bool MainWindow::IsMenuHidden() const
 
 void MainWindow::OnTimer(wxTimerEvent& event)
 {
-	if(m_update_available.valid() && future_is_ready(m_update_available))
+	if (m_update_available.valid() && future_is_ready(m_update_available))
 	{
-		if(m_update_available.get())
+		if (m_update_available.get())
 		{
 			wxMessageDialog dialog(this, _("There's a new update available.\nDo you want to update?"), _("Update notification"), wxCENTRE | wxYES_NO);
-			if(dialog.ShowModal() == wxID_YES)
+			if (dialog.ShowModal() == wxID_YES)
 			{
 				CemuUpdateWindow update_window(this, m_pathProvider);
 				update_window.ShowModal();
@@ -2521,7 +2516,7 @@ void MainWindow::OnTimer(wxTimerEvent& event)
 		return;
 
 	const auto mouse_position = wxGetMousePosition();
-	if(m_mouse_position != mouse_position)
+	if (m_mouse_position != mouse_position)
 	{
 		m_last_mouse_move_time = std::chrono::steady_clock::now();
 		m_mouse_position = mouse_position;
@@ -2534,14 +2529,13 @@ void MainWindow::OnTimer(wxTimerEvent& event)
 	{
 		ShowCursor(false);
 	}
-
 }
 
 #define BUILD_DATE __DATE__ " " __TIME__
 
 class CemuAboutDialog : public wxDialog
 {
-public:
+  public:
 	CemuAboutDialog(wxWindow* parent = NULL)
 		: wxDialog(NULL, wxID_ANY, _("About Cemu"), wxDefaultPosition, wxSize(500, 700))
 	{
@@ -2578,7 +2572,7 @@ public:
 		auto versionString = formatWxString(_("Cemu\nVersion {0}\nCompiled on {1}\nOriginal authors: {2}"), BUILD_VERSION_STRING, BUILD_DATE, "Exzap, Petergov");
 
 		sizer->Add(new wxStaticText(parent, wxID_ANY, versionString), wxSizerFlags().Border(wxALL, 3).Border(wxTOP, 10));
-		sizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://cemu.info", "https://cemu.info", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)), wxSizerFlags().Expand().Border(wxTOP | wxBOTTOM, 3));
+		sizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://cemu.info", "https://cemu.info", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)), wxSizerFlags().Expand().Border(wxTOP | wxBOTTOM, 3));
 
 		sizer->AddSpacer(3);
 		sizer->Add(new wxStaticLine(parent), wxSizerFlags().Expand().Border(wxRIGHT, 4));
@@ -2599,7 +2593,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "zLib ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.zlib.net", "https://www.zlib.net", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.zlib.net", "https://www.zlib.net", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2607,7 +2601,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "wxWidgets ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.wxwidgets.org/", "https://www.wxwidgets.org/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.wxwidgets.org/", "https://www.wxwidgets.org/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2615,7 +2609,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "OpenSSL ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.openssl.org/", "https://www.openssl.org/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.openssl.org/", "https://www.openssl.org/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2623,7 +2617,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "libcurl ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://curl.haxx.se/libcurl/", "https://curl.haxx.se/libcurl/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://curl.haxx.se/libcurl/", "https://curl.haxx.se/libcurl/", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2631,7 +2625,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "imgui ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/ocornut/imgui", "https://github.com/ocornut/imgui", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/ocornut/imgui", "https://github.com/ocornut/imgui", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2639,7 +2633,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "fontawesome ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/FortAwesome/Font-Awesome", "https://github.com/FortAwesome/Font-Awesome", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/FortAwesome/Font-Awesome", "https://github.com/FortAwesome/Font-Awesome", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2647,7 +2641,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "boost ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.boost.org", "https://www.boost.org", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://www.boost.org", "https://www.boost.org", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2655,7 +2649,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "libusb ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://libusb.info", "https://libusb.info", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://libusb.info", "https://libusb.info", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2664,7 +2658,7 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, -1, "MoltenVK ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, -1, "https://github.com/KhronosGroup/MoltenVK", "https://github.com/KhronosGroup/MoltenVK", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, -1, "https://github.com/KhronosGroup/MoltenVK", "https://github.com/KhronosGroup/MoltenVK", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, -1, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2673,20 +2667,20 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "icons from "));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://icons8.com", "https://icons8.com", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://icons8.com", "https://icons8.com", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			sizer->Add(lineSizer);
 		}
 		// Lato font (are we still using it?)
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
-			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "\"Lato\" font by tyPoland Lukasz Dziedzic (OFL, V1.1)", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "\"Lato\" font by tyPoland Lukasz Dziedzic (OFL, V1.1)", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			sizer->Add(lineSizer);
 		}
 		// SDL
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "SDL ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/libsdl-org/SDL", "https://github.com/libsdl-org/SDL", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "https://github.com/libsdl-org/SDL", "https://github.com/libsdl-org/SDL", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
 		}
@@ -2694,41 +2688,39 @@ public:
 		{
 			wxSizer* lineSizer = new wxBoxSizer(wxHORIZONTAL);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, "Modified ih264 from Android project ("));
-			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "Source", "https://cemu.info/oss/ih264d.zip", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT)));
+			lineSizer->Add(new wxHyperlinkCtrl(parent, wxID_ANY, "Source", "https://cemu.info/oss/ih264d.zip", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT)));
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, " "));
-			wxHyperlinkCtrl* noticeLink = new wxHyperlinkCtrl(parent, wxID_ANY, "NOTICE", "", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU|wxNO_BORDER|wxHL_ALIGN_LEFT));
-			noticeLink->Bind(wxEVT_LEFT_DOWN, [](wxMouseEvent& event)
-				{
-					fs::path tempPath = fs::temp_directory_path();
-					tempPath.append("NOTICE_IH264.txt");
-					FileStream* fs = FileStream::createFile2(tempPath);
-					if (!fs)
-						return;
-					fs->writeString(
-						"/******************************************************************************\r\n"
-						" *\r\n"
-						" * Copyright (C) 2015 The Android Open Source Project\r\n"
-						" *\r\n"
-						" * Licensed under the Apache License, Version 2.0 (the \"License\");\r\n"
-						" * you may not use this file except in compliance with the License.\r\n"
-						" * You may obtain a copy of the License at:"
-						" *\r\n"
-						" * http://www.apache.org/licenses/LICENSE-2.0\r\n"
-						" *\r\n"
-						" * Unless required by applicable law or agreed to in writing, software\r\n"
-						" * distributed under the License is distributed on an \"AS IS\" BASIS,\r\n"
-						" * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\n"
-						" * See the License for the specific language governing permissions and\r\n"
-						" * limitations under the License.\r\n"
-						" *\r\n"
-						" *****************************************************************************\r\n"
-						" * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore\r\n"
-						"*/\r\n"
-						"/*****************************************************************************/\r\n"
-					);
-					delete fs;
-					wxLaunchDefaultBrowser(formatWxString("file:{}", _pathToUtf8(tempPath)));
-				});
+			wxHyperlinkCtrl* noticeLink = new wxHyperlinkCtrl(parent, wxID_ANY, "NOTICE", "", wxDefaultPosition, wxDefaultSize, (wxHL_CONTEXTMENU | wxNO_BORDER | wxHL_ALIGN_LEFT));
+			noticeLink->Bind(wxEVT_LEFT_DOWN, [](wxMouseEvent& event) {
+				fs::path tempPath = fs::temp_directory_path();
+				tempPath.append("NOTICE_IH264.txt");
+				FileStream* fs = FileStream::createFile2(tempPath);
+				if (!fs)
+					return;
+				fs->writeString(
+					"/******************************************************************************\r\n"
+					" *\r\n"
+					" * Copyright (C) 2015 The Android Open Source Project\r\n"
+					" *\r\n"
+					" * Licensed under the Apache License, Version 2.0 (the \"License\");\r\n"
+					" * you may not use this file except in compliance with the License.\r\n"
+					" * You may obtain a copy of the License at:"
+					" *\r\n"
+					" * http://www.apache.org/licenses/LICENSE-2.0\r\n"
+					" *\r\n"
+					" * Unless required by applicable law or agreed to in writing, software\r\n"
+					" * distributed under the License is distributed on an \"AS IS\" BASIS,\r\n"
+					" * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\n"
+					" * See the License for the specific language governing permissions and\r\n"
+					" * limitations under the License.\r\n"
+					" *\r\n"
+					" *****************************************************************************\r\n"
+					" * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore\r\n"
+					"*/\r\n"
+					"/*****************************************************************************/\r\n");
+				delete fs;
+				wxLaunchDefaultBrowser(formatWxString("file:{}", _pathToUtf8(tempPath)));
+			});
 			lineSizer->Add(noticeLink);
 			lineSizer->Add(new wxStaticText(parent, wxID_ANY, ")"));
 			sizer->Add(lineSizer);
@@ -2747,15 +2739,7 @@ public:
 
 		sizer->Add(new wxStaticText(parent, wxID_ANY, _("Thanks to our Patreon supporters:")), wxSizerFlags().Expand().Border(wxTOP | wxBOTTOM, 2));
 
-		std::vector<const char*> patreonSupporterNames{ "Maufeat", "lvlv", "F34R", "John Godgames", "Jameel Lewis", "skooks", "Cheesy", "Barrowsx", "Mored1984", "madmat007"
-			, "Kuhnnl", "Owen M", "lucianobugalu", "KimoMaka", "nick palma aka renaissance18", "TheGiantBros", "SpiGAndromeda"
-			, "Chimech0", "Nicolás Pino", "Pezzatti", "Barry Wallace", "REGNR8 Productions", "Lagia", "Freestyler316", "Dentora"
-			, "tactics", "Merola.C", "Ceigyx", "Mata", "BobSchneeder45", "fenixDG", "jjalapeno55", "FissionMetroid101", "Jetta88"
-			, "nesxdie", "Mikah", "PornfoxVR.com", "Hunter4everosa", "Bbzx", "Salim Sanehi", "FalloutpunkX", "NashOH-CL", "RaheemWala"
-			, "Faris Leonhart", "MahvZero", "PlaguedGuardian", "Stuffie", "CaptainLester", "Qtech", "Zaurexus", "Leonidas", "Artifesto"
-			, "Alca259", "SirWestofAsh", "Loli Co.", "The Technical Revolutionary", "MegaYama", "mitori", "Seymordius", "Adrian Josh Cruz", "Manuel Hoenings", "Just A Jabb"
-			, "pgantonio", "CannonXIII", "Lonewolf00708", "AlexsDesign.com", "NoskLo", "MrSirHaku", "xElite_V AKA William H. Johnson", "Zalnor", "Pig", "James \"SE4LS\"", "DairyOrange", "Horoko Lawrence", "bloodmc", "Officer Jenny", "Quasar", "Postposterous", "Jake Jackson", "Kaydax", "CthePredatorG"
-			, "Hengi", "Pyrochaser", "luma.x3"};
+		std::vector<const char*> patreonSupporterNames{"Maufeat", "lvlv", "F34R", "John Godgames", "Jameel Lewis", "skooks", "Cheesy", "Barrowsx", "Mored1984", "madmat007", "Kuhnnl", "Owen M", "lucianobugalu", "KimoMaka", "nick palma aka renaissance18", "TheGiantBros", "SpiGAndromeda", "Chimech0", "Nicolás Pino", "Pezzatti", "Barry Wallace", "REGNR8 Productions", "Lagia", "Freestyler316", "Dentora", "tactics", "Merola.C", "Ceigyx", "Mata", "BobSchneeder45", "fenixDG", "jjalapeno55", "FissionMetroid101", "Jetta88", "nesxdie", "Mikah", "PornfoxVR.com", "Hunter4everosa", "Bbzx", "Salim Sanehi", "FalloutpunkX", "NashOH-CL", "RaheemWala", "Faris Leonhart", "MahvZero", "PlaguedGuardian", "Stuffie", "CaptainLester", "Qtech", "Zaurexus", "Leonidas", "Artifesto", "Alca259", "SirWestofAsh", "Loli Co.", "The Technical Revolutionary", "MegaYama", "mitori", "Seymordius", "Adrian Josh Cruz", "Manuel Hoenings", "Just A Jabb", "pgantonio", "CannonXIII", "Lonewolf00708", "AlexsDesign.com", "NoskLo", "MrSirHaku", "xElite_V AKA William H. Johnson", "Zalnor", "Pig", "James \"SE4LS\"", "DairyOrange", "Horoko Lawrence", "bloodmc", "Officer Jenny", "Quasar", "Postposterous", "Jake Jackson", "Kaydax", "CthePredatorG", "Hengi", "Pyrochaser", "luma.x3"};
 
 		wxString nameListLeft, nameListRight;
 		for (size_t i = 0; i < patreonSupporterNames.size(); i++)
@@ -2779,7 +2763,7 @@ public:
 		sizer->Add(new wxStaticText(parent, wxID_ANY, "espes - Also try XQEMU!\nWaltzz92"), wxSizerFlags().Expand().Border(wxTOP, 1));
 	}
 
-protected:
+  protected:
 	wxSizer* m_scrolledSizer;
 };
 
@@ -2862,7 +2846,7 @@ void MainWindow::RecreateMenu()
 	m_optionsAccountMenu = new wxMenu();
 	const auto account_id = ActiveSettings::GetPersistentId();
 	int index = 0;
-	for(const auto& account : m_emulationController.ListAccounts())
+	for (const auto& account : m_emulationController.ListAccounts())
 	{
 		wxMenuItem* item = m_optionsAccountMenu->AppendRadioItem(
 			MAINFRAME_MENU_ID_OPTIONS_ACCOUNT_1 + index,
@@ -2890,7 +2874,7 @@ void MainWindow::RecreateMenu()
 	optionsConsoleLanguageMenu->AppendRadioItem(MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_PORTUGUESE, _("&Portuguese"))->Check(config.console_language == CafeConsoleLanguage::PT);
 	optionsConsoleLanguageMenu->AppendRadioItem(MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_RUSSIAN, _("&Russian"))->Check(config.console_language == CafeConsoleLanguage::RU);
 	optionsConsoleLanguageMenu->AppendRadioItem(MAINFRAME_MENU_ID_OPTIONS_LANGUAGE_TAIWANESE, _("&Taiwanese"))->Check(config.console_language == CafeConsoleLanguage::TW);
-	if(IsGameLaunched())
+	if (IsGameLaunched())
 	{
 		auto items = optionsConsoleLanguageMenu->GetMenuItems();
 		for (auto& item : items)
@@ -2908,9 +2892,10 @@ void MainWindow::RecreateMenu()
 	m_padViewMenuItem = optionsMenu->AppendCheckItem(MAINFRAME_MENU_ID_OPTIONS_SECOND_WINDOW_PADVIEW, _("&Separate GamePad view"));
 	m_padViewMenuItem->Check(wxConfig.pad_open);
 	optionsMenu->AppendSeparator();
-	#if BOOST_OS_MACOS
-	optionsMenu->Append(MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS, _("&Settings..." "\tCtrl-,"));
-	#endif
+#if BOOST_OS_MACOS
+	optionsMenu->Append(MAINFRAME_MENU_ID_OPTIONS_MAC_SETTINGS, _("&Settings..."
+																  "\tCtrl-,"));
+#endif
 	optionsMenu->Append(MAINFRAME_MENU_ID_OPTIONS_GENERAL2, _("&General settings"));
 	optionsMenu->Append(MAINFRAME_MENU_ID_OPTIONS_INPUT, _("&Input settings"));
 	optionsMenu->Append(MAINFRAME_MENU_ID_OPTIONS_HOTKEY, _("&Hotkey settings"));
@@ -3006,7 +2991,7 @@ void MainWindow::RecreateMenu()
 
 	auto upsidedownItem = debugMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_RENDER_UPSIDE_DOWN, _("&Render upside-down"));
 	upsidedownItem->Check(ActiveSettings::RenderUpsideDownEnabled());
-	if(LaunchSettings::RenderUpsideDownEnabled().has_value())
+	if (LaunchSettings::RenderUpsideDownEnabled().has_value())
 		upsidedownItem->Enable(false);
 
 	auto accurateBarriers = debugMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_VK_ACCURATE_BARRIERS, _("&Accurate barriers (Vulkan)"));
@@ -3041,7 +3026,8 @@ void MainWindow::RecreateMenu()
 	wxMenu* helpMenu = new wxMenu();
 	m_check_update_menu = helpMenu->Append(MAINFRAME_MENU_ID_HELP_UPDATE, _("&Check for updates"));
 #if BOOST_OS_LINUX
-	if (!std::getenv("APPIMAGE")) {
+	if (!std::getenv("APPIMAGE"))
+	{
 		m_check_update_menu->Enable(false);
 	}
 #elif BOOST_OS_BSD // BSD users must update from source so disable update checks
@@ -3079,7 +3065,7 @@ void MainWindow::UpdateChildWindowTitleRunningState()
 {
 	const bool running = m_emulationController.IsTitleRunning();
 
-	if(m_graphic_pack_window)
+	if (m_graphic_pack_window)
 		m_graphic_pack_window->UpdateTitleRunning(running);
 }
 
@@ -3141,21 +3127,24 @@ void MainWindow::HandlePpcProcessExit()
 }
 
 bool MainWindow::ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,
-	std::vector<Application::CemodPermissionRequest> requests)
+										 std::vector<Application::CemodPermissionRequest> requests)
 {
 	cemu_assert_debug(wxIsMainThread());
-	if (requests.empty()) return true;
-	if (gameName.empty()) gameName = fmt::format("Title {:016x}", titleId);
+	if (requests.empty())
+		return true;
+	if (gameName.empty())
+		gameName = fmt::format("Title {:016x}", titleId);
 
 	CemodPermissionDialog dialog(this, wxString::FromUTF8(gameName), std::move(requests));
 	m_active_cemod_permission_dialog = &dialog;
 	const auto modalResult = dialog.ShowModal();
 	m_active_cemod_permission_dialog = nullptr;
-	if (modalResult != wxID_OK) return false;
+	if (modalResult != wxID_OK)
+		return false;
 	std::vector<Application::CemodPermissionDecision> decisions;
 	for (const auto& selection : dialog.GetSelections())
 		decisions.push_back({selection.principal, selection.requestedPermissions,
-			selection.grantedPermissions});
+							 selection.grantedPermissions});
 	m_emulationController.SaveCemodPermissionDecisions(titleId, decisions);
 	return true;
 }

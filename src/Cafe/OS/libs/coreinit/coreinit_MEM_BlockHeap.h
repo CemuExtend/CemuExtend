@@ -31,4 +31,4 @@ namespace coreinit
 	sint32 MEMAddBlockHeapTracking(MPTR heap, MPTR trackMem, uint32 trackMemSize);
 
 	void InitializeMEMBlockHeap();
-}
+} // namespace coreinit

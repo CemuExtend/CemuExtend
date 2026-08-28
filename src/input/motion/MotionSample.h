@@ -57,7 +57,7 @@ struct Quat
 
 	void Normalize()
 	{
-		//printf("Normalizing: %.4f, %.4f, %.4f, %.4f\n", w, x, y, z);
+		// printf("Normalizing: %.4f, %.4f, %.4f, %.4f\n", w, x, y, z);
 		const float length = sqrtf(x * x + y * y + z * z);
 		float targetLength = 1.0f - w * w;
 		if (targetLength <= 0.0f || length <= 0.0f)
@@ -72,7 +72,7 @@ struct Quat
 		y *= fixFactor;
 		z *= fixFactor;
 
-		//printf("Normalized: %.4f, %.4f, %.4f, %.4f\n", w, x, y, z);
+		// printf("Normalized: %.4f, %.4f, %.4f, %.4f\n", w, x, y, z);
 		return;
 	}
 
@@ -103,12 +103,11 @@ struct Quat
 // supports retrieving values in their API-specific (VPAD, KPAD etc.) format
 class MotionSample
 {
-public:
+  public:
 	MotionSample() = default;
 
 	MotionSample(float acc[3], float accAcceleration, float gyro[3], float orientation[3],
-		float quaternion[4]
-	)
+				 float quaternion[4])
 	{
 		m_acc[0] = acc[0];
 		m_acc[1] = acc[1];
@@ -190,8 +189,8 @@ public:
 		float zz = Z * Z;
 		float zw = Z * W;
 		vOut[0] = 1.0f - 2.0f * (yy + zz); // x.x
-		vOut[2] = 2.0f * (xy + zw); // x.y
-		vOut[1] = 2.0f * (xz - yw); // x.z
+		vOut[2] = 2.0f * (xy + zw);		   // x.y
+		vOut[1] = 2.0f * (xz - yw);		   // x.z
 	}
 
 	void getVPADAttitudeMatrix(float mtx[9])
@@ -200,7 +199,7 @@ public:
 		Quaternionf qImu(m_q[0], m_q[1], m_q[2], m_q[3]);
 		Quaternionf qY = qImu * Quaternionf::FromAngleAxis(1.5708f * 1.0f, 0.0f, 0.0f, 1.0f);
 		Quaternionf qZ = qImu * Quaternionf::FromAngleAxis(1.5708f * 1.0f, 0.0f, 1.0f, 0.0f);
- 		getXVector(mtx + 0, qImu);
+		getXVector(mtx + 0, qImu);
 		getXVector(mtx + 3, qY);
 		getXVector(mtx + 6, qZ);
 	}
@@ -226,7 +225,7 @@ public:
 		gyro[2] = m_gyro[2];
 	}
 
-private:
+  private:
 	static float _radToOrientation(float rad)
 	{
 		return rad / (2.0f * 3.14159265f);

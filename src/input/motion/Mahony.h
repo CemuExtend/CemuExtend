@@ -6,7 +6,7 @@
 
 class MahonySensorFusion
 {
-public:
+  public:
 	MahonySensorFusion()
 	{
 		// assume default forward pose (holding controller in hand, tilted forward so the sticks/buttons face upward)
@@ -80,8 +80,7 @@ public:
 		gBias[2] = m_gyroBias[2];
 	}
 
-private:
-
+  private:
 	// calculate roll, yaw and pitch in radians. (-0.5 to 0.5)
 	void calcOrientation()
 	{
@@ -104,8 +103,7 @@ private:
 
 	void updateOrientationAngles()
 	{
-		auto calcWindingCountChange = [](float prevAngle, float newAngle) -> int
-		{
+		auto calcWindingCountChange = [](float prevAngle, float newAngle) -> int {
 			if (newAngle > prevAngle)
 			{
 				float angleDif = newAngle - prevAngle;
@@ -149,17 +147,17 @@ private:
 		}
 	}
 
-	private:
-		Quaternionf m_imuQ; // current orientation
-		// angle data
-		float m_roll{};
-		float m_pitch{};
-		float m_yaw{};
-		int m_rollWinding{};
-		int m_pitchWinding{};
-		int m_yawWinding{};
-		// gyro bias
-		float m_gyroBias[3]{};
-		double m_gyroTotalSum[3]{};
-		uint64 m_gyroTotalSampleCount{};
+  private:
+	Quaternionf m_imuQ; // current orientation
+	// angle data
+	float m_roll{};
+	float m_pitch{};
+	float m_yaw{};
+	int m_rollWinding{};
+	int m_pitchWinding{};
+	int m_yawWinding{};
+	// gyro bias
+	float m_gyroBias[3]{};
+	double m_gyroTotalSum[3]{};
+	uint64 m_gyroTotalSampleCount{};
 };

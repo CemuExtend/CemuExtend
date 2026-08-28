@@ -11,30 +11,30 @@ namespace ndef
 
 	class Record
 	{
-	public:
+	  public:
 		enum HeaderFlag
 		{
-			NDEF_IL         = 0x08,
-			NDEF_SR         = 0x10,
-			NDEF_CF         = 0x20,
-			NDEF_ME         = 0x40,
-			NDEF_MB         = 0x80,
-			NDEF_TNF_MASK   = 0x07,
+			NDEF_IL = 0x08,
+			NDEF_SR = 0x10,
+			NDEF_CF = 0x20,
+			NDEF_ME = 0x40,
+			NDEF_MB = 0x80,
+			NDEF_TNF_MASK = 0x07,
 		};
 
 		enum TypeNameFormat
 		{
-			NDEF_TNF_EMPTY      = 0,
-			NDEF_TNF_WKT        = 1,
-			NDEF_TNF_MEDIA      = 2,
-			NDEF_TNF_URI        = 3,
-			NDEF_TNF_EXT        = 4,
-			NDEF_TNF_UNKNOWN    = 5,
-			NDEF_TNF_UNCHANGED  = 6,
-			NDEF_TNF_RESERVED   = 7,
+			NDEF_TNF_EMPTY = 0,
+			NDEF_TNF_WKT = 1,
+			NDEF_TNF_MEDIA = 2,
+			NDEF_TNF_URI = 3,
+			NDEF_TNF_EXT = 4,
+			NDEF_TNF_UNKNOWN = 5,
+			NDEF_TNF_UNCHANGED = 6,
+			NDEF_TNF_RESERVED = 7,
 		};
 
-	public:
+	  public:
 		Record();
 		virtual ~Record();
 
@@ -54,7 +54,7 @@ namespace ndef
 		bool IsLast() const;
 		bool IsShort() const;
 
-	private:
+	  private:
 		uint8 mFlags;
 		TypeNameFormat mTNF;
 		std::vector<std::byte> mID;
@@ -64,24 +64,42 @@ namespace ndef
 
 	class Message
 	{
-	public:
+	  public:
 		Message();
 		virtual ~Message();
 
 		static std::optional<Message> FromBytes(const std::span<const std::byte>& data);
 		std::vector<std::byte> ToBytes() const;
 
-		Record& operator[](int i) { return mRecords[i]; }
-		const Record& operator[](int i) const { return mRecords[i]; }
+		Record& operator[](int i)
+		{
+			return mRecords[i];
+		}
+		const Record& operator[](int i) const
+		{
+			return mRecords[i];
+		}
 
 		void append(const Record& r);
 
-		auto begin() { return mRecords.begin(); }
-		auto end() { return mRecords.end(); }
-		auto begin() const { return mRecords.begin(); }
-		auto end() const { return mRecords.end(); }
+		auto begin()
+		{
+			return mRecords.begin();
+		}
+		auto end()
+		{
+			return mRecords.end();
+		}
+		auto begin() const
+		{
+			return mRecords.begin();
+		}
+		auto end() const
+		{
+			return mRecords.end();
+		}
 
-	private:
+	  private:
 		std::vector<Record> mRecords;
 	};
 

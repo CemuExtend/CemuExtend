@@ -3,7 +3,8 @@
 
 namespace nsyshid::backend::emulated
 {
-	class BackendEmulated : public nsyshid::Backend {
+	class BackendEmulated : public nsyshid::Backend
+	{
 	  public:
 		BackendEmulated();
 		~BackendEmulated();

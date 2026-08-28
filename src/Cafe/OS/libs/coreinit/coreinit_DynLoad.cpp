@@ -184,4 +184,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSDynLoad_IsModuleLoaded, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSDynLoad_FindExport, LogType::Placeholder);
 	}
-}
+} // namespace coreinit

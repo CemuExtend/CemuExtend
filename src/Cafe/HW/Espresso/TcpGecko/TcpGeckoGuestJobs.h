@@ -14,4 +14,4 @@ namespace TcpGecko::GuestJobs
 
 	// Called once per emulated frame from a live PPC core thread. Drains one pending job.
 	void Tick();
-}
+} // namespace TcpGecko::GuestJobs

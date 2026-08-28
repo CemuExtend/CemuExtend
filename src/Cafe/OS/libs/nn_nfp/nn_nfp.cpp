@@ -70,7 +70,7 @@ struct AmiiboInternal
 			appDataIdHigh = (uint16)(appId >> 16);
 			appDataIdLow = (uint16)(appId & 0xFFFF);
 		}
-	}amiiboSettings;
+	} amiiboSettings;
 	/* +0x0DC */ uint8 applicationData[0xD8];
 	/* encrypted region ends here */
 	/* +0x1B4 */ uint8 tagHMAC[32];
@@ -85,7 +85,7 @@ struct AmiiboInternal
 		/* +0x1E2 */ uint8 amiiboSeries;
 		/* +0x1E3 */ uint8 ukn_02; // always 0x02 ?
 		/* +0x1E4 */ uint8 ukn5C[4];
-	}amiiboIdentificationBlock;
+	} amiiboIdentificationBlock;
 	/* +0x1E8 */ uint8 keygenSalt[32];
 };
 
@@ -94,7 +94,6 @@ static_assert(offsetof(AmiiboInternal, dataHMAC) == 0x8);
 static_assert(offsetof(AmiiboInternal, amiiboSettings.appDataIdHigh) == 0xB6);
 static_assert(offsetof(AmiiboInternal, amiiboSettings.ukn0D8) == 0xD8);
 static_assert(offsetof(AmiiboInternal, tagHMAC) == 0x1B4);
-
 
 union AmiiboRawNFCData
 {
@@ -129,7 +128,7 @@ union AmiiboRawNFCData
 		/* +0x007 */ uint8 nintendoId;
 		/* +0x008 */ uint8 lockBytes[2];
 		/* +0x00A */ uint8 staticLock[2];
-		/* +0x00C */ uint8 cc[4]; // compatibility container
+		/* +0x00C */ uint8 cc[4];  // compatibility container
 		/* +0x010 */ uint8 ukn_A5; // always 0xA5
 		/* +0x011 */ uint8 writeCounter[2];
 		/* +0x013 */ uint8 unk013;
@@ -145,7 +144,7 @@ union AmiiboRawNFCData
 			/* +0x5A */ uint8 amiiboSeries;
 			/* +0x5B */ uint8 ukn_02; // always 0x02 ?
 			/* +0x5C */ uint8 ukn5C[4];
-		}amiiboIdentificationBlock;
+		} amiiboIdentificationBlock;
 		/* +0x060 */ uint8 keygenSalt[32];
 		/* +0x080 */ uint8 dataHMAC[32];
 		/* +0x0A0 */ uint8 encryptedMii[0x60];
@@ -169,7 +168,7 @@ struct AmiiboProcessedData
 	uint8 uid[7];
 };
 
-struct  
+struct
 {
 	bool nfpIsInitialized;
 	MPTR activateEvent;
@@ -184,9 +183,9 @@ struct
 	bool hasInvalidHMAC;
 	uint32 amiiboTouchTime;
 	AmiiboRawNFCData amiiboNFCData; // raw data
-	AmiiboInternal amiiboInternal; // decrypted internal format
+	AmiiboInternal amiiboInternal;	// decrypted internal format
 	AmiiboProcessedData amiiboProcessedData;
-}nfp_data = { 0 };
+} nfp_data = {0};
 
 bool nnNfp_writeCurrentAmiibo();
 
@@ -256,9 +255,9 @@ void nnNfpExport_StopDetection(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0));
 }
 
-#define NFP_TAG_MAX_LENGTH	(10)
+#define NFP_TAG_MAX_LENGTH (10)
 
-typedef struct  
+typedef struct
 {
 	/* +0x00 */ uint8 uidLength;
 	/* +0x01 */ uint8 uid[0xA];
@@ -267,7 +266,7 @@ typedef struct
 	uint32 ukn30[4];
 	uint32 ukn40[4];
 	uint32 ukn50;
-}nfpTagInfo_t;
+} nfpTagInfo_t;
 
 static_assert(sizeof(nfpTagInfo_t) == 0x54, "nfpTagInfo_t has invalid size");
 
@@ -358,10 +357,10 @@ namespace nn::nfp
 		memset(romInfo, 0x00, sizeof(RomInfo));
 		romInfo->characterId[0] = nfp_data.amiiboNFCData.amiiboIdentificationBlock.gameAndCharacterId[0];
 		romInfo->characterId[1] = nfp_data.amiiboNFCData.amiiboIdentificationBlock.gameAndCharacterId[1];
-		romInfo->characterId[2] = nfp_data.amiiboNFCData.amiiboIdentificationBlock.characterVariation; // guessed
-		romInfo->amiiboSeries = nfp_data.amiiboNFCData.amiiboIdentificationBlock.amiiboSeries; // guessed
+		romInfo->characterId[2] = nfp_data.amiiboNFCData.amiiboIdentificationBlock.characterVariation;	  // guessed
+		romInfo->amiiboSeries = nfp_data.amiiboNFCData.amiiboIdentificationBlock.amiiboSeries;			  // guessed
 		romInfo->number = *(uint16be*)nfp_data.amiiboNFCData.amiiboIdentificationBlock.amiiboModelNumber; // guessed
-		romInfo->nfpType = nfp_data.amiiboNFCData.amiiboIdentificationBlock.amiiboFigureType; // guessed
+		romInfo->nfpType = nfp_data.amiiboNFCData.amiiboIdentificationBlock.amiiboFigureType;			  // guessed
 		memset(romInfo->unused, 0x00, sizeof(romInfo->unused));
 	}
 
@@ -390,16 +389,16 @@ namespace nn::nfp
 		nnNfpUnlock();
 		return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0);
 	}
-};
+}; // namespace nn::nfp
 
-typedef struct  
+typedef struct
 {
 	uint16be year;
 	uint8 month;
 	uint8 day;
-}nfpDate_t;
+} nfpDate_t;
 
-typedef struct  
+typedef struct
 {
 	/* +0x00 */ nfpDate_t date;
 	/* +0x04 */ uint8 writeCount[2];
@@ -410,7 +409,7 @@ typedef struct
 	/* +0x0D */ uint8 nfpVersion;
 	/* +0x0E */ uint16be applicationAreaSize;
 	/* +0x10 */ uint8 unused[0x30];
-}nfpCommonData_t;
+} nfpCommonData_t;
 
 static_assert(sizeof(nfpCommonData_t) == 0x40, "nfpCommonData_t has invalid size");
 static_assert(offsetof(nfpCommonData_t, writeCount) == 0x4, "nfpCommonData.writeCount has invalid offset");
@@ -431,7 +430,7 @@ void nnNfpExport_GetNfpCommonInfo(PPCInterpreter_t* hCPU)
 		return;
 	}
 	// tag info format is currently unknown, so we just set it to all zeros for now
-	if (sizeof(nfpCommonData_t) != 0x40 )
+	if (sizeof(nfpCommonData_t) != 0x40)
 		assert_dbg();
 	memset(commonInfo, 0x00, sizeof(nfpCommonData_t));
 
@@ -454,30 +453,30 @@ void nnNfpExport_GetNfpCommonInfo(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0));
 }
 
-typedef struct  
+typedef struct
 {
-	/* +0x00 */ uint8 ownerMii[0x60]; 
+	/* +0x00 */ uint8 ownerMii[0x60];
 	/* +0x60 */ uint8 nickname[0x14];
 	/* +0x74 */ uint16be ukn74;
 	/* +0x76 */ uint8 ukn76;
 	/* +0x77 */ uint8 _padding77;
 	/* +0x78 */ nfpDate_t registerDate;
 	/* +0x7C */ uint8 ukn7C[0x2C];
-}nfpRegisterInfo_t;
+} nfpRegisterInfo_t;
 
-typedef struct  
+typedef struct
 {
 	/* +0x00 */ uint8 ownerMii[0x60];
 	/* +0x60 */ uint8 nickname[0x14];
 	// maybe has more fields?
-}nfpRegisterInfoSet_t;
+} nfpRegisterInfoSet_t;
 
 void nnNfpExport_GetNfpRegisterInfo(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::NN_NFP, "GetNfpRegisterInfo(0x{:08x})", hCPU->gpr[3]);
 	ppcDefineParamStructPtr(registerInfo, nfpRegisterInfo_t, 0);
 
-	if(!registerInfo)
+	if (!registerInfo)
 	{
 		osLib_returnFromFunction(hCPU, 0xC1B03780);
 		return;
@@ -489,7 +488,7 @@ void nnNfpExport_GetNfpRegisterInfo(PPCInterpreter_t* hCPU)
 		memcpy(registerInfo->ownerMii, nfp_data.amiiboInternal.amiiboSettings.mii, sizeof(nfp_data.amiiboInternal.amiiboSettings.mii));
 		memcpy(registerInfo->nickname, nfp_data.amiiboInternal.amiiboSettings.nickname, sizeof(nfp_data.amiiboInternal.amiiboSettings.nickname));
 	}
-	
+
 	// todo - missing fields
 
 	osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0));
@@ -577,7 +576,7 @@ void nnNfpExport_WriteApplicationArea(PPCInterpreter_t* hCPU)
 	cemuLog_log(LogType::NN_NFP, "WriteApplicationArea(0x{:08x}, 0x{:x}, 0x{:08x})", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5]);
 	ppcDefineParamPtr(bufferPtr, uint8*, 0);
 	ppcDefineParamU32(len, 1);
-	
+
 	if (!nfp_data.hasOpenApplicationArea)
 	{
 		osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_STATUS, NN_RESULT_MODULE_NN_NFP, 0));
@@ -600,20 +599,20 @@ void nnNfpExport_WriteApplicationArea(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0));
 }
 
-typedef struct  
+typedef struct
 {
 	uint32be appAreaId;
 	MEMPTR<uint8> initialData;
 	uint32be initialLen;
 	// more?
-}NfpCreateInfo_t;
+} NfpCreateInfo_t;
 
 void nnNfpExport_CreateApplicationArea(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::NN_NFP, "CreateApplicationArea(0x{:08x})", hCPU->gpr[3]);
 	ppcDefineParamPtr(createInfo, NfpCreateInfo_t, 0);
 
-	if (nfp_data.hasOpenApplicationArea || (nfp_data.amiiboInternal.amiiboSettings.flags&0x20))
+	if (nfp_data.hasOpenApplicationArea || (nfp_data.amiiboInternal.amiiboSettings.flags & 0x20))
 	{
 		// cant create app area if it already exists
 		osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_STATUS, NN_RESULT_MODULE_NN_NFP, 0));
@@ -692,7 +691,7 @@ void nnNfpExport_Flush(PPCInterpreter_t* hCPU)
 	cemuLog_log(LogType::NN_NFP, "Flush()");
 
 	// write Amiibo data
-	if (nfp_data.isReadOnly) 
+	if (nfp_data.isReadOnly)
 	{
 		cemuLog_log(LogType::Force, "Cannot write to Amiibo when it is mounted in read-only mode");
 		osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_STATUS, NN_RESULT_MODULE_NN_NFP, 0));
@@ -709,7 +708,7 @@ void nnNfpExport_Flush(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NFP, 0));
 }
 
-typedef struct  
+typedef struct
 {
 	/* +0x000 */ uint8 ukn00[0x10];
 	/* +0x010 */ uint32be mode;
@@ -719,7 +718,7 @@ typedef struct
 	/* +0x06C */ uint8 registerInfo[0xA8];
 	/* +0x114 */ uint8 commonInfo[0x40];
 	/* +0x154 */ uint8 ukn154[0x20];
-}AmiiboSettingsArgs_t;
+} AmiiboSettingsArgs_t;
 
 static_assert(sizeof(AmiiboSettingsArgs_t) == 0x174);
 static_assert(offsetof(AmiiboSettingsArgs_t, mode) == 0x10);
@@ -758,13 +757,13 @@ bool nnNfp_isInitialized()
 }
 
 // CEMU NFC error codes
-#define NFC_ERROR_NONE					(0)
-#define NFC_ERROR_NO_ACCESS				(1)
-#define NFC_ERROR_INVALID_FILE_FORMAT	(2)
+#define NFC_ERROR_NONE (0)
+#define NFC_ERROR_NO_ACCESS (1)
+#define NFC_ERROR_INVALID_FILE_FORMAT (2)
 
 bool nnNfp_touchNfcTagFromFile(const fs::path& filePath, uint32* nfcError)
 {
-	AmiiboRawNFCData rawData = { 0 };
+	AmiiboRawNFCData rawData = {0};
 	auto nfcData = FileStream::LoadIntoMemory(filePath);
 	if (!nfcData)
 	{
@@ -953,7 +952,7 @@ void nnNfpExport_GetNfpState(PPCInterpreter_t* hCPU)
 
 namespace nn::nfp
 {
-	typedef struct  
+	typedef struct
 	{
 		/* +0x00 */ uint8 uidLength;
 		/* +0x01 */ uint8 uid[0xA];
@@ -961,12 +960,11 @@ namespace nn::nfp
 		/* +0x0C */ uint8 ukn0C;
 		/* +0x0D */ uint8 ukn0D;
 		// more?
-	}NFCTagInfoCallbackParam_t;
+	} NFCTagInfoCallbackParam_t;
 
 	uint32 NFCGetTagInfo(uint32 index, uint32 timeout, MPTR functionPtr, void* userParam)
 	{
 		cemuLog_log(LogType::NN_NFP, "NFCGetTagInfo({},{},0x{:08x},0x{:08x})", index, timeout, functionPtr, userParam ? memory_getVirtualOffsetFromPointer(userParam) : 0);
-
 
 		cemu_assert(index == 0);
 
@@ -984,7 +982,6 @@ namespace nn::nfp
 
 		nnNfpUnlock();
 
-
 		return 0; // 0 -> success
 	}
 
@@ -992,14 +989,14 @@ namespace nn::nfp
 	{
 		uint32 level = (result >> 0x1b) & 3;
 		uint32 mask = 0x7f00000;
-		if (level != 3) 
+		if (level != 3)
 		{
 			mask = 0x1ff00000;
 		}
-		if (((result & mask) == 0x1b00000) && ((result & 0x80000000) != 0)) 
+		if (((result & mask) == 0x1b00000) && ((result & 0x80000000) != 0))
 		{
 			mask = 0x3ff;
-			if (level != 3) 
+			if (level != 3)
 			{
 				mask = 0xfffff;
 			}
@@ -1042,7 +1039,7 @@ namespace nn::nfp
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_nfp";
@@ -1057,10 +1054,10 @@ namespace nn::nfp
 			cafeExportRegisterFunc(nn::nfp::GetNfpReadOnlyInfo, "nn_nfp", "GetNfpReadOnlyInfo__Q2_2nn3nfpFPQ3_2nn3nfp12ReadOnlyInfo", LogType::NN_NFP);
 		};
 
-	}s_COSnnNfpModule;
+	} s_COSnnNfpModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnNfpModule;
 	}
-}
+} // namespace nn::nfp

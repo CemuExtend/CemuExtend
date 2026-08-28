@@ -46,7 +46,7 @@ namespace coreinit
 {
 	FSClientBody_t* __FSGetClientBody(FSClient_t* fsClient);
 	FSA_RESULT FSAUnmount(FSAClientHandle client, const char* mountedTarget,
-		uint32 flags);
+						  uint32 flags);
 	SysAllocator<OSMutex> s_fsGlobalMutex;
 
 	inline void FSLockMutex()
@@ -102,7 +102,7 @@ namespace coreinit
 			// check for SD card permissions (from cos.xml)
 			// One Piece relies on failing here, otherwise it will call FSGetMountSource in an infinite loop
 			CosCapabilityBitsFS perms = static_cast<CosCapabilityBitsFS>(CafeSystem::GetForegroundTitleCosCapabilities(CosCapabilityGroup::FS));
-			if(!HAS_FLAG(perms, CosCapabilityBitsFS::SDCARD_MOUNT))
+			if (!HAS_FLAG(perms, CosCapabilityBitsFS::SDCARD_MOUNT))
 			{
 				cemuLog_logOnce(LogType::Force, "Title is trying to access SD card mount info without having SD card permissions. This may not be a bug");
 				return FS_RESULT::END_ITERATION;
@@ -155,15 +155,14 @@ namespace coreinit
 	}
 
 	FS_RESULT FSUnmount(FSClient_t* fsClient, FSCmdBlock_t*, const char* target,
-		FS_ERROR_MASK)
+						FS_ERROR_MASK)
 	{
 		if (!fsClient || !target)
 			return FS_RESULT::ERR_PLACEHOLDER;
 		FSClientBody_t* body = __FSGetClientBody(fsClient);
 		if (!body)
 			return FS_RESULT::ERR_PLACEHOLDER;
-		return FSAUnmount(body->iosuFSAHandle, target, 0) == FSA_RESULT::OK ?
-			FS_RESULT::SUCCESS : FS_RESULT::ERR_PLACEHOLDER;
+		return FSAUnmount(body->iosuFSAHandle, target, 0) == FSA_RESULT::OK ? FS_RESULT::SUCCESS : FS_RESULT::ERR_PLACEHOLDER;
 	}
 
 	FS_RESULT FSBindMount(FSClient_t* fsClient, FSCmdBlock_t* fsCmdBlock, char* mountPathSrc, char* mountPathOut, FS_ERROR_MASK errMask)
@@ -826,7 +825,7 @@ namespace coreinit
 
 #define _FSCmdIntro()                                                                        \
 	FSClientBody_t* fsClientBody = __FSGetClientBody(fsClient);                              \
-	FSCmdBlockBody* fsCmdBlockBody = __FSGetCmdBlockBody(fsCmdBlock);                      \
+	FSCmdBlockBody* fsCmdBlockBody = __FSGetCmdBlockBody(fsCmdBlock);                        \
 	sint32 fsError = __FSPrepareCmd(fsClientBody, fsCmdBlockBody, errorMask, fsAsyncParams); \
 	if (fsError != 0)                                                                        \
 		return fsError;
@@ -2662,6 +2661,20 @@ namespace coreinit
 
 	void InitializeFS()
 	{
+		// These variables live on the host while their buffers and client bodies
+		// live in title memory. Recreate the bridge for every coreinit mapping;
+		// otherwise a second title reuses the first title's closed IOS handles.
+		sFSInitialized = true;
+		sFSShutdown = false;
+		g_fsRegisteredClientBodies = nullptr;
+		{
+			std::scoped_lock lock(s_fsa_activeClientsMutex);
+			s_fsa_activeClients.clear();
+		}
+		s_fsaInitDone = false;
+		s_fsaIpcPool = nullptr;
+		s_fsaIpcPoolBufferNumItems = 0;
+
 		OSInitMutex(&s_fsGlobalMutex);
 
 		cafeExportRegister("coreinit", FSInit, LogType::CoreinitFile);
@@ -2792,6 +2805,5 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSAGetStat, LogType::Placeholder);
 		cafeExportRegister("coreinit", FSAGetStatusStr, LogType::Placeholder);
 
-		g_fsRegisteredClientBodies = nullptr;
 	}
 } // namespace coreinit

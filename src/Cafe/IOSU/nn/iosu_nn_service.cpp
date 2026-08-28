@@ -16,7 +16,8 @@ namespace iosu
 			m_threadInitialized = false;
 			m_requestStop = false;
 			m_serviceThread = std::thread(&IPCSimpleService::ServiceThread, this);
-			while (!m_threadInitialized) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			while (!m_threadInitialized)
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			StartService();
 		}
 
@@ -25,17 +26,26 @@ namespace iosu
 			if (!m_isRunning.exchange(false))
 				return;
 			m_requestStop = true;
-			StopService();
-			if(m_timerId != IOSInvalidTimerId)
+			if (m_timerId != IOSInvalidTimerId)
 				IOS_DestroyTimer(m_timerId);
 			m_timerId = IOSInvalidTimerId;
 			IOS_SendMessage(m_msgQueueId, 0, 0); // wake up thread
 			m_serviceThread.join();
+
+			// External async producers must be quiescent before delayed IPC commands
+			// and their guest buffers are released.
+			BeforeStopService();
+			StopService();
+			IOS_DestroyMessageQueue(m_msgQueueId);
+			m_clientObjects.clear();
+			m_nextHandle = 1;
+			m_activeCmd = nullptr;
+			m_delayResponse = false;
 		}
 
 		void IPCSimpleService::ServiceThread()
 		{
-			if(!GetThreadName().empty())
+			if (!GetThreadName().empty())
 				SetThreadName(GetThreadName().c_str());
 			m_msgQueueId = IOS_CreateMessageQueue(_m_msgBuffer.GetPtr(), _m_msgBuffer.GetCount());
 			cemu_assert(!IOS_ResultIsError((IOS_ERROR)m_msgQueueId));
@@ -52,7 +62,7 @@ namespace iosu
 					cemu_assert_debug(m_requestStop);
 					break;
 				}
-				else if(msg == 1)
+				else if (msg == 1)
 				{
 					TimerUpdate();
 					continue;
@@ -61,7 +71,7 @@ namespace iosu
 				if (cmd->cmdId == IPCCommandId::IOS_OPEN)
 				{
 					void* clientObject = CreateClientObject();
-					if(clientObject == nullptr)
+					if (clientObject == nullptr)
 					{
 						cemuLog_log(LogType::Force, "IPCSimpleService[{}]: Maximum handle count reached or handle rejected", m_devicePath);
 						IOS_ResourceReply(cmd, IOS_ERROR_MAXIMUM_REACHED);
@@ -92,7 +102,7 @@ namespace iosu
 					uint32 requestId = cmd->args[0];
 					uint32 numIn = cmd->args[1];
 					uint32 numOut = cmd->args[2];
-					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{ cmd->args[3] }.GetPtr();
+					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{cmd->args[3]}.GetPtr();
 					IPCIoctlVector* vecIn = vec + 0; // the ordering of vecIn/vecOut differs from IPCService
 					IPCIoctlVector* vecOut = vec + numIn;
 					m_delayResponse = false;
@@ -110,13 +120,12 @@ namespace iosu
 					IOS_ResourceReply(cmd, IOS_ERROR_INVALID);
 				}
 			}
-			IOS_DestroyMessageQueue(m_msgQueueId);
 			m_threadInitialized = false;
 		}
 
 		void IPCSimpleService::SetTimerUpdate(uint32 milliseconds)
 		{
-			if(m_timerId != IOSInvalidTimerId)
+			if (m_timerId != IOSInvalidTimerId)
 				IOS_DestroyTimer(m_timerId);
 			m_timerId = IOS_CreateTimer(milliseconds * 1000, milliseconds * 1000, m_msgQueueId, 1);
 		}
@@ -141,7 +150,8 @@ namespace iosu
 			m_threadInitialized = false;
 			m_requestStop = false;
 			m_serviceThread = std::thread(&IPCService::ServiceThread, this);
-			while (!m_threadInitialized) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			while (!m_threadInitialized)
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 
 		void IPCService::Stop()
@@ -151,6 +161,7 @@ namespace iosu
 			m_requestStop = true;
 			IOS_SendMessage(m_msgQueueId, 0, 0); // wake up thread
 			m_serviceThread.join();
+			IOS_DestroyMessageQueue(m_msgQueueId);
 		}
 
 		void IPCService::ServiceThread()
@@ -190,7 +201,7 @@ namespace iosu
 					uint32 requestId = cmd->args[0];
 					uint32 numOut = cmd->args[1];
 					uint32 numIn = cmd->args[2];
-					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{ cmd->args[3] }.GetPtr();
+					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{cmd->args[3]}.GetPtr();
 					IPCIoctlVector* vecOut = vec + 0; // out buffers come first
 					IPCIoctlVector* vecIn = vec + numOut;
 
@@ -235,8 +246,7 @@ namespace iosu
 					IOS_ResourceReply(cmd, IOS_ERROR_INVALID);
 				}
 			}
-			IOS_DestroyMessageQueue(m_msgQueueId);
 			m_threadInitialized = false;
 		}
-	};
-};
+	}; // namespace nn
+}; // namespace iosu

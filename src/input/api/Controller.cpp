@@ -66,7 +66,7 @@ const ControllerState& ControllerBase::update_state()
 }
 
 void ControllerBase::apply_axis_setting(glm::vec2& axis, const glm::vec2& default_value,
-                                        const AxisSetting& setting) const
+										const AxisSetting& setting) const
 {
 	constexpr float kMaxValue = 1.0f + ControllerState::kMinAxisValue;
 	if (setting.deadzone < 1.0f)
@@ -160,36 +160,53 @@ const ControllerState& ControllerBase::calibrate()
 	return m_default_state;
 }
 
-
 std::string ControllerBase::get_button_name(uint64 button) const
 {
 	switch (button)
 	{
-	case kButtonZL: return "ZL";
-	case kButtonZR: return "ZR";
+	case kButtonZL:
+		return "ZL";
+	case kButtonZR:
+		return "ZR";
 
-	case kButtonUp: return "DPAD-Up";
-	case kButtonDown: return "DPAD-Down";
-	case kButtonLeft: return "DPAD-Left";
-	case kButtonRight: return "DPAD-Right";
+	case kButtonUp:
+		return "DPAD-Up";
+	case kButtonDown:
+		return "DPAD-Down";
+	case kButtonLeft:
+		return "DPAD-Left";
+	case kButtonRight:
+		return "DPAD-Right";
 
-	case kAxisXP: return "X-Axis+";
-	case kAxisYP: return "Y-Axis+";
+	case kAxisXP:
+		return "X-Axis+";
+	case kAxisYP:
+		return "Y-Axis+";
 
-	case kAxisXN: return "X-Axis-";
-	case kAxisYN: return "Y-Axis-";
+	case kAxisXN:
+		return "X-Axis-";
+	case kAxisYN:
+		return "Y-Axis-";
 
-	case kRotationXP: return "X-Rotation+";
-	case kRotationYP: return "Y-Rotation+";
+	case kRotationXP:
+		return "X-Rotation+";
+	case kRotationYP:
+		return "Y-Rotation+";
 
-	case kRotationXN: return "X-Rotation-";
-	case kRotationYN: return "Y-Rotation-";
+	case kRotationXN:
+		return "X-Rotation-";
+	case kRotationYN:
+		return "Y-Rotation-";
 
-	case kTriggerXP: return "X-Trigger+";
-	case kTriggerYP: return "Y-Trigger+";
+	case kTriggerXP:
+		return "X-Trigger+";
+	case kTriggerYP:
+		return "Y-Trigger+";
 
-	case kTriggerXN: return "X-Trigger-";
-	case kTriggerYN: return "y-Trigger-";
+	case kTriggerXN:
+		return "X-Trigger-";
+	case kTriggerYN:
+		return "y-Trigger-";
 	}
 
 	return fmt::format("Button {}", (uint64)button);

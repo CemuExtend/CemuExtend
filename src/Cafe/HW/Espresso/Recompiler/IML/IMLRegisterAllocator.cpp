@@ -15,7 +15,7 @@
 
 #include "Common/cpu_features.h"
 
-#define DEBUG_RA_EXTRA_VALIDATION 0	// if set to non-zero, additional expensive validation checks will be performed
+#define DEBUG_RA_EXTRA_VALIDATION 0 // if set to non-zero, additional expensive validation checks will be performed
 #define DEBUG_RA_INSTRUCTION_GEN 0
 
 struct IMLRARegAbstractLiveness // preliminary liveness info. One entry per register and segment
@@ -158,7 +158,7 @@ static void GetInstructionFixedRegisters(IMLInstruction* instruction, IMLFixedRe
 	{
 		if (instruction->operation == PPCREC_IML_OP_LEFT_SHIFT || instruction->operation == PPCREC_IML_OP_RIGHT_SHIFT_S || instruction->operation == PPCREC_IML_OP_RIGHT_SHIFT_U)
 		{
-			if(!g_CPUFeatures.x86.bmi2)
+			if (!g_CPUFeatures.x86.bmi2)
 			{
 				IMLPhysRegisterSet ps;
 				ps.SetAvailable(IMLArchX86::PHYSREG_GPR_BASE + X86_REG_ECX);
@@ -170,7 +170,7 @@ static void GetInstructionFixedRegisters(IMLInstruction* instruction, IMLFixedRe
 	{
 		IMLPhysRegisterSet ps;
 		ps.SetAvailable(IMLArchX86::PHYSREG_GPR_BASE + X86_REG_EAX);
-		fixedRegs.listInput.emplace_back(IMLREG_INVALID, ps); // none of the inputs may use EAX
+		fixedRegs.listInput.emplace_back(IMLREG_INVALID, ps);									// none of the inputs may use EAX
 		fixedRegs.listOutput.emplace_back(instruction->op_atomic_compare_store.regBoolOut, ps); // but we output to EAX
 	}
 	else if (instruction->type == PPCREC_IML_TYPE_CALL_IMM)
@@ -582,7 +582,7 @@ void IMLRA_HandleFixedRegisters(ppcImlGenContext_t* ppcImlGenContext, IMLSegment
 	for (raLivenessRange* currentRange = imlSegment->raInfo.linkedList_allSubranges; currentRange;)
 	{
 		IMLPhysRegisterSet allowedRegs;
-		if(currentRange->list_fixedRegRequirements.empty())
+		if (currentRange->list_fixedRegRequirements.empty())
 		{
 			currentRange = currentRange->link_allSegmentRanges.next;
 			continue; // since we run this pass for every segment we dont need to do global checks here for clusters which may not even have fixed register requirements
@@ -800,7 +800,7 @@ class RASpillStrategy_LocalRangeHoleCutting : public RASpillStrategy
 		{
 			collisionRange = IMLRA_SplitRange(nullptr, collisionRange, holeStartPosition, true);
 			cemu_assert_debug(!collisionRange || collisionRange->interval.start >= holeStartPosition); // verify if splitting worked at all, tail must be on or after the split point
-			cemu_assert_debug(!collisionRange || collisionRange->interval.start >= holeEndPosition);	// also verify that the trimmed hole is actually big enough
+			cemu_assert_debug(!collisionRange || collisionRange->interval.start >= holeEndPosition);   // also verify that the trimmed hole is actually big enough
 		}
 		else
 		{
@@ -988,7 +988,7 @@ class RASpillStrategy_ExplodeRange : public RASpillStrategy
 	{
 		raLivenessRange* range;
 		sint32 distance; // size of hole
-		// note: If we explode a range, we still have to check the size of the hole that becomes available, if too small then we need to add cost of splitting local subrange
+						 // note: If we explode a range, we still have to check the size of the hole that becomes available, if too small then we need to add cost of splitting local subrange
 	} explodeRange;
 };
 
@@ -1049,8 +1049,8 @@ class RASpillStrategy_ExplodeRangeInter : public RASpillStrategy
 	{
 		raLivenessRange* range;
 		sint32 distance; // size of hole
-		// note: If we explode a range, we still have to check the size of the hole that becomes available, if too small then we need to add cost of splitting local subrange
-	}explodeRange;
+						 // note: If we explode a range, we still have to check the size of the hole that becomes available, if too small then we need to add cost of splitting local subrange
+	} explodeRange;
 };
 
 // filter any registers from candidatePhysRegSet which cannot be used by currentRange due to fixed register requirements within the range that it occupies
@@ -1462,7 +1462,7 @@ void IMLRA_UpdateOrAddSubrangeLocation(raLivenessRange* subrange, raInstructionE
 		subrange->list_accessLocations.emplace_back(pos);
 		return;
 	}
-	if(subrange->list_accessLocations.back().pos == pos)
+	if (subrange->list_accessLocations.back().pos == pos)
 		return;
 	cemu_assert_debug(subrange->list_accessLocations.back().pos < pos);
 	subrange->list_accessLocations.emplace_back(pos);
@@ -2142,14 +2142,14 @@ static void DbgVerifyFixedRegRequirements(IMLSegment* imlSegment)
 {
 #if DEBUG_RA_EXTRA_VALIDATION
 	std::vector<raFixedRegRequirementWithVGPR> frr = IMLRA_BuildSegmentInstructionFixedRegList(imlSegment);
-	for(auto& fixedReq : frr)
+	for (auto& fixedReq : frr)
 	{
 		for (raLivenessRange* range = imlSegment->raInfo.linkedList_allSubranges; range; range = range->link_allSegmentRanges.next)
 		{
 			if (!range->interval2.ContainsEdge(fixedReq.pos))
 				continue;
 			// verify if the requirement is compatible
-			if(range->GetVirtualRegister() == fixedReq.regId)
+			if (range->GetVirtualRegister() == fixedReq.regId)
 			{
 				cemu_assert(range->HasPhysicalRegister());
 				cemu_assert(fixedReq.allowedReg.IsAvailable(range->GetPhysicalRegister())); // virtual register matches, but not assigned the right physical register

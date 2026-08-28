@@ -9,8 +9,8 @@ class DualStringBuffer
 {
 	static constexpr size_t N = 1024;
 
-public:
-	DualStringBuffer() : m_offsetBegin(N / 2), m_offsetEnd(N / 2) { }
+  public:
+	DualStringBuffer() : m_offsetBegin(N / 2), m_offsetEnd(N / 2) {}
 
 	~DualStringBuffer() = default;
 
@@ -29,7 +29,7 @@ public:
 		m_offsetEnd += (uint32)strView.size();
 	}
 
-	template <typename... Args>
+	template<typename... Args>
 	void appendFmt(const char* format_str, Args... args)
 	{
 		char* buf = (char*)(m_strBuffer + m_offsetEnd);
@@ -53,30 +53,28 @@ public:
 		return std::basic_string_view<char>((char*)(m_strBuffer + m_offsetBegin), m_offsetEnd - m_offsetBegin);
 	}
 
-private:
-	//void resizeBuffer(uint32 spaceRequiredFront, uint32 spaceRequiredBack)
+  private:
+	// void resizeBuffer(uint32 spaceRequiredFront, uint32 spaceRequiredBack)
 	//{
 	//	uint32 newTotalSize = spaceRequiredFront + size() + spaceRequiredBack;
 	//	// round to next multiple of 32 and add extra buffer
 	//	newTotalSize = (newTotalSize + 31) & ~31;
 	//	newTotalSize += (newTotalSize / 4);
-	//	// 
-	//}
+	//	//
+	// }
 
-	//uint8* m_bufferPtr{ nullptr };
-	//size_t m_bufferSize{ 0 };
-	//std::vector<uint8> m_buffer;
+	// uint8* m_bufferPtr{ nullptr };
+	// size_t m_bufferSize{ 0 };
+	// std::vector<uint8> m_buffer;
 	uint32 m_offsetBegin;
 	uint32 m_offsetEnd;
 
 	uint8 m_strBuffer[N];
 };
 
-
-
 namespace ZirEmitter
 {
-	static const char g_idx_to_element[] = { 'x' , 'y', 'z', 'w'};
+	static const char g_idx_to_element[] = {'x', 'y', 'z', 'w'};
 
 	void GLSL::Emit(ZpIR::ZpIRFunction* irFunction, StringBuf* output)
 	{
@@ -94,7 +92,7 @@ namespace ZirEmitter
 
 	void GLSL::GenerateBasicBlockCode(ZpIR::ZpIRBasicBlock& basicBlock)
 	{
-		// init context		
+		// init context
 #ifdef CEMU_DEBUG_ASSERT
 		for (auto& itr : m_blockContext.regInlinedExpression)
 		{
@@ -112,19 +110,13 @@ namespace ZirEmitter
 		ZpIR::IR::__InsBase* instruction = basicBlock.m_instructionFirst;
 		while (instruction)
 		{
-			ZpIR::ZpIRCmdUtil::forEachAccessedReg(basicBlock, instruction,
-				[this](ZpIR::IRReg readReg)
-			{
+			ZpIR::ZpIRCmdUtil::forEachAccessedReg(basicBlock, instruction, [this](ZpIR::IRReg readReg) {
 				if (readReg >= 0x8000)
 					assert_dbg();
 				// read access
 				auto& entry = m_blockContext.regReadTracking.at(readReg);
 				if (entry < 255)
-					entry++;
-			},
-				[](ZpIR::IRReg writtenReg)
-			{
-			});
+					entry++; }, [](ZpIR::IRReg writtenReg) {});
 
 			instruction = instruction->next;
 		}
@@ -223,7 +215,7 @@ namespace ZirEmitter
 			auto dstType = m_blockContext.currentBasicBlock->getRegType(ins->rA);
 			cemu_assert_debug(srcType == ZpIR::DataType::F32);
 			cemu_assert_debug(dstType == ZpIR::DataType::S32 || dstType == ZpIR::DataType::U32);
-			if(dstType == ZpIR::DataType::U32)
+			if (dstType == ZpIR::DataType::U32)
 				expressionBuf->append("uint(");
 			else
 				expressionBuf->append("int(");
@@ -290,7 +282,7 @@ namespace ZirEmitter
 			uint16 index;
 			loc.GetUniformRegister(index);
 			// todo - this is complex. Solve via callback
-			buf->appendFmt("uf_remappedVS[{}].{}", index/4, g_idx_to_element[index&3]);
+			buf->appendFmt("uf_remappedVS[{}].{}", index / 4, g_idx_to_element[index & 3]);
 			AssignResult(ins->regArray[0], buf);
 		}
 		else if (loc.IsVertexAttribute())
@@ -325,7 +317,7 @@ namespace ZirEmitter
 			cemu_assert_debug(ins->count == 4);
 			for (uint32 i = 0; i < ins->count; i++)
 			{
-				if(i > 0)
+				if (i > 0)
 					buf->append(", ");
 				appendSourceString(buf, ins->regArray[i]);
 			}
@@ -489,4 +481,4 @@ namespace ZirEmitter
 	{
 		m_stringBufferCache.emplace_back(buf);
 	}
-};
+}; // namespace ZirEmitter

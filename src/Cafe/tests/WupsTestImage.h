@@ -51,9 +51,9 @@ inline void WupsTestBe32(std::vector<std::byte>& bytes, std::size_t offset, std:
 inline std::uint32_t WupsTestU32(const std::vector<std::byte>& bytes, std::size_t offset)
 {
 	return (std::to_integer<std::uint32_t>(bytes[offset]) << 24) |
-		(std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
-		(std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
-		std::to_integer<std::uint32_t>(bytes[offset + 3]);
+		   (std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
+		   (std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
+		   std::to_integer<std::uint32_t>(bytes[offset + 3]);
 }
 
 inline std::vector<std::byte> WupsTestBytes(std::string_view value)
@@ -93,23 +93,23 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	std::vector<FixtureSection> sections;
 	sections.push_back({});
 	sections.push_back({".text", progbits, alloc | execute, 0x02000000, 0, 0, 4, 0,
-		std::vector<std::byte>{std::byte{0x4e}, std::byte{0x80}, std::byte{0x00}, std::byte{0x20}}, options.compressText});
+						std::vector<std::byte>{std::byte{0x4e}, std::byte{0x80}, std::byte{0x00}, std::byte{0x20}}, options.compressText});
 	std::vector<std::byte> data(64);
 	const std::string_view functionName = "OSReport";
 	const std::string_view replacementName = "my_OSReport";
 	std::memcpy(data.data(), functionName.data(), functionName.size());
 	std::memcpy(data.data() + 16, replacementName.data(), replacementName.size());
 	sections.push_back({".data", progbits, alloc | write | (options.tls ? tls : 0), 0x10000000,
-		0, 0, 4, 0, std::move(data)});
+						0, 0, 4, 0, std::move(data)});
 	sections.push_back({options.wums ? ".wums.meta" : ".wups.meta",
-		progbits, alloc | write, 0x10000100,
-		0, 0, 4, 0, WupsTestBytes(options.metadata)});
+						progbits, alloc | write, 0x10000100,
+						0, 0, 4, 0, WupsTestBytes(options.metadata)});
 	std::vector<std::byte> hooks(8);
 	WupsTestBe32(hooks, 0, options.hookType);
 	WupsTestBe32(hooks, 4, 0x02000000);
 	sections.push_back({options.wums ? ".wums.hooks" : ".wups.hooks",
-		progbits, alloc | write, 0x10000200,
-		0, 0, 4, 0, std::move(hooks)});
+						progbits, alloc | write, 0x10000200,
+						0, 0, 4, 0, std::move(hooks)});
 	if (options.includeLoad)
 	{
 		if (options.wums)
@@ -119,7 +119,7 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 			WupsTestBe32(exports, 4, 0x10000000);
 			WupsTestBe32(exports, 8, 0x02000000);
 			sections.push_back({".wums.exports", progbits, alloc | write,
-				0x10000300, 0, 0, 4, 0, std::move(exports)});
+								0x10000300, 0, 0, 4, 0, std::move(exports)});
 		}
 		else
 		{
@@ -132,20 +132,20 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 			WupsTestBe32(load, 28, 0x10000030);
 			WupsTestBe32(load, 32, options.processTarget);
 			sections.push_back({".wups.load", progbits, alloc | write,
-				0x10000300, 0, 0, 4, 0, std::move(load)});
+								0x10000300, 0, 0, 4, 0, std::move(load)});
 		}
 	}
 	if (options.wums && !options.dependencies.empty())
 		sections.push_back({".wums.dependencies", progbits, alloc | write,
-			0x10000400, 0, 0, 4, 0,
-			WupsTestBytes(options.dependencies)});
+							0x10000400, 0, 0, 4, 0,
+							WupsTestBytes(options.dependencies)});
 	std::size_t importIndex{};
 	if (options.includeImport)
 	{
 		importIndex = sections.size();
 		sections.push_back({options.wrongImportKind ? ".dimport_coreinit" : ".fimport_coreinit",
-			imports, alloc | (options.wrongImportKind ? 0 : execute), 0xc0000000,
-			0, 0, 16, 0, std::vector<std::byte>(16)});
+							imports, alloc | (options.wrongImportKind ? 0 : execute), 0xc0000000,
+							0, 0, 16, 0, std::vector<std::byte>(16)});
 	}
 	std::size_t relocationIndex{};
 	if (options.includeRelocation)
@@ -165,14 +165,14 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	sections.push_back({".symtab", symtab, 0, 0, 0, options.includeImport ? 1U : 0U, 4, 16, std::move(symbols)});
 	const auto stringIndex = sections.size();
 	sections.push_back({".strtab", strtab, 0, 0, 0, 0, 1, 0,
-		WupsTestBytes(std::string_view{"\0OSReport\0", 10})});
+						WupsTestBytes(std::string_view{"\0OSReport\0", 10})});
 	sections[symbolIndex].link = static_cast<std::uint32_t>(stringIndex);
 	if (options.includeRelocation)
 	{
 		sections[relocationIndex].link = static_cast<std::uint32_t>(symbolIndex);
 		WupsTestBe32(sections[relocationIndex].data, 0, 0x02000000);
 		WupsTestBe32(sections[relocationIndex].data, 4,
-			(static_cast<std::uint32_t>(options.includeImport ? 1 : 0) << 8) | options.relocationType);
+					 (static_cast<std::uint32_t>(options.includeImport ? 1 : 0) << 8) | options.relocationType);
 	}
 	std::string names(1, '\0');
 	std::vector<std::uint32_t> nameOffsets;
@@ -214,7 +214,7 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 			stored[index].resize(4 + bound);
 			WupsTestBe32(stored[index], 0, sections[index].data.size());
 			if (compress2(reinterpret_cast<Bytef*>(stored[index].data() + 4), &bound,
-				reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size(), 9) != Z_OK)
+						  reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size(), 9) != Z_OK)
 				std::abort();
 			stored[index].resize(4 + bound);
 			sections[index].flags |= compressed;
@@ -226,14 +226,22 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	}
 	std::vector<std::byte> image(cursor);
 	WupsTestBe32(image, 0, 0x7f454c46);
-	image[4] = std::byte{1}; image[5] = std::byte{2}; image[6] = std::byte{1};
-	image[7] = std::byte{0xca}; image[8] = std::byte{0xfe};
+	image[4] = std::byte{1};
+	image[5] = std::byte{2};
+	image[6] = std::byte{1};
+	image[7] = std::byte{0xca};
+	image[8] = std::byte{0xfe};
 	image[9] = options.wums ? std::byte{0xaf} : std::byte{'P'};
 	image[10] = options.wums ? std::byte{0xfe} : std::byte{'L'};
-	WupsTestBe16(image, 16, 0xfe01); WupsTestBe16(image, 18, 20); WupsTestBe32(image, 20, 1);
-	WupsTestBe32(image, 24, 0x02000000); WupsTestBe32(image, 32, sectionTableOffset);
-	WupsTestBe16(image, 40, 52); WupsTestBe16(image, 46, 40);
-	WupsTestBe16(image, 48, sections.size()); WupsTestBe16(image, 50, nameIndex);
+	WupsTestBe16(image, 16, 0xfe01);
+	WupsTestBe16(image, 18, 20);
+	WupsTestBe32(image, 20, 1);
+	WupsTestBe32(image, 24, 0x02000000);
+	WupsTestBe32(image, 32, sectionTableOffset);
+	WupsTestBe16(image, 40, 52);
+	WupsTestBe16(image, 46, 40);
+	WupsTestBe16(image, 48, sections.size());
+	WupsTestBe16(image, 50, nameIndex);
 	for (std::size_t index = 0; index < sections.size(); ++index)
 	{
 		const auto offset = sectionTableOffset + index * 40;
@@ -252,9 +260,10 @@ inline std::vector<std::byte> BuildWupsTestImage(const WupsTestImageOptions& opt
 	}
 	for (std::size_t index = 0; index < sections.size(); ++index)
 	{
-		if (index == crcIndex) continue;
+		if (index == crcIndex)
+			continue;
 		const auto checksum = static_cast<std::uint32_t>(crc32(0,
-			reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size()));
+															   reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size()));
 		WupsTestBe32(sections[crcIndex].data, index * 4, checksum);
 		WupsTestBe32(image, fileOffsets[crcIndex] + index * 4, checksum);
 	}

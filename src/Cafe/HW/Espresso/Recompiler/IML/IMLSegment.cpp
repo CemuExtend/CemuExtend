@@ -34,7 +34,7 @@ void IMLSegment::SetLinkBranchNotTaken(IMLSegment* imlSegmentDst)
 	if (nextSegmentBranchNotTaken)
 		nextSegmentBranchNotTaken->list_prevSegments.erase(std::find(nextSegmentBranchNotTaken->list_prevSegments.begin(), nextSegmentBranchNotTaken->list_prevSegments.end(), this));
 	nextSegmentBranchNotTaken = imlSegmentDst;
-	if(imlSegmentDst)
+	if (imlSegmentDst)
 		imlSegmentDst->list_prevSegments.push_back(this);
 }
 

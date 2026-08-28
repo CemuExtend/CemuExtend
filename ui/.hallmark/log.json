@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-08-24",
+    "macrostructure": "Workbench",
+    "theme": "custom",
+    "theme_axes": "dark / utilitarian-sans / cool-cyan",
+    "enrichment": "supplied game artwork",
+    "brief": "CemuExtend reference UI full 81-screen rebuild",
+    "scope": "app",
+    "nav": "N9 desktop chrome",
+    "footer": "Ft2 status line",
+    "pre_emit": "P5 H5 E4 S5 R5 V4",
+    "slop_test": "pass; native desktop density and reference geometry take precedence over marketing-page spacing floors",
+    "verification": "main-window embedded workspaces verified at 320/375/414/768/1440 widths with no page overflow; exact approval remains the only modal; full 81-screen regression pending"
+  }
+]

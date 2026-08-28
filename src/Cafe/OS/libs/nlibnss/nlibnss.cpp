@@ -18,7 +18,6 @@ namespace nlibnss
 		*uknLength1 = 0x100;
 		*uknLength2 = 0x100;
 
-
 		return 0; // failed
 	}
 
@@ -31,7 +30,7 @@ namespace nlibnss
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nlibnss";
@@ -43,10 +42,10 @@ namespace nlibnss
 			cafeExportRegister("nlibnss", NSSExportDeviceCertChain, LogType::Placeholder);
 		};
 
-	}s_COSnlibnssModule;
+	} s_COSnlibnssModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnlibnssModule;
 	}
-}
+} // namespace nlibnss

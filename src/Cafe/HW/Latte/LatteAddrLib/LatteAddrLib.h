@@ -17,7 +17,7 @@ namespace LatteAddrLib
 	union AddrSurfaceFlags
 	{
 		uint32 rawValue;
-		struct  
+		struct
 		{
 			bool color : 1;
 			bool depth : 1;
@@ -101,12 +101,11 @@ namespace LatteAddrLib
 
 	inline bool TM_IsThick(Latte::E_HWTILEMODE tileMode)
 	{
-		return
-			tileMode == Latte::E_HWTILEMODE::TM_1D_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_2D_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_2B_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_3D_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_3B_TILED_THICK;
+		return tileMode == Latte::E_HWTILEMODE::TM_1D_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_2D_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_2B_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_3D_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_3B_TILED_THICK;
 	}
 
 	inline uint32 TM_GetThickness(Latte::E_HWTILEMODE tileMode)
@@ -116,16 +115,15 @@ namespace LatteAddrLib
 
 	inline bool TM_IsThickAndMacroTiled(Latte::E_HWTILEMODE tileMode)
 	{
-		return
-			tileMode == Latte::E_HWTILEMODE::TM_2D_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_2B_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_3D_TILED_THICK ||
-			tileMode == Latte::E_HWTILEMODE::TM_3B_TILED_THICK;
+		return tileMode == Latte::E_HWTILEMODE::TM_2D_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_2B_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_3D_TILED_THICK ||
+			   tileMode == Latte::E_HWTILEMODE::TM_3B_TILED_THICK;
 	}
 
 	uint32 ComputeSurfaceRotationFromTileMode(Latte::E_HWTILEMODE tileMode);
 	uint32 ComputeSurfaceBankSwappedWidth(Latte::E_HWTILEMODE tileMode, uint32 bpp, uint32 numSamples, uint32 pitch);
-	
+
 	void GX2CalculateSurfaceInfo(Latte::E_GX2SURFFMT surfaceFormat, uint32 surfaceWidth, uint32 surfaceHeight, uint32 surfaceDepth, Latte::E_DIM surfaceDim, Latte::E_GX2TILEMODE surfaceTileMode, uint32 surfaceAA, uint32 level, AddrSurfaceInfo_OUT* pSurfOut, bool optimizeForDepthBuffer = false, bool optimizeForScanBuffer = false);
 	uint32 CalculateMipOffset(Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, Latte::E_DIM dim, Latte::E_HWTILEMODE tileMode, uint32 swizzle, uint32 surfaceAA, sint32 mipIndex);
 	void CalculateMipAndSliceAddr(uint32 physAddr, uint32 physMipAddr, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, Latte::E_DIM dim, Latte::E_HWTILEMODE tileMode, uint32 swizzle, uint32 surfaceAA, sint32 mipIndex, sint32 sliceIndex, uint32* outputSliceOffset, uint32* outputSliceSize, sint32* subSliceIndex);
@@ -178,4 +176,4 @@ namespace LatteAddrLib
 	void SetupCachedSurfaceAddrInfo(CachedSurfaceAddrInfo* info, uint32 slice, uint32 sample, uint32 bpp, uint32 pitch, uint32 height, uint32 depth, uint32 numSamples, Latte::E_HWTILEMODE tileMode, int isDepth, uint32 pipeSwizzle, uint32 bankSwizzle);
 	uint32 ComputeSurfaceAddrFromCoordMacroTiledCached(uint32 x, uint32 y, CachedSurfaceAddrInfo* info);
 	uint32 ComputeSurfaceAddrFromCoordMacroTiledCached_tm04_sample1(uint32 x, uint32 y, CachedSurfaceAddrInfo* info);
-};
+}; // namespace LatteAddrLib

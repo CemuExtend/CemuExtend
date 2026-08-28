@@ -4,8 +4,8 @@
 
 class FileCache
 {
-public:
-	struct FileName 
+  public:
+	struct FileName
 	{
 		FileName(uint64 name1, uint64 name2) : name1(name1), name2(name2) {};
 		FileName(std::string_view filePath)
@@ -39,7 +39,10 @@ public:
 	static FileCache* Open(const fs::path& path, bool allowCreate, uint32 extraVersion = 0);
 	static FileCache* Open(const fs::path& path); // open without extraVersion check
 
-	void UseCompression(bool enable) { enableCompression = enable; };
+	void UseCompression(bool enable)
+	{
+		enableCompression = enable;
+	};
 
 	void AddFile(const FileName&& name, const uint8* fileData, sint32 fileSize);
 	void AddFileAsync(const FileName& name, const uint8* fileData, sint32 fileSize);
@@ -52,7 +55,7 @@ public:
 
 	sint32 GetMaximumFileIndex();
 
-private:
+  private:
 	struct FileTableEntry
 	{
 		enum FLAGS : uint8

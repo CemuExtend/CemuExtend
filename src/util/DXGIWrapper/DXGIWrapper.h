@@ -6,11 +6,11 @@
 
 class DXGIWrapper
 {
-public:
+  public:
 	DXGIWrapper()
 		: DXGIWrapper(nullptr)
 	{}
-	
+
 	DXGIWrapper(uint8* deviceLUID)
 	{
 		m_moduleHandle = LoadLibraryA("dxgi.dll");
@@ -58,7 +58,7 @@ public:
 		return m_dxgiAdapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info) == S_OK;
 	}
 
-private:
+  private:
 	HMODULE m_moduleHandle = nullptr;
 	Microsoft::WRL::ComPtr<IDXGIAdapter3> m_dxgiAdapter;
 

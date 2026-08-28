@@ -3,8 +3,10 @@
 #include "config/CemuConfig.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
+#endif
 #include <png.h>
 
 #include "config/ActiveSettings.h"
@@ -14,7 +16,7 @@ std::unique_ptr<Renderer> g_renderer;
 bool Renderer::GetVRAMInfo(int& usageInMB, int& totalInMB) const
 {
 	usageInMB = totalInMB = -1;
-	
+
 #if BOOST_OS_WINDOWS
 	if (m_dxgi_wrapper)
 	{
@@ -31,14 +33,14 @@ bool Renderer::GetVRAMInfo(int& usageInMB, int& totalInMB) const
 	return false;
 }
 
-
 void Renderer::Initialize()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// imgui
 	imguiFontAtlas = new ImFontAtlas();
 	imguiFontAtlas->AddFontDefault();
 
-	auto setupContext = [](ImGuiContext* context){
+	auto setupContext = [](ImGuiContext* context) {
 		ImGui::SetCurrentContext(context);
 		ImGuiIO& io = ImGui::GetIO();
 		io.WantSaveIniSettings = false;
@@ -49,25 +51,29 @@ void Renderer::Initialize()
 	imguiPadContext = ImGui::CreateContext(imguiFontAtlas);
 	setupContext(imguiTVContext);
 	setupContext(imguiPadContext);
+#endif
 }
 
 void Renderer::Shutdown()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	// imgui
 	ImGui::DestroyContext(imguiTVContext);
 	ImGui::DestroyContext(imguiPadContext);
-    ImGui_ClearFonts();
+	ImGui_ClearFonts();
 	delete imguiFontAtlas;
+#endif
 }
 
 bool Renderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	const auto window = GetWindowMetrics();
 	if (!mainWindow && !window.padOpen)
 		return false;
 	const sint32 w = mainWindow ? window.physicalWidth : window.physicalPadWidth;
 	const sint32 h = mainWindow ? window.physicalHeight : window.physicalPadHeight;
-		
+
 	if (w == 0 || h == 0)
 		return false;
 
@@ -80,6 +86,10 @@ bool Renderer::ImguiBegin(bool mainWindow)
 
 	ImGui_PrecacheFonts();
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 uint8 Renderer::SRGBComponentToRGB(uint8 ci)
@@ -145,7 +155,6 @@ void Renderer::CancelScreenshotRequest()
 	m_screenshot_active_request_id = 0;
 }
 
-
 Renderer::ScreenshotRequestId Renderer::GetActiveScreenshotRequestId()
 {
 	std::lock_guard lock(m_screenshot_mutex);
@@ -153,7 +162,7 @@ Renderer::ScreenshotRequestId Renderer::GetActiveScreenshotRequestId()
 }
 
 void Renderer::SaveScreenshot(ScreenshotRequestId requestId, const std::vector<uint8>& rgb_data,
-	int width, int height, bool mainWindow)
+							  int width, int height, bool mainWindow)
 {
 	ScreenshotSaveFunction onSaveScreenshot;
 	{

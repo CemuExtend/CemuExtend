@@ -11,13 +11,22 @@
 struct ModExecutionContext;
 struct ModServicePermissions;
 struct PPCInterpreter_t;
-namespace cemuextend_hle { class Cex2Owner; }
+namespace cemuextend_hle
+{
+	class Cex2Owner;
+}
 
-enum class CemodLifecycle : std::uint8_t { Init, Tick, Event, Shutdown };
+enum class CemodLifecycle : std::uint8_t
+{
+	Init,
+	Tick,
+	Event,
+	Shutdown
+};
 
 class CemodRuntime
 {
-public:
+  public:
 	static constexpr std::size_t kMaximumModsPerTitle = 16;
 	static constexpr std::uint32_t kMaximumTitleTimeMicroseconds = 4000;
 
@@ -25,12 +34,12 @@ public:
 	~CemodRuntime();
 
 	[[nodiscard]] std::optional<std::uint64_t> Load(CemodPackage package,
-		std::uint32_t userPermissions, std::uint32_t titlePermissions, std::string& error,
-		const ModServicePermissions* servicePermissions = nullptr);
+													std::uint32_t userPermissions, std::uint32_t titlePermissions, std::string& error,
+													const ModServicePermissions* servicePermissions = nullptr);
 	[[nodiscard]] bool BeginTrustedTitle(std::uint64_t titleId, std::string& error);
 	[[nodiscard]] bool ReadyForNextTitle(std::string& error) const;
 	[[nodiscard]] bool Invoke(std::uint64_t handle, CemodLifecycle lifecycle,
-		std::uint32_t argument = 0, std::uint32_t argumentSize = 0);
+							  std::uint32_t argument = 0, std::uint32_t argumentSize = 0);
 	[[nodiscard]] bool Unload(std::uint64_t handle);
 	void BeginFrame();
 	void TickAll();
@@ -38,7 +47,7 @@ public:
 	// Drives WUPS plugin OnApplicationStarts. Must run on an emulated PPC/CPU thread.
 	void OnApplicationStarts();
 	void UpdatePermissions(std::string_view principal, std::uint32_t permissions,
-		const ModServicePermissions& services);
+						   const ModServicePermissions& services);
 	void UpdateTitlePermissions(const ModServicePermissions& services);
 	// Completes sandbox/WUPS teardown and requests trusted release. Trusted code
 	// remains mapped until the explicit post-thread late phase.
@@ -62,7 +71,7 @@ public:
 	[[nodiscard]] std::size_t Size() const;
 	[[nodiscard]] cemuextend_hle::Cex2Owner* TrustedOwner();
 
-private:
+  private:
 	struct Impl;
 	std::unique_ptr<Impl> m_impl;
 };

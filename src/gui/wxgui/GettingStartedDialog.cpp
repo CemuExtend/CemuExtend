@@ -37,12 +37,11 @@ wxPanel* GettingStartedDialog::CreatePage1()
 		page1_sizer->Add(sizer, 0, wxALL | wxEXPAND, 5);
 	}
 
-	if(ActiveSettings::IsPortableMode())
+	if (ActiveSettings::IsPortableMode())
 	{
 		m_page1.portableModeInfoText = new wxStaticText(mainPanel, wxID_ANY, _("Cemu is running in portable mode"));
 		m_page1.portableModeInfoText->Show(true);
 		page1_sizer->Add(m_page1.portableModeInfoText, 0, wxALL, 5);
-
 	}
 
 	// language selection
@@ -129,7 +128,7 @@ wxPanel* GettingStartedDialog::CreatePage1()
 		sizer->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_ALL);
 
 		auto* next = new wxButton(mainPanel, wxID_ANY, _("Next"));
-		next->Bind(wxEVT_BUTTON, [this](const auto&){m_notebook->SetSelection(1); });
+		next->Bind(wxEVT_BUTTON, [this](const auto&) { m_notebook->SetSelection(1); });
 		sizer->Add(next, 0, wxALIGN_BOTTOM | wxALIGN_RIGHT | wxALL, 5);
 
 		page1_sizer->Add(sizer, 1, wxEXPAND, 5);
@@ -171,10 +170,11 @@ wxPanel* GettingStartedDialog::CreatePage2()
 
 		m_page2.updateCheckbox = new wxCheckBox(sizer->GetStaticBox(), wxID_ANY, _("Automatically check for updates"));
 		option_sizer->Add(m_page2.updateCheckbox, 0, wxALL, 5);
-#if BOOST_OS_LINUX 
-		if (!std::getenv("APPIMAGE")) {
+#if BOOST_OS_LINUX
+		if (!std::getenv("APPIMAGE"))
+		{
 			m_page2.updateCheckbox->Disable();
-		} 
+		}
 #endif
 		sizer->Add(option_sizer, 1, wxEXPAND, 5);
 		page2_sizer->Add(sizer, 0, wxALL | wxEXPAND, 5);
@@ -188,16 +188,16 @@ wxPanel* GettingStartedDialog::CreatePage2()
 		sizer->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_ALL);
 
 		auto* previous = new wxButton(result, wxID_ANY, _("Previous"));
-		previous->Bind(wxEVT_BUTTON, [this](const auto&) {m_notebook->SetSelection(0); });
+		previous->Bind(wxEVT_BUTTON, [this](const auto&) { m_notebook->SetSelection(0); });
 		sizer->Add(previous, 0, wxALIGN_BOTTOM | wxALIGN_RIGHT | wxALL, 5);
 
 		auto* close = new wxButton(result, wxID_ANY, _("Close"));
-		close->Bind(wxEVT_BUTTON, [this](const auto&){ Close(); });
+		close->Bind(wxEVT_BUTTON, [this](const auto&) { Close(); });
 		sizer->Add(close, 1, wxALIGN_BOTTOM | wxALIGN_RIGHT | wxALL, 5);
 
 		page2_sizer->Add(sizer, 1, wxEXPAND | wxLEFT, 5);
 	}
-	
+
 	result->SetSizer(page2_sizer);
 	return result;
 }
@@ -229,6 +229,7 @@ void GettingStartedDialog::OnClose(wxCloseEvent& event)
 	wxGUIConfig.fullscreen = m_page2.fullscreenCheckbox->GetValue();
 	wxGUIConfig.check_update = m_page2.updateCheckbox->GetValue();
 	wxGUIConfig.pad_open = m_page2.separateCheckbox->GetValue();
+	SyncWxFrontendSettingsToNeutral();
 
 	auto& config = GetConfig();
 	const fs::path gamePath = wxHelper::MakeFSPath(m_page1.gamePathPicker->GetPath());
@@ -248,8 +249,8 @@ GettingStartedDialog::GettingStartedDialog(
 	std::function<bool()> escapeDown,
 	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
 	std::shared_ptr<Host::IPathProvider> pathProvider, wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, _("Getting started"), wxDefaultPosition, { 740,530 },
-		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: wxDialog(parent, wxID_ANY, _("Getting started"), wxDefaultPosition, {740, 530},
+			   wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_emulationController(emulationController),
 	  m_escapeDown(std::move(escapeDown)),
 	  m_uiDispatcher(std::move(uiDispatcher)),

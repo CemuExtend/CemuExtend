@@ -30,13 +30,13 @@ enum
 wxDEFINE_EVENT(wxEVT_SEARCH_FINISHED, wxCommandEvent);
 
 wxBEGIN_EVENT_TABLE(MemorySearcherTool, wxFrame)
-EVT_CLOSE(MemorySearcherTool::OnClose)
-EVT_BUTTON(BUTTON_START, MemorySearcherTool::OnSearch)
-EVT_BUTTON(BUTTON_FILTER, MemorySearcherTool::OnFilter)
-EVT_TIMER(TIMER_REFRESH, MemorySearcherTool::OnTimerTick)
-wxEND_EVENT_TABLE()
+	EVT_CLOSE(MemorySearcherTool::OnClose)
+		EVT_BUTTON(BUTTON_START, MemorySearcherTool::OnSearch)
+			EVT_BUTTON(BUTTON_FILTER, MemorySearcherTool::OnFilter)
+				EVT_TIMER(TIMER_REFRESH, MemorySearcherTool::OnTimerTick)
+					wxEND_EVENT_TABLE()
 
-constexpr auto kMaxResultCount = 5000;
+						constexpr auto kMaxResultCount = 5000;
 
 const wxString kDatatypeFloat = "float";
 const wxString kDatatypeDouble = "double";
@@ -45,7 +45,7 @@ const wxString kDatatypeInt8 = "int8";
 const wxString kDatatypeInt16 = "int16";
 const wxString kDatatypeInt32 = "int32";
 const wxString kDatatypeInt64 = "int64";
-const wxString kDataTypeNames[] = {kDatatypeFloat,kDatatypeDouble,/*DATATYPE_STRING,*/kDatatypeInt8,kDatatypeInt16,kDatatypeInt32,kDatatypeInt64};
+const wxString kDataTypeNames[] = {kDatatypeFloat, kDatatypeDouble, /*DATATYPE_STRING,*/ kDatatypeInt8, kDatatypeInt16, kDatatypeInt32, kDatatypeInt64};
 
 MemorySearcherTool::MemorySearcherTool(wxWindow* parent)
 	: wxFrame(parent, wxID_ANY, _("Memory Searcher"), wxDefaultPosition, wxSize(600, 540), wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL)
@@ -126,7 +126,7 @@ MemorySearcherTool::MemorySearcherTool(wxWindow* parent)
 
 	m_refresh_timer = new wxTimer(this, TIMER_REFRESH);
 	m_refresh_timer->Start(250);
-	
+
 	this->SetSizer(sizer);
 	this->wxWindowBase::Layout();
 
@@ -193,7 +193,7 @@ void MemorySearcherTool::OnUpdateGauge(wxSetGaugeValue& event)
 		gauge->SetValue(value);
 		return;
 	}
-	
+
 	debug_printf("update gauge: %d + %d = %d (/%d)\n", gauge->GetValue(), value, gauge->GetValue() + value, gauge->GetRange());
 	gauge->SetValue(gauge->GetValue() + value);
 }
@@ -228,40 +228,39 @@ void MemorySearcherTool::OnSearch(wxCommandEvent&)
 	if (m_worker.joinable())
 		m_worker.join();
 
-	m_worker = std::thread([this]()
+	m_worker = std::thread([this]() {
+		m_search_jobs.clear();
+		uint32 total_size = 0;
+		for (const auto& itr : memory_getMMURanges())
 		{
-			m_search_jobs.clear();
-			uint32 total_size = 0;
-			for (const auto& itr : memory_getMMURanges())
-			{
-				if (!m_running)
-					return;
+			if (!m_running)
+				return;
 
-				if (!itr->isMapped())
-					continue;
+			if (!itr->isMapped())
+				continue;
 
-				void* ptr = itr->getPtr();
-				const uint32 size = itr->getSize();
+			void* ptr = itr->getPtr();
+			const uint32 size = itr->getSize();
 
-				total_size += (size / kGaugeStep);
-				m_search_jobs.emplace_back(std::async(std::launch::async, [this, ptr, size]() { return SearchValues(m_searchDataType, ptr, size); }));
-			}
+			total_size += (size / kGaugeStep);
+			m_search_jobs.emplace_back(std::async(std::launch::async, [this, ptr, size]() { return SearchValues(m_searchDataType, ptr, size); }));
+		}
 
-			wxQueueEvent(this, new wxSetGaugeValue(0, total_size, m_gauge));
-			
-			ListType_t tmp;
-			for (auto& it : m_search_jobs)
-			{
-				const auto result = it.get();
-				tmp.insert(tmp.end(), result.cbegin(), result.cend());
-			}
-		
-			std::unique_lock lock(m_mutex);
-			m_searchBuffer.swap(tmp);
-			lock.unlock();
-			
-			wxQueueEvent(this, new wxCommandEvent(wxEVT_SEARCH_FINISHED));
-		});
+		wxQueueEvent(this, new wxSetGaugeValue(0, total_size, m_gauge));
+
+		ListType_t tmp;
+		for (auto& it : m_search_jobs)
+		{
+			const auto result = it.get();
+			tmp.insert(tmp.end(), result.cbegin(), result.cend());
+		}
+
+		std::unique_lock lock(m_mutex);
+		m_searchBuffer.swap(tmp);
+		lock.unlock();
+
+		wxQueueEvent(this, new wxCommandEvent(wxEVT_SEARCH_FINISHED));
+	});
 }
 
 void MemorySearcherTool::OnFilter(wxCommandEvent& event)
@@ -272,19 +271,18 @@ void MemorySearcherTool::OnFilter(wxCommandEvent& event)
 	if (m_worker.joinable())
 		m_worker.join();
 
-	m_worker = std::thread([this]()
-		{
-			const auto count = (uint32)m_searchBuffer.size();
-			wxQueueEvent(this, new wxSetGaugeValue(0, count, m_gauge));
-		
-			auto tmp = FilterValues(m_searchDataType);
+	m_worker = std::thread([this]() {
+		const auto count = (uint32)m_searchBuffer.size();
+		wxQueueEvent(this, new wxSetGaugeValue(0, count, m_gauge));
 
-			std::unique_lock lock(m_mutex);
-			m_searchBuffer.swap(tmp);
-			lock.unlock();
+		auto tmp = FilterValues(m_searchDataType);
 
-			wxQueueEvent(this, new wxCommandEvent(wxEVT_SEARCH_FINISHED));
-		});
+		std::unique_lock lock(m_mutex);
+		m_searchBuffer.swap(tmp);
+		lock.unlock();
+
+		wxQueueEvent(this, new wxCommandEvent(wxEVT_SEARCH_FINISHED));
+	});
 
 	m_gauge->SetValue(0);
 }
@@ -312,8 +310,7 @@ void MemorySearcherTool::Load()
 			const auto addr = StringHelpers::ToInt64(*option_address);
 			if (!IsAddressValid(addr))
 				continue;
-		}
-		catch (const std::invalid_argument&)
+		} catch (const std::invalid_argument&)
 		{
 			continue;
 		}
@@ -398,9 +395,9 @@ bool MemorySearcherTool::IsAddressValid(uint32 addr)
 
 void MemorySearcherTool::OnEntryListRightClick(wxDataViewEvent& event)
 {
-	//void *data = reinterpret_cast<void *>(event.GetItem().GetData());
+	// void *data = reinterpret_cast<void *>(event.GetItem().GetData());
 	wxMenu mnu;
-	//mnu.SetClientData(data);
+	// mnu.SetClientData(data);
 	mnu.Append(LIST_ENTRY_ADD, _("&Add new entry"))->Enable(false);
 	mnu.Append(LIST_ENTRY_REMOVE, _("&Remove entry"));
 	mnu.Bind(wxEVT_COMMAND_MENU_SELECTED, &MemorySearcherTool::OnPopupClick, this);
@@ -448,35 +445,35 @@ bool MemorySearcherTool::VerifySearchValue() const
 	case SearchDataType_String:
 		return true;
 	case SearchDataType_Float:
-		{
-			float value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		float value;
+		return ConvertStringToType(inputString, value);
+	}
 	case SearchDataType_Double:
-		{
-			double value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		double value;
+		return ConvertStringToType(inputString, value);
+	}
 	case SearchDataType_Int8:
-		{
-			sint8 value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		sint8 value;
+		return ConvertStringToType(inputString, value);
+	}
 	case SearchDataType_Int16:
-		{
-			sint16 value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		sint16 value;
+		return ConvertStringToType(inputString, value);
+	}
 	case SearchDataType_Int32:
-		{
-			sint32 value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		sint32 value;
+		return ConvertStringToType(inputString, value);
+	}
 	case SearchDataType_Int64:
-		{
-			sint64 value;
-			return ConvertStringToType(inputString, value);
-		}
+	{
+		sint64 value;
+		return ConvertStringToType(inputString, value);
+	}
 	default:
 		return false;
 	}
@@ -512,46 +509,46 @@ void MemorySearcherTool::RefreshResultList()
 		switch (m_searchDataType)
 		{
 		case SearchDataType_String:
-			{
-				// TODO Peter
-				break;
-			}
+		{
+			// TODO Peter
+			break;
+		}
 		case SearchDataType_Float:
-			{
+		{
 			const auto value = memory_read<float>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		case SearchDataType_Double:
-			{
+		{
 			const auto value = memory_read<double>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		case SearchDataType_Int8:
-			{
+		{
 			const auto value = memory_read<sint8>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		case SearchDataType_Int16:
-			{
+		{
 			const auto value = memory_read<sint16>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		case SearchDataType_Int32:
-			{
-				const auto value = memory_read<sint32>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+		{
+			const auto value = memory_read<sint32>(addr);
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		case SearchDataType_Int64:
-			{
+		{
 			const auto value = memory_read<sint64>(addr);
-				m_listResults->SetItem(i, 1, fmt::format("{}", value));
-				break;
-			}
+			m_listResults->SetItem(i, 1, fmt::format("{}", value));
+			break;
+		}
 		}
 	}
 }
@@ -698,7 +695,7 @@ void MemorySearcherTool::OnPopupClick(wxCommandEvent& event)
 		const int row = m_listEntryTable->GetSelectedRow();
 		if (row == wxNOT_FOUND)
 			return;
-		
+
 		m_listEntryTable->DeleteItem(row);
 	}
 }
@@ -707,8 +704,9 @@ void MemorySearcherTool::OnItemEdited(wxDataViewEvent& event)
 {
 	auto column = event.GetColumn();
 	// Edit description
-	if (column == 0) { }
-		// Edit value
+	if (column == 0)
+	{}
+	// Edit value
 	else if (column == 3)
 	{
 		auto row = m_listEntryTable->GetSelectedRow();

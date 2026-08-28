@@ -31,10 +31,16 @@ namespace
 	[[noreturn]] void CheckFailed(const char* expression, int line)
 	{
 		std::cerr << "CHECK failed at line " << line << ": "
-			<< expression << '\n';
+				  << expression << '\n';
 		std::abort();
 	}
-#define CHECK(condition) do { if (!(condition)) CheckFailed(#condition, __LINE__); } while (false)
+#define CHECK(condition)                       \
+	do                                         \
+	{                                          \
+		if (!(condition))                      \
+			CheckFailed(#condition, __LINE__); \
+	}                                          \
+	while (false)
 
 	ModuleProviderDescriptor Provider(
 		ModuleProviderKind kind, std::string name,
@@ -42,8 +48,7 @@ namespace
 		std::uint64_t lifetime = 1, std::string version = "1.0.0")
 	{
 		return {
-			kind, std::move(name), std::move(version),
-			{owner, generation, lifetime}};
+			kind, std::move(name), std::move(version), {owner, generation, lifetime}};
 	}
 
 	void TestRegistryCollisionKindsAndLifetime()
@@ -86,7 +91,7 @@ namespace
 				"Open", WupsSymbolKind::Function, 0x02002000}};
 		CHECK(!registry.Publish(
 			Provider(ModuleProviderKind::CustomModule,
-				"homebrew_wupsbackend", 11),
+					 "homebrew_wupsbackend", 11),
 			collisionExports, collision, error));
 		CHECK(error.find("ambiguous") != std::string::npos);
 
@@ -99,9 +104,15 @@ namespace
 
 	class FakePatchPlatform final : public IWupsPatchPlatform
 	{
-	public:
-		WupsPatchProcess CurrentProcess() const override { return process; }
-		void SetCurrentProcess(WupsPatchProcess value) override { process = value; }
+	  public:
+		WupsPatchProcess CurrentProcess() const override
+		{
+			return process;
+		}
+		void SetCurrentProcess(WupsPatchProcess value) override
+		{
+			process = value;
+		}
 
 		std::optional<WupsResolvedPatchTarget> ResolveFunction(
 			std::string_view module, std::string_view function,
@@ -139,7 +150,7 @@ namespace
 		}
 
 		bool IsExecutable(std::uint32_t address,
-			std::uint32_t size) const override
+						  std::uint32_t size) const override
 		{
 			if (onExecutableCheck)
 				onExecutableCheck();
@@ -148,15 +159,15 @@ namespace
 		}
 
 		bool IsWritable(std::uint32_t address,
-			std::uint32_t size) const override
+						std::uint32_t size) const override
 		{
 			std::lock_guard lock(memoryMutex);
 			return Contains(writable, address, size);
 		}
 
 		bool ReadWords(std::uint32_t address,
-			std::span<std::uint32_t> output,
-			std::string& error) override
+					   std::span<std::uint32_t> output,
+					   std::string& error) override
 		{
 			std::lock_guard lock(memoryMutex);
 			for (std::size_t index = 0; index < output.size(); ++index)
@@ -174,14 +185,14 @@ namespace
 		}
 
 		bool WriteWords(std::uint32_t address,
-			std::span<const std::uint32_t> input,
-			std::string& error) override
+						std::span<const std::uint32_t> input,
+						std::string& error) override
 		{
 			std::lock_guard lock(memoryMutex);
 			const auto attempt = ++writeAttempts[address];
 			if (failWriteAddress == address ||
 				(failWriteAttempt.contains(address) &&
-					failWriteAttempt[address] == attempt))
+				 failWriteAttempt[address] == attempt))
 			{
 				error = "injected write failure";
 				return false;
@@ -194,8 +205,8 @@ namespace
 		}
 
 		bool AllocateExecutableNear(std::uint32_t,
-			std::uint32_t size, std::uint32_t,
-			std::uint32_t& address, std::string&) override
+									std::uint32_t size, std::uint32_t,
+									std::uint32_t& address, std::string&) override
 		{
 			std::lock_guard lock(memoryMutex);
 			address = nextAllocation;
@@ -225,7 +236,7 @@ namespace
 		}
 
 		void AddFunction(std::string module, std::string function,
-			std::uint32_t address, std::uint32_t instruction)
+						 std::uint32_t address, std::uint32_t instruction)
 		{
 			std::lock_guard lock(memoryMutex);
 			symbols.emplace(
@@ -324,7 +335,7 @@ namespace
 		CHECK(relocated.size() >= 6);
 		CHECK((relocated[0] >> 26) == 16);
 		CHECK((relocated.back() >> 26) == 19 ||
-			relocated.back() == 0x4e800420U);
+			  relocated.back() == 0x4e800420U);
 
 		CHECK(!PpcFunctionRelocator::Relocate(
 			farConditional, 0x02000001, 0x08000000, 4,
@@ -396,9 +407,9 @@ namespace
 
 		const std::array transaction{
 			NamedPatch({3, 1}, 0, "OSReport",
-				0x09000000, 0x10001000),
+					   0x09000000, 0x10001000),
 			NamedPatch({3, 1}, 1, "OSFatal",
-				0x09000100, 0x10001004),
+					   0x09000100, 0x10001004),
 		};
 		platform->failWriteAddress = 0x02010100;
 		CHECK(!manager.Apply(transaction, error));
@@ -468,7 +479,7 @@ namespace
 		secondAdd.join();
 		CHECK(firstResult != secondResult);
 		CHECK((firstError.find("already exists") != std::string::npos) !=
-			(secondError.find("already exists") != std::string::npos));
+			  (secondError.find("already exists") != std::string::npos));
 		CHECK(manager.Applied().size() == 2);
 		CHECK(manager.RemoveOwner({9, 1}, error));
 	}
@@ -551,51 +562,75 @@ namespace
 
 	class FacadeGuestPlatform final : public IWupsPlatform
 	{
-	public:
+	  public:
 		bool ValidateGuestRange(std::uint32_t address, std::uint32_t size,
-			WupsGuestAccess access) const override
+								WupsGuestAccess access) const override
 		{
-			if (size == 0 || address > 0x20000000U - size) return false;
+			if (size == 0 || address > 0x20000000U - size)
+				return false;
 			if (access == WupsGuestAccess::Execute)
 				return address >= 0x09000000 && address + size <= 0x09001000;
 			if (access == WupsGuestAccess::Write)
 				return address >= 0x10001000 && address + size <= 0x10002000;
 			return memory.contains(address) &&
-				memory.lower_bound(address + size - 1) != memory.end();
+				   memory.lower_bound(address + size - 1) != memory.end();
 		}
 		bool ReadGuest(std::uint32_t address,
-			std::span<std::byte> output) const override
+					   std::span<std::byte> output) const override
 		{
 			for (std::size_t i = 0; i < output.size(); ++i)
 			{
 				const auto found = memory.find(address + i);
-				if (found == memory.end()) return false;
+				if (found == memory.end())
+					return false;
 				output[i] = found->second;
 			}
 			return true;
 		}
 		bool WriteGuest(std::uint32_t,
-			std::span<const std::byte>) override { return true; }
+						std::span<const std::byte>) override
+		{
+			return true;
+		}
 		std::optional<std::uint32_t> AllocateGuestData(WupsOwnerToken,
-			std::uint32_t, std::uint32_t, std::string&) override { return {}; }
+													   std::uint32_t, std::uint32_t, std::string&) override
+		{
+			return {};
+		}
 		void FreeGuestData(WupsOwnerToken, std::uint32_t) override {}
 		std::optional<std::uint32_t> RegisterFunction(WupsOwnerToken,
-			std::string_view, std::string_view, WupsHostExportHandler,
-			std::string&) override { return {}; }
+													  std::string_view, std::string_view, WupsHostExportHandler,
+													  std::string&) override
+		{
+			return {};
+		}
 		void ReleaseOwnerExports(WupsOwnerToken) override {}
-		std::uint64_t CurrentGuestThreadId() const override { return 1; }
+		std::uint64_t CurrentGuestThreadId() const override
+		{
+			return 1;
+		}
 		bool QueueCpuTask(WupsOwnerToken, std::function<void()> task,
-			std::string&) override { task(); return true; }
+						  std::string&) override
+		{
+			task();
+			return true;
+		}
 		void CancelCpuTasks(WupsOwnerToken) override {}
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(WupsOwnerToken,
-			std::uint32_t, std::uint32_t, bool, WupsMappedMemoryPurpose,
-			std::string&) override { return {}; }
+																 std::uint32_t, std::uint32_t, bool, WupsMappedMemoryPurpose,
+																 std::string&) override
+		{
+			return {};
+		}
 		bool FreeMappedMemory(WupsOwnerToken, const WupsMappedMemoryInfo&,
-			std::string&) override { return false; }
+							  std::string&) override
+		{
+			return false;
+		}
 		void ShowNotification(WupsOwnerToken,
-			const WupsNotificationModel&) override {}
+							  const WupsNotificationModel&) override {}
 		void Log(WupsOwnerToken, WupsLogLevel, std::string_view,
-			std::string_view, std::string_view) override {}
+				 std::string_view, std::string_view) override {}
 
 		void U32(std::uint32_t address, std::uint32_t value)
 		{
@@ -618,9 +653,9 @@ namespace
 	{
 		auto patchPlatform = std::make_shared<FakePatchPlatform>();
 		patchPlatform->AddFunction("coreinit", "OSReport",
-			0x02010000, 0x9421fff0);
+								   0x02010000, 0x9421fff0);
 		patchPlatform->AddFunction("coreinit", "OSFatal",
-			0x02010100, 0x7c0802a6);
+								   0x02010100, 0x7c0802a6);
 		patchPlatform->AddReplacement(0x09000000);
 		patchPlatform->AddReplacement(0x09000100);
 		patchPlatform->AddStorage(0x10001000);
@@ -628,7 +663,7 @@ namespace
 		auto manager = std::make_shared<WupsFunctionPatchManager>(patchPlatform);
 		const WupsPatchOwner patchOwner{41, 3};
 		const auto staticPatch = NamedPatch(patchOwner, 0, "OSFatal",
-			0x09000100, 0x10001004);
+											0x09000100, 0x10001004);
 		std::string error;
 		CHECK(manager->Apply(std::span{&staticPatch, 1}, error));
 
@@ -642,7 +677,7 @@ namespace
 		guest->U32(descriptor + 16, 0x09000000);
 		guest->U32(descriptor + 20, 0x10001000);
 		guest->U32(descriptor + 24,
-			static_cast<std::uint32_t>(WupsPatchProcess::Game));
+				   static_cast<std::uint32_t>(WupsPatchProcess::Game));
 		guest->U32(descriptor + 28, name);
 		guest->U32(descriptor + 32, 2); // LIBRARY_COREINIT
 		guest->String(name, "OSReport");
@@ -652,17 +687,18 @@ namespace
 		std::uint32_t handle{};
 		bool applied{};
 		CHECK(facade->AddPatch({41, 3}, descriptor, false,
-			handle, applied, error) == WupsServiceStatus::Success);
+							   handle, applied, error) == WupsServiceStatus::Success);
 		CHECK(handle != 0 && applied);
 		CHECK(manager->Applied().size() == 2);
 		CHECK(facade->IsPatchApplied({41, 3}, handle, applied, error) ==
-			WupsServiceStatus::Success && applied);
+				  WupsServiceStatus::Success &&
+			  applied);
 		CHECK(facade->IsPatchApplied({41, 2}, handle, applied, error) ==
-			WupsServiceStatus::StaleGeneration);
+			  WupsServiceStatus::StaleGeneration);
 		CHECK(facade->RemovePatch({99, 3}, handle, error) ==
-			WupsServiceStatus::OwnerMismatch);
+			  WupsServiceStatus::OwnerMismatch);
 		CHECK(facade->RemovePatch({41, 3}, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(manager->Applied().size() == 1);
 		facade->ReleaseOwner({41, 3});
 		CHECK(manager->RemoveOwner(patchOwner, error));
@@ -698,7 +734,7 @@ namespace
 		CHECK(parsed->metadata.abiVersion == WupsVersion(0, 3, 6));
 		CHECK(parsed->dependencies.size() == 2);
 		CHECK(parsed->dependencies[0].match ==
-			WumsDependencyMatch::AtLeast);
+			  WumsDependencyMatch::AtLeast);
 		CHECK(parsed->dependencies[1].optional);
 		CHECK(parsed->exports.size() == 1);
 		CHECK(parsed->exports[0].kind == WupsSymbolKind::Function);
@@ -710,13 +746,11 @@ namespace
 		ModuleExportRegistry registry;
 		auto base = Module("homebrew_base", "1.1.0");
 		auto middle = Module("homebrew_middle");
-		middle.dependencies.push_back({
-			"homebrew_base", false,
-			WumsDependencyMatch::AtLeast, WupsVersion{1, 0, 0}});
+		middle.dependencies.push_back({"homebrew_base", false,
+									   WumsDependencyMatch::AtLeast, WupsVersion{1, 0, 0}});
 		auto leaf = Module("homebrew_leaf");
-		leaf.dependencies.push_back({
-			"homebrew_middle", false,
-			WumsDependencyMatch::Any, std::nullopt});
+		leaf.dependencies.push_back({"homebrew_middle", false,
+									 WumsDependencyMatch::Any, std::nullopt});
 		const std::array modules{leaf, middle, base};
 		std::vector<std::size_t> order;
 		CHECK(WumsDependencyGraph::Build(modules, registry, order, error));
@@ -726,26 +760,22 @@ namespace
 
 		auto cycleA = Module("cycle_a");
 		auto cycleB = Module("cycle_b");
-		cycleA.dependencies.push_back({
-			"cycle_b", false, WumsDependencyMatch::Any, std::nullopt});
-		cycleB.dependencies.push_back({
-			"cycle_a", false, WumsDependencyMatch::Any, std::nullopt});
+		cycleA.dependencies.push_back({"cycle_b", false, WumsDependencyMatch::Any, std::nullopt});
+		cycleB.dependencies.push_back({"cycle_a", false, WumsDependencyMatch::Any, std::nullopt});
 		const std::array cycle{cycleA, cycleB};
 		CHECK(!WumsDependencyGraph::Build(cycle, registry, order, error));
 		CHECK(error.find("cycle") != std::string::npos);
 
 		auto missing = Module("missing_user");
-		missing.dependencies.push_back({
-			"not_present", false,
-			WumsDependencyMatch::Any, std::nullopt});
+		missing.dependencies.push_back({"not_present", false,
+										WumsDependencyMatch::Any, std::nullopt});
 		CHECK(!WumsDependencyGraph::Build(
 			std::span{&missing, 1}, registry, order, error));
 		CHECK(error.find("missing mandatory") != std::string::npos);
 
 		auto mismatch = Module("mismatch");
-		mismatch.dependencies.push_back({
-			"homebrew_base", false,
-			WumsDependencyMatch::AtLeast, WupsVersion{2, 0, 0}});
+		mismatch.dependencies.push_back({"homebrew_base", false,
+										 WumsDependencyMatch::AtLeast, WupsVersion{2, 0, 0}});
 		const std::array mismatchModules{base, mismatch};
 		CHECK(!WumsDependencyGraph::Build(
 			mismatchModules, registry, order, error));
@@ -763,14 +793,13 @@ namespace
 
 	class FakeWumsLoader final : public IWumsModuleLoader
 	{
-	public:
-		explicit FakeWumsLoader(std::shared_ptr<WumsLog> log) :
-			m_log(std::move(log)) {}
+	  public:
+		explicit FakeWumsLoader(std::shared_ptr<WumsLog> log) : m_log(std::move(log)) {}
 
 		bool Map(std::span<const std::byte>, std::string_view name,
-			const ModuleProviderOwner& owner, WumsImportResolver,
-			RPLModule*& module, std::uint64_t& lifetime,
-			std::string&) override
+				 const ModuleProviderOwner& owner, WumsImportResolver,
+				 RPLModule*& module, std::uint64_t& lifetime,
+				 std::string&) override
 		{
 			m_log->mapped.emplace_back(name);
 			module = reinterpret_cast<RPLModule*>(
@@ -781,7 +810,7 @@ namespace
 		}
 
 		bool Link(RPLModule* module, std::uint64_t,
-			std::string& error) override
+				  std::string& error) override
 		{
 			if (m_log->failLink &&
 				m_names[module].starts_with(*m_log->failLink))
@@ -793,19 +822,19 @@ namespace
 		}
 
 		bool ResolveAddress(RPLModule* module, std::uint64_t,
-			std::uint32_t virtualAddress, std::uint32_t,
-			WupsSymbolKind, std::uint32_t& mapped,
-			std::string&) override
+							std::uint32_t virtualAddress, std::uint32_t,
+							WupsSymbolKind, std::uint32_t& mapped,
+							std::string&) override
 		{
 			mapped = virtualAddress +
-				static_cast<std::uint32_t>(
-					reinterpret_cast<std::uintptr_t>(module) & 0xffff);
+					 static_cast<std::uint32_t>(
+						 reinterpret_cast<std::uintptr_t>(module) & 0xffff);
 			return true;
 		}
 
 		bool Invoke(RPLModule* module, std::uint64_t,
-			std::uint32_t target, std::span<const std::uint32_t>,
-			std::uint32_t& result, std::string&) override
+					std::uint32_t target, std::span<const std::uint32_t>,
+					std::uint32_t& result, std::string&) override
 		{
 			result = 0;
 			m_invocations.emplace_back(module, target);
@@ -813,7 +842,7 @@ namespace
 		}
 
 		bool Unload(RPLModule* module, std::uint64_t,
-			std::string&) override
+					std::string&) override
 		{
 			m_log->unloaded.push_back(m_names[module]);
 			m_names.erase(module);
@@ -822,26 +851,25 @@ namespace
 
 		std::vector<std::pair<RPLModule*, std::uint32_t>> m_invocations;
 
-	private:
+	  private:
 		std::shared_ptr<WumsLog> m_log;
 		std::map<RPLModule*, std::string> m_names;
 	};
 
 	class FakeWumsServices final : public IWumsRuntimeServices
 	{
-	public:
-		explicit FakeWumsServices(std::shared_ptr<WumsLog> log) :
-			m_log(std::move(log)) {}
+	  public:
+		explicit FakeWumsServices(std::shared_ptr<WumsLog> log) : m_log(std::move(log)) {}
 
 		bool PrepareHook(const WumsInspection& inspection,
-			const ModuleProviderOwner&, WumsHookType type,
-			WumsHookInvocation& invocation, std::string& error) override
+						 const ModuleProviderOwner&, WumsHookType type,
+						 WumsHookInvocation& invocation, std::string& error) override
 		{
 			invocation = {};
 			m_log->hooks.emplace_back(
 				inspection.metadata.moduleName, type);
 			if (m_log->failHook == std::pair{
-				inspection.metadata.moduleName, type})
+									   inspection.metadata.moduleName, type})
 			{
 				error = "injected WUMS hook failure";
 				return false;
@@ -852,24 +880,19 @@ namespace
 		void ReleaseModule(
 			const WumsInspection&, const ModuleProviderOwner&) override {}
 
-	private:
+	  private:
 		std::shared_ptr<WumsLog> m_log;
 	};
 
 	WumsModuleDefinition Definition(
 		WumsInspection inspection, std::uint32_t address)
 	{
-		inspection.hooks.push_back({
-			WumsHookType::InitWutMalloc, address});
-		inspection.hooks.push_back({
-			WumsHookType::FiniWutMalloc, address + 4});
-		inspection.hooks.push_back({
-			WumsHookType::ApplicationStarts, address + 8});
-		inspection.hooks.push_back({
-			WumsHookType::ApplicationEnds, address + 12});
-		inspection.exports.push_back({
-			inspection.metadata.moduleName, "Export",
-			WupsSymbolKind::Function, address + 16, true});
+		inspection.hooks.push_back({WumsHookType::InitWutMalloc, address});
+		inspection.hooks.push_back({WumsHookType::FiniWutMalloc, address + 4});
+		inspection.hooks.push_back({WumsHookType::ApplicationStarts, address + 8});
+		inspection.hooks.push_back({WumsHookType::ApplicationEnds, address + 12});
+		inspection.exports.push_back({inspection.metadata.moduleName, "Export",
+									  WupsSymbolKind::Function, address + 16, true});
 		WumsModuleDefinition result;
 		result.fileName = inspection.metadata.moduleName + ".wms";
 		result.image = {std::byte{1}};
@@ -887,9 +910,8 @@ namespace
 
 		auto base = Module("homebrew_base");
 		auto dependent = Module("homebrew_dependent");
-		dependent.dependencies.push_back({
-			"homebrew_base", false,
-			WumsDependencyMatch::Any, std::nullopt});
+		dependent.dependencies.push_back({"homebrew_base", false,
+										  WumsDependencyMatch::Any, std::nullopt});
 		std::vector definitions{
 			Definition(std::move(dependent), 0x02002000),
 			Definition(std::move(base), 0x02001000),
@@ -897,8 +919,7 @@ namespace
 		std::string error;
 		CHECK(runtime.Load(std::move(definitions), error));
 		CHECK(runtime.LoadOrder() ==
-			std::vector<std::string>({
-				"homebrew_base", "homebrew_dependent"}));
+			  std::vector<std::string>({"homebrew_base", "homebrew_dependent"}));
 		CHECK(registry->ProviderCount() == 2);
 		CHECK(runtime.OnApplicationStarts(error));
 		runtime.OnApplicationRequestsExit();
@@ -913,9 +934,8 @@ namespace
 		log->failLink = "homebrew_dependent";
 		auto rollbackBase = Module("homebrew_base");
 		auto rollbackDependent = Module("homebrew_dependent");
-		rollbackDependent.dependencies.push_back({
-			"homebrew_base", false,
-			WumsDependencyMatch::Any, std::nullopt});
+		rollbackDependent.dependencies.push_back({"homebrew_base", false,
+												  WumsDependencyMatch::Any, std::nullopt});
 		std::vector rollbackDefinitions{
 			Definition(std::move(rollbackDependent), 0x02004000),
 			Definition(std::move(rollbackBase), 0x02003000),
@@ -931,9 +951,8 @@ namespace
 			WumsHookType::ApplicationStarts};
 		auto startBase = Module("homebrew_base");
 		auto startDependent = Module("homebrew_dependent");
-		startDependent.dependencies.push_back({
-			"homebrew_base", false,
-			WumsDependencyMatch::Any, std::nullopt});
+		startDependent.dependencies.push_back({"homebrew_base", false,
+											   WumsDependencyMatch::Any, std::nullopt});
 		std::vector startDefinitions{
 			Definition(std::move(startDependent), 0x02006000),
 			Definition(std::move(startBase), 0x02005000),
@@ -942,12 +961,12 @@ namespace
 		CHECK(!runtime.OnApplicationStarts(error));
 		CHECK(error.find("injected WUMS hook failure") != std::string::npos);
 		CHECK(std::ranges::find(log->hooks,
-			std::pair{std::string("homebrew_base"),
-				WumsHookType::ApplicationEnds}) != log->hooks.end());
+								std::pair{std::string("homebrew_base"),
+										  WumsHookType::ApplicationEnds}) != log->hooks.end());
 		log->failHook.reset();
 		CHECK(runtime.Unload(error));
 	}
-}
+} // namespace
 
 std::shared_ptr<IWumsModuleLoader> CreateRplWumsModuleLoader()
 {

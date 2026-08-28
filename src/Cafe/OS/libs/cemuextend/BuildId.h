@@ -17,4 +17,4 @@ namespace cemuextend_hle
 	}
 
 	inline constexpr std::uint64_t kCemuExtendBuildId = HashBuildId(CEMU_EXTEND_COMMIT_HASH);
-}
+} // namespace cemuextend_hle

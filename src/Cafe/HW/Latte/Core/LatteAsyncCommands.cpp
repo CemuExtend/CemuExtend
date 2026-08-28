@@ -4,11 +4,14 @@
 #include "Cafe/HW/Latte/Core/LatteSurfaceCopy.h"
 #include "Cafe/HW/Latte/Core/LatteTexture.h"
 
+#include <condition_variable>
+#include <future>
+
 void LatteThread_Exit();
 
 SlimRWLock swl_gpuAsyncCommands;
 
-typedef struct  
+typedef struct
 {
 	uint32 type;
 	union
@@ -28,27 +31,29 @@ typedef struct
 			Latte::E_HWTILEMODE tilemode;
 			sint32 aa;
 			sint32 level;
-		}forceTextureReadback;
+		} forceTextureReadback;
 
 		struct
 		{
-			uint64 shaderBaseHash; 
-			uint64 shaderAuxHash; 
+			uint64 shaderBaseHash;
+			uint64 shaderAuxHash;
 			LatteConst::ShaderType shaderType;
-		}deleteShader;
+		} deleteShader;
 
 		struct
 		{
 			LatteSurfaceCopyParam src;
 			LatteSurfaceCopyParam dst;
 			LatteSurfaceCopyRect rect;
-		}textureCopy;
+		} textureCopy;
 	};
-}LatteAsyncCommand_t;
+	std::function<void()> rendererTask;
+} LatteAsyncCommand_t;
 
-#define ASYNC_CMD_FORCE_TEXTURE_READBACK		1
-#define ASYNC_CMD_DELETE_SHADER					2
-#define ASYNC_CMD_TEXTURE_COPY					3
+#define ASYNC_CMD_FORCE_TEXTURE_READBACK 1
+#define ASYNC_CMD_DELETE_SHADER 2
+#define ASYNC_CMD_TEXTURE_COPY 3
+#define ASYNC_CMD_RENDERER_TASK 4
 
 std::queue<LatteAsyncCommand_t> LatteAsyncCommandQueue;
 
@@ -57,7 +62,7 @@ void LatteAsyncCommands_queueForceTextureReadback(MPTR physAddr, MPTR mipAddr, u
 	LatteAsyncCommand_t asyncCommand = {};
 	// setup command
 	asyncCommand.type = ASYNC_CMD_FORCE_TEXTURE_READBACK;
-	
+
 	asyncCommand.forceTextureReadback.physAddr = physAddr;
 	asyncCommand.forceTextureReadback.mipAddr = mipAddr;
 	asyncCommand.forceTextureReadback.swizzle = swizzle;
@@ -107,10 +112,133 @@ void LatteAsyncCommand_queueTextureCopy(const LatteSurfaceCopyParam& src, const 
 
 void LatteAsyncCommands_waitUntilAllProcessed()
 {
-	while (LatteAsyncCommandQueue.empty() == false)
+	for (;;)
 	{
+		swl_gpuAsyncCommands.LockWrite();
+		const auto empty = LatteAsyncCommandQueue.empty();
+		swl_gpuAsyncCommands.UnlockWrite();
+		if (empty)
+			return;
 		_mm_pause();
 	}
+}
+
+void LatteAsyncCommands_runOnRendererThread(std::function<void()> task)
+{
+	if (!task)
+		return;
+	if (Latte_GetStopSignal())
+		throw std::runtime_error("the renderer thread is stopping");
+
+	enum class TaskState : std::uint8_t
+	{
+		Pending,
+		Running,
+		Completed,
+		Cancelled,
+	};
+	struct Completion
+	{
+		std::atomic<TaskState> state{TaskState::Pending};
+		std::promise<void> promise;
+	};
+	auto completion = std::make_shared<Completion>();
+	auto future = completion->promise.get_future();
+	LatteAsyncCommand_t command{};
+	command.type = ASYNC_CMD_RENDERER_TASK;
+	command.rendererTask = [task = std::move(task), completion]() mutable {
+		auto expected = TaskState::Pending;
+		if (!completion->state.compare_exchange_strong(expected, TaskState::Running,
+													   std::memory_order_acq_rel))
+			return;
+		try
+		{
+			task();
+			completion->promise.set_value();
+		} catch (...)
+		{
+			completion->promise.set_exception(std::current_exception());
+		}
+		completion->state.store(TaskState::Completed, std::memory_order_release);
+	};
+	swl_gpuAsyncCommands.LockWrite();
+	LatteAsyncCommandQueue.push(std::move(command));
+	swl_gpuAsyncCommands.UnlockWrite();
+
+	while (future.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready)
+	{
+		if (Latte_GetStopSignal())
+		{
+			auto expected = TaskState::Pending;
+			if (completion->state.compare_exchange_strong(expected, TaskState::Cancelled,
+														  std::memory_order_acq_rel))
+				throw std::runtime_error("the renderer thread stopped before completing a host task");
+		}
+	}
+	future.get();
+}
+
+void LatteAsyncCommands_runWithRendererPaused(std::function<void()> task)
+{
+	if (!task)
+		return;
+	if (Latte_GetStopSignal())
+		throw std::runtime_error("the renderer thread is stopping");
+
+	struct PauseState
+	{
+		std::mutex mutex;
+		std::condition_variable condition;
+		bool paused{};
+		bool released{};
+		bool completed{};
+		bool cancelled{};
+	};
+	auto state = std::make_shared<PauseState>();
+	LatteAsyncCommand_t command{};
+	command.type = ASYNC_CMD_RENDERER_TASK;
+	command.rendererTask = [state] {
+		std::unique_lock lock(state->mutex);
+		if (state->cancelled)
+			return;
+		state->paused = true;
+		state->condition.notify_all();
+		state->condition.wait(lock, [&] { return state->released; });
+		state->completed = true;
+		state->condition.notify_all();
+	};
+	swl_gpuAsyncCommands.LockWrite();
+	LatteAsyncCommandQueue.push(std::move(command));
+	swl_gpuAsyncCommands.UnlockWrite();
+
+	std::unique_lock lock(state->mutex);
+	while (!state->paused)
+	{
+		if (state->condition.wait_for(lock, std::chrono::milliseconds(10),
+									  [&] { return state->paused; }))
+			break;
+		if (Latte_GetStopSignal())
+		{
+			state->cancelled = true;
+			throw std::runtime_error("the renderer thread stopped before entering a host barrier");
+		}
+	}
+	lock.unlock();
+	std::exception_ptr failure;
+	try
+	{
+		task();
+	} catch (...)
+	{
+		failure = std::current_exception();
+	}
+	lock.lock();
+	state->released = true;
+	state->condition.notify_all();
+	state->condition.wait(lock, [&] { return state->completed; });
+	lock.unlock();
+	if (failure)
+		std::rethrow_exception(failure);
 }
 
 /*
@@ -118,12 +246,14 @@ void LatteAsyncCommands_waitUntilAllProcessed()
  */
 void LatteAsyncCommands_checkAndExecute()
 {
-	// quick check if queue is empty (requires no lock)
 	if (Latte_GetStopSignal())
 		LatteThread_Exit();
-	if (LatteAsyncCommandQueue.empty())
-		return;
 	swl_gpuAsyncCommands.LockWrite();
+	if (LatteAsyncCommandQueue.empty())
+	{
+		swl_gpuAsyncCommands.UnlockWrite();
+		return;
+	}
 	while (LatteAsyncCommandQueue.empty() == false)
 	{
 		// get first command in queue
@@ -153,6 +283,10 @@ void LatteAsyncCommands_checkAndExecute()
 		else if (asyncCommand.type == ASYNC_CMD_TEXTURE_COPY)
 		{
 			LatteSurfaceCopy_copySurfaceNew(asyncCommand.textureCopy.src, asyncCommand.textureCopy.dst, asyncCommand.textureCopy.rect);
+		}
+		else if (asyncCommand.type == ASYNC_CMD_RENDERER_TASK)
+		{
+			asyncCommand.rendererTask();
 		}
 		else
 		{

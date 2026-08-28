@@ -7,7 +7,7 @@ bool GamePatch_IsNonReturnFunction(uint32 hleIndex);
 // utility class to determine shape of a function
 class PPCFunctionBoundaryTracker
 {
-public:
+  public:
 	struct PPCRange_t
 	{
 		PPCRange_t() = default;
@@ -15,12 +15,15 @@ public:
 
 		uint32 startAddress{};
 		uint32 length{};
-		//bool isProcessed{false};
+		// bool isProcessed{false};
 
-		uint32 getEndAddress() const { return startAddress + length; };
+		uint32 getEndAddress() const
+		{
+			return startAddress + length;
+		};
 	};
 
-public:
+  public:
 	~PPCFunctionBoundaryTracker()
 	{
 		while (!map_ranges.empty())
@@ -73,7 +76,7 @@ public:
 		return map_branchTargetsAll;
 	}
 
-private:
+  private:
 	void addBranchDestination(PPCRange_t* sourceRange, MPTR address)
 	{
 		map_queuedBranchTargets.emplace(address);
@@ -119,7 +122,7 @@ private:
 				addBranchDestination(range, branchTarget);
 			break;
 		}
-		case Espresso::PrimaryOpcode::B:	
+		case Espresso::PrimaryOpcode::B:
 		{
 			uint32 LI;
 			bool AA, LK;
@@ -252,7 +255,7 @@ private:
 		auto rangeItr = map_ranges.begin();
 
 		PPCRange_t* previousRange = nullptr;
-		for (std::set<uint32_t>::const_iterator targetItr = map_queuedBranchTargets.begin() ; targetItr != map_queuedBranchTargets.end(); )
+		for (std::set<uint32_t>::const_iterator targetItr = map_queuedBranchTargets.begin(); targetItr != map_queuedBranchTargets.end();)
 		{
 			while (rangeItr != map_ranges.end() && ((*rangeItr)->startAddress + (*rangeItr)->length) <= (*targetItr))
 			{
@@ -289,10 +292,11 @@ private:
 
 	void processBranchTargets()
 	{
-		while (processBranchTargetsSinglePass());
+		while (processBranchTargetsSinglePass())
+			;
 	}
 
-	private:
+  private:
 	bool PPCRecompilerCalcFuncSize_isUnconditionalBranchInstruction(uint32 opcode)
 	{
 		if (Espresso::GetPrimaryOpcode(opcode) == Espresso::PrimaryOpcode::B)
@@ -313,7 +317,7 @@ private:
 		return true;
 	}
 
-private:
+  private:
 	struct RangePtrCmp
 	{
 		bool operator()(const PPCRange_t* lhs, const PPCRange_t* rhs) const

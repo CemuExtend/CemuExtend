@@ -3,7 +3,7 @@
 #include "util/helpers/StringHelpers.h"
 
 /* Helper classes to represent CafeOS strings in emulated memory */
-template <size_t N>
+template<size_t N>
 class CafeString // fixed buffer size, null-terminated, PPC char
 {
   public:
@@ -22,8 +22,8 @@ class CafeString // fixed buffer size, null-terminated, PPC char
 	{
 		if (sv.size() >= N)
 		{
-			memcpy(data, sv.data(), N-1);
-			data[N-1] = '\0';
+			memcpy(data, sv.data(), N - 1);
+			data[N - 1] = '\0';
 			return false;
 		}
 		memcpy(data, sv.data(), sv.size());
@@ -78,18 +78,18 @@ class CafeString // fixed buffer size, null-terminated, PPC char
 	uint8be data[N];
 };
 
-template <size_t N>
+template<size_t N>
 class CafeWideString // fixed buffer size, null-terminated, PPC wchar_t (16bit big-endian)
 {
   public:
 	bool assign(const uint16be* input)
 	{
 		size_t i = 0;
-		while(input[i])
+		while (input[i])
 		{
-			if(i >= N-1)
+			if (i >= N - 1)
 			{
-				data[N-1] = 0;
+				data[N - 1] = 0;
 				return false;
 			}
 			data[i] = input[i];
@@ -102,13 +102,13 @@ class CafeWideString // fixed buffer size, null-terminated, PPC wchar_t (16bit b
 	bool assignFromUTF8(std::string_view sv)
 	{
 		std::vector<uint16be> beStr = StringHelpers::FromUtf8(sv);
-		if(beStr.size() > N-1)
+		if (beStr.size() > N - 1)
 		{
-			memcpy(data, beStr.data(), (N-1)*sizeof(uint16be));
-			data[N-1] = 0;
+			memcpy(data, beStr.data(), (N - 1) * sizeof(uint16be));
+			data[N - 1] = 0;
 			return false;
 		}
-		memcpy(data, beStr.data(), beStr.size()*sizeof(uint16be));
+		memcpy(data, beStr.data(), beStr.size() * sizeof(uint16be));
 		data[beStr.size()] = '\0';
 		return true;
 	}
@@ -121,8 +121,8 @@ namespace CafeStringHelpers
 	static uint32 Length(const uint16be* input, uint32 maxLength)
 	{
 		uint32 i = 0;
-		while(input[i] && i < maxLength)
+		while (input[i] && i < maxLength)
 			i++;
 		return i;
 	}
-};
+}; // namespace CafeStringHelpers

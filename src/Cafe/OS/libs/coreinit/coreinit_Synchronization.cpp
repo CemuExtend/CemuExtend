@@ -193,9 +193,9 @@ namespace coreinit
 		while (true)
 		{
 			bool metAll = true;
-			for(sint32 i=0; i<PPC_CORE_COUNT; i++)
-			{ 
-				if( (coreMask & (1<<i)) == 0 )
+			for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
+			{
+				if ((coreMask & (1 << i)) == 0)
 					continue; // core not required by core mask
 				if (rendezvous->coreHit[i] == 0)
 				{
@@ -486,7 +486,7 @@ namespace coreinit
 		_OSFastMutex_AcquireContention(fastMutex);
 		while (true)
 		{
-			if (fastMutex->owner.atomic_compare_exchange(nullptr, currentThread))//(fastMutex->owner == nullptr)
+			if (fastMutex->owner.atomic_compare_exchange(nullptr, currentThread)) //(fastMutex->owner == nullptr)
 			{
 				// acquire lock
 				cemu_assert_debug(fastMutex->owner == currentThread);
@@ -556,7 +556,7 @@ namespace coreinit
 		if (fastMutex->owner != currentThread)
 		{
 			// seen in Paper Mario Color Splash
-			//cemuLog_log(LogType::Force, "OSFastMutex_Unlock() called on mutex which is not owned by current thread");
+			// cemuLog_log(LogType::Force, "OSFastMutex_Unlock() called on mutex which is not owned by current thread");
 			_OSFastMutex_ReleaseContention(fastMutex);
 			return;
 		}
@@ -672,4 +672,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSFastCond_Signal, LogType::CoreinitThreadSync);
 	}
 
-};
+}; // namespace coreinit

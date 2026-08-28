@@ -18,7 +18,7 @@ struct CafeSaveListCallbackEvent
 
 class CafeSaveList
 {
-public:
+  public:
 	static void Initialize();
 	static void SetMLCPath(fs::path mlcPath);
 	static void Refresh();
@@ -28,10 +28,10 @@ public:
 	static SaveInfo GetSaveByTitleId(TitleId titleId);
 
 	// callback
-	static uint64 RegisterCallback(void(*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx); // on register, the callback will be invoked for every already known save
+	static uint64 RegisterCallback(void (*cb)(CafeSaveListCallbackEvent* evt, void* ctx), void* ctx); // on register, the callback will be invoked for every already known save
 	static void UnregisterCallback(uint64 id);
 
-private:
+  private:
 	static void RefreshThreadWorker();
 	static void DiscoveredSave(SaveInfo* saveInfo);
 };

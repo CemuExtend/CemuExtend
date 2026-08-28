@@ -7,6 +7,8 @@
 #include "Backend.h"
 #include "Whitelist.h"
 
+#include <unordered_map>
+
 namespace nsyshid
 {
 
@@ -22,6 +24,78 @@ namespace nsyshid
 	std::list<HIDClient_t*> HIDClientList;
 
 	std::recursive_mutex hidMutex;
+	std::mutex deviceObserverMutex;
+	std::unordered_map<DeviceObserverToken, DeviceObserver> deviceObservers;
+	DeviceObserverToken nextDeviceObserverToken = 1;
+
+	DeviceDescriptor CopyDescriptor(const std::shared_ptr<Device>& device)
+	{
+		return {
+			.id = fmt::format("{:04x}:{:04x}:{:02x}", device->m_vendorId,
+							  device->m_productId, device->m_interfaceIndex),
+			.vendorId = device->m_vendorId,
+			.productId = device->m_productId,
+			.interfaceIndex = device->m_interfaceIndex,
+			.interfaceSubClass = device->m_interfaceSubClass,
+			.protocol = device->m_protocol,
+			.maxPacketSizeRx = device->m_maxPacketSizeRX,
+			.maxPacketSizeTx = device->m_maxPacketSizeTX,
+			.opened = device->IsOpened(),
+		};
+	}
+
+	void NotifyDeviceObservers(DeviceChange change)
+	{
+		std::vector<DeviceObserver> observers;
+		{
+			std::scoped_lock lock(deviceObserverMutex);
+			observers.reserve(deviceObservers.size());
+			for (const auto& [token, observer] : deviceObservers)
+			{
+				(void)token;
+				observers.push_back(observer);
+			}
+		}
+		for (const auto& observer : observers)
+		{
+			try
+			{
+				observer(change);
+			} catch (const std::exception& error)
+			{
+				cemuLog_logDebug(LogType::Force, "nsyshid device observer failed: {}", error.what());
+			} catch (...)
+			{
+				cemuLog_logDebug(LogType::Force, "nsyshid device observer failed");
+			}
+		}
+	}
+
+	std::vector<DeviceDescriptor> EnumerateDeviceDescriptors()
+	{
+		std::lock_guard<std::recursive_mutex> lock(hidMutex);
+		std::vector<DeviceDescriptor> descriptors;
+		descriptors.reserve(deviceList.size());
+		for (const auto& device : deviceList)
+			descriptors.push_back(CopyDescriptor(device));
+		return descriptors;
+	}
+
+	DeviceObserverToken SubscribeDeviceChanges(DeviceObserver observer)
+	{
+		if (!observer)
+			throw std::invalid_argument("device observer is required");
+		std::scoped_lock lock(deviceObserverMutex);
+		const auto token = nextDeviceObserverToken++;
+		deviceObservers.emplace(token, std::move(observer));
+		return token;
+	}
+
+	void UnsubscribeDeviceChanges(DeviceObserverToken token)
+	{
+		std::scoped_lock lock(deviceObserverMutex);
+		deviceObservers.erase(token);
+	}
 
 	void AttachClientToList(HIDClient_t* hidClient)
 	{
@@ -185,48 +259,54 @@ namespace nsyshid
 
 	bool AttachDevice(const std::shared_ptr<Device>& device)
 	{
-		std::lock_guard<std::recursive_mutex> lock(hidMutex);
-
-		// is the device already attached?
+		DeviceDescriptor descriptor;
 		{
-			auto it = std::find(deviceList.begin(), deviceList.end(), device);
-			if (it != deviceList.end())
+			std::lock_guard<std::recursive_mutex> lock(hidMutex);
+
+			// is the device already attached?
+			{
+				auto it = std::find(deviceList.begin(), deviceList.end(), device);
+				if (it != deviceList.end())
+				{
+					cemuLog_logDebug(LogType::Force,
+									 "nsyshid.AttachDevice(): failed to attach device: {:04x}:{:04x}: already attached",
+									 device->m_vendorId,
+									 device->m_productId);
+					return false;
+				}
+			}
+
+			HID_t* hidDevice = GetFreeHID();
+			if (hidDevice == nullptr)
 			{
 				cemuLog_logDebug(LogType::Force,
-								 "nsyshid.AttachDevice(): failed to attach device: {:04x}:{:04x}: already attached",
+								 "nsyshid.AttachDevice(): failed to attach device: {:04x}:{:04x}: no free device slots left",
 								 device->m_vendorId,
 								 device->m_productId);
 				return false;
 			}
-		}
+			hidDevice->handle = GenerateHIDHandle();
+			device->AssignHID(hidDevice);
+			deviceList.push_back(device);
+			descriptor = CopyDescriptor(device);
 
-		HID_t* hidDevice = GetFreeHID();
-		if (hidDevice == nullptr)
-		{
-			cemuLog_logDebug(LogType::Force,
-							 "nsyshid.AttachDevice(): failed to attach device: {:04x}:{:04x}: no free device slots left",
+			// do attach callbacks
+			for (auto client : HIDClientList)
+			{
+				DoAttachCallbackAsync(client, device);
+			}
+
+			cemuLog_logDebug(LogType::Force, "nsyshid.AttachDevice(): device attached: {:04x}:{:04x}",
 							 device->m_vendorId,
 							 device->m_productId);
-			return false;
 		}
-		hidDevice->handle = GenerateHIDHandle();
-		device->AssignHID(hidDevice);
-		deviceList.push_back(device);
-
-		// do attach callbacks
-		for (auto client : HIDClientList)
-		{
-			DoAttachCallbackAsync(client, device);
-		}
-
-		cemuLog_logDebug(LogType::Force, "nsyshid.AttachDevice(): device attached: {:04x}:{:04x}",
-						 device->m_vendorId,
-						 device->m_productId);
+		NotifyDeviceObservers({DeviceChangeKind::Attached, std::move(descriptor)});
 		return true;
 	}
 
 	void DetachDevice(const std::shared_ptr<Device>& device)
 	{
+		DeviceDescriptor descriptor;
 		{
 			std::lock_guard<std::recursive_mutex> lock(hidMutex);
 
@@ -239,6 +319,7 @@ namespace nsyshid
 								 device->m_productId);
 				return;
 			}
+			descriptor = CopyDescriptor(device);
 			deviceList.erase(it);
 
 			// do detach callbacks
@@ -250,6 +331,7 @@ namespace nsyshid
 		}
 
 		device->Close();
+		NotifyDeviceObservers({DeviceChangeKind::Detached, std::move(descriptor)});
 
 		cemuLog_logDebug(LogType::Force, "nsyshid.DetachDevice(): device removed: {:04x}:{:04x}",
 						 device->m_vendorId,
@@ -377,7 +459,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(cbFuncMPTR, 6);	   // r9
 		ppcDefineParamMPTR(cbParamMPTR, 7);	   // r10
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDGetDescriptor(0x{:08x}, 0x{:02x}, 0x{:02x}, 0x{:04x}, 0x{:x}, 0x{:08x}, 0x{:08x}, 0x{:08x})",
-					hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9], hCPU->gpr[10]);
+						 hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9], hCPU->gpr[10]);
 
 		std::shared_ptr<Device> device = GetDeviceByHandle(hidHandle, true);
 		if (device == nullptr)
@@ -439,7 +521,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(callbackFuncMPTR, 4);  // r7
 		ppcDefineParamMPTR(callbackParamMPTR, 5); // r8
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDSetIdle(0x{:08x}, 0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:08x}, 0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8]);
+						 hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8]);
 
 		std::shared_ptr<Device> device = GetDeviceByHandle(hidHandle, true);
 		if (device == nullptr)
@@ -500,7 +582,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(callbackFuncMPTR, 3);  // r6
 		ppcDefineParamMPTR(callbackParamMPTR, 4); // r7
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDSetProtocol(0x{:08x}, 0x{:02x}, 0x{:02x}, 0x{:08x}, 0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
+						 hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
 
 		std::shared_ptr<Device> device = GetDeviceByHandle(hidHandle, true);
 		if (device == nullptr)
@@ -582,7 +664,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(callbackFuncMPTR, 5);  // r8
 		ppcDefineParamMPTR(callbackParamMPTR, 6); // r9
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDSetReport(0x{:08x}, 0x{:02x}, 0x{:02x}, 0x{:08x}, 0x{:08x}, 0x{:08x}, 0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9]);
+						 hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7], hCPU->gpr[8], hCPU->gpr[9]);
 
 		_debugPrintHex("HIDSetReport", data, dataLength);
 
@@ -690,7 +772,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(callbackFuncMPTR, 3);  // r6
 		ppcDefineParamMPTR(callbackParamMPTR, 4); // r7
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDRead(0x{:x},0x{:08x},0x{:08x},0x{:08x},0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
+						 hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
 
 		std::shared_ptr<Device> device = GetDeviceByHandle(hidHandle, true);
 		if (device == nullptr)
@@ -787,7 +869,7 @@ namespace nsyshid
 		ppcDefineParamMPTR(callbackFuncMPTR, 3);  // r6
 		ppcDefineParamMPTR(callbackParamMPTR, 4); // r7
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDWrite(0x{:x},0x{:08x},0x{:08x},0x{:08x},0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
+						 hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6], hCPU->gpr[7]);
 
 		std::shared_ptr<Device> device = GetDeviceByHandle(hidHandle, true);
 		if (device == nullptr)
@@ -822,7 +904,7 @@ namespace nsyshid
 		ppcDefineParamTypePtr(ukn0, uint32be, 1);
 		ppcDefineParamTypePtr(ukn1, uint32be, 2);
 		cemuLog_logDebug(LogType::Force, "nsyshid.HIDDecodeError(0x{:08x},0x{:08x},0x{:08x})", hCPU->gpr[3],
-					hCPU->gpr[4], hCPU->gpr[5]);
+						 hCPU->gpr[4], hCPU->gpr[5]);
 
 		// todo
 		*ukn0 = 0x3FF;
@@ -946,7 +1028,7 @@ namespace nsyshid
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nsyshid";
@@ -965,7 +1047,6 @@ namespace nsyshid
 			osLib_addFunction("nsyshid", "HIDWrite", export_HIDWrite);
 
 			osLib_addFunction("nsyshid", "HIDDecodeError", export_HIDDecodeError);
-
 		};
 		void rpl_entry(uint32 moduleHandle, coreinit::RplEntryReason reason) override
 		{
@@ -979,7 +1060,7 @@ namespace nsyshid
 			{
 			}
 		}
-	}s_COSnsyshidModule;
+	} s_COSnsyshidModule;
 
 	COSModule* GetModule()
 	{

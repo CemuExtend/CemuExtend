@@ -1,6 +1,8 @@
 #include "application/EmulationController.h"
 
+#include <algorithm>
 #include <exception>
+#include <ranges>
 #include <utility>
 
 namespace Application
@@ -24,14 +26,13 @@ namespace Application
 	}
 
 	LaunchResult EmulationController::Launch(const LaunchRequest& request,
-		BeforeStart beforeStart, StartFailure startFailure)
+											 BeforeStart beforeStart, StartFailure startFailure)
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		{
 			std::scoped_lock lock(m_mutex);
 			if (m_state != EmulationState::Idle)
-				return {LaunchError::InvalidState, request.path, {}, {},
-					"emulation is already preparing, running, or stopping"};
+				return {LaunchError::InvalidState, request.path, {}, {}, "emulation is already preparing, running, or stopping"};
 			m_state = EmulationState::Preparing;
 		}
 
@@ -39,28 +40,37 @@ namespace Application
 		try
 		{
 			result = m_backend->Prepare(request);
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			bool aborted{};
-			try { aborted = m_backend->AbortPrepared(); } catch (...) {}
+			try
+			{
+				aborted = m_backend->AbortPrepared();
+			} catch (...)
+			{}
 			std::scoped_lock lock(m_mutex);
 			m_state = aborted ? EmulationState::Idle : EmulationState::Running;
 			return {LaunchError::BackendFailure, request.path, {}, {}, ex.what()};
-		}
-		catch (...)
+		} catch (...)
 		{
 			bool aborted{};
-			try { aborted = m_backend->AbortPrepared(); } catch (...) {}
+			try
+			{
+				aborted = m_backend->AbortPrepared();
+			} catch (...)
+			{}
 			std::scoped_lock lock(m_mutex);
 			m_state = aborted ? EmulationState::Idle : EmulationState::Running;
-			return {LaunchError::BackendFailure, request.path, {}, {},
-				"unknown backend exception while preparing emulation"};
+			return {LaunchError::BackendFailure, request.path, {}, {}, "unknown backend exception while preparing emulation"};
 		}
 		if (!result)
 		{
 			bool aborted{};
-			try { aborted = m_backend->AbortPrepared(); } catch (...) {}
+			try
+			{
+				aborted = m_backend->AbortPrepared();
+			} catch (...)
+			{}
 			std::scoped_lock lock(m_mutex);
 			m_state = aborted ? EmulationState::Idle : EmulationState::Running;
 			if (!aborted)
@@ -77,25 +87,39 @@ namespace Application
 			if (beforeStart)
 				beforeStart(result);
 			m_backend->Start();
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			bool aborted{};
-			try { aborted = m_backend->AbortPrepared(); } catch (...) {}
+			try
+			{
+				aborted = m_backend->AbortPrepared();
+			} catch (...)
+			{}
 			if (aborted && startFailure)
-				try { startFailure(); } catch (...) {}
+				try
+				{
+					startFailure();
+				} catch (...)
+				{}
 			std::scoped_lock lock(m_mutex);
 			m_state = aborted ? EmulationState::Idle : EmulationState::Running;
 			result.error = LaunchError::BackendFailure;
 			result.diagnostic = ex.what();
 			return result;
-		}
-		catch (...)
+		} catch (...)
 		{
 			bool aborted{};
-			try { aborted = m_backend->AbortPrepared(); } catch (...) {}
+			try
+			{
+				aborted = m_backend->AbortPrepared();
+			} catch (...)
+			{}
 			if (aborted && startFailure)
-				try { startFailure(); } catch (...) {}
+				try
+				{
+					startFailure();
+				} catch (...)
+				{}
 			std::scoped_lock lock(m_mutex);
 			m_state = aborted ? EmulationState::Idle : EmulationState::Running;
 			result.error = LaunchError::BackendFailure;
@@ -105,6 +129,24 @@ namespace Application
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Running;
+		}
+		return result;
+	}
+
+	CemodLaunchPreflight EmulationController::GetCemodLaunchPreflight(
+		std::uint64_t titleId)
+	{
+		const auto snapshot = m_backend->GetCemodManagerSnapshot(titleId);
+		CemodLaunchPreflight result{snapshot.generation, titleId, {}};
+		for (const auto& package : snapshot.packages)
+		{
+			if (!package.valid || package.approved || package.packageDigest.empty() ||
+				package.modIdentity.empty() ||
+				std::ranges::find(package.titleIds, titleId) == package.titleIds.end())
+				continue;
+			result.pendingApprovals.push_back({snapshot.generation, titleId,
+											   package.packageKey, package.packageDigest, package.modIdentity,
+											   package.requestedPermissions});
 		}
 		return result;
 	}
@@ -129,14 +171,12 @@ namespace Application
 				m_state = EmulationState::Running;
 				return {false, "backend retained title resources during shutdown"};
 			}
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Running;
 			return {false, ex.what()};
-		}
-		catch (...)
+		} catch (...)
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Running;
@@ -172,14 +212,12 @@ namespace Application
 				m_state = EmulationState::Idle;
 				return {false, "backend retained resources during application shutdown"};
 			}
-		}
-		catch (const std::exception& ex)
+		} catch (const std::exception& ex)
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Idle;
 			return {false, ex.what()};
-		}
-		catch (...)
+		} catch (...)
 		{
 			std::scoped_lock lock(m_mutex);
 			m_state = EmulationState::Idle;
@@ -203,6 +241,33 @@ namespace Application
 		return m_backend->IsTitleRunning();
 	}
 
+	PpcThreadsSnapshot EmulationController::CapturePpcThreads()
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_state != EmulationState::Running)
+				return {.diagnostic = "PPC threads are available only while emulation is running"};
+		}
+		if (!m_backend->IsTitleRunning())
+			return {.diagnostic = "the emulated title is not running"};
+		return m_backend->CapturePpcThreads();
+	}
+
+	PpcThreadCommandResult EmulationController::ExecutePpcThreadCommand(
+		const PpcThreadCommandRequest& request)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		{
+			std::scoped_lock lock(m_mutex);
+			if (m_state != EmulationState::Running)
+				return {false, "PPC thread commands require running emulation"};
+		}
+		if (!m_backend->IsTitleRunning())
+			return {false, "the emulated title is not running"};
+		return m_backend->ExecutePpcThreadCommand(request);
+	}
+
 	std::optional<std::uint64_t> EmulationController::RunningTitleId() const
 	{
 		return m_backend->RunningTitleId();
@@ -220,7 +285,7 @@ namespace Application
 	}
 
 	void EmulationController::SubmitKeyboard(std::uint16_t usage, bool pressed,
-		std::uint8_t modifiers)
+											 std::uint8_t modifiers)
 	{
 		m_backend->SubmitKeyboard(usage, pressed, modifiers);
 	}
@@ -243,6 +308,23 @@ namespace Application
 	bool EmulationController::SubmitSoftwareKeyboardKey(std::uint32_t keyCode)
 	{
 		return m_backend->SubmitSoftwareKeyboardKey(keyCode);
+	}
+
+	RuntimeOverlay::Snapshot EmulationController::GetRuntimeOverlaySnapshot()
+	{
+		return m_backend->GetRuntimeOverlaySnapshot();
+	}
+
+	bool EmulationController::SubmitRuntimeOverlayKeyboardKey(
+		std::uint64_t generation, std::uint32_t keyCode)
+	{
+		return m_backend->SubmitRuntimeOverlayKeyboardKey(generation, keyCode);
+	}
+
+	bool EmulationController::SelectRuntimeOverlayErrorButton(
+		std::uint64_t generation, bool rightButton)
+	{
+		return m_backend->SelectRuntimeOverlayErrorButton(generation, rightButton);
 	}
 
 	NfcTouchResult EmulationController::TouchNfcTagFromFile(
@@ -273,13 +355,13 @@ namespace Application
 	}
 
 	void EmulationController::SubmitTextComposition(std::string_view text,
-		std::string_view preedit, std::uint32_t cursor, std::uint32_t selectionLength)
+													std::string_view preedit, std::uint32_t cursor, std::uint32_t selectionLength)
 	{
 		m_backend->SubmitTextComposition(text, preedit, cursor, selectionLength);
 	}
 
 	void EmulationController::SaveCemodPermissionDecisions(std::uint64_t titleId,
-		std::span<const CemodPermissionDecision> decisions)
+														   std::span<const CemodPermissionDecision> decisions)
 	{
 		m_backend->SaveCemodPermissionDecisions(titleId, decisions);
 	}
@@ -295,8 +377,8 @@ namespace Application
 	}
 
 	CemodGrant EmulationController::ResolveCemodGrant(std::uint64_t titleId,
-		std::string_view modId, std::string_view principal,
-		std::uint32_t requestedPermissions)
+													  std::string_view modId, std::string_view principal,
+													  std::uint32_t requestedPermissions)
 	{
 		return m_backend->ResolveCemodGrant(
 			titleId, modId, principal, requestedPermissions);
@@ -308,15 +390,161 @@ namespace Application
 	}
 
 	bool EmulationController::ImportLegacyCemodData(std::uint64_t titleId,
-		std::string_view principal, std::string& error)
+													std::string_view principal, std::string& error)
 	{
 		return m_backend->ImportLegacyCemodData(titleId, principal, error);
+	}
+
+	CemodManagerSnapshot EmulationController::GetCemodManagerSnapshot(
+		std::optional<std::uint64_t> titleId, CemodCancellationCheck cancelled)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->GetCemodManagerSnapshot(titleId, std::move(cancelled));
+	}
+
+	CemodManagerResult EmulationController::SaveCemodApproval(
+		const CemodApprovalUpdate& update)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->SaveCemodApproval(update);
+	}
+
+	CemodManagerResult EmulationController::ImportLegacyCemodPackageData(
+		std::uint64_t generation, std::uint64_t titleId, std::string_view packageKey)
+	{
+		std::scoped_lock lock(m_operationMutex);
+		return m_backend->ImportLegacyCemodPackageData(generation, titleId, packageKey);
+	}
+
+	FrontendSettingsSnapshot EmulationController::GetFrontendSettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetFrontendSettings();
+	}
+
+	FrontendSettingsResult EmulationController::ApplyFrontendSettings(
+		const FrontendSettingsUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ApplyFrontendSettings(update);
+	}
+
+	InputSettingsModel EmulationController::GetInputSettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetInputSettings();
+	}
+
+	InputDeviceEnumerationResult EmulationController::EnumerateInputDevices(
+		std::string_view api)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->EnumerateInputDevices(api);
+	}
+
+	InputSettingsResult EmulationController::SetEmulatedController(std::uint32_t player,
+																   EmulatedControllerType type, bool preserveDevices)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetEmulatedController(player, type, preserveDevices);
+	}
+
+	InputSettingsResult EmulationController::AddInputDevice(
+		std::uint32_t player, std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->AddInputDevice(player, token);
+	}
+
+	InputSettingsResult EmulationController::RemoveInputDevice(
+		std::uint32_t player, std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->RemoveInputDevice(player, token);
+	}
+
+	InputSettingsResult EmulationController::ConnectInputDevice(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ConnectInputDevice(token);
+	}
+
+	std::optional<CapturedInputButton> EmulationController::CaptureInputButton(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->CaptureInputButton(token);
+	}
+
+	InputSettingsResult EmulationController::SetInputMapping(std::uint32_t player,
+															 std::uint64_t mappingId, std::uint64_t controllerToken, std::uint64_t buttonId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetInputMapping(player, mappingId, controllerToken, buttonId);
+	}
+
+	InputSettingsResult EmulationController::ClearInputMapping(std::uint32_t player,
+															   std::optional<std::uint64_t> mappingId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ClearInputMapping(player, mappingId);
+	}
+
+	InputSettingsResult EmulationController::SetPhysicalControllerSettings(
+		std::uint64_t token, const PhysicalControllerSettings& settings)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetPhysicalControllerSettings(token, settings);
+	}
+
+	InputSettingsResult EmulationController::CalibrateInputDevice(std::uint64_t token)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->CalibrateInputDevice(token);
+	}
+
+	InputSettingsResult EmulationController::LoadInputProfile(
+		std::uint32_t player, std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->LoadInputProfile(player, profile);
+	}
+
+	InputSettingsResult EmulationController::SaveInputProfile(
+		std::uint32_t player, std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SaveInputProfile(player, profile);
+	}
+
+	InputSettingsResult EmulationController::DeleteInputProfile(std::string_view profile)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteInputProfile(profile);
+	}
+
+	HotkeySettingsModel EmulationController::GetHotkeySettings() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetHotkeySettings();
+	}
+
+	HotkeySettingsResult EmulationController::ApplyHotkeySettings(
+		const HotkeySettingsUpdate& update)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ApplyHotkeySettings(update);
 	}
 
 	std::vector<TitleSummary> EmulationController::ListTitles() const
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->ListTitles();
+	}
+
+	std::vector<ManagedContentEntry> EmulationController::ListManagedContent() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->ListManagedContent();
 	}
 
 	std::optional<TitleSummary> EmulationController::ResolveBaseTitle(
@@ -385,13 +613,13 @@ namespace Application
 	}
 
 	ContentOperationResult EmulationController::ConvertToWua(
-		std::span<const std::uint64_t> locationUids,
+		const WuaConversionPlan& plan,
 		const std::filesystem::path& outputPath, ContentProgressHandler progress,
 		ContentCancellationCheck cancelled)
 	{
 		std::scoped_lock operationLock(m_operationMutex);
-		return m_backend->ConvertToWua(locationUids, outputPath,
-			std::move(progress), std::move(cancelled));
+		return m_backend->ConvertToWua(plan, outputPath,
+									   std::move(progress), std::move(cancelled));
 	}
 
 	ContentChecksumResult EmulationController::ComputeTitleChecksum(
@@ -400,7 +628,7 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->ComputeTitleChecksum(locationUid,
-			std::move(progress), std::move(cancelled));
+											   std::move(progress), std::move(cancelled));
 	}
 
 	GameProfileView EmulationController::LoadGameProfile(std::uint64_t titleId) const
@@ -424,12 +652,26 @@ namespace Application
 	}
 
 	TitleInstallResult EmulationController::InstallTitle(const TitleInstallPlan& plan,
-		TitleInstallDecision decision, TitleInstallProgressHandler progress,
-		TitleInstallCancellationCheck cancelled)
+														 TitleInstallDecision decision, TitleInstallProgressHandler progress,
+														 TitleInstallCancellationCheck cancelled)
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->InstallTitle(plan, decision, std::move(progress),
-			std::move(cancelled));
+									   std::move(cancelled));
+	}
+
+	ManagedContentDeletePlanResult EmulationController::PlanManagedContentDelete(
+		std::uint64_t locationUid) const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->PlanManagedContentDelete(locationUid);
+	}
+
+	ManagedContentDeleteResult EmulationController::DeleteManagedContent(
+		const ManagedContentDeletePlan& plan)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->DeleteManagedContent(plan);
 	}
 
 	std::vector<GraphicPackInfo> EmulationController::ListGraphicPacks() const
@@ -462,6 +704,16 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->RefreshGraphicPacks();
+	}
+
+	GraphicPackInstallResult EmulationController::InstallGraphicPacks(
+		const GraphicPackInstallRequest& request,
+		GraphicPackInstallProgressHandler progress,
+		GraphicPackInstallCancellationCheck cancelled)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->InstallGraphicPacks(request, std::move(progress),
+											  std::move(cancelled));
 	}
 
 	void EmulationController::SaveGraphicPackState()
@@ -505,6 +757,26 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->GetOnlineEnvironmentStatus();
+	}
+
+	AccountManagerSnapshot EmulationController::GetAccountManagerSnapshot() const
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->GetAccountManagerSnapshot();
+	}
+
+	AccountOperationResult EmulationController::SetActiveAccount(
+		std::uint32_t persistentId)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetActiveAccount(persistentId);
+	}
+
+	AccountOperationResult EmulationController::SetAccountNetworkService(
+		std::uint32_t persistentId, AccountNetworkService service)
+	{
+		std::scoped_lock operationLock(m_operationMutex);
+		return m_backend->SetAccountNetworkService(persistentId, service);
 	}
 
 	DownloadAccountContext EmulationController::GetDownloadAccountContext(
@@ -577,7 +849,7 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->TransferSave(titleId, sourcePersistentId,
-			targetPersistentId, overwrite);
+									   targetPersistentId, overwrite);
 	}
 
 	SaveOperationResult EmulationController::ImportSave(
@@ -587,7 +859,7 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->ImportSave(archivePath, titleId, persistentId, overwrite,
-			std::move(progress), std::move(cancelled));
+									 std::move(progress), std::move(cancelled));
 	}
 
 	SaveOperationResult EmulationController::ExportSave(
@@ -597,6 +869,6 @@ namespace Application
 	{
 		std::scoped_lock operationLock(m_operationMutex);
 		return m_backend->ExportSave(titleId, persistentId, archivePath, overwrite,
-			std::move(progress), std::move(cancelled));
+									 std::move(progress), std::move(cancelled));
 	}
-}
+} // namespace Application

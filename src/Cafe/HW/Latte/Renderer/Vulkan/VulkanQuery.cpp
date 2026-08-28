@@ -4,10 +4,9 @@ class LatteQueryObjectVk : public LatteQueryObject
 {
 	friend class VulkanRenderer;
 
-	LatteQueryObjectVk(VulkanRenderer* rendererVk) : m_rendererVk(rendererVk) 
-	{
+	LatteQueryObjectVk(VulkanRenderer* rendererVk) : m_rendererVk(rendererVk) {
 
-	};
+													 };
 
 	bool getResult(uint64& numSamplesPassed) override;
 	void begin() override;
@@ -19,8 +18,8 @@ class LatteQueryObjectVk : public LatteQueryObject
 	uint32 acquireQueryIndex();
 	void releaseQueryIndex(uint32 queryIndex);
 
-private:
-	struct queryFragment 
+  private:
+	struct queryFragment
 	{
 		uint32 queryIndex;
 		uint64 m_finishCommandBuffer;
@@ -28,7 +27,7 @@ private:
 	};
 
 	VulkanRenderer* m_rendererVk;
-	//sint32 m_queryIndex;
+	// sint32 m_queryIndex;
 	std::vector<queryFragment> list_queryFragments;
 	bool m_vkQueryEnded{};
 	bool m_hasActiveQuery{};
@@ -46,7 +45,7 @@ bool LatteQueryObjectVk::getResult(uint64& numSamplesPassed)
 	handleFinishedFragments();
 	cemu_assert_debug(list_queryFragments.empty());
 	numSamplesPassed = m_acccumulatedSum;
-	//numSamplesPassed = m_rendererVk->m_occlusionQueries.ptrQueryResults[m_queryIndex];
+	// numSamplesPassed = m_rendererVk->m_occlusionQueries.ptrQueryResults[m_queryIndex];
 	return true;
 }
 
@@ -62,7 +61,6 @@ void LatteQueryObjectVk::beginFragment()
 	qf.isFinished = false;
 	qf.m_finishCommandBuffer = 0;
 	list_queryFragments.emplace_back(qf);
-
 
 	vkCmdResetQueryPool(m_rendererVk->m_state.currentCommandBuffer, m_rendererVk->m_occlusionQueries.queryPool, newQueryIndex, 1);
 	vkCmdBeginQuery(m_rendererVk->m_state.currentCommandBuffer, m_rendererVk->m_occlusionQueries.queryPool, newQueryIndex, VK_QUERY_CONTROL_PRECISE_BIT);
@@ -128,7 +126,7 @@ void LatteQueryObjectVk::releaseQueryIndex(uint32 queryIndex)
 void LatteQueryObjectVk::end()
 {
 	cemu_assert_debug(!list_queryFragments.empty());
-	if(m_hasActiveFragment)
+	if (m_hasActiveFragment)
 		endFragment();
 	m_vkQueryEnded = true;
 	m_hasActiveQuery = false;
@@ -141,8 +139,8 @@ void LatteQueryObjectVk::end()
 LatteQueryObject* VulkanRenderer::occlusionQuery_create()
 {
 	// create query pool if it doesn't already exist
-	if(m_occlusionQueries.queryPool == VK_NULL_HANDLE)
-	{ 
+	if (m_occlusionQueries.queryPool == VK_NULL_HANDLE)
+	{
 		VkQueryPoolCreateInfo queryPoolCreateInfo{};
 		queryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
 		queryPoolCreateInfo.flags = 0;
@@ -164,7 +162,7 @@ LatteQueryObject* VulkanRenderer::occlusionQuery_create()
 	else
 	{
 		queryObjVk = m_occlusionQueries.list_cachedQueries.front();
-		m_occlusionQueries.list_cachedQueries.erase(m_occlusionQueries.list_cachedQueries.begin()+0);
+		m_occlusionQueries.list_cachedQueries.erase(m_occlusionQueries.list_cachedQueries.begin() + 0);
 	}
 	queryObjVk->queryEnded = false;
 	queryObjVk->queryEventStart = 0;
@@ -200,7 +198,7 @@ void VulkanRenderer::occlusionQuery_updateState()
 void VulkanRenderer::occlusionQuery_notifyEndCommandBuffer()
 {
 	for (auto& it : m_occlusionQueries.list_currentlyActiveQueries)
-		if(it->m_hasActiveQuery)
+		if (it->m_hasActiveQuery)
 			it->endFragment();
 }
 

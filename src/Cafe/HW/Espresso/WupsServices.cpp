@@ -56,14 +56,14 @@ namespace
 	[[nodiscard]] bool ValidAbiName(std::string_view value)
 	{
 		return !value.empty() && value.size() <= 128 &&
-			std::ranges::all_of(value, [](unsigned char character) {
-				return std::isalnum(character) || character == '_' ||
-					character == '.' || character == '-';
-			});
+			   std::ranges::all_of(value, [](unsigned char character) {
+				   return std::isalnum(character) || character == '_' ||
+						  character == '.' || character == '-';
+			   });
 	}
 
 	[[nodiscard]] bool AddU32(std::uint32_t left, std::uint32_t right,
-		std::uint32_t& result)
+							  std::uint32_t& result)
 	{
 		const auto sum = static_cast<std::uint64_t>(left) + right;
 		if (sum > std::numeric_limits<std::uint32_t>::max())
@@ -136,7 +136,7 @@ namespace
 	}
 
 	[[nodiscard]] std::uint16_t ReadU16(std::span<const std::byte> input,
-		std::size_t offset)
+										std::size_t offset)
 	{
 		return static_cast<std::uint16_t>(
 			(std::to_integer<std::uint16_t>(input[offset]) << 8) |
@@ -144,12 +144,12 @@ namespace
 	}
 
 	[[nodiscard]] std::uint32_t ReadU32(std::span<const std::byte> input,
-		std::size_t offset)
+										std::size_t offset)
 	{
 		return (std::to_integer<std::uint32_t>(input[offset]) << 24) |
-			(std::to_integer<std::uint32_t>(input[offset + 1]) << 16) |
-			(std::to_integer<std::uint32_t>(input[offset + 2]) << 8) |
-			std::to_integer<std::uint32_t>(input[offset + 3]);
+			   (std::to_integer<std::uint32_t>(input[offset + 1]) << 16) |
+			   (std::to_integer<std::uint32_t>(input[offset + 2]) << 8) |
+			   std::to_integer<std::uint32_t>(input[offset + 3]);
 	}
 
 	[[nodiscard]] std::uint32_t Crc32(std::span<const std::byte> input)
@@ -165,11 +165,11 @@ namespace
 	}
 
 	[[nodiscard]] bool PathStartsWith(const std::filesystem::path& path,
-		const std::filesystem::path& root)
+									  const std::filesystem::path& root)
 	{
 		auto pathIterator = path.begin();
 		for (auto rootIterator = root.begin(); rootIterator != root.end();
-			++rootIterator, ++pathIterator)
+			 ++rootIterator, ++pathIterator)
 			if (pathIterator == path.end() || *pathIterator != *rootIterator)
 				return false;
 		return true;
@@ -188,7 +188,7 @@ namespace
 		{
 			const auto end = raw.find('/', begin);
 			const auto component = raw.substr(begin,
-				end == std::string_view::npos ? raw.size() - begin : end - begin);
+											  end == std::string_view::npos ? raw.size() - begin : end - begin);
 			if (!component.empty() && component != ".")
 			{
 				if (component == ".." ||
@@ -230,9 +230,9 @@ namespace
 			return value.bytes.size() == 1;
 		case WupsStorageValueType::String:
 			return value.bytes.size() <= kMaximumGuestString &&
-				std::ranges::none_of(value.bytes, [](std::byte value) {
-					return value == std::byte{};
-				});
+				   std::ranges::none_of(value.bytes, [](std::byte value) {
+					   return value == std::byte{};
+				   });
 		case WupsStorageValueType::Binary:
 			return true;
 		}
@@ -243,17 +243,24 @@ namespace
 	{
 		switch (status)
 		{
-		case WupsServiceStatus::Success: return 0;
+		case WupsServiceStatus::Success:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
 		case WupsServiceStatus::StaleGeneration:
-		case WupsServiceStatus::PermissionDenied: return -0x01;
-		case WupsServiceStatus::BufferTooSmall: return -0x04;
-		case WupsServiceStatus::AlreadyExists: return -0x05;
-		case WupsServiceStatus::NotFound: return -0x10;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x01;
+		case WupsServiceStatus::BufferTooSmall:
+			return -0x04;
+		case WupsServiceStatus::AlreadyExists:
+			return -0x05;
+		case WupsServiceStatus::NotFound:
+			return -0x10;
 		case WupsServiceStatus::IoError:
-		case WupsServiceStatus::CorruptData: return -0x06;
-		default: return -0x100;
+		case WupsServiceStatus::CorruptData:
+			return -0x06;
+		default:
+			return -0x100;
 		}
 	}
 
@@ -261,15 +268,21 @@ namespace
 	{
 		switch (status)
 		{
-		case WupsServiceStatus::Success: return 0;
+		case WupsServiceStatus::Success:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
-		case WupsServiceStatus::PermissionDenied: return -0x01;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x01;
 		case WupsServiceStatus::NotFound:
-		case WupsServiceStatus::StaleGeneration: return -0x06;
-		case WupsServiceStatus::Unsupported: return -0x83;
-		case WupsServiceStatus::LimitExceeded: return -0x03;
-		default: return -0x100;
+		case WupsServiceStatus::StaleGeneration:
+			return -0x06;
+		case WupsServiceStatus::Unsupported:
+			return -0x83;
+		case WupsServiceStatus::LimitExceeded:
+			return -0x03;
+		default:
+			return -0x100;
 		}
 	}
 
@@ -278,14 +291,19 @@ namespace
 		switch (status)
 		{
 		case WupsServiceStatus::Success:
-		case WupsServiceStatus::Conflict: return 0;
+		case WupsServiceStatus::Conflict:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
-		case WupsServiceStatus::PermissionDenied: return -0x01;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x01;
 		case WupsServiceStatus::NotFound:
-		case WupsServiceStatus::StaleGeneration: return -0x03;
-		case WupsServiceStatus::Busy: return -0x04;
-		default: return -0x100;
+		case WupsServiceStatus::StaleGeneration:
+			return -0x03;
+		case WupsServiceStatus::Busy:
+			return -0x04;
+		default:
+			return -0x100;
 		}
 	}
 
@@ -293,15 +311,21 @@ namespace
 	{
 		switch (status)
 		{
-		case WupsServiceStatus::Success: return 0;
+		case WupsServiceStatus::Success:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
-		case WupsServiceStatus::PermissionDenied: return -0x04;
-		case WupsServiceStatus::Unsupported: return -0x06;
-		case WupsServiceStatus::LimitExceeded: return -0x12;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x04;
+		case WupsServiceStatus::Unsupported:
+			return -0x06;
+		case WupsServiceStatus::LimitExceeded:
+			return -0x12;
 		case WupsServiceStatus::NotFound:
-		case WupsServiceStatus::StaleGeneration: return -0x13;
-		default: return -0x1000;
+		case WupsServiceStatus::StaleGeneration:
+			return -0x13;
+		default:
+			return -0x1000;
 		}
 	}
 
@@ -309,15 +333,21 @@ namespace
 	{
 		switch (status)
 		{
-		case WupsServiceStatus::Success: return 0;
+		case WupsServiceStatus::Success:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
-		case WupsServiceStatus::PermissionDenied: return -0x10;
-		case WupsServiceStatus::LimitExceeded: return -0x11;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x10;
+		case WupsServiceStatus::LimitExceeded:
+			return -0x11;
 		case WupsServiceStatus::NotFound:
-		case WupsServiceStatus::StaleGeneration: return -0x13;
-		case WupsServiceStatus::Unsupported: return -0x21;
-		default: return -0x1000;
+		case WupsServiceStatus::StaleGeneration:
+			return -0x13;
+		case WupsServiceStatus::Unsupported:
+			return -0x21;
+		default:
+			return -0x1000;
 		}
 	}
 
@@ -325,42 +355,48 @@ namespace
 	{
 		switch (status)
 		{
-		case WupsServiceStatus::Success: return 0;
+		case WupsServiceStatus::Success:
+			return 0;
 		case WupsServiceStatus::InvalidArgument:
 		case WupsServiceStatus::OwnerMismatch:
-		case WupsServiceStatus::PermissionDenied: return -0x10;
+		case WupsServiceStatus::PermissionDenied:
+			return -0x10;
 		case WupsServiceStatus::NotFound:
-		case WupsServiceStatus::StaleGeneration: return -0x11;
-		case WupsServiceStatus::UnsupportedVersion: return -0x12;
-		case WupsServiceStatus::Unsupported: return -0x21;
-		default: return -0x1000;
+		case WupsServiceStatus::StaleGeneration:
+			return -0x11;
+		case WupsServiceStatus::UnsupportedVersion:
+			return -0x12;
+		case WupsServiceStatus::Unsupported:
+			return -0x21;
+		default:
+			return -0x1000;
 		}
 	}
 
 	class UnsupportedFunctionPatcher final : public IWupsFunctionPatcherFacade
 	{
-	public:
+	  public:
 		std::uint32_t ApiVersion() const override
 		{
 			return 2;
 		}
 
 		WupsServiceStatus AddPatch(WupsOwnerToken, std::uint32_t, bool,
-			std::uint32_t&, bool&, std::string& error) override
+								   std::uint32_t&, bool&, std::string& error) override
 		{
 			error = "FunctionPatcher provider is not connected";
 			return WupsServiceStatus::Unsupported;
 		}
 
 		WupsServiceStatus RemovePatch(WupsOwnerToken, std::uint32_t,
-			std::string& error) override
+									  std::string& error) override
 		{
 			error = "FunctionPatcher provider is not connected";
 			return WupsServiceStatus::Unsupported;
 		}
 
 		WupsServiceStatus IsPatchApplied(WupsOwnerToken, std::uint32_t,
-			bool&, std::string& error) const override
+										 bool&, std::string& error) const override
 		{
 			error = "FunctionPatcher provider is not connected";
 			return WupsServiceStatus::Unsupported;
@@ -370,7 +406,7 @@ namespace
 		{
 		}
 	};
-}
+} // namespace
 
 struct AromaCompatibilityRuntime::Impl
 {
@@ -482,10 +518,22 @@ struct AromaCompatibilityRuntime::Impl
 		{
 			return 0x4000000000000000ULL | token.owner;
 		}
-		std::uint32_t Generation() const override { return token.generation; }
-		const std::string& Principal() const override { return principal; }
-		std::uint64_t TitleId() const override { return titleId; }
-		bool IsStopped() const override { return stopped.load(std::memory_order_acquire); }
+		std::uint32_t Generation() const override
+		{
+			return token.generation;
+		}
+		const std::string& Principal() const override
+		{
+			return principal;
+		}
+		std::uint64_t TitleId() const override
+		{
+			return titleId;
+		}
+		bool IsStopped() const override
+		{
+			return stopped.load(std::memory_order_acquire);
+		}
 		std::uint32_t GrantedPermissions() const override
 		{
 			return grantedPermissions.load(std::memory_order_acquire);
@@ -495,26 +543,30 @@ struct AromaCompatibilityRuntime::Impl
 			grantedPermissions.store(value, std::memory_order_release);
 		}
 		bool IsServiceAllowed(std::uint16_t service, std::uint32_t permission,
-			std::uint16_t operation) const override
+							  std::uint16_t operation) const override
 		{
-			if (service == 1 || permission == 0) return true;
-			if (service < 2 || service > 9) return false;
+			if (service == 1 || permission == 0)
+				return true;
+			if (service < 2 || service > 9)
+				return false;
 			const auto bit = 1U << (service - 1U);
-			if (permission == 1) return (package.serviceReadMask & bit) != 0;
-			if (permission == 2) return (package.serviceWriteMask & bit) != 0;
-			if (permission == 4) return (package.serviceInjectMask & bit) != 0;
+			if (permission == 1)
+				return (package.serviceReadMask & bit) != 0;
+			if (permission == 2)
+				return (package.serviceWriteMask & bit) != 0;
+			if (permission == 4)
+				return (package.serviceInjectMask & bit) != 0;
 			if (permission == 8)
-				return (((operation == 1 ? package.serviceReadMask :
-					package.serviceWriteMask) & bit) != 0);
-			if (permission == 16) return (package.serviceReadMask & bit) != 0;
+				return (((operation == 1 ? package.serviceReadMask : package.serviceWriteMask) & bit) != 0);
+			if (permission == 16)
+				return (package.serviceReadMask & bit) != 0;
 			return false;
 		}
 	};
 
 	struct PendingCallback
 	{
-		explicit PendingCallback(std::shared_ptr<Owner> owner_) :
-			owner(std::move(owner_))
+		explicit PendingCallback(std::shared_ptr<Owner> owner_) : owner(std::move(owner_))
 		{
 			std::lock_guard lock(owner->mutex);
 			++owner->pendingCallbacks;
@@ -542,12 +594,10 @@ struct AromaCompatibilityRuntime::Impl
 	struct AsyncLease
 	{
 		AsyncLease() = default;
-		AsyncLease(std::shared_ptr<AsyncGate> gate_, Impl* impl_) :
-			gate(std::move(gate_)), impl(impl_)
+		AsyncLease(std::shared_ptr<AsyncGate> gate_, Impl* impl_) : gate(std::move(gate_)), impl(impl_)
 		{
 		}
-		AsyncLease(AsyncLease&& other) noexcept :
-			gate(std::move(other.gate)), impl(std::exchange(other.impl, nullptr))
+		AsyncLease(AsyncLease&& other) noexcept : gate(std::move(other.gate)), impl(std::exchange(other.impl, nullptr))
 		{
 		}
 		AsyncLease& operator=(AsyncLease&&) = delete;
@@ -557,9 +607,11 @@ struct AromaCompatibilityRuntime::Impl
 		Impl* impl{};
 		~AsyncLease()
 		{
-			if (!gate || !impl) return;
+			if (!gate || !impl)
+				return;
 			std::lock_guard lock(gate->mutex);
-			if (gate->active != 0) --gate->active;
+			if (gate->active != 0)
+				--gate->active;
 			gate->idle.notify_all();
 		}
 	};
@@ -567,14 +619,12 @@ struct AromaCompatibilityRuntime::Impl
 	struct Lease
 	{
 		Lease() = default;
-		Lease(Impl* impl_, std::shared_ptr<Owner> owner_) :
-			impl(impl_), owner(std::move(owner_)), previous(s_activeServiceOwner)
+		Lease(Impl* impl_, std::shared_ptr<Owner> owner_) : impl(impl_), owner(std::move(owner_)), previous(s_activeServiceOwner)
 		{
 			s_activeServiceOwner = owner.get();
 		}
-		Lease(Lease&& other) noexcept :
-			impl(std::exchange(other.impl, nullptr)),
-			owner(std::move(other.owner)), previous(other.previous)
+		Lease(Lease&& other) noexcept : impl(std::exchange(other.impl, nullptr)),
+										owner(std::move(other.owner)), previous(other.previous)
 		{
 		}
 		Lease& operator=(Lease&&) = delete;
@@ -588,30 +638,32 @@ struct AromaCompatibilityRuntime::Impl
 				impl->Unpin(owner);
 			}
 		}
-		explicit operator bool() const { return owner != nullptr; }
-		Owner* operator->() const { return owner.get(); }
+		explicit operator bool() const
+		{
+			return owner != nullptr;
+		}
+		Owner* operator->() const
+		{
+			return owner.get();
+		}
 		Impl* impl{};
 		std::shared_ptr<Owner> owner;
 		const void* previous{};
 	};
 
-	explicit Impl(AromaRuntimeOptions options_, WupsProcessKind initialProcess) :
-		options(std::move(options_)), process(initialProcess),
-		registry(options.exportRegistry ? options.exportRegistry :
-			std::make_shared<ModuleExportRegistry>()),
-		patchManager(options.patchManager),
-		patchPlatform(options.patchPlatform),
-		asyncGate(std::make_shared<AsyncGate>())
+	explicit Impl(AromaRuntimeOptions options_, WupsProcessKind initialProcess) : options(std::move(options_)), process(initialProcess),
+																				  registry(options.exportRegistry ? options.exportRegistry : std::make_shared<ModuleExportRegistry>()),
+																				  patchManager(options.patchManager),
+																				  patchPlatform(options.patchPlatform),
+																				  asyncGate(std::make_shared<AsyncGate>())
 	{
 		asyncGate->impl = this;
 		if (!options.functionPatcher)
 			options.functionPatcher = CreateUnsupportedFunctionPatcherFacade();
 		if (patchPlatform)
 			patchPlatform->SetCurrentProcess(
-				initialProcess == WupsProcessKind::RootRpx ?
-					WupsPatchProcess::RootRpx :
-				initialProcess == WupsProcessKind::WiiUMenu ?
-					WupsPatchProcess::WiiUMenu : WupsPatchProcess::Game);
+				initialProcess == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx : initialProcess == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu
+																																	 : WupsPatchProcess::Game);
 	}
 
 	~Impl()
@@ -625,7 +677,8 @@ struct AromaCompatibilityRuntime::Impl
 		const std::shared_ptr<AsyncGate>& gate)
 	{
 		std::lock_guard lock(gate->mutex);
-		if (!gate->impl) return {};
+		if (!gate->impl)
+			return {};
 		++gate->active;
 		return AsyncLease(gate, gate->impl);
 	}
@@ -681,34 +734,33 @@ struct AromaCompatibilityRuntime::Impl
 				--owner->pins;
 			owner->pinsChanged.notify_all();
 			finalize = owner->pins == 0 && owner->closing &&
-				owner->deferredFinalize && !owner->finalized;
+					   owner->deferredFinalize && !owner->finalized;
 		}
 		if (finalize)
 			FinalizeOwner(owner);
 	}
 
 	[[nodiscard]] bool ModuleAllowed(const Owner& owner,
-		std::string_view moduleName) const
+									 std::string_view moduleName) const
 	{
 		return std::ranges::find(owner.permissions.modules, moduleName) !=
-			owner.permissions.modules.end();
+			   owner.permissions.modules.end();
 	}
 
 	[[nodiscard]] bool ReadGuest(const Owner& owner, std::uint32_t address,
-		std::span<std::byte> output, WupsGuestAccess access,
-		std::string& error) const
+								 std::span<std::byte> output, WupsGuestAccess access,
+								 std::string& error) const
 	{
 		if (!options.platform || address == 0 || output.empty() ||
 			output.size() > std::numeric_limits<std::uint32_t>::max())
 		{
-			error = !options.platform ? "guest platform adapter is unavailable" :
-				"guest range is null or empty";
+			error = !options.platform ? "guest platform adapter is unavailable" : "guest range is null or empty";
 			return false;
 		}
 		std::uint32_t end{};
 		if (!AddU32(address, static_cast<std::uint32_t>(output.size()), end) ||
 			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
-				static_cast<std::uint32_t>(output.size()), access) ||
+														  static_cast<std::uint32_t>(output.size()), access) ||
 			!options.platform->ReadGuest(address, output))
 		{
 			error = fmt::format(
@@ -723,24 +775,24 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool WriteGuest(const Owner& owner, std::uint32_t address,
-		std::span<const std::byte> input, std::string& error)
+								  std::span<const std::byte> input, std::string& error)
 	{
 		if (!options.platform || address == 0 || input.empty() ||
 			input.size() > std::numeric_limits<std::uint32_t>::max())
 		{
-			error = !options.platform ? "guest platform adapter is unavailable" :
-				"guest output range is null or empty";
+			error = !options.platform ? "guest platform adapter is unavailable" : "guest output range is null or empty";
 			return false;
 		}
 		std::uint32_t end{};
 		if (!AddU32(address, static_cast<std::uint32_t>(input.size()), end) ||
 			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
-				static_cast<std::uint32_t>(input.size()), WupsGuestAccess::Write) ||
+														  static_cast<std::uint32_t>(input.size()), WupsGuestAccess::Write) ||
 			!options.platform->WriteGuest(address, input))
 		{
 			error = fmt::format(
 				"owner {} generation {} supplied an invalid writable guest range "
-				"0x{:08x}+0x{:x}", owner.token.owner, owner.token.generation,
+				"0x{:08x}+0x{:x}",
+				owner.token.owner, owner.token.generation,
 				address, input.size());
 			return false;
 		}
@@ -748,14 +800,13 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool ReadGuestString(const Owner& owner, std::uint32_t address,
-		std::size_t maximum, std::string& value, std::string& error) const
+									   std::size_t maximum, std::string& value, std::string& error) const
 	{
 		value.clear();
 		if (!options.platform || address == 0 || maximum == 0 ||
 			maximum > kMaximumGuestString)
 		{
-			error = !options.platform ? "guest platform adapter is unavailable" :
-				"guest string pointer or limit is invalid";
+			error = !options.platform ? "guest platform adapter is unavailable" : "guest string pointer or limit is invalid";
 			return false;
 		}
 		value.reserve(std::min<std::size_t>(maximum, 128));
@@ -764,7 +815,7 @@ struct AromaCompatibilityRuntime::Impl
 			std::uint32_t current{};
 			if (!AddU32(address, static_cast<std::uint32_t>(index), current) ||
 				!options.platform->ValidateGuestRangeForOwner(owner.token,
-					current, 1, WupsGuestAccess::Read))
+															  current, 1, WupsGuestAccess::Read))
 			{
 				error = fmt::format(
 					"guest string at 0x{:08x} leaves readable memory", address);
@@ -774,7 +825,7 @@ struct AromaCompatibilityRuntime::Impl
 			if (!options.platform->ReadGuest(current, byte))
 			{
 				error = fmt::format("guest string at 0x{:08x} could not be read",
-					address);
+									address);
 				return false;
 			}
 			const auto character = std::to_integer<unsigned char>(byte[0]);
@@ -794,7 +845,7 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool ReadGuestU32(const Owner& owner, std::uint32_t address,
-		std::uint32_t& value, std::string& error) const
+									std::uint32_t& value, std::string& error) const
 	{
 		if ((address & 3U) != 0)
 		{
@@ -809,7 +860,7 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool WriteGuestU32(const Owner& owner, std::uint32_t address,
-		std::uint32_t value, std::string& error)
+									 std::uint32_t value, std::string& error)
 	{
 		if ((address & 3U) != 0)
 		{
@@ -825,17 +876,18 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool ValidateGuestOutput(const Owner& owner,
-		std::uint32_t address, std::uint32_t size, std::uint32_t alignment,
-		std::string& error) const
+										   std::uint32_t address, std::uint32_t size, std::uint32_t alignment,
+										   std::string& error) const
 	{
 		if (!options.platform || address == 0 || size == 0 ||
 			(alignment > 1 && (address & (alignment - 1)) != 0) ||
 			!options.platform->ValidateGuestRangeForOwner(owner.token, address,
-				size, WupsGuestAccess::Write))
+														  size, WupsGuestAccess::Write))
 		{
 			error = fmt::format(
 				"owner {} generation {} supplied an invalid writable guest output "
-				"0x{:08x}+0x{:x}", owner.token.owner, owner.token.generation,
+				"0x{:08x}+0x{:x}",
+				owner.token.owner, owner.token.generation,
 				address, size);
 			return false;
 		}
@@ -843,20 +895,20 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool WriteGuestBool(const Owner& owner,
-		std::uint32_t address, bool value, std::string& error)
+									  std::uint32_t address, bool value, std::string& error)
 	{
 		const std::array bytes{value ? std::byte{1} : std::byte{0}};
 		return WriteGuest(owner, address, bytes, error);
 	}
 
 	[[nodiscard]] bool ValidateGuestCallback(const Owner& owner,
-		std::uint32_t address, std::string& error) const
+											 std::uint32_t address, std::string& error) const
 	{
 		if (address == 0)
 			return true;
 		if (!options.platform || (address & 3U) != 0 ||
 			!options.platform->ValidateGuestRangeForOwner(owner.token,
-				address, 4, WupsGuestAccess::Execute))
+														  address, 4, WupsGuestAccess::Execute))
 		{
 			error = fmt::format(
 				"owner {} generation {} supplied non-executable callback 0x{:08x}",
@@ -867,8 +919,8 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool Invoke(const std::shared_ptr<Owner>& owner,
-		std::uint32_t callback, std::span<const std::uint32_t> arguments,
-		std::uint32_t& result, std::string& error) const
+							  std::uint32_t callback, std::span<const std::uint32_t> arguments,
+							  std::uint32_t& result, std::string& error) const
 	{
 		if (callback == 0)
 			return true;
@@ -887,14 +939,13 @@ struct AromaCompatibilityRuntime::Impl
 
 	[[nodiscard]] std::filesystem::path StoragePath(const Owner& owner) const
 	{
-		const auto principal = owner.principal.empty() ?
-			HexEncode(owner.packageId) : HexEncode(owner.principal);
+		const auto principal = owner.principal.empty() ? HexEncode(owner.packageId) : HexEncode(owner.principal);
 		return options.storageRoot / principal / HexU64(owner.titleId) /
-			(HexEncode(owner.metadata.storageId) + ".wups-storage");
+			   (HexEncode(owner.metadata.storageId) + ".wups-storage");
 	}
 
 	[[nodiscard]] bool EnsureSafeStorageParent(const std::filesystem::path& path,
-		std::string& error) const
+											   std::string& error) const
 	{
 		std::error_code code;
 		if (options.storageRoot.empty())
@@ -906,7 +957,7 @@ struct AromaCompatibilityRuntime::Impl
 		if (code)
 		{
 			error = fmt::format("could not create WUPS storage root: {}",
-				code.message());
+								code.message());
 			return false;
 		}
 		auto current = options.storageRoot;
@@ -931,7 +982,7 @@ struct AromaCompatibilityRuntime::Impl
 			if (code && code != std::errc::file_exists)
 			{
 				error = fmt::format("could not create storage namespace: {}",
-					code.message());
+									code.message());
 				return false;
 			}
 			code.clear();
@@ -940,17 +991,17 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool WriteAtomic(const std::filesystem::path& path,
-		std::span<const std::byte> bytes, WupsOwnerToken token,
-		std::string& error) const
+								   std::span<const std::byte> bytes, WupsOwnerToken token,
+								   std::string& error) const
 	{
 		if (!EnsureSafeStorageParent(path, error))
 			return false;
 		const auto temporary = path.parent_path() /
-			fmt::format(".{}.tmp-{}-{}", path.filename().string(),
-				token.owner, token.generation);
+							   fmt::format(".{}.tmp-{}-{}", path.filename().string(),
+										   token.owner, token.generation);
 		std::error_code code;
 		if (std::filesystem::is_symlink(
-			std::filesystem::symlink_status(temporary, code)))
+				std::filesystem::symlink_status(temporary, code)))
 		{
 			error = "storage temporary path is a symlink";
 			return false;
@@ -958,11 +1009,11 @@ struct AromaCompatibilityRuntime::Impl
 		std::filesystem::remove(temporary, code);
 #if BOOST_OS_WINDOWS
 		const int descriptor = _wopen(temporary.c_str(),
-			_O_BINARY | _O_CREAT | _O_EXCL | _O_WRONLY,
-			_S_IREAD | _S_IWRITE);
+									  _O_BINARY | _O_CREAT | _O_EXCL | _O_WRONLY,
+									  _S_IREAD | _S_IWRITE);
 #else
 		const int descriptor = open(temporary.c_str(),
-			O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0600);
+									O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0600);
 #endif
 		if (descriptor < 0)
 		{
@@ -975,11 +1026,11 @@ struct AromaCompatibilityRuntime::Impl
 		{
 #if BOOST_OS_WINDOWS
 			const auto written = _write(descriptor, bytes.data() + offset,
-				static_cast<unsigned>(std::min<std::size_t>(
-					bytes.size() - offset, std::numeric_limits<unsigned>::max())));
+										static_cast<unsigned>(std::min<std::size_t>(
+											bytes.size() - offset, std::numeric_limits<unsigned>::max())));
 #else
 			const auto written = write(descriptor, bytes.data() + offset,
-				bytes.size() - offset);
+									   bytes.size() - offset);
 #endif
 			if (written <= 0)
 			{
@@ -1013,7 +1064,7 @@ struct AromaCompatibilityRuntime::Impl
 		}
 #if !BOOST_OS_WINDOWS
 		const int directory = open(path.parent_path().c_str(),
-			O_RDONLY | O_CLOEXEC | O_DIRECTORY);
+								   O_RDONLY | O_CLOEXEC | O_DIRECTORY);
 		if (directory >= 0)
 		{
 			(void)fsync(directory);
@@ -1024,8 +1075,8 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool SerializeStorage(const Owner& owner,
-		std::vector<std::byte>& output, std::uint64_t& revision,
-		std::string& error) const
+										std::vector<std::byte>& output, std::uint64_t& revision,
+										std::string& error) const
 	{
 		struct Entry
 		{
@@ -1037,7 +1088,7 @@ struct AromaCompatibilityRuntime::Impl
 		const auto storage = owner.storage;
 		std::lock_guard lock(storage->mutex);
 		walk = [&](std::uint32_t handle, std::string prefix,
-			std::size_t depth) {
+				   std::size_t depth) {
 			if (depth > kMaximumStorageDepth)
 				return false;
 			const auto found = storage->nodes.find(handle);
@@ -1076,15 +1127,14 @@ struct AromaCompatibilityRuntime::Impl
 			}
 			AppendU16(output, static_cast<std::uint16_t>(entry.path.size()));
 			output.insert(output.end(),
-				reinterpret_cast<const std::byte*>(entry.path.data()),
-				reinterpret_cast<const std::byte*>(entry.path.data() +
-					entry.path.size()));
-			AppendU32(output, entry.node->container ? kStorageContainerType :
-				static_cast<std::uint32_t>(entry.node->value.type));
+						  reinterpret_cast<const std::byte*>(entry.path.data()),
+						  reinterpret_cast<const std::byte*>(entry.path.data() +
+															 entry.path.size()));
+			AppendU32(output, entry.node->container ? kStorageContainerType : static_cast<std::uint32_t>(entry.node->value.type));
 			AppendU32(output, static_cast<std::uint32_t>(
-				entry.node->value.bytes.size()));
+								  entry.node->value.bytes.size()));
 			output.insert(output.end(), entry.node->value.bytes.begin(),
-				entry.node->value.bytes.end());
+						  entry.node->value.bytes.end());
 		}
 		const auto crc = Crc32(output);
 		AppendU32(output, crc);
@@ -1098,7 +1148,7 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool DeserializeStorage(Owner& owner,
-		std::span<const std::byte> input, std::string& error)
+										  std::span<const std::byte> input, std::string& error)
 	{
 		if (input.size() < kStorageMagic.size() + 8 ||
 			!std::equal(kStorageMagic.begin(), kStorageMagic.end(), input.begin()) ||
@@ -1117,7 +1167,7 @@ struct AromaCompatibilityRuntime::Impl
 		std::unordered_map<std::uint32_t, StorageNode> replacement;
 		const auto replacementRoot = NewHandle();
 		replacement.emplace(replacementRoot,
-			StorageNode{replacementRoot, 0, {}, true});
+							StorageNode{replacementRoot, 0, {}, true});
 		std::size_t offset = 12;
 		for (std::uint32_t index = 0; index < count; ++index)
 		{
@@ -1156,8 +1206,7 @@ struct AromaCompatibilityRuntime::Impl
 			{
 				const auto slash = path.find('/', componentBegin);
 				const auto key = std::string_view(path).substr(componentBegin,
-					slash == std::string::npos ? path.size() - componentBegin :
-						slash - componentBegin);
+															   slash == std::string::npos ? path.size() - componentBegin : slash - componentBegin);
 				if (!ValidStorageKey(key) || ++depth > kMaximumStorageDepth)
 				{
 					error = "WUPS storage contains an unsafe item path";
@@ -1191,18 +1240,18 @@ struct AromaCompatibilityRuntime::Impl
 				}
 				const auto handle = NewHandle();
 				StorageNode node{handle, parent, std::string(key),
-					type == kStorageContainerType};
+								 type == kStorageContainerType};
 				if (!node.container)
 				{
 					if (type > static_cast<std::uint32_t>(
-						WupsStorageValueType::Double))
+								   WupsStorageValueType::Double))
 					{
 						error = "WUPS storage contains an invalid item type";
 						return false;
 					}
 					node.value.type = static_cast<WupsStorageValueType>(type);
 					node.value.bytes.assign(input.begin() + offset,
-						input.begin() + offset + size);
+											input.begin() + offset + size);
 					if (!ValidateStorageValue(node.value))
 					{
 						error = "WUPS storage contains an invalid typed value";
@@ -1238,7 +1287,7 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] WupsServiceStatus EnsureStorageLoadedLocked(Owner& owner,
-		std::string& error)
+															  std::string& error)
 	{
 		if (!ValidStorageId(owner.metadata.storageId))
 		{
@@ -1258,18 +1307,18 @@ struct AromaCompatibilityRuntime::Impl
 			if (code)
 			{
 				error = fmt::format("could not inspect WUPS storage: {}",
-					code.message());
+									code.message());
 				return WupsServiceStatus::IoError;
 			}
 			std::lock_guard lock(owner.storage->mutex);
 			owner.storage->root = NewHandle();
 			owner.storage->nodes.emplace(owner.storage->root,
-				StorageNode{owner.storage->root, 0, {}, true});
+										 StorageNode{owner.storage->root, 0, {}, true});
 			owner.storage->loaded = true;
 			return WupsServiceStatus::Success;
 		}
 		if (std::filesystem::is_symlink(
-			std::filesystem::symlink_status(path, code)))
+				std::filesystem::symlink_status(path, code)))
 		{
 			error = "WUPS storage file is a symlink";
 			return WupsServiceStatus::IoError;
@@ -1293,19 +1342,18 @@ struct AromaCompatibilityRuntime::Impl
 			error = "WUPS storage file could not be read completely";
 			return WupsServiceStatus::IoError;
 		}
-		return DeserializeStorage(owner, bytes, error) ?
-			WupsServiceStatus::Success : WupsServiceStatus::CorruptData;
+		return DeserializeStorage(owner, bytes, error) ? WupsServiceStatus::Success : WupsServiceStatus::CorruptData;
 	}
 
 	[[nodiscard]] WupsServiceStatus EnsureStorageLoaded(Owner& owner,
-		std::string& error)
+														std::string& error)
 	{
 		std::lock_guard loadLock(owner.storageLoadMutex);
 		return EnsureStorageLoadedLocked(owner, error);
 	}
 
 	[[nodiscard]] WupsServiceStatus SaveStorage(Owner& owner, bool force,
-		std::string& error)
+												std::string& error)
 	{
 		auto status = EnsureStorageLoaded(owner, error);
 		if (status != WupsServiceStatus::Success)
@@ -1349,7 +1397,7 @@ struct AromaCompatibilityRuntime::Impl
 			if (const auto status = SaveStorage(*owner, false, storageError);
 				status != WupsServiceStatus::Success && options.platform)
 				options.platform->Log(owner->token, WupsLogLevel::Error,
-					"homebrew_wupsbackend", "storage cleanup", storageError);
+									  "homebrew_wupsbackend", "storage cleanup", storageError);
 		}
 
 		{
@@ -1385,9 +1433,9 @@ struct AromaCompatibilityRuntime::Impl
 			{
 				std::string mappingError;
 				if (!options.platform->FreeMappedMemory(
-					owner->token, mapping, mappingError))
+						owner->token, mapping, mappingError))
 					options.platform->Log(owner->token, WupsLogLevel::Warning,
-						"homebrew_memorymapping", "owner cleanup", mappingError);
+										  "homebrew_memorymapping", "owner cleanup", mappingError);
 			}
 			for (const auto address : guestData)
 				options.platform->FreeGuestData(owner->token, address);
@@ -1429,18 +1477,18 @@ struct AromaCompatibilityRuntime::Impl
 	}
 
 	[[nodiscard]] bool EnsureFunctionExport(const std::shared_ptr<Owner>& owner,
-		std::string_view moduleName, std::string_view symbolName,
-		std::uint32_t& address, std::string& error);
+											std::string_view moduleName, std::string_view symbolName,
+											std::uint32_t& address, std::string& error);
 	[[nodiscard]] std::int32_t Dispatch(const std::shared_ptr<Owner>& owner,
-		std::string_view moduleName, std::string_view symbolName,
-		std::span<const std::uint32_t> arguments, std::string& error);
+										std::string_view moduleName, std::string_view symbolName,
+										std::span<const std::uint32_t> arguments, std::string& error);
 	[[nodiscard]] std::int32_t DispatchBackend(
 		const std::shared_ptr<Owner>& owner,
 		const WupsBackendExportDescriptor& export_,
 		std::span<const std::uint32_t> arguments, std::string& error);
 	[[nodiscard]] bool QueueCallback(WupsOwnerToken token,
-		std::uint32_t callback, std::vector<std::uint32_t> arguments,
-		std::string& error);
+									 std::uint32_t callback, std::vector<std::uint32_t> arguments,
+									 std::string& error);
 	[[nodiscard]] WupsServiceStatus AllocateMapping(
 		const std::shared_ptr<Owner>& owner, WupsOwnerToken token,
 		std::uint32_t size, std::uint32_t alignment, bool writable,
@@ -1457,14 +1505,12 @@ CreateUnsupportedFunctionPatcherFacade()
 	return std::make_shared<UnsupportedFunctionPatcher>();
 }
 
-AromaCompatibilityRuntime::AromaCompatibilityRuntime(WupsProcessKind process) :
-	AromaCompatibilityRuntime(AromaRuntimeOptions{}, process)
+AromaCompatibilityRuntime::AromaCompatibilityRuntime(WupsProcessKind process) : AromaCompatibilityRuntime(AromaRuntimeOptions{}, process)
 {
 }
 
 AromaCompatibilityRuntime::AromaCompatibilityRuntime(AromaRuntimeOptions options,
-	WupsProcessKind process) :
-	m_impl(std::make_unique<Impl>(std::move(options), process))
+													 WupsProcessKind process) : m_impl(std::make_unique<Impl>(std::move(options), process))
 {
 }
 
@@ -1494,9 +1540,8 @@ void AromaCompatibilityRuntime::SetCurrentProcess(WupsProcessKind process)
 	m_impl->process.store(process);
 	if (m_impl->patchPlatform)
 		m_impl->patchPlatform->SetCurrentProcess(
-			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx :
-			process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu :
-			WupsPatchProcess::Game);
+			process == WupsProcessKind::RootRpx ? WupsPatchProcess::RootRpx : process == WupsProcessKind::WiiUMenu ? WupsPatchProcess::WiiUMenu
+																												   : WupsPatchProcess::Game);
 }
 
 WupsProcessKind AromaCompatibilityRuntime::CurrentProcess() const
@@ -1505,7 +1550,7 @@ WupsProcessKind AromaCompatibilityRuntime::CurrentProcess() const
 }
 
 bool AromaCompatibilityRuntime::RegisterOwner(const CemodPackage& package,
-	const WupsMetadata& metadata, WupsOwnerToken token, std::string& error)
+											  const WupsMetadata& metadata, WupsOwnerToken token, std::string& error)
 {
 	error.clear();
 	if (token.owner == 0 || token.generation == 0)
@@ -1534,7 +1579,7 @@ bool AromaCompatibilityRuntime::RegisterOwner(const CemodPackage& package,
 	owner->token = token;
 	owner->package = package;
 	owner->grantedPermissions.store(package.grantedPermissions,
-		std::memory_order_release);
+									std::memory_order_release);
 	owner->permissions = package.manifest.nativePermissions;
 	owner->packageId = package.manifest.modId;
 	owner->principal = package.principal;
@@ -1570,7 +1615,7 @@ AromaCompatibilityRuntime::Cex2OwnerFor(WupsOwnerToken token) const
 }
 
 bool AromaCompatibilityRuntime::BindGuestInvoker(std::uint64_t owner,
-	std::uint32_t generation, WupsGuestInvoker invoker, std::string& error)
+												 std::uint32_t generation, WupsGuestInvoker invoker, std::string& error)
 {
 	error.clear();
 	WupsServiceStatus status;
@@ -1591,8 +1636,8 @@ bool AromaCompatibilityRuntime::BindGuestInvoker(std::uint64_t owner,
 }
 
 bool AromaCompatibilityRuntime::BeginOwner(const CemodPackage& package,
-	const WupsMetadata& metadata, std::uint64_t owner,
-	std::uint32_t generation, std::string& error)
+										   const WupsMetadata& metadata, std::uint64_t owner,
+										   std::uint32_t generation, std::string& error)
 {
 	return RegisterOwner(package, metadata, {owner, generation}, error);
 }
@@ -1611,8 +1656,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageCreateSubItem(
 	std::string error;
 	status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 	if (status != WupsServiceStatus::Success || !ValidStorageKey(key))
-		return status == WupsServiceStatus::Success ?
-			WupsServiceStatus::InvalidArgument : status;
+		return status == WupsServiceStatus::Success ? WupsServiceStatus::InvalidArgument : status;
 	auto storage = owner->storage;
 	std::lock_guard lock(storage->mutex);
 	parent = parent == 0 ? storage->root : parent;
@@ -1626,7 +1670,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageCreateSubItem(
 	handle = m_impl->NewHandle();
 	found->second.children.emplace(std::string(key), handle);
 	storage->nodes.emplace(handle, Impl::StorageNode{
-		handle, parent, std::string(key), true});
+									   handle, parent, std::string(key), true});
 	storage->dirty = true;
 	++storage->revision;
 	return WupsServiceStatus::Success;
@@ -1646,8 +1690,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageGetSubItem(
 	std::string error;
 	status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 	if (status != WupsServiceStatus::Success || !ValidStorageKey(key))
-		return status == WupsServiceStatus::Success ?
-			WupsServiceStatus::InvalidArgument : status;
+		return status == WupsServiceStatus::Success ? WupsServiceStatus::InvalidArgument : status;
 	const auto storage = owner->storage;
 	std::lock_guard lock(storage->mutex);
 	parent = parent == 0 ? storage->root : parent;
@@ -1665,7 +1708,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageGetSubItem(
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::StorageStore(WupsOwnerToken token,
-	std::uint32_t parent, std::string_view key, const WupsStorageValue& value)
+														  std::uint32_t parent, std::string_view key, const WupsStorageValue& value)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -1677,8 +1720,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageStore(WupsOwnerToken token,
 	status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 	if (status != WupsServiceStatus::Success || !ValidStorageKey(key) ||
 		!ValidateStorageValue(value))
-		return status == WupsServiceStatus::Success ?
-			WupsServiceStatus::InvalidArgument : status;
+		return status == WupsServiceStatus::Success ? WupsServiceStatus::InvalidArgument : status;
 	const auto storage = owner->storage;
 	std::lock_guard lock(storage->mutex);
 	parent = parent == 0 ? storage->root : parent;
@@ -1711,8 +1753,8 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageStore(WupsOwnerToken token,
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::StorageGet(WupsOwnerToken token,
-	std::uint32_t parent, std::string_view key, WupsStorageValueType type,
-	WupsStorageValue& value) const
+														std::uint32_t parent, std::string_view key, WupsStorageValueType type,
+														WupsStorageValue& value) const
 {
 	value = {};
 	WupsServiceStatus status;
@@ -1724,8 +1766,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageGet(WupsOwnerToken token,
 	std::string error;
 	status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 	if (status != WupsServiceStatus::Success || !ValidStorageKey(key))
-		return status == WupsServiceStatus::Success ?
-			WupsServiceStatus::InvalidArgument : status;
+		return status == WupsServiceStatus::Success ? WupsServiceStatus::InvalidArgument : status;
 	const auto storage = owner->storage;
 	std::lock_guard lock(storage->mutex);
 	parent = parent == 0 ? storage->root : parent;
@@ -1745,7 +1786,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageGet(WupsOwnerToken token,
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::StorageDelete(WupsOwnerToken token,
-	std::uint32_t parent, std::string_view key)
+														   std::uint32_t parent, std::string_view key)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -1756,8 +1797,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageDelete(WupsOwnerToken token,
 	std::string error;
 	status = m_impl->EnsureStorageLoaded(*owner.owner, error);
 	if (status != WupsServiceStatus::Success || !ValidStorageKey(key))
-		return status == WupsServiceStatus::Success ?
-			WupsServiceStatus::InvalidArgument : status;
+		return status == WupsServiceStatus::Success ? WupsServiceStatus::InvalidArgument : status;
 	const auto storage = owner->storage;
 	std::lock_guard lock(storage->mutex);
 	parent = parent == 0 ? storage->root : parent;
@@ -1786,7 +1826,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageDelete(WupsOwnerToken token,
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::StorageSave(WupsOwnerToken token,
-	bool force, std::string& error)
+														 bool force, std::string& error)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -1827,7 +1867,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageForceReload(
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::StorageWipe(WupsOwnerToken token,
-	std::string& error)
+														 std::string& error)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -1847,7 +1887,7 @@ WupsServiceStatus AromaCompatibilityRuntime::StorageWipe(WupsOwnerToken token,
 		const auto root = storage->root;
 		storage->nodes.clear();
 		storage->nodes.emplace(root,
-			Impl::StorageNode{root, 0, {}, true});
+							   Impl::StorageNode{root, 0, {}, true});
 		storage->dirty = true;
 		++storage->revision;
 	}
@@ -1896,7 +1936,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigCreateCategory(
 		return WupsServiceStatus::LimitExceeded;
 	handle = m_impl->NewHandle();
 	owner->config.categories.emplace(handle,
-		Impl::ConfigCategory{handle, std::string(name)});
+									 Impl::ConfigCategory{handle, std::string(name)});
 	return WupsServiceStatus::Success;
 }
 
@@ -1913,7 +1953,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigCreateItem(
 	if (!ValidDisplayName(item.displayName) ||
 		item.choices.size() > 128 ||
 		(item.kind == WupsConfigItemKind::IntegerRange &&
-			item.minimum > item.maximum))
+		 item.minimum > item.maximum))
 		return WupsServiceStatus::InvalidArgument;
 	std::set<std::int32_t> choiceValues;
 	for (const auto& choice : item.choices)
@@ -1941,7 +1981,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigCreateItem(
 	handle = m_impl->NewHandle();
 	item.handle = handle;
 	owner->config.items.emplace(handle,
-		Impl::ConfigItem{std::move(item)});
+								Impl::ConfigItem{std::move(item)});
 	return WupsServiceStatus::Success;
 }
 
@@ -1977,7 +2017,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigAddCategory(
 		const auto category = owner->config.categories.find(current);
 		if (category != owner->config.categories.end())
 			pending.insert(pending.end(), category->second.categories.begin(),
-				category->second.categories.end());
+						   category->second.categories.end());
 	}
 	parentFound->second.categories.push_back(child);
 	childFound->second.attached = true;
@@ -2060,7 +2100,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigDestroyItem(
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ConfigOpen(WupsOwnerToken token,
-	std::string& error)
+														std::string& error)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -2084,7 +2124,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigOpen(WupsOwnerToken token,
 		root = m_impl->NewHandle();
 		owner->config.root = root;
 		owner->config.categories.emplace(root,
-			Impl::ConfigCategory{root, owner->config.name, true});
+										 Impl::ConfigCategory{root, owner->config.name, true});
 		owner->config.menuOpen = true;
 		callback = owner->config.openCallback;
 	}
@@ -2100,7 +2140,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ConfigOpen(WupsOwnerToken token,
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ConfigClose(WupsOwnerToken token,
-	std::string& error)
+														 std::string& error)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -2194,8 +2234,8 @@ namespace
 	[[nodiscard]] bool IsObserverCombo(WupsButtonComboType type)
 	{
 		return type == WupsButtonComboType::HoldObserver ||
-			type == WupsButtonComboType::PressDownObserver ||
-			type == WupsButtonComboType::PressReleaseObserver;
+			   type == WupsButtonComboType::PressDownObserver ||
+			   type == WupsButtonComboType::PressReleaseObserver;
 	}
 
 	[[nodiscard]] bool ValidComboDefinition(
@@ -2207,15 +2247,14 @@ namespace
 			definition.callback == 0 ||
 			type < static_cast<std::uint32_t>(WupsButtonComboType::Hold) ||
 			type > static_cast<std::uint32_t>(
-				WupsButtonComboType::PressReleaseObserver))
+					   WupsButtonComboType::PressReleaseObserver))
 			return false;
 		const bool hold = definition.type == WupsButtonComboType::Hold ||
-			definition.type == WupsButtonComboType::HoldObserver;
-		return hold ?
-			definition.holdDurationMilliseconds != 0 &&
-				definition.holdDurationMilliseconds <=
-					kMaximumComboHoldMilliseconds :
-			definition.holdDurationMilliseconds == 0;
+						  definition.type == WupsButtonComboType::HoldObserver;
+		return hold ? definition.holdDurationMilliseconds != 0 &&
+						  definition.holdDurationMilliseconds <=
+							  kMaximumComboHoldMilliseconds
+					: definition.holdDurationMilliseconds == 0;
 	}
 
 	template<typename Combos>
@@ -2232,13 +2271,13 @@ namespace
 				IsObserverCombo(combo.definition.type))
 				continue;
 			if ((candidate.controllerMask &
-					combo.definition.controllerMask) != 0 &&
+				 combo.definition.controllerMask) != 0 &&
 				(candidate.buttons & combo.definition.buttons) != 0)
 				return WupsButtonComboStatus::Conflict;
 		}
 		return WupsButtonComboStatus::Valid;
 	}
-}
+} // namespace
 
 WupsServiceStatus AromaCompatibilityRuntime::ButtonComboCreate(
 	WupsOwnerToken token, const WupsButtonComboDefinition& definition,
@@ -2262,9 +2301,8 @@ WupsServiceStatus AromaCompatibilityRuntime::ButtonComboCreate(
 	comboStatus = ComboAvailability(owner->combos, definition);
 	handle = m_impl->NewHandle();
 	owner->combos.emplace(handle, Impl::ComboState{
-		handle, definition, comboStatus});
-	return comboStatus == WupsButtonComboStatus::Conflict ?
-		WupsServiceStatus::Conflict : WupsServiceStatus::Success;
+									  handle, definition, comboStatus});
+	return comboStatus == WupsButtonComboStatus::Conflict ? WupsServiceStatus::Conflict : WupsServiceStatus::Success;
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ButtonComboUpdate(
@@ -2291,8 +2329,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ButtonComboUpdate(
 	found->second.definition = definition;
 	found->second.status = comboStatus;
 	found->second.holdFired = false;
-	return comboStatus == WupsButtonComboStatus::Conflict ?
-		WupsServiceStatus::Conflict : WupsServiceStatus::Success;
+	return comboStatus == WupsButtonComboStatus::Conflict ? WupsServiceStatus::Conflict : WupsServiceStatus::Success;
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ButtonComboRemove(
@@ -2305,8 +2342,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ButtonComboRemove(
 	if (!m_impl->ModuleAllowed(*owner.owner, "homebrew_wupsbackend"))
 		return WupsServiceStatus::PermissionDenied;
 	std::lock_guard lock(owner->mutex);
-	return owner->combos.erase(handle) != 0 ?
-		WupsServiceStatus::Success : WupsServiceStatus::NotFound;
+	return owner->combos.erase(handle) != 0 ? WupsServiceStatus::Success : WupsServiceStatus::NotFound;
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ButtonComboGet(
@@ -2346,8 +2382,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ButtonComboCheckAvailable(
 		return WupsServiceStatus::InvalidArgument;
 	std::lock_guard lock(owner->mutex);
 	comboStatus = ComboAvailability(owner->combos, definition);
-	return comboStatus == WupsButtonComboStatus::Conflict ?
-		WupsServiceStatus::Conflict : WupsServiceStatus::Success;
+	return comboStatus == WupsButtonComboStatus::Conflict ? WupsServiceStatus::Conflict : WupsServiceStatus::Success;
 }
 
 void AromaCompatibilityRuntime::SubmitButtonSample(
@@ -2388,20 +2423,20 @@ void AromaCompatibilityRuntime::SubmitButtonSample(
 			case WupsButtonComboType::PressDown:
 			case WupsButtonComboType::PressDownObserver:
 				fired = (sample.pressed & definition.buttons) ==
-					definition.buttons;
+						definition.buttons;
 				break;
 			case WupsButtonComboType::PressRelease:
 			case WupsButtonComboType::PressReleaseObserver:
 				fired = (sample.released & definition.buttons) ==
-					definition.buttons;
+						definition.buttons;
 				break;
 			case WupsButtonComboType::Hold:
 			case WupsButtonComboType::HoldObserver:
 				if ((sample.held & definition.buttons) != definition.buttons)
 					combo.holdFired = false;
 				else if (!combo.holdFired &&
-					sample.heldFor >= std::chrono::milliseconds(
-						definition.holdDurationMilliseconds))
+						 sample.heldFor >= std::chrono::milliseconds(
+											   definition.holdDurationMilliseconds))
 				{
 					combo.holdFired = true;
 					fired = true;
@@ -2412,21 +2447,21 @@ void AromaCompatibilityRuntime::SubmitButtonSample(
 			}
 			if (fired)
 				callbacks.push_back({token, definition.callback,
-					definition.context,
-					sample.controllerMask & definition.controllerMask,
-					handle});
+									 definition.context,
+									 sample.controllerMask & definition.controllerMask,
+									 handle});
 		}
 	}
 	for (const auto& callback : callbacks)
 	{
 		std::string error;
 		(void)m_impl->QueueCallback(callback.owner, callback.callback,
-			{callback.controller, callback.handle, callback.context}, error);
+									{callback.controller, callback.handle, callback.context}, error);
 	}
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ReentGet(WupsOwnerToken token,
-	std::uint32_t pluginId, std::uint32_t& context) const
+													  std::uint32_t pluginId, std::uint32_t& context) const
 {
 	context = 0;
 	WupsServiceStatus status;
@@ -2456,38 +2491,38 @@ WupsServiceStatus AromaCompatibilityRuntime::ReentRegister(
 	if (!owner)
 	{
 		cemuLog_log(LogType::Force,
-			"WUPS ReentRegister: owner {}:{} pin failed (status {})", token.owner,
-			token.generation, static_cast<int>(status));
+					"WUPS ReentRegister: owner {}:{} pin failed (status {})", token.owner,
+					token.generation, static_cast<int>(status));
 		return status;
 	}
 	if (!m_impl->ModuleAllowed(*owner.owner, "homebrew_wupsbackend"))
 	{
 		cemuLog_log(LogType::Force,
-			"WUPS ReentRegister: owner {}:{} lacks homebrew_wupsbackend",
-			token.owner, token.generation);
+					"WUPS ReentRegister: owner {}:{} lacks homebrew_wupsbackend",
+					token.owner, token.generation);
 		return WupsServiceStatus::PermissionDenied;
 	}
 	if (!m_impl->options.platform || pluginId == 0 || context == 0)
 	{
 		cemuLog_log(LogType::Force,
-			"WUPS ReentRegister: invalid args pluginId=0x{:08x} context=0x{:08x}",
-			pluginId, context);
+					"WUPS ReentRegister: invalid args pluginId=0x{:08x} context=0x{:08x}",
+					pluginId, context);
 		return WupsServiceStatus::InvalidArgument;
 	}
 	std::string error;
 	if (!m_impl->ValidateGuestCallback(
-		*owner.owner, cleanupCallback, error))
+			*owner.owner, cleanupCallback, error))
 	{
 		cemuLog_log(LogType::Force,
-			"WUPS ReentRegister: cleanup callback 0x{:08x} rejected: {}",
-			cleanupCallback, error);
+					"WUPS ReentRegister: cleanup callback 0x{:08x} rejected: {}",
+					cleanupCallback, error);
 		return WupsServiceStatus::InvalidArgument;
 	}
 	const auto thread = m_impl->options.platform->CurrentGuestThreadId();
 	if (thread == 0)
 	{
 		cemuLog_log(LogType::Force,
-			"WUPS ReentRegister: no current guest thread");
+					"WUPS ReentRegister: no current guest thread");
 		return WupsServiceStatus::InvalidArgument;
 	}
 	std::lock_guard lock(owner->mutex);
@@ -2495,7 +2530,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ReentRegister(
 	if (owner->reent.contains(key))
 		return WupsServiceStatus::AlreadyExists;
 	owner->reent.emplace(key, Impl::ReentState{
-		thread, pluginId, context, cleanupCallback});
+								  thread, pluginId, context, cleanupCallback});
 	return WupsServiceStatus::Success;
 }
 
@@ -2512,7 +2547,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ReentUnregisterThread(
 	{
 		std::lock_guard lock(owner->mutex);
 		for (auto iterator = owner->reent.begin();
-			iterator != owner->reent.end();)
+			 iterator != owner->reent.end();)
 		{
 			if (iterator->first.first != threadId)
 			{
@@ -2526,7 +2561,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ReentUnregisterThread(
 	for (const auto& reent : removed)
 		if (reent.cleanup != 0 &&
 			!m_impl->QueueCallback(token, reent.cleanup,
-				{reent.context}, error))
+								   {reent.context}, error))
 			return WupsServiceStatus::InternalError;
 	return WupsServiceStatus::Success;
 }
@@ -2586,18 +2621,20 @@ WupsServiceStatus AromaCompatibilityRuntime::Impl::AllocateMapping(
 		if (owner->mappedBytes > maximum ||
 			owner->mappedBytesReserved > maximum - owner->mappedBytes ||
 			result->size > maximum - owner->mappedBytes -
-				owner->mappedBytesReserved)
+							   owner->mappedBytesReserved)
 			publishStatus = WupsServiceStatus::LimitExceeded;
 		auto overlaps = [&](const auto& mappings) {
 			for (const auto& [address, existing] : mappings)
 			{
 				const auto existingEnd = static_cast<std::uint64_t>(
-					existing.address) + existing.size;
+											 existing.address) +
+										 existing.size;
 				const auto existingPhysicalEnd = static_cast<std::uint64_t>(
-					existing.physicalAddress) + existing.size;
+													 existing.physicalAddress) +
+												 existing.size;
 				if (!(end <= existing.address || result->address >= existingEnd) ||
 					!(physicalEnd <= existing.physicalAddress ||
-						result->physicalAddress >= existingPhysicalEnd))
+					  result->physicalAddress >= existingPhysicalEnd))
 					return true;
 			}
 			return false;
@@ -2608,7 +2645,8 @@ WupsServiceStatus AromaCompatibilityRuntime::Impl::AllocateMapping(
 		if (publishStatus == WupsServiceStatus::Success)
 		{
 			const bool inserted = owner->mappings.emplace(
-				result->address, *result).second;
+													 result->address, *result)
+									  .second;
 			cemu_assert_debug(inserted);
 			owner->mappedBytes += result->size;
 		}
@@ -2617,9 +2655,7 @@ WupsServiceStatus AromaCompatibilityRuntime::Impl::AllocateMapping(
 	{
 		std::string ignored;
 		(void)options.platform->FreeMappedMemory(token, *result, ignored);
-		error = publishStatus == WupsServiceStatus::Conflict ?
-			"platform returned an overlapping mapped allocation" :
-			"platform returned an allocation that exceeds the mapped-memory quota";
+		error = publishStatus == WupsServiceStatus::Conflict ? "platform returned an overlapping mapped allocation" : "platform returned an allocation that exceeds the mapped-memory quota";
 		return publishStatus;
 	}
 	allocation = *result;
@@ -2638,13 +2674,14 @@ WupsServiceStatus AromaCompatibilityRuntime::Impl::FreeMapping(
 			return WupsServiceStatus::NotFound;
 		allocation = found->second;
 		const bool inserted = owner->mappingsBeingFreed.emplace(
-			address, allocation).second;
+														   address, allocation)
+								  .second;
 		if (!inserted)
 			return WupsServiceStatus::Busy;
 		owner->mappings.erase(found);
 	}
 	const auto freed = options.platform &&
-		options.platform->FreeMappedMemory(token, allocation, error);
+					   options.platform->FreeMappedMemory(token, allocation, error);
 	{
 		std::lock_guard lock(owner->mutex);
 		owner->mappingsBeingFreed.erase(address);
@@ -2656,7 +2693,8 @@ WupsServiceStatus AromaCompatibilityRuntime::Impl::FreeMapping(
 		else
 		{
 			const bool inserted = owner->mappings.emplace(
-				address, allocation).second;
+													 address, allocation)
+									  .second;
 			cemu_assert_debug(inserted);
 		}
 	}
@@ -2687,7 +2725,7 @@ WupsServiceStatus AromaCompatibilityRuntime::MappedMemoryAllocate(
 			std::numeric_limits<std::uint32_t>::max())
 		return WupsServiceStatus::InvalidArgument;
 	return m_impl->AllocateMapping(owner.owner, token, size, alignment,
-		writable, purpose, allocation, error);
+								   writable, purpose, allocation, error);
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::MappedMemoryFree(
@@ -2722,7 +2760,8 @@ WupsServiceStatus AromaCompatibilityRuntime::MappedMemoryEffectiveToPhysical(
 				static_cast<std::uint64_t>(address) + mapping.size)
 		{
 			const auto translated = static_cast<std::uint64_t>(
-				mapping.physicalAddress) + (effective - address);
+										mapping.physicalAddress) +
+									(effective - address);
 			if (translated > std::numeric_limits<std::uint32_t>::max())
 				return WupsServiceStatus::InternalError;
 			physical = static_cast<std::uint32_t>(translated);
@@ -2750,7 +2789,7 @@ WupsServiceStatus AromaCompatibilityRuntime::MappedMemoryPhysicalToEffective(
 				static_cast<std::uint64_t>(mapping.physicalAddress) + mapping.size)
 		{
 			const auto translated = static_cast<std::uint64_t>(address) +
-				(physical - mapping.physicalAddress);
+									(physical - mapping.physicalAddress);
 			if (translated > std::numeric_limits<std::uint32_t>::max())
 				return WupsServiceStatus::InternalError;
 			effective = static_cast<std::uint32_t>(translated);
@@ -2775,14 +2814,9 @@ WupsServiceStatus AromaCompatibilityRuntime::NotificationAdd(
 		notification.text.size() > 1024 ||
 		std::ranges::any_of(notification.text, [](unsigned char character) {
 			return character == 0 ||
-				(character < 0x20 && character != '\n' && character != '\t');
+				   (character < 0x20 && character != '\n' && character != '\t');
 		}) ||
-		notification.duration < std::chrono::milliseconds::zero() ||
-		notification.duration > std::chrono::hours(1) ||
-		(!notification.dynamic &&
-			notification.duration == std::chrono::milliseconds::zero()) ||
-		!m_impl->ValidateGuestCallback(
-			*owner.owner, notification.callback, error))
+		notification.duration < std::chrono::milliseconds::zero() || notification.duration > std::chrono::hours(1) || (!notification.dynamic && notification.duration == std::chrono::milliseconds::zero()) || !m_impl->ValidateGuestCallback(*owner.owner, notification.callback, error))
 		return WupsServiceStatus::InvalidArgument;
 	{
 		std::lock_guard lock(owner->mutex);
@@ -2812,7 +2846,7 @@ WupsServiceStatus AromaCompatibilityRuntime::NotificationUpdate(
 	if (text.empty() || text.size() > 1024 ||
 		std::ranges::any_of(text, [](unsigned char character) {
 			return character == 0 ||
-				(character < 0x20 && character != '\n' && character != '\t');
+				   (character < 0x20 && character != '\n' && character != '\t');
 		}))
 		return WupsServiceStatus::InvalidArgument;
 	WupsNotificationModel copy;
@@ -2855,7 +2889,7 @@ WupsServiceStatus AromaCompatibilityRuntime::NotificationFinish(
 	}
 	if (notification.callback != 0 &&
 		!m_impl->QueueCallback(token, notification.callback,
-			{notification.handle, notification.callbackContext}, error))
+							   {notification.handle, notification.callbackContext}, error))
 		return WupsServiceStatus::InternalError;
 	return WupsServiceStatus::Success;
 }
@@ -2877,8 +2911,8 @@ AromaCompatibilityRuntime::NotificationSnapshot(WupsOwnerToken token) const
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::Log(WupsOwnerToken token,
-	WupsLogLevel level, std::string_view moduleName, std::string_view source,
-	std::string_view message)
+												 WupsLogLevel level, std::string_view moduleName, std::string_view source,
+												 std::string_view message)
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -2894,16 +2928,15 @@ WupsServiceStatus AromaCompatibilityRuntime::Log(WupsOwnerToken token,
 		}) ||
 		std::ranges::any_of(message, [](unsigned char character) {
 			return character == 0 ||
-				(character < 0x20 && character != '\n' && character != '\t');
+				   (character < 0x20 && character != '\n' && character != '\t');
 		}) ||
-		static_cast<unsigned>(level) >
-			static_cast<unsigned>(WupsLogLevel::Verbose))
+		static_cast<unsigned>(level) > static_cast<unsigned>(WupsLogLevel::Verbose))
 		return WupsServiceStatus::InvalidArgument;
 	const auto now = std::chrono::steady_clock::now();
 	{
 		std::lock_guard lock(owner->mutex);
 		while (!owner->recentLogs.empty() &&
-			now - owner->recentLogs.front() >= std::chrono::seconds(1))
+			   now - owner->recentLogs.front() >= std::chrono::seconds(1))
 			owner->recentLogs.pop_front();
 		if (owner->recentLogs.size() >= 100)
 			return WupsServiceStatus::LimitExceeded;
@@ -2961,7 +2994,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ContentRedirectAdd(
 		return WupsServiceStatus::LimitExceeded;
 	handle = m_impl->NewHandle();
 	owner->redirects.emplace(handle, WupsContentRedirectRule{
-		handle, *normalized, source, priority, writable, true});
+										 handle, *normalized, source, priority, writable, true});
 	return WupsServiceStatus::Success;
 }
 
@@ -2976,8 +3009,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ContentRedirectRemove(
 		!m_impl->ModuleAllowed(*owner.owner, "homebrew_content_redirection"))
 		return WupsServiceStatus::PermissionDenied;
 	std::lock_guard lock(owner->mutex);
-	return owner->redirects.erase(handle) != 0 ?
-		WupsServiceStatus::Success : WupsServiceStatus::NotFound;
+	return owner->redirects.erase(handle) != 0 ? WupsServiceStatus::Success : WupsServiceStatus::NotFound;
 }
 
 WupsServiceStatus AromaCompatibilityRuntime::ContentRedirectSetActive(
@@ -3000,7 +3032,7 @@ WupsServiceStatus AromaCompatibilityRuntime::ContentRedirectSetActive(
 
 std::optional<std::filesystem::path>
 AromaCompatibilityRuntime::ResolveContentPath(WupsOwnerToken token,
-	std::string_view virtualPath, bool write, std::string& error) const
+											  std::string_view virtualPath, bool write, std::string& error) const
 {
 	WupsServiceStatus status;
 	auto owner = m_impl->Pin(token, status);
@@ -3031,17 +3063,16 @@ AromaCompatibilityRuntime::ResolveContentPath(WupsOwnerToken token,
 			if (!rule.active || (write && !rule.writable) ||
 				normalized->size() < rule.virtualPath.size() ||
 				normalized->compare(0, rule.virtualPath.size(),
-					rule.virtualPath) != 0 ||
+									rule.virtualPath) != 0 ||
 				(normalized->size() != rule.virtualPath.size() &&
-					rule.virtualPath != "/" &&
-					(*normalized)[rule.virtualPath.size()] != '/'))
+				 rule.virtualPath != "/" &&
+				 (*normalized)[rule.virtualPath.size()] != '/'))
 				continue;
-			if (!selected || rule.virtualPath.size() >
-					selected->virtualPath.size() ||
+			if (!selected || rule.virtualPath.size() > selected->virtualPath.size() ||
 				(rule.virtualPath.size() == selected->virtualPath.size() &&
-					(rule.priority > selected->priority ||
-						(rule.priority == selected->priority &&
-							rule.handle < selected->handle))))
+				 (rule.priority > selected->priority ||
+				  (rule.priority == selected->priority &&
+				   rule.handle < selected->handle))))
 				selected = rule;
 		}
 	}
@@ -3050,8 +3081,7 @@ AromaCompatibilityRuntime::ResolveContentPath(WupsOwnerToken token,
 		error = "no active content redirection matches the virtual path";
 		return std::nullopt;
 	}
-	auto suffix = std::string_view(*normalized).substr(
-		selected->virtualPath == "/" ? 1 : selected->virtualPath.size());
+	auto suffix = std::string_view(*normalized).substr(selected->virtualPath == "/" ? 1 : selected->virtualPath.size());
 	if (!suffix.empty() && suffix.front() == '/')
 		suffix.remove_prefix(1);
 	std::error_code code;
@@ -3075,8 +3105,7 @@ WupsOwnerResourceCounts AromaCompatibilityRuntime::ResourceCounts(
 		return counts;
 	{
 		std::lock_guard lock(owner->storage->mutex);
-		counts.storageItems = owner->storage->nodes.empty() ?
-			0 : owner->storage->nodes.size() - 1;
+		counts.storageItems = owner->storage->nodes.empty() ? 0 : owner->storage->nodes.size() - 1;
 	}
 	{
 		std::lock_guard lock(owner->config.mutex);
@@ -3088,7 +3117,7 @@ WupsOwnerResourceCounts AromaCompatibilityRuntime::ResourceCounts(
 		counts.buttonCombos = owner->combos.size();
 		counts.reentContexts = owner->reent.size();
 		counts.mappedAllocations = owner->mappings.size() +
-			owner->mappingsBeingFreed.size();
+								   owner->mappingsBeingFreed.size();
 		counts.notifications = owner->notifications.size();
 		counts.contentRedirects = owner->redirects.size();
 		counts.pendingCallbacks = owner->pendingCallbacks;
@@ -3097,13 +3126,12 @@ WupsOwnerResourceCounts AromaCompatibilityRuntime::ResourceCounts(
 }
 
 bool AromaCompatibilityRuntime::Impl::QueueCallback(WupsOwnerToken token,
-	std::uint32_t callback, std::vector<std::uint32_t> arguments,
-	std::string& error)
+													std::uint32_t callback, std::vector<std::uint32_t> arguments,
+													std::string& error)
 {
 	if (!options.platform || callback == 0)
 	{
-		error = !options.platform ? "guest platform adapter is unavailable" :
-			"guest callback pointer is null";
+		error = !options.platform ? "guest platform adapter is unavailable" : "guest callback pointer is null";
 		return false;
 	}
 	WupsServiceStatus status;
@@ -3117,9 +3145,7 @@ bool AromaCompatibilityRuntime::Impl::QueueCallback(WupsOwnerToken token,
 		return false;
 	const auto pending = std::make_shared<PendingCallback>(owner.owner);
 	const std::weak_ptr gateWeak(asyncGate);
-	if (!options.platform->QueueCpuTask(token,
-		[gateWeak, pending, token, callback,
-			arguments = std::move(arguments)] {
+	if (!options.platform->QueueCpuTask(token, [gateWeak, pending, token, callback, arguments = std::move(arguments)] {
 			(void)pending;
 			const auto gate = gateWeak.lock();
 			if (!gate)
@@ -3137,8 +3163,7 @@ bool AromaCompatibilityRuntime::Impl::QueueCallback(WupsOwnerToken token,
 			if (!impl->Invoke(callbackOwner.owner, callback, arguments,
 				result, callbackError) && impl->options.platform)
 				impl->options.platform->Log(token, WupsLogLevel::Warning,
-					"homebrew_wupsbackend", "queued callback", callbackError);
-		}, error))
+					"homebrew_wupsbackend", "queued callback", callbackError); }, error))
 	{
 		return false;
 	}
@@ -3211,7 +3236,8 @@ bool AromaCompatibilityRuntime::Impl::EnsureFunctionExport(
 			}
 			return async.impl->Dispatch(
 				dispatchOwner.owner, module, symbol, arguments, dispatchError);
-		}, error);
+		},
+		error);
 	owner->functionExportsRegistering.erase(key);
 	if (!registered || *registered == 0)
 		return false;
@@ -3226,7 +3252,7 @@ bool AromaCompatibilityRuntime::Impl::EnsureFunctionExport(
 namespace
 {
 	[[nodiscard]] bool Contains(std::span<const std::string_view> values,
-		std::string_view value)
+								std::string_view value)
 	{
 		return std::ranges::find(values, value) != values.end();
 	}
@@ -3293,18 +3319,18 @@ namespace
 			!owner.permissions.mappedMemory)
 			error = "mapped_memory permission is required";
 		else if (module == "homebrew_notifications" &&
-			!owner.permissions.notifications)
+				 !owner.permissions.notifications)
 			error = "notifications permission is required";
 		else if (module == "homebrew_content_redirection" &&
-			(!owner.permissions.contentRedirection ||
-				!owner.permissions.filesystemRead))
+				 (!owner.permissions.contentRedirection ||
+				  !owner.permissions.filesystemRead))
 			error = "content_redirection and filesystem.read permissions are required";
 		else if (module == "homebrew_functionpatcher" &&
-			!owner.permissions.functionPatching)
+				 !owner.permissions.functionPatching)
 			error = "function_patching permission is required";
 		return error.empty();
 	}
-}
+} // namespace
 
 std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	const CemodPackage& package, const WupsMetadata& metadata,
@@ -3353,8 +3379,8 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	// redirection must win unconditionally regardless of how it got here.
 	if (kind == WupsSymbolKind::Data && moduleName == "coreinit" &&
 		(symbolName == "MEMAllocFromDefaultHeap" ||
-			symbolName == "MEMAllocFromDefaultHeapEx" ||
-			symbolName == "MEMFreeToDefaultHeap"))
+		 symbolName == "MEMAllocFromDefaultHeapEx" ||
+		 symbolName == "MEMFreeToDefaultHeap"))
 	{
 		if (!m_impl->options.platform ||
 			!m_impl->options.platform->SupportsPluginHeap())
@@ -3375,7 +3401,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 		}
 		std::uint32_t target{};
 		if (!m_impl->EnsureFunctionExport(owner.owner, "__cemu_wups_data",
-			symbolName, target, error))
+										  symbolName, target, error))
 			return std::nullopt;
 		const auto cell = m_impl->options.platform->AllocateGuestData(
 			token, 4, 4, error);
@@ -3392,8 +3418,8 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 			owner->guestData.push_back(*cell);
 		}
 		cemuLog_log(LogType::Force,
-			"WUPS: redirected coreinit.{} -> cell 0x{:08x} (thunk 0x{:08x})",
-			symbolName, *cell, target);
+					"WUPS: redirected coreinit.{} -> cell 0x{:08x} (thunk 0x{:08x})",
+					symbolName, *cell, target);
 		return *cell;
 	}
 
@@ -3402,23 +3428,23 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	if (kind == WupsSymbolKind::Function)
 	{
 		backendKnown = moduleName == "homebrew_wupsbackend" &&
-			(Contains(kWupsConfigExports, symbolName) ||
-				FindWupsBackendExport(symbolName, kind) != nullptr);
+					   (Contains(kWupsConfigExports, symbolName) ||
+						FindWupsBackendExport(symbolName, kind) != nullptr);
 		standardKnown =
 			(moduleName == "homebrew_memorymapping" &&
-				Contains(kMemoryFunctions, symbolName)) ||
+			 Contains(kMemoryFunctions, symbolName)) ||
 			(moduleName == "homebrew_notifications" &&
-				Contains(kNotificationExports, symbolName)) ||
+			 Contains(kNotificationExports, symbolName)) ||
 			(moduleName == "homebrew_logging" &&
-				symbolName == "WUMSLogWrite") ||
+			 symbolName == "WUMSLogWrite") ||
 			(moduleName == "homebrew_content_redirection" &&
-				Contains(kContentExports, symbolName)) ||
+			 Contains(kContentExports, symbolName)) ||
 			(moduleName == "homebrew_functionpatcher" &&
-				Contains(kFunctionPatcherExports, symbolName));
+			 Contains(kFunctionPatcherExports, symbolName));
 	}
 	else
 		standardKnown = moduleName == "homebrew_memorymapping" &&
-			Contains(kMemoryData, symbolName);
+						Contains(kMemoryData, symbolName);
 
 	std::string registryError;
 	if (!backendKnown)
@@ -3456,9 +3482,9 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 		return std::nullopt;
 	}
 	if ((moduleName == "homebrew_wupsbackend" ||
-			moduleName == "homebrew_logging") &&
+		 moduleName == "homebrew_logging") &&
 		(!m_impl->options.platform ||
-			!m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
+		 !m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
 	{
 		error = fmt::format(
 			"package '{}' plugin '{}' cannot resolve '{}.{}': this platform "
@@ -3469,7 +3495,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	}
 	if (moduleName == "homebrew_memorymapping" &&
 		(!m_impl->options.platform ||
-			!m_impl->options.platform->SupportsMappedMemory()))
+		 !m_impl->options.platform->SupportsMappedMemory()))
 	{
 		error = fmt::format(
 			"package '{}' plugin '{}' cannot resolve '{}.{}': Cemu has no "
@@ -3484,7 +3510,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	{
 		std::uint32_t address{};
 		if (!m_impl->EnsureFunctionExport(
-			owner.owner, moduleName, symbolName, address, error))
+				owner.owner, moduleName, symbolName, address, error))
 			return std::nullopt;
 		return address;
 	}
@@ -3499,7 +3525,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveImport(
 	}
 	std::uint32_t target{};
 	if (!m_impl->EnsureFunctionExport(owner.owner, "__cemu_wups_data",
-		symbolName, target, error))
+									  symbolName, target, error))
 		return std::nullopt;
 	const auto cell = m_impl->options.platform->AllocateGuestData(
 		token, 4, 4, error);
@@ -3555,29 +3581,30 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveRuntimeModuleExpo
 	if (kind == WupsSymbolKind::Function)
 	{
 		backendKnown = moduleName == "homebrew_wupsbackend" &&
-			(Contains(kWupsConfigExports, symbolName) ||
-				FindWupsBackendExport(symbolName, kind) != nullptr);
+					   (Contains(kWupsConfigExports, symbolName) ||
+						FindWupsBackendExport(symbolName, kind) != nullptr);
 		standardKnown =
 			(moduleName == "homebrew_memorymapping" &&
-				Contains(kMemoryFunctions, symbolName)) ||
+			 Contains(kMemoryFunctions, symbolName)) ||
 			(moduleName == "homebrew_notifications" &&
-				Contains(kNotificationExports, symbolName)) ||
+			 Contains(kNotificationExports, symbolName)) ||
 			(moduleName == "homebrew_logging" &&
-				symbolName == "WUMSLogWrite") ||
+			 symbolName == "WUMSLogWrite") ||
 			(moduleName == "homebrew_content_redirection" &&
-				Contains(kContentExports, symbolName)) ||
+			 Contains(kContentExports, symbolName)) ||
 			(moduleName == "homebrew_functionpatcher" &&
-				Contains(kFunctionPatcherExports, symbolName));
+			 Contains(kFunctionPatcherExports, symbolName));
 	}
 	else
 		standardKnown = moduleName == "homebrew_memorymapping" &&
-			Contains(kMemoryData, symbolName);
+						Contains(kMemoryData, symbolName);
 
 	if (!backendKnown && !standardKnown)
 	{
 		error = fmt::format(
 			"owner {} generation {} requested unknown WUPS runtime export "
-			"'{}.{}'", token.owner, token.generation, moduleName, symbolName);
+			"'{}.{}'",
+			token.owner, token.generation, moduleName, symbolName);
 		return std::nullopt;
 	}
 	if (moduleName == "homebrew_wupsbackend" &&
@@ -3588,23 +3615,25 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveRuntimeModuleExpo
 		return std::nullopt;
 	}
 	if ((moduleName == "homebrew_wupsbackend" ||
-			moduleName == "homebrew_logging") &&
+		 moduleName == "homebrew_logging") &&
 		(!m_impl->options.platform ||
-			!m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
+		 !m_impl->options.platform->SupportsOwnerScopedHeapPointers()))
 	{
 		error = fmt::format(
 			"cannot resolve '{}.{}': this platform cannot attribute arbitrary "
 			"WUT heap pointers to an owner generation; the heap-taking ABI is "
-			"explicitly unsupported", moduleName, symbolName);
+			"explicitly unsupported",
+			moduleName, symbolName);
 		return std::nullopt;
 	}
 	if (moduleName == "homebrew_memorymapping" &&
 		(!m_impl->options.platform ||
-			!m_impl->options.platform->SupportsMappedMemory()))
+		 !m_impl->options.platform->SupportsMappedMemory()))
 	{
 		error = fmt::format(
 			"cannot resolve '{}.{}': Cemu has no safe guest effective/physical "
-			"mapped-memory allocator", moduleName, symbolName);
+			"mapped-memory allocator",
+			moduleName, symbolName);
 		return std::nullopt;
 	}
 	if (!PermissionForModule(*owner.owner, moduleName, error))
@@ -3614,7 +3643,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveRuntimeModuleExpo
 	{
 		std::uint32_t address{};
 		if (!m_impl->EnsureFunctionExport(
-			owner.owner, moduleName, symbolName, address, error))
+				owner.owner, moduleName, symbolName, address, error))
 			return std::nullopt;
 		return address;
 	}
@@ -3628,7 +3657,7 @@ std::optional<std::uint32_t> AromaCompatibilityRuntime::ResolveRuntimeModuleExpo
 	}
 	std::uint32_t target{};
 	if (!m_impl->EnsureFunctionExport(owner.owner, "__cemu_wups_data",
-		symbolName, target, error))
+									  symbolName, target, error))
 		return std::nullopt;
 	const auto cell = m_impl->options.platform->AllocateGuestData(token, 4, 4, error);
 	if (!cell)
@@ -3696,7 +3725,8 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 		error = fmt::format(
 			"WUPS backend initialization hook {} is unsupported because this "
 			"platform cannot attribute arbitrary WUT heap pointers to owner {} "
-			"generation {}", static_cast<unsigned>(type), ownerId, generation);
+			"generation {}",
+			static_cast<unsigned>(type), ownerId, generation);
 		return false;
 	};
 
@@ -3705,7 +3735,7 @@ bool AromaCompatibilityRuntime::PrepareHookInvocation(
 		{
 			std::uint32_t address{};
 			if (!m_impl->EnsureFunctionExport(
-				owner.owner, "__cemu_wups_hook", name, address, error))
+					owner.owner, "__cemu_wups_hook", name, address, error))
 				return false;
 			invocation.argumentWords.push_back(address);
 		}
@@ -3853,7 +3883,7 @@ bool AromaCompatibilityRuntime::DeactivatePlugin(
 	if (m_impl->patchManager)
 	{
 		if (!m_impl->patchManager->RemoveOwner(
-			WupsPatchOwner{owner, generation}, error))
+				WupsPatchOwner{owner, generation}, error))
 		{
 			error = fmt::format(
 				"failed to remove patches for owner {} generation {}: {}",
@@ -3887,8 +3917,8 @@ bool AromaCompatibilityRuntime::IsProcessInScope(
 			(target == "game" && process == WupsProcessKind::Game) ||
 			(target == "wii_u_menu" && process == WupsProcessKind::WiiUMenu) ||
 			(target == "game_and_menu" &&
-				(process == WupsProcessKind::Game ||
-					process == WupsProcessKind::WiiUMenu)))
+			 (process == WupsProcessKind::Game ||
+			  process == WupsProcessKind::WiiUMenu)))
 			return true;
 	}
 	reason =
@@ -3915,10 +3945,10 @@ void AromaCompatibilityRuntime::OnModuleLoaded(
 		return;
 	std::string error;
 	if (!m_impl->patchManager->OnModuleLoaded(
-		{std::string(moduleName), lifetimeId}, error))
+			{std::string(moduleName), lifetimeId}, error))
 		cemuLog_log(LogType::Force,
-			"WUPS: dynamic module '{}' patch transaction failed: {}",
-			moduleName, error);
+					"WUPS: dynamic module '{}' patch transaction failed: {}",
+					moduleName, error);
 }
 
 void AromaCompatibilityRuntime::OnModuleUnloading(
@@ -3928,10 +3958,10 @@ void AromaCompatibilityRuntime::OnModuleUnloading(
 		return;
 	std::string error;
 	if (!m_impl->patchManager->OnModuleUnloading(
-		{std::string(moduleName), lifetimeId}, error))
+			{std::string(moduleName), lifetimeId}, error))
 		cemuLog_log(LogType::Force,
-			"WUPS: dynamic module '{}' pre-unload patch restoration failed: {}",
-			moduleName, error);
+					"WUPS: dynamic module '{}' pre-unload patch restoration failed: {}",
+					moduleName, error);
 }
 
 void AromaCompatibilityRuntime::SetModuleEventDetach(
@@ -3953,14 +3983,14 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		if (arguments.size() >= count)
 			return true;
 		error = fmt::format("{}.{} requires {} ABI words, received {}",
-			"homebrew_wupsbackend", export_.name, count, arguments.size());
+							"homebrew_wupsbackend", export_.name, count, arguments.size());
 		return false;
 	};
 	if (!owner->permissions.pluginManagement || !options.backendManagement)
 		return result(WupsBackendApiError::UnsupportedCommand);
 
 	auto readHandles = [&](std::uint32_t address, std::uint32_t count,
-		std::vector<std::uint32_t>& handles) {
+						   std::vector<std::uint32_t>& handles) {
 		handles.clear();
 		if (count == 0)
 			return true;
@@ -3977,11 +4007,11 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		return true;
 	};
 	auto writeHandles = [&](std::uint32_t address,
-		std::span<const std::uint32_t> handles) {
+							std::span<const std::uint32_t> handles) {
 		if (handles.empty())
 			return true;
 		if (address == 0 || handles.size() >
-			std::numeric_limits<std::uint32_t>::max() / 4)
+								std::numeric_limits<std::uint32_t>::max() / 4)
 			return false;
 		std::vector<std::byte> bytes(handles.size() * 4);
 		for (std::size_t index = 0; index < handles.size(); ++index)
@@ -4006,10 +4036,10 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		output[3] = static_cast<std::byte>(value);
 	};
 	auto writeInformation = [&](std::uint32_t address,
-		const CemodPackage& package) {
+								const CemodPackage& package) {
 		GuestWupsPluginInformationV2 wire{};
 		putU32(wire.informationVersion,
-			kWupsBackendPluginInformationVersion);
+			   kWupsBackendPluginInformationVersion);
 		const auto& metadata = package.wups->metadata;
 		copyString(wire.name, metadata.name);
 		copyString(wire.author, metadata.author);
@@ -4020,11 +4050,11 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		copyString(wire.storageId, metadata.storageId);
 		putU32(wire.size, static_cast<std::uint32_t>(package.PayloadBytes().size()));
 		return WriteGuest(*owner, address,
-			std::as_bytes(std::span{&wire, 1}), error);
+						  std::as_bytes(std::span{&wire, 1}), error);
 	};
 	auto loadBytes = [&](WupsBackendInputType inputType,
-		std::uint32_t pathAddress, std::uint32_t bufferAddress,
-		std::uint32_t size, std::vector<std::byte>& bytes) {
+						 std::uint32_t pathAddress, std::uint32_t bufferAddress,
+						 std::uint32_t size, std::vector<std::byte>& bytes) {
 		bytes.clear();
 		if (inputType == WupsBackendInputType::Buffer)
 		{
@@ -4033,7 +4063,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 				return WupsBackendApiError::InvalidArgument;
 			bytes.resize(size);
 			if (!ReadGuest(*owner, bufferAddress, bytes,
-				WupsGuestAccess::Read, error))
+						   WupsGuestAccess::Read, error))
 				return WupsBackendApiError::InvalidArgument;
 			return WupsBackendApiError::None;
 		}
@@ -4043,14 +4073,14 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			return WupsBackendApiError::UnsupportedCommand;
 		std::string guestPath;
 		if (!ReadGuestString(*owner, pathAddress, kMaximumContentPath,
-			guestPath, error))
+							 guestPath, error))
 			return WupsBackendApiError::InvalidArgument;
 		std::string relative = guestPath;
 		if (const auto marker = relative.find("/vol/external01/");
 			marker != std::string::npos)
 			relative.erase(0, marker + std::string_view("/vol/external01/").size());
 		else if (const auto scheme = relative.find(":/");
-			scheme != std::string::npos)
+				 scheme != std::string::npos)
 			relative.erase(0, scheme + 2);
 		while (!relative.empty() && (relative.front() == '/' || relative.front() == '\\'))
 			relative.erase(relative.begin());
@@ -4076,7 +4106,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 				continue;
 			bytes.resize(static_cast<std::size_t>(fileSize));
 			stream.read(reinterpret_cast<char*>(bytes.data()),
-				static_cast<std::streamsize>(bytes.size()));
+						static_cast<std::streamsize>(bytes.size()));
 			if (!stream)
 			{
 				bytes.clear();
@@ -4087,13 +4117,13 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		return WupsBackendApiError::FileNotFound;
 	};
 	auto inspectInput = [&](WupsBackendInputType inputType,
-		std::uint32_t pathAddress, std::uint32_t bufferAddress,
-		std::uint32_t size, CemodPackage& package,
-		WupsBackendParseError& parseError) {
+							std::uint32_t pathAddress, std::uint32_t bufferAddress,
+							std::uint32_t size, CemodPackage& package,
+							WupsBackendParseError& parseError) {
 		parseError = WupsBackendParseError::Unknown;
 		std::vector<std::byte> bytes;
 		const auto loadResult = loadBytes(inputType, pathAddress, bufferAddress,
-			size, bytes);
+										  size, bytes);
 		if (loadResult != WupsBackendApiError::None)
 			return loadResult;
 		std::string inspectError;
@@ -4107,7 +4137,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		}
 		parseError = WupsBackendParseError::None;
 		package = MakeDynamicWupsPackage(std::move(bytes),
-			std::move(*inspection), owner->package);
+										 std::move(*inspection), owner->package);
 		return WupsBackendApiError::None;
 	};
 	const WupsProcessKey processKey{
@@ -4122,14 +4152,13 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		return result(WupsBackendApiError::None);
 	case WupsBackendExportId::GetNumberOfLoadedPlugins:
 		if (!require(1) || arguments[0] == 0 ||
-			!WriteGuestU32(*owner, arguments[0], static_cast<std::uint32_t>(
-				options.backendManagement->LoadedContainers().size()), error))
+			!WriteGuestU32(*owner, arguments[0], static_cast<std::uint32_t>(options.backendManagement->LoadedContainers().size()), error))
 			return result(WupsBackendApiError::InvalidArgument);
 		return result(WupsBackendApiError::None);
 	case WupsBackendExportId::WillReloadPluginsOnNextLaunch:
 		if (!require(1) || arguments[0] == 0 ||
 			!WriteGuestBool(*owner, arguments[0],
-				options.backendManagement->HasPendingPlan(processKey), error))
+							options.backendManagement->HasPendingPlan(processKey), error))
 			return result(WupsBackendApiError::InvalidArgument);
 		return result(WupsBackendApiError::None);
 	case WupsBackendExportId::GetLoadedPlugins:
@@ -4138,7 +4167,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			(arguments[1] != 0 && arguments[0] == 0))
 			return result(WupsBackendApiError::InvalidArgument);
 		if (!WriteGuestU32(*owner, arguments[3],
-			kWupsBackendPluginInformationVersion, error))
+						   kWupsBackendPluginInformationVersion, error))
 			return result(WupsBackendApiError::InvalidArgument);
 		const auto loaded = options.backendManagement->LoadedContainers();
 		const auto count = std::min<std::size_t>(loaded.size(), arguments[1]);
@@ -4148,7 +4177,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			handles.push_back(loaded[index].publicHandle);
 		if (!writeHandles(arguments[0], handles) ||
 			(arguments[2] != 0 && !WriteGuestU32(*owner, arguments[2],
-				static_cast<std::uint32_t>(count), error)))
+												 static_cast<std::uint32_t>(count), error)))
 			return result(WupsBackendApiError::InvalidArgument);
 		return result(WupsBackendApiError::None);
 	}
@@ -4160,8 +4189,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		if (!readHandles(arguments[0], arguments[1], handles))
 			return result(WupsBackendApiError::InvalidArgument);
 		return result(options.backendManagement->ScheduleNextLaunch(
-			processKey, handles) ? WupsBackendApiError::None :
-			WupsBackendApiError::InvalidSize);
+						  processKey, handles)
+						  ? WupsBackendApiError::None
+						  : WupsBackendApiError::InvalidSize);
 	}
 	case WupsBackendExportId::DeletePluginData:
 	{
@@ -4186,27 +4216,34 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			if (!require(5) || arguments[0] > 1)
 				return result(WupsBackendApiError::InvalidArgument);
 			inputType = static_cast<WupsBackendInputType>(arguments[0]);
-			path = arguments[1]; buffer = arguments[2]; size = arguments[3];
+			path = arguments[1];
+			buffer = arguments[2];
+			size = arguments[3];
 			output = arguments[4];
 		}
 		else if (export_.id == WupsBackendExportId::LoadPluginAsDataByPath)
 		{
-			if (!require(2)) return result(WupsBackendApiError::InvalidArgument);
-			inputType = WupsBackendInputType::Path; output = arguments[0];
+			if (!require(2))
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Path;
+			output = arguments[0];
 			path = arguments[1];
 		}
 		else
 		{
-			if (!require(3)) return result(WupsBackendApiError::InvalidArgument);
-			inputType = WupsBackendInputType::Buffer; output = arguments[0];
-			buffer = arguments[1]; size = arguments[2];
+			if (!require(3))
+				return result(WupsBackendApiError::InvalidArgument);
+			inputType = WupsBackendInputType::Buffer;
+			output = arguments[0];
+			buffer = arguments[1];
+			size = arguments[2];
 		}
 		if (output == 0)
 			return result(WupsBackendApiError::InvalidArgument);
 		CemodPackage package;
 		WupsBackendParseError parseError;
 		const auto status = inspectInput(inputType, path, buffer, size,
-			package, parseError);
+										 package, parseError);
 		if (status != WupsBackendApiError::None)
 			return result(status);
 		const auto handle = options.backendManagement->CreatePluginData(
@@ -4234,15 +4271,18 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			if (!require(5) || arguments[0] > 1)
 				return result(WupsBackendApiError::InvalidArgument);
 			inputType = static_cast<WupsBackendInputType>(arguments[0]);
-			path = arguments[1]; buffer = arguments[2]; size = arguments[3];
+			path = arguments[1];
+			buffer = arguments[2];
+			size = arguments[3];
 			output = arguments[4];
 		}
 		else if (export_.id == WupsBackendExportId::GetPluginMetaInformationByPath ||
-			export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx)
+				 export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx)
 		{
 			if (!require(export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx ? 3 : 2))
 				return result(WupsBackendApiError::InvalidArgument);
-			inputType = WupsBackendInputType::Path; output = arguments[0];
+			inputType = WupsBackendInputType::Path;
+			output = arguments[0];
 			path = arguments[1];
 			if (export_.id == WupsBackendExportId::GetPluginMetaInformationByPathEx)
 				parseOutput = arguments[2];
@@ -4252,35 +4292,36 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			const bool extended = export_.id == WupsBackendExportId::GetPluginMetaInformationByBufferEx;
 			if (!require(extended ? 4 : 3))
 				return result(WupsBackendApiError::InvalidArgument);
-			inputType = WupsBackendInputType::Buffer; output = arguments[0];
-			buffer = arguments[1]; size = arguments[2];
-			if (extended) parseOutput = arguments[3];
+			inputType = WupsBackendInputType::Buffer;
+			output = arguments[0];
+			buffer = arguments[1];
+			size = arguments[2];
+			if (extended)
+				parseOutput = arguments[3];
 		}
 		if (output == 0)
 			return result(WupsBackendApiError::InvalidArgument);
 		CemodPackage package;
 		WupsBackendParseError parseError;
 		const auto status = inspectInput(inputType, path, buffer, size,
-			package, parseError);
+										 package, parseError);
 		if (parseOutput != 0 && !WriteGuestU32(*owner, parseOutput,
-			static_cast<std::uint32_t>(static_cast<std::int32_t>(parseError)), error))
+											   static_cast<std::uint32_t>(static_cast<std::int32_t>(parseError)), error))
 			return result(WupsBackendApiError::InvalidArgument);
 		if (status != WupsBackendApiError::None)
 			return result(status);
-		return result(writeInformation(output, package) ?
-			WupsBackendApiError::None : WupsBackendApiError::InvalidArgument);
+		return result(writeInformation(output, package) ? WupsBackendApiError::None : WupsBackendApiError::InvalidArgument);
 	}
 	case WupsBackendExportId::GetMetaInformation:
 	{
 		if (!require(3) || arguments[0] == 0 || arguments[1] == 0 ||
-			arguments[2] == 0 || arguments[2] >
-				WupsBackendManagementRuntime::kMaximumDataHandles)
+			arguments[2] == 0 || arguments[2] > WupsBackendManagementRuntime::kMaximumDataHandles)
 			return result(WupsBackendApiError::InvalidArgument);
 		std::vector<std::uint32_t> handles;
 		if (!readHandles(arguments[0], arguments[2], handles))
 			return result(WupsBackendApiError::InvalidArgument);
 		const std::uint64_t total = static_cast<std::uint64_t>(arguments[2]) *
-			kWupsBackendPluginInformationSize;
+									kWupsBackendPluginInformationSize;
 		if (total > std::numeric_limits<std::uint32_t>::max())
 			return result(WupsBackendApiError::InvalidSize);
 		std::vector<std::byte> zeros(static_cast<std::size_t>(total));
@@ -4292,7 +4333,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			if (!container)
 				continue;
 			if (!writeInformation(arguments[1] + static_cast<std::uint32_t>(index) *
-				kWupsBackendPluginInformationSize, *container->package))
+													 kWupsBackendPluginInformationSize,
+								  *container->package))
 				return result(WupsBackendApiError::InvalidArgument);
 		}
 		return result(WupsBackendApiError::None);
@@ -4314,14 +4356,15 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			if (!data)
 				return result(WupsBackendApiError::FailedAllocation);
 			if (!WriteGuestU32(*owner, arguments[1] + static_cast<std::uint32_t>(index * 4),
-				*data, error))
+							   *data, error))
 				return result(WupsBackendApiError::InvalidArgument);
 		}
 		return result(WupsBackendApiError::None);
 	}
 	case WupsBackendExportId::GetSectionInformationForPlugin:
 	{
-		if (!require(4)) return result(WupsBackendApiError::InvalidArgument);
+		if (!require(4))
+			return result(WupsBackendApiError::InvalidArgument);
 		if (arguments[3] != 0 && !WriteGuestU32(*owner, arguments[3], 0, error))
 			return result(WupsBackendApiError::InvalidArgument);
 		if (!owner->permissions.nativeMemory)
@@ -4329,7 +4372,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		if (arguments[0] == 0 || arguments[1] == 0 || arguments[2] == 0)
 			return result(WupsBackendApiError::InvalidArgument);
 		const auto container = options.backendManagement->FindContainer(arguments[0]);
-		if (!container) return result(WupsBackendApiError::InvalidHandle);
+		if (!container)
+			return result(WupsBackendApiError::InvalidHandle);
 		WupsMappedLayout layout;
 		if (!container->runtime->QueryMappedLayout(layout, error))
 			return result(WupsBackendApiError::InvalidHandle);
@@ -4341,13 +4385,12 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 			copyString(wire.name, layout.sections[index].name);
 			putU32(wire.address, layout.sections[index].address);
 			putU32(wire.size, layout.sections[index].size);
-			if (!WriteGuest(*owner, arguments[1] + static_cast<std::uint32_t>(index) *
-				kWupsBackendSectionInformationSize,
-				std::as_bytes(std::span{&wire, 1}), error))
+			if (!WriteGuest(*owner, arguments[1] + static_cast<std::uint32_t>(index) * kWupsBackendSectionInformationSize,
+							std::as_bytes(std::span{&wire, 1}), error))
 				return result(WupsBackendApiError::InvalidArgument);
 		}
 		if (arguments[3] != 0 && !WriteGuestU32(*owner, arguments[3],
-			static_cast<std::uint32_t>(count), error))
+												static_cast<std::uint32_t>(count), error))
 			return result(WupsBackendApiError::InvalidArgument);
 		return result(WupsBackendApiError::None);
 	}
@@ -4358,7 +4401,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::DispatchBackend(
 		if (!owner->permissions.nativeMemory)
 			return result(WupsBackendApiError::UnsupportedCommand);
 		const auto container = options.backendManagement->FindContainer(arguments[0]);
-		if (!container) return result(WupsBackendApiError::InvalidHandle);
+		if (!container)
+			return result(WupsBackendApiError::InvalidHandle);
 		WupsMappedLayout layout;
 		if (!container->runtime->QueryMappedLayout(layout, error))
 			return result(WupsBackendApiError::InvalidHandle);
@@ -4380,11 +4424,11 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 		if (arguments.size() >= count)
 			return true;
 		error = fmt::format("{}.{} requires {} ABI words, received {}",
-			moduleName, symbolName, count, arguments.size());
+							moduleName, symbolName, count, arguments.size());
 		return false;
 	};
 	auto readString = [&](std::uint32_t address, std::size_t maximum,
-		std::string& output) {
+						  std::string& output) {
 		return ReadGuestString(*owner, address, maximum, output, error);
 	};
 	const auto token = owner->token;
@@ -4430,7 +4474,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				std::lock_guard lock(owner->storage->mutex);
 				owner->storage->nodes.clear();
 				owner->storage->nodes.emplace(root,
-					StorageNode{root, 0, {}, true});
+											  StorageNode{root, 0, {}, true});
 				owner->storage->dirty = true;
 				++owner->storage->revision;
 				return 0;
@@ -4465,7 +4509,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 					if (node == storage->nodes.end())
 						continue;
 					for (const auto& [childKey, childHandle] :
-						node->second.children)
+						 node->second.children)
 						pending.push_back(childHandle);
 					storage->nodes.erase(node);
 				}
@@ -4508,14 +4552,14 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 						else if (child != parentFound->second.children.end())
 							status = WupsServiceStatus::AlreadyExists;
 						else if (storage->nodes.size() - 1 >=
-							options.maximumStorageItems)
+								 options.maximumStorageItems)
 							status = WupsServiceStatus::LimitExceeded;
 						else
 						{
 							handle = NewHandle();
 							parentFound->second.children.emplace(key, handle);
 							storage->nodes.emplace(handle, StorageNode{
-								handle, actualParent, key, true});
+															   handle, actualParent, key, true});
 							storage->dirty = true;
 							++storage->revision;
 							status = WupsServiceStatus::Success;
@@ -4529,8 +4573,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			}
 			if (symbolName == "StorageStore")
 			{
-				if (!require(6) || arguments[3] > static_cast<std::uint32_t>(
-					WupsStorageValueType::Double) ||
+				if (!require(6) || arguments[3] > static_cast<std::uint32_t>(WupsStorageValueType::Double) ||
 					arguments[5] > kMaximumStorageValue ||
 					(arguments[5] != 0 && arguments[4] == 0))
 					return StorageAbiResult(WupsServiceStatus::InvalidArgument);
@@ -4539,7 +4582,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				value.bytes.resize(arguments[5]);
 				if (!value.bytes.empty() &&
 					!ReadGuest(*owner, arguments[4], value.bytes,
-						WupsGuestAccess::Read, error))
+							   WupsGuestAccess::Read, error))
 					return StorageAbiResult(WupsServiceStatus::InvalidArgument);
 				if (!ValidateStorageValue(value))
 					return StorageAbiResult(WupsServiceStatus::InvalidArgument);
@@ -4572,7 +4615,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 					const auto handle = NewHandle();
 					parentFound->second.children.emplace(key, handle);
 					storage->nodes.emplace(handle, StorageNode{
-						handle, actualParent, key, false, {}, std::move(value)});
+													   handle, actualParent, key, false, {}, std::move(value)});
 				}
 				storage->dirty = true;
 				++storage->revision;
@@ -4584,7 +4627,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				const auto needed = symbolName == "StorageGet" ? 8U : 5U;
 				if (!require(needed) ||
 					arguments[3] > static_cast<std::uint32_t>(
-						WupsStorageValueType::Double))
+									   WupsStorageValueType::Double))
 					return StorageAbiResult(WupsServiceStatus::InvalidArgument);
 				WupsStorageValue value;
 				{
@@ -4611,7 +4654,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				const auto outSize =
 					symbolName == "StorageGet" ? arguments[7] : arguments[4];
 				if (!WriteGuestU32(*owner, outSize,
-					static_cast<std::uint32_t>(value.bytes.size()), error))
+								   static_cast<std::uint32_t>(value.bytes.size()), error))
 					return StorageAbiResult(
 						WupsServiceStatus::InvalidArgument);
 				if (symbolName == "StorageGetSize")
@@ -4626,7 +4669,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				return 0;
 			}
 			error = fmt::format("unsupported internal storage command '{}'",
-				symbolName);
+								symbolName);
 			return StorageAbiResult(WupsServiceStatus::Unsupported);
 		}
 
@@ -4652,7 +4695,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			if (found == owner->reent.end())
 				return WriteGuestU32(*owner, arguments[1], 0, error) ? 1 : 0;
 			if (!WriteGuestU32(*owner, arguments[1],
-				found->second.context, error))
+							   found->second.context, error))
 				return 0;
 			return 1;
 		}
@@ -4668,7 +4711,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			std::lock_guard lock(owner->mutex);
 			const auto [iterator, added] = owner->reent.emplace(
 				std::pair{thread, arguments[0]}, ReentState{
-					thread, arguments[0], arguments[1], arguments[2]});
+													 thread, arguments[0], arguments[1], arguments[2]});
 			return added ? 1 : 0;
 		}
 
@@ -4682,11 +4725,11 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 					return ComboAbiResult(WupsServiceStatus::InvalidArgument);
 				std::array<std::byte, 28> raw{};
 				if (!ReadGuest(*owner, arguments[1], raw,
-					WupsGuestAccess::Read, error))
+							   WupsGuestAccess::Read, error))
 					return ComboAbiResult(WupsServiceStatus::InvalidArgument);
 				WupsButtonComboDefinition definition;
 				if (!ReadGuestString(*owner, ReadU32(raw, 0),
-					kMaximumConfigName, definition.label, error))
+									 kMaximumConfigName, definition.label, error))
 					return ComboAbiResult(WupsServiceStatus::InvalidArgument);
 				definition.callback = ReadU32(raw, 4);
 				definition.context = ReadU32(raw, 8);
@@ -4712,15 +4755,15 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 								WupsServiceStatus::LimitExceeded);
 						handle = NewHandle();
 						owner->combos.emplace(handle, ComboState{
-							handle, definition, comboStatus});
+														  handle, definition, comboStatus});
 					}
 				}
 				const auto outStatus =
 					arguments[symbolName == "ButtonAdd" ? 3 : 2];
 				if (!WriteGuestU32(*owner, outStatus,
-					static_cast<std::uint32_t>(comboStatus), error) ||
+								   static_cast<std::uint32_t>(comboStatus), error) ||
 					(symbolName == "ButtonAdd" &&
-						!WriteGuestU32(*owner, arguments[2], handle, error)))
+					 !WriteGuestU32(*owner, arguments[2], handle, error)))
 					return ComboAbiResult(WupsServiceStatus::InvalidArgument);
 				return 0;
 			}
@@ -4729,9 +4772,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				if (!require(2))
 					return ComboAbiResult(WupsServiceStatus::InvalidArgument);
 				std::lock_guard lock(owner->mutex);
-				return ComboAbiResult(owner->combos.erase(arguments[1]) ?
-					WupsServiceStatus::Success :
-					WupsServiceStatus::NotFound);
+				return ComboAbiResult(owner->combos.erase(arguments[1]) ? WupsServiceStatus::Success : WupsServiceStatus::NotFound);
 			}
 			if (symbolName == "ButtonGetStatus")
 			{
@@ -4746,8 +4787,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 					status = found->second.status;
 				}
 				return WriteGuestU32(*owner, arguments[2],
-					static_cast<std::uint32_t>(status), error) ?
-					0 : ComboAbiResult(WupsServiceStatus::InvalidArgument);
+									 static_cast<std::uint32_t>(status), error)
+						   ? 0
+						   : ComboAbiResult(WupsServiceStatus::InvalidArgument);
 			}
 			error = fmt::format(
 				"button combo command '{}' is explicitly unsupported",
@@ -4755,7 +4797,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			return ComboAbiResult(WupsServiceStatus::Unsupported);
 		}
 		error = fmt::format("unknown internal WUPS hook export '{}'",
-			symbolName);
+							symbolName);
 		return -0x1000;
 	}
 
@@ -4802,10 +4844,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 						WupsServiceStatus::LimitExceeded);
 				handle = NewHandle();
 				owner->config.categories.emplace(handle,
-					ConfigCategory{handle, std::move(name)});
+												 ConfigCategory{handle, std::move(name)});
 			}
-			return WriteGuestU32(*owner, arguments[2], handle, error) ?
-				0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
+			return WriteGuestU32(*owner, arguments[2], handle, error) ? 0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
 		}
 		if (symbolName == "WUPSConfigAPI_Category_Destroy" ||
 			symbolName == "WUPSConfigAPI_Item_Destroy")
@@ -4885,7 +4926,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			const auto callbacksIndex = v2 ? 3U : 4U;
 			std::string display;
 			if (!readString(arguments[displayIndex],
-				kMaximumConfigName, display))
+							kMaximumConfigName, display))
 				return ConfigAbiResult(WupsServiceStatus::InvalidArgument);
 			WupsConfigItemModel item;
 			item.displayName = std::move(display);
@@ -4928,8 +4969,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				owner->config.items.emplace(
 					handle, ConfigItem{std::move(item)});
 			}
-			return WriteGuestU32(*owner, arguments[12], handle, error) ?
-				0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
+			return WriteGuestU32(*owner, arguments[12], handle, error) ? 0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
 		}
 		if (symbolName == "WUPSConfigAPI_Menu_GetStatus")
 		{
@@ -4940,8 +4980,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				std::lock_guard lock(owner->config.mutex);
 				open = owner->config.menuOpen;
 			}
-			return WriteGuestU32(*owner, arguments[0], open ? 1 : 0, error) ?
-				0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
+			return WriteGuestU32(*owner, arguments[0], open ? 1 : 0, error) ? 0 : ConfigAbiResult(WupsServiceStatus::InvalidArgument);
 		}
 		error = fmt::format("unsupported WUPS config export '{}'", symbolName);
 		return ConfigAbiResult(WupsServiceStatus::Unsupported);
@@ -4961,8 +5000,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			// MEMAllocFromDefaultHeapEx's alignment is a signed word (a
 			// negative value requests a tail allocation); the plain variant
 			// matches the real default heap's implicit 0x40 alignment.
-			const auto alignment = ex ?
-				static_cast<std::int32_t>(arguments[1]) : std::int32_t{0x40};
+			const auto alignment = ex ? static_cast<std::int32_t>(arguments[1]) : std::int32_t{0x40};
 			const auto allocated = options.platform->AllocatePluginHeapMemory(
 				token, arguments[0], alignment);
 			return static_cast<std::int32_t>(allocated);
@@ -4996,8 +5034,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			return 0;
 		WupsMappedMemoryInfo allocation;
 		if (AllocateMapping(owner, token, arguments[0], alignment, true,
-			gx2 ? WupsMappedMemoryPurpose::Gx2 :
-				WupsMappedMemoryPurpose::Cpu, allocation, error) !=
+							gx2 ? WupsMappedMemoryPurpose::Gx2 : WupsMappedMemoryPurpose::Cpu, allocation, error) !=
 			WupsServiceStatus::Success)
 			return 0;
 		return static_cast<std::int32_t>(allocation.address);
@@ -5020,7 +5057,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				arguments[0] >= mapping.physicalAddress &&
 				static_cast<std::uint64_t>(arguments[0]) <
 					static_cast<std::uint64_t>(
-						mapping.physicalAddress) + mapping.size)
+						mapping.physicalAddress) +
+						mapping.size)
 				return static_cast<std::int32_t>(
 					address + (arguments[0] - mapping.physicalAddress));
 		}
@@ -5034,26 +5072,26 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			return 0;
 		std::vector<std::byte> bytes(arguments[1]);
 		if (!ReadGuest(*owner, arguments[0], bytes,
-			WupsGuestAccess::Read, error) ||
+					   WupsGuestAccess::Read, error) ||
 			std::ranges::any_of(bytes, [](std::byte byte) {
 				return byte == std::byte{};
 			}))
 			return 0;
 		std::string message(reinterpret_cast<const char*>(bytes.data()),
-			bytes.size());
+							bytes.size());
 		const auto now = std::chrono::steady_clock::now();
 		{
 			std::lock_guard lock(owner->mutex);
 			while (!owner->recentLogs.empty() &&
-				now - owner->recentLogs.front() >=
-					std::chrono::seconds(1))
+				   now - owner->recentLogs.front() >=
+					   std::chrono::seconds(1))
 				owner->recentLogs.pop_front();
 			if (owner->recentLogs.size() >= 100)
 				return 0;
 			owner->recentLogs.push_back(now);
 		}
 		options.platform->Log(token, WupsLogLevel::Info,
-			moduleName, "WUMSLogWrite", message);
+							  moduleName, "WUMSLogWrite", message);
 		return 0;
 	}
 
@@ -5065,7 +5103,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			return 0;
 		error = fmt::format(
 			"notification ABI command '{}' is not implemented by the Cemu "
-			"overlay adapter", symbolName);
+			"overlay adapter",
+			symbolName);
 		return NotificationAbiResult(WupsServiceStatus::Unsupported);
 	}
 
@@ -5075,7 +5114,8 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			return 2;
 		error = fmt::format(
 			"content-redirection guest ABI command '{}' requires the Task 3 "
-			"filesystem registry adapter", symbolName);
+			"filesystem registry adapter",
+			symbolName);
 		return ContentAbiResult(WupsServiceStatus::Unsupported);
 	}
 
@@ -5084,7 +5124,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 		if (symbolName == "FPGetVersion")
 		{
 			if (!require(1) || !WriteGuestU32(*owner, arguments[0],
-				options.functionPatcher->ApiVersion(), error))
+											  options.functionPatcher->ApiVersion(), error))
 				return FunctionPatcherAbiResult(
 					WupsServiceStatus::InvalidArgument);
 			return 0;
@@ -5095,9 +5135,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 				return FunctionPatcherAbiResult(
 					WupsServiceStatus::InvalidArgument);
 			if ((arguments[1] != 0 &&
-					!ValidateGuestOutput(*owner, arguments[1], 4, 4, error)) ||
+				 !ValidateGuestOutput(*owner, arguments[1], 4, 4, error)) ||
 				(arguments[2] != 0 &&
-					!ValidateGuestOutput(*owner, arguments[2], 1, 1, error)))
+				 !ValidateGuestOutput(*owner, arguments[2], 1, 1, error)))
 				return FunctionPatcherAbiResult(
 					WupsServiceStatus::InvalidArgument);
 			std::uint32_t handle{};
@@ -5110,9 +5150,9 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 			{
 				const bool outputsWritten =
 					(arguments[1] == 0 ||
-						WriteGuestU32(*owner, arguments[1], handle, error)) &&
+					 WriteGuestU32(*owner, arguments[1], handle, error)) &&
 					(arguments[2] == 0 ||
-						WriteGuestBool(*owner, arguments[2], applied, error));
+					 WriteGuestBool(*owner, arguments[2], applied, error));
 				if (!outputsWritten)
 				{
 					const auto outputError = error;
@@ -5121,8 +5161,7 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 						token, handle, rollbackError);
 					error = outputError;
 					if (rollbackStatus != WupsServiceStatus::Success)
-						error.append("; patch rollback failed: ").append(
-							rollbackError.empty() ? "unknown error" : rollbackError);
+						error.append("; patch rollback failed: ").append(rollbackError.empty() ? "unknown error" : rollbackError);
 					return FunctionPatcherAbiResult(
 						WupsServiceStatus::InvalidArgument);
 				}
@@ -5159,6 +5198,6 @@ std::int32_t AromaCompatibilityRuntime::Impl::Dispatch(
 	}
 
 	error = fmt::format("unhandled WUPS export {}.{}",
-		moduleName, symbolName);
+						moduleName, symbolName);
 	return -0x1000;
 }

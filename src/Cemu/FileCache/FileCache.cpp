@@ -38,7 +38,7 @@ struct _FileCacheAsyncWriter
 		async.fileCache = fileCache;
 		async.name1 = name.name1;
 		async.name2 = name.name2;
-		async.fileData = { fileData, fileData + fileSize };
+		async.fileData = {fileData, fileData + fileSize};
 
 		std::unique_lock lock(m_fileCacheMutex);
 		m_writeRequests.emplace_back(std::move(async));
@@ -47,7 +47,7 @@ struct _FileCacheAsyncWriter
 		m_fileCacheCondVar.notify_one();
 	}
 
-private:
+  private:
 	void FileCacheThread()
 	{
 		SetThreadName("fileCache");
@@ -67,7 +67,7 @@ private:
 
 			for (const auto& entry : requestsCopy)
 			{
-				entry.fileCache->AddFile({ entry.name1, entry.name2 }, entry.fileData.data(), (sint32)entry.fileData.size());
+				entry.fileCache->AddFile({entry.name1, entry.name2}, entry.fileData.data(), (sint32)entry.fileData.size());
 			}
 		}
 	}
@@ -77,15 +77,15 @@ private:
 	std::condition_variable m_fileCacheCondVar;
 	std::vector<FileCacheAsyncJob> m_writeRequests;
 	std::atomic_bool m_isRunning;
-}FileCacheAsyncWriter;
+} FileCacheAsyncWriter;
 
-#define FILECACHE_MAGIC_V1					0x8371b694 // used prior to Cemu 1.7.4, only supported caches up to 4GB
-#define FILECACHE_MAGIC_V2					0x8371b695 // added support for large caches
-#define FILECACHE_MAGIC_V3					0x8371b696 // introduced in Cemu 1.16.0 (non-WIP). Adds zlib compression
-#define FILECACHE_HEADER_RESV				128 // number of bytes reserved for the header
-#define FILECACHE_FILETABLE_NAME1			0xEFEFEFEFEFEFEFEFULL
-#define FILECACHE_FILETABLE_NAME2			0xFEFEFEFEFEFEFEFEULL
-#define FILECACHE_FILETABLE_FREE_NAME		0ULL
+#define FILECACHE_MAGIC_V1 0x8371b694 // used prior to Cemu 1.7.4, only supported caches up to 4GB
+#define FILECACHE_MAGIC_V2 0x8371b695 // added support for large caches
+#define FILECACHE_MAGIC_V3 0x8371b696 // introduced in Cemu 1.16.0 (non-WIP). Adds zlib compression
+#define FILECACHE_HEADER_RESV 128	  // number of bytes reserved for the header
+#define FILECACHE_FILETABLE_NAME1 0xEFEFEFEFEFEFEFEFULL
+#define FILECACHE_FILETABLE_NAME2 0xFEFEFEFEFEFEFEFEULL
+#define FILECACHE_FILETABLE_FREE_NAME 0ULL
 
 FileCache* FileCache::Create(const fs::path& path, uint32 extraVersion)
 {
@@ -118,7 +118,7 @@ FileCache* FileCache::Create(const fs::path& path, uint32 extraVersion)
 	fs->writeU64(fileCache->fileTableOffset);
 	fs->writeU32(fileCache->fileTableSize);
 	// write file table
-	fs->SetPosition(fileCache->dataOffset+fileCache->fileTableOffset);
+	fs->SetPosition(fileCache->dataOffset + fileCache->fileTableOffset);
 	fs->writeData(fileCache->fileTableEntries, fileCache->fileTableSize);
 	// done
 	return fileCache;
@@ -246,7 +246,7 @@ void FileCache::fileCache_updateFiletable(sint32 extraEntriesToAllocate)
 	this->fileTableEntries[0].name1 = FILECACHE_FILETABLE_FREE_NAME;
 	this->fileTableEntries[0].name2 = FILECACHE_FILETABLE_FREE_NAME;
 	sint32 newFileTableEntryCount = this->fileTableEntryCount + extraEntriesToAllocate;
-	this->fileTableEntries = (FileTableEntry*)realloc(this->fileTableEntries, sizeof(FileTableEntry)*newFileTableEntryCount);
+	this->fileTableEntries = (FileTableEntry*)realloc(this->fileTableEntries, sizeof(FileTableEntry) * newFileTableEntryCount);
 	for (sint32 f = this->fileTableEntryCount; f < newFileTableEntryCount; f++)
 	{
 		this->fileTableEntries[f].name1 = FILECACHE_FILETABLE_FREE_NAME;
@@ -259,7 +259,7 @@ void FileCache::fileCache_updateFiletable(sint32 extraEntriesToAllocate)
 		this->fileTableEntries[f].extraReserved3 = 0;
 	}
 	this->fileTableEntryCount = newFileTableEntryCount;
-	this->_addFileInternal(FILECACHE_FILETABLE_NAME1, FILECACHE_FILETABLE_NAME2, (uint8*)this->fileTableEntries, sizeof(FileTableEntry)*newFileTableEntryCount, true);
+	this->_addFileInternal(FILECACHE_FILETABLE_NAME1, FILECACHE_FILETABLE_NAME2, (uint8*)this->fileTableEntries, sizeof(FileTableEntry) * newFileTableEntryCount, true);
 	// update file table info in struct
 	if (this->fileTableEntries[0].name1 != FILECACHE_FILETABLE_NAME1 || this->fileTableEntries[0].name2 != FILECACHE_FILETABLE_NAME2)
 	{
@@ -463,13 +463,13 @@ void FileCache::_addFileInternal(uint64 name1, uint64 name2, const uint8* fileDa
 	fileStream->SetPosition(this->dataOffset + currentStartOffset);
 	fileStream->writeData(rawData, rawSize);
 #ifdef __APPLE__
-    fileStream->Flush();
+	fileStream->Flush();
 #endif
 	// write file table entry
-	fileStream->SetPosition(this->dataOffset + this->fileTableOffset + (uint64)(sizeof(FileTableEntry)*entryIndex));
+	fileStream->SetPosition(this->dataOffset + this->fileTableOffset + (uint64)(sizeof(FileTableEntry) * entryIndex));
 	fileStream->writeData(this->fileTableEntries + entryIndex, sizeof(FileTableEntry));
 #ifdef __APPLE__
-    fileStream->Flush();
+	fileStream->Flush();
 #endif
 	if (isCompressed)
 		free(rawData);
@@ -482,14 +482,14 @@ void FileCache::AddFile(const FileName&& name, const uint8* fileData, sint32 fil
 
 bool FileCache::DeleteFile(const FileName&& name)
 {
-	if( name.name1 == FILECACHE_FILETABLE_NAME1 && name.name2 == FILECACHE_FILETABLE_NAME2 )
+	if (name.name1 == FILECACHE_FILETABLE_NAME1 && name.name2 == FILECACHE_FILETABLE_NAME2)
 		return false; // prevent filetable from being deleted
 	std::unique_lock lock(this->mutex);
 	FileTableEntry* entry = this->fileTableEntries;
-	FileTableEntry* entryLast = this->fileTableEntries+this->fileTableEntryCount;
-	while( entry < entryLast )
+	FileTableEntry* entryLast = this->fileTableEntries + this->fileTableEntryCount;
+	while (entry < entryLast)
 	{
-		if( entry->name1 == name.name1 && entry->name2 == name.name2 )
+		if (entry->name1 == name.name1 && entry->name2 == name.name2)
 		{
 			entry->name1 = FILECACHE_FILETABLE_FREE_NAME;
 			entry->name2 = FILECACHE_FILETABLE_FREE_NAME;
@@ -497,8 +497,8 @@ bool FileCache::DeleteFile(const FileName&& name)
 			entry->fileSize = 0;
 			// store updated entry to file cache
 			size_t entryIndex = entry - this->fileTableEntries;
-			fileStream->SetPosition(this->dataOffset+this->fileTableOffset+(uint64)(sizeof(FileTableEntry)*entryIndex));
-			fileStream->writeData(this->fileTableEntries+entryIndex, sizeof(FileTableEntry));
+			fileStream->SetPosition(this->dataOffset + this->fileTableOffset + (uint64)(sizeof(FileTableEntry) * entryIndex));
+			fileStream->writeData(this->fileTableEntries + entryIndex, sizeof(FileTableEntry));
 			return true;
 		}
 		entry++;
@@ -518,7 +518,7 @@ bool FileCache::_getFileDataInternal(const FileTableEntry* entry, std::vector<ui
 	fileStream->SetPosition(this->dataOffset + entry->fileOffset);
 	fileStream->readData(rawData.data(), entry->fileSize);
 
-	if ((entry->flags&FileTableEntry::FLAG_COMPRESSED) == 0)
+	if ((entry->flags & FileTableEntry::FLAG_COMPRESSED) == 0)
 	{
 		// uncompressed
 		std::swap(rawData, dataOut);
@@ -538,10 +538,10 @@ bool FileCache::GetFile(const FileName&& name, std::vector<uint8>& dataOut)
 {
 	std::unique_lock lock(this->mutex);
 	FileTableEntry* entry = this->fileTableEntries;
-	FileTableEntry* entryLast = this->fileTableEntries+this->fileTableEntryCount;
-	while( entry < entryLast )
+	FileTableEntry* entryLast = this->fileTableEntries + this->fileTableEntryCount;
+	while (entry < entryLast)
 	{
-		if( entry->name1 == name.name1 && entry->name2 == name.name2 )
+		if (entry->name1 == name.name1 && entry->name2 == name.name2)
 		{
 			return _getFileDataInternal(entry, dataOut);
 		}
@@ -567,9 +567,9 @@ bool FileCache::GetFileByIndex(sint32 index, uint64* name1, uint64* name2, std::
 		return false;
 
 	std::unique_lock lock(this->mutex);
-	if(name1)
+	if (name1)
 		*name1 = entry->name1;
-	if(name2)
+	if (name2)
 		*name2 = entry->name2;
 	return _getFileDataInternal(entry, dataOut);
 }
@@ -598,15 +598,15 @@ sint32 FileCache::GetFileCount()
 	std::unique_lock lock(this->mutex);
 	sint32 fileCount = 0;
 	FileTableEntry* entry = this->fileTableEntries;
-	FileTableEntry* entryLast = this->fileTableEntries+this->fileTableEntryCount;
-	while( entry < entryLast )
+	FileTableEntry* entryLast = this->fileTableEntries + this->fileTableEntryCount;
+	while (entry < entryLast)
 	{
-		if( entry->name1 == FILECACHE_FILETABLE_FREE_NAME && entry->name2 == FILECACHE_FILETABLE_FREE_NAME )
+		if (entry->name1 == FILECACHE_FILETABLE_FREE_NAME && entry->name2 == FILECACHE_FILETABLE_FREE_NAME)
 		{
 			entry++;
 			continue;
 		}
-		if( entry->name1 == FILECACHE_FILETABLE_NAME1 && entry->name2 == FILECACHE_FILETABLE_NAME2 )
+		if (entry->name1 == FILECACHE_FILETABLE_NAME1 && entry->name2 == FILECACHE_FILETABLE_NAME2)
 		{
 			entry++;
 			continue;
@@ -633,33 +633,33 @@ void fileCache_test()
 		testString3[f] = 'f' + (f & 3);
 	}
 
-	for(sint32 i=0; i<2200; i++)
+	for (sint32 i = 0; i < 2200; i++)
 	{
-		fc->AddFile({ 0x1000001ULL, (uint64)i }, (uint8*)testString1, 1024 * 1024 * 1);
-		fc->AddFile({ 0x1000002ULL, (uint64)i }, (uint8*)testString2, 1024 * 1024 * 1);
-		fc->AddFile({ 0x1000003ULL, (uint64)i }, (uint8*)testString3, 1024 * 1024 * 1);
+		fc->AddFile({0x1000001ULL, (uint64)i}, (uint8*)testString1, 1024 * 1024 * 1);
+		fc->AddFile({0x1000002ULL, (uint64)i}, (uint8*)testString2, 1024 * 1024 * 1);
+		fc->AddFile({0x1000003ULL, (uint64)i}, (uint8*)testString3, 1024 * 1024 * 1);
 	}
 	uint32 time2 = GetTickCount();
-	debug_printf("Writing took %dms\n", time2-time1);
+	debug_printf("Writing took %dms\n", time2 - time1);
 	delete fc;
 	// verify if all entries are still valid
 	FileCache* fcRead = FileCache::Open("testCache.bin", 0);
 	uint32 time3 = GetTickCount();
-	for(sint32 i=0; i<2200; i++)
+	for (sint32 i = 0; i < 2200; i++)
 	{
 		std::vector<uint8> fileData;
-		bool r = fcRead->GetFile({ 0x1000001ULL, (uint64)i }, fileData);
+		bool r = fcRead->GetFile({0x1000001ULL, (uint64)i}, fileData);
 		if (!r || fileData.size() != 1024 * 1024 * 1 || memcmp(fileData.data(), testString1, 1024 * 1024 * 1) != 0)
 			cemu_assert_debug(false);
-		r = fcRead->GetFile({ 0x1000002ULL, (uint64)i }, fileData);
-		if( !r || fileData.size() != 1024 * 1024 * 1 || memcmp(fileData.data(), testString2, 1024 * 1024 * 1) != 0 )
+		r = fcRead->GetFile({0x1000002ULL, (uint64)i}, fileData);
+		if (!r || fileData.size() != 1024 * 1024 * 1 || memcmp(fileData.data(), testString2, 1024 * 1024 * 1) != 0)
 			cemu_assert_debug(false);
-		r = fcRead->GetFile({ 0x1000003ULL, (uint64)i }, fileData);
-		if( !r || fileData.size() != 1024 * 1024 * 1 || memcmp(fileData.data(), testString3, 1024 * 1024 * 1) != 0 )
+		r = fcRead->GetFile({0x1000003ULL, (uint64)i}, fileData);
+		if (!r || fileData.size() != 1024 * 1024 * 1 || memcmp(fileData.data(), testString3, 1024 * 1024 * 1) != 0)
 			cemu_assert_debug(false);
 	}
 	uint32 time4 = GetTickCount();
-	debug_printf("Reading took %dms\n", time4-time3);
+	debug_printf("Reading took %dms\n", time4 - time3);
 	delete fcRead;
 	cemu_assert_debug(false);
 	exit(0);

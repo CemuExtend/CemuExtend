@@ -38,14 +38,14 @@ namespace WxRendererAdapters
 		const Host::NativeWindowHandle& mainWindow);
 	[[nodiscard]] std::vector<MetalDevice> EnumerateMetalDevices();
 	[[nodiscard]] wxWindow* CreateRenderCanvas(wxWindow* parent,
-		const wxSize& size, bool isMainWindow,
-		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
+											   const wxSize& size, bool isMainWindow,
+											   std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+											   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+											   std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher);
 
 	void NotifyWindowPositionChanged();
 	[[nodiscard]] std::optional<ScreenshotRequestId> RequestScreenshot(
 		ScreenshotSaveCallback saveCallback);
 	[[nodiscard]] bool IsFrameCaptureSupported();
 	[[nodiscard]] bool RequestFrameCapture();
-}
+} // namespace WxRendererAdapters

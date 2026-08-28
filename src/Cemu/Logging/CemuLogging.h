@@ -1,13 +1,15 @@
 #pragma once
 
+#include "Cemu/Logging/LoggingCallbacks.h"
+
 extern uint64 s_loggingFlagMask;
 
 enum class LogType : sint32
 {
 	// note: IDs must be in range 1-64
-	Force = 63, // always enabled
+	Force = 63,		  // always enabled
 	Placeholder = 62, // always disabled
-	APIErrors = 61, // Logs bad parameters or other API usage mistakes or unintended errors in OS libs. Intended for homebrew developers
+	APIErrors = 61,	  // Logs bad parameters or other API usage mistakes or unintended errors in OS libs. Intended for homebrew developers
 
 	CoreinitFile = 0,
 	GX2 = 1,
@@ -17,14 +19,14 @@ enum class LogType : sint32
 	Socket = 6,
 	Save = 7,
 	H264 = 9,
-	OpenGLLogging = 10, // OpenGL debug logging
-	TextureCache = 11, // texture cache warnings and info
+	OpenGLLogging = 10,	   // OpenGL debug logging
+	TextureCache = 11,	   // texture cache warnings and info
 	VulkanValidation = 12, // Vulkan validation layer
 	Patches = 14,
 	CoreinitMem = 8, // coreinit memory functions
 	CoreinitMP = 15,
 	CoreinitThread = 16,
-	CoreinitLogging = 17, // OSReport, OSConsoleWrite etc.
+	CoreinitLogging = 17,		// OSReport, OSConsoleWrite etc.
 	CoreinitMemoryMapping = 18, // OSGetAvailPhysAddrRange, OSAllocVirtAddr, OSMapMemory etc.
 	CoreinitAlarm = 22,
 	CoreinitThreadSync = 3,
@@ -45,14 +47,15 @@ enum class LogType : sint32
 
 	PRUDP = 40,
 
-	NFC	= 43,
+	NFC = 43,
 	NTAG = 44,
 	Recompiler = 60,
 };
 
-template <>
-struct fmt::formatter<std::u8string_view> : formatter<string_view> {
-	template <typename FormatContext>
+template<>
+struct fmt::formatter<std::u8string_view> : formatter<string_view>
+{
+	template<typename FormatContext>
 	auto format(std::u8string_view v, FormatContext& ctx)
 	{
 		string_view s((char*)v.data(), v.size());
@@ -61,7 +64,10 @@ struct fmt::formatter<std::u8string_view> : formatter<string_view> {
 };
 
 void cemuLog_writeLineToLog(std::string_view text, bool date = true, bool new_line = true);
-inline void cemuLog_writePlainToLog(std::string_view text) { cemuLog_writeLineToLog(text, false, false); }
+inline void cemuLog_writePlainToLog(std::string_view text)
+{
+	cemuLog_writeLineToLog(text, false, false);
+}
 
 void cemuLog_setActiveLoggingFlags(uint64 flagMask);
 void cemuLog_configureRuntime(fs::path logFilePath, bool advancedPpcLogging, bool verbose);
@@ -92,10 +98,18 @@ bool cemuLog_log(LogType type, fmt::format_string<TArgs...> formatStr, TArgs&&..
 	return true;
 }
 
-#define cemuLog_logOnce(...) { static bool _not_first_call = false; if (!_not_first_call) { _not_first_call = true; cemuLog_log(__VA_ARGS__); } }
+#define cemuLog_logOnce(...)                 \
+	{                                        \
+		static bool _not_first_call = false; \
+		if (!_not_first_call)                \
+		{                                    \
+			_not_first_call = true;          \
+			cemuLog_log(__VA_ARGS__);        \
+		}                                    \
+	}
 
 // same as cemuLog_log, but only outputs in debug mode
-template<typename ... TArgs>
+template<typename... TArgs>
 bool cemuLog_logDebug(LogType type, fmt::format_string<TArgs...> format, TArgs&&... args)
 {
 #ifdef CEMU_DEBUG_ASSERT
@@ -114,7 +128,15 @@ inline bool cemuLog_logDebug(LogType type, std::string_view message)
 #endif
 }
 
-#define cemuLog_logDebugOnce(...) { static bool _not_first_call = false; if (!_not_first_call) { _not_first_call = true; cemuLog_logDebug(__VA_ARGS__); } }
+#define cemuLog_logDebugOnce(...)            \
+	{                                        \
+		static bool _not_first_call = false; \
+		if (!_not_first_call)                \
+		{                                    \
+			_not_first_call = true;          \
+			cemuLog_logDebug(__VA_ARGS__);   \
+		}                                    \
+	}
 
 // utility function for logging binary data as a hex dump
 void cemuLog_logHexDump(LogType type, const void* data, size_t size, size_t lineSize = 16);
@@ -127,14 +149,3 @@ uint64 cemuLog_getFlag(LogType type);
 fs::path cemuLog_GetLogFilePath();
 void cemuLog_createLogFile(bool triggeredByCrash);
 [[nodiscard]] std::unique_lock<std::recursive_mutex> cemuLog_acquire(); // used for logging multiple lines at once
-
-class LoggingCallbacks
-{
-  public:
-	virtual void Log(std::string_view filter, std::string_view message) {};
-	virtual void Log(std::string_view filter, std::wstring_view message) {};
-	virtual ~LoggingCallbacks() = default;
-};
-
-void cemuLog_setCallbacks(LoggingCallbacks* loggingCallbacks);
-void cemuLog_clearCallbacks();

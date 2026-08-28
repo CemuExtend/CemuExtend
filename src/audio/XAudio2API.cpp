@@ -1,6 +1,6 @@
 
 
-//#if (_WIN32_WINNT >= 0x0602 /*_WIN32_WINNT_WIN8*/)
+// #if (_WIN32_WINNT >= 0x0602 /*_WIN32_WINNT_WIN8*/)
 
 #include <wrl/client.h>
 #include <xaudio2.h>
@@ -21,7 +21,7 @@
 #include <system_error>
 
 // guid from mmdeviceapi.h
-static const GUID DEVINTERFACE_AUDIO_RENDER_GUID = { 0xe6327cad, 0xdcec, 0x4949, 0xae, 0x8a, 0x99, 0x1e, 0x97, 0x6a, 0x79, 0xd2 };
+static const GUID DEVINTERFACE_AUDIO_RENDER_GUID = {0xe6327cad, 0xdcec, 0x4949, 0xae, 0x8a, 0x99, 0x1e, 0x97, 0x6a, 0x79, 0xd2};
 
 static_assert(IAudioAPI::kBlockCount < XAUDIO2_MAX_QUEUED_BUFFERS, "too many xaudio2 buffers");
 
@@ -39,7 +39,6 @@ XAudio2API::XAudio2API(std::wstring device_id, uint32 samplerate, uint32 channel
 	if (FAILED((hres = _XAudio2Create(&m_xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR))))
 		throw std::runtime_error(fmt::format("can't create xaudio device (hres: {:#x})", hres));
 
-
 	IXAudio2MasteringVoice* mastering_voice;
 	if (FAILED((hres = m_xaudio->CreateMasteringVoice(&mastering_voice, channels, samplerate, 0, m_device_id.empty() ? nullptr : m_device_id.c_str()))))
 		throw std::runtime_error(fmt::format("can't create xaudio mastering voice (hres: {:#x})", hres));
@@ -56,7 +55,7 @@ XAudio2API::XAudio2API(std::wstring device_id, uint32 samplerate, uint32 channel
 
 	m_wfx.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
 	m_wfx.Samples.wValidBitsPerSample = bits_per_sample;
-	switch(channels)
+	switch (channels)
 	{
 	case 8:
 		m_wfx.dwChannelMask |= (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT | SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY | SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT | SPEAKER_FRONT_LEFT_OF_CENTER | SPEAKER_FRONT_RIGHT_OF_CENTER);
@@ -74,7 +73,7 @@ XAudio2API::XAudio2API(std::wstring device_id, uint32 samplerate, uint32 channel
 		m_wfx.dwChannelMask = 0;
 		break;
 	}
-	
+
 	IXAudio2SourceVoice* source_voice;
 	if (FAILED((hres = m_xaudio->CreateSourceVoice(&source_voice, &m_wfx.Format, 0, 1.0f))))
 		throw std::runtime_error(fmt::format("can't create xaudio source voice (hres: {:#x})", hres));
@@ -97,7 +96,7 @@ void XAudio2API::VoiceDeleter::operator()(IXAudio2Voice* ptr) const
 
 XAudio2API::~XAudio2API()
 {
-	if(m_xaudio)
+	if (m_xaudio)
 		m_xaudio->StopEngine();
 
 	XAudio2API::Stop();
@@ -148,8 +147,7 @@ bool XAudio2API::InitializeStatic()
 
 		RefreshDevices();
 		return true;
-	}
-	catch (const std::exception&)
+	} catch (const std::exception&)
 	{
 		if (s_xaudio_dll)
 			FreeLibrary(s_xaudio_dll);
@@ -214,21 +212,21 @@ const std::vector<XAudio2API::DeviceDescriptionPtr>& XAudio2API::RefreshDevices(
 					{
 						std::wstring id = var.bstrVal;
 
-						if(id.find(L"{0.0.0.00000000}") == std::wstring::npos)
+						if (id.find(L"{0.0.0.00000000}") == std::wstring::npos)
 						{
 							object[i]->Release();
 							continue;
 						}
 
 						std::replace(id.begin(), id.end(), L'\\', L'#'); // xaudio devices have "#" instead of backslashes
-						
+
 						std::wstringstream tmp;
 						tmp << L"\\\\?\\" << id << L"#{" << WStringFromGUID(DEVINTERFACE_AUDIO_RENDER_GUID) << L"}";
 						device_id = tmp.str();
 					}
 				}
-			
-				auto device = std::make_shared<XAudio2DeviceDescription>(name,device_id);
+
+				auto device = std::make_shared<XAudio2DeviceDescription>(name, device_id);
 				s_devices.emplace_back(device);
 
 				object[i]->Release();
@@ -236,12 +234,12 @@ const std::vector<XAudio2API::DeviceDescriptionPtr>& XAudio2API::RefreshDevices(
 		}
 
 		// Only add default device if audio devices exist
-		if (s_devices.size() > 0) {
+		if (s_devices.size() > 0)
+		{
 			auto default_device = std::make_shared<XAudio2DeviceDescription>(L"Primary Sound Driver", L"");
 			s_devices.insert(s_devices.begin(), default_device);
 		}
-	}
-	catch (const std::system_error& ex)
+	} catch (const std::system_error& ex)
 	{
 		cemuLog_log(LogType::Force, "XAudio2API::RefreshDevices: error while refreshing device list ({} - code: 0x{:08x})", ex.what(), ex.code().value());
 	}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "wxgui/CemuUpdateWorker.h"
+#include "application/UpdateWorkerMailbox.h"
 
 #include <wx/dialog.h>
 #include <wx/stattext.h>
@@ -13,20 +13,23 @@
 #include <atomic>
 #include <memory>
 
-namespace Host { class IPathProvider; }
+namespace Host
+{
+	class IPathProvider;
+}
 
 class CemuUpdateWindow : public wxDialog
 {
-public:
+  public:
 	CemuUpdateWindow(wxWindow* parent, std::shared_ptr<Host::IPathProvider> pathProvider);
 	~CemuUpdateWindow();
 
 	static std::future<bool> IsUpdateAvailableAsync();
 
-private:
+  private:
 	wxStaticText* m_text;
 	wxGauge* m_gauge;
-	wxButton* m_cancelButton, *m_updateButton;
+	wxButton *m_cancelButton, *m_updateButton;
 	wxHyperlinkCtrl* m_changelog;
 
 	void OnUpdateButton(const wxCommandEvent& event);

@@ -3,88 +3,88 @@
 namespace HWREG
 {
 
-#define REGISTER_FULL_FIELD(__regname) \
-auto& set_##__regname(uint32 newValue) \
-{	\
-	v = newValue; \
-    return *this; \
-} \
-uint32 get_##__regname() const \
-{	\
-	return v; \
-}
+#define REGISTER_FULL_FIELD(__regname)     \
+	auto& set_##__regname(uint32 newValue) \
+	{                                      \
+		v = newValue;                      \
+		return *this;                      \
+	}                                      \
+	uint32 get_##__regname() const         \
+	{                                      \
+		return v;                          \
+	}
 
-#define REGISTER_BITFIELD(__regname, __bitIndex, __bitWidth) \
-auto& set_##__regname(uint32 newValue) \
-{	\
-	cemu_assert_debug(newValue < (1u << (__bitWidth))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (newValue << (__bitIndex)); \
-    return *this; \
-} \
-uint32 get_##__regname() const \
-{	\
-	return (v >> (__bitIndex))&((1u << (__bitWidth)) - 1u); \
-}
+#define REGISTER_BITFIELD(__regname, __bitIndex, __bitWidth)      \
+	auto& set_##__regname(uint32 newValue)                        \
+	{                                                             \
+		cemu_assert_debug(newValue < (1u << (__bitWidth)));       \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));    \
+		v |= (newValue << (__bitIndex));                          \
+		return *this;                                             \
+	}                                                             \
+	uint32 get_##__regname() const                                \
+	{                                                             \
+		return (v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u); \
+	}
 
-#define REGISTER_BITFIELD_SIGNED(__regname, __bitIndex, __bitWidth) \
-auto& set_##__regname(sint32 newValue) \
-{	\
-	cemu_assert_debug(newValue < (1 << ((__bitWidth)-1))); \
-	cemu_assert_debug(newValue >= -(1 << ((__bitWidth)-1))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (((uint32)newValue & ((1u << (__bitWidth)) - 1u)) << (__bitIndex)); \
-    return *this; \
-} \
-sint32 get_##__regname() const \
-{	\
-    sint32 r = (v >> (__bitIndex))&((1u << (__bitWidth)) - 1u); \
-    r = (r << (32 - (__bitWidth))); \
-    r = (r >> (32 - (__bitWidth))); \
-	return r; \
-}
+#define REGISTER_BITFIELD_SIGNED(__regname, __bitIndex, __bitWidth)              \
+	auto& set_##__regname(sint32 newValue)                                       \
+	{                                                                            \
+		cemu_assert_debug(newValue < (1 << ((__bitWidth) - 1)));                 \
+		cemu_assert_debug(newValue >= -(1 << ((__bitWidth) - 1)));               \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));                   \
+		v |= (((uint32)newValue & ((1u << (__bitWidth)) - 1u)) << (__bitIndex)); \
+		return *this;                                                            \
+	}                                                                            \
+	sint32 get_##__regname() const                                               \
+	{                                                                            \
+		sint32 r = (v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u);            \
+		r = (r << (32 - (__bitWidth)));                                          \
+		r = (r >> (32 - (__bitWidth)));                                          \
+		return r;                                                                \
+	}
 
 #define REGISTER_BITFIELD_BOOL(__regname, __bitIndex) \
-auto& set_##__regname(bool newValue) \
-{	\
-	if(newValue) \
-	v |= (1u << (__bitIndex)); \
-	else \
-	v &= ~(1u << (__bitIndex)); \
-    return *this; \
-} \
-bool get_##__regname() const \
-{	\
-	return (v&(1u << (__bitIndex))) != 0; \
-}
+	auto& set_##__regname(bool newValue)              \
+	{                                                 \
+		if (newValue)                                 \
+			v |= (1u << (__bitIndex));                \
+		else                                          \
+			v &= ~(1u << (__bitIndex));               \
+		return *this;                                 \
+	}                                                 \
+	bool get_##__regname() const                      \
+	{                                                 \
+		return (v & (1u << (__bitIndex))) != 0;       \
+	}
 
-#define REGISTER_BITFIELD_TYPED(__regname, __bitIndex, __bitWidth, __typename) \
-auto& set_##__regname(__typename newValue) \
-{	\
-	cemu_assert_debug(static_cast<uint32>(newValue) < (1u << (__bitWidth))); \
-	v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex))); \
-	v |= (static_cast<uint32>(newValue) << (__bitIndex)); \
-    return *this; \
-} \
-__typename get_##__regname() const \
-{	\
-	return static_cast<__typename>((v >> (__bitIndex))&((1u << (__bitWidth)) - 1u)); \
-}
+#define REGISTER_BITFIELD_TYPED(__regname, __bitIndex, __bitWidth, __typename)             \
+	auto& set_##__regname(__typename newValue)                                             \
+	{                                                                                      \
+		cemu_assert_debug(static_cast<uint32>(newValue) < (1u << (__bitWidth)));           \
+		v &= ~((((1u << (__bitWidth)) - 1u) << (__bitIndex)));                             \
+		v |= (static_cast<uint32>(newValue) << (__bitIndex));                              \
+		return *this;                                                                      \
+	}                                                                                      \
+	__typename get_##__regname() const                                                     \
+	{                                                                                      \
+		return static_cast<__typename>((v >> (__bitIndex)) & ((1u << (__bitWidth)) - 1u)); \
+	}
 
 #define REGISTER_BITFIELD_FLOAT(__regname) \
-auto& set_##__regname(float newValue) \
-{	\
-	*(float*)&v = newValue; \
-    return *this; \
-} \
-float get_##__regname() const \
-{	\
-	return *(float*)&v; \
-}
+	auto& set_##__regname(float newValue)  \
+	{                                      \
+		*(float*)&v = newValue;            \
+		return *this;                      \
+	}                                      \
+	float get_##__regname() const          \
+	{                                      \
+		return *(float*)&v;                \
+	}
 
 	class HWREG
 	{
-	public:
+	  public:
 		uint32 getRawValue() const
 		{
 			return v;
@@ -100,7 +100,7 @@ float get_##__regname() const \
 			v = regValue;
 		}
 
-	protected:
+	  protected:
 		uint32 v{};
 	};
 
@@ -119,9 +119,8 @@ float get_##__regname() const \
 	struct ACR_VI_CTRL : HWREG // 0x0D000228 - official name unknown
 	{
 		REGISTER_BITFIELD_BOOL(HAS_OWNERSHIP, 0); // exact purpose not understood
-		// other fields unknown
+												  // other fields unknown
 	};
-
 
 	/* SI */
 
@@ -130,7 +129,6 @@ float get_##__regname() const \
 		REGISTER_BITFIELD(OUTPUT1, 0, 8);
 		REGISTER_BITFIELD(OUTPUT0, 8, 8);
 		REGISTER_BITFIELD(CMD, 16, 8);
-
 	};
 
 	struct SICINBUFH : HWREG // 0x6404/0x6410/0x641C/0x6428
@@ -209,4 +207,4 @@ float get_##__regname() const \
 		REGISTER_BITFIELD(UNRUN3, 0, 1);
 	};
 
-}
+} // namespace HWREG

@@ -18,11 +18,11 @@ MPTR coreinit_allocFromSysArea(uint32 size, uint32 alignment)
 	// deprecated, use OSAllocFromSystem instead (for everything but SysAllocator which probably should use its own allocator?)
 	static std::mutex s_allocator_mutex;
 	s_allocator_mutex.lock();
-	sysAreaAllocatorOffset = (sysAreaAllocatorOffset+alignment-1);
-	sysAreaAllocatorOffset -= (sysAreaAllocatorOffset%alignment);
-	uint32 newMemOffset =  mmuRange_CEMU_AREA.getBase() + sysAreaAllocatorOffset;
-	sysAreaAllocatorOffset += (size+3)&~3;
-	if( sysAreaAllocatorOffset >= mmuRange_CEMU_AREA.getSize() )
+	sysAreaAllocatorOffset = (sysAreaAllocatorOffset + alignment - 1);
+	sysAreaAllocatorOffset -= (sysAreaAllocatorOffset % alignment);
+	uint32 newMemOffset = mmuRange_CEMU_AREA.getBase() + sysAreaAllocatorOffset;
+	sysAreaAllocatorOffset += (size + 3) & ~3;
+	if (sysAreaAllocatorOffset >= mmuRange_CEMU_AREA.getSize())
 	{
 		cemuLog_log(LogType::Force, "Ran out of system memory");
 		cemu_assert(false); // out of bounds
@@ -50,7 +50,7 @@ namespace coreinit
 	MEMList g_list2;
 	MEMList g_list3;
 
-	std::array<uint32, 3> gHeapFillValues{ 0xC3C3C3C3, 0xF3F3F3F3, 0xD3D3D3D3 };
+	std::array<uint32, 3> gHeapFillValues{0xC3C3C3C3, 0xF3F3F3F3, 0xD3D3D3D3};
 	SysAllocator<OSSpinLock> gHeapGlobalLock;
 	MEMHeapBase* gDefaultHeap;
 
@@ -290,7 +290,7 @@ namespace coreinit
 		{
 			if (coreinit::OSGetForegroundBucket(nullptr, nullptr) == 0)
 			{
-				cemu_assert_unimplemented();  // foreground required
+				cemu_assert_unimplemented(); // foreground required
 				result = nullptr;
 			}
 			else
@@ -312,7 +312,7 @@ namespace coreinit
 
 	/* MEM Heap list */
 
-#define GET_MEM_LINK(__obj__,__offset__) ((MEMLink*)((uintptr_t)__obj__ + (uint16)__offset__))
+#define GET_MEM_LINK(__obj__, __offset__) ((MEMLink*)((uintptr_t)__obj__ + (uint16)__offset__))
 
 	void* MEMGetFirstListObject(MEMList* list)
 	{
@@ -468,7 +468,7 @@ namespace coreinit
 		cemuLog_logDebug(LogType::CoreinitMem, "MEMAllocFromDefaultHeap(0x{:08x}) Result: 0x{:08x}", size, memory_getVirtualOffsetFromPointer(mem));
 		if (mem)
 			cafe::wups::NotifyHeapAllocation(WupsHeapAllocatorKind::DefaultHeap, 0,
-				memory_getVirtualOffsetFromPointer(mem), size, size, 0x40);
+											 memory_getVirtualOffsetFromPointer(mem), size, size, 0x40);
 		return mem;
 	}
 
@@ -485,8 +485,8 @@ namespace coreinit
 		cemuLog_logDebug(LogType::CoreinitMem, "MEMAllocFromDefaultHeap(0x{:08x},{}) Result: 0x{:08x}", size, alignment, memory_getVirtualOffsetFromPointer(mem));
 		if (mem)
 			cafe::wups::NotifyHeapAllocation(WupsHeapAllocatorKind::DefaultHeap, 0,
-				memory_getVirtualOffsetFromPointer(mem), size, size,
-				static_cast<std::uint32_t>(alignment < 0 ? -alignment : alignment));
+											 memory_getVirtualOffsetFromPointer(mem), size, size,
+											 static_cast<std::uint32_t>(alignment < 0 ? -alignment : alignment));
 		return mem;
 	}
 
@@ -531,13 +531,13 @@ namespace coreinit
 
 	void* _weak_MEMAllocFromDefaultHeapEx(uint32 size, sint32 alignment)
 	{
-		MEMPTR<void> r{ PPCCoreCallback(gCoreinitData->MEMAllocFromDefaultHeapEx.GetMPTR(), size, alignment) };
+		MEMPTR<void> r{PPCCoreCallback(gCoreinitData->MEMAllocFromDefaultHeapEx.GetMPTR(), size, alignment)};
 		return r.GetPtr();
 	}
 
 	void* _weak_MEMAllocFromDefaultHeap(uint32 size)
 	{
-		MEMPTR<void> r{ PPCCoreCallback(gCoreinitData->MEMAllocFromDefaultHeap.GetMPTR(), size) };
+		MEMPTR<void> r{PPCCoreCallback(gCoreinitData->MEMAllocFromDefaultHeap.GetMPTR(), size)};
 		return r.GetPtr();
 	}
 
@@ -625,24 +625,24 @@ namespace coreinit
 		cemu_assert_unimplemented();
 	}
 
-    void MEMResetToDefaultState()
-    {
-        for (auto& it : sHeapBaseHandle)
-            it = nullptr;
+	void MEMResetToDefaultState()
+	{
+		for (auto& it : sHeapBaseHandle)
+			it = nullptr;
 
-        g_heapTableCount = 0;
-        g_slockInitialized = false;
-        g_listsInitialized = false;
-        gDefaultHeap = nullptr;
+		g_heapTableCount = 0;
+		g_slockInitialized = false;
+		g_listsInitialized = false;
+		gDefaultHeap = nullptr;
 
-        memset(&g_list1, 0, sizeof(g_list1));
-        memset(&g_list2, 0, sizeof(g_list2));
-        memset(&g_list3, 0, sizeof(g_list3));
-    }
+		memset(&g_list1, 0, sizeof(g_list1));
+		memset(&g_list2, 0, sizeof(g_list2));
+		memset(&g_list3, 0, sizeof(g_list3));
+	}
 
 	void InitializeMEM()
 	{
-        MEMResetToDefaultState();
+		MEMResetToDefaultState();
 
 		cafeExportRegister("coreinit", CoreInitDefaultHeap, LogType::CoreinitMem);
 
@@ -669,4 +669,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", MEMGetPrevListObject, LogType::CoreinitMem);
 	}
 
-}
+} // namespace coreinit

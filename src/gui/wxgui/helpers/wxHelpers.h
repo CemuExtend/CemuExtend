@@ -5,10 +5,10 @@
 #include <wx/listbase.h>
 #include <wx/string.h>
 
-template <>
+template<>
 struct fmt::formatter<wxString> : formatter<string_view>
 {
-	template <typename FormatContext>
+	template<typename FormatContext>
 	auto format(const wxString& str, FormatContext& ctx) const
 	{
 		return formatter<string_view>::format(str.ToStdString(), ctx);
@@ -17,7 +17,7 @@ struct fmt::formatter<wxString> : formatter<string_view>
 
 class wxTempEnable
 {
-public:
+  public:
 	wxTempEnable(wxControl* control, bool state = true)
 		: m_control(control), m_state(state)
 	{
@@ -29,52 +29,54 @@ public:
 
 	~wxTempEnable()
 	{
-		if(m_control)
+		if (m_control)
 			m_control->Enable(!m_state);
 	}
 
-private:
+  private:
 	wxControl* m_control;
 	const bool m_state;
 };
 
 class wxTempDisable : wxTempEnable
 {
-public:
+  public:
 	wxTempDisable(wxControl* control)
 		: wxTempEnable(control, false) {}
 };
 
-template<typename ...TArgs>
-wxString formatWxString(const wxString& format, TArgs&&...args)
+template<typename... TArgs>
+wxString formatWxString(const wxString& format, TArgs&&... args)
 {
 	return wxString::FromUTF8(fmt::format(fmt::runtime(format.utf8_string()), std::forward<TArgs>(args)...));
 }
 
 // executes a function when destroying the obj
-template<typename TFunction, typename ...TArgs>
+template<typename TFunction, typename... TArgs>
 class wxDTorFunc
 {
-public:
+  public:
 	wxDTorFunc(TFunction&& func, TArgs&&... args)
 	{
 		auto bound = std::bind(std::forward<TFunction>(func), std::forward<TArgs>(args)...);
 		// m_function = [bound] { bound(); };
-		m_function = [bound{ std::move(bound) }]{ bound(); };
-		
+		m_function = [bound{std::move(bound)}] {
+			bound();
+		};
 	}
 	~wxDTorFunc()
 	{
 		m_function();
 	}
-private:
+
+  private:
 	std::function<void()> m_function;
 };
 
 void wxAutosizeColumn(wxListCtrlBase* ctrl, int col);
 void wxAutosizeColumns(wxListCtrlBase* ctrl, int col_start, int col_end);
 
-template <typename T>
+template<typename T>
 T get_next_sibling(const T element)
 {
 	static_assert(std::is_pointer_v<T> && std::is_base_of_v<wxControl, std::remove_pointer_t<T>>, "element must be a pointer and inherit from wxControl");
@@ -87,7 +89,7 @@ T get_next_sibling(const T element)
 	return nullptr;
 }
 
-template <typename T>
+template<typename T>
 T get_prev_sibling(const T element)
 {
 	static_assert(std::is_pointer_v<T> && std::is_base_of_v<wxControl, std::remove_pointer_t<T>>, "element must be a pointer and inherit from wxControl");

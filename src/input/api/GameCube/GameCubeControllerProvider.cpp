@@ -10,14 +10,14 @@ GameCubeControllerProvider::GameCubeControllerProvider()
 {
 	m_libusb = libusbWrapper::getInstance();
 	m_libusb->init();
-	if(!m_libusb->isAvailable())
+	if (!m_libusb->isAvailable())
 		throw std::runtime_error("libusbWrapper not available");
-    m_libusb->p_libusb_init(&m_context);
+	m_libusb->p_libusb_init(&m_context);
 
-	for(auto i = 0; i < kMaxAdapters; ++i)
+	for (auto i = 0; i < kMaxAdapters; ++i)
 	{
 		auto device = fetch_usb_device(i);
-		if(std::get<0>(device))
+		if (std::get<0>(device))
 		{
 			m_adapters[i].m_device_handle = std::get<0>(device);
 			m_adapters[i].m_endpoint_reader = std::get<1>(device);
@@ -28,7 +28,7 @@ GameCubeControllerProvider::GameCubeControllerProvider()
 	if (m_libusb->p_libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
 	{
 		m_libusb->p_libusb_hotplug_register_callback(m_context, static_cast<libusb_hotplug_event>(LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED | LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT),
-			LIBUSB_HOTPLUG_NO_FLAGS, kVendorId, kProductId, LIBUSB_HOTPLUG_MATCH_ANY, &GameCubeControllerProvider::hotplug_event, this, &m_callback_handle);
+													 LIBUSB_HOTPLUG_NO_FLAGS, kVendorId, kProductId, LIBUSB_HOTPLUG_MATCH_ANY, &GameCubeControllerProvider::hotplug_event, this, &m_callback_handle);
 	}
 
 	m_running = true;
@@ -262,7 +262,7 @@ void GameCubeControllerProvider::reader_thread()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		std::this_thread::yield();
 
-		for(auto& adapter : m_adapters)
+		for (auto& adapter : m_adapters)
 		{
 			if (!adapter.m_device_handle)
 				continue;
@@ -301,7 +301,10 @@ void GameCubeControllerProvider::reader_thread()
 				if (const auto handle = adapter.m_device_handle.exchange(nullptr))
 					m_libusb->p_libusb_close(handle);
 			}
-			else { cemuLog_log(LogType::Force, "libusb error {} at libusb_interrupt_transfer: {}", result, m_libusb->p_libusb_error_name(result)); }
+			else
+			{
+				cemuLog_log(LogType::Force, "libusb error {} at libusb_interrupt_transfer: {}", result, m_libusb->p_libusb_error_name(result));
+			}
 		}
 	}
 }
@@ -337,17 +340,20 @@ void GameCubeControllerProvider::writer_thread()
 			m_rumble_changed = false;
 			lock.unlock();
 
-			std::array<uint8, 5> rumble{ 0x11, rumble_states[i][0],rumble_states[i][1],rumble_states[i][2], rumble_states[i][3] };
+			std::array<uint8, 5> rumble{0x11, rumble_states[i][0], rumble_states[i][1], rumble_states[i][2], rumble_states[i][3]};
 
 			int written;
 			const int result = m_libusb->p_libusb_interrupt_transfer(adapter.m_device_handle, adapter.m_endpoint_writer, rumble.data(), static_cast<int>(rumble.size()), &written, 25);
-			if (result != 0) { cemuLog_log(LogType::Force, "libusb error {} at libusb_interrupt_transfer: {}", result, m_libusb->p_libusb_error_name(result)); }
+			if (result != 0)
+			{
+				cemuLog_log(LogType::Force, "libusb error {} at libusb_interrupt_transfer: {}", result, m_libusb->p_libusb_error_name(result));
+			}
 			cmd_sent = true;
 
 			lock.lock();
 		}
 
-		if(cmd_sent)
+		if (cmd_sent)
 		{
 			lock.unlock();
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));

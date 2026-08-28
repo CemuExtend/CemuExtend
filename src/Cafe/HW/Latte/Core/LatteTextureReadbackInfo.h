@@ -5,7 +5,7 @@
 
 class LatteTextureReadbackInfo
 {
-public:
+  public:
 	LatteTextureReadbackInfo(LatteTextureView* textureView)
 		: hostTextureCopy(textureView->baseTexture), m_textureView(textureView)
 	{}
@@ -21,11 +21,11 @@ public:
 
 	HRTick transferStartTime;
 	HRTick waitStartTime;
-	bool forceFinish{ false }; // set to true if not finished in time for dependent operation
+	bool forceFinish{false}; // set to true if not finished in time for dependent operation
 	// texture info
 	LatteTextureDefinition hostTextureCopy{};
 
-protected:
+  protected:
 	LatteTextureView* m_textureView;
 	uint32 m_image_size = 0;
 };

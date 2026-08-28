@@ -23,10 +23,20 @@ jobs:
         include:
           - os: ubuntu-22.04
             arch: x64
+            frontend: cef
+            cef_script: fetch-cef-linux-x64.sh
+          - os: ubuntu-22.04
+            arch: x64
+            frontend: wx
+          - os: ubuntu-22.04
+            arch: x64
+            frontend: headless
           - os: ubuntu-22.04-arm
             arch: arm
+            frontend: cef
+            cef_script: fetch-cef-linux-arm64.sh
             
-    name: build-ubuntu-${{ matrix.arch }}
+    name: build-ubuntu-${{ matrix.arch }}-${{ matrix.frontend }}
     runs-on: ${{ matrix.os }}
     steps:
     - name: "Checkout repo"
@@ -37,20 +47,31 @@ jobs:
 
     - name: Setup release mode parameters
       run: |
-        echo "BUILD_MODE=release" >> $GITHUB_ENV
-        echo "BUILD_FLAGS=" >> $GITHUB_ENV
+        echo "BUILD_MODE=release" >> "$GITHUB_ENV"
+        echo "BUILD_FLAGS=" >> "$GITHUB_ENV"
         echo "Build mode is release"
 
     - name: Setup build flags for version
       if: ${{ inputs.next_version_major != '' }}
       run: |
         echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> $GITHUB_ENV
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> "$GITHUB_ENV"
 
     - name: "Install system dependencies"
       run: |
         sudo apt update -qq
-        sudo apt install -y clang-15 cmake freeglut3-dev libgcrypt20-dev libglm-dev libgtk-3-dev libpulse-dev libsecret-1-dev libsystemd-dev libudev-dev nasm ninja-build libbluetooth-dev
+        sudo apt install -y clang-15 cmake freeglut3-dev libgcrypt20-dev libglm-dev libgtk-3-dev libnss3 libpulse-dev libsecret-1-dev libsystemd-dev libudev-dev nasm ninja-build libbluetooth-dev xauth xvfb
+
+    - name: Cache CEF archive
+      if: matrix.frontend == 'cef'
+      uses: actions/cache@v5
+      with:
+        path: dependencies/.cef-downloads
+        key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/CefVersion.cmake') }}
+
+    - name: Fetch CEF SDK
+      if: matrix.frontend == 'cef'
+      run: scripts/${{ matrix.cef_script }}
 
     - name: "Bootstrap vcpkg"
       run: |
@@ -59,20 +80,21 @@ jobs:
     - name: 'Setup NuGet Credentials for vcpkg'
       shell: 'bash'
       run: |
-        mono `./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1` \
+        nuget="$(./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1)"
+        mono "$nuget" \
         sources add \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
         -storepasswordincleartext \
         -name "GitHub" \
         -username "${{ github.repository_owner }}" \
         -password "${{ secrets.GITHUB_TOKEN }}"
-        mono `./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1` \
+        mono "$nuget" \
         setapikey "${{ secrets.GITHUB_TOKEN }}" \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
         
     - name: "cmake"
       run: |
-        cmake -S . -B build ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=/usr/bin/clang-15 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 -G Ninja -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja
+        cmake -S . -B build ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DCEMU_FRONTEND=${{ matrix.frontend }} -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=/usr/bin/clang-15 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 -G Ninja -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja
 
     - name: "Build Cemu"
       run: |
@@ -82,13 +104,26 @@ jobs:
       run: ctest --test-dir build --output-on-failure
 
     - name: Prepare artifact
+      if: matrix.frontend == 'cef'
       run: mv bin/Cemu_release bin/Cemu
 
+    - name: Audit CEF runtime
+      if: matrix.frontend == 'cef'
+      run: |
+        test -x bin/Cemu
+        test -f bin/libcef.so
+        test -f bin/icudtl.dat
+        test -f bin/resources.pak
+        test -d bin/locales
+        test -f bin/cef-swiftshader/libvulkan.so.1
+        test ! -e bin/libvulkan.so.1
+
     - name: Upload artifact
+      if: matrix.frontend == 'cef'
       uses: actions/upload-artifact@v6
       with:
         name: cemu-bin-linux-${{ matrix.arch }}
-        path: ./bin/Cemu
+        path: ./bin
 
   build-appimage:
     strategy:
@@ -154,6 +189,16 @@ jobs:
       with:
         cmake-version: '3.29.0'
 
+    - name: Cache CEF archive
+      uses: actions/cache@v5
+      with:
+        path: dependencies/.cef-downloads
+        key: cef-windows64-${{ hashFiles('cmake/CefVersion.cmake') }}
+
+    - name: Fetch CEF SDK
+      shell: bash
+      run: scripts/fetch-cef-windows-x64.sh
+
     - name: "Bootstrap vcpkg"
       run: |
         ./dependencies/vcpkg/bootstrap-vcpkg.bat
@@ -161,14 +206,15 @@ jobs:
     - name: 'Setup NuGet Credentials for vcpkg'
       shell: 'bash'
       run: |
-        `./dependencies/vcpkg/vcpkg.exe fetch nuget | tail -n 1` \
+        nuget="$(./dependencies/vcpkg/vcpkg.exe fetch nuget | tail -n 1)"
+        "$nuget" \
         sources add \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
         -storepasswordincleartext \
         -name "GitHub" \
         -username "${{ github.repository_owner }}" \
         -password "${{ secrets.GITHUB_TOKEN }}"
-        `./dependencies/vcpkg/vcpkg.exe fetch nuget | tail -n 1` \
+        "$nuget" \
         setapikey "${{ secrets.GITHUB_TOKEN }}" \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
@@ -178,15 +224,34 @@ jobs:
         cd build
         echo "[INFO] BUILD_FLAGS: ${{ env.BUILD_FLAGS }}"
         echo "[INFO] BUILD_MODE: ${{ env.BUILD_MODE }}"
-        cmake .. ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DVCPKG_INSTALL_OPTIONS="--clean-after-build"
+        cmake .. ${{ env.BUILD_FLAGS }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} -DCEMU_FRONTEND=cef -DVCPKG_INSTALL_OPTIONS="--clean-after-build"
 
     - name: "Build Cemu"
       run: |
         cd build
         cmake --build . --config ${{ env.BUILD_MODE }}
 
+    - name: "Run tests"
+      run: ctest --test-dir build -C ${{ env.BUILD_MODE }} --output-on-failure
+
     - name: Prepare artifact
       run: Rename-Item bin/Cemu_release.exe Cemu.exe
+
+    - name: Audit CEF runtime
+      shell: pwsh
+      run: |
+        @(
+          'bin/Cemu.exe',
+          'bin/libcef.dll',
+          'bin/chrome_elf.dll',
+          'bin/icudtl.dat',
+          'bin/resources.pak',
+          'bin/locales',
+          'bin/cef-swiftshader/vulkan-1.dll'
+        ) | ForEach-Object {
+          if (-not (Test-Path $_)) { throw "Missing staged CEF asset: $_" }
+        }
+        if (Test-Path 'bin/vulkan-1.dll') { throw 'CEF Vulkan loader leaked into the Cemu DLL search path' }
 
     - name: Build NSIS Installer
       shell: cmd
@@ -198,7 +263,7 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: cemu-bin-windows-x64
-        path: ./bin/Cemu.exe
+        path: ./bin
 
     - name: Upload NSIS Installer
       uses: actions/upload-artifact@v6
@@ -220,15 +285,15 @@ jobs:
 
     - name: Setup release mode parameters
       run: |
-        echo "BUILD_MODE=release" >> $GITHUB_ENV
-        echo "BUILD_FLAGS=" >> $GITHUB_ENV
+        echo "BUILD_MODE=release" >> "$GITHUB_ENV"
+        echo "BUILD_FLAGS=" >> "$GITHUB_ENV"
         echo "Build mode is release"
 
     - name: Setup build flags for version
       if: ${{ inputs.next_version_major != '' }}
       run: |
         echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> $GITHUB_ENV
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> "$GITHUB_ENV"
 
     - name: "Install system dependencies"
       run: |
@@ -250,6 +315,20 @@ jobs:
       with:
         cmake-version: '3.29.0'
 
+    - name: Cache CEF archive
+      uses: actions/cache@v5
+      with:
+        path: dependencies/.cef-downloads
+        key: cef-${{ matrix.arch }}-${{ hashFiles('cmake/CefVersion.cmake') }}
+
+    - name: Fetch CEF SDK
+      run: |
+        if [[ '${{ matrix.arch }}' == 'arm64' ]]; then
+          scripts/fetch-cef-macos-arm64.sh
+        else
+          scripts/fetch-cef-macos-x64.sh
+        fi
+
     - name: "Bootstrap vcpkg"
       run: |
         bash ./dependencies/vcpkg/bootstrap-vcpkg.sh
@@ -257,14 +336,15 @@ jobs:
     - name: 'Setup NuGet Credentials for vcpkg'
       shell: 'bash'
       run: |
-        mono `./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1` \
+        nuget="$(./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1)"
+        mono "$nuget" \
         sources add \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
         -storepasswordincleartext \
         -name "GitHub" \
         -username "${{ github.repository_owner }}" \
         -password "${{ secrets.GITHUB_TOKEN }}"
-        mono `./dependencies/vcpkg/vcpkg fetch nuget | tail -n 1` \
+        mono "$nuget" \
         setapikey "${{ secrets.GITHUB_TOKEN }}" \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
@@ -274,6 +354,7 @@ jobs:
         cd build
         cmake .. ${{ env.BUILD_FLAGS }} \
         -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} \
+        -DCEMU_FRONTEND=cef \
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
         -DMACOS_BUNDLE=ON \
         -G Ninja
@@ -282,13 +363,26 @@ jobs:
       run: |
         cmake --build build
 
+    - name: "Run tests"
+      run: ctest --test-dir build --output-on-failure
+
+    - name: Audit CEF bundle
+      run: |
+        app='bin/Cemu_release.app'
+        framework="$app/Contents/Frameworks/Chromium Embedded Framework.framework"
+        test -f "$framework/Versions/A/Chromium Embedded Framework"
+        test -f "$framework/Versions/A/Resources/icudtl.dat"
+        for helper in 'Cemu Helper' 'Cemu Helper (Alerts)' 'Cemu Helper (GPU)' 'Cemu Helper (Plugin)' 'Cemu Helper (Renderer)'; do
+          test -x "$app/Contents/Frameworks/$helper.app/Contents/MacOS/$helper"
+        done
+
     - name: Prepare artifact
       run: |
         mkdir bin/Cemu_app
         mv bin/Cemu_release.app bin/Cemu_app/Cemu.app
         mv bin/Cemu_app/Cemu.app/Contents/MacOS/Cemu_release bin/Cemu_app/Cemu.app/Contents/MacOS/Cemu
         sed -i '' 's/Cemu_release/Cemu/g' bin/Cemu_app/Cemu.app/Contents/Info.plist
-        codesign --entitlements ${{github.workspace}}/src/resource/cemu.macos.entitlements --force --deep --preserve-metadata=entitlements,requirements,flags,runtime --sign - --timestamp --options runtime bin/Cemu_app/Cemu.app/Contents/MacOS/Cemu
+        codesign --entitlements ${{github.workspace}}/src/resource/cemu.macos.entitlements --force --deep --preserve-metadata=entitlements,requirements,flags,runtime --sign - --timestamp --options runtime bin/Cemu_app/Cemu.app
         ln -s /Applications bin/Cemu_app/Applications
         hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app"
         hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu.dmg

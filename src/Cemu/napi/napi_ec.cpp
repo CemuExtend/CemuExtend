@@ -193,7 +193,7 @@ namespace NAPI
 	NAPI_IASGetChallenge_Result IAS_GetChallenge(AuthInfo& authInfo)
 	{
 		NAPI_IASGetChallenge_Result result{};
-		
+
 		CurlSOAPHelper soapHelper(authInfo.GetService());
 		soapHelper.SOAP_initate("ias", _getIASUrl(authInfo.GetService()), "GetChallenge", "2.0");
 
@@ -292,7 +292,6 @@ namespace NAPI
 			<Currency>EUR</Currency>
 		*/
 
-
 		return result;
 	}
 
@@ -327,7 +326,7 @@ namespace NAPI
 		soapHelper.SOAP_addRequestField("Region", NCrypto::GetRegionAsString(authInfo.region));
 		soapHelper.SOAP_addRequestField("Country", authInfo.country);
 
-		if(!authInfo.IASToken.accountId.empty())
+		if (!authInfo.IASToken.accountId.empty())
 			soapHelper.SOAP_addRequestField("AccountId", authInfo.IASToken.accountId);
 		if (!authInfo.IASToken.deviceToken.empty())
 			soapHelper.SOAP_addRequestField("DeviceToken", _getDeviceTokenWT(authInfo.IASToken.deviceToken));
@@ -363,7 +362,7 @@ namespace NAPI
 		{
 			std::string_view serviceType = serviceURLNode.child_value("Name");
 			std::string_view url = serviceURLNode.child_value("URI");
-			if(serviceType.empty() || url.empty())
+			if (serviceType.empty() || url.empty())
 				continue;
 			if (boost::iequals(serviceType, "ContentPrefixURL"))
 				result.serviceURLs.ContentPrefixURL = url;
@@ -450,13 +449,13 @@ namespace NAPI
 			}
 			// parse ticket version
 			uint32 ticketVersion = 0;
-			fcr = std::from_chars(tivValueSeparator+1, tivValueEnd, ticketVersion);
+			fcr = std::from_chars(tivValueSeparator + 1, tivValueEnd, ticketVersion);
 			if (fcr.ec == std::errc::invalid_argument || fcr.ec == std::errc::result_out_of_range)
 			{
 				result.apiError = NAPI_RESULT::XML_ERROR;
 				return result;
 			}
-			result.tivs.push_back({ ticketId , ticketVersion });
+			result.tivs.push_back({ticketId, ticketVersion});
 		}
 		return result;
 	}
@@ -575,7 +574,7 @@ namespace NAPI
 		return result;
 	}
 
-	bool CCS_GetContentFile(NetworkService service, uint64 titleId, uint32 contentId, bool(*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData)
+	bool CCS_GetContentFile(NetworkService service, uint64 titleId, uint32 contentId, bool (*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData)
 	{
 		CurlRequestHelper req;
 		req.initate(service, fmt::format("{}/{:016x}/{:08x}", _getCCSUrl(service), titleId, contentId), CurlRequestHelper::SERVER_SSL_CONTEXT::CCS);
@@ -604,4 +603,4 @@ namespace NAPI
 		return result;
 	}
 
-};
+}; // namespace NAPI

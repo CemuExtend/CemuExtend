@@ -30,7 +30,7 @@ enum class WupsHeapAllocatorKind : std::uint8_t
 
 class WupsOwnerScopedHeapTracker
 {
-public:
+  public:
 	explicit WupsOwnerScopedHeapTracker(
 		WupsGuestMemoryOwnershipRegistry& registry);
 
@@ -38,9 +38,9 @@ public:
 	// allocator-managed block size when known, otherwise the requested size; only
 	// the payload range is registered.
 	void OnAllocation(WupsOwnerToken owner, WupsHeapAllocatorKind kind,
-		std::uint32_t heapHandle, std::uint32_t address,
-		std::uint32_t requestedSize, std::uint32_t trackedSize,
-		std::uint32_t alignment);
+					  std::uint32_t heapHandle, std::uint32_t address,
+					  std::uint32_t requestedSize, std::uint32_t trackedSize,
+					  std::uint32_t alignment);
 
 	// The allocation at `address` was freed. Only an exact base match owned by
 	// `owner` is honoured.
@@ -48,13 +48,13 @@ public:
 
 	// The allocation at `address` was resized in place to `newSize`.
 	void OnResize(WupsOwnerToken owner, std::uint32_t address,
-		std::uint32_t newSize);
+				  std::uint32_t newSize);
 
 	// The plugin created its own heap on memory it owns; register the backing so
 	// interior pointers are attributable without per-allocation tracking.
 	void RegisterOwnedHeap(WupsOwnerToken owner, std::uint32_t heapHandle,
-		std::uint32_t backingBase, std::uint32_t backingSize,
-		WupsHeapAllocatorKind kind);
+						   std::uint32_t backingBase, std::uint32_t backingSize,
+						   WupsHeapAllocatorKind kind);
 
 	void UnregisterOwnedHeap(WupsOwnerToken owner, std::uint32_t heapHandle);
 
@@ -64,17 +64,17 @@ public:
 
 	[[nodiscard]] std::size_t OwnerAllocationCount(WupsOwnerToken owner) const;
 
-private:
+  private:
 	struct AllocationKey
 	{
 		std::uint64_t owner{};
 		std::uint32_t generation{};
 		std::uint32_t address{};
 		[[nodiscard]] friend bool operator<(const AllocationKey& a,
-			const AllocationKey& b)
+											const AllocationKey& b)
 		{
 			return std::tie(a.owner, a.generation, a.address) <
-				std::tie(b.owner, b.generation, b.address);
+				   std::tie(b.owner, b.generation, b.address);
 		}
 	};
 	struct HeapKey
@@ -85,12 +85,12 @@ private:
 		[[nodiscard]] friend bool operator<(const HeapKey& a, const HeapKey& b)
 		{
 			return std::tie(a.owner, a.generation, a.heapHandle) <
-				std::tie(b.owner, b.generation, b.heapHandle);
+				   std::tie(b.owner, b.generation, b.heapHandle);
 		}
 	};
 
 	WupsGuestMemoryOwnershipRegistry& m_registry;
 	mutable std::mutex m_mutex;
 	std::map<AllocationKey, std::uint64_t> m_allocations; // -> rangeId
-	std::map<HeapKey, std::uint64_t> m_ownedHeaps;        // -> rangeId
+	std::map<HeapKey, std::uint64_t> m_ownedHeaps;		  // -> rangeId
 };

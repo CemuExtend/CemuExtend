@@ -21,8 +21,9 @@ enum class BreakpointType
 	BP_STEP_POINT
 };
 
-class GDBServer::ExecutionBreakpoint {
-public:
+class GDBServer::ExecutionBreakpoint
+{
+  public:
 	ExecutionBreakpoint(MPTR address, BreakpointType type, bool visible, std::string reason);
 	~ExecutionBreakpoint();
 
@@ -66,7 +67,7 @@ public:
 		this->m_origOpCode = newOpCode;
 	};
 
-private:
+  private:
 	const MPTR m_address;
 	std::string m_reason;
 	uint32 m_origOpCode;
@@ -86,8 +87,9 @@ enum class AccessPointType
 	BP_BOTH = 4
 };
 
-class GDBServer::AccessBreakpoint {
-public:
+class GDBServer::AccessBreakpoint
+{
+  public:
 	AccessBreakpoint(MPTR address, AccessPointType type);
 	~AccessBreakpoint();
 
@@ -100,7 +102,7 @@ public:
 		return m_type;
 	};
 
-private:
+  private:
 	const MPTR m_address;
 	const AccessPointType m_type;
 };

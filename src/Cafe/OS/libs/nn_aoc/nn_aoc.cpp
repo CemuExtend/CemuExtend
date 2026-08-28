@@ -63,17 +63,17 @@ namespace nn
 				while (fsc_nextDir(volDirIterator, &dirEntry))
 				{
 					std::string_view dirName = dirEntry.GetPath();
-					if(!dirEntry.isDirectory)
+					if (!dirEntry.isDirectory)
 						continue;
 					// check for pattern: aoc<titleId>
-					if(dirName.size() != (3+16))
+					if (dirName.size() != (3 + 16))
 						continue;
-					if(dirName[0] != 'a' ||
+					if (dirName[0] != 'a' ||
 						dirName[1] != 'o' ||
 						dirName[2] != 'c')
 						continue;
 					TitleId aocTitleId;
-					if( !TitleIdParser::ParseFromStr(dirName.substr(3), aocTitleId) )
+					if (!TitleIdParser::ParseFromStr(dirName.substr(3), aocTitleId))
 						continue;
 					// add to list of known AOC
 					sAocCache.emplace_back(aocTitleId);
@@ -88,7 +88,7 @@ namespace nn
 			for (uint32 i = 0; i < std::min(maxCount, (uint32)sAocCache.size()); i++)
 			{
 				titleList[i].titleId = sAocCache[i].aocTitleId;
-				titleList[i].groupId = 0; // todo
+				titleList[i].groupId = 0;	   // todo
 				titleList[i].titleVersion = 0; // todo
 				strcpy(titleList[i].path, sAocCache[i].GetPath().c_str());
 			}
@@ -151,7 +151,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_aoc";
@@ -166,11 +166,11 @@ namespace nn
 				cafeExportRegister("nn_aoc", AOC_CloseTitle, LogType::NN_AOC);
 				cafeExportRegister("nn_aoc", AOC_GetPurchaseInfo, LogType::NN_AOC);
 			};
-		}s_COSnnAocModule;
+		} s_COSnnAocModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnAocModule;
 		}
-	}
-}
+	} // namespace aoc
+} // namespace nn

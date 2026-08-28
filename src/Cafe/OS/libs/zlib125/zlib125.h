@@ -5,4 +5,4 @@ namespace zlib
 	void load();
 
 	COSModule* GetModule();
-}
+} // namespace zlib

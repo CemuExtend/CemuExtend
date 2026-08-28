@@ -10,9 +10,9 @@ struct ThreadProfileState;
 class wxGenericProgressDialog;
 class wxListView;
 
-class DebugPPCThreadsWindow: public wxFrame
+class DebugPPCThreadsWindow : public wxFrame
 {
-public:
+  public:
 	DebugPPCThreadsWindow(wxFrame& parent);
 	~DebugPPCThreadsWindow();
 
@@ -20,12 +20,12 @@ public:
 	void OnRefreshButton(wxCommandEvent& event);
 	void OnClose(wxCloseEvent& event);
 	void RefreshThreadList();
-	void OnThreadListPopupClick(wxCommandEvent &evt);
+	void OnThreadListPopupClick(wxCommandEvent& evt);
 	void OnThreadListRightClick(wxMouseEvent& event);
 
 	void Close();
 
-private:
+  private:
 	void ProfileThread(std::uint32_t threadAddress);
 	void StopProfile();
 	void UpdateProfileProgress();
@@ -41,6 +41,4 @@ private:
 	void OnTimer(wxTimerEvent& event);
 
 	wxDECLARE_EVENT_TABLE();
-
-
 };

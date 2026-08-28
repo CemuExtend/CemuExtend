@@ -294,7 +294,7 @@ namespace
 		for (const auto& sample : samples)
 			totalSampleCount += sample.second;
 		cemuLog_log(LogType::Force, "--- Thread {:08x} profile results with {:} samples captured ---",
-			threadAddress, totalSampleCount);
+					threadAddress, totalSampleCount);
 		if (totalSampleCount == 0)
 			return;
 
@@ -306,14 +306,14 @@ namespace
 			if (symbol)
 				sampleAddr = symbol->address;
 			auto it = std::find_if(sortedSamples.begin(), sortedSamples.end(),
-				[sampleAddr](const std::pair<std::uint32_t, std::uint32_t>& entry) { return entry.first == sampleAddr; });
+								   [sampleAddr](const std::pair<std::uint32_t, std::uint32_t>& entry) { return entry.first == sampleAddr; });
 			if (it != sortedSamples.end())
 				it->second += sample.second;
 			else
 				sortedSamples.emplace_back(sampleAddr, sample.second);
 		}
 		std::sort(sortedSamples.begin(), sortedSamples.end(),
-			[](const auto& left, const auto& right) { return left.second > right.second; });
+				  [](const auto& left, const auto& right) { return left.second > right.second; });
 		for (const auto& sample : sortedSamples)
 		{
 			if (sample.second < 3)
@@ -323,15 +323,15 @@ namespace
 			if (symbol)
 			{
 				symbolName = fmt::format("{}.{}+0x{:x}", (const char*)symbol->libName,
-					(const char*)symbol->symbolName, sample.first - symbol->address);
+										 (const char*)symbol->symbolName, sample.first - symbol->address);
 			}
 			cemuLog_log(LogType::Force, "[{:08x}] {:8.2f}% (Samples: {:5}) Symbol: {}", sample.first,
-				(double)(sample.second * 100) / (double)totalSampleCount, sample.second, symbolName);
+						(double)(sample.second * 100) / (double)totalSampleCount, sample.second, symbolName);
 		}
 	}
 
 	bool SampleThreadInstructionPointer(const std::shared_ptr<ThreadProfileState>& state,
-		std::uint32_t threadAddress, std::uint32_t& instructionPointer)
+										std::uint32_t threadAddress, std::uint32_t& instructionPointer)
 	{
 		auto* thread = reinterpret_cast<OSThread_t*>(memory_getPointerFromVirtualOffset(threadAddress));
 		__OSLockScheduler();
@@ -391,18 +391,16 @@ namespace
 			}
 			if (!samples.empty())
 				PresentProfileResults(threadAddress, samples);
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			cemuLog_log(LogType::Force, "PPC thread profiler failed: {}", exception.what());
-		}
-		catch (...)
+		} catch (...)
 		{
 			cemuLog_log(LogType::Force, "PPC thread profiler failed with an unknown error");
 		}
 		state->finished.store(true, std::memory_order_release);
 	}
-}
+} // namespace
 
 void DebugPPCThreadsWindow::ProfileThread(std::uint32_t threadAddress)
 {
@@ -411,7 +409,7 @@ void DebugPPCThreadsWindow::ProfileThread(std::uint32_t threadAddress)
 
 	m_profile_state = std::make_shared<ThreadProfileState>();
 	m_profile_dialog = new wxGenericProgressDialog(_("Profiling thread"), _("Capturing samples..."),
-		1000, this, wxPD_CAN_SKIP);
+												   1000, this, wxPD_CAN_SKIP);
 	const auto state = m_profile_state;
 	m_profile_thread = std::jthread([state, threadAddress] {
 		ProfileThreadWorker(state, threadAddress);

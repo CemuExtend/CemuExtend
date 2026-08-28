@@ -5,40 +5,40 @@
 
 namespace
 {
-[[nodiscard]] WupsOwnedRangeKind RangeKindFor(WupsHeapAllocatorKind kind)
-{
-	switch (kind)
+	[[nodiscard]] WupsOwnedRangeKind RangeKindFor(WupsHeapAllocatorKind kind)
 	{
-	case WupsHeapAllocatorKind::DefaultHeap:
-		return WupsOwnedRangeKind::DefaultHeapAllocation;
-	case WupsHeapAllocatorKind::ExpHeap:
-		return WupsOwnedRangeKind::ExpHeapAllocation;
-	case WupsHeapAllocatorKind::UnitHeap:
-		return WupsOwnedRangeKind::UnitHeapAllocation;
-	case WupsHeapAllocatorKind::AllocatorInterface:
+		switch (kind)
+		{
+		case WupsHeapAllocatorKind::DefaultHeap:
+			return WupsOwnedRangeKind::DefaultHeapAllocation;
+		case WupsHeapAllocatorKind::ExpHeap:
+			return WupsOwnedRangeKind::ExpHeapAllocation;
+		case WupsHeapAllocatorKind::UnitHeap:
+			return WupsOwnedRangeKind::UnitHeapAllocation;
+		case WupsHeapAllocatorKind::AllocatorInterface:
+			return WupsOwnedRangeKind::AllocatorAllocation;
+		case WupsHeapAllocatorKind::OwnerCreatedHeap:
+			return WupsOwnedRangeKind::OwnedHeapBacking;
+		}
 		return WupsOwnedRangeKind::AllocatorAllocation;
-	case WupsHeapAllocatorKind::OwnerCreatedHeap:
-		return WupsOwnedRangeKind::OwnedHeapBacking;
 	}
-	return WupsOwnedRangeKind::AllocatorAllocation;
-}
 
-[[nodiscard]] WupsOwnedGuestRange MakeHeapRange(WupsOwnerToken owner,
-	WupsOwnedRangeKind kind, std::uint32_t base, std::uint32_t size)
-{
-	WupsOwnedGuestRange range{};
-	range.owner = owner;
-	range.base = base;
-	range.size = size;
-	range.kind = kind;
-	range.readable = true;
-	range.writable = true;
-	range.executable = false;
-	range.heapEligible = true;
-	range.acceptsInteriorPointers = true;
-	range.activelyReleasedOnUnload = true;
-	return range;
-}
+	[[nodiscard]] WupsOwnedGuestRange MakeHeapRange(WupsOwnerToken owner,
+													WupsOwnedRangeKind kind, std::uint32_t base, std::uint32_t size)
+	{
+		WupsOwnedGuestRange range{};
+		range.owner = owner;
+		range.base = base;
+		range.size = size;
+		range.kind = kind;
+		range.readable = true;
+		range.writable = true;
+		range.executable = false;
+		range.heapEligible = true;
+		range.acceptsInteriorPointers = true;
+		range.activelyReleasedOnUnload = true;
+		return range;
+	}
 } // namespace
 
 WupsOwnerScopedHeapTracker::WupsOwnerScopedHeapTracker(
@@ -48,9 +48,9 @@ WupsOwnerScopedHeapTracker::WupsOwnerScopedHeapTracker(
 }
 
 void WupsOwnerScopedHeapTracker::OnAllocation(WupsOwnerToken owner,
-	WupsHeapAllocatorKind kind, std::uint32_t heapHandle, std::uint32_t address,
-	std::uint32_t requestedSize, std::uint32_t trackedSize,
-	std::uint32_t alignment)
+											  WupsHeapAllocatorKind kind, std::uint32_t heapHandle, std::uint32_t address,
+											  std::uint32_t requestedSize, std::uint32_t trackedSize,
+											  std::uint32_t alignment)
 {
 	(void)heapHandle;
 	(void)alignment;
@@ -86,7 +86,7 @@ void WupsOwnerScopedHeapTracker::OnAllocation(WupsOwnerToken owner,
 }
 
 void WupsOwnerScopedHeapTracker::OnFree(WupsOwnerToken owner,
-	std::uint32_t address)
+										std::uint32_t address)
 {
 	if (address == 0)
 		return;
@@ -101,7 +101,7 @@ void WupsOwnerScopedHeapTracker::OnFree(WupsOwnerToken owner,
 }
 
 void WupsOwnerScopedHeapTracker::OnResize(WupsOwnerToken owner,
-	std::uint32_t address, std::uint32_t newSize)
+										  std::uint32_t address, std::uint32_t newSize)
 {
 	if (address == 0 || newSize == 0)
 		return;
@@ -131,8 +131,8 @@ void WupsOwnerScopedHeapTracker::OnResize(WupsOwnerToken owner,
 }
 
 void WupsOwnerScopedHeapTracker::RegisterOwnedHeap(WupsOwnerToken owner,
-	std::uint32_t heapHandle, std::uint32_t backingBase,
-	std::uint32_t backingSize, WupsHeapAllocatorKind kind)
+												   std::uint32_t heapHandle, std::uint32_t backingBase,
+												   std::uint32_t backingSize, WupsHeapAllocatorKind kind)
 {
 	(void)kind;
 	if (backingBase == 0 || backingSize == 0)
@@ -143,7 +143,7 @@ void WupsOwnerScopedHeapTracker::RegisterOwnedHeap(WupsOwnerToken owner,
 		return;
 	std::string error;
 	auto range = MakeHeapRange(owner, WupsOwnedRangeKind::OwnedHeapBacking,
-		backingBase, backingSize);
+							   backingBase, backingSize);
 	const auto rangeId = m_registry.RegisterRange(std::move(range), error);
 	if (!rangeId)
 		return;
@@ -156,7 +156,7 @@ void WupsOwnerScopedHeapTracker::RegisterOwnedHeap(WupsOwnerToken owner,
 }
 
 void WupsOwnerScopedHeapTracker::UnregisterOwnedHeap(WupsOwnerToken owner,
-	std::uint32_t heapHandle)
+													 std::uint32_t heapHandle)
 {
 	const HeapKey key{owner.owner, owner.generation, heapHandle};
 	std::lock_guard lock(m_mutex);
@@ -175,11 +175,11 @@ void WupsOwnerScopedHeapTracker::ReleaseOwner(WupsOwnerToken owner)
 	// drop this owner+generation's bookkeeping so a reused owner id starts clean.
 	std::erase_if(m_allocations, [&](const auto& entry) {
 		return entry.first.owner == owner.owner &&
-			entry.first.generation == owner.generation;
+			   entry.first.generation == owner.generation;
 	});
 	std::erase_if(m_ownedHeaps, [&](const auto& entry) {
 		return entry.first.owner == owner.owner &&
-			entry.first.generation == owner.generation;
+			   entry.first.generation == owner.generation;
 	});
 }
 

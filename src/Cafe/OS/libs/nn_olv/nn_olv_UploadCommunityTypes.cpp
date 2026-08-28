@@ -7,11 +7,10 @@ namespace nn
 	{
 
 		sint32 UploadCommunityData_AsyncRequestImpl(CurlRequestHelper& req, const char* reqUrl,
-			UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam);
+													UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam);
 
 		sint32 UploadCommunityData_AsyncRequest(CurlRequestHelper& req, const char* reqUrl, coreinit::OSEvent* requestDoneEvent,
-			UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam
-		)
+												UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam)
 		{
 			sint32 res = UploadCommunityData_AsyncRequestImpl(req, reqUrl, pOutData, pParam);
 			coreinit::OSSignalEvent(requestDoneEvent);
@@ -22,7 +21,7 @@ namespace nn
 		{
 			if (!nn::olv::g_IsInitialized)
 				return OLV_RESULT_NOT_INITIALIZED;
-			
+
 			if (!nn::olv::g_IsOnlineMode)
 				return OLV_RESULT_OFFLINE_MODE_REQUEST;
 
@@ -48,7 +47,6 @@ namespace nn
 					snprintf(requestUrl, sizeof(requestUrl), "%s/v1/communities", g_DiscoveryResults.apiEndpoint);
 			}
 
-			
 			CurlRequestHelper req;
 			req.initate(ActiveSettings::GetNetworkService(), requestUrl, CurlRequestHelper::SERVER_SSL_CONTEXT::OLIVE);
 			InitializeOliveRequest(req);
@@ -67,7 +65,7 @@ namespace nn
 		}
 
 		sint32 UploadCommunityData_AsyncRequestImpl(CurlRequestHelper& req, const char* reqUrl,
-			UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam)
+													UploadedCommunityData* pOutData, UploadCommunityDataParam const* pParam)
 		{
 			sint32 res = OLV_RESULT_SUCCESS;
 
@@ -98,11 +96,10 @@ namespace nn
 						base64icon = NCrypto::base64Encode(encodedIcon, iconEncodeRes);
 						res = olv_curlformcode_to_error(
 							curl_formadd(&post, &last,
-								CURLFORM_COPYNAME, "icon",
-								CURLFORM_PTRCONTENTS, base64icon.data(),
-								CURLFORM_CONTENTSLENGTH, base64icon.size(),
-								CURLFORM_END)
-						);
+										 CURLFORM_COPYNAME, "icon",
+										 CURLFORM_PTRCONTENTS, base64icon.data(),
+										 CURLFORM_CONTENTSLENGTH, base64icon.size(),
+										 CURLFORM_END));
 
 						if (res < 0)
 							throw std::runtime_error("curl_formadd() error! - icon");
@@ -114,11 +111,10 @@ namespace nn
 					form_name = StringHelpers::ToUtf8((const uint16be*)pParam->titleText, 127);
 					res = olv_curlformcode_to_error(
 						curl_formadd(&post, &last,
-							CURLFORM_COPYNAME, "name",
-							CURLFORM_PTRCONTENTS, form_name.data(),
-							CURLFORM_CONTENTSLENGTH, form_name.size(),
-							CURLFORM_END)
-					);
+									 CURLFORM_COPYNAME, "name",
+									 CURLFORM_PTRCONTENTS, form_name.data(),
+									 CURLFORM_CONTENTSLENGTH, form_name.size(),
+									 CURLFORM_END));
 
 					if (res < 0)
 						throw std::runtime_error("curl_formadd() error! - name");
@@ -129,12 +125,10 @@ namespace nn
 					form_desc = StringHelpers::ToUtf8((const uint16be*)pParam->description, 255);
 					res = olv_curlformcode_to_error(
 						curl_formadd(&post, &last,
-							CURLFORM_COPYNAME, "description",
-							CURLFORM_PTRCONTENTS, form_desc.data(),
-							CURLFORM_CONTENTSLENGTH, form_desc.size(),
-							CURLFORM_END)
-					);
-
+									 CURLFORM_COPYNAME, "description",
+									 CURLFORM_PTRCONTENTS, form_desc.data(),
+									 CURLFORM_CONTENTSLENGTH, form_desc.size(),
+									 CURLFORM_END));
 
 					if (res < 0)
 						throw std::runtime_error("curl_formadd() error! - description");
@@ -147,11 +141,10 @@ namespace nn
 						form_searchKey[i] = StringHelpers::ToUtf8((const uint16be*)pParam->searchKeys[i], 151);
 						res = olv_curlformcode_to_error(
 							curl_formadd(&post, &last,
-								CURLFORM_COPYNAME, "search_key",
-								CURLFORM_PTRCONTENTS, form_searchKey[i].data(),
-								CURLFORM_CONTENTSLENGTH, form_searchKey[i].size(),
-								CURLFORM_END)
-						);
+										 CURLFORM_COPYNAME, "search_key",
+										 CURLFORM_PTRCONTENTS, form_searchKey[i].data(),
+										 CURLFORM_CONTENTSLENGTH, form_searchKey[i].size(),
+										 CURLFORM_END));
 
 						if (res < 0)
 							throw std::runtime_error("curl_formadd() error! - search_key");
@@ -167,18 +160,16 @@ namespace nn
 					{
 						res = olv_curlformcode_to_error(
 							curl_formadd(&post, &last,
-								CURLFORM_COPYNAME, "app_data",
-								CURLFORM_PTRCONTENTS, encodedAppData.data(),
-								CURLFORM_CONTENTSLENGTH, encodedAppData.size(),
-								CURLFORM_END)
-						);
+										 CURLFORM_COPYNAME, "app_data",
+										 CURLFORM_PTRCONTENTS, encodedAppData.data(),
+										 CURLFORM_CONTENTSLENGTH, encodedAppData.size(),
+										 CURLFORM_END));
 
 						if (res < 0)
 							throw std::runtime_error("curl_formadd() error! - app_data");
 					}
 				}
-			}
-			catch (const std::runtime_error& error)
+			} catch (const std::runtime_error& error)
 			{
 				cemuLog_log(LogType::Force, "Error in multipart curl -> {}", error.what());
 				curl_formfree(post);
@@ -219,10 +210,9 @@ namespace nn
 
 			if (httpCode != 200)
 				return OLV_RESULT_STATUS(httpCode + 4000);
-			
+
 			if (pOutData)
 			{
-
 				std::string_view app_data = doc.select_node("//app_data").node().child_value();
 				std::string_view community_id = doc.select_node("//community_id").node().child_value();
 				std::string_view name = doc.select_node("//name").node().child_value();
@@ -233,7 +223,8 @@ namespace nn
 				if (app_data.size() != 0)
 				{
 					auto app_data_bin = NCrypto::base64Decode(app_data);
-					if (app_data_bin.size() != 0) {
+					if (app_data_bin.size() != 0)
+					{
 						memcpy(pOutData->appData, app_data_bin.data(), std::min(size_t(0x400), app_data_bin.size()));
 						pOutData->flags |= UploadedCommunityData::FLAG_HAS_APP_DATA;
 						pOutData->appDataLen = app_data_bin.size();
@@ -302,5 +293,5 @@ namespace nn
 
 			return OLV_RESULT_SUCCESS;
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

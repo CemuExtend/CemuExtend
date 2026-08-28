@@ -30,10 +30,10 @@ enum
 
 RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_position, const wxSize& main_size)
 	: wxFrame(&parent, wxID_ANY, _("Registers"), wxDefaultPosition, wxSize(400, 975), wxSYSTEM_MENU | wxCAPTION | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxFRAME_FLOAT_ON_PARENT),
-	m_prev_snapshot({}), m_show_double_values(true), m_context_ctrl(nullptr)
+	  m_prev_snapshot({}), m_show_double_values(true), m_context_ctrl(nullptr)
 {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
-	SetMaxSize({ 400, 975 });
+	SetMaxSize({400, 975});
 	this->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 
 	wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
@@ -42,9 +42,9 @@ RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_posi
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	auto gpr_sizer = new wxFlexGridSizer(0, 3, 0, 0);
-	
+
 	// GPRs
-	for(sint32 i = 0; i < 32; ++i)
+	for (sint32 i = 0; i < 32; ++i)
 	{
 		gpr_sizer->Add(new wxStaticText(scrolled_win, wxID_ANY, wxString::Format("R%d", i)), 0, wxLEFT, 5);
 
@@ -52,8 +52,8 @@ RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_posi
 		value->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 		value->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 		value->Bind(wxEVT_LEFT_DCLICK, &RegisterWindow::OnMouseDClickEvent, this);
-		//value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
-		gpr_sizer->Add(value, 0, wxLEFT|wxRIGHT, 5);
+		// value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
+		gpr_sizer->Add(value, 0, wxLEFT | wxRIGHT, 5);
 
 		auto label = new wxTextCtrl(scrolled_win, kRegisterLabelR0 + i, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxNO_BORDER | wxTE_RICH2);
 		label->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
@@ -69,7 +69,7 @@ RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_posi
 		value->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 		value->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 		value->Bind(wxEVT_LEFT_DCLICK, &RegisterWindow::OnMouseDClickEvent, this);
-		//value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
+		// value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
 		gpr_sizer->Add(value, 0, wxLEFT | wxRIGHT, 5);
 		auto label = new wxTextCtrl(scrolled_win, kRegisterLabelLR, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxNO_BORDER | wxTE_RICH2);
 		label->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
@@ -112,7 +112,7 @@ RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_posi
 		auto value = new wxTextCtrl(scrolled_win, kRegisterValueCR0 + i, "-", wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxNO_BORDER | wxTE_RICH2);
 		value->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 		value->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
-		//value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
+		// value->Bind(wxEVT_CONTEXT_MENU, &RegisterWindow::OnValueContextMenu, this);
 		cr_sizer->Add(value, 0, wxRIGHT, 5);
 	}
 
@@ -127,9 +127,8 @@ RegisterWindow::RegisterWindow(DebuggerWindow2& parent, const wxPoint& main_posi
 	if (parent.GetConfig().data().pin_to_main)
 		OnMainMove(main_position, main_size);
 
-	//Bind(wxEVT_COMMAND_MENU_SELECTED, &RegisterWindow::OnValueContextMenuSelected, this, kContextMenuZero, kContextMenuGotoDump);
+	// Bind(wxEVT_COMMAND_MENU_SELECTED, &RegisterWindow::OnValueContextMenuSelected, this, kContextMenuZero, kContextMenuGotoDump);
 }
-
 
 void RegisterWindow::OnMainMove(const wxPoint& main_position, const wxSize& main_size)
 {
@@ -144,10 +143,10 @@ void RegisterWindow::OnMainMove(const wxPoint& main_position, const wxSize& main
 
 void RegisterWindow::UpdateIntegerRegister(wxTextCtrl* label, wxTextCtrl* value, uint32 registerValue, bool hasChanged)
 {
-	//const auto value = dynamic_cast<wxTextCtrl*>(GetWindowChild(kRegisterValueR0 + i));
-	//wxASSERT(value);
+	// const auto value = dynamic_cast<wxTextCtrl*>(GetWindowChild(kRegisterValueR0 + i));
+	// wxASSERT(value);
 
-	//const bool has_changed = register_value != m_prev_snapshot.gpr[i];
+	// const bool has_changed = register_value != m_prev_snapshot.gpr[i];
 	if (hasChanged)
 		value->SetForegroundColour(m_changed_color);
 	else if (value->GetForegroundColour() != wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT))
@@ -155,8 +154,8 @@ void RegisterWindow::UpdateIntegerRegister(wxTextCtrl* label, wxTextCtrl* value,
 
 	value->ChangeValue(wxString::Format("%08x", registerValue));
 
-	//const auto label = dynamic_cast<wxTextCtrl*>(GetWindowChild(kRegisterLabelR0 + i));
-	//wxASSERT(label);
+	// const auto label = dynamic_cast<wxTextCtrl*>(GetWindowChild(kRegisterLabelR0 + i));
+	// wxASSERT(label);
 	label->SetForegroundColour(hasChanged ? m_changed_color : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 
 	// check if address is a string
@@ -275,7 +274,7 @@ void RegisterWindow::OnUpdateView()
 		else
 			continue;
 
-		if(m_show_double_values)
+		if (m_show_double_values)
 			value->ChangeValue(wxString::Format("%lf", snapshot.fpr[i].fp0));
 		else
 			value->ChangeValue(wxString::Format("%016llx", register_value));
@@ -307,7 +306,7 @@ void RegisterWindow::OnUpdateView()
 	{
 		const auto value = dynamic_cast<wxTextCtrl*>(FindWindow(kRegisterValueCR0 + i));
 		wxASSERT(value);
-		
+
 		auto cr_bits_ptr = snapshot.cr + i * 4;
 		auto cr_bits_ptr_cmp = m_prev_snapshot.cr + i * 4;
 
@@ -351,7 +350,7 @@ void RegisterWindow::OnMouseDClickEvent(wxMouseEvent& event)
 	debugSession = nullptr;
 
 	const auto id = event.GetId();
-	if(kRegisterValueR0 <= id && id < kRegisterValueR0 + 32)
+	if (kRegisterValueR0 <= id && id < kRegisterValueR0 + 32)
 	{
 		const uint32 register_index = id - kRegisterValueR0;
 		const uint32 register_value = ppcSnapshot.gpr[register_index];
@@ -365,7 +364,7 @@ void RegisterWindow::OnMouseDClickEvent(wxMouseEvent& event)
 				debugSession->gpr[register_index] = value;
 				debugger_unlockDebugSession(debugSession);
 			}
-			
+
 			OnUpdateView();
 		}
 		return;
@@ -385,7 +384,7 @@ void RegisterWindow::OnMouseDClickEvent(wxMouseEvent& event)
 				debugSession->fpr[register_index].fp0 = value;
 				debugger_unlockDebugSession(debugSession);
 			}
-			
+
 			OnUpdateView();
 		}
 
@@ -406,7 +405,7 @@ void RegisterWindow::OnMouseDClickEvent(wxMouseEvent& event)
 				debugSession->fpr[register_index].fp1 = value;
 				debugger_unlockDebugSession(debugSession);
 			}
-			
+
 			OnUpdateView();
 		}
 		return;
@@ -467,7 +466,7 @@ void RegisterWindow::OnValueContextMenuSelected(wxCommandEvent& event)
 {
 	wxASSERT(m_context_ctrl);
 
-	switch (event.GetId()) 
+	switch (event.GetId())
 	{
 	case kContextMenuZero:
 		break;

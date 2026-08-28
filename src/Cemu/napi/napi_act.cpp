@@ -61,7 +61,7 @@ namespace NAPI
 					result.apiError = NAPI_RESULT::SERVICE_ERROR;
 					result.serviceError = (ACT_ERROR_CODE)errorCode;
 					cemuLog_log(LogType::Force, "Account response with error code {}", errorCode);
-					if(!errorCodeMsg.empty())
+					if (!errorCodeMsg.empty())
 						cemuLog_log(LogType::Force, "Message from server: {}", errorCodeMsg);
 				}
 			}
@@ -84,7 +84,7 @@ namespace NAPI
 
 		req.addHeaderField("Accept", "*/*");
 
-		if(authInfo.region == CafeConsoleRegion::USA)
+		if (authInfo.region == CafeConsoleRegion::USA)
 			req.addHeaderField("X-Nintendo-System-Version", "0270");
 		else
 			req.addHeaderField("X-Nintendo-System-Version", "0260");
@@ -102,7 +102,7 @@ namespace NAPI
 		req.addHeaderField("X-Nintendo-Country", authInfo.country);
 	}
 
-	struct OAuthTokenCacheEntry 
+	struct OAuthTokenCacheEntry
 	{
 		OAuthTokenCacheEntry(std::string_view accountId, std::array<uint8, 32>& passwordHash, std::string_view token, std::string_view refreshToken, uint64 expiresIn, NetworkService service) : accountId(accountId), passwordHash(passwordHash), token(token), refreshToken(refreshToken), service(service)
 		{
@@ -133,7 +133,7 @@ namespace NAPI
 	ACTOauthToken ACT_GetOauthToken_WithCache(AuthInfo& authInfo, uint64 titleId, uint16 titleVersion)
 	{
 		ACTOauthToken result{};
-		
+
 		// check cache first
 		NetworkService service = authInfo.GetService();
 		g_oauthTokenCacheMtx.lock();
@@ -289,7 +289,6 @@ namespace NAPI
 				result.apiError = NAPI_RESULT::SUCCESS;
 				g_nexTokenCacheMtx.unlock();
 				return result;
-
 			}
 		}
 		g_nexTokenCacheMtx.unlock();
@@ -428,7 +427,7 @@ namespace NAPI
 		// check cache
 		g_IndependentTokenCacheMtx.lock();
 		auto itr = g_IndependentTokenCache.begin();
-		while(itr != g_IndependentTokenCache.end())
+		while (itr != g_IndependentTokenCache.end())
 		{
 			if (itr->CheckIfExpired())
 			{
@@ -618,7 +617,7 @@ namespace NAPI
 			}
 			return false; // password hash not set
 		}
-		authInfo.deviceId = NCrypto::GetDeviceId();		
+		authInfo.deviceId = NCrypto::GetDeviceId();
 		authInfo.serial = NCrypto::GetSerial();
 		authInfo.region = NCrypto::SEEPROM_GetRegion();
 		authInfo.country = NCrypto::GetCountryAsString(account.GetCountry());
@@ -626,4 +625,4 @@ namespace NAPI
 
 		return true;
 	}
-}
+} // namespace NAPI

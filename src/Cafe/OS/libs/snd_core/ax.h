@@ -12,8 +12,8 @@ namespace snd_core
 	const int AX_RENDERER_FREQ_48KHZ = 1;
 	const int AX_FRAMELENGTH_3MS = 0;
 
-	const int AX_SAMPLES_PER_3MS_48KHZ = (144); // 48000*3/1000
-	const int AX_SAMPLES_PER_3MS_32KHZ = (96);  // 32000*3/1000
+	const int AX_SAMPLES_PER_3MS_48KHZ = (144);			 // 48000*3/1000
+	const int AX_SAMPLES_PER_3MS_32KHZ = (96);			 // 32000*3/1000
 	const int AX_SAMPLES_MAX = AX_SAMPLES_PER_3MS_48KHZ; // the maximum amount of samples in a single frame
 
 	const int AX_DEV_TV = 0;
@@ -28,8 +28,8 @@ namespace snd_core
 
 	struct AXINITPARAM
 	{
-		uint32be freq; // AX_RENDERER_FREQ_*
-		uint32be frameLength; // AX_FRAMELENGTH_*
+		uint32be freq;		   // AX_RENDERER_FREQ_*
+		uint32be frameLength;  // AX_FRAMELENGTH_*
 		uint32be pipelineMode; // AX_PIPELINE_*
 	};
 
@@ -37,7 +37,7 @@ namespace snd_core
 	const int AX_TV_CHANNEL_COUNT = 6;
 	const int AX_DRC_CHANNEL_COUNT = 4;
 	const int AX_RMT_CHANNEL_COUNT = 1;
-	
+
 	const int AX_APP_FRAME_CALLBACK_MAX = 64;
 
 	const int AX_MODE_STEREO = 0;
@@ -91,18 +91,18 @@ namespace snd_core
 
 	struct AXPBOFFSET_t
 	{
-		/* +0x00 | +0x34 */ uint16		format;
-		/* +0x02 | +0x36 */ uint16		loopFlag;
-		/* +0x04 | +0x38 */ uint32		loopOffset;
-		/* +0x08 | +0x3C */ uint32		endOffset;
-		/* +0x0C | +0x40 */ uint32		currentOffset;
-		/* +0x10 | +0x44 */ MPTR		samples;
+		/* +0x00 | +0x34 */ uint16 format;
+		/* +0x02 | +0x36 */ uint16 loopFlag;
+		/* +0x04 | +0x38 */ uint32 loopOffset;
+		/* +0x08 | +0x3C */ uint32 endOffset;
+		/* +0x0C | +0x40 */ uint32 currentOffset;
+		/* +0x10 | +0x44 */ MPTR samples;
 	};
 
 	struct AXPBVE
 	{
 		uint16be currentVolume;
-		sint16be currentDelta; 
+		sint16be currentDelta;
 	};
 
 	struct AXVPBItd
@@ -112,24 +112,24 @@ namespace snd_core
 
 	struct AXVPB
 	{
-		/* +0x00 */ uint32be			index;
-		/* +0x04 */ uint32be			playbackState;
-		/* +0x08 */ uint32be			ukn08;
-		/* +0x0C */ uint32be			mixerSelect;
-		/* +0x10 */ MEMPTR<AXVPB>		next;
-		/* +0x14 */ MEMPTR<AXVPB>		prev;
-		/* +0x18 */ uint32be			ukn18;
-		/* +0x1C */ uint32be			priority;
-		/* +0x20 */ uint32be			callback;
-		/* +0x24 */ uint32be			userParam;
-		/* +0x28 */ uint32be			sync;
-		/* +0x2C */ uint32be			depop;
-		/* +0x30 */ MEMPTR<AXVPBItd>	itd;
-		/* +0x34 */ AXPBOFFSET_t		offsets;
-		/* +0x48 */ uint32be			callbackEx; // AXAcquireVoiceEx
-		/* +0x4C */ uint32be			ukn4C_dropReason;
-		/* +0x50 */ float32be			dspLoad;
-		/* +0x54 */ float32be			ppcLoad;
+		/* +0x00 */ uint32be index;
+		/* +0x04 */ uint32be playbackState;
+		/* +0x08 */ uint32be ukn08;
+		/* +0x0C */ uint32be mixerSelect;
+		/* +0x10 */ MEMPTR<AXVPB> next;
+		/* +0x14 */ MEMPTR<AXVPB> prev;
+		/* +0x18 */ uint32be ukn18;
+		/* +0x1C */ uint32be priority;
+		/* +0x20 */ uint32be callback;
+		/* +0x24 */ uint32be userParam;
+		/* +0x28 */ uint32be sync;
+		/* +0x2C */ uint32be depop;
+		/* +0x30 */ MEMPTR<AXVPBItd> itd;
+		/* +0x34 */ AXPBOFFSET_t offsets;
+		/* +0x48 */ uint32be callbackEx; // AXAcquireVoiceEx
+		/* +0x4C */ uint32be ukn4C_dropReason;
+		/* +0x50 */ float32be dspLoad;
+		/* +0x54 */ float32be ppcLoad;
 	};
 
 	struct AXPBLPF_t
@@ -160,7 +160,7 @@ namespace snd_core
 		/* +0x04 */ uint32be channelOut;
 		/* +0x08 */ MEMPTR<float32be> matrix;
 	};
-	
+
 	struct AXRemixMatrices_t
 	{
 		/* +0x00 */ AXRemixMatrix_t deviceEntry[3]; // tv, drc, remote
@@ -209,7 +209,7 @@ namespace snd_core
 	};
 
 	void AXVPB_Init();
-    void AXResetToDefaultState();
+	void AXResetToDefaultState();
 
 	sint32 AXIsValidDevice(sint32 device, sint32 deviceIndex);
 
@@ -304,7 +304,7 @@ namespace snd_core
 	void AXAux_Init();
 
 	void AXAux_Process();
-	
+
 	sint32be* AXAux_GetInputBuffer(sint32 device, sint32 deviceIndex, sint32 auxBus);
 	sint32be* AXAux_GetOutputBuffer(sint32 device, sint32 deviceIndex, sint32 auxBus);
 
@@ -387,11 +387,11 @@ namespace snd_core
 	void AXSetMultiVoiceState(AXVPBMULTI* mv, uint16 state);
 	void AXSetMultiVoiceAdpcmLoop(AXVPBMULTI* mv, AXPBADPCMLOOP_t* loops);
 	sint32 AXIsMultiVoiceRunning(AXVPBMULTI* mv);
-	
+
 	void AXOut_init();
 	void AXOut_reset();
 	void AXOut_update();
 
 	COSModule* GetModuleSndCore1();
 	COSModule* GetModuleSndCore2();
-}
+} // namespace snd_core

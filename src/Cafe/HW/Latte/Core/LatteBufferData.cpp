@@ -27,8 +27,10 @@ void rectGenerate4thVertex(uint32be* output, uint32be* input0, uint32be* input1,
 
 	float minX = std::min(v[vectorLen * 0 + 0], std::min(v[vectorLen * 1 + 0], v[vectorLen * 2 + 0]));
 	float maxX = std::max(v[vectorLen * 0 + 0], std::max(v[vectorLen * 1 + 0], v[vectorLen * 2 + 0]));
-	float minY = std::min(v[vectorLen * 0 + 1], std::min(v[vectorLen * 1 + 1], v[vectorLen * 2 + 1]));;
-	float maxY = std::max(v[vectorLen * 0 + 1], std::max(v[vectorLen * 1 + 1], v[vectorLen * 2 + 1]));;
+	float minY = std::min(v[vectorLen * 0 + 1], std::min(v[vectorLen * 1 + 1], v[vectorLen * 2 + 1]));
+	;
+	float maxY = std::max(v[vectorLen * 0 + 1], std::max(v[vectorLen * 1 + 1], v[vectorLen * 2 + 1]));
+	;
 
 	float totalX = minX;
 	totalX += maxY;
@@ -66,7 +68,7 @@ void rectGenerate4thVertex(uint32be* output, uint32be* input0, uint32be* input1,
 	// v0 v1
 	// v2 v3
 
-	for (sint32 f = 0; f < vectorLen*4; f++)
+	for (sint32 f = 0; f < vectorLen * 4; f++)
 		output[f] = _swapEndianU32(output[f]);
 }
 
@@ -113,7 +115,7 @@ bool LatteBufferCache_LoadRemappedUniforms(LatteDecompilerShader* shader, float*
 	{
 		for (auto& bufferGroup : shader->list_remappedUniformEntries_bufferGroups)
 		{
-			if ((uniformBufferDirtyMask&(1<<bufferGroup.bufferId)) == 0)
+			if ((uniformBufferDirtyMask & (1 << bufferGroup.bufferId)) == 0)
 				continue;
 			MPTR physicalAddr = LatteGPUState.contextRegister[shaderUniformRegisterOffset + bufferGroup.kcacheBankIdOffset / 4];
 			if (physicalAddr)
@@ -145,10 +147,10 @@ bool LatteBufferCache_syncGPUUniformBuffers(LatteDecompilerShader* shader, const
 {
 	cemu_assert_debug(shader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK);
 	bool hasChange = false;
-	for(const auto& buf : shader->list_quickBufferList)
+	for (const auto& buf : shader->list_quickBufferList)
 	{
 		sint32 i = buf.index;
-		if ((bufferDirtyMask&(1<<i)) == 0)
+		if ((bufferDirtyMask & (1 << i)) == 0)
 			continue;
 		hasChange = true;
 		MPTR physicalAddr = LatteGPUState.contextRegister[uniformBufferRegOffset + i * 7 + 0];
@@ -196,12 +198,12 @@ void LatteBufferCache_Sync(uint32 maxIndex, uint32 baseInstance, uint32 instance
 		// dont process flush queue and dont process deallocations yet, we are in the middle of a sequence of drawcalls that (most likely) reuse previous bindings
 		uint32 maxInstance = baseInstance + instanceCount - 1;
 		bool hasBufferChange = attribBufferDirtyMask != 0;
-		if ( maxIndex > s_vtxStateMaxIndex )
+		if (maxIndex > s_vtxStateMaxIndex)
 		{
 			attribBufferDirtyMask = 0xFFFFFFFF;
 			s_vtxStateMaxIndex = maxIndex;
 		}
-		if ( maxInstance > s_vtxStateMaxInstance )
+		if (maxInstance > s_vtxStateMaxInstance)
 		{
 			attribBufferDirtyMask = 0xFFFFFFFF;
 			s_vtxStateMaxInstance = maxInstance;
@@ -228,7 +230,7 @@ void LatteBufferCache_Sync(uint32 maxIndex, uint32 baseInstance, uint32 instance
 		for (auto& bufferGroup : parsedFetchShader->bufferGroups)
 		{
 			uint32 bufferIndex = bufferGroup.attributeBufferIndex;
-			if ((attribBufferDirtyMask&(1<<bufferIndex)) == 0)
+			if ((attribBufferDirtyMask & (1 << bufferIndex)) == 0)
 				continue;
 			uint32* __restrict bufferRegs = bufferRegStartPtr + bufferIndex * 7;
 			MPTR bufferAddress = bufferRegs[0];
@@ -252,9 +254,8 @@ void LatteBufferCache_Sync(uint32 maxIndex, uint32 baseInstance, uint32 instance
 			if (fixedBufferSize == 0 || bufferStride == 0)
 				fixedBufferSize += 128;
 
-
 #if BOOST_OS_MACOS && defined(ENABLE_VULKAN)
-			if(bufferStride % 4 != 0)
+			if (bufferStride % 4 != 0)
 			{
 				if (g_renderer->GetType() == RendererAPI::Vulkan)
 				{
@@ -280,16 +281,16 @@ void LatteBufferCache_Sync(uint32 maxIndex, uint32 baseInstance, uint32 instance
 	if (vertexShader && vertexShader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK)
 	{
 		if (LatteBufferCache_syncGPUUniformBuffers(vertexShader, mmSQ_VTX_UNIFORM_BLOCK_START, LatteConst::ShaderType::Vertex, vsUniformBufferDirtyMask))
-			stageUniformModifiedMask |= (1<<VulkanRendererConst::SHADER_STAGE_INDEX_VERTEX);
+			stageUniformModifiedMask |= (1 << VulkanRendererConst::SHADER_STAGE_INDEX_VERTEX);
 	}
 	if (pixelShader && pixelShader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK)
 	{
 		if (LatteBufferCache_syncGPUUniformBuffers(pixelShader, mmSQ_PS_UNIFORM_BLOCK_START, LatteConst::ShaderType::Pixel, psUniformBufferDirtyMask))
-			stageUniformModifiedMask |= (1<<VulkanRendererConst::SHADER_STAGE_INDEX_FRAGMENT); // todo - move this enum to Latte?
+			stageUniformModifiedMask |= (1 << VulkanRendererConst::SHADER_STAGE_INDEX_FRAGMENT); // todo - move this enum to Latte?
 	}
 	if (geometryShader && geometryShader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_FULL_CBANK)
 	{
-		if ( LatteBufferCache_syncGPUUniformBuffers(geometryShader, mmSQ_GS_UNIFORM_BLOCK_START, LatteConst::ShaderType::Geometry, gsUniformBufferDirtyMask) )
-			stageUniformModifiedMask |= (1<<VulkanRendererConst::SHADER_STAGE_INDEX_GEOMETRY);
+		if (LatteBufferCache_syncGPUUniformBuffers(geometryShader, mmSQ_GS_UNIFORM_BLOCK_START, LatteConst::ShaderType::Geometry, gsUniformBufferDirtyMask))
+			stageUniformModifiedMask |= (1 << VulkanRendererConst::SHADER_STAGE_INDEX_GEOMETRY);
 	}
 }

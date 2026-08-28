@@ -10,23 +10,23 @@
 #include <wx/glcanvas.h> // this includes GL/gl.h, avoid using this in a header because it would contaminate our own OpenGL definitions (GLInclude)
 
 static const int g_gl_attribute_list[] =
-{
-	WX_GL_RGBA,
-	WX_GL_DOUBLEBUFFER,
-	WX_GL_DEPTH_SIZE, 16,
+	{
+		WX_GL_RGBA,
+		WX_GL_DOUBLEBUFFER,
+		WX_GL_DEPTH_SIZE, 16,
 
-	WX_GL_MIN_RED, 8,
-	WX_GL_MIN_GREEN, 8,
-	WX_GL_MIN_BLUE, 8,
-	WX_GL_MIN_ALPHA, 8,
+		WX_GL_MIN_RED, 8,
+		WX_GL_MIN_GREEN, 8,
+		WX_GL_MIN_BLUE, 8,
+		WX_GL_MIN_ALPHA, 8,
 
-	WX_GL_STENCIL_SIZE, 8,
+		WX_GL_STENCIL_SIZE, 8,
 
-	//WX_GL_MAJOR_VERSION, 4,
-	//WX_GL_MINOR_VERSION, 1,
-	//wx_GL_COMPAT_PROFILE,
+		// WX_GL_MAJOR_VERSION, 4,
+		// WX_GL_MINOR_VERSION, 1,
+		// wx_GL_COMPAT_PROFILE,
 
-	0, // end of list
+		0, // end of list
 };
 
 class OpenGLCanvas;
@@ -85,10 +85,10 @@ class GLCanvasManager : public OpenGLCanvasCallbacks
 
 class OpenGLCanvas : public IRenderCanvas, public wxGLCanvas
 {
-public:
+  public:
 	OpenGLCanvas(wxWindow* parent, const wxSize& size, bool is_main_window,
-		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+				 std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+				 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 		: IRenderCanvas(is_main_window), wxGLCanvas(parent, wxID_ANY, g_gl_attribute_list, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS)
 	{
 		if (m_is_main_window)
@@ -128,10 +128,10 @@ public:
 	{
 		int configValue = GetConfig().vsync.GetValue();
 		configValue = configValue > 0 ? 1 : 0;
-		if(m_activeVSyncState != configValue)
+		if (m_activeVSyncState != configValue)
 		{
 #if BOOST_OS_WINDOWS
-			if(wglSwapIntervalEXT)
+			if (wglSwapIntervalEXT)
 				wglSwapIntervalEXT(configValue); // 1 = enabled, 0 = disabled
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
 			if (eglSwapInterval)
@@ -148,18 +148,18 @@ public:
 		}
 	}
 
-private:
+  private:
 	int m_activeVSyncState = -1;
 	bool m_preparedForDestroy{};
-	//wxGLContext* m_context = nullptr;
+	// wxGLContext* m_context = nullptr;
 };
 
 wxWindow* GLCanvas_Create(wxWindow* parent, const wxSize& size, bool is_main_window,
-	std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+						  std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+						  std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 {
 	return new OpenGLCanvas(parent, size, is_main_window,
-		std::move(windowMetrics), std::move(nativeSurfaces));
+							std::move(windowMetrics), std::move(nativeSurfaces));
 }
 
 void GLCanvasManager::SwapBuffers(bool swapTV, bool swapDRC)

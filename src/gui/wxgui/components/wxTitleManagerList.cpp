@@ -30,10 +30,10 @@ wxDEFINE_EVENT(wxEVT_TITLE_SEARCH_COMPLETE, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_REMOVE_ENTRY, wxCommandEvent);
 
 wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
-	Application::EmulationController& emulationController,
-	std::shared_ptr<IWxUiDispatcher> uiDispatcher,
-	std::shared_ptr<Host::IPathProvider> pathProvider,
-	std::function<void(fs::path)> requestLaunch, wxWindowID id)
+									   Application::EmulationController& emulationController,
+									   std::shared_ptr<IWxUiDispatcher> uiDispatcher,
+									   std::shared_ptr<Host::IPathProvider> pathProvider,
+									   std::function<void(fs::path)> requestLaunch, wxWindowID id)
 	: wxListView(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_VIRTUAL),
 	  m_emulationController(emulationController),
 	  m_uiDispatcher(std::move(uiDispatcher)),
@@ -48,7 +48,7 @@ wxTitleManagerList::wxTitleManagerList(wxWindow* parent,
 	m_tooltip_window = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNO_BORDER);
 	auto* tooltip_sizer = new wxBoxSizer(wxVERTICAL);
 	m_tooltip_text = new wxStaticText(m_tooltip_window, wxID_ANY, wxEmptyString);
-	tooltip_sizer->Add(m_tooltip_text , 0, wxALL, 5);
+	tooltip_sizer->Add(m_tooltip_text, 0, wxALL, 5);
 	m_tooltip_window->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INFOBK));
 	m_tooltip_window->SetSizerAndFit(tooltip_sizer);
 	m_tooltip_window->Hide();
@@ -88,8 +88,7 @@ wxTitleManagerList::~wxTitleManagerList()
 		try
 		{
 			(void)m_conversionWorker.get();
-		}
-		catch (...)
+		} catch (...)
 		{
 		}
 	}
@@ -121,7 +120,7 @@ boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetSelected
 	return {};
 }
 
-//boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetTitleEntry(EntryType type, uint64 titleid)
+// boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetTitleEntry(EntryType type, uint64 titleid)
 //{
 //	for(const auto& v : m_data)
 //	{
@@ -130,7 +129,7 @@ boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetSelected
 //	}
 //
 //	return {};
-//}
+// }
 
 boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetTitleEntryByUID(uint64 uid)
 {
@@ -221,7 +220,7 @@ boost::optional<wxTitleManagerList::TitleEntry&> wxTitleManagerList::GetTitleEnt
 
 		return data.get().entry;
 	}
-	
+
 	return {};
 }
 
@@ -272,7 +271,10 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	struct ActiveReset
 	{
 		std::atomic_bool& active;
-		~ActiveReset() { active.store(false, std::memory_order_release); }
+		~ActiveReset()
+		{
+			active.store(false, std::memory_order_release);
+		}
 	} activeReset{m_conversionActive};
 	m_conversionCancelled.store(false, std::memory_order_release);
 
@@ -280,19 +282,19 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	if (!plan || plan->items.empty())
 	{
 		wxMessageBox(_("No installed content was found for conversion."), _("Error"),
-			wxOK | wxCENTRE | wxICON_ERROR, this);
+					 wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 
 	auto findItem = [&plan](Application::ContentRole role) -> const Application::WuaContentItem* {
 		const auto found = std::ranges::find_if(plan->items,
-			[role](const auto& item) { return item.role == role; });
+												[role](const auto& item) { return item.role == role; });
 		return found == plan->items.end() ? nullptr : &*found;
 	};
 	auto appendItem = [](wxString& message, const wxString& label,
-		const Application::WuaContentItem* item) {
+						 const Application::WuaContentItem* item) {
 		message.append(formatWxString("{}:\n{}", label,
-			item ? wxString::FromUTF8(item->displayPath) : _("Not installed")));
+									  item ? wxString::FromUTF8(item->displayPath) : _("Not installed")));
 	};
 	wxString message = _("The following content will be converted to a compressed Wii U archive file (.wua):");
 	message.append("\n \n");
@@ -301,23 +303,17 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	appendItem(message, _("Update"), findItem(Application::ContentRole::Update));
 	message.append("\n\n");
 	appendItem(message, _("DLC"), findItem(Application::ContentRole::Dlc));
-	if (wxMessageBox(message, _("Confirmation"), wxOK | wxCANCEL | wxCENTRE |
-		wxICON_QUESTION, this) != wxOK)
+	if (wxMessageBox(message, _("Confirmation"), wxOK | wxCANCEL | wxCENTRE | wxICON_QUESTION, this) != wxOK)
 		return;
 
 	std::string defaultDirectory;
 	if (!GetConfig().game_paths.empty())
 		defaultDirectory = GetConfig().game_paths.front();
 	wxFileDialog saveDialog(this, _("Save Wii U game archive file"), defaultDirectory,
-		wxString::FromUTF8(plan->suggestedFileName), "WUA files (*.wua)|*.wua",
-		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+							wxString::FromUTF8(plan->suggestedFileName), "WUA files (*.wua)|*.wua",
+							wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveDialog.ShowModal() == wxID_CANCEL || saveDialog.GetPath().IsEmpty())
 		return;
-
-	std::vector<std::uint64_t> locationUids;
-	locationUids.reserve(plan->items.size());
-	for (const auto& item : plan->items)
-		locationUids.push_back(item.locationUid);
 
 	struct SharedProgress
 	{
@@ -327,17 +323,15 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	const auto outputPath = wxHelper::MakeFSPath(saveDialog.GetPath());
 	auto* controller = &m_emulationController;
 	m_conversionWorker = std::async(std::launch::async,
-		[controller, locationUids = std::move(locationUids), outputPath, &sharedProgress,
-			cancelled = &m_conversionCancelled] {
-			return controller->ConvertToWua(locationUids, outputPath,
-				[&sharedProgress](const auto& progress) {
+									[controller, plan = *plan, outputPath, &sharedProgress,
+									 cancelled = &m_conversionCancelled] {
+										return controller->ConvertToWua(plan, outputPath, [&sharedProgress](const auto& progress) {
 					std::scoped_lock lock(sharedProgress.mutex);
-					sharedProgress.value = progress;
-				}, [cancelled] { return cancelled->load(std::memory_order_acquire); });
-		});
+					sharedProgress.value = progress; }, [cancelled] { return cancelled->load(std::memory_order_acquire); });
+									});
 
 	wxGenericProgressDialog progressDialog(_("Converting to .wua"), _("Counting files..."),
-		100, this, wxPD_CAN_ABORT);
+										   100, this, wxPD_CAN_ABORT);
 	progressDialog.Show();
 	while (!future_is_ready(m_conversionWorker))
 	{
@@ -359,9 +353,9 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 		{
 			if (progress.bytesTotal != 0)
 				percent = static_cast<std::uint32_t>(std::min<std::uint64_t>(99,
-					progress.bytesCompleted * 100 / progress.bytesTotal));
+																			 progress.bytesCompleted * 100 / progress.bytesTotal));
 			status = formatWxString(_("Converting files... ({0}MiB/{1}MiB)"),
-				progress.bytesCompleted / 1024 / 1024, progress.bytesTotal / 1024 / 1024);
+									progress.bytesCompleted / 1024 / 1024, progress.bytesTotal / 1024 / 1024);
 		}
 		else
 		{
@@ -377,15 +371,13 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	try
 	{
 		result = m_conversionWorker.get();
-	}
-	catch (const std::exception& exception)
+	} catch (const std::exception& exception)
 	{
 		result = {Application::ContentOperationError::ReadFailure, exception.what()};
-	}
-	catch (...)
+	} catch (...)
 	{
 		result = {Application::ContentOperationError::ReadFailure,
-			"Unknown archive conversion failure"};
+				  "Unknown archive conversion failure"};
 	}
 	progressDialog.Hide();
 	if (result.error == Application::ContentOperationError::Cancelled)
@@ -393,11 +385,11 @@ void wxTitleManagerList::RunWuaConversion(uint64 titleId, uint64 rightClickedUID
 	if (!result)
 	{
 		wxMessageBox(wxString::FromUTF8(result.diagnostic), _("Conversion failed"),
-			wxOK | wxCENTRE | wxICON_ERROR, this);
+					 wxOK | wxCENTRE | wxICON_ERROR, this);
 		return;
 	}
 	wxMessageBox(_("Conversion finished\n"), _("Complete"),
-		wxOK | wxCENTRE | wxICON_INFORMATION, this);
+				 wxOK | wxCENTRE | wxICON_INFORMATION, this);
 }
 
 void wxTitleManagerList::OnConvertToCompressedFormat(uint64 titleId, uint64 rightClickedUID)
@@ -434,7 +426,7 @@ void wxTitleManagerList::RemoveItem(long item)
 
 	const ItemData* ref = nullptr;
 	long counter = 0;
-	for(auto it = m_sorted_data.begin(); it != m_sorted_data.end(); ++it)
+	for (auto it = m_sorted_data.begin(); it != m_sorted_data.end(); ++it)
 	{
 		if (!it->get().visible)
 			continue;
@@ -450,12 +442,12 @@ void wxTitleManagerList::RemoveItem(long item)
 	// shouldn't happen
 	if (ref == nullptr)
 		return;
-	
-	for(auto it = m_data.begin(); it != m_data.end(); ++it)
+
+	for (auto it = m_data.begin(); it != m_data.end(); ++it)
 	{
 		if (ref != (*it).get())
 			continue;
-		
+
 		m_data.erase(it);
 		break;
 	}
@@ -513,28 +505,28 @@ void wxTitleManagerList::OnItemSelected(wxListEvent& event)
 	m_tooltip_window->Hide();
 	return;
 
-	//const auto mouse_position = wxGetMousePosition() - GetScreenPosition();
-	//m_tooltip_window->SetPosition(wxPoint(mouse_position.x + 15, mouse_position.y + 15));
+	// const auto mouse_position = wxGetMousePosition() - GetScreenPosition();
+	// m_tooltip_window->SetPosition(wxPoint(mouse_position.x + 15, mouse_position.y + 15));
 
-	//wxString msg;
-	//switch(entry->error)
+	// wxString msg;
+	// switch(entry->error)
 	//{
-	//case TitleError::WrongBaseLocation:
+	// case TitleError::WrongBaseLocation:
 	//	msg = _("This base game is installed at the wrong location.");
 	//	break;
-	//case TitleError::WrongUpdateLocation:
+	// case TitleError::WrongUpdateLocation:
 	//	msg = _("This update is installed at the wrong location.");
 	//	break;
-	//case TitleError::WrongDlcLocation:
+	// case TitleError::WrongDlcLocation:
 	//	msg = _("This DLC is installed at the wrong location.");
 	//	break;
-	//default:
+	// default:
 	//	return;;
-	//}
+	// }
 
-	//m_tooltip_text->SetLabel(formatWxString("{}\n{}", msg, _("You can use the context menu to fix it.")));
-	//m_tooltip_window->Fit();
-	//m_tooltip_timer->StartOnce(250);
+	// m_tooltip_text->SetLabel(formatWxString("{}\n{}", msg, _("You can use the context menu to fix it.")));
+	// m_tooltip_window->Fit();
+	// m_tooltip_timer->StartOnce(250);
 }
 
 enum ContextMenuEntries
@@ -550,7 +542,7 @@ void wxTitleManagerList::OnContextMenu(wxContextMenuEvent& event)
 	// still doing work
 	if (m_context_worker.valid() && !future_is_ready(m_context_worker))
 		return;
-	
+
 	wxMenu menu;
 	menu.Bind(wxEVT_COMMAND_MENU_SELECTED, &wxTitleManagerList::OnContextMenuSelected, this);
 
@@ -562,9 +554,9 @@ void wxTitleManagerList::OnContextMenu(wxContextMenuEvent& event)
 	if (!entry.has_value())
 		return;
 
-	if(entry->type == EntryType::Base)
+	if (entry->type == EntryType::Base)
 		menu.Append(kContextMenuLaunch, _("&Launch title"));
-	
+
 	menu.Append(kContextMenuOpenDirectory, _("&Open directory"));
 	if (entry->type != EntryType::Save)
 		menu.Append(kContextMenuVerifyGameFiles, _("&Verify integrity of game files"));
@@ -577,10 +569,10 @@ void wxTitleManagerList::OnContextMenu(wxContextMenuEvent& event)
 
 		menu.AppendSeparator();
 	}
-	menu.Append(kContextMenuDelete, _("&Delete"));	
+	menu.Append(kContextMenuDelete, _("&Delete"));
 
 	PopupMenu(&menu);
-	
+
 	// TODO: fix tooltip position
 }
 
@@ -588,18 +580,18 @@ bool wxTitleManagerList::DeleteEntry(long index, const TitleEntry& entry)
 {
 	wxDTorFunc reset_text(wxQueueEvent, this, new wxSetStatusBarTextEvent(wxEmptyString, 1));
 	wxQueueEvent(this, new wxSetStatusBarTextEvent("Deleting entry...", 1));
-	
+
 	wxString msg;
 	const bool is_directory = fs::is_directory(entry.path);
-	if(is_directory)
+	if (is_directory)
 		msg = formatWxString(_("Are you really sure that you want to delete the following folder:\n{}"), _pathToUtf8(entry.path));
 	else
 		msg = formatWxString(_("Are you really sure that you want to delete the following file:\n{}"), _pathToUtf8(entry.path));
-	
+
 	const auto result = wxMessageBox(msg, _("Warning"), wxYES_NO | wxCENTRE | wxICON_EXCLAMATION, this);
 	if (result == wxNO)
 		return false;
-				
+
 	std::error_code ec;
 	if (is_directory)
 	{
@@ -620,23 +612,22 @@ bool wxTitleManagerList::DeleteEntry(long index, const TitleEntry& entry)
 			// delete meta, user folders first
 			const auto meta = entry.path / "meta";
 			fs::remove_all(meta, ec);
-			
+
 			const auto user = entry.path / "user";
 			fs::remove_all(user, ec);
 		}
-		
 
 		// check if folder is empty
-		if(fs::is_empty(entry.path, ec))
+		if (fs::is_empty(entry.path, ec))
 			fs::remove_all(entry.path, ec);
-	}	
+	}
 	else // simply remove file
 		fs::remove(entry.path, ec);
-	
-	if(ec)
+
+	if (ec)
 	{
 		const auto error_msg = formatWxString(_("Error when trying to delete the entry:\n{}"), GetSystemErrorMessage(ec));
-		wxMessageBox(error_msg, _("Error"), wxOK|wxCENTRE, this);
+		wxMessageBox(error_msg, _("Error"), wxOK | wxCENTRE, this);
 		return false;
 	}
 
@@ -660,44 +651,45 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 	const auto entry = GetTitleEntry(selection);
 	if (!entry.has_value())
 		return;
-	
+
 	switch (event.GetId())
 	{
 	case kContextMenuOpenDirectory:
-		{
-			const auto path = fs::is_directory(entry->path) ? entry->path : entry->path.parent_path();
-			wxLaunchDefaultApplication(wxHelper::FromPath(path));
-		}
-		break;
+	{
+		const auto path = fs::is_directory(entry->path) ? entry->path : entry->path.parent_path();
+		wxLaunchDefaultApplication(wxHelper::FromPath(path));
+	}
+	break;
 	case kContextMenuDelete:
 		m_context_worker = std::async(std::launch::async, &wxTitleManagerList::DeleteEntry, this, selection, entry.value());
 		break;
 	case kContextMenuLaunch:
+	{
+		try
 		{
-			try
-			{
-				m_requestLaunch(entry->path);
-				Close();
-			}
-			catch (const std::exception& ex)
-			{
-				cemuLog_log(LogType::Force, "wxTitleManagerList::OnContextMenuSelected: can't launch title: {}", ex.what());
-			}
+			m_requestLaunch(entry->path);
+			Close();
+		} catch (const std::exception& ex)
+		{
+			cemuLog_log(LogType::Force, "wxTitleManagerList::OnContextMenuSelected: can't launch title: {}", ex.what());
 		}
-		break;
+	}
+	break;
 	case kContextMenuVerifyGameFiles:
 		(new ChecksumTool(this, m_emulationController, Application::ManagedContentEntry{
-			.locationUid = entry->location_uid,
-			.titleId = entry->title_id,
-			.path = entry->path,
-			.name = entry->name.ToStdString(),
-			.version = entry->version,
-			.region = entry->region,
-			.regionName = entry->region_name.ToStdString(),
-		}, m_pathProvider))->Show();
+														   .locationUid = entry->location_uid,
+														   .titleId = entry->title_id,
+														   .path = entry->path,
+														   .name = entry->name.ToStdString(),
+														   .version = entry->version,
+														   .region = entry->region,
+														   .regionName = entry->region_name.ToStdString(),
+													   },
+						  m_pathProvider))
+			->Show();
 		break;
 	case kContextMenuConvertToWUA:
-		
+
 		OnConvertToCompressedFormat(entry.value().title_id, entry.value().location_uid);
 		break;
 	}
@@ -705,7 +697,7 @@ void wxTitleManagerList::OnContextMenuSelected(wxCommandEvent& event)
 
 void wxTitleManagerList::OnTimer(wxTimerEvent& event)
 {
-	if(event.GetTimer().GetId() != m_tooltip_timer->GetId())
+	if (event.GetTimer().GetId() != m_tooltip_timer->GetId())
 	{
 		event.Skip();
 		return;
@@ -730,7 +722,7 @@ wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColu
 	switch (column)
 	{
 	case ColumnTitleId:
-		return formatWxString("{:08x}-{:08x}", (uint32) (entry.title_id >> 32), (uint32) (entry.title_id & 0xFFFFFFFF));
+		return formatWxString("{:08x}-{:08x}", (uint32)(entry.title_id >> 32), (uint32)(entry.title_id & 0xFFFFFFFF));
 	case ColumnName:
 		return entry.name;
 	case ColumnType:
@@ -769,7 +761,7 @@ wxString wxTitleManagerList::GetTitleEntryText(const TitleEntry& entry, ItemColu
 	default:
 		UNREACHABLE;
 	}
-	
+
 	return wxEmptyString;
 }
 
@@ -777,18 +769,18 @@ wxString wxTitleManagerList::GetTranslatedTitleEntryType(EntryType type)
 {
 	switch (type)
 	{
-		case EntryType::Base:
-			return _("base");
-		case EntryType::Update:
-			return _("update");
-		case EntryType::Dlc:
-			return _("DLC");
-		case EntryType::Save:
-			return _("save");
-		case EntryType::System:
-			return _("system");
-		default:
-			return std::to_string(static_cast<std::underlying_type_t<EntryType>>(type));
+	case EntryType::Base:
+		return _("base");
+	case EntryType::Update:
+		return _("update");
+	case EntryType::Dlc:
+		return _("DLC");
+	case EntryType::Save:
+		return _("save");
+	case EntryType::System:
+		return _("system");
+	default:
+		return std::to_string(static_cast<std::underlying_type_t<EntryType>>(type));
 	}
 }
 
@@ -830,7 +822,7 @@ namespace
 			return wxTitleManagerList::EntryFormat::Folder;
 		}
 	}
-}
+} // namespace
 
 void wxTitleManagerList::HandleTitleCatalogEvent(
 	const Application::TitleCatalogEvent& event)
@@ -848,7 +840,7 @@ void wxTitleManagerList::HandleTitleCatalogEvent(
 
 	const auto& managed = *event.managedEntry;
 	TitleEntry entry(ToWxEntryType(managed.type), ToWxEntryFormat(managed.format),
-		managed.path);
+					 managed.path);
 	entry.location_uid = managed.locationUid;
 	entry.title_id = managed.titleId;
 	entry.name = wxString::FromUTF8(managed.name);
@@ -857,7 +849,7 @@ void wxTitleManagerList::HandleTitleCatalogEvent(
 	entry.region_name = wxString::FromUTF8(managed.regionName);
 
 	const bool removed = event.type == Application::TitleCatalogEventType::Removed ||
-		event.type == Application::TitleCatalogEventType::SaveRemoved;
+						 event.type == Application::TitleCatalogEventType::SaveRemoved;
 	wxCommandEvent command(removed ? wxEVT_TITLE_REMOVED : wxEVT_TITLE_FOUND);
 	command.SetEventObject(this);
 	command.SetClientObject(new wxCustomData(entry));
@@ -915,53 +907,53 @@ bool wxTitleManagerList::SortFunc(int column, const Type_t& v1, const Type_t& v2
 
 	const auto& entry1 = v1.get().entry;
 	const auto& entry2 = v2.get().entry;
-	
+
 	// check column: title id -> type -> path
 	if (column == ColumnTitleId)
 	{
 		// ensure strong ordering -> use type since only one entry should be now (should be changed if every save for every user is displayed separately?)
 		if (entry1.title_id == entry2.title_id)
 			return SortFunc(ColumnType, v1, v2);
-		
+
 		return entry1.title_id < entry2.title_id;
 	}
 	else if (column == ColumnName)
 	{
 		const int tmp = entry1.name.CmpNoCase(entry2.name);
-		if(tmp == 0)
+		if (tmp == 0)
 			return SortFunc(ColumnTitleId, v1, v2);
-			
+
 		return tmp < 0;
 	}
 	else if (column == ColumnType)
 	{
-		if(entry1.type == entry2.type)
+		if (entry1.type == entry2.type)
 			return SortFunc(-1, v1, v2);
-		
+
 		return std::underlying_type_t<EntryType>(entry1.type) < std::underlying_type_t<EntryType>(entry2.type);
 	}
 	else if (column == ColumnVersion)
 	{
-		if(entry1.version == entry2.version)
+		if (entry1.version == entry2.version)
 			return SortFunc(ColumnTitleId, v1, v2);
 
 		return entry1.version < entry2.version;
 	}
 	else if (column == ColumnRegion)
 	{
-		if(entry1.region == entry2.region)
+		if (entry1.region == entry2.region)
 			return SortFunc(ColumnTitleId, v1, v2);
 
 		return entry1.region < entry2.region;
 	}
 	else if (column == ColumnFormat)
 	{
-		if(entry1.format == entry2.format)
+		if (entry1.format == entry2.format)
 			return SortFunc(ColumnType, v1, v2);
 
 		return std::underlying_type_t<EntryFormat>(entry1.format) < std::underlying_type_t<EntryFormat>(entry2.format);
 	}
-		
+
 	return false;
 }
 void wxTitleManagerList::SortEntries(int column)
@@ -1001,7 +993,7 @@ int wxTitleManagerList::Filter(const wxString& filter, const wxString& prefix, I
 {
 	if (prefix.empty())
 		return -1;
-	
+
 	if (!filter.StartsWith(prefix))
 		return -1;
 
@@ -1022,7 +1014,7 @@ int wxTitleManagerList::Filter(const wxString& filter, const wxString& prefix, I
 
 void wxTitleManagerList::Filter(const wxString& filter)
 {
-	if(filter.empty())
+	if (filter.empty())
 	{
 		std::for_each(m_data.begin(), m_data.end(), [](ItemDataPtr& data) { data->visible = true; });
 		SetItemCount(m_data.size());
@@ -1032,7 +1024,7 @@ void wxTitleManagerList::Filter(const wxString& filter)
 
 	const auto filter_upper = filter.Upper().Trim(false).Trim(true);
 	int counter = 0;
-	
+
 	if (const auto result = Filter(filter_upper, "TITLEID:", ColumnTitleId) != -1)
 		counter = result;
 	else if (const auto result = Filter(filter_upper, "NAME:", ColumnName) != -1)
@@ -1045,7 +1037,7 @@ void wxTitleManagerList::Filter(const wxString& filter)
 		counter = result;
 	else if (const auto result = Filter(filter_upper, "FORMAT:", ColumnFormat) != -1)
 		counter = result;
-	else if(filter_upper == "ERROR")
+	else if (filter_upper == "ERROR")
 	{
 		for (auto&& data : m_data)
 		{
@@ -1072,7 +1064,7 @@ void wxTitleManagerList::Filter(const wxString& filter)
 				++counter;
 		}
 	}
-	
+
 	SetItemCount(counter);
 	RefreshPage();
 }
@@ -1080,7 +1072,7 @@ void wxTitleManagerList::Filter(const wxString& filter)
 size_t wxTitleManagerList::GetCountByType(EntryType type) const
 {
 	size_t result = 0;
-	for(const auto& data : m_data)
+	for (const auto& data : m_data)
 	{
 		if (data->entry.type == type)
 			++result;

@@ -5,8 +5,8 @@
 // global active settings for fast access (reflects settings from command line and game profile)
 class ActiveSettings
 {
-private:
-	template <typename ...TArgs>
+  private:
+	template<typename... TArgs>
 	static fs::path GetPath(const fs::path& path, std::string_view format, TArgs&&... args)
 	{
 		cemu_assert_debug(format.empty() || (format[0] != '/' && format[0] != '\\'));
@@ -14,13 +14,13 @@ private:
 		return path / _utf8ToPath(tmpPathStr);
 	}
 
-	template <typename ...TArgs>
+	template<typename... TArgs>
 	static fs::path GetPath(const fs::path& path, std::wstring_view format, TArgs&&... args)
 	{
 		cemu_assert_debug(format.empty() || (format[0] != L'/' && format[0] != L'\\'));
 		return path / fmt::format(fmt::runtime(format), std::forward<TArgs>(args)...);
 	}
-	static fs::path GetPath(const fs::path& path, std::string_view p) 
+	static fs::path GetPath(const fs::path& path, std::string_view p)
 	{
 		std::basic_string_view<char8_t> s((const char8_t*)p.data(), p.size());
 		return path / fs::path(s);
@@ -30,41 +30,62 @@ private:
 		return path;
 	}
 
-public:
+  public:
 	// Set directories and return all directories that failed write access test
 	static void
 	SetPaths(bool isPortableMode,
-		   const fs::path& executablePath,
-		   const fs::path& userDataPath,
-		   const fs::path& configPath,
-		   const fs::path& cachePath,
-		   const fs::path& dataPath,
-		   std::set<fs::path>& failedWriteAccess);
+			 const fs::path& executablePath,
+			 const fs::path& userDataPath,
+			 const fs::path& configPath,
+			 const fs::path& cachePath,
+			 const fs::path& dataPath,
+			 std::set<fs::path>& failedWriteAccess);
 
 	static void Init();
 
-	[[nodiscard]] static fs::path GetExecutablePath() { return s_executable_path; }
-	[[nodiscard]] static fs::path GetExecutableFilename() { return s_executable_filename; }
-	template <typename ...TArgs>
-	[[nodiscard]] static fs::path GetUserDataPath(TArgs&&... args){ return GetPath(s_user_data_path, std::forward<TArgs>(args)...); };
-	template <typename ...TArgs>
-	[[nodiscard]] static fs::path GetConfigPath(TArgs&&... args){ return GetPath(s_config_path, std::forward<TArgs>(args)...); };
-	template <typename ...TArgs>
-	[[nodiscard]] static fs::path GetCachePath(TArgs&&... args){ return GetPath(s_cache_path, std::forward<TArgs>(args)...); };
-	template <typename ...TArgs>
-	[[nodiscard]] static fs::path GetDataPath(TArgs&&... args){ return GetPath(s_data_path, std::forward<TArgs>(args)...); };
+	[[nodiscard]] static fs::path GetExecutablePath()
+	{
+		return s_executable_path;
+	}
+	[[nodiscard]] static fs::path GetExecutableFilename()
+	{
+		return s_executable_filename;
+	}
+	template<typename... TArgs>
+	[[nodiscard]] static fs::path GetUserDataPath(TArgs&&... args)
+	{
+		return GetPath(s_user_data_path, std::forward<TArgs>(args)...);
+	};
+	template<typename... TArgs>
+	[[nodiscard]] static fs::path GetConfigPath(TArgs&&... args)
+	{
+		return GetPath(s_config_path, std::forward<TArgs>(args)...);
+	};
+	template<typename... TArgs>
+	[[nodiscard]] static fs::path GetCachePath(TArgs&&... args)
+	{
+		return GetPath(s_cache_path, std::forward<TArgs>(args)...);
+	};
+	template<typename... TArgs>
+	[[nodiscard]] static fs::path GetDataPath(TArgs&&... args)
+	{
+		return GetPath(s_data_path, std::forward<TArgs>(args)...);
+	};
 
 	[[nodiscard]] static fs::path GetMlcPath();
 
-	template <typename ...TArgs>
-	[[nodiscard]] static fs::path GetMlcPath(TArgs&&... args){ return GetPath(GetMlcPath(), std::forward<TArgs>(args)...); };
+	template<typename... TArgs>
+	[[nodiscard]] static fs::path GetMlcPath(TArgs&&... args)
+	{
+		return GetPath(GetMlcPath(), std::forward<TArgs>(args)...);
+	};
 	static bool IsCustomMlcPath();
 	static bool IsCommandLineMlcPath();
 
 	// get mlc path to default cemu root dir/mlc01
 	[[nodiscard]] static fs::path GetDefaultMLCPath();
 
-private:
+  private:
 	inline static bool s_isPortableMode{false};
 	inline static fs::path s_executable_path;
 	inline static fs::path s_user_data_path;
@@ -74,7 +95,7 @@ private:
 	inline static fs::path s_executable_filename; // cemu.exe
 	inline static fs::path s_mlc_path;
 
-public:
+  public:
 	// can be called before Init
 	[[nodiscard]] static bool IsPortableMode();
 
@@ -87,7 +108,7 @@ public:
 	[[nodiscard]] static uint8 GetTimerShiftFactor();
 
 	static void SetTimerShiftFactor(uint8 shiftFactor);
-	
+
 	// gpu
 	[[nodiscard]] static PrecompiledShaderOption GetPrecompiledShadersOption();
 	[[nodiscard]] static bool RenderUpsideDownEnabled();
@@ -123,7 +144,7 @@ public:
 	[[nodiscard]] static bool FlushGPUCacheOnSwap();
 	[[nodiscard]] static bool ForceSamplerRoundToPrecision();
 
-private:
+  private:
 	inline static bool s_setPathsCalled = false;
 	// dump options
 	inline static bool s_dump_shaders = false;
@@ -139,4 +160,3 @@ private:
 
 	inline static bool s_has_required_online_files = false;
 };
-

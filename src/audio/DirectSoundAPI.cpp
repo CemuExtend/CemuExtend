@@ -9,7 +9,7 @@ std::wstring DirectSoundAPI::DirectSoundDeviceDescription::GetIdentifier() const
 }
 
 DirectSoundAPI::DirectSoundAPI(GUID* guid, Host::NativeWindowHandle mainWindow,
-	sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample)
+							   sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample)
 	: IAudioAPI(samplerate, channels, samples_per_block, bits_per_sample)
 {
 	if (DirectSoundCreate8(guid, &m_direct_sound, nullptr) != DS_OK)
@@ -65,7 +65,7 @@ DirectSoundAPI::DirectSoundAPI(GUID* guid, Host::NativeWindowHandle mainWindow,
 		m_notify_event[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
 		notify[i].hEventNotify = m_notify_event[i];
-		//notify[i].dwOffset = ((i*2) + 1) * (m_bytes_per_block / 2);
+		// notify[i].dwOffset = ((i*2) + 1) * (m_bytes_per_block / 2);
 		notify[i].dwOffset = (i * m_bytesPerBlock);
 	}
 
@@ -108,7 +108,7 @@ void DirectSoundAPI::AudioThread()
 				std::unique_lock lock(m_mutex);
 				if (m_buffer.empty())
 				{
-					//cemuLog_logDebug(LogType::Force, "DirectSound: writing silence");
+					// cemuLog_logDebug(LogType::Force, "DirectSound: writing silence");
 
 					// we got no data, just write silence
 					memset(ptr1, 0x00, bytes1);
@@ -135,11 +135,11 @@ DirectSoundAPI::~DirectSoundAPI()
 {
 	m_running = false;
 	DirectSoundAPI::Stop();
-	
-	if(m_thread.joinable())
+
+	if (m_thread.joinable())
 		m_thread.join();
 
-	for(auto entry : m_notify_event)
+	for (auto entry : m_notify_event)
 	{
 		if (entry)
 			CloseHandle(entry);
@@ -198,19 +198,20 @@ std::vector<DirectSoundAPI::DeviceDescriptionPtr> DirectSoundAPI::GetDevices()
 	std::vector<DeviceDescriptionPtr> result;
 
 	DirectSoundEnumerateW(
-		[](LPGUID lpGuid, LPCWSTR lpcstrDescription, LPCWSTR lpcstrModule, LPVOID lpContext) -> BOOL
-		{
+		[](LPGUID lpGuid, LPCWSTR lpcstrDescription, LPCWSTR lpcstrModule, LPVOID lpContext) -> BOOL {
 			auto results = (std::vector<DeviceDescriptionPtr>*)lpContext;
 			auto obj = std::make_shared<DirectSoundDeviceDescription>(lpcstrDescription, lpGuid);
 			results->emplace_back(obj);
 			return TRUE;
-		}, &result);
+		},
+		&result);
 
-	//Exclude default primary sound device if no other sound devices are available
-	if (result.size() == 1 && result.at(0).get()->GetIdentifier() == L"default") {
+	// Exclude default primary sound device if no other sound devices are available
+	if (result.size() == 1 && result.at(0).get()->GetIdentifier() == L"default")
+	{
 		result.clear();
 	}
-	
+
 	return result;
 }
 
@@ -219,13 +220,13 @@ std::vector<DirectSoundAPI::DeviceDescriptionPtr> DirectSoundAPI::GetInputDevice
 	std::vector<DeviceDescriptionPtr> result;
 
 	DirectSoundCaptureEnumerateW(
-		[](LPGUID lpGuid, LPCWSTR lpcstrDescription, LPCWSTR lpcstrModule, LPVOID lpContext) -> BOOL
-	{
-		auto results = (std::vector<DirectSoundDeviceDescriptionPtr>*)lpContext;
-		auto obj = std::make_shared<DirectSoundDeviceDescription>(lpcstrDescription, lpGuid);
-		results->emplace_back(obj);
-		return TRUE;
-	}, &result);
+		[](LPGUID lpGuid, LPCWSTR lpcstrDescription, LPCWSTR lpcstrModule, LPVOID lpContext) -> BOOL {
+			auto results = (std::vector<DirectSoundDeviceDescriptionPtr>*)lpContext;
+			auto obj = std::make_shared<DirectSoundDeviceDescription>(lpcstrDescription, lpGuid);
+			results->emplace_back(obj);
+			return TRUE;
+		},
+		&result);
 
 	return result;
 }

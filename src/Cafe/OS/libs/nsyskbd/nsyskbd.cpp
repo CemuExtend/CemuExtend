@@ -37,7 +37,7 @@ namespace nsyskbd
 	uint32 KBDGetKey(uint32 channel, KeyState* keyState)
 	{
 		// used by MSX VC
-		if(!IsValidChannel(channel) || !keyState)
+		if (!IsValidChannel(channel) || !keyState)
 		{
 			cemuLog_log(LogType::APIErrors, "KBDGetKey(): Invalid parameter");
 			return 0;
@@ -52,7 +52,7 @@ namespace nsyskbd
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nsyskbd";
@@ -66,12 +66,11 @@ namespace nsyskbd
 
 		void RPLUnmapped() override
 		{
-
 		}
-	}s_COSnsyskbdModule;
+	} s_COSnsyskbdModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnsyskbdModule;
 	}
-}
+} // namespace nsyskbd

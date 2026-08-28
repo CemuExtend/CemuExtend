@@ -706,13 +706,20 @@ void GDBServer::CMDReadRegister(std::unique_ptr<CommandContext>& context) const
 		{
 			switch (reg)
 			{
-			case RegisterID::PC: return context->QueueResponse(fmt::format("{:08X}", cpu.srr0));
-			case RegisterID::MSR: return context->QueueResponse("xxxxxxxx");
-			case RegisterID::CR: return context->QueueResponse(fmt::format("{:08X}", cpu.cr));
-			case RegisterID::LR: return context->QueueResponse(fmt::format("{:08X}", CPU_swapEndianU32(cpu.lr)));
-			case RegisterID::CTR: return context->QueueResponse(fmt::format("{:08X}", cpu.ctr));
-			case RegisterID::XER: return context->QueueResponse(fmt::format("{:08X}", cpu.xer));
-			default: break;
+			case RegisterID::PC:
+				return context->QueueResponse(fmt::format("{:08X}", cpu.srr0));
+			case RegisterID::MSR:
+				return context->QueueResponse("xxxxxxxx");
+			case RegisterID::CR:
+				return context->QueueResponse(fmt::format("{:08X}", cpu.cr));
+			case RegisterID::LR:
+				return context->QueueResponse(fmt::format("{:08X}", CPU_swapEndianU32(cpu.lr)));
+			case RegisterID::CTR:
+				return context->QueueResponse(fmt::format("{:08X}", cpu.ctr));
+			case RegisterID::XER:
+				return context->QueueResponse(fmt::format("{:08X}", cpu.xer));
+			default:
+				break;
 			}
 		}
 	});

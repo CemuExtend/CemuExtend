@@ -7,30 +7,30 @@
 #include <string>
 #include <mutex>
 
-template <typename T>
+template<typename T>
 concept HasConstCharConstructor = requires { T(std::declval<const char*>()); };
 
 class XMLConfigParser
 {
-public:
+  public:
 	XMLConfigParser(tinyxml2::XMLDocument* document)
 		: m_document(document), m_current_element(nullptr), m_is_root(true) {}
 
-private:
+  private:
 	XMLConfigParser(tinyxml2::XMLDocument* document, tinyxml2::XMLElement* element)
 		: m_document(document), m_current_element(element), m_is_root(false) {}
 
-public:
-	template <typename T>
+  public:
+	template<typename T>
 	auto get(const char* name, T default_value = {})
 	{
-		if constexpr(std::is_enum_v<T>)
+		if constexpr (std::is_enum_v<T>)
 			return static_cast<T>(get(name, static_cast<std::underlying_type_t<T>>(default_value)));
 
 		const auto* element = m_current_element
-			? m_current_element->FirstChildElement(name)
-			: m_document->FirstChildElement(name);
-		
+								  ? m_current_element->FirstChildElement(name)
+								  : m_document->FirstChildElement(name);
+
 		if (element == nullptr)
 			return default_value;
 
@@ -53,23 +53,23 @@ public:
 			const char* text = element->GetText();
 			return text ? text : default_value;
 		}
-		
+
 		return default_value;
 	}
-	
-	template <typename T>
+
+	template<typename T>
 	T get(const char* name, const ConfigValue<T>& default_value)
 	{
 		return get(name, default_value.GetInitValue());
 	}
-	
-	template <typename T>
+
+	template<typename T>
 	T get(const char* name, const ConfigValueBounds<T>& default_value)
 	{
 		return get(name, default_value.GetInitValue());
 	}
 
-	template <typename T>
+	template<typename T>
 	auto get_attribute(const char* name, T default_value = {})
 	{
 		if constexpr (std::is_enum_v<T>)
@@ -99,13 +99,13 @@ public:
 		return default_value;
 	}
 
-	template <typename T>
+	template<typename T>
 	T get_attribute(const char* name, const ConfigValue<T>& default_value)
 	{
 		return get_attribute(name, default_value.GetInitValue());
 	}
 
-	template <typename T>
+	template<typename T>
 	T get_attribute(const char* name, const ConfigValueBounds<T>& default_value)
 	{
 		return get_attribute(name, default_value.GetInitValue());
@@ -113,43 +113,43 @@ public:
 
 	int char2int(char input)
 	{
-	  if(input >= '0' && input <= '9')
-	    return input - '0';
-	  if(input >= 'A' && input <= 'F')
-	    return input - 'A' + 10;
-	  if(input >= 'a' && input <= 'f')
-	    return input - 'a' + 10;
-	  throw std::invalid_argument("Invalid input string");
+		if (input >= '0' && input <= '9')
+			return input - '0';
+		if (input >= 'A' && input <= 'F')
+			return input - 'A' + 10;
+		if (input >= 'a' && input <= 'f')
+			return input - 'a' + 10;
+		throw std::invalid_argument("Invalid input string");
 	}
 
-	template <typename TType, size_t TSize>
+	template<typename TType, size_t TSize>
 	std::array<TType, TSize>& get(const char* name, std::array<TType, TSize>& arr)
 	{
 		arr = {};
 		const auto element = m_current_element
-			                     ? m_current_element->FirstChildElement(name)
-			                     : m_document->FirstChildElement(name);
+								 ? m_current_element->FirstChildElement(name)
+								 : m_document->FirstChildElement(name);
 		if (element == nullptr)
 			return arr;
 
 		const char* text = element->GetText();
-		if(text)
+		if (text)
 		{
 			assert(strlen(text) == (arr.size() * 2));
 			std::istringstream iss(text);
-			for(int i = 0; i < arr.size(); ++i)
+			for (int i = 0; i < arr.size(); ++i)
 			{
-				arr[i] = (char2int(text[i*2]) << 4) + char2int(text[i * 2 + 1]);
+				arr[i] = (char2int(text[i * 2]) << 4) + char2int(text[i * 2 + 1]);
 			}
 		}
 
 		return arr;
 	}
-	
-	template <typename T>
+
+	template<typename T>
 	T value(T default_value = T())
 	{
-		//peterBreak();
+		// peterBreak();
 		return default_value;
 	}
 
@@ -199,13 +199,13 @@ public:
 		return default_value;
 	}
 
-	template <typename TType, size_t TSize>
+	template<typename TType, size_t TSize>
 	void set(const char* name, const std::array<TType, TSize>& value)
 	{
 		auto element = m_document->NewElement(name);
 
 		std::stringstream str;
-		for(const auto& v : value)
+		for (const auto& v : value)
 		{
 			str << fmt::format("{:02x}", v);
 		}
@@ -218,7 +218,7 @@ public:
 			m_document->InsertEndChild(element);
 	}
 
-	template <typename T>
+	template<typename T>
 	void set(const char* name, T value)
 	{
 		auto* element = m_document->NewElement(name);
@@ -234,13 +234,13 @@ public:
 			m_document->InsertEndChild(element);
 	}
 
-	template <typename T>
+	template<typename T>
 	void set(const char* name, const std::atomic<T>& value)
 	{
 		set(name, value.load());
 	}
 
-	template <typename T>
+	template<typename T>
 	void set(const char* name, const ConfigValue<T>& value)
 	{
 		set(name, value.GetValue());
@@ -251,22 +251,25 @@ public:
 		set(name, (sint64)value);
 	}
 
-	tinyxml2::XMLElement* GetCurrentElement() const { return m_current_element; }
+	tinyxml2::XMLElement* GetCurrentElement() const
+	{
+		return m_current_element;
+	}
 
 	XMLConfigParser get(const char* name) const
 	{
 		const auto element = m_current_element
-			                     ? m_current_element->FirstChildElement(name)
-			                     : m_document->FirstChildElement(name);
+								 ? m_current_element->FirstChildElement(name)
+								 : m_document->FirstChildElement(name);
 		return {m_document, element};
 	}
 
 	XMLConfigParser get(const char* name, const XMLConfigParser& parser)
 	{
 		const auto element = parser.m_current_element
-			? parser.m_current_element->NextSiblingElement(name)
-			: parser.m_document->NextSiblingElement(name);
-		return { m_document, element };
+								 ? parser.m_current_element->NextSiblingElement(name)
+								 : parser.m_document->NextSiblingElement(name);
+		return {m_document, element};
 	}
 
 	XMLConfigParser set(const char* name) const
@@ -280,33 +283,32 @@ public:
 		return {m_document, element};
 	}
 
-	template <typename T>
+	template<typename T>
 	XMLConfigParser& set_attribute(const char* name, const T& value)
 	{
 		cemu_assert_debug(m_current_element != nullptr);
 		if (m_current_element)
 			m_current_element->SetAttribute(name, value);
-		
+
 		return *this;
 	}
 
-	template <typename T>
+	template<typename T>
 	XMLConfigParser& set_attribute(const char* name, const ConfigValue<T>& value)
 	{
 		return set_attribute(name, value.GetValue());
 	}
 
-	template <typename T>
+	template<typename T>
 	XMLConfigParser& set_attribute(const char* name, const ConfigValueBounds<T>& value)
 	{
 		return set_attribute(name, value.GetValue());
 	}
-	
+
 	XMLConfigParser& set_attribute(const char* name, const std::string& value)
 	{
 		return set_attribute(name, value.c_str());
 	}
-
 
 	bool valid() const
 	{
@@ -316,7 +318,7 @@ public:
 		return m_document != nullptr && m_current_element != nullptr;
 	}
 
-private:
+  private:
 	tinyxml2::XMLDocument* m_document;
 	tinyxml2::XMLElement* m_current_element;
 	bool m_is_root;
@@ -330,10 +332,10 @@ concept XMLConfigurable = requires(T t, XMLConfigParser& configParser) {
 	{ t.Load(configParser) } -> std::same_as<XMLConfigParser>;
 };
 
-template <XMLConfigurable T>
+template<XMLConfigurable T>
 class XMLConfig
 {
-public:
+  public:
 	XMLConfig() = delete;
 
 	XMLConfig(T& instance)
@@ -368,7 +370,7 @@ public:
 		fs->readData(xmlData.data(), xmlData.size());
 		delete fs;
 
-		tinyxml2::XMLDocument doc;		
+		tinyxml2::XMLDocument doc;
 		const tinyxml2::XMLError error = doc.Parse((const char*)xmlData.data(), xmlData.size());
 		const bool success = error == tinyxml2::XML_SUCCESS;
 		if (error != 0)
@@ -400,7 +402,7 @@ public:
 
 	bool Save(const std::wstring& filename)
 	{
-		std::wstring tmp_name = fmt::format(L"{}_{}.tmp", filename,rand() % 1000);
+		std::wstring tmp_name = fmt::format(L"{}_{}.tmp", filename, rand() % 1000);
 		std::error_code err;
 		fs::create_directories(fs::path(filename).parent_path(), err);
 		if (err)
@@ -411,15 +413,15 @@ public:
 
 		FILE* file = nullptr;
 #if BOOST_OS_WINDOWS
-        file = _wfopen(tmp_name.c_str(), L"wb");
+		file = _wfopen(tmp_name.c_str(), L"wb");
 #else
 		file = fopen(boost::nowide::narrow(tmp_name).c_str(), "wb");
 #endif
-        if (!file)
-        {
+		if (!file)
+		{
 			cemuLog_logDebug(LogType::Force, "XMLConfig::Save > failed \"{}\" with error {}", boost::nowide::narrow(filename), errno);
-            return false;
-        }
+			return false;
+		}
 
 		tinyxml2::XMLDocument doc;
 		const auto declaration = doc.NewDeclaration();
@@ -433,26 +435,46 @@ public:
 
 		const tinyxml2::XMLError error = doc.SaveFile(file);
 		const bool success = error == tinyxml2::XML_SUCCESS;
-		if(error != 0)
+		if (error != 0)
 			cemuLog_logDebug(LogType::Force, "XMLConfig::Save > SaveFile {}", error);
 
-		fflush(file);
-		fclose(file);
+		const bool flushed = fflush(file) == 0;
+		const bool closed = fclose(file) == 0;
+		if (!flushed || !closed)
+		{
+			fs::remove(tmp_name, err);
+			return false;
+		}
+		if (!success)
+		{
+			fs::remove(tmp_name, err);
+			return false;
+		}
 
 		fs::rename(tmp_name, filename, err);
-		if(err)
+		if (err)
 		{
 			cemuLog_log(LogType::Force, "Unable to save settings to file: {}", err.message().c_str());
 			fs::remove(tmp_name, err);
+			return false;
 		}
 
 		return success;
 	}
 
-	[[nodiscard]] const std::wstring& GetFilename() const { return m_filename; }
-	void SetFilename(const std::wstring& filename) { m_filename = filename; }
+	[[nodiscard]] const std::wstring& GetFilename() const
+	{
+		return m_filename;
+	}
+	void SetFilename(const std::wstring& filename)
+	{
+		m_filename = filename;
+	}
 
-	std::unique_lock<std::mutex> Lock() { return std::unique_lock(m_mutex); }
+	std::unique_lock<std::mutex> Lock()
+	{
+		return std::unique_lock(m_mutex);
+	}
 
 	void AddChildConfig(ChildXMLConfigParser childConfigParser)
 	{
@@ -530,12 +552,14 @@ class XMLChildConfig
 };
 
 template<typename T>
-struct XMLDataConfig {};
+struct XMLDataConfig
+{
+};
 
-template <XMLConfigurable T>
+template<XMLConfigurable T>
 class XMLDataConfig<T> : public XMLConfig<T>
 {
-public:
+  public:
 	XMLDataConfig()
 		: XMLConfig<T>::XMLConfig(m_data), m_data() {}
 
@@ -547,9 +571,12 @@ public:
 
 	XMLDataConfig(const XMLDataConfig& o) = delete;
 
-	T& data() { return m_data; }
+	T& data()
+	{
+		return m_data;
+	}
 
-private:
+  private:
 	T m_data;
 };
 

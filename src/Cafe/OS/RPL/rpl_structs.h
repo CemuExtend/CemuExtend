@@ -3,57 +3,57 @@
 #include "Cafe/OS/RPL/rpl.h"
 #include "util/ChunkedHeap/ChunkedHeap.h"
 
-#define RPL_MODULE_NAME_LENGTH	64
-#define RPL_MODULE_PATH_LENGTH	256
+#define RPL_MODULE_NAME_LENGTH 64
+#define RPL_MODULE_PATH_LENGTH 256
 
 // types
-#define SHT_RPL_EXPORTS			(0x80000001)
-#define SHT_RPL_IMPORTS			(0x80000002)
-#define SHT_RPL_CRCS			(0x80000003)
-#define SHT_RPL_FILEINFO		(0x80000004)
+#define SHT_RPL_EXPORTS (0x80000001)
+#define SHT_RPL_IMPORTS (0x80000002)
+#define SHT_RPL_CRCS (0x80000003)
+#define SHT_RPL_FILEINFO (0x80000004)
 
-#define SHT_PROGBITS			(0x00000001)
-#define SHT_SYMTAB				(0x00000002)
-#define SHT_STRTAB				(0x00000003)
-#define SHT_RELA				(0x00000004)
-#define SHT_HASH				(0x00000005)
-#define SHT_DYNAMIC				(0x00000006)
-#define SHT_NOTE				(0x00000007)
-#define SHT_NOBITS				(0x00000008) // this section contains no data
-#define SHT_REL					(0x00000009) 
-#define SHT_SHLIB				(0x0000000A) 
-#define SHT_DYNSYM				(0x0000000B)
+#define SHT_PROGBITS (0x00000001)
+#define SHT_SYMTAB (0x00000002)
+#define SHT_STRTAB (0x00000003)
+#define SHT_RELA (0x00000004)
+#define SHT_HASH (0x00000005)
+#define SHT_DYNAMIC (0x00000006)
+#define SHT_NOTE (0x00000007)
+#define SHT_NOBITS (0x00000008) // this section contains no data
+#define SHT_REL (0x00000009)
+#define SHT_SHLIB (0x0000000A)
+#define SHT_DYNSYM (0x0000000B)
 
 // flags
-#define SHF_EXECUTE				0x00000004
-#define SHF_RPL_COMPRESSED		0x08000000
-#define SHF_TLS					0x00000400
-#define SHF_RPL_TLS_LEGACY		0x04000000
-#define SHF_TLS_MASK			(SHF_TLS | SHF_RPL_TLS_LEGACY)
+#define SHF_EXECUTE 0x00000004
+#define SHF_RPL_COMPRESSED 0x08000000
+#define SHF_TLS 0x00000400
+#define SHF_RPL_TLS_LEGACY 0x04000000
+#define SHF_TLS_MASK (SHF_TLS | SHF_RPL_TLS_LEGACY)
 
 // relocs
-#define RPL_RELOC_ADDR32	1
-#define RPL_RELOC_LO16		4
-#define RPL_RELOC_HI16		5
-#define RPL_RELOC_HA16		6
-#define RPL_RELOC_REL24		10 
-#define RPL_RELOC_REL14		11
+#define RPL_RELOC_ADDR32 1
+#define RPL_RELOC_LO16 4
+#define RPL_RELOC_HI16 5
+#define RPL_RELOC_HA16 6
+#define RPL_RELOC_REL24 10
+#define RPL_RELOC_REL14 11
 
-#define R_PPC_DTPMOD32		68
-#define R_PPC_DTPREL32		78
+#define R_PPC_DTPMOD32 68
+#define R_PPC_DTPREL32 78
 
-#define R_PPC_REL16_HA		251
-#define R_PPC_REL16_HI		252
-#define R_PPC_REL16_LO		253
+#define R_PPC_REL16_HA 251
+#define R_PPC_REL16_HI 252
+#define R_PPC_REL16_LO 253
 
-#define HLE_MODULE_PTR		((RPLModule*)-1)
+#define HLE_MODULE_PTR ((RPLModule*)-1)
 
 typedef struct
 {
 	/* +0x00 */ uint32be relocOffset;
 	/* +0x04 */ uint32be symbolIndexAndType;
 	/* +0x08 */ uint32be relocAddend;
-}rplRelocNew_t;
+} rplRelocNew_t;
 
 typedef struct
 {
@@ -67,22 +67,22 @@ typedef struct
 	/* +0x1C */ uint32be relocTargetSectionIndex;
 	/* +0x20 */ uint32be alignment;
 	/* +0x24 */ uint32be ukn24; // for symtab: Size of each symbol entry
-}rplSectionEntryNew_t;
+} rplSectionEntryNew_t;
 
 typedef struct
 {
 	/* +0x00 */ uint32be magic1;
-	/* +0x04 */ uint8    version04; // probably version?
-	/* +0x05 */ uint8    ukn05; // probably version?
-	/* +0x06 */ uint8    ukn06; // probably version?
-	/* +0x07 */ uint8    magic2_0; // part of second magic
-	/* +0x08 */ uint8    magic2_1; // part of second magic
-	/* +0x09 */ uint8    ukn09;
-	/* +0x0A */ uint8    ukn0A;
-	/* +0x0B */ uint8    ukn0B;
+	/* +0x04 */ uint8 version04; // probably version?
+	/* +0x05 */ uint8 ukn05;	 // probably version?
+	/* +0x06 */ uint8 ukn06;	 // probably version?
+	/* +0x07 */ uint8 magic2_0;	 // part of second magic
+	/* +0x08 */ uint8 magic2_1;	 // part of second magic
+	/* +0x09 */ uint8 ukn09;
+	/* +0x0A */ uint8 ukn0A;
+	/* +0x0B */ uint8 ukn0B;
 	/* +0x0C */ uint32be dataRegionSize;
-	/* +0x10 */ uint8    ukn10;
-	/* +0x11 */ uint8    ukn11;
+	/* +0x10 */ uint8 ukn10;
+	/* +0x11 */ uint8 ukn11;
 	/* +0x12 */ uint16be ukn12;
 	/* +0x14 */ uint32be ukn14;
 	/* +0x18 */ uint32be entrypoint;
@@ -95,19 +95,18 @@ typedef struct
 	/* +0x2E */ uint16be sectionTableEntrySize;
 	/* +0x30 */ uint16be sectionTableEntryCount;
 	/* +0x32 */ uint16be nameSectionIndex;
-}rplHeaderNew_t;
+} rplHeaderNew_t;
 
 static_assert(offsetof(rplHeaderNew_t, dataRegionSize) == 0xC);
 static_assert(offsetof(rplHeaderNew_t, programHeaderTableEntrySize) == 0x2A);
 
-
 typedef struct
 {
-	/* +0x00 */ uint32be fileInfoMagic; // always 0xCAFE0402
+	/* +0x00 */ uint32be fileInfoMagic;	 // always 0xCAFE0402
 	/* +0x04 */ uint32be textRegionSize; // text region size
-	/* +0x08 */ uint32be ukn08; // base align text
+	/* +0x08 */ uint32be ukn08;			 // base align text
 	/* +0x0C */ uint32be dataRegionSize; // size of data sections
-	/* +0x10 */ uint32be baseAlign; // base align data?
+	/* +0x10 */ uint32be baseAlign;		 // base align data?
 	/* +0x14 */ uint32be ukn14;
 	/* +0x18 */ uint32be ukn18;
 	/* +0x1C */ uint32be ukn1C;
@@ -126,22 +125,21 @@ typedef struct
 	/* +0x50 */ uint32be ukn50;
 	/* +0x54 */ uint32be ukn54;
 	/* +0x58 */ sint16be tlsModuleIndex;
-}RPLFileInfoData;
+} RPLFileInfoData;
 
 static_assert(offsetof(RPLFileInfoData, tlsModuleIndex) == 0x58);
 
-
 typedef struct
 {
-	//uint32 address;
+	// uint32 address;
 	void* ptr;
-}rplSectionAddressEntry_t;
+} rplSectionAddressEntry_t;
 
 typedef struct
 {
 	uint32be virtualOffset;
 	uint32be nameOffset;
-}rplExportTableEntry_t;
+} rplExportTableEntry_t;
 
 struct RPLModule
 {
@@ -157,8 +155,8 @@ struct RPLModule
 	MPTR textRegionTemp; // temporary memory for text section?
 
 	MEMPTR<void> regionMappingBase_text; // base destination address for text region
-	MPTR regionMappingBase_data; // base destination address for data region
-	MPTR regionMappingBase_loaderInfo; // base destination address for loaderInfo region
+	MPTR regionMappingBase_data;		 // base destination address for data region
+	MPTR regionMappingBase_loaderInfo;	 // base destination address for loaderInfo region
 	uint8* tempRegionPtr;
 	uint32 tempRegionAllocSize;
 
@@ -168,7 +166,7 @@ struct RPLModule
 	rplExportTableEntry_t* exportFDataPtr;
 
 	std::string moduleName;
-	
+
 	std::vector<rplSectionAddressEntry_t> sectionAddressTable2;
 
 	uint32 tlsStartAddress;
@@ -192,10 +190,10 @@ struct RPLModule
 	std::vector<uint8> sectionData_crc;
 
 	// parsed FILEINFO
-	struct 
+	struct
 	{
 		uint32 textRegionSize; // size of region containing all text sections
-		//uint32 ukn08; // base align text?
+		// uint32 ukn08; // base align text?
 		uint32 dataRegionSize; // size of region containing all data sections
 		uint32 baseAlign;
 		uint32 ukn14;
@@ -205,9 +203,9 @@ struct RPLModule
 
 		uint32 sdataBase1;
 		uint32 sdataBase2;
-		
+
 		uint32 flags;
-	}fileInfo;
+	} fileInfo;
 	// parsed CRC
 	std::vector<uint32> crcTable;
 
@@ -217,17 +215,17 @@ struct RPLModule
 			return 0;
 		return crcTable[sectionIndex];
 	}
-	
+
 	bool IsRPX() const
 	{
-	    return fileInfo.flags & 2;
+		return fileInfo.flags & 2;
 	}
 
 	// state
-	bool isLinked; // set to true if _linkModule was called on this module
+	bool isLinked;		   // set to true if _linkModule was called on this module
 	bool entrypointCalled; // set if entrypoint was called
 
-	// allocator	
+	// allocator
 	betype<MPTR> funcAlloc;
 	betype<MPTR> funcFree;
 
@@ -236,8 +234,8 @@ struct RPLModule
 	std::vector<uint8> ownedRPLRawData;
 
 	std::vector<bool> debugSectionLoadMask;
-	bool hasError{ false };
-	bool loggedTLSModuleIndexReloc{ false };
+	bool hasError{false};
+	bool loggedTLSModuleIndexReloc{false};
 
 	// External modules are lifecycle-owned by their caller and are deliberately
 	// skipped by the title-wide RPL link/entrypoint path.
@@ -254,7 +252,6 @@ struct RPLModule
 	uint32 externalGeneration{};
 	std::string externalLinkError;
 	RPLExternalImportResolver externalImportResolver;
-
 };
 
 struct RPLDependency
@@ -263,8 +260,8 @@ struct RPLDependency
 	bool isMainExecutable{false};
 	bool loadAttempted{false};
 	bool hleEntrypointCalled{false};
-	bool isCafeOSModule{false}; // name is a known Cafe OS system RPL
-	RPLModule* rplLoaderContext{}; // context of loaded module, can be nullptr for HLE COS modules
+	bool isCafeOSModule{false};		 // name is a known Cafe OS system RPL
+	RPLModule* rplLoaderContext{};	 // context of loaded module, can be nullptr for HLE COS modules
 	class COSModule* rplHLEModule{}; // set if this is a HLE module
 	sint32 referenceCount;
 	uint32 coreinitHandle; // fake handle for coreinit

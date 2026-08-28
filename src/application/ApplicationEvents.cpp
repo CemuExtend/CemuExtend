@@ -15,10 +15,10 @@ namespace Application
 			std::uint64_t nextId{1};
 			std::unordered_map<std::uint64_t, ApplicationEvents::Handler> handlers;
 		};
-	}
+	} // namespace Detail
 
 	EventSubscription::EventSubscription(std::weak_ptr<Detail::EventState> state,
-		std::uint64_t id) : m_state(std::move(state)), m_id(id) {}
+										 std::uint64_t id) : m_state(std::move(state)), m_id(id) {}
 
 	EventSubscription::EventSubscription(EventSubscription&& other) noexcept
 		: m_state(std::move(other.m_state)), m_id(std::exchange(other.m_id, 0)) {}
@@ -34,7 +34,10 @@ namespace Application
 		return *this;
 	}
 
-	EventSubscription::~EventSubscription() { Reset(); }
+	EventSubscription::~EventSubscription()
+	{
+		Reset();
+	}
 
 	void EventSubscription::Reset()
 	{
@@ -71,4 +74,4 @@ namespace Application
 		for (const auto& handler : handlers)
 			handler(event);
 	}
-}
+} // namespace Application

@@ -24,7 +24,7 @@ extern class DebuggerWindow2* s_debuggerWindow;
 struct DebuggerConfig
 {
 	DebuggerConfig()
-	: pin_to_main(true), break_on_start(true), log_memory_breakpoints(false), show_register(true), show_dump(true), show_stack(true), show_breakpoints(true), show_modules(true), show_symbols(true) {}
+		: pin_to_main(true), break_on_start(true), log_memory_breakpoints(false), show_register(true), show_dump(true), show_stack(true), show_breakpoints(true), show_modules(true), show_symbols(true) {}
 
 	bool pin_to_main;
 	bool break_on_start;
@@ -52,7 +52,7 @@ struct DebuggerModuleInfo
 
 		bool ContainsAddress(MPTR addr) const
 		{
-			return addr >= base && (addr < (base+size));
+			return addr >= base && (addr < (base + size));
 		}
 
 		bool ContainsOriginalAddress(MPTR addr) const
@@ -90,7 +90,7 @@ static wxBitmap LoadThemedBitmapFromPNG(const uint8* data, size_t size, const wx
 
 class DebuggerWindow2 : public wxFrame, public DebuggerCallbacks
 {
-public:
+  public:
 	void CreateToolBar();
 	void LoadModuleStorage(const struct DebuggerModuleInfo& moduleInfo);
 	void SaveModuleStorage(const struct DebuggerModuleInfo& moduleInfo, bool deleteModuleStorage);
@@ -106,7 +106,7 @@ public:
 	bool Show(bool show = true) override;
 	std::wstring GetModuleStoragePath(std::string module_name, uint32_t crc_hash) const;
 
-private:
+  private:
 	void OnBreakpointHit(wxCommandEvent& event);
 	void OnRunProgram(wxCommandEvent& event);
 	void OnToolClicked(wxCommandEvent& event);
@@ -143,7 +143,7 @@ private:
 
 	wxPoint m_main_position;
 	wxSize m_main_size;
-	
+
 	RegisterWindow* m_register_window;
 	DumpWindow* m_dump_window;
 	BreakpointWindow* m_breakpoint_window;
@@ -160,5 +160,5 @@ private:
 
 	bool m_forceInterpreter{false};
 
-wxDECLARE_EVENT_TABLE();
+	wxDECLARE_EVENT_TABLE();
 };

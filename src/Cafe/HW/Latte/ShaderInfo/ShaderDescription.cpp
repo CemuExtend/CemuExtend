@@ -7,7 +7,6 @@ namespace Latte
 	{
 		assert_dbg();
 
-
 		// parse CF flow
 		// we need to parse:
 		// - Export clauses to gather info about exported attributes and written render targets
@@ -27,7 +26,7 @@ namespace Latte
 				cemu_assert_debug(cfInstr->getField_WHOLE_QUAD_MODE() == 0);
 
 				cemu_assert_debug(cfInstr->getField_CALL_COUNT() == 0); // todo
-				cemu_assert_debug(cfInstr->getField_POP_COUNT() == 0); // todo
+				cemu_assert_debug(cfInstr->getField_POP_COUNT() == 0);	// todo
 
 				auto cond = cfInstr->getField_COND();
 
@@ -53,4 +52,4 @@ namespace Latte
 
 		return true;
 	}
-};
+}; // namespace Latte

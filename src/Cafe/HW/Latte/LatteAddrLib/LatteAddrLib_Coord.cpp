@@ -17,7 +17,7 @@ namespace LatteAddrLib
 	}
 #endif
 
-	static const uint32 bankSwapOrder[] = { 0, 1, 3, 2 };
+	static const uint32 bankSwapOrder[] = {0, 1, 3, 2};
 
 	uint32 _GetMicroTileType(bool isDepth)
 	{
@@ -382,7 +382,7 @@ namespace LatteAddrLib
 	{
 		uint32 pixelIndex = (uint32)info->microTilePixelIndexTable[(x & 7) + ((y & 7) << 3) + ((info->slice & 7) << 6)];
 		uint32 pixelOffset = pixelIndex * info->pixelOffsetMul;
-		pixelOffset >>= 3; // bits to bytes
+		pixelOffset >>= 3;									 // bits to bytes
 		uint32 pipe = _ComputePipeFromCoordWoRotation(x, y); // pipe = ((y >> 3) ^ (x >> 3)) & 1;
 		uint32 bank = _ComputeBankFromCoordWoRotation(x, y); // based on (x>>3)&3 and (y>>4)&3
 		pipe ^= (info->c0 >> 0) & 1;
@@ -402,4 +402,4 @@ namespace LatteAddrLib
 		return finalMacroTileOffset | pipeOffset | bankOffset;
 	}
 
-};
+}; // namespace LatteAddrLib

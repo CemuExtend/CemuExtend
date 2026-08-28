@@ -12,8 +12,10 @@
 
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include "imgui/imgui_impl_opengl3.h"
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -56,12 +58,12 @@ void GLCanvas_SwapBuffers(bool swapTV, bool swapDRC)
 
 namespace CemuGL
 {
-#define GLFUNC(__type, __name)	__type __name;
-#define EGLFUNC(__type, __name)	__type __name;
+#define GLFUNC(__type, __name) __type __name;
+#define EGLFUNC(__type, __name) __type __name;
 #include "Common/GLInclude/glFunctions.h"
 #undef GLFUNC
 #undef EGLFUNC
-}
+} // namespace CemuGL
 
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
@@ -84,34 +86,32 @@ struct
 	std::vector<uint8> texUploadBuffer;
 	// FBO for fast clearing (on Nvidia or if glClearTexSubImage is not supported)
 	GLuint clearFBO;
-}glRendererState;
+} glRendererState;
 
 static const GLenum glDepthFuncTable[] =
-{
-	GL_NEVER,
-	GL_LESS,
-	GL_EQUAL,
-	GL_LEQUAL,
-	GL_GREATER,
-	GL_NOTEQUAL,
-	GL_GEQUAL,
-	GL_ALWAYS
-};
+	{
+		GL_NEVER,
+		GL_LESS,
+		GL_EQUAL,
+		GL_LEQUAL,
+		GL_GREATER,
+		GL_NOTEQUAL,
+		GL_GEQUAL,
+		GL_ALWAYS};
 
 static const GLenum glAlphaTestFunc[] =
-{
-	GL_NEVER,
-	GL_LESS,
-	GL_EQUAL,
-	GL_LEQUAL,
-	GL_GREATER,
-	GL_NOTEQUAL,
-	GL_GEQUAL,
-	GL_ALWAYS
-};
+	{
+		GL_NEVER,
+		GL_LESS,
+		GL_EQUAL,
+		GL_LEQUAL,
+		GL_GREATER,
+		GL_NOTEQUAL,
+		GL_GEQUAL,
+		GL_ALWAYS};
 
 OpenGLRenderer::OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-	std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+							   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 	: Renderer(RendererAPI::OpenGL, std::move(windowMetrics), std::move(nativeSurfaces))
 {
 	glRendererState.useTextureUploadBuffer = false;
@@ -134,8 +134,7 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetri
 	try
 	{
 		m_dxgi_wrapper = std::make_unique<DXGIWrapper>();
-	}
-	catch (const std::exception& ex)
+	} catch (const std::exception& ex)
 	{
 		cemuLog_log(LogType::Force, "Unable to create dxgi wrapper: {} (VRAM overlay stat won't be available)", ex.what());
 	}
@@ -144,7 +143,13 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetri
 
 OpenGLRenderer::~OpenGLRenderer()
 {
-	if(m_pipeline != 0)
+	if (!GLCanvas_MakeCurrent(false))
+	{
+		cemuLog_log(LogType::Force,
+					"Skipping explicit OpenGL object deletion because the native context is unavailable");
+		return;
+	}
+	if (m_pipeline != 0)
 		glDeleteProgramPipelines(1, &m_pipeline);
 
 	glDeleteBuffers(1, &m_backbufferBlit_uniformBuffer);
@@ -158,15 +163,16 @@ OpenGLRenderer* OpenGLRenderer::GetInstance()
 
 bool OpenGLRenderer::ImguiBegin(bool mainWindow)
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	if (!mainWindow)
 	{
 		GLCanvas_MakeCurrent(true);
 		m_isPadViewContext = true;
 	}
 
-	if(!Renderer::ImguiBegin(mainWindow))
+	if (!Renderer::ImguiBegin(mainWindow))
 		return false;
-	
+
 	renderstate_resetColorControl();
 	renderstate_resetDepthControl();
 	renderstate_resetStencilMask();
@@ -178,10 +184,15 @@ bool OpenGLRenderer::ImguiBegin(bool mainWindow)
 	ImGui_UpdateWindowInformation(mainWindow);
 	ImGui::NewFrame();
 	return true;
+#else
+	(void)mainWindow;
+	return false;
+#endif
 }
 
 void OpenGLRenderer::ImguiEnd()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -193,6 +204,7 @@ void OpenGLRenderer::ImguiEnd()
 
 	if (glClipControl)
 		glClipControl(GL_UPPER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
+#endif
 }
 
 ImTextureID OpenGLRenderer::GenerateTexture(const std::vector<uint8>& data, const Vector2i& size)
@@ -223,10 +235,12 @@ void OpenGLRenderer::DeleteTexture(ImTextureID id)
 
 void OpenGLRenderer::DeleteFontTextures()
 {
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui_ImplOpenGL3_DestroyFontsTexture();
+#endif
 }
 
-typedef void(*GL_IMPORT)();
+typedef void (*GL_IMPORT)();
 
 #if BOOST_OS_WINDOWS
 GL_IMPORT _GetOpenGLFunction(HMODULE hLib, const char* name)
@@ -240,7 +254,7 @@ GL_IMPORT _GetOpenGLFunction(HMODULE hLib, const char* name)
 void LoadOpenGLImports()
 {
 	HMODULE hLib = LoadLibraryA("opengl32.dll");
-#define GLFUNC(__type, __name)	__name = (__type)_GetOpenGLFunction(hLib, STRINGIFY(__name));
+#define GLFUNC(__type, __name) __name = (__type)_GetOpenGLFunction(hLib, STRINGIFY(__name));
 #include "Common/GLInclude/glFunctions.h"
 #undef GLFUNC
 }
@@ -260,20 +274,20 @@ void LoadOpenGLImports()
 	PFNGLXGETPROCADDRESSPROC _glXGetProcAddress = nullptr;
 	void* libGL = dlopen("libGL.so.1", RTLD_NOW | RTLD_GLOBAL);
 	_glXGetProcAddress = (PFNGLXGETPROCADDRESSPROC)dlsym(libGL, "glXGetProcAddressARB");
-	if(!_glXGetProcAddress)
+	if (!_glXGetProcAddress)
 	{
 		libGL = dlopen("libGL.so", RTLD_NOW | RTLD_GLOBAL);
 		_glXGetProcAddress = (PFNGLXGETPROCADDRESSPROC)dlsym(libGL, "glXGetProcAddressARB");
 	}
 
 	void* libEGL = dlopen("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL);
-	if(!libEGL)
+	if (!libEGL)
 	{
-		libGL = dlopen("libEGL.so", RTLD_NOW | RTLD_GLOBAL);
+		libEGL = dlopen("libEGL.so", RTLD_NOW | RTLD_GLOBAL);
 	}
 
-#define GLFUNC(__type, __name)	__name = (__type)_GetOpenGLFunction(libGL, _glXGetProcAddress, STRINGIFY(__name));
-#define EGLFUNC(__type, __name)	__name = (__type)dlsym(libEGL, STRINGIFY(__name));
+#define GLFUNC(__type, __name) __name = (__type)_GetOpenGLFunction(libGL, _glXGetProcAddress, STRINGIFY(__name));
+#define EGLFUNC(__type, __name) __name = (__type)dlsym(libEGL, STRINGIFY(__name));
 #include "Common/GLInclude/glFunctions.h"
 #undef GLFUNC
 #undef EGLFUNC
@@ -282,17 +296,29 @@ void LoadOpenGLImports()
 #if BOOST_OS_LINUX || BOOST_OS_BSD
 // dummy function for all code that is statically linked with cemu and attempts to use eglSwapInterval
 // used to suppress wxWidgets calls to eglSwapInterval
-extern "C"
-EGLAPI EGLBoolean EGLAPIENTRY eglSwapInterval(EGLDisplay dpy, EGLint interval)
+extern "C" EGLAPI EGLBoolean EGLAPIENTRY eglSwapInterval(EGLDisplay dpy, EGLint interval)
 {
 	return EGL_TRUE;
 }
 #endif
 
 #elif BOOST_OS_MACOS
+#include <dlfcn.h>
+
+GL_IMPORT _GetOpenGLFunction(void* library, const char* name)
+{
+	return reinterpret_cast<GL_IMPORT>(dlsym(library, name));
+}
+
 void LoadOpenGLImports()
 {
-	cemu_assert_unimplemented();
+	void* openGL = dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL",
+						  RTLD_NOW | RTLD_GLOBAL);
+	if (!openGL)
+		throw std::runtime_error("failed to load the macOS OpenGL framework");
+#define GLFUNC(__type, __name) __name = reinterpret_cast<__type>(_GetOpenGLFunction(openGL, STRINGIFY(__name)));
+#include "Common/GLInclude/glFunctions.h"
+#undef GLFUNC
 }
 #endif
 
@@ -302,9 +328,10 @@ void OpenGLRenderer::Initialize()
 	auto lock = cemuLog_acquire();
 	cemuLog_log(LogType::Force, "------- Init OpenGL graphics backend -------");
 
-	GLCanvas_MakeCurrent(false);
+	if (!GLCanvas_MakeCurrent(false))
+		throw std::runtime_error("failed to make the native OpenGL context current");
 	LoadOpenGLImports();
-	GetVendorInformation();	
+	GetVendorInformation();
 
 #if BOOST_OS_WINDOWS
 	if (wglSwapIntervalEXT)
@@ -354,7 +381,6 @@ void OpenGLRenderer::Initialize()
 	if (m_vendor == GfxVendor::Nvidia)
 		glClampColor(GL_CLAMP_FRAGMENT_COLOR, GL_FALSE);
 
-
 	glEnable(GL_PRIMITIVE_RESTART);
 	glPrimitiveRestartIndex(0xFFFFFFFF);
 
@@ -390,7 +416,9 @@ void OpenGLRenderer::Initialize()
 	catchOpenGLError();
 
 	// imgui
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	ImGui_ImplOpenGL3_Init("#version 130");
+#endif
 }
 
 bool OpenGLRenderer::IsPadWindowActive()
@@ -414,7 +442,7 @@ void OpenGLRenderer::GetVendorInformation()
 {
 	// example vendor strings:
 	// ATI Technologies Inc.
-	// NVIDIA Corporation 
+	// NVIDIA Corporation
 	// Intel
 	char* glVendorString = (char*)glGetString(GL_VENDOR);
 	char* glRendererString = (char*)glGetString(GL_RENDERER);
@@ -424,7 +452,7 @@ void OpenGLRenderer::GetVendorInformation()
 	cemuLog_log(LogType::Force, "GL_RENDERER: {}", glRendererString ? glRendererString : "unknown");
 	cemuLog_log(LogType::Force, "GL_VERSION: {}", glVersionString ? glVersionString : "unknown");
 
-	if(glVersionString && boost::icontains(glVersionString, "Mesa"))
+	if (glVersionString && boost::icontains(glVersionString, "Mesa"))
 	{
 		m_vendor = GfxVendor::Mesa;
 		return;
@@ -453,7 +481,7 @@ void OpenGLRenderer::GetVendorInformation()
 	m_vendor = GfxVendor::Generic;
 }
 
-void _glDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
+void _glDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 {
 	if (LatteGPUState.glVendor == GLVENDOR_NVIDIA && strstr(message, "Buffer"))
 		return;
@@ -465,7 +493,7 @@ void _glDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GL
 		return;
 	if (LatteGPUState.glVendor == GLVENDOR_NVIDIA && strstr(message, "does not have a defined base level"))
 		return;
-	if(LatteGPUState.glVendor == GLVENDOR_NVIDIA && strstr(message, "has depth comparisons disabled, with a texture object"))
+	if (LatteGPUState.glVendor == GLVENDOR_NVIDIA && strstr(message, "has depth comparisons disabled, with a texture object"))
 		return;
 
 	cemuLog_log(LogType::Force, "GLDEBUG: {}", message);
@@ -504,7 +532,7 @@ void OpenGLRenderer::DrawEmptyFrame(bool mainWindow)
 {
 	if (!BeginFrame(mainWindow))
 		return;
-	
+
 	SwapBuffers(mainWindow, !mainWindow);
 }
 
@@ -514,10 +542,9 @@ void OpenGLRenderer::ClearColorbuffer(bool padView)
 	glClear(GL_COLOR_BUFFER_BIT);
 }
 
-
 void OpenGLRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool padView)
 {
-	if(!m_screenshot_requested && m_screenshot_state == ScreenshotState::None)
+	if (!m_screenshot_requested && m_screenshot_state == ScreenshotState::None)
 		return;
 
 	if (IsPadWindowActive())
@@ -553,10 +580,10 @@ void OpenGLRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 
 	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_data.data());
 	texture_bindAndActivate(nullptr, 0);
-	
+
 	const bool srcUsesSRGB = HAS_FLAG(texView->format, Latte::E_GX2SURFFMT::FMT_BIT_SRGB);
 	const bool dstUsesSRGB = (!padView && LatteGPUState.tvBufferUsesSRGB) || (padView && LatteGPUState.drcBufferUsesSRGB);
-	if((srcUsesSRGB && !dstUsesSRGB) || (!srcUsesSRGB && dstUsesSRGB))
+	if ((srcUsesSRGB && !dstUsesSRGB) || (!srcUsesSRGB && dstUsesSRGB))
 	{
 		for (sint32 iy = 0; iy < screenshotHeight; ++iy)
 		{
@@ -635,7 +662,7 @@ void OpenGLRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
 
 	glDisable(GL_FRAMEBUFFER_SRGB);
 
-	uint16 indexData[6] = { 0,1,2,3,4,5 };
+	uint16 indexData[6] = {0, 1, 2, 3, 4, 5};
 	glDrawRangeElements(GL_TRIANGLES, 0, 5, 6, GL_UNSIGNED_SHORT, indexData);
 
 	glEnable(GL_FRAMEBUFFER_SRGB);
@@ -770,29 +797,28 @@ void OpenGLRenderer::renderstate_setAlwaysWriteDepth()
 }
 
 static const GLuint table_glBlendSrcDst[] =
-{
-	/* 0x00 */ GL_ZERO,
-	/* 0x01 */ GL_ONE,
-	/* 0x02 */ GL_SRC_COLOR,
-	/* 0x03 */ GL_ONE_MINUS_SRC_COLOR,
-	/* 0x04 */ GL_SRC_ALPHA,
-	/* 0x05 */ GL_ONE_MINUS_SRC_ALPHA,
-	/* 0x06 */ GL_DST_ALPHA,
-	/* 0x07 */ GL_ONE_MINUS_DST_ALPHA,
-	/* 0x08 */ GL_DST_COLOR,
-	/* 0x09 */ GL_ONE_MINUS_DST_COLOR,
-	/* 0x0A */ GL_SRC_ALPHA_SATURATE,
-	/* 0x0B */ 0xFFFFFFFF,
-	/* 0x0C */ 0xFFFFFFFF,
-	/* 0x0D */ GL_CONSTANT_COLOR,
-	/* 0x0E */ GL_ONE_MINUS_CONSTANT_COLOR,
-	/* 0x0F */ GL_SRC1_COLOR,
-	/* 0x10 */ GL_ONE_MINUS_SRC1_COLOR,
-	/* 0x11 */ GL_SRC1_ALPHA,
-	/* 0x12 */ GL_ONE_MINUS_SRC1_ALPHA,
-	/* 0x13 */ GL_CONSTANT_ALPHA,
-	/* 0x14 */ GL_ONE_MINUS_CONSTANT_ALPHA
-};
+	{
+		/* 0x00 */ GL_ZERO,
+		/* 0x01 */ GL_ONE,
+		/* 0x02 */ GL_SRC_COLOR,
+		/* 0x03 */ GL_ONE_MINUS_SRC_COLOR,
+		/* 0x04 */ GL_SRC_ALPHA,
+		/* 0x05 */ GL_ONE_MINUS_SRC_ALPHA,
+		/* 0x06 */ GL_DST_ALPHA,
+		/* 0x07 */ GL_ONE_MINUS_DST_ALPHA,
+		/* 0x08 */ GL_DST_COLOR,
+		/* 0x09 */ GL_ONE_MINUS_DST_COLOR,
+		/* 0x0A */ GL_SRC_ALPHA_SATURATE,
+		/* 0x0B */ 0xFFFFFFFF,
+		/* 0x0C */ 0xFFFFFFFF,
+		/* 0x0D */ GL_CONSTANT_COLOR,
+		/* 0x0E */ GL_ONE_MINUS_CONSTANT_COLOR,
+		/* 0x0F */ GL_SRC1_COLOR,
+		/* 0x10 */ GL_ONE_MINUS_SRC1_COLOR,
+		/* 0x11 */ GL_SRC1_ALPHA,
+		/* 0x12 */ GL_ONE_MINUS_SRC1_ALPHA,
+		/* 0x13 */ GL_CONSTANT_ALPHA,
+		/* 0x14 */ GL_ONE_MINUS_CONSTANT_ALPHA};
 
 static GLuint GetGLBlendFactor(Latte::LATTE_CB_BLENDN_CONTROL::E_BLENDFACTOR blendFactor)
 {
@@ -818,13 +844,12 @@ static GLuint GetGLBlendFactor(Latte::LATTE_CB_BLENDN_CONTROL::E_BLENDFACTOR ble
 }
 
 static const GLuint table_glBlendCombine[] =
-{
-	GL_FUNC_ADD,
-	GL_FUNC_SUBTRACT,
-	GL_MIN,
-	GL_MAX,
-	GL_FUNC_REVERSE_SUBTRACT
-};
+	{
+		GL_FUNC_ADD,
+		GL_FUNC_SUBTRACT,
+		GL_MIN,
+		GL_MAX,
+		GL_FUNC_REVERSE_SUBTRACT};
 
 GLuint GetGLBlendCombineFunc(Latte::LATTE_CB_BLENDN_CONTROL::E_COMBINEFUNC combineFunc)
 {
@@ -836,7 +861,6 @@ GLuint GetGLBlendCombineFunc(Latte::LATTE_CB_BLENDN_CONTROL::E_COMBINEFUNC combi
 	}
 	return table_glBlendCombine[combineFuncU];
 }
-
 
 void* OpenGLRenderer::texture_acquireTextureUploadBuffer(uint32 size)
 {
@@ -1012,7 +1036,7 @@ void OpenGLRenderer_texture_loadSlice_normal(LatteTexture* hostTextureGeneric, s
 	sint32 effectiveHeight = height;
 	sint32 effectiveDepth = depth;
 	cemu_assert_debug(hostTexture->overwriteInfo.hasResolutionOverwrite == false); // not supported in _loadSlice
-	cemu_assert_debug(hostTexture->overwriteInfo.hasFormatOverwrite == false); // not supported in _loadSlice
+	cemu_assert_debug(hostTexture->overwriteInfo.hasFormatOverwrite == false);	   // not supported in _loadSlice
 	// get format info
 	LatteTextureGL::FormatInfoGL glFormatInfo;
 	LatteTextureGL::GetOpenGLFormatInfo(hostTexture->isDepth, hostTexture->overwriteInfo.hasFormatOverwrite ? (Latte::E_GX2SURFFMT)hostTexture->overwriteInfo.format : hostTexture->format, hostTexture->dim, &glFormatInfo);
@@ -1115,7 +1139,6 @@ void OpenGLRenderer::texture_clearDepthSlice(LatteTexture* hostTexture, uint32 s
 	catchOpenGLError();
 }
 
-
 void OpenGLRenderer::texture_clearSlice(LatteTexture* hostTextureGeneric, sint32 sliceIndex, sint32 mipIndex)
 {
 	auto hostTexture = (LatteTextureGL*)hostTextureGeneric;
@@ -1163,7 +1186,7 @@ void OpenGLRenderer::texture_clearSlice(LatteTexture* hostTextureGeneric, sint32
 }
 
 LatteTexture* OpenGLRenderer::texture_createTextureEx(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels,
-	uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth)
+													  uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth)
 {
 	return new LatteTextureGL(dim, physAddress, physMipAddress, format, width, height, depth, pitch, mipLevels, swizzle, tileMode, isDepth);
 }
@@ -1230,7 +1253,7 @@ void OpenGLRenderer::texture_setLatteTexture(LatteTextureView* textureView1, uin
 }
 
 void OpenGLRenderer::texture_copyImageSubData(LatteTexture* src, sint32 srcMip, sint32 effectiveSrcX, sint32 effectiveSrcY, sint32 srcSlice, LatteTexture* dst, sint32 dstMip, sint32 effectiveDstX, sint32 effectiveDstY,
-	sint32 dstSlice, sint32 effectiveCopyWidth, sint32 effectiveCopyHeight, sint32 srcDepth)
+											  sint32 dstSlice, sint32 effectiveCopyWidth, sint32 effectiveCopyHeight, sint32 srcDepth)
 {
 	auto srcGL = (LatteTextureGL*)src;
 	auto dstGL = (LatteTextureGL*)dst;
@@ -1252,11 +1275,10 @@ void OpenGLRenderer::texture_copyImageSubData(LatteTexture* src, sint32 srcMip, 
 
 	if (srcGL->format == Latte::E_GX2SURFFMT::R32_G32_B32_A32_UINT && dstGL->format == Latte::E_GX2SURFFMT::BC3_UNORM)
 	{
-		if ((dstGL->width >> dstMip) < 4 ||	(dstGL->height >> dstMip) < 4)
+		if ((dstGL->width >> dstMip) < 4 || (dstGL->height >> dstMip) < 4)
 		{
 			texture_syncSliceSpecialIntegerToBC3(srcGL, srcSlice, srcMip, dstGL, dstSlice, dstMip);
 			return;
-
 		}
 	}
 	catchOpenGLError();
@@ -1318,7 +1340,7 @@ void OpenGLRenderer::shader_bind(RendererShader* shader)
 	auto shaderGL = (RendererShaderGL*)shader;
 	GLbitfield shaderBit;
 	const auto program = shaderGL->GetProgram();
-	switch(shader->GetType())
+	switch (shader->GetType())
 	{
 	case RendererShader::ShaderType::kVertex:
 		if (program == prevVertexShaderProgram)
@@ -1349,20 +1371,21 @@ void OpenGLRenderer::shader_bind(RendererShader* shader)
 
 void OpenGLRenderer::shader_unbind(RendererShader::ShaderType shaderType)
 {
-	switch (shaderType) { 
-		case RendererShader::ShaderType::kVertex:
+	switch (shaderType)
+	{
+	case RendererShader::ShaderType::kVertex:
 		glUseProgramStages(m_pipeline, GL_VERTEX_SHADER_BIT, 0);
 		prevVertexShaderProgram = -1;
 		break;
-	case RendererShader::ShaderType::kFragment: 
+	case RendererShader::ShaderType::kFragment:
 		glUseProgramStages(m_pipeline, GL_FRAGMENT_SHADER_BIT, 0);
 		prevPixelShaderProgram = -1;
 		break;
-	case RendererShader::ShaderType::kGeometry: 
+	case RendererShader::ShaderType::kGeometry:
 		glUseProgramStages(m_pipeline, GL_GEOMETRY_SHADER_BIT, 0);
 		prevGeometryShaderProgram = -1;
 		break;
-	default: 
+	default:
 		UNREACHABLE;
 	}
 }
@@ -1382,8 +1405,8 @@ void OpenGLRenderer::texture_syncSliceSpecialBC4(LatteTexture* srcTexture, sint3
 	sint32 compressedCopyWidth = std::min(sourceTexWidth, std::max(1, destTexWidth / 4));
 	sint32 compressedCopyHeight = std::min(sourceTexHeight, std::max(1, destTexHeight / 4));
 
-	uint8* texelData = (uint8*)malloc(compressedCopyWidth*compressedCopyHeight * 8);
-	float* pixelRGBA16fData = (float*)malloc(destTexWidth*destTexHeight * sizeof(float) * 2);
+	uint8* texelData = (uint8*)malloc(compressedCopyWidth * compressedCopyHeight * 8);
+	float* pixelRGBA16fData = (float*)malloc(destTexWidth * destTexHeight * sizeof(float) * 2);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 	if (glGetTextureSubImage)
 		glGetTextureSubImage(srcTextureGL->glId_texture, 0, 0, 0, srcSliceIndex, compressedCopyWidth, compressedCopyHeight, 1, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, compressedCopyWidth * compressedCopyHeight * 8, texelData);
@@ -1397,7 +1420,7 @@ void OpenGLRenderer::texture_syncSliceSpecialBC4(LatteTexture* srcTexture, sint3
 			{
 				for (sint32 sx = 0; sx < std::min(4, destTexWidth - bx * 4); sx++)
 				{
-					sint32 pixelIndex = (bx * 4 + sx) + (by * 4 + sy)*destTexWidth;
+					sint32 pixelIndex = (bx * 4 + sx) + (by * 4 + sy) * destTexWidth;
 					pixelRGBA16fData[pixelIndex * 2] = rBlock[sx + sy * 4];
 					pixelRGBA16fData[pixelIndex * 2 + 1] = rBlock[sx + sy * 4];
 				}
@@ -1425,15 +1448,15 @@ void OpenGLRenderer::texture_syncSliceSpecialIntegerToBC3(LatteTexture* srcTextu
 	sint32 compressedCopyWidth = std::min(sourceTexWidth, std::max(1, destTexWidth / 4));
 	sint32 compressedCopyHeight = std::min(sourceTexHeight, std::max(1, destTexHeight / 4));
 
-	uint8* texelData = (uint8*)malloc(compressedCopyWidth*compressedCopyHeight * 16);
+	uint8* texelData = (uint8*)malloc(compressedCopyWidth * compressedCopyHeight * 16);
 
 	catchOpenGLError();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 	catchOpenGLError();
 	if (glGetTextureSubImage)
 		glGetTextureSubImage(srcTextureGL->glId_texture, 0, 0, 0, srcSliceIndex, compressedCopyWidth, compressedCopyHeight, 1, GL_RGBA_INTEGER, GL_UNSIGNED_INT, compressedCopyWidth * compressedCopyHeight * 16, texelData);
-	//float* pixelRGBA16fData = (float*)malloc(destTexWidth*destTexHeight * sizeof(float) * 2);
-	//for (sint32 bx = 0; bx < compressedCopyWidth; bx++)
+	// float* pixelRGBA16fData = (float*)malloc(destTexWidth*destTexHeight * sizeof(float) * 2);
+	// for (sint32 bx = 0; bx < compressedCopyWidth; bx++)
 	//{
 	//	for (sint32 by = 0; by < compressedCopyHeight; by++)
 	//	{
@@ -1449,8 +1472,8 @@ void OpenGLRenderer::texture_syncSliceSpecialIntegerToBC3(LatteTexture* srcTextu
 	//			}
 	//		}
 	//	}
-	//}
-	// upload mip
+	// }
+	//  upload mip
 	catchOpenGLError();
 	if (glGetTextureSubImage && glCompressedTextureSubImage3D)
 		glCompressedTextureSubImage3D(dstTextureGL->glId_texture, dstMipIndex, 0, 0, dstSliceIndex, destTexWidth, destTexHeight, 1, dstTextureGL->glInternalFormat, compressedCopyWidth * compressedCopyHeight * 16, texelData);
@@ -1504,16 +1527,15 @@ void OpenGLRenderer::renderstate_updateBlendingAndColorControl()
 	uint32 stencilRefBack = LatteGPUState.contextNew.DB_STENCILREFMASK_BF.get_STENCILREF_B();
 
 	const static GLenum stencilActionGX2ToGL[] =
-	{
-		GL_KEEP,
-		GL_ZERO,
-		GL_REPLACE,
-		GL_INCR,
-		GL_DECR,
-		GL_INVERT,
-		GL_INCR_WRAP,
-		GL_DECR_WRAP
-	};
+		{
+			GL_KEEP,
+			GL_ZERO,
+			GL_REPLACE,
+			GL_INCR,
+			GL_DECR,
+			GL_INVERT,
+			GL_INCR_WRAP,
+			GL_DECR_WRAP};
 
 	if (prevStencilEnable != stencilEnable)
 	{
@@ -1727,7 +1749,6 @@ void OpenGLRenderer::renderstate_updateBlendingAndColorControl()
 		else
 			glDisable(GL_POLYGON_OFFSET_FILL);
 		prevPolygonOffsetFrontEnabled = polyOffsetFrontEnabled;
-
 	}
 
 	if (polyOffsetFrontEnabled)
@@ -1741,9 +1762,9 @@ void OpenGLRenderer::renderstate_updateBlendingAndColorControl()
 
 			frontScale /= 16.0f;
 
-			//if( glPolygonOffsetClampEXT )
-			//	glPolygonOffsetClampEXT(frontOffset, frontScale, offsetClamp);		
-			//else
+			// if( glPolygonOffsetClampEXT )
+			//	glPolygonOffsetClampEXT(frontOffset, frontScale, offsetClamp);
+			// else
 			glPolygonOffset(frontScale, frontOffset);
 
 			prevPolygonFrontOffsetU32 = LatteGPUState.contextNew.PA_SU_POLY_OFFSET_FRONT_SCALE.getRawValue();
@@ -1800,10 +1821,10 @@ void OpenGLRenderer::renderstate_resetColorControl()
 	uint32 blendEnableMask = 0;
 	for (uint32 i = 0; i < 8; i++)
 	{
-		if (((blendEnableMask^prevBlendMask)&(1 << i)) != 0)
+		if (((blendEnableMask ^ prevBlendMask) & (1 << i)) != 0)
 		{
 			// bit changed -> blend mode was toggled
-			if ((blendEnableMask&(1 << i)) != 0)
+			if ((blendEnableMask & (1 << i)) != 0)
 				glEnablei(GL_BLEND, i);
 			else
 				glDisablei(GL_BLEND, i);
@@ -1865,11 +1886,11 @@ void OpenGLRenderer::renderstate_resetDepthControl()
 		glDisable(GL_STENCIL_TEST);
 		prevStencilEnable = false;
 	}
-	//if (prevZClipEnable == 0)
+	// if (prevZClipEnable == 0)
 	//{
 	//	glDisable(GL_DEPTH_CLAMP);
 	//	prevZClipEnable = 1;
-	//}
+	// }
 
 	glDisable(GL_DEPTH_CLAMP);
 	prevZClipEnable = 1;
@@ -1884,7 +1905,7 @@ void OpenGLRenderer::renderstate_resetDepthControl()
 void OpenGLRenderer::renderstate_resetStencilMask()
 {
 	uint32 stencilWriteMaskFront = 0xFFFFFFFF; // enable front mask
-	uint32 stencilWriteMaskBack = 0xFFFFFFFF; // enable back mask
+	uint32 stencilWriteMaskBack = 0xFFFFFFFF;  // enable back mask
 	if (prevStencilWriteMaskFront != stencilWriteMaskFront)
 	{
 		glStencilMaskSeparate(GL_FRONT, stencilWriteMaskFront);

@@ -16,7 +16,7 @@ bool RendererShaderGL::loadBinary()
 	if (!s_programBinaryCache)
 		return false;
 	if (m_isGameShader == false || m_isGfxPackShader)
-		return false; // only non-custom 
+		return false; // only non-custom
 	if (!glProgramBinary)
 		return false; // OpenGL program binaries not supported
 
@@ -24,7 +24,7 @@ bool RendererShaderGL::loadBinary()
 	uint64 h1, h2;
 	GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
 	std::vector<uint8> cacheFileData;
-	if (!s_programBinaryCache->GetFile({h1, h2 }, cacheFileData))
+	if (!s_programBinaryCache->GetFile({h1, h2}, cacheFileData))
 		return false;
 	if (cacheFileData.size() <= sizeof(uint32))
 		return false;
@@ -32,7 +32,7 @@ bool RendererShaderGL::loadBinary()
 	uint32 shaderBinFormat = *(uint32*)(cacheFileData.data());
 
 	m_program = glCreateProgram();
-	glProgramBinary(m_program, shaderBinFormat, cacheFileData.data()+4, cacheFileData.size()-4);
+	glProgramBinary(m_program, shaderBinFormat, cacheFileData.data() + 4, cacheFileData.size() - 4);
 
 	int status = -1;
 	glGetProgramiv(m_program, GL_LINK_STATUS, &status);
@@ -64,12 +64,12 @@ void RendererShaderGL::storeBinary()
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
 		// build stored shader data (4 byte format + binary data)
-		std::vector<uint8> storedBinary(binaryLength+sizeof(uint32), 0);
+		std::vector<uint8> storedBinary(binaryLength + sizeof(uint32), 0);
 		GLenum binaryFormat = 0;
-		glGetProgramBinary(m_program, binaryLength, NULL, &binaryFormat, storedBinary.data()+sizeof(uint32));		
+		glGetProgramBinary(m_program, binaryLength, NULL, &binaryFormat, storedBinary.data() + sizeof(uint32));
 		*(uint32*)(storedBinary.data() + 0) = binaryFormat;
 		// store
-		s_programBinaryCache->AddFileAsync({h1, h2 }, storedBinary.data(), storedBinary.size());
+		s_programBinaryCache->AddFileAsync({h1, h2}, storedBinary.data(), storedBinary.size());
 	}
 }
 
@@ -104,7 +104,7 @@ RendererShaderGL::RendererShaderGL(ShaderType type, uint64 baseHash, uint64 auxH
 
 	m_shader_object = glCreateShader(glShaderType);
 
-	const char *c_str = m_glslSource.c_str();
+	const char* c_str = m_glslSource.c_str();
 	const GLint size = (GLint)m_glslSource.size();
 	glShaderSource(m_shader_object, 1, &c_str, &size);
 	glCompileShader(m_shader_object);
@@ -121,7 +121,7 @@ RendererShaderGL::RendererShaderGL(ShaderType type, uint64 baseHash, uint64 auxH
 	}
 
 	// set debug name
-	if (LaunchSettings::NSightModeEnabled()) 
+	if (LaunchSettings::NSightModeEnabled())
 	{
 		auto objNameStr = fmt::format("shader_{:016x}_{:016x}", m_baseHash, m_auxHash);
 		glObjectLabel(GL_SHADER, m_shader_object, objNameStr.size(), objNameStr.c_str());
@@ -190,7 +190,7 @@ bool RendererShaderGL::WaitForCompiled()
 	if (compileStatus == 0)
 	{
 		uint32 infoLogLength, tempLength;
-		glGetShaderiv(m_shader_object, GL_INFO_LOG_LENGTH, (GLint *)&infoLogLength);
+		glGetShaderiv(m_shader_object, GL_INFO_LOG_LENGTH, (GLint*)&infoLogLength);
 		if (infoLogLength != 0)
 		{
 			tempLength = sizeof(infoLog) - 1;
@@ -209,7 +209,7 @@ bool RendererShaderGL::WaitForCompiled()
 	if (linkStatus == 0)
 	{
 		uint32 infoLogLength, tempLength;
-		glGetProgramiv(m_program, GL_INFO_LOG_LENGTH, (GLint *)&infoLogLength);
+		glGetProgramiv(m_program, GL_INFO_LOG_LENGTH, (GLint*)&infoLogLength);
 		if (infoLogLength != 0)
 		{
 			tempLength = sizeof(infoLog) - 1;
@@ -255,7 +255,7 @@ void RendererShaderGL::SetUniform4iv(sint32 location, void* data, sint32 count)
 
 void RendererShaderGL::ShaderCacheLoading_begin(uint64 cacheTitleId)
 {
-    cemu_assert_debug(!s_programBinaryCache); // should not be set, ShaderCacheLoading_Close() not called?
+	cemu_assert_debug(!s_programBinaryCache); // should not be set, ShaderCacheLoading_Close() not called?
 	// determine if cache is enabled
 	bool usePrecompiled = false;
 	switch (ActiveSettings::GetPrecompiledShadersOption())
@@ -282,7 +282,7 @@ void RendererShaderGL::ShaderCacheLoading_begin(uint64 cacheTitleId)
 	{
 		const uint32 cacheMagic = GeneratePrecompiledCacheId();
 		const std::string cacheFilename = fmt::format("{:016x}_gl.bin", cacheTitleId);
-        s_programBinaryCache = FileCache::Open(ActiveSettings::GetCachePath("shaderCache/precompiled/{}", cacheFilename), true, cacheMagic);
+		s_programBinaryCache = FileCache::Open(ActiveSettings::GetCachePath("shaderCache/precompiled/{}", cacheFilename), true, cacheMagic);
 		if (s_programBinaryCache == nullptr)
 			cemuLog_log(LogType::Force, "Unable to open OpenGL precompiled cache {}", cacheFilename);
 	}
@@ -296,13 +296,13 @@ void RendererShaderGL::ShaderCacheLoading_end()
 
 void RendererShaderGL::ShaderCacheLoading_Close()
 {
-    if(s_programBinaryCache)
-    {
-        delete s_programBinaryCache;
-        s_programBinaryCache = nullptr;
-    }
-    g_compiled_shaders_total = 0;
-    g_compiled_shaders_async = 0;
+	if (s_programBinaryCache)
+	{
+		delete s_programBinaryCache;
+		s_programBinaryCache = nullptr;
+	}
+	g_compiled_shaders_total = 0;
+	g_compiled_shaders_async = 0;
 }
 
 FileCache* RendererShaderGL::s_programBinaryCache{};

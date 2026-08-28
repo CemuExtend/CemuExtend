@@ -10,10 +10,14 @@ std::string_view EmulatedController::type_to_string(Type type)
 {
 	switch (type)
 	{
-	case VPAD: return "Wii U GamePad";
-	case Pro: return "Wii U Pro Controller";
-	case Classic: return "Wii U Classic Controller";
-	case Wiimote: return "Wiimote";
+	case VPAD:
+		return "Wii U GamePad";
+	case Pro:
+		return "Wii U Pro Controller";
+	case Classic:
+		return "Wii U Classic Controller";
+	case Wiimote:
+		return "Wiimote";
 	}
 
 	throw std::runtime_error(fmt::format("unknown emulated controller: {}", stdx::to_underlying(type)));
@@ -59,7 +63,7 @@ void EmulatedController::connect()
 void EmulatedController::update()
 {
 	std::shared_lock lock(m_mutex);
-	for(const auto& controller : m_controllers)
+	for (const auto& controller : m_controllers)
 	{
 		controller->update();
 	}
@@ -85,6 +89,12 @@ void EmulatedController::copy_unique_controllers(
 		if (std::find(output.begin(), output.begin() + count, controller) == output.begin() + count)
 			output[count++] = controller;
 	}
+}
+
+std::vector<std::shared_ptr<ControllerBase>> EmulatedController::copy_controllers() const
+{
+	std::shared_lock lock(m_mutex);
+	return m_controllers;
 }
 
 void EmulatedController::start_rumble()
@@ -114,13 +124,13 @@ void EmulatedController::stop_rumble()
 bool EmulatedController::is_battery_low() const
 {
 	std::shared_lock lock(m_mutex);
-	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) {return c->has_low_battery(); });
+	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) { return c->has_low_battery(); });
 }
 
 bool EmulatedController::has_motion() const
 {
 	std::shared_lock lock(m_mutex);
-	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) {return c->use_motion(); });
+	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) { return c->use_motion(); });
 }
 
 MotionSample EmulatedController::get_motion_data() const
@@ -139,20 +149,20 @@ bool EmulatedController::has_second_motion() const
 {
 	int motion = 0;
 	std::shared_lock lock(m_mutex);
-	for(const auto& controller : m_controllers)
+	for (const auto& controller : m_controllers)
 	{
-		if(controller->use_motion())
+		if (controller->use_motion())
 		{
-			// if wiimote has nunchuck connected, we use its acceleration
-            #if SUPPORTS_WIIMOTE
-            if(controller->api() == InputAPI::Wiimote)
+// if wiimote has nunchuck connected, we use its acceleration
+#if SUPPORTS_WIIMOTE
+			if (controller->api() == InputAPI::Wiimote)
 			{
-				if(((NativeWiimoteController*)controller.get())->get_extension() == NativeWiimoteController::Nunchuck)
+				if (((NativeWiimoteController*)controller.get())->get_extension() == NativeWiimoteController::Nunchuck)
 				{
 					return true;
 				}
 			}
-            #endif
+#endif
 			motion++;
 		}
 	}
@@ -168,8 +178,8 @@ MotionSample EmulatedController::get_second_motion_data() const
 	{
 		if (controller->use_motion())
 		{
-			// if wiimote has nunchuck connected, we use its acceleration
-            #ifdef SUPPORTS_WIIMOTE
+// if wiimote has nunchuck connected, we use its acceleration
+#ifdef SUPPORTS_WIIMOTE
 			if (controller->api() == InputAPI::Wiimote)
 			{
 				if (((NativeWiimoteController*)controller.get())->get_extension() == NativeWiimoteController::Nunchuck)
@@ -177,10 +187,10 @@ MotionSample EmulatedController::get_second_motion_data() const
 					return ((NativeWiimoteController*)controller.get())->get_nunchuck_motion_sample();
 				}
 			}
-			#endif
+#endif
 
 			motion++;
-			if(motion == 2)
+			if (motion == 2)
 			{
 				return controller->get_motion_sample();
 			}
@@ -193,7 +203,7 @@ MotionSample EmulatedController::get_second_motion_data() const
 bool EmulatedController::has_position() const
 {
 	std::shared_lock lock(m_mutex);
-	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) {return c->has_position(); });
+	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) { return c->has_position(); });
 }
 
 glm::vec2 EmulatedController::get_position() const
@@ -235,11 +245,12 @@ void EmulatedController::add_controller(std::shared_ptr<ControllerBase> controll
 {
 	controller->connect();
 
-    #ifdef SUPPORTS_WIIMOTE
-    if (const auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller)) {
+#ifdef SUPPORTS_WIIMOTE
+	if (const auto wiimote = std::dynamic_pointer_cast<NativeWiimoteController>(controller))
+	{
 		wiimote->set_player_index(m_player_index);
 	}
-    #endif
+#endif
 	std::scoped_lock lock(m_mutex);
 	m_controllers.emplace_back(std::move(controller));
 }
@@ -252,11 +263,11 @@ void EmulatedController::remove_controller(const std::shared_ptr<ControllerBase>
 	{
 		m_controllers.erase(it);
 
-		for(auto m = m_mappings.begin(); m != m_mappings.end();)
+		for (auto m = m_mappings.begin(); m != m_mappings.end();)
 		{
-			if(auto mc = m->second.controller.lock())
+			if (auto mc = m->second.controller.lock())
 			{
-				if(*mc == *controller)
+				if (*mc == *controller)
 				{
 					m = m_mappings.erase(m);
 					continue;
@@ -280,7 +291,8 @@ float EmulatedController::get_axis_value(uint64 mapping) const
 	const auto it = m_mappings.find(mapping);
 	if (it != m_mappings.cend())
 	{
-		if (const auto controller = it->second.controller.lock()) {
+		if (const auto controller = it->second.controller.lock())
+		{
 			return controller->get_axis_value(it->second.button);
 		}
 	}
@@ -300,14 +312,14 @@ bool EmulatedController::is_mapping_down(uint64 mapping) const
 	return false;
 }
 
-
 std::string EmulatedController::get_mapping_name(uint64 mapping) const
 {
 	std::shared_lock lock(m_mutex);
 	const auto it = m_mappings.find(mapping);
 	if (it != m_mappings.cend())
 	{
-		if (const auto controller = it->second.controller.lock()) {
+		if (const auto controller = it->second.controller.lock())
+		{
 			return controller->get_button_name(it->second.button);
 		}
 	}
@@ -321,7 +333,8 @@ std::shared_ptr<ControllerBase> EmulatedController::get_mapping_controller(uint6
 	const auto it = m_mappings.find(mapping);
 	if (it != m_mappings.cend())
 	{
-		if (const auto controller = it->second.controller.lock()) {
+		if (const auto controller = it->second.controller.lock())
+		{
 			return controller;
 		}
 	}
@@ -342,10 +355,10 @@ void EmulatedController::clear_mappings()
 }
 
 void EmulatedController::set_mapping(uint64 mapping, const std::shared_ptr<ControllerBase>& controller,
-                                     uint64 button)
+									 uint64 button)
 {
 	std::scoped_lock lock(m_mutex);
-	m_mappings[mapping] = { controller, button };
+	m_mappings[mapping] = {controller, button};
 }
 
 bool EmulatedController::operator==(const EmulatedController& o) const

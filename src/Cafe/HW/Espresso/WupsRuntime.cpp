@@ -20,33 +20,60 @@ namespace
 	{
 		switch (type)
 		{
-		case WupsHookType::InitWutMalloc: return "INIT_WUT_MALLOC";
-		case WupsHookType::FiniWutMalloc: return "FINI_WUT_MALLOC";
-		case WupsHookType::InitWutNewlib: return "INIT_WUT_NEWLIB";
-		case WupsHookType::FiniWutNewlib: return "FINI_WUT_NEWLIB";
-		case WupsHookType::InitWutStdcpp: return "INIT_WUT_STDCPP";
-		case WupsHookType::FiniWutStdcpp: return "FINI_WUT_STDCPP";
-		case WupsHookType::InitWutDevoptab: return "INIT_WUT_DEVOPTAB";
-		case WupsHookType::FiniWutDevoptab: return "FINI_WUT_DEVOPTAB";
-		case WupsHookType::InitWutSockets: return "INIT_WUT_SOCKETS";
-		case WupsHookType::FiniWutSockets: return "FINI_WUT_SOCKETS";
-		case WupsHookType::InitWrapper: return "INIT_WRAPPER";
-		case WupsHookType::FiniWrapper: return "FINI_WRAPPER";
-		case WupsHookType::GetConfigDeprecated: return "GET_CONFIG_DEPRECATED";
-		case WupsHookType::ConfigClosedDeprecated: return "CONFIG_CLOSED_DEPRECATED";
-		case WupsHookType::InitStorageDeprecated: return "INIT_STORAGE_DEPRECATED";
-		case WupsHookType::InitPlugin: return "INIT_PLUGIN";
-		case WupsHookType::DeinitPlugin: return "DEINIT_PLUGIN";
-		case WupsHookType::ApplicationStarts: return "APPLICATION_STARTS";
-		case WupsHookType::ReleaseForeground: return "RELEASE_FOREGROUND";
-		case WupsHookType::AcquiredForeground: return "ACQUIRED_FOREGROUND";
-		case WupsHookType::ApplicationRequestsExit: return "APPLICATION_REQUESTS_EXIT";
-		case WupsHookType::ApplicationEnds: return "APPLICATION_ENDS";
-		case WupsHookType::InitStorage: return "INIT_STORAGE";
-		case WupsHookType::InitConfig: return "INIT_CONFIG";
-		case WupsHookType::InitButtonCombo: return "INIT_BUTTON_COMBO";
-		case WupsHookType::InitWutThread: return "INIT_WUT_THREAD";
-		case WupsHookType::InitReentFunctions: return "INIT_REENT_FUNCTIONS";
+		case WupsHookType::InitWutMalloc:
+			return "INIT_WUT_MALLOC";
+		case WupsHookType::FiniWutMalloc:
+			return "FINI_WUT_MALLOC";
+		case WupsHookType::InitWutNewlib:
+			return "INIT_WUT_NEWLIB";
+		case WupsHookType::FiniWutNewlib:
+			return "FINI_WUT_NEWLIB";
+		case WupsHookType::InitWutStdcpp:
+			return "INIT_WUT_STDCPP";
+		case WupsHookType::FiniWutStdcpp:
+			return "FINI_WUT_STDCPP";
+		case WupsHookType::InitWutDevoptab:
+			return "INIT_WUT_DEVOPTAB";
+		case WupsHookType::FiniWutDevoptab:
+			return "FINI_WUT_DEVOPTAB";
+		case WupsHookType::InitWutSockets:
+			return "INIT_WUT_SOCKETS";
+		case WupsHookType::FiniWutSockets:
+			return "FINI_WUT_SOCKETS";
+		case WupsHookType::InitWrapper:
+			return "INIT_WRAPPER";
+		case WupsHookType::FiniWrapper:
+			return "FINI_WRAPPER";
+		case WupsHookType::GetConfigDeprecated:
+			return "GET_CONFIG_DEPRECATED";
+		case WupsHookType::ConfigClosedDeprecated:
+			return "CONFIG_CLOSED_DEPRECATED";
+		case WupsHookType::InitStorageDeprecated:
+			return "INIT_STORAGE_DEPRECATED";
+		case WupsHookType::InitPlugin:
+			return "INIT_PLUGIN";
+		case WupsHookType::DeinitPlugin:
+			return "DEINIT_PLUGIN";
+		case WupsHookType::ApplicationStarts:
+			return "APPLICATION_STARTS";
+		case WupsHookType::ReleaseForeground:
+			return "RELEASE_FOREGROUND";
+		case WupsHookType::AcquiredForeground:
+			return "ACQUIRED_FOREGROUND";
+		case WupsHookType::ApplicationRequestsExit:
+			return "APPLICATION_REQUESTS_EXIT";
+		case WupsHookType::ApplicationEnds:
+			return "APPLICATION_ENDS";
+		case WupsHookType::InitStorage:
+			return "INIT_STORAGE";
+		case WupsHookType::InitConfig:
+			return "INIT_CONFIG";
+		case WupsHookType::InitButtonCombo:
+			return "INIT_BUTTON_COMBO";
+		case WupsHookType::InitWutThread:
+			return "INIT_WUT_THREAD";
+		case WupsHookType::InitReentFunctions:
+			return "INIT_REENT_FUNCTIONS";
 		}
 		return fmt::format("HOOK_{}", static_cast<std::uint32_t>(type));
 	}
@@ -55,14 +82,22 @@ namespace
 	{
 		switch (type)
 		{
-		case WupsHookType::InitWutMalloc: return WupsHookType::FiniWutMalloc;
-		case WupsHookType::InitWutNewlib: return WupsHookType::FiniWutNewlib;
-		case WupsHookType::InitWutStdcpp: return WupsHookType::FiniWutStdcpp;
-		case WupsHookType::InitWutDevoptab: return WupsHookType::FiniWutDevoptab;
-		case WupsHookType::InitWutSockets: return WupsHookType::FiniWutSockets;
-		case WupsHookType::InitWrapper: return WupsHookType::FiniWrapper;
-		case WupsHookType::InitPlugin: return WupsHookType::DeinitPlugin;
-		default: return std::nullopt;
+		case WupsHookType::InitWutMalloc:
+			return WupsHookType::FiniWutMalloc;
+		case WupsHookType::InitWutNewlib:
+			return WupsHookType::FiniWutNewlib;
+		case WupsHookType::InitWutStdcpp:
+			return WupsHookType::FiniWutStdcpp;
+		case WupsHookType::InitWutDevoptab:
+			return WupsHookType::FiniWutDevoptab;
+		case WupsHookType::InitWutSockets:
+			return WupsHookType::FiniWutSockets;
+		case WupsHookType::InitWrapper:
+			return WupsHookType::FiniWrapper;
+		case WupsHookType::InitPlugin:
+			return WupsHookType::DeinitPlugin;
+		default:
+			return std::nullopt;
 		}
 	}
 
@@ -74,7 +109,7 @@ namespace
 		});
 		return result;
 	}
-}
+} // namespace
 
 struct WupsPluginRuntime::Impl
 {
@@ -108,15 +143,14 @@ struct WupsPluginRuntime::Impl
 	std::string lastError;
 
 	Impl(CemodPackage package_, WupsInspection inspection_, std::uint64_t owner_,
-		std::uint32_t generation_, std::shared_ptr<IWupsRuntimeServices> services_,
-		std::shared_ptr<IWupsModuleLoader> loader_) :
-		package(std::move(package_)),
-		inspection(std::move(inspection_)),
-		owner(owner_),
-		resourceGeneration(generation_),
-		generation(generation_),
-		services(std::move(services_)),
-		moduleLoader(std::move(loader_))
+		 std::uint32_t generation_, std::shared_ptr<IWupsRuntimeServices> services_,
+		 std::shared_ptr<IWupsModuleLoader> loader_) : package(std::move(package_)),
+													   inspection(std::move(inspection_)),
+													   owner(owner_),
+													   resourceGeneration(generation_),
+													   generation(generation_),
+													   services(std::move(services_)),
+													   moduleLoader(std::move(loader_))
 	{
 		for (const auto& hook : inspection.hooks)
 			hooks.emplace(hook.type, hook.target);
@@ -124,9 +158,8 @@ struct WupsPluginRuntime::Impl
 
 	struct InvocationActivity
 	{
-		explicit InvocationActivity(Impl& runtime_) :
-			runtime(runtime_),
-			previousRuntime(s_activeWupsRuntime)
+		explicit InvocationActivity(Impl& runtime_) : runtime(runtime_),
+													  previousRuntime(s_activeWupsRuntime)
 		{
 			s_activeWupsRuntime = &runtime;
 		}
@@ -143,11 +176,11 @@ struct WupsPluginRuntime::Impl
 					--runtime.callbacksInFlight;
 				runtime.callbacksFinished.notify_all();
 				finishDeferredApplicationEnd = runtime.deferredApplicationEnd &&
-					runtime.applicationEndsPending &&
-					runtime.callbacksInFlight == 0 && !runtime.teardownInProgress;
+											   runtime.applicationEndsPending &&
+											   runtime.callbacksInFlight == 0 && !runtime.teardownInProgress;
 				finishDeferredUnload = !finishDeferredApplicationEnd &&
-					runtime.deferredUnload &&
-					runtime.callbacksInFlight == 0 && !runtime.teardownInProgress;
+									   runtime.deferredUnload &&
+									   runtime.callbacksInFlight == 0 && !runtime.teardownInProgress;
 			}
 			if (finishDeferredApplicationEnd)
 				runtime.FinishApplicationEnd();
@@ -180,7 +213,7 @@ struct WupsPluginRuntime::Impl
 			if (!permitted || !module)
 			{
 				error = fmt::format("{} rejected for stale lifecycle state {}",
-					HookName(type), static_cast<unsigned>(state));
+									HookName(type), static_cast<unsigned>(state));
 				return false;
 			}
 			callbackModule = module;
@@ -195,17 +228,15 @@ struct WupsPluginRuntime::Impl
 		try
 		{
 			prepared = services->PrepareHookInvocation(package, inspection.metadata,
-				owner, resourceGeneration, type, invocation, error);
-		}
-		catch (const std::exception& exception)
+													   owner, resourceGeneration, type, invocation, error);
+		} catch (const std::exception& exception)
 		{
 			error = fmt::format("{} preparation threw an exception: {}",
-				HookName(type), exception.what());
-		}
-		catch (...)
+								HookName(type), exception.what());
+		} catch (...)
 		{
 			error = fmt::format("{} preparation threw a non-standard exception",
-				HookName(type));
+								HookName(type));
 		}
 		std::uint32_t result{};
 		bool called = false;
@@ -214,9 +245,9 @@ struct WupsPluginRuntime::Impl
 		{
 			std::lock_guard lock(mutex);
 			authorized = generation == callbackGeneration &&
-				state != WupsPluginState::Unloading &&
-				state != WupsPluginState::Unloaded &&
-				state != WupsPluginState::Failed;
+						 state != WupsPluginState::Unloading &&
+						 state != WupsPluginState::Unloaded &&
+						 state != WupsPluginState::Failed;
 			if (!authorized && error.empty())
 				error = fmt::format(
 					"{} preparation completed after its owner generation was revoked",
@@ -230,18 +261,16 @@ struct WupsPluginRuntime::Impl
 				// WUPS loader hook arguments are materialized as one aggregate and
 				// passed by address by the SDK hook ABI.
 				called = moduleLoader->Invoke(callbackModule, callbackLifetime,
-					found->second, invocation.argumentWords, result, error,
-					true);
-			}
-			catch (const std::exception& exception)
+											  found->second, invocation.argumentWords, result, error,
+											  true);
+			} catch (const std::exception& exception)
 			{
 				error = fmt::format("{} guest callback threw an exception: {}",
-					HookName(type), exception.what());
-			}
-			catch (...)
+									HookName(type), exception.what());
+			} catch (...)
 			{
 				error = fmt::format("{} guest callback threw a non-standard exception",
-					HookName(type));
+									HookName(type));
 			}
 			if (called && result != 0 &&
 				(invocation.requireZeroResult || invocation.reportNonZeroResult))
@@ -249,13 +278,13 @@ struct WupsPluginRuntime::Impl
 				if (invocation.requireZeroResult)
 				{
 					error = fmt::format("{} returned error 0x{:08x}",
-						HookName(type), result);
+										HookName(type), result);
 					called = false;
 				}
 				else
 					cemuLog_log(LogType::Force,
-						"WUPS: {} returned 0x{:08x}; continuing without it",
-						HookName(type), result);
+								"WUPS: {} returned 0x{:08x}; continuing without it",
+								HookName(type), result);
 			}
 		}
 
@@ -263,14 +292,14 @@ struct WupsPluginRuntime::Impl
 			std::lock_guard lock(mutex);
 			if (prepared && authorized && (invocation.skip || called) &&
 				(allowTeardown || (generation == callbackGeneration &&
-					state != WupsPluginState::Unloading)))
+								   state != WupsPluginState::Unloading)))
 				invoked = !invocation.skip;
 			else if (prepared && authorized && called && error.empty())
 				error = fmt::format("{} completed after its owner generation was revoked",
-					HookName(type));
+									HookName(type));
 		}
 		return prepared && authorized && (invocation.skip || called) &&
-			(allowTeardown || invoked);
+			   (allowTeardown || invoked);
 	}
 
 	bool Invoke(WupsHookType type, bool allowTeardown, std::string& error)
@@ -292,14 +321,12 @@ struct WupsPluginRuntime::Impl
 		{
 			if (!services->DeactivatePlugin(owner, resourceGeneration, error))
 				return false;
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			error = fmt::format(
 				"plugin deactivation threw an exception: {}", exception.what());
 			return false;
-		}
-		catch (...)
+		} catch (...)
 		{
 			error = "plugin deactivation threw a non-standard exception";
 			return false;
@@ -319,16 +346,14 @@ struct WupsPluginRuntime::Impl
 		try
 		{
 			if (!services->ReleaseOwnerResources(
-				owner, resourceGeneration, error))
+					owner, resourceGeneration, error))
 				return false;
-		}
-		catch (const std::exception& exception)
+		} catch (const std::exception& exception)
 		{
 			error = fmt::format(
 				"owner resource release threw an exception: {}", exception.what());
 			return false;
-		}
-		catch (...)
+		} catch (...)
 		{
 			error = "owner resource release threw a non-standard exception";
 			return false;
@@ -397,12 +422,12 @@ struct WupsPluginRuntime::Impl
 					.append(deactivateError);
 			}
 			else if (state != WupsPluginState::Unloading &&
-				state != WupsPluginState::Unloaded)
+					 state != WupsPluginState::Unloaded)
 				state = WupsPluginState::Deinitialized;
 			lifecycleTransition = false;
 			foregroundReleased = false;
 			finishDeferredUnload = deferredUnload &&
-				callbacksInFlight == 0 && !teardownInProgress;
+								   callbacksInFlight == 0 && !teardownInProgress;
 		}
 		if (finishDeferredUnload)
 			FinishUnload(false);
@@ -480,14 +505,12 @@ struct WupsPluginRuntime::Impl
 			{
 				unloaded = moduleLoader->Unload(
 					unloadModule, unloadLifetime, unloadError);
-			}
-			catch (const std::exception& exception)
+			} catch (const std::exception& exception)
 			{
 				unloaded = false;
 				unloadError = fmt::format(
 					"WUPS module unload threw an exception: {}", exception.what());
-			}
-			catch (...)
+			} catch (...)
 			{
 				unloaded = false;
 				unloadError = "WUPS module unload threw a non-standard exception";
@@ -507,9 +530,7 @@ struct WupsPluginRuntime::Impl
 			lifecycleTransition = false;
 			foregroundTransition = false;
 			exitRequestInProgress = false;
-			state = unloaded ?
-				(preserveFailure ? WupsPluginState::Failed : WupsPluginState::Unloaded) :
-				WupsPluginState::Failed;
+			state = unloaded ? (preserveFailure ? WupsPluginState::Failed : WupsPluginState::Unloaded) : WupsPluginState::Failed;
 			if (!cleanupError.empty())
 				lastError = cleanupError;
 			if (!unloaded)
@@ -537,13 +558,13 @@ struct WupsPluginRuntime::Impl
 		std::string unloadError;
 		if (!FinishUnload(true, &unloadError))
 			error.append(error.empty() ? "" : "; ")
-				.append("WUPS unload failed: ").append(unloadError);
+				.append("WUPS unload failed: ")
+				.append(unloadError);
 		return false;
 	}
 };
 
-WupsPluginRuntime::WupsPluginRuntime(std::unique_ptr<Impl> impl) :
-	m_impl(std::move(impl))
+WupsPluginRuntime::WupsPluginRuntime(std::unique_ptr<Impl> impl) : m_impl(std::move(impl))
 {
 }
 
@@ -589,7 +610,7 @@ std::shared_ptr<WupsPluginRuntime> WupsPluginRuntime::Create(
 	}
 	return std::shared_ptr<WupsPluginRuntime>(new WupsPluginRuntime(
 		std::make_unique<Impl>(std::move(package), std::move(inspection), owner,
-			generation, std::move(services), std::move(moduleLoader))));
+							   generation, std::move(services), std::move(moduleLoader))));
 }
 
 WupsPluginRuntime::~WupsPluginRuntime()
@@ -597,10 +618,10 @@ WupsPluginRuntime::~WupsPluginRuntime()
 	std::string error;
 	if (!UnloadChecked(error))
 		cemuLog_log(LogType::Force,
-			"WUPS: destructor could not unload package '{}' plugin '{}' owner {} "
-			"generation {}; its RPL remains registered for title-wide cleanup: {}",
-			m_impl->package.manifest.modId, m_impl->inspection.metadata.name,
-			m_impl->owner, m_impl->resourceGeneration, error);
+					"WUPS: destructor could not unload package '{}' plugin '{}' owner {} "
+					"generation {}; its RPL remains registered for title-wide cleanup: {}",
+					m_impl->package.manifest.modId, m_impl->inspection.metadata.name,
+					m_impl->owner, m_impl->resourceGeneration, error);
 }
 
 CemodPayloadFormat WupsPluginRuntime::Format() const
@@ -643,7 +664,7 @@ CemodPackage WupsPluginRuntime::PackageCopy() const
 }
 
 bool WupsPluginRuntime::QueryMappedLayout(WupsMappedLayout& layout,
-	std::string& error) const
+										  std::string& error) const
 {
 	layout = {};
 	std::lock_guard lock(m_impl->mutex);
@@ -657,7 +678,7 @@ bool WupsPluginRuntime::QueryMappedLayout(WupsMappedLayout& layout,
 		return false;
 	}
 	return m_impl->moduleLoader->QueryMappedLayout(m_impl->module,
-		m_impl->moduleLifetime, layout, error);
+												   m_impl->moduleLifetime, layout, error);
 }
 
 bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
@@ -698,7 +719,7 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 			initialState != WupsPluginState::Deinitialized)
 		{
 			error = fmt::format("APPLICATION_STARTS is invalid in WUPS state {}",
-				static_cast<unsigned>(initialState));
+								static_cast<unsigned>(initialState));
 			m_impl->lastError = error;
 			return false;
 		}
@@ -721,13 +742,13 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		std::uint64_t lifetime{};
 		const auto moduleName = fmt::format("cemod_wups_{:016x}.wps", m_impl->owner);
 		if (!m_impl->services->BeginOwner(m_impl->package,
-			m_impl->inspection.metadata, m_impl->owner,
-			m_impl->resourceGeneration, error))
+										  m_impl->inspection.metadata, m_impl->owner,
+										  m_impl->resourceGeneration, error))
 			return m_impl->FailStart(error);
 		if (!m_impl->moduleLoader->Map(m_impl->package.PayloadBytes(), moduleName,
-			m_impl->owner, m_impl->resourceGeneration, m_impl->package,
-			m_impl->inspection.metadata, m_impl->services,
-			mappedModule, lifetime, error))
+									   m_impl->owner, m_impl->resourceGeneration, m_impl->package,
+									   m_impl->inspection.metadata, m_impl->services,
+									   mappedModule, lifetime, error))
 			return m_impl->FailStart(error);
 		bool revoked{};
 		{
@@ -735,7 +756,7 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 			m_impl->module = mappedModule;
 			m_impl->moduleLifetime = lifetime;
 			revoked = m_impl->generation != startGeneration ||
-				m_impl->state == WupsPluginState::Unloading;
+					  m_impl->state == WupsPluginState::Unloading;
 			if (!revoked)
 				m_impl->state = WupsPluginState::Mapped;
 		}
@@ -748,27 +769,25 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 			return false;
 		}
 		if (!m_impl->services->BindGuestInvoker(
-			m_impl->owner, m_impl->resourceGeneration,
-			[loader = m_impl->moduleLoader, mappedModule, lifetime,
-				scopedOwner = WupsOwnerToken{
-					m_impl->owner, m_impl->resourceGeneration}](
-				std::uint32_t target, std::span<const std::uint32_t> arguments,
-				std::uint32_t& result, std::string& invokeError) {
-				WupsGuestOwnerScope ownerScope{scopedOwner};
-				return loader->Invoke(mappedModule, lifetime, target,
-					arguments, result, invokeError);
-				}, error))
+				m_impl->owner, m_impl->resourceGeneration,
+				[loader = m_impl->moduleLoader, mappedModule, lifetime,
+				 scopedOwner = WupsOwnerToken{
+					 m_impl->owner, m_impl->resourceGeneration}](std::uint32_t target, std::span<const std::uint32_t> arguments, std::uint32_t& result, std::string& invokeError) {
+					WupsGuestOwnerScope ownerScope{scopedOwner};
+					return loader->Invoke(mappedModule, lifetime, target,
+										  arguments, result, invokeError);
+				},
+				error))
 			return m_impl->FailStart(error);
 		{
-			WupsGuestOwnerScope ownerScope{{
-				m_impl->owner, m_impl->resourceGeneration}};
+			WupsGuestOwnerScope ownerScope{{m_impl->owner, m_impl->resourceGeneration}};
 			if (!m_impl->moduleLoader->Relocate(mappedModule, lifetime, error))
 				return m_impl->FailStart(error);
 		}
 		{
 			std::lock_guard lock(m_impl->mutex);
 			revoked = m_impl->generation != startGeneration ||
-				m_impl->state == WupsPluginState::Unloading;
+					  m_impl->state == WupsPluginState::Unloading;
 			if (!revoked)
 				m_impl->state = WupsPluginState::Relocated;
 		}
@@ -785,7 +804,7 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 	std::vector<WupsPatchRequest> patchRequests;
 	patchRequests.reserve(m_impl->inspection.replacements.size());
 	for (std::size_t index = 0;
-		index < m_impl->inspection.replacements.size(); ++index)
+		 index < m_impl->inspection.replacements.size(); ++index)
 	{
 		const auto& replacement = m_impl->inspection.replacements[index];
 		if (replacement.entryType == WupsLoadEntryType::LegacyExport)
@@ -800,9 +819,9 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		std::uint32_t replacementAddress{};
 		std::uint32_t callThroughStorage{};
 		if (!m_impl->moduleLoader->ResolveAddress(
-			m_impl->module, m_impl->moduleLifetime,
-			replacement.target, 4, WupsSymbolKind::Function,
-			replacementAddress, error) ||
+				m_impl->module, m_impl->moduleLifetime,
+				replacement.target, 4, WupsSymbolKind::Function,
+				replacementAddress, error) ||
 			!m_impl->moduleLoader->ResolveAddress(
 				m_impl->module, m_impl->moduleLifetime,
 				replacement.callThroughStorage, 4, WupsSymbolKind::Data,
@@ -855,9 +874,9 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 		patchRequests.push_back(std::move(request));
 	}
 	if (!m_impl->services->ActivatePlugin(
-		m_impl->package, m_impl->inspection.metadata,
-		m_impl->owner, m_impl->resourceGeneration,
-		patchRequests, error))
+			m_impl->package, m_impl->inspection.metadata,
+			m_impl->owner, m_impl->resourceGeneration,
+			patchRequests, error))
 		return m_impl->FailStart(error);
 	{
 		std::lock_guard lock(m_impl->mutex);
@@ -923,7 +942,7 @@ bool WupsPluginRuntime::OnApplicationStarts(std::string& error)
 	{
 		std::lock_guard lock(m_impl->mutex);
 		revoked = m_impl->generation != startGeneration ||
-			m_impl->state == WupsPluginState::Unloading;
+				  m_impl->state == WupsPluginState::Unloading;
 		if (!revoked)
 		{
 			m_impl->state = WupsPluginState::Active;
@@ -1050,10 +1069,10 @@ void WupsPluginRuntime::Unload()
 	std::string error;
 	if (!UnloadChecked(error))
 		cemuLog_log(LogType::Force,
-			"WUPS: unload of package '{}' plugin '{}' owner {} generation {} "
-			"did not complete: {}",
-			m_impl->package.manifest.modId, m_impl->inspection.metadata.name,
-			m_impl->owner, m_impl->resourceGeneration, error);
+					"WUPS: unload of package '{}' plugin '{}' owner {} generation {} "
+					"did not complete: {}",
+					m_impl->package.manifest.modId, m_impl->inspection.metadata.name,
+					m_impl->owner, m_impl->resourceGeneration, error);
 }
 
 bool WupsPluginRuntime::UnloadChecked(std::string& error)
@@ -1284,15 +1303,12 @@ struct WupsPayloadRuntime::Impl
 WupsPayloadRuntime::WupsPayloadRuntime(
 	std::shared_ptr<IWupsRuntimeServices> services,
 	std::shared_ptr<IWupsModuleLoader> moduleLoader,
-	std::shared_ptr<WupsBackendManagementRuntime> management) :
-	m_impl(std::make_unique<Impl>())
+	std::shared_ptr<WupsBackendManagementRuntime> management) : m_impl(std::make_unique<Impl>())
 {
-	m_impl->services = services ? std::move(services) :
-		CreateRplAromaCompatibilityRuntime();
+	m_impl->services = services ? std::move(services) : CreateRplAromaCompatibilityRuntime();
 	if (!m_impl->services)
 		m_impl->services = std::make_shared<AromaCompatibilityRuntime>();
-	m_impl->moduleLoader = moduleLoader ? std::move(moduleLoader) :
-		CreateRplWupsModuleLoader();
+	m_impl->moduleLoader = moduleLoader ? std::move(moduleLoader) : CreateRplWupsModuleLoader();
 	m_impl->management = std::move(management);
 }
 
@@ -1301,12 +1317,13 @@ WupsPayloadRuntime::~WupsPayloadRuntime()
 	std::string error;
 	if (!UnloadAll(error))
 		cemuLog_log(LogType::Force,
-			"WUPS: payload-runtime destruction left retryable RPL modules for "
-			"title-wide cleanup: {}", error);
+					"WUPS: payload-runtime destruction left retryable RPL modules for "
+					"title-wide cleanup: {}",
+					error);
 }
 
 std::optional<std::uint64_t> WupsPayloadRuntime::Load(CemodPackage package,
-	std::string& error)
+													  std::string& error)
 {
 	std::uint64_t handle{};
 	std::uint32_t generation{};
@@ -1324,7 +1341,7 @@ std::optional<std::uint64_t> WupsPayloadRuntime::Load(CemodPackage package,
 		start = m_impl->applicationActive;
 	}
 	auto plugin = WupsPluginRuntime::Create(std::move(package), handle, generation,
-		m_impl->services, m_impl->moduleLoader, error);
+											m_impl->services, m_impl->moduleLoader, error);
 	if (!plugin)
 		return std::nullopt;
 	if (start && !plugin->OnApplicationStarts(error))
@@ -1350,7 +1367,7 @@ std::optional<std::uint64_t> WupsPayloadRuntime::Load(CemodPackage package,
 }
 
 bool WupsPayloadRuntime::Reload(std::uint64_t handle, CemodPackage package,
-	std::string& error)
+								std::string& error)
 {
 	error.clear();
 	auto oldPlugin = Find(handle);
@@ -1386,7 +1403,7 @@ bool WupsPayloadRuntime::Reload(std::uint64_t handle, CemodPackage package,
 		generation = m_impl->nextGeneration++;
 	}
 	auto replacement = WupsPluginRuntime::Create(std::move(package), handle, generation,
-		m_impl->services, m_impl->moduleLoader, error);
+												 m_impl->services, m_impl->moduleLoader, error);
 	if (replacement && (!start || replacement->OnApplicationStarts(error)))
 	{
 		std::lock_guard lock(m_impl->mutex);
@@ -1415,13 +1432,13 @@ bool WupsPayloadRuntime::Reload(std::uint64_t handle, CemodPackage package,
 		rollbackGeneration = m_impl->nextGeneration++;
 	}
 	auto rollback = WupsPluginRuntime::Create(rollbackPackage, handle,
-		rollbackGeneration, m_impl->services, m_impl->moduleLoader, rollbackError);
+											  rollbackGeneration, m_impl->services, m_impl->moduleLoader, rollbackError);
 	if (rollback && (!start || rollback->OnApplicationStarts(rollbackError)))
 	{
 		std::lock_guard lock(m_impl->mutex);
 		m_impl->plugins.emplace(handle, std::move(rollback));
 		error = fmt::format("WUPS reload failed and previous generation was restored: {}",
-			replacementError);
+							replacementError);
 		return false;
 	}
 	if (rollback)
@@ -1439,7 +1456,7 @@ bool WupsPayloadRuntime::Reload(std::uint64_t handle, CemodPackage package,
 		}
 	}
 	error = fmt::format("WUPS reload failed ({}) and rollback failed ({})",
-		replacementError, rollbackError);
+						replacementError, rollbackError);
 	return false;
 }
 
@@ -1465,7 +1482,7 @@ bool WupsPayloadRuntime::Unload(std::uint64_t handle, std::string& error)
 	}
 	if (m_impl->management)
 		m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
-			plugin->Generation());
+											   plugin->Generation());
 	if (!plugin->UnloadChecked(error))
 		return false;
 	{
@@ -1482,8 +1499,8 @@ void WupsPayloadRuntime::UnloadAll()
 	std::string error;
 	if (!UnloadAll(error))
 		cemuLog_log(LogType::Force,
-			"WUPS: unload-all did not complete; failed plugins remain retryable: {}",
-			error);
+					"WUPS: unload-all did not complete; failed plugins remain retryable: {}",
+					error);
 }
 
 bool WupsPayloadRuntime::UnloadAll(std::string& error)
@@ -1501,13 +1518,12 @@ bool WupsPayloadRuntime::UnloadAll(std::string& error)
 	{
 		if (m_impl->management)
 			m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
-				plugin->Generation());
+												   plugin->Generation());
 		std::string pluginError;
 		if (!plugin->UnloadChecked(pluginError))
 		{
 			success = false;
-			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name)
-				.append(": ").append(pluginError);
+			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name).append(": ").append(pluginError);
 			continue;
 		}
 		std::lock_guard lock(m_impl->mutex);
@@ -1598,7 +1614,7 @@ void WupsPayloadRuntime::AbandonAllForTitleShutdown()
 	{
 		if (m_impl->management)
 			m_impl->management->UnpublishContainer(plugin->OwnerHandle(),
-				plugin->Generation());
+												   plugin->Generation());
 		plugin->AbandonForTitleShutdown();
 	}
 	std::lock_guard lock(m_impl->mutex);
@@ -1652,8 +1668,7 @@ bool WupsPayloadRuntime::OnApplicationStarts(std::string& error)
 		if (!plugin->OnApplicationStarts(pluginError))
 		{
 			success = false;
-			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name)
-				.append(": ").append(pluginError);
+			error.append(error.empty() ? "" : "; ").append(plugin->Metadata().name).append(": ").append(pluginError);
 		}
 		else if (m_impl->management)
 			(void)m_impl->management->PublishContainer(plugin);
@@ -1676,7 +1691,7 @@ bool WupsPayloadRuntime::WillStartPlugins() const
 }
 
 void WupsPayloadRuntime::SetProcessKey(WupsProcessKind process,
-	std::uint64_t titleId)
+									   std::uint64_t titleId)
 {
 	std::lock_guard lock(m_impl->mutex);
 	m_impl->processKey = {static_cast<std::uint8_t>(process), titleId};

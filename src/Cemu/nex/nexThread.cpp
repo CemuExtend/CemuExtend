@@ -13,7 +13,7 @@ void nexThread_run()
 	{
 		// check for new services
 		mtx_queuedServices.lock();
-		for(auto& it : list_queuedServices)
+		for (auto& it : list_queuedServices)
 			list_activeNexServices.push_back(it);
 		list_queuedServices.clear();
 		mtx_queuedServices.unlock();
@@ -26,7 +26,8 @@ void nexThread_run()
 		// update
 		for (auto& it : list_activeNexServices)
 		{
-			it->update();
+			if (!it->isMarkedForDestruction())
+				it->update();
 		}
 		// delete services marked for destruction
 		sint32 idx = 0;
@@ -38,6 +39,7 @@ void nexThread_run()
 				list_activeNexServices[idx]->destroy();
 				listSize--;
 				list_activeNexServices[idx] = list_activeNexServices[listSize];
+				continue;
 			}
 			idx++;
 		}

@@ -18,7 +18,7 @@ struct TexScaleXY
 struct
 {
 	TexScaleXY perUnit[Latte::GPU_LIMITS::NUM_TEXTURES_PER_STAGE]; // stores actualResolution/effectiveResolution ratio for each texture
-}LatteTextureScale[static_cast<size_t>(LatteConst::ShaderType::TotalCount)] = { };
+} LatteTextureScale[static_cast<size_t>(LatteConst::ShaderType::TotalCount)] = {};
 
 float* LatteTexture_getEffectiveTextureScale(LatteConst::ShaderType shaderType, sint32 texUnit)
 {
@@ -39,26 +39,26 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 void LatteTexture_ReloadData(LatteTexture* tex)
 {
 	tex->reloadCount++;
-	for(sint32 mip=0; mip<tex->mipLevels; mip++)
+	for (sint32 mip = 0; mip < tex->mipLevels; mip++)
 	{
-		if(tex->dim == Latte::E_DIM::DIM_2D_ARRAY ||
-			tex->dim == Latte::E_DIM::DIM_2D_ARRAY_MSAA )
+		if (tex->dim == Latte::E_DIM::DIM_2D_ARRAY ||
+			tex->dim == Latte::E_DIM::DIM_2D_ARRAY_MSAA)
 		{
 			sint32 numSlices = std::max(tex->depth, 1);
-			for(sint32 s=0; s<numSlices; s++)
+			for (sint32 s = 0; s < numSlices; s++)
 				LatteTextureLoader_UpdateTextureSliceData(tex, s, mip, tex->physAddress, tex->physMipAddress, tex->dim, tex->width, tex->height, tex->depth, tex->mipLevels, tex->pitch, tex->tileMode, tex->swizzle, true);
 		}
-		else if( tex->dim == Latte::E_DIM::DIM_CUBEMAP )
+		else if (tex->dim == Latte::E_DIM::DIM_CUBEMAP)
 		{
 			cemu_assert_debug((tex->depth % 6) == 0);
-			sint32 numFullCubeMaps = tex->depth/6; // number of cubemaps (if numFullCubeMaps is >1 then this texture is a cubemap array)
-			for(sint32 s=0; s<numFullCubeMaps*6; s++)
+			sint32 numFullCubeMaps = tex->depth / 6; // number of cubemaps (if numFullCubeMaps is >1 then this texture is a cubemap array)
+			for (sint32 s = 0; s < numFullCubeMaps * 6; s++)
 				LatteTextureLoader_UpdateTextureSliceData(tex, s, mip, tex->physAddress, tex->physMipAddress, tex->dim, tex->width, tex->height, tex->depth, tex->mipLevels, tex->pitch, tex->tileMode, tex->swizzle, true);
 		}
-		else if( tex->dim == Latte::E_DIM::DIM_3D )
+		else if (tex->dim == Latte::E_DIM::DIM_3D)
 		{
-			sint32 mipDepth = std::max(tex->depth>>mip, 1);
-			for(sint32 s=0; s<mipDepth; s++)
+			sint32 mipDepth = std::max(tex->depth >> mip, 1);
+			for (sint32 s = 0; s < mipDepth; s++)
 			{
 				LatteTextureLoader_UpdateTextureSliceData(tex, s, mip, tex->physAddress, tex->physMipAddress, tex->dim, tex->width, tex->height, tex->depth, tex->mipLevels, tex->pitch, tex->tileMode, tex->swizzle, true);
 			}
@@ -99,7 +99,7 @@ Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_
 	else if (nfa == Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N::E_NUM_FORMAT_ALL::NUM_FORMAT_INT)
 		gx2Format |= Latte::E_GX2SURFFMT::FMT_BIT_INT;
 
-	if(texUnitWord4.get_FORCE_DEGAMMA())
+	if (texUnitWord4.get_FORCE_DEGAMMA())
 		gx2Format |= Latte::E_GX2SURFFMT::FMT_BIT_SRGB;
 
 	if (texUnitWord4.get_FORMAT_COMP_X() == Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N::E_FORMAT_COMP::COMP_SIGNED)
@@ -213,7 +213,7 @@ void LatteTexture_updateTexturesForStage(LatteDecompilerShader* shaderContext, u
 						break;
 				}
 				textureView = textureViewGL;
-		}
+			}
 			textureView->lastTextureBindIndex = LatteGPUState.textureBindCounter;
 			rendererGL->renderstate_updateTextureSettingsGL(shaderContext, textureView, textureIndex + glBackendBaseTexUnit, word4, textureIndex, isDepthSampler);
 		}
@@ -331,10 +331,10 @@ bool LatteTexture_doesEffectiveRescaleRatioMatch(LatteTexture* texture1, sint32 
 
 void LatteTexture_scaleToEffectiveSize(LatteTexture* texture, sint32* x, sint32* y, sint32 mipLevel)
 {
-	if( texture->overwriteInfo.hasResolutionOverwrite == false )
+	if (texture->overwriteInfo.hasResolutionOverwrite == false)
 		return;
-	*x = *x * std::max(1,texture->overwriteInfo.width>>mipLevel) / std::max(1,texture->width>>mipLevel);
-	*y = *y * std::max(1,texture->overwriteInfo.height>>mipLevel) / std::max(1, texture->height>>mipLevel);
+	*x = *x * std::max(1, texture->overwriteInfo.width >> mipLevel) / std::max(1, texture->width >> mipLevel);
+	*y = *y * std::max(1, texture->overwriteInfo.height >> mipLevel) / std::max(1, texture->height >> mipLevel);
 }
 
 uint64 _textureUpdateEventCounter = 1;

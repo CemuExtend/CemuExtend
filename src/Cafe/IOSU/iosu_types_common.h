@@ -28,7 +28,7 @@ class IOSUModule
 {
   public:
 	virtual void SystemLaunch() {}; // CafeSystem is initialized
-	virtual void SystemExit() {}; // CafeSystem is shutdown
-	virtual void TitleStart() {}; // foreground title is launched
-	virtual void TitleStop() {}; // foreground title is closed
+	virtual void SystemExit() {};	// CafeSystem is shutdown
+	virtual void TitleStart() {};	// foreground title is launched
+	virtual void TitleStop() {};	// foreground title is closed
 };

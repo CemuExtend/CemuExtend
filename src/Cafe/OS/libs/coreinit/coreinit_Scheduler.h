@@ -13,4 +13,4 @@ namespace coreinit
 	uint32 OSEnableInterrupts();
 
 	void InitializeSchedulerLock();
-}
+} // namespace coreinit

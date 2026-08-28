@@ -33,7 +33,7 @@ bool IniParser::ReadNextLine(std::string_view& lineString)
 			break;
 	}
 	size_t lineEnd = m_parseOffset;
-	lineString = { m_iniFileData.data() + lineStart, lineEnd - lineStart };
+	lineString = {m_iniFileData.data() + lineStart, lineEnd - lineStart};
 	return true;
 }
 
@@ -84,7 +84,7 @@ bool IniParser::parse()
 				break;
 			}
 		}
-		if(lineView.empty())
+		if (lineView.empty())
 			continue;
 		// handle section headers
 		if (lineView[0] == '[')
@@ -118,11 +118,10 @@ bool IniParser::parse()
 			if (lineView[i] == '=')
 			{
 				option_name = lineView.substr(0, i);
-				option_value = lineView.substr(i+1);
+				option_value = lineView.substr(i + 1);
 				invalidName = false;
 				break;
 			}
-
 		}
 		if (invalidName)
 		{
@@ -156,7 +155,7 @@ bool IniParser::parse()
 				break;
 			}
 		}
-		if(invalidCharacter)
+		if (invalidCharacter)
 			continue;
 		// remove quotes from value
 		if (!option_value.empty() && option_value.front() == '\"')
@@ -225,7 +224,7 @@ std::optional<std::string_view> IniParser::FindOption(std::string_view optionNam
 	{
 		auto& itrOptionName = itr.first;
 		// case insensitive ANSI string comparison
-		if(itrOptionName.size() != optionName.size())
+		if (itrOptionName.size() != optionName.size())
 			continue;
 		bool isMatch = true;
 		for (size_t i = 0; i < itrOptionName.size(); i++)

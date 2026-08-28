@@ -12,9 +12,10 @@ if [[ -z "${GITHUB_WORKSPACE}" ]]; then
 	export GITHUB_WORKSPACE="."
 fi
 
-curl -sSfLO "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-"${CPU_ARCH}".AppImage"
+curl -sSfLO "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${CPU_ARCH}.AppImage"
 chmod a+x linuxdeploy*.AppImage
-curl -sSfL https://github.com"$(curl https://github.com/probonopd/go-appimage/releases/expanded_assets/continuous | grep "mkappimage-.*-"${CPU_ARCH}".AppImage" | head -n 1 | cut -d '"' -f 2)" -o mkappimage.AppImage
+mkappimage_path="$(curl -sSfL https://github.com/probonopd/go-appimage/releases/expanded_assets/continuous | grep "mkappimage-.*-${CPU_ARCH}.AppImage" | head -n 1 | cut -d '"' -f 2)"
+curl -sSfL "https://github.com${mkappimage_path}" -o mkappimage.AppImage
 chmod a+x mkappimage.AppImage
 curl -sSfLO "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh"
 chmod a+x linuxdeploy-plugin-gtk.sh
@@ -22,6 +23,7 @@ curl -sSfLO "https://github.com/darealshinji/linuxdeploy-plugin-checkrt/releases
 chmod a+x linuxdeploy-plugin-checkrt.sh
 
 if [[ ! -e /usr/lib/"${CPU_ARCH}"-linux-gnu ]]; then
+	# shellcheck disable=SC2016 # Match the plugin's literal ${CPU_ARCH} expression.
 	sed -i 's#lib\/"${CPU_ARCH}"-linux-gnu#lib64#g' linuxdeploy-plugin-gtk.sh
 fi
 
@@ -45,8 +47,11 @@ if [[ -z "${CEMU_BIN}" ]]; then
 	echo "appimage.sh: no Cemu_<config> binary found under bin/ (looked in AppDir/usr/share/Cemu)" >&2
 	exit 1
 fi
-mv "${CEMU_BIN}" AppDir/usr/bin/Cemu
-chmod +x AppDir/usr/bin/Cemu
+# Keep the executable beside the CEF library, ICU data, pak files and locales.
+# /proc/self/exe resolves through this symlink, so both CEF resource discovery
+# and the executable's $ORIGIN RPATH continue to point at usr/share/Cemu.
+chmod +x "${CEMU_BIN}"
+ln -sfn "../share/Cemu/$(basename "${CEMU_BIN}")" AppDir/usr/bin/Cemu
 
 cp /usr/lib/"${CPU_ARCH}"-linux-gnu/{libsepol.so.1,libffi.so.7,libpcre.so.3,libGLU.so.1,libthai.so.0} AppDir/usr/lib
 

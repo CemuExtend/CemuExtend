@@ -15,7 +15,7 @@ namespace iosu
 		std::thread s_serviceThread;
 		std::atomic_bool s_requestStop{false};
 		std::atomic_bool s_isRunning{false};
-		std::atomic_bool s_threadInitialized{ false };
+		std::atomic_bool s_threadInitialized{false};
 
 		IOSMsgQueueId s_msgQueueId;
 		SysAllocator<iosu::kernel::IOSMessage, 128> _s_msgBuffer;
@@ -46,23 +46,23 @@ namespace iosu
 
 		void ODMHandleCommandIoctl(uint32 clientHandle, IPCCommandBody* cmd, ODM_CMD_OPERATION_TYPE operationId, void* ptrIn, uint32 sizeIn, void* ptrOut, uint32 sizeOut)
 		{
-			switch(operationId)
+			switch (operationId)
 			{
-				case ODM_CMD_OPERATION_TYPE::CHECK_STATE:
-				{
-					*(uint32be*)ptrOut = (uint32)ODM_STATE::NO_DISC;
-					break;
-				}
-				case ODM_CMD_OPERATION_TYPE::UKN_5:
-				{
-					// does this return anything?
-					break;
-				}
-				default:
-				{
-					cemuLog_log(LogType::Force, "ODMHandleCommandIoctl: Unknown operationId %d\n", (uint32)operationId);
-					break;
-				}
+			case ODM_CMD_OPERATION_TYPE::CHECK_STATE:
+			{
+				*(uint32be*)ptrOut = (uint32)ODM_STATE::NO_DISC;
+				break;
+			}
+			case ODM_CMD_OPERATION_TYPE::UKN_5:
+			{
+				// does this return anything?
+				break;
+			}
+			default:
+			{
+				cemuLog_log(LogType::Force, "ODMHandleCommandIoctl: Unknown operationId %d\n", (uint32)operationId);
+				break;
+			}
 			}
 
 			IOS_ResourceReply(cmd, IOS_ERROR_OK);
@@ -75,7 +75,6 @@ namespace iosu
 
 		void CloseClientHandle(uint32 handle)
 		{
-
 		}
 
 		void ODMServiceThread()
@@ -114,7 +113,7 @@ namespace iosu
 					uint32 requestId = cmd->args[0];
 					uint32 numIn = cmd->args[1];
 					uint32 numOut = cmd->args[2];
-					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{ cmd->args[3] }.GetPtr();
+					IPCIoctlVector* vec = MEMPTR<IPCIoctlVector>{cmd->args[3]}.GetPtr();
 					IPCIoctlVector* vecIn = vec + numIn;
 					IPCIoctlVector* vecOut = vec + 0;
 					cemuLog_log(LogType::Force, "{}: Received unsupported Ioctlv cmd", s_devicePath);
@@ -142,7 +141,8 @@ namespace iosu
 			s_threadInitialized = false;
 			s_requestStop = false;
 			s_serviceThread = std::thread(&ODMServiceThread);
-			while (!s_threadInitialized) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			while (!s_threadInitialized)
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 
 		void Shutdown()
@@ -153,5 +153,5 @@ namespace iosu
 			IOS_SendMessage(s_msgQueueId, 0, 0);
 			s_serviceThread.join();
 		}
-	}
-}
+	} // namespace odm
+} // namespace iosu

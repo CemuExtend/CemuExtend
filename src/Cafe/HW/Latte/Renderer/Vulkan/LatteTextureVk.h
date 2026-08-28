@@ -8,19 +8,31 @@
 
 class LatteTextureVk : public LatteTexture
 {
-public:
+  public:
 	LatteTextureVk(class VulkanRenderer* vkRenderer, Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels,
-		uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth);
+				   uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth);
 
 	~LatteTextureVk();
 
 	void AllocateOnHost() override;
 
-	VKRObjectTexture* GetImageObj() const { return vkObjTex; };
-	
-	VkFormat GetFormat() const { return vkObjTex->m_format; }
-	VkImageAspectFlags GetImageAspect() const { return vkObjTex->m_imageAspect; }
-	VkImageLayout GetDefaultLayout() const { return m_defaultLayout; }
+	VKRObjectTexture* GetImageObj() const
+	{
+		return vkObjTex;
+	};
+
+	VkFormat GetFormat() const
+	{
+		return vkObjTex->m_format;
+	}
+	VkImageAspectFlags GetImageAspect() const
+	{
+		return vkObjTex->m_imageAspect;
+	}
+	VkImageLayout GetDefaultLayout() const
+	{
+		return m_defaultLayout;
+	}
 
 	VkImageLayout GetImageLayout(VkImageSubresource& subresource)
 	{
@@ -70,15 +82,15 @@ public:
 			m_layouts[subresource.baseMipLevel] = newLayout;
 		else
 		{
-			for(uint32 i=0; i<subresource.layerCount; i++)
+			for (uint32 i = 0; i < subresource.layerCount; i++)
 				m_layouts[subresource.baseMipLevel * m_layoutsDepth + subresource.baseArrayLayer + i] = newLayout;
 		}
 	}
 
-protected:
+  protected:
 	LatteTextureView* CreateView(Latte::E_DIM dim, Latte::E_GX2SURFFMT format, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount) override;
 
-public:
+  public:
 	uint64 m_vkFlushIndex{}; // used to track read-write dependencies within the same renderpass
 
 	uint64 m_vkFlushIndex_read{};
@@ -87,11 +99,11 @@ public:
 	uint32 m_selfDependencyCheckIndex{}; // used to track if texture is being both sampled and output to during drawcall
 	VkImageAspectFlags m_selfDependencyCheckAspectMask{};
 
-private:
+  private:
 	class VulkanRenderer* m_vkr;
 
 	VKRObjectTexture* vkObjTex{};
-	VkImageLayout m_defaultLayout{ VK_IMAGE_LAYOUT_GENERAL }; // the targetted long term layout of the texture. Can be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT for potential rendertargets if supported
+	VkImageLayout m_defaultLayout{VK_IMAGE_LAYOUT_GENERAL}; // the targetted long term layout of the texture. Can be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT for potential rendertargets if supported
 	std::vector<VkImageLayout> m_layouts;
 	uint32 m_layoutsMips;
 	uint32 m_layoutsDepth;

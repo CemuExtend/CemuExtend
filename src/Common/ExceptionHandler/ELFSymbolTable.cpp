@@ -13,7 +13,7 @@ uint16 ELFSymbolTable::FindSection(int type, const std::string_view& name)
 	for (uint16 i = 0; i < header->e_shnum; ++i)
 	{
 		auto& entry = shTable[i];
-		if(entry.sh_type == type && std::string_view{&shStrTable[entry.sh_name]} == name)
+		if (entry.sh_type == type && std::string_view{&shStrTable[entry.sh_name]} == name)
 		{
 			return i;
 		}
@@ -87,21 +87,21 @@ ELFSymbolTable::~ELFSymbolTable()
 
 std::string_view ELFSymbolTable::OffsetToSymbol(uint64 ptr, uint64& fromStart) const
 {
-	if(!symTable || !strTable)
+	if (!symTable || !strTable)
 	{
 		fromStart = -1;
 		return {};
 	}
 
-	for (auto entry = symTable+1; entry < symTable+symTableLen; ++entry)
+	for (auto entry = symTable + 1; entry < symTable + symTableLen; ++entry)
 	{
 		if (ELF64_ST_TYPE(entry->st_info) != STT_FUNC)
 			continue;
 		auto begin = entry->st_value;
 		auto size = entry->st_size;
-		if(ptr >= begin && ptr < begin+size)
+		if (ptr >= begin && ptr < begin + size)
 		{
-			fromStart = ptr-begin;
+			fromStart = ptr - begin;
 			return &strTable[entry->st_name];
 		}
 	}

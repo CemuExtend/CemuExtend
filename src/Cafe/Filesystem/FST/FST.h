@@ -5,7 +5,8 @@
 struct FSTFileHandle
 {
 	friend class FSTVolume;
-private:
+
+  private:
 	uint32 m_fstIndex;
 };
 
@@ -17,8 +18,9 @@ struct FSTDirectoryIterator
 	{
 		return dirHandle;
 	}
-private:
-    FSTFileHandle dirHandle;
+
+  private:
+	FSTFileHandle dirHandle;
 	uint32 startIndex;
 	uint32 endIndex;
 	uint32 currentIndex;
@@ -26,16 +28,16 @@ private:
 
 class FSTVolume
 {
-public:
+  public:
 	enum class ErrorCode
-  	{
+	{
 		OK = 0,
 		UNKNOWN_ERROR = 1,
-	  	DISC_KEY_MISSING = 2,
-	  	TITLE_TIK_MISSING = 3,
-	    BAD_TITLE_TMD = 4,
-	    BAD_TITLE_TIK = 5,
-  	};
+		DISC_KEY_MISSING = 2,
+		TITLE_TIK_MISSING = 3,
+		BAD_TITLE_TMD = 4,
+		BAD_TITLE_TIK = 5,
+	};
 
 	static bool FindDiscKey(const fs::path& path, NCrypto::AesKey& discTitleKey);
 
@@ -46,7 +48,10 @@ public:
 	~FSTVolume();
 
 	uint32 GetFileCount() const;
-	bool HasCorruption() const { return m_detectedCorruption; }
+	bool HasCorruption() const
+	{
+		return m_detectedCorruption;
+	}
 
 	bool OpenFile(std::string_view path, FSTFileHandle& fileHandleOut, bool openOnlyFiles = false);
 
@@ -82,12 +87,12 @@ public:
 		return fileData;
 	}
 
-private:
+  private:
 	/* FST data (in memory) */
 	enum class ClusterHashMode : uint8
 	{
-		RAW = 0, // raw data + encryption, no hashing?
-	  	RAW_STREAM = 1, // raw data + encryption, with hash stored in tmd?
+		RAW = 0,			  // raw data + encryption, no hashing?
+		RAW_STREAM = 1,		  // raw data + encryption, with hash stored in tmd?
 		HASH_INTERLEAVED = 2, // hashes + raw interleaved in 0x10000 blocks (0x400 bytes of hashes at the beginning, followed by 0xFC00 bytes of data)
 	};
 
@@ -102,7 +107,7 @@ private:
 		bool hasContentHash;
 		uint8 contentHash32[32];
 		bool contentHashIsSHA1; // if true then it's SHA1 (with extra bytes zeroed out), otherwise it's SHA256
-		uint64 contentSize; // size of the content (in blocks)
+		uint64 contentSize;		// size of the content (in blocks)
 		// hash context for single hash mode (content hash must be available)
 		std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> singleHashCtx; // unique_ptr to make this move-only
 		uint32 singleHashNumBlocksHashed{0};
@@ -161,19 +166,19 @@ private:
 			struct
 			{
 				uint32 endIndex;
-			}dirInfo;
+			} dirInfo;
 			struct
 			{
 				uint32 fileOffset;
 				uint32 fileSize;
 				uint16 clusterIndex;
-			}fileInfo;
+			} fileInfo;
 		};
 	};
 
 	class FSTDataSource* m_dataSource;
 	bool m_sourceIsOwned{};
-	uint32 m_sectorSize{}; // for cluster offsets
+	uint32 m_sectorSize{};	 // for cluster offsets
 	uint32 m_offsetFactor{}; // for file offsets
 	bool m_hashIsDisabled{}; // disables hash verification (for all clusters of this volume?)
 	std::vector<FSTCluster> m_cluster;
@@ -227,8 +232,8 @@ private:
 		/* +0x04 */ uint32be size;
 		/* +0x08 */ uint64be ownerTitleId;
 		/* +0x10 */ uint32be groupId;
-		/* +0x14 */ uint8be  hashMode;
-		/* +0x15 */ uint8be  padding[0xB]; // ?
+		/* +0x14 */ uint8be hashMode;
+		/* +0x15 */ uint8be padding[0xB]; // ?
 	};
 	static_assert(sizeof(FSTHeader_ClusterEntry) == 0x20);
 
@@ -241,8 +246,8 @@ private:
 		};
 
 		/* +0x00 */ uint32be typeAndNameOffset;
-		/* +0x04 */ uint32be offset; // for directories: parent directory index
-		/* +0x08 */ uint32be size; // for directories: end index
+		/* +0x04 */ uint32be offset;			 // for directories: parent directory index
+		/* +0x08 */ uint32be size;				 // for directories: end index
 		/* +0x0C */ uint16be flagsOrPermissions; // three entries, each one shifted by 4. (so 0xXYZ). Possible bits per value seem to be 0x1 and 0x4 ? These are probably permissions
 		/* +0x0E */ uint16be clusterIndex;
 
@@ -280,7 +285,7 @@ private:
 			return size;
 		}
 
-	private:
+	  private:
 		uint8 GetTypeFlagField()
 		{
 			return static_cast<uint8>((typeAndNameOffset >> 24) & 0xFF);
@@ -330,13 +335,11 @@ private:
 		}
 		return v;
 	}
-
 };
 
 class FSTVerifier
 {
-public:
+  public:
 	static bool VerifyContentFile(class FileStream* fileContent, const NCrypto::AesKey* key, uint32 contentIndex, uint32 contentSize, uint32 contentSizePadded, bool isSHA1, const uint8* tmdContentHash);
 	static bool VerifyHashedContentFile(class FileStream* fileContent, const NCrypto::AesKey* key, uint32 contentIndex, uint32 contentSize, uint32 contentSizePadded, bool isSHA1, const uint8* tmdContentHash);
-
 };

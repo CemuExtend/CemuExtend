@@ -21,12 +21,12 @@ namespace GX2
 			pm4HeaderType3(IT_SET_RESOURCE, 8),
 			0x8C0 + bufferIndex * 7,
 			physicalAddress,
-			sizeInBytes - 1, // size
+			sizeInBytes - 1,		 // size
 			(stride & 0xFFFF) << 11, // stride
-			0, // ukn
-			0, // ukn
-			0, // ukn
-			0xC0000000); // ukn
+			0,						 // ukn
+			0,						 // ukn
+			0,						 // ukn
+			0xC0000000);			 // ukn
 	}
 
 	void GX2DrawIndexedEx(GX2PrimitiveMode2 primitiveMode, uint32 count, GX2IndexType indexType, void* indexData, uint32 baseVertex, uint32 numInstances)
@@ -173,7 +173,6 @@ namespace GX2
 				gx2WriteGather_submitU32AsLE(indexPair);
 			}
 		}
-
 	}
 
 	struct GX2DispatchComputeParam
@@ -188,14 +187,14 @@ namespace GX2
 		GX2ReserveCmdSpace(9 + 10);
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_RESOURCE, 8),
-			(mmSQ_CS_DISPATCH_PARAMS - mmSQ_TEX_RESOURCE_WORD0),
-			memory_virtualToPhysical(MEMPTR<GX2DispatchComputeParam>(dispatchParam).GetMPTR()),
-			0xF,
-			0x862000,
-			1,
-			0xABCD1234,
-			0xABCD1234,
-			0xC0000000);
+							  (mmSQ_CS_DISPATCH_PARAMS - mmSQ_TEX_RESOURCE_WORD0),
+							  memory_virtualToPhysical(MEMPTR<GX2DispatchComputeParam>(dispatchParam).GetMPTR()),
+							  0xF,
+							  0x862000,
+							  1,
+							  0xABCD1234,
+							  0xABCD1234,
+							  0xC0000000);
 
 		// IT_EVENT_WRITE with RST_VTX_CNT?
 
@@ -224,4 +223,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2DispatchCompute, LogType::GX2);
 	}
 
-}
+} // namespace GX2

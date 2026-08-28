@@ -57,7 +57,7 @@ TextList::TextList(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wx
 
 void TextList::RefreshControl(const wxRect* update_region)
 {
-	if(update_region)
+	if (update_region)
 		Refresh(true, update_region);
 	else
 	{
@@ -175,13 +175,13 @@ void TextList::OnMouseMoveEvent(wxMouseEvent& event)
 {
 	m_tooltip_timer->Stop();
 	m_tooltip_timer->StartOnce(250);
-	
+
 	wxPoint position = event.GetPosition();
 	CalcUnscrolledPosition(position.x, position.y, &position.x, &position.y);
 
 	m_mouse_position = position;
 
-	if(m_mouse_down)
+	if (m_mouse_down)
 		m_selection.SetBottomRight(position);
 
 	const sint32 line = position.y / m_line_height;
@@ -192,7 +192,7 @@ void TextList::OnKeyDownEvent(wxKeyEvent& event)
 {
 	const auto key_code = event.GetKeyCode();
 	const auto it = m_key_states.find(key_code);
-	if(it == m_key_states.end() || !it->second)
+	if (it == m_key_states.end() || !it->second)
 	{
 		m_key_states[key_code] = true;
 		OnKeyPressed(key_code, event.GetPosition());
@@ -270,7 +270,7 @@ void TextList::OnTooltipTimer(wxTimerEvent& event)
 		return;
 
 	const sint32 line = position.y / m_line_height;
-	if(OnShowTooltip(m_mouse_position, line))
+	if (OnShowTooltip(m_mouse_position, line))
 	{
 		m_tooltip_window->SetPosition(wxPoint(m_mouse_position.x + 15, m_mouse_position.y + 15));
 		m_tooltip_window->SendSizeEvent();
@@ -299,12 +299,12 @@ void TextList::OnPaintEvent(wxPaintEvent& event)
 	dc.DrawRectangle(rect_update);
 
 	//// paint selection
-	//if (!m_selected_text.eof())
+	// if (!m_selected_text.eof())
 	//{
 	//	dc.SetBrush(*wxBLUE_BRUSH);
 	//	dc.SetPen(*wxBLUE_PEN);
 	//	dc.DrawRectangle(m_selection);
-	//}
+	// }
 
 	sint32 start;
 	CalcUnscrolledPosition(rect_update.x, rect_update.y, nullptr, &start);

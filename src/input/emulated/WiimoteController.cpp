@@ -29,45 +29,45 @@ bool WiimoteController::set_default_mapping(const std::shared_ptr<ControllerBase
 	std::vector<std::pair<uint64, uint64>> mapping;
 	switch (controller->api())
 	{
-	case InputAPI::Wiimote: {
+	case InputAPI::Wiimote:
+	{
 		const auto sdl_controller = std::static_pointer_cast<NativeWiimoteController>(controller);
 		mapping =
-		{
-			{kButtonId_A, kWiimoteButton_A},
-			{kButtonId_B, kWiimoteButton_B},
-			{kButtonId_1, kWiimoteButton_One},
-			{kButtonId_2, kWiimoteButton_Two},
+			{
+				{kButtonId_A, kWiimoteButton_A},
+				{kButtonId_B, kWiimoteButton_B},
+				{kButtonId_1, kWiimoteButton_One},
+				{kButtonId_2, kWiimoteButton_Two},
 
-			{kButtonId_Home, kWiimoteButton_Home},
+				{kButtonId_Home, kWiimoteButton_Home},
 
-			{kButtonId_Plus, kWiimoteButton_Plus},
-			{kButtonId_Minus, kWiimoteButton_Minus},
+				{kButtonId_Plus, kWiimoteButton_Plus},
+				{kButtonId_Minus, kWiimoteButton_Minus},
 
-			{kButtonId_Up, kWiimoteButton_Up},
-			{kButtonId_Down, kWiimoteButton_Down},
-			{kButtonId_Left, kWiimoteButton_Left},
-			{kButtonId_Right, kWiimoteButton_Right},
+				{kButtonId_Up, kWiimoteButton_Up},
+				{kButtonId_Down, kWiimoteButton_Down},
+				{kButtonId_Left, kWiimoteButton_Left},
+				{kButtonId_Right, kWiimoteButton_Right},
 
-			{kButtonId_Nunchuck_Z, kWiimoteButton_Z},
-			{kButtonId_Nunchuck_C, kWiimoteButton_C},
+				{kButtonId_Nunchuck_Z, kWiimoteButton_Z},
+				{kButtonId_Nunchuck_C, kWiimoteButton_C},
 
-			{kButtonId_Nunchuck_Up, kAxisYP},
-			{kButtonId_Nunchuck_Down, kAxisYN},
-			{kButtonId_Nunchuck_Left, kAxisXN},
-			{kButtonId_Nunchuck_Right, kAxisXP},
-		};
+				{kButtonId_Nunchuck_Up, kAxisYP},
+				{kButtonId_Nunchuck_Down, kAxisYN},
+				{kButtonId_Nunchuck_Left, kAxisXN},
+				{kButtonId_Nunchuck_Right, kAxisXP},
+			};
 	}
 	}
 
 	bool mapping_updated = false;
-	std::for_each(mapping.cbegin(), mapping.cend(), [this, &controller, &mapping_updated](const auto& m)
+	std::for_each(mapping.cbegin(), mapping.cend(), [this, &controller, &mapping_updated](const auto& m) {
+		if (m_mappings.find(m.first) == m_mappings.cend())
 		{
-			if (m_mappings.find(m.first) == m_mappings.cend())
-			{
-				set_mapping(m.first, controller, m.second);
-				mapping_updated = true;
-			}
-		});
+			set_mapping(m.first, controller, m.second);
+			mapping_updated = true;
+		}
+	});
 
 	return mapping_updated;
 }
@@ -115,35 +115,35 @@ uint32 WiimoteController::s_get_emulated_button_flag(uint32 id)
 {
 	switch (id)
 	{
-		case kButtonId_A:
-			return kWPADButton_A;
-		case kButtonId_B:
-			return kWPADButton_B;
-		case kButtonId_1:
-			return kWPADButton_1;
-		case kButtonId_2:
-			return kWPADButton_2;
+	case kButtonId_A:
+		return kWPADButton_A;
+	case kButtonId_B:
+		return kWPADButton_B;
+	case kButtonId_1:
+		return kWPADButton_1;
+	case kButtonId_2:
+		return kWPADButton_2;
 
-		case kButtonId_Plus:
-			return kWPADButton_Plus;
-		case kButtonId_Minus:
-			return kWPADButton_Minus;
-		case kButtonId_Home:
-			return kWPADButton_Home;
+	case kButtonId_Plus:
+		return kWPADButton_Plus;
+	case kButtonId_Minus:
+		return kWPADButton_Minus;
+	case kButtonId_Home:
+		return kWPADButton_Home;
 
-		case kButtonId_Up:
-			return kWPADButton_Up;
-		case kButtonId_Down:
-			return kWPADButton_Down;
-		case kButtonId_Left:
-			return kWPADButton_Left;
-		case kButtonId_Right:
-			return kWPADButton_Right;
+	case kButtonId_Up:
+		return kWPADButton_Up;
+	case kButtonId_Down:
+		return kWPADButton_Down;
+	case kButtonId_Left:
+		return kWPADButton_Left;
+	case kButtonId_Right:
+		return kWPADButton_Right;
 
-		case kButtonId_Nunchuck_Z:
-			return kWPADButton_Z;
-		case kButtonId_Nunchuck_C:
-			return kWPADButton_C;
+	case kButtonId_Nunchuck_Z:
+		return kWPADButton_Z;
+	case kButtonId_Nunchuck_C:
+		return kWPADButton_C;
 	}
 
 	return 0;
@@ -153,31 +153,46 @@ std::string_view WiimoteController::get_button_name(ButtonId id)
 {
 	switch (id)
 	{
-	case kButtonId_A: return "A";
-	case kButtonId_B: return "B";
-	case kButtonId_1: return "1";
-	case kButtonId_2: return "2";
+	case kButtonId_A:
+		return "A";
+	case kButtonId_B:
+		return "B";
+	case kButtonId_1:
+		return "1";
+	case kButtonId_2:
+		return "2";
 
-	case kButtonId_Home: return TR_NOOP("home");
-	case kButtonId_Plus: return "+";
-	case kButtonId_Minus: return "-";
+	case kButtonId_Home:
+		return TR_NOOP("home");
+	case kButtonId_Plus:
+		return "+";
+	case kButtonId_Minus:
+		return "-";
 
-	case kButtonId_Up: return TR_NOOP("up");
-	case kButtonId_Down: return TR_NOOP("down");
-	case kButtonId_Left: return TR_NOOP("left");
-	case kButtonId_Right: return TR_NOOP("right");
+	case kButtonId_Up:
+		return TR_NOOP("up");
+	case kButtonId_Down:
+		return TR_NOOP("down");
+	case kButtonId_Left:
+		return TR_NOOP("left");
+	case kButtonId_Right:
+		return TR_NOOP("right");
 
-	case kButtonId_Nunchuck_Z: return "Z";
-	case kButtonId_Nunchuck_C: return "C";
+	case kButtonId_Nunchuck_Z:
+		return "Z";
+	case kButtonId_Nunchuck_C:
+		return "C";
 
-	case kButtonId_Nunchuck_Up: return TR_NOOP("up");
-	case kButtonId_Nunchuck_Down: return TR_NOOP("down");
-	case kButtonId_Nunchuck_Left: return TR_NOOP("left");
-	case kButtonId_Nunchuck_Right: return TR_NOOP("right");
+	case kButtonId_Nunchuck_Up:
+		return TR_NOOP("up");
+	case kButtonId_Nunchuck_Down:
+		return TR_NOOP("down");
+	case kButtonId_Nunchuck_Left:
+		return TR_NOOP("left");
+	case kButtonId_Nunchuck_Right:
+		return TR_NOOP("right");
 
 	default:
 		return "";
 	}
 }
-
-

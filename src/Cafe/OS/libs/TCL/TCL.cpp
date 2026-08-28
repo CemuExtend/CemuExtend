@@ -46,7 +46,7 @@ namespace TCL
 	{
 		if (id == TCLTimestampId::TIMESTAMP_LAST_BUFFER_RETIRED)
 		{
-			while ( true )
+			while (true)
 			{
 				stdx::atomic_ref<uint64be> retireTimestamp(s_tclStatePPC->gpuRetireMarker);
 				uint64 currentTimestamp = retireTimestamp.load();
@@ -112,20 +112,20 @@ namespace TCL
 		tclRingBufferA_writeIndex.store(writeIndex, std::memory_order::release);
 	}
 
-	#define EVENT_TYPE_TS		5
+#define EVENT_TYPE_TS 5
 
 	void TCLSubmitRetireMarker(bool triggerEventInterrupt)
 	{
 		s_currentRetireMarker++;
 		uint32be cmd[6];
 		cmd[0] = pm4HeaderType3(IT_EVENT_WRITE_EOP, 5);
-		cmd[1] = (4 | (EVENT_TYPE_TS << 8)); // event type (bits 8-15) and event index (bits 0-7).
+		cmd[1] = (4 | (EVENT_TYPE_TS << 8));							  // event type (bits 8-15) and event index (bits 0-7).
 		cmd[2] = MEMPTR<void>(&s_tclStatePPC->gpuRetireMarker).GetMPTR(); // address lower 32bits + data sel bits
-		cmd[3] = 0x40000000; // select 64bit write, lower 16 bits are the upper bits of the address
+		cmd[3] = 0x40000000;											  // select 64bit write, lower 16 bits are the upper bits of the address
 		if (triggerEventInterrupt)
-			cmd[3] |= 0x2000000; // trigger interrupt after value has been written
-		cmd[4] = (uint32)s_currentRetireMarker; // data lower 32 bits
-		cmd[5] = (uint32)(s_currentRetireMarker>>32); // data higher 32 bits
+			cmd[3] |= 0x2000000;						// trigger interrupt after value has been written
+		cmd[4] = (uint32)s_currentRetireMarker;			// data lower 32 bits
+		cmd[5] = (uint32)(s_currentRetireMarker >> 32); // data higher 32 bits
 		TCLWriteCmd(cmd, 6);
 	}
 
@@ -158,7 +158,7 @@ namespace TCL
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "tcl";
@@ -185,10 +185,10 @@ namespace TCL
 				s_tclStatePPC->gpuRetireMarker = 0;
 			}
 		}
-	}s_COStclModule;
+	} s_COStclModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COStclModule;
 	}
-}
+} // namespace TCL

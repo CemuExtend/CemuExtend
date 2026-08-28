@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <functional>
 
 namespace Application
 {
@@ -74,9 +75,67 @@ namespace Application
 		}
 	};
 
+	enum class GraphicPackInstallKind : std::uint8_t
+	{
+		Community,
+		CustomUrl,
+	};
+
+	enum class GraphicPackInstallPhase : std::uint8_t
+	{
+		Checking,
+		Downloading,
+		Extracting,
+		Refreshing,
+	};
+
+	enum class GraphicPackInstallError : std::uint8_t
+	{
+		None,
+		ConfirmationRequired,
+		Cancelled,
+		InvalidUrl,
+		ConnectionFailed,
+		InvalidArchive,
+		Conflict,
+		IoFailure,
+	};
+
+	struct GraphicPackInstallRequest
+	{
+		GraphicPackInstallKind kind{GraphicPackInstallKind::Community};
+		std::string url;
+		bool replaceExisting{};
+	};
+
+	struct GraphicPackInstallProgress
+	{
+		GraphicPackInstallPhase phase{GraphicPackInstallPhase::Checking};
+		std::uint64_t completed{};
+		std::uint64_t total{};
+		std::string currentPath;
+	};
+
+	using GraphicPackInstallProgressHandler =
+		std::function<void(const GraphicPackInstallProgress&)>;
+	using GraphicPackInstallCancellationCheck = std::function<bool()>;
+
+	struct GraphicPackInstallResult
+	{
+		GraphicPackInstallError error{GraphicPackInstallError::None};
+		std::string diagnostic;
+		bool upToDate{};
+		std::vector<std::string> removedEnabledPaths;
+
+		[[nodiscard]] explicit operator bool() const
+		{
+			return error == GraphicPackInstallError::None;
+		}
+	};
+
 	class IGraphicPackService
 	{
-	public:
+	  public:
 		virtual ~IGraphicPackService() = default;
 		[[nodiscard]] virtual std::vector<GraphicPackInfo> ListGraphicPacks() const = 0;
 		[[nodiscard]] virtual GraphicPackResult SetGraphicPackEnabled(
@@ -85,6 +144,10 @@ namespace Application
 			std::string_view key, std::string_view category, std::string_view preset) = 0;
 		[[nodiscard]] virtual GraphicPackResult ReloadGraphicPack(std::string_view key) = 0;
 		[[nodiscard]] virtual GraphicPackRefreshResult RefreshGraphicPacks() = 0;
+		[[nodiscard]] virtual GraphicPackInstallResult InstallGraphicPacks(
+			const GraphicPackInstallRequest& request,
+			GraphicPackInstallProgressHandler progress,
+			GraphicPackInstallCancellationCheck cancelled) = 0;
 		virtual void SaveGraphicPackState() = 0;
 	};
-}
+} // namespace Application

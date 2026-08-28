@@ -12,7 +12,13 @@ namespace
 		std::cerr << "CHECK failed at line " << line << ": " << expression << '\n';
 		std::abort();
 	}
-#define CHECK(condition) do { if (!(condition)) CheckFailed(#condition, __LINE__); } while (false)
+#define CHECK(condition)                       \
+	do                                         \
+	{                                          \
+		if (!(condition))                      \
+			CheckFailed(#condition, __LINE__); \
+	}                                          \
+	while (false)
 
 	bool Rejected(const std::vector<std::byte>& image, std::string_view contains = {})
 	{
@@ -131,7 +137,7 @@ namespace
 		options.wrongImportKind = true;
 		CHECK(Rejected(BuildWupsTestImage(options), "function/data"));
 	}
-}
+} // namespace
 
 int main()
 {
@@ -146,7 +152,8 @@ int main()
 		CHECK(input.read(reinterpret_cast<char*>(image.data()), size).good());
 		std::string error;
 		const auto result = WupsBinaryInspector::Inspect(image, error);
-		if (!result) std::cerr << error << '\n';
+		if (!result)
+			std::cerr << error << '\n';
 		CHECK(result.has_value());
 		CHECK((result->metadata.abiVersion == WupsVersion{0, 9, 1}));
 		return 0;

@@ -72,7 +72,6 @@ void ModuleWindow::OnMainMove(const wxPoint& main_position, const wxSize& main_s
 	this->SetPosition(position);
 }
 
-
 void ModuleWindow::OnGameLoaded()
 {
 	Freeze();
@@ -117,7 +116,6 @@ void ModuleWindow::OnGameLoaded()
 
 	Thaw();
 }
-
 
 void ModuleWindow::OnLeftDClick(wxMouseEvent& event)
 {

@@ -5,11 +5,9 @@
 
 namespace MemMapper
 {
-	const size_t sPageSize{ []()
-		{
+	const size_t sPageSize{[]() {
 		return (size_t)getpagesize();
-	}()
-	};
+	}()};
 
 	size_t GetPageSize()
 	{
@@ -18,7 +16,7 @@ namespace MemMapper
 
 	int GetProt(PAGE_PERMISSION permissionFlags)
 	{
-		int  p = 0;
+		int p = 0;
 		if (permissionFlags == PAGE_PERMISSION::P_NONE)
 			p = PROT_NONE;
 		else if (HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_READ) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_WRITE) && HAS_FLAG(permissionFlags, PAGE_PERMISSION::P_EXECUTE))
@@ -45,16 +43,16 @@ namespace MemMapper
 	void* AllocateMemory(void* baseAddr, size_t size, PAGE_PERMISSION permissionFlags, bool fromReservation)
 	{
 		void* r;
-		if(fromReservation)
+		if (fromReservation)
 		{
-		    uint64 page_size = sysconf(_SC_PAGESIZE);
-		    void* page = baseAddr;
-		    if ( (uint64) baseAddr % page_size != 0 )
-		        page = (void*) ((uint64)baseAddr & ~(page_size - 1));
-			if( mprotect(page, size, GetProt(permissionFlags)) == 0 )
-                r = baseAddr;
+			uint64 page_size = sysconf(_SC_PAGESIZE);
+			void* page = baseAddr;
+			if ((uint64)baseAddr % page_size != 0)
+				page = (void*)((uint64)baseAddr & ~(page_size - 1));
+			if (mprotect(page, size, GetProt(permissionFlags)) == 0)
+				r = baseAddr;
 			else
-                r = nullptr;
+				r = nullptr;
 		}
 		else
 			r = mmap(baseAddr, size, GetProt(permissionFlags), MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -64,7 +62,17 @@ namespace MemMapper
 	bool FreeMemory(void* baseAddr, size_t size, bool fromReservation)
 	{
 		if (fromReservation)
-			return mprotect(baseAddr, size, PROT_NONE) == 0;
+		{
+			// mprotect(PROT_NONE) only makes the committed pages inaccessible; it
+			// does not discard their contents. Re-enabling such a range therefore
+			// exposed data from the previous title on Unix, unlike MEM_DECOMMIT on
+			// Windows. Replace the range with fresh inaccessible anonymous pages so
+			// the address-space reservation remains intact and the next commit is
+			// zero-initialized.
+			void* result = mmap(baseAddr, size, PROT_NONE,
+							MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+			return result == baseAddr;
+		}
 		return munmap(baseAddr, size) == 0;
 	}
 
@@ -79,4 +87,4 @@ namespace MemMapper
 		return mprotect(reinterpret_cast<void*>(page), end - page, GetProt(permissionFlags)) == 0;
 	}
 
-};
+}; // namespace MemMapper

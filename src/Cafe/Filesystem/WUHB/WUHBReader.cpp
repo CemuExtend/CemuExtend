@@ -28,8 +28,7 @@ static const romfs_direntry_t fallbackDirEntry{
 	.fileListHead = ROMFS_ENTRY_EMPTY,
 	.hash = ROMFS_ENTRY_EMPTY,
 	.name_size = 0,
-	.name = ""
-};
+	.name = ""};
 static const romfs_fentry_t fallbackFileEntry{
 	.parent = ROMFS_ENTRY_EMPTY,
 	.listNext = ROMFS_ENTRY_EMPTY,
@@ -37,8 +36,7 @@ static const romfs_fentry_t fallbackFileEntry{
 	.size = 0,
 	.hash = ROMFS_ENTRY_EMPTY,
 	.name_size = 0,
-	.name = ""
-};
+	.name = ""};
 template<bool File>
 const WUHBReader::EntryType<File>& WUHBReader::GetFallback()
 {
@@ -52,7 +50,7 @@ template<bool File>
 WUHBReader::EntryType<File> WUHBReader::GetEntry(uint32 offset) const
 {
 	auto fallback = GetFallback<File>();
-	if(offset == ROMFS_ENTRY_EMPTY)
+	if (offset == ROMFS_ENTRY_EMPTY)
 		return fallback;
 
 	const char* typeName = File ? "fentry" : "direntry";

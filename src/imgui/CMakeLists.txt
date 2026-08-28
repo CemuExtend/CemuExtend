@@ -46,4 +46,5 @@ target_link_libraries(imguiImpl PRIVATE
 	CemuCommon
 	CemuHostContracts
 	CemuInput
+	CemuResource
 )

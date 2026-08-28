@@ -12,7 +12,7 @@ namespace nn
 
 		class DownloadedCommunityData
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_HAS_TITLE_TEXT = (1 << 0);
 			static const inline uint32 FLAG_HAS_DESC_TEXT = (1 << 1);
 			static const inline uint32 FLAG_HAS_APP_DATA = (1 << 2);
@@ -227,7 +227,7 @@ namespace nn
 				return _this->GetIconData(pBuffer, pOutSize, bufferSize);
 			}
 
-			sint32 GetOwnerMiiData(/* FFLStoreData* */void* pBuffer) const
+			sint32 GetOwnerMiiData(/* FFLStoreData* */ void* pBuffer) const
 			{
 				if (!this->TestFlags(FLAG_HAS_MII_DATA))
 					return OLV_RESULT_MISSING_DATA;
@@ -238,7 +238,7 @@ namespace nn
 				memcpy(pBuffer, this->miiFFLStoreData, sizeof(this->miiFFLStoreData));
 				return OLV_RESULT_SUCCESS;
 			}
-			static sint32 __GetOwnerMiiData(DownloadedCommunityData* _this, /* FFLStoreData* */void* pBuffer)
+			static sint32 __GetOwnerMiiData(DownloadedCommunityData* _this, /* FFLStoreData* */ void* pBuffer)
 			{
 				return _this->GetOwnerMiiData(pBuffer);
 			}
@@ -255,7 +255,7 @@ namespace nn
 				return _this->GetOwnerMiiNickname();
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			uint32be communityId;
 			uint32be pid;
@@ -275,7 +275,7 @@ namespace nn
 
 		class DownloadCommunityDataListParam
 		{
-		public:
+		  public:
 			static const inline uint32 FLAG_FILTER_FAVORITES = (1 << 0);
 			static const inline uint32 FLAG_FILTER_OFFICIALS = (1 << 1);
 			static const inline uint32 FLAG_FILTER_OWNED = (1 << 2);
@@ -341,7 +341,7 @@ namespace nn
 
 				this->additionalCommunityIdList[idx] = communityId;
 				int validIdsCount = 0;
-				for (int i = 0; i < 20; i++ )
+				for (int i = 0; i < 20; i++)
 				{
 					if (this->additionalCommunityIdList[i] != -2)
 						++validIdsCount;
@@ -441,7 +441,7 @@ namespace nn
 					uint32 filterBy_favorite = (this->flags & FLAG_FILTER_FAVORITES) != 0;
 					uint32 filterBy_official = (this->flags & FLAG_FILTER_OFFICIALS) != 0;
 					uint32 filterBy_selfmade = (this->flags & FLAG_FILTER_OWNED) != 0;
-				
+
 					if ((filterBy_favorite + filterBy_official + filterBy_selfmade) != 1)
 						return OLV_RESULT_INVALID_PARAMETER;
 
@@ -488,12 +488,12 @@ namespace nn
 				return _this->GetRawDataUrl(pBuffer, bufferSize);
 			}
 
-		public:
+		  public:
 			uint32be flags;
 			uint32be communityId;
 			uint32be communityDownloadLimit;
 			uint32be additionalCommunityIdList[20]; // Additional community ID filter list
-			uint8 unk[4004]; // Looks unused lol, probably reserved data
+			uint8 unk[4004];						// Looks unused lol, probably reserved data
 		};
 		static_assert(sizeof(nn::olv::DownloadCommunityDataListParam) == 0x1000, "sizeof(nn::olv::DownloadCommunityDataListParam) != 0x1000");
 
@@ -520,11 +520,11 @@ namespace nn
 			cafeExportRegisterFunc(DownloadCommunityDataListParam::__GetRawDataUrl, "nn_olv", "GetRawDataUrl__Q3_2nn3olv30DownloadCommunityDataListParamCFPcUi", LogType::NN_OLV);
 
 			cafeExportRegisterFunc((sint32 (*)(DownloadCommunityDataListParam*, uint32))DownloadCommunityDataListParam::__SetCommunityId,
-				"nn_olv", "SetCommunityId__Q3_2nn3olv30DownloadCommunityDataListParamFUi", LogType::NN_OLV);
-			cafeExportRegisterFunc((sint32(*)(DownloadCommunityDataListParam*, uint32, uint8))DownloadCommunityDataListParam::__SetCommunityId,
-				"nn_olv", "SetCommunityId__Q3_2nn3olv30DownloadCommunityDataListParamFUiUc", LogType::NN_OLV);
-		
+								   "nn_olv", "SetCommunityId__Q3_2nn3olv30DownloadCommunityDataListParamFUi", LogType::NN_OLV);
+			cafeExportRegisterFunc((sint32 (*)(DownloadCommunityDataListParam*, uint32, uint8))DownloadCommunityDataListParam::__SetCommunityId,
+								   "nn_olv", "SetCommunityId__Q3_2nn3olv30DownloadCommunityDataListParamFUiUc", LogType::NN_OLV);
+
 			cafeExportRegisterFunc(DownloadCommunityDataList, "nn_olv", "DownloadCommunityDataList__Q2_2nn3olvFPQ3_2nn3olv23DownloadedCommunityDataPUiUiPCQ3_2nn3olv30DownloadCommunityDataListParam", LogType::NN_OLV);
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

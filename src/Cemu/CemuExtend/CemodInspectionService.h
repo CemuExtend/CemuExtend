@@ -129,22 +129,25 @@ namespace CemuExtend
 		bool usesTls{};
 		bool usesFixedAddressPatches{};
 
-		[[nodiscard]] bool Valid() const { return error.empty(); }
+		[[nodiscard]] bool Valid() const
+		{
+			return error.empty();
+		}
 	};
 
 	class CemodInspectionService final
 	{
-	public:
+	  public:
 		[[nodiscard]] static std::string MakeApprovalKey(std::string_view modIdentity,
-			std::string_view packageDigest);
+														 std::string_view packageDigest);
 		[[nodiscard]] static std::string CalculatePackageDigest(
 			const std::filesystem::path& path, std::string& error);
 		[[nodiscard]] static std::uint64_t PermissionBit(CemodPermission permission);
 		[[nodiscard]] static bool IsDangerous(CemodPermission permission);
 		[[nodiscard]] static std::uint64_t DefaultGrantedPermissions(std::uint64_t requested);
 		[[nodiscard]] static CemodApprovalState EvaluateApproval(std::uint64_t requested,
-			const std::optional<CemodApproval>& approval, bool headless);
+																 const std::optional<CemodApproval>& approval, bool headless);
 		[[nodiscard]] static CemodInspection Inspect(const CemodPackageDescriptor& package,
-			const std::optional<CemodApproval>& approval, bool headless = false);
+													 const std::optional<CemodApproval>& approval, bool headless = false);
 	};
-}
+} // namespace CemuExtend

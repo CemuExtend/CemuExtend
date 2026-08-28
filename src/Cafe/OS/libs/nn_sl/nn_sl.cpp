@@ -55,7 +55,7 @@ namespace nn
 		};
 		static_assert(sizeof(WhiteList) == 0x264);
 #pragma pack()
-		
+
 		struct WhiteListAccessor
 		{
 			MEMPTR<void> vTablePtr{}; // 0x00
@@ -106,7 +106,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_sl";
@@ -129,7 +129,7 @@ namespace nn
 					// nothing to clean up
 				}
 			}
-		}s_COSnnSlModule;
+		} s_COSnnSlModule;
 
 		COSModule* GetModule()
 		{

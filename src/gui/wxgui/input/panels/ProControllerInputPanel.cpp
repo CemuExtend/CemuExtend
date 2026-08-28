@@ -9,14 +9,13 @@
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/components/wxInputDraw.h"
 
-const ProController::ButtonId g_kFirstColumnItems[] = { ProController::kButtonId_A, ProController::kButtonId_B, ProController::kButtonId_X, ProController::kButtonId_Y, ProController::kButtonId_L, ProController::kButtonId_R, ProController::kButtonId_ZL, ProController::kButtonId_ZR, ProController::kButtonId_Plus, ProController::kButtonId_Minus };
-const ProController::ButtonId g_kSecondColumnItems[] = { ProController::kButtonId_StickL, ProController::kButtonId_StickL_Up, ProController::kButtonId_StickL_Down, ProController::kButtonId_StickL_Left, ProController::kButtonId_StickL_Right };
-const ProController::ButtonId g_kThirdColumnItems[] = { ProController::kButtonId_StickR, ProController::kButtonId_StickR_Up, ProController::kButtonId_StickR_Down, ProController::kButtonId_StickR_Left, ProController::kButtonId_StickR_Right };
-const ProController::ButtonId g_kFourthRowItems[] = { ProController::kButtonId_Up, ProController::kButtonId_Down, ProController::kButtonId_Left, ProController::kButtonId_Right };
-
+const ProController::ButtonId g_kFirstColumnItems[] = {ProController::kButtonId_A, ProController::kButtonId_B, ProController::kButtonId_X, ProController::kButtonId_Y, ProController::kButtonId_L, ProController::kButtonId_R, ProController::kButtonId_ZL, ProController::kButtonId_ZR, ProController::kButtonId_Plus, ProController::kButtonId_Minus};
+const ProController::ButtonId g_kSecondColumnItems[] = {ProController::kButtonId_StickL, ProController::kButtonId_StickL_Up, ProController::kButtonId_StickL_Down, ProController::kButtonId_StickL_Left, ProController::kButtonId_StickL_Right};
+const ProController::ButtonId g_kThirdColumnItems[] = {ProController::kButtonId_StickR, ProController::kButtonId_StickR_Up, ProController::kButtonId_StickR_Down, ProController::kButtonId_StickR_Left, ProController::kButtonId_StickR_Right};
+const ProController::ButtonId g_kFourthRowItems[] = {ProController::kButtonId_Up, ProController::kButtonId_Down, ProController::kButtonId_Left, ProController::kButtonId_Right};
 
 ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent,
-	std::function<bool()> escapeDown)
+												 std::function<bool()> escapeDown)
 	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
@@ -50,9 +49,9 @@ ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent,
 	}
 
 	row++;
-	
+
 	// input drawer
-	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_left_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
@@ -75,7 +74,7 @@ ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent,
 	row++;
 
 	// input drawer
-	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_right_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
@@ -100,7 +99,8 @@ ProControllerInputPanel::ProControllerInputPanel(wxWindow* parent,
 	SetSizerAndFit(main_sizer);
 }
 
-void ProControllerInputPanel::add_button_row(wxGridBagSizer *sizer, sint32 row, sint32 column, const ProController::ButtonId &button_id) {
+void ProControllerInputPanel::add_button_row(wxGridBagSizer* sizer, sint32 row, sint32 column, const ProController::ButtonId& button_id)
+{
 	sizer->Add(
 		new wxStaticText(this, wxID_ANY, wxGetTranslation(wxString::FromUTF8(ProController::get_button_name(button_id)))),
 		wxGBPosition(row, column),
@@ -117,7 +117,7 @@ void ProControllerInputPanel::add_button_row(wxGridBagSizer *sizer, sint32 row, 
 }
 
 void ProControllerInputPanel::on_timer(const EmulatedControllerPtr& emulated_controller,
-	const ControllerPtr& controller_base)
+									   const ControllerPtr& controller_base)
 {
 	InputPanel::on_timer(emulated_controller, controller_base);
 

@@ -67,8 +67,8 @@ namespace coreinit
 		OSCoroutine* coroutineCurrent = MEMPTR<OSCoroutine>(hCPU->gpr[3]);
 		OSCoroutine* coroutineNext = MEMPTR<OSCoroutine>(hCPU->gpr[4]);
 		hCPU->gpr[1] -= 0x10;
-		memory_writeU32(hCPU->gpr[1]+0xC, hCPU->gpr[31]);
-		memory_writeU32(hCPU->gpr[1]+0x14, hCPU->spr.LR);
+		memory_writeU32(hCPU->gpr[1] + 0xC, hCPU->gpr[31]);
+		memory_writeU32(hCPU->gpr[1] + 0x14, hCPU->spr.LR);
 		hCPU->spr.LR = s_PPCAddrOSSwitchCoroutineAfterOSLoadCoroutine;
 		hCPU->gpr[31] = hCPU->gpr[4];
 		coreinitCoroutine_OSSaveCoroutine(coroutineCurrent, hCPU);
@@ -81,8 +81,8 @@ namespace coreinit
 	void coreinitExport_OSSwitchCoroutineAfterOSLoadCoroutine(PPCInterpreter_t* hCPU)
 	{
 		// resuming after OSSaveCoroutine
-		hCPU->gpr[31] = memory_readU32(hCPU->gpr[1]+0xC);
-		hCPU->spr.LR = memory_readU32(hCPU->gpr[1]+0x14);
+		hCPU->gpr[31] = memory_readU32(hCPU->gpr[1] + 0xC);
+		hCPU->spr.LR = memory_readU32(hCPU->gpr[1] + 0x14);
 		hCPU->gpr[1] += 0x10;
 		hCPU->instructionPointer = hCPU->spr.LR;
 	}
@@ -119,4 +119,4 @@ namespace coreinit
 
 		s_PPCAddrOSSwitchCoroutineAfterOSLoadCoroutine = RPLLoader_MakePPCCallable(coreinitExport_OSSwitchCoroutineAfterOSLoadCoroutine);
 	}
-}
+} // namespace coreinit

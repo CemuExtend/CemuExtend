@@ -6,14 +6,12 @@ namespace nn
 {
 	namespace olv
 	{
-	
+
 		sint32 UploadFavoriteToCommunityData_AsyncRequestImpl(CurlRequestHelper& req, const char* reqUrl,
-			UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam
-		);
+															  UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam);
 
 		sint32 UploadFavoriteToCommunityData_AsyncRequest(CurlRequestHelper& req, const char* reqUrl, coreinit::OSEvent* requestDoneEvent,
-			UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam
-		)
+														  UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam)
 		{
 			sint32 res = UploadFavoriteToCommunityData_AsyncRequestImpl(req, reqUrl, pOutData, pParam);
 			coreinit::OSSignalEvent(requestDoneEvent);
@@ -37,9 +35,9 @@ namespace nn
 			char requestUrl[512];
 			if (pParam->flags & UploadFavoriteToCommunityDataParam::FLAG_DELETION)
 				snprintf(requestUrl, sizeof(requestUrl), "%s/v1/communities/%u.unfavorite", g_DiscoveryResults.apiEndpoint, pParam->communityId.value());
-			else 
+			else
 				snprintf(requestUrl, sizeof(requestUrl), "%s/v1/communities/%u.favorite", g_DiscoveryResults.apiEndpoint, pParam->communityId.value());
-			
+
 			CurlRequestHelper req;
 			req.initate(ActiveSettings::GetNetworkService(), requestUrl, CurlRequestHelper::SERVER_SSL_CONTEXT::OLIVE);
 			InitializeOliveRequest(req);
@@ -58,8 +56,7 @@ namespace nn
 		}
 
 		sint32 UploadFavoriteToCommunityData_AsyncRequestImpl(CurlRequestHelper& req, const char* reqUrl,
-			UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam
-		)
+															  UploadedFavoriteToCommunityData* pOutData, const UploadFavoriteToCommunityDataParam* pParam)
 		{
 			bool reqResult = req.submitRequest(true);
 			long httpCode = 0;
@@ -168,5 +165,5 @@ namespace nn
 
 			return OLV_RESULT_SUCCESS;
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

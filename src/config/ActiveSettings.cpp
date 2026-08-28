@@ -12,12 +12,12 @@
 #include "util/helpers/helpers.h"
 
 void ActiveSettings::SetPaths(bool isPortableMode,
-		const fs::path& executablePath,
-		const fs::path& userDataPath,
-		const fs::path& configPath,
-		const fs::path& cachePath,
-		const fs::path& dataPath,
-		std::set<fs::path>& failedWriteAccess)
+							  const fs::path& executablePath,
+							  const fs::path& userDataPath,
+							  const fs::path& configPath,
+							  const fs::path& cachePath,
+							  const fs::path& dataPath,
+							  std::set<fs::path>& failedWriteAccess)
 {
 	cemu_assert_debug(!s_setPathsCalled); // can only change paths before loading
 	s_isPortableMode = isPortableMode;
@@ -161,9 +161,9 @@ uint32 ActiveSettings::GetPersistentId()
 
 bool ActiveSettings::IsOnlineEnabled()
 {
-	if(!Account::GetAccount(GetPersistentId()).IsValidOnlineAccount())
+	if (!Account::GetAccount(GetPersistentId()).IsValidOnlineAccount())
 		return false;
-	if(!HasRequiredOnlineFiles())
+	if (!HasRequiredOnlineFiles())
 		return false;
 	NetworkService networkService = static_cast<NetworkService>(GetConfig().GetAccountNetworkService(GetPersistentId()));
 	return networkService == NetworkService::Nintendo || networkService == NetworkService::Pretendo || networkService == NetworkService::Custom || networkService == NetworkService::Plasma;
@@ -224,8 +224,8 @@ bool ActiveSettings::VPADDelayEnabled()
 	const uint64 titleId = CafeSystem::GetForegroundTitleId();
 	// workaround for Art Academy spamming VPADRead
 	return /* Art Academy: Home Studio (US) */ titleId == 0x000500001017BF00 ||
-		/* Art Academy: Home Studio (JP) */ titleId == 0x000500001017BE00 ||
-		/* Art Academy: Atelier (EU) */ titleId == 0x000500001017B500;
+		   /* Art Academy: Home Studio (JP) */ titleId == 0x000500001017BE00 ||
+		   /* Art Academy: Atelier (EU) */ titleId == 0x000500001017B500;
 }
 
 bool ActiveSettings::ShaderPreventInfiniteLoopsEnabled()
@@ -236,16 +236,16 @@ bool ActiveSettings::ShaderPreventInfiniteLoopsEnabled()
 	// update: As of Cemu 1.20.0 this should no longer be required for NSMBU/NSLU due to fixes with uniform handling. But we leave it here for good measure
 	// todo - Once we add support for loop config registers this workaround should become unnecessary
 	return /* NSMBU JP */ titleId == 0x0005000010101C00 ||
-		/* NSMBU US */ titleId == 0x0005000010101D00 ||
-		/* NSMBU EU */ titleId == 0x0005000010101E00 ||
-		/* NSMBU+L US */ titleId == 0x000500001014B700 ||
-		/* NSMBU+L EU */ titleId == 0x000500001014B800 ||
-		/* NSLU US */ titleId == 0x0005000010142300 ||
-		/* NSLU EU */ titleId == 0x0005000010142400 ||
-	   /* Project Zero: Maiden of Black Water (EU) */ titleId == 0x00050000101D0300 ||
-	   /* Fatal Frame: Maiden of Black Water (US) */ titleId == 0x00050000101D0600 ||
-	   /* Project Zero: Maiden of Black Water (JP) */ titleId == 0x000500001014D200 ||
-	   /* Project Zero: Maiden of Black Water (Trial, EU) */ titleId == 0x00050000101D3F00;
+		   /* NSMBU US */ titleId == 0x0005000010101D00 ||
+		   /* NSMBU EU */ titleId == 0x0005000010101E00 ||
+		   /* NSMBU+L US */ titleId == 0x000500001014B700 ||
+		   /* NSMBU+L EU */ titleId == 0x000500001014B800 ||
+		   /* NSLU US */ titleId == 0x0005000010142300 ||
+		   /* NSLU EU */ titleId == 0x0005000010142400 ||
+		   /* Project Zero: Maiden of Black Water (EU) */ titleId == 0x00050000101D0300 ||
+		   /* Fatal Frame: Maiden of Black Water (US) */ titleId == 0x00050000101D0600 ||
+		   /* Project Zero: Maiden of Black Water (JP) */ titleId == 0x000500001014D200 ||
+		   /* Project Zero: Maiden of Black Water (Trial, EU) */ titleId == 0x00050000101D3F00;
 }
 
 bool ActiveSettings::FlushGPUCacheOnSwap()
@@ -276,10 +276,10 @@ bool ActiveSettings::ForceSamplerRoundToPrecision()
 fs::path ActiveSettings::GetMlcPath()
 {
 	cemu_assert_debug(s_setPathsCalled);
-	if(const auto launch_mlc = LaunchSettings::GetMLCPath(); launch_mlc.has_value())
+	if (const auto launch_mlc = LaunchSettings::GetMLCPath(); launch_mlc.has_value())
 		return launch_mlc.value();
 
-	if(const auto config_mlc = GetConfig().mlc_path.GetValue(); !config_mlc.empty())
+	if (const auto config_mlc = GetConfig().mlc_path.GetValue(); !config_mlc.empty())
 		return _utf8ToPath(config_mlc);
 
 	return GetDefaultMLCPath();

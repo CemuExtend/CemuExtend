@@ -202,29 +202,28 @@ static VkBlendOp GetVkBlendOp(Latte::LATTE_CB_BLENDN_CONTROL::E_COMBINEFUNC comb
 static VkBlendFactor GetVkBlendFactor(Latte::LATTE_CB_BLENDN_CONTROL::E_BLENDFACTOR factor)
 {
 	const VkBlendFactor factors[] =
-	{
-		/* 0x00 */ VK_BLEND_FACTOR_ZERO,
-		/* 0x01 */ VK_BLEND_FACTOR_ONE,
-		/* 0x02 */ VK_BLEND_FACTOR_SRC_COLOR,
-		/* 0x03 */ VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
-		/* 0x04 */ VK_BLEND_FACTOR_SRC_ALPHA,
-		/* 0x05 */ VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		/* 0x06 */ VK_BLEND_FACTOR_DST_ALPHA,
-		/* 0x07 */ VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
-		/* 0x08 */ VK_BLEND_FACTOR_DST_COLOR,
-		/* 0x09 */ VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
-		/* 0x0A */ VK_BLEND_FACTOR_SRC_ALPHA_SATURATE,
-		/* 0x0B */ VK_BLEND_FACTOR_MAX_ENUM, // todo
-		/* 0x0C */ VK_BLEND_FACTOR_MAX_ENUM, // todo
-		/* 0x0D */ VK_BLEND_FACTOR_CONSTANT_COLOR,
-		/* 0x0E */ VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
-		/* 0x0F */ VK_BLEND_FACTOR_SRC1_COLOR,
-		/* 0x10 */ VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR,
-		/* 0x11 */ VK_BLEND_FACTOR_SRC1_ALPHA,
-		/* 0x12 */ VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA,
-		/* 0x13 */ VK_BLEND_FACTOR_CONSTANT_ALPHA,
-		/* 0x14 */ VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA
-	};
+		{
+			/* 0x00 */ VK_BLEND_FACTOR_ZERO,
+			/* 0x01 */ VK_BLEND_FACTOR_ONE,
+			/* 0x02 */ VK_BLEND_FACTOR_SRC_COLOR,
+			/* 0x03 */ VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+			/* 0x04 */ VK_BLEND_FACTOR_SRC_ALPHA,
+			/* 0x05 */ VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+			/* 0x06 */ VK_BLEND_FACTOR_DST_ALPHA,
+			/* 0x07 */ VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+			/* 0x08 */ VK_BLEND_FACTOR_DST_COLOR,
+			/* 0x09 */ VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+			/* 0x0A */ VK_BLEND_FACTOR_SRC_ALPHA_SATURATE,
+			/* 0x0B */ VK_BLEND_FACTOR_MAX_ENUM, // todo
+			/* 0x0C */ VK_BLEND_FACTOR_MAX_ENUM, // todo
+			/* 0x0D */ VK_BLEND_FACTOR_CONSTANT_COLOR,
+			/* 0x0E */ VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
+			/* 0x0F */ VK_BLEND_FACTOR_SRC1_COLOR,
+			/* 0x10 */ VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR,
+			/* 0x11 */ VK_BLEND_FACTOR_SRC1_ALPHA,
+			/* 0x12 */ VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA,
+			/* 0x13 */ VK_BLEND_FACTOR_CONSTANT_ALPHA,
+			/* 0x14 */ VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA};
 	cemu_assert_debug((uint32)factor < std::size(factors));
 	return factors[(uint32)factor];
 }
@@ -396,7 +395,7 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 			if (attr.fetchType == LatteConst::INSTANCE_DATA)
 			{
 				cemu_assert_debug(attr.aluDivisor == 1); // other divisor not yet supported
-				// use VK_EXT_vertex_attribute_divisor
+														 // use VK_EXT_vertex_attribute_divisor
 			}
 		}
 
@@ -406,8 +405,9 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 
 		VkVertexInputBindingDescription entry{};
 #if BOOST_OS_MACOS
-		if (bufferStride % 4 != 0) {
-			bufferStride = bufferStride + (4-(bufferStride % 4));
+		if (bufferStride % 4 != 0)
+		{
+			bufferStride = bufferStride + (4 - (bufferStride % 4));
 		}
 #endif
 		entry.stride = bufferStride;
@@ -583,7 +583,6 @@ bool _IsVkIntegerFormat(VkFormat fmt)
 		fmt == VK_FORMAT_R32G32B32A32_UINT || fmt == VK_FORMAT_R32G32B32A32_SINT;
 }
 
-
 void PipelineCompiler::InitBlendState(const LatteContextRegister& latteRegister, PipelineInfo* pipelineInfo, bool& usesBlendConstants, VKRObjectRenderPass* renderPassObj)
 {
 	const Latte::LATTE_CB_COLOR_CONTROL& colorControlReg = latteRegister.CB_COLOR_CONTROL;
@@ -605,7 +604,7 @@ void PipelineCompiler::InitBlendState(const LatteContextRegister& latteRegister,
 			// force-disable blending for integer formats
 			entry.blendEnable = VK_FALSE;
 		}
-		
+
 		const auto& blendControlReg = latteRegister.CB_BLENDN_CONTROL[i];
 
 		entry.colorWriteMask = (renderTargetMask >> (i * 4)) & 0xF;
@@ -723,16 +722,15 @@ void PipelineCompiler::InitDepthStencilState()
 	depthStencilState.depthWriteEnable = depthWriteEnable ? VK_TRUE : VK_FALSE;
 
 	static const VkCompareOp vkDepthCompareTable[8] =
-	{
-		VK_COMPARE_OP_NEVER,
-		VK_COMPARE_OP_LESS,
-		VK_COMPARE_OP_EQUAL,
-		VK_COMPARE_OP_LESS_OR_EQUAL,
-		VK_COMPARE_OP_GREATER,
-		VK_COMPARE_OP_NOT_EQUAL,
-		VK_COMPARE_OP_GREATER_OR_EQUAL,
-		VK_COMPARE_OP_ALWAYS
-	};
+		{
+			VK_COMPARE_OP_NEVER,
+			VK_COMPARE_OP_LESS,
+			VK_COMPARE_OP_EQUAL,
+			VK_COMPARE_OP_LESS_OR_EQUAL,
+			VK_COMPARE_OP_GREATER,
+			VK_COMPARE_OP_NOT_EQUAL,
+			VK_COMPARE_OP_GREATER_OR_EQUAL,
+			VK_COMPARE_OP_ALWAYS};
 
 	depthStencilState.depthCompareOp = vkDepthCompareTable[(size_t)depthFunc];
 
@@ -767,8 +765,7 @@ void PipelineCompiler::InitDepthStencilState()
 		VK_STENCIL_OP_DECREMENT_AND_CLAMP,
 		VK_STENCIL_OP_INVERT,
 		VK_STENCIL_OP_INCREMENT_AND_WRAP,
-		VK_STENCIL_OP_DECREMENT_AND_WRAP
-	};
+		VK_STENCIL_OP_DECREMENT_AND_WRAP};
 
 	depthStencilState.stencilTestEnable = stencilEnable ? VK_TRUE : VK_FALSE;
 
@@ -804,7 +801,6 @@ void PipelineCompiler::InitDepthStencilState()
 
 void PipelineCompiler::InitDynamicState(PipelineInfo* pipelineInfo, bool usesBlendConstants, bool usesDepthBias)
 {
-
 	if (usesBlendConstants)
 	{
 		dynamicStates.emplace_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
@@ -1083,7 +1079,7 @@ static void compilePipeline_thread(sint32 threadIndex)
 #ifdef _WIN32
 	// to avoid starving the main cpu and render threads the pipeline compile threads run at lower priority
 	// except for one thread which we always run at normal priority to prevent the opposite scenario where all compile threads are starved
-	if(threadIndex != 0)
+	if (threadIndex != 0)
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
 #endif
 	while (!s_compileThreadsShutdownSignal)

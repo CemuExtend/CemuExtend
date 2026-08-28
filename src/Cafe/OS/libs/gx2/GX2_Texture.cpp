@@ -16,7 +16,7 @@ namespace GX2
 
 	void GX2InitTextureRegs(GX2Texture* texture)
 	{
-		uint32 _regs[5] = { 0 };
+		uint32 _regs[5] = {0};
 
 		// some values may not be zero
 		if (texture->viewNumMips == 0)
@@ -56,13 +56,13 @@ namespace GX2
 		Latte::LATTE_SQ_TEX_RESOURCE_WORD0_N newRegWord0;
 		newRegWord0.set_DIM(dim);
 		newRegWord0.set_TILE_MODE(Latte::MakeHWTileMode(texture->surface.tileMode));
-		newRegWord0.set_TILE_TYPE((surfaceFlags&4) != 0);
+		newRegWord0.set_TILE_TYPE((surfaceFlags & 4) != 0);
 
 		uint32 pixelPitch = pitch;
 		if (Latte::IsCompressedFormat(formatHw))
 			pixelPitch *= 4;
 
-		if(pixelPitch == 0)
+		if (pixelPitch == 0)
 			newRegWord0.set_PITCH(0x7FF);
 		else
 			newRegWord0.set_PITCH((pixelPitch >> 3) - 1);
@@ -83,9 +83,9 @@ namespace GX2
 			newRegWord1.set_DEPTH((depth / 6) - 1);
 		}
 		else if (dim == E_DIM::DIM_3D ||
-			dim == E_DIM::DIM_2D_ARRAY_MSAA ||
-			dim == E_DIM::DIM_2D_ARRAY ||
-			dim == E_DIM::DIM_1D_ARRAY)
+				 dim == E_DIM::DIM_2D_ARRAY_MSAA ||
+				 dim == E_DIM::DIM_2D_ARRAY ||
+				 dim == E_DIM::DIM_1D_ARRAY)
 		{
 			newRegWord1.set_DEPTH(depth - 1);
 		}
@@ -138,7 +138,7 @@ namespace GX2
 		newRegWord5.set_LAST_ARRAY(viewFirstSlice + viewNumSlices - 1);
 		if (dim == Latte::E_DIM::DIM_CUBEMAP && ((depth / 6) - 1) != 0)
 			newRegWord5.set_UKN_BIT_30(true);
-		if(surfaceAA >= 1 && surfaceAA <= 3)
+		if (surfaceAA >= 1 && surfaceAA <= 3)
 			newRegWord5.set_LAST_LEVEL(surfaceAA);
 		texture->regTexWord5 = newRegWord5;
 		// calculate register word 4
@@ -174,14 +174,14 @@ namespace GX2
 		}
 
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_RESOURCE, 8),
-			baseRegister + textureUnitIndex * 7 - mmSQ_TEX_RESOURCE_WORD0,
-			tex->regTexWord0,
-			tex->regTexWord1,
-			memory_virtualToPhysical(imagePtr) >> 8,
-			memory_virtualToPhysical(mipPtr) >> 8,
-			tex->regTexWord4,
-			tex->regTexWord5,
-			tex->regTexWord6);
+							  baseRegister + textureUnitIndex * 7 - mmSQ_TEX_RESOURCE_WORD0,
+							  tex->regTexWord0,
+							  tex->regTexWord1,
+							  memory_virtualToPhysical(imagePtr) >> 8,
+							  memory_virtualToPhysical(mipPtr) >> 8,
+							  tex->regTexWord4,
+							  tex->regTexWord5,
+							  tex->regTexWord6);
 	}
 
 	void GX2SetPixelTexture(GX2Texture* tex, uint32 texUnit)
@@ -240,8 +240,7 @@ namespace GX2
 		}
 		else
 		{
-			auto getAnisoFilter = [](LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER filter) -> LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER
-			{
+			auto getAnisoFilter = [](LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER filter) -> LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER {
 				if (filter == LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::POINT)
 					return LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::ANISO_POINT;
 				else if (filter == LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::BILINEAR)
@@ -315,8 +314,8 @@ namespace GX2
 	{
 		GX2ReserveCmdSpace(5);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_SAMPLER, 1 + 3),
-			samplerIndex * 3,
-			sampler->word0, sampler->word1, sampler->word2);
+							  samplerIndex * 3,
+							  sampler->word0, sampler->word1, sampler->word2);
 	}
 
 	void GX2SetPixelSampler(GX2Sampler* sampler, uint32 samplerIndex)
@@ -389,4 +388,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2SetGeometrySamplerBorderColor, LogType::GX2);
 	}
 
-};
+}; // namespace GX2

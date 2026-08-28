@@ -1,20 +1,24 @@
 #pragma once
 #include <wx/dialog.h>
 
-namespace Application { class EmulationController; }
+namespace Application
+{
+	class EmulationController;
+}
 
 class wxCreateAccountDialog : public wxDialog
 {
-public:
+  public:
 	wxCreateAccountDialog(wxWindow* parent,
-		Application::EmulationController& emulationController);
+						  Application::EmulationController& emulationController);
 
 	[[nodiscard]] uint32 GetPersistentId() const;
 	[[nodiscard]] wxString GetMiiName() const;
-private:
+
+  private:
 	class wxTextCtrl* m_persistent_id;
 	class wxTextCtrl* m_mii_name;
-	class wxButton* m_ok_button, * m_cancel_buton;
+	class wxButton *m_ok_button, *m_cancel_buton;
 	Application::EmulationController& m_emulationController;
 
 	void OnOK(wxCommandEvent& event);

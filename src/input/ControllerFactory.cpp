@@ -23,7 +23,7 @@
 #endif
 
 ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::string_view uuid,
-                                                  std::string_view display_name)
+												  std::string_view display_name)
 {
 	switch (api)
 	{
@@ -33,77 +33,77 @@ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::strin
 #endif
 #if HAS_DIRECTINPUT
 	case InputAPI::DirectInput:
+	{
+		GUID guid;
+		// Workaround for mouse2joystick users, which has 0 as it's uuid in it's profile and counts on Cemu applying it to the first directinput controller. GUIDFromString also doesn't allow for invalid uuids either.
+		if (uuid == "0")
 		{
-			GUID guid;
-			// Workaround for mouse2joystick users, which has 0 as it's uuid in it's profile and counts on Cemu applying it to the first directinput controller. GUIDFromString also doesn't allow for invalid uuids either.
-			if (uuid == "0")
-			{
-				const auto provider = InputManager::instance().get_api_provider(InputAPI::DirectInput);
-				const auto controllers = provider->get_controllers();
-				if (controllers.empty())
-					throw std::invalid_argument(fmt::format(
-						"can't apply non-uuid-specific directinput profile when no controllers are available"));
-				if (!GUIDFromString(controllers.front()->uuid().c_str(), guid))
-					throw std::invalid_argument(fmt::format("invalid guid format: {}", uuid));
-			}
-			else
-			{
-				if (!GUIDFromString(uuid.data(), guid))
-					throw std::invalid_argument(fmt::format("invalid guid format: {}", uuid));
-			}
-
-			return std::make_shared<DirectInputController>(guid);
+			const auto provider = InputManager::instance().get_api_provider(InputAPI::DirectInput);
+			const auto controllers = provider->get_controllers();
+			if (controllers.empty())
+				throw std::invalid_argument(fmt::format(
+					"can't apply non-uuid-specific directinput profile when no controllers are available"));
+			if (!GUIDFromString(controllers.front()->uuid().c_str(), guid))
+				throw std::invalid_argument(fmt::format("invalid guid format: {}", uuid));
 		}
+		else
+		{
+			if (!GUIDFromString(uuid.data(), guid))
+				throw std::invalid_argument(fmt::format("invalid guid format: {}", uuid));
+		}
+
+		return std::make_shared<DirectInputController>(guid);
+	}
 #endif
 #if HAS_XINPUT
 	case InputAPI::XInput:
-		{
-			const auto index = ConvertString<uint32>(uuid);
-			return std::make_shared<XInputController>(index);
-		}
+	{
+		const auto index = ConvertString<uint32>(uuid);
+		return std::make_shared<XInputController>(index);
+	}
 #endif
 #ifdef HAS_SDL
 	case InputAPI::SDLController:
-		{
-			// diid_guid
-			const auto index = uuid.find_first_of('_');
-			if (index == std::string_view::npos)
-				throw std::invalid_argument(fmt::format("invalid sdl uuid format: {}", uuid));
+	{
+		// diid_guid
+		const auto index = uuid.find_first_of('_');
+		if (index == std::string_view::npos)
+			throw std::invalid_argument(fmt::format("invalid sdl uuid format: {}", uuid));
 
-			const auto guid_index = ConvertString<size_t>(uuid.substr(0, index));
-			const auto guid = SDL_StringToGUID(std::string{uuid.substr(index + 1)}.c_str());
+		const auto guid_index = ConvertString<size_t>(uuid.substr(0, index));
+		const auto guid = SDL_StringToGUID(std::string{uuid.substr(index + 1)}.c_str());
 
-			if (display_name.empty())
-				return std::make_shared<SDLController>(guid, guid_index);
-			else
-				return std::make_shared<SDLController>(guid, guid_index, display_name);
-		}
+		if (display_name.empty())
+			return std::make_shared<SDLController>(guid, guid_index);
+		else
+			return std::make_shared<SDLController>(guid, guid_index, display_name);
+	}
 #endif
 #if HAS_DSU
 	case InputAPI::DSUClient:
-		{
-			const auto index = ConvertString<uint32>(uuid);
-			return std::make_shared<DSUController>(index);
-		}
+	{
+		const auto index = ConvertString<uint32>(uuid);
+		return std::make_shared<DSUController>(index);
+	}
 #endif
 #if defined(HAS_GAMECUBE) && HAS_GAMECUBE && defined(HAS_LIBUSB)
 	case InputAPI::GameCube:
-		{
-			const auto index = uuid.find_first_of('_');
-			if (index == std::string_view::npos)
-				throw std::invalid_argument(fmt::format("invalid gamecube uuid format: {}", uuid));
+	{
+		const auto index = uuid.find_first_of('_');
+		if (index == std::string_view::npos)
+			throw std::invalid_argument(fmt::format("invalid gamecube uuid format: {}", uuid));
 
-			const auto adapter = ConvertString<int>(uuid.substr(0, index));
-			const auto controller_index = ConvertString<int>(uuid.substr(index + 1));
-			return std::make_shared<GameCubeController>(adapter, controller_index);
-		}
+		const auto adapter = ConvertString<int>(uuid.substr(0, index));
+		const auto controller_index = ConvertString<int>(uuid.substr(index + 1));
+		return std::make_shared<GameCubeController>(adapter, controller_index);
+	}
 #endif
 #if HAS_WIIMOTE
 	case InputAPI::Wiimote:
-		{
-			const auto index = ConvertString<uint32>(uuid);
-			return std::make_shared<NativeWiimoteController>(index);
-		}
+	{
+		const auto index = ConvertString<uint32>(uuid);
+		return std::make_shared<NativeWiimoteController>(index);
+	}
 #endif
 	default:
 		throw std::invalid_argument(fmt::format("unhandled controller api: {}", api));
@@ -154,18 +154,17 @@ ControllerProviderPtr ControllerFactory::CreateControllerProvider(InputAPI::Type
 #endif
 #if HAS_DSU
 	case InputAPI::DSUClient:
+	{
+		try
 		{
-			try
-			{
-				const auto& dsu_settings = dynamic_cast<const DSUProviderSettings&>(settings);
-				return std::make_shared<DSUControllerProvider>(dsu_settings);
-			}
-			catch (const std::bad_cast&)
-			{
-				cemuLog_log(LogType::Force, "failing to cast ControllerProviderSettings class to DSUControllerProvider");
-				return std::make_shared<DSUControllerProvider>();
-			}
+			const auto& dsu_settings = dynamic_cast<const DSUProviderSettings&>(settings);
+			return std::make_shared<DSUControllerProvider>(dsu_settings);
+		} catch (const std::bad_cast&)
+		{
+			cemuLog_log(LogType::Force, "failing to cast ControllerProviderSettings class to DSUControllerProvider");
+			return std::make_shared<DSUControllerProvider>();
 		}
+	}
 
 #endif
 #if defined(HAS_GAMECUBE) && HAS_GAMECUBE && defined(HAS_LIBUSB)

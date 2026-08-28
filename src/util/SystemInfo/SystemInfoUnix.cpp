@@ -2,7 +2,7 @@
 
 #include <sys/times.h>
 
-void QueryProcTime(uint64 &out_now, uint64 &out_user, uint64 &out_kernel)
+void QueryProcTime(uint64& out_now, uint64& out_user, uint64& out_kernel)
 {
 	struct tms time_info;
 	clock_t clock_now = times(&time_info);
@@ -12,4 +12,3 @@ void QueryProcTime(uint64 &out_now, uint64 &out_user, uint64 &out_kernel)
 	out_user = static_cast<uint64>(clock_user);
 	out_kernel = static_cast<uint64>(clock_kernel);
 }
-

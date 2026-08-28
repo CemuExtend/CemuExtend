@@ -74,29 +74,29 @@ namespace WxRendererAdapters
 	}
 
 	wxWindow* CreateRenderCanvas(wxWindow* parent, const wxSize& size,
-		bool isMainWindow,
-		std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
-		std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
+								 bool isMainWindow,
+								 std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+								 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+								 std::shared_ptr<Host::INativeSurfacePublisher> nativeSurfacePublisher)
 	{
 		switch (ActiveSettings::GetGraphicsAPI())
 		{
 #ifdef ENABLE_OPENGL
 		case kOpenGL:
 			return GLCanvas_Create(parent, size, isMainWindow,
-				std::move(windowMetrics), std::move(nativeSurfaces));
+								   std::move(windowMetrics), std::move(nativeSurfaces));
 #endif
 #ifdef ENABLE_VULKAN
 		case kVulkan:
 			return new VulkanCanvas(parent, size, isMainWindow,
-				std::move(windowMetrics), std::move(nativeSurfaces),
-				std::move(nativeSurfacePublisher));
+									std::move(windowMetrics), std::move(nativeSurfaces),
+									std::move(nativeSurfacePublisher));
 #endif
 #ifdef ENABLE_METAL
 		case kMetal:
 			return new MetalCanvas(parent, size, isMainWindow,
-				std::move(windowMetrics), std::move(nativeSurfaces),
-				std::move(nativeSurfacePublisher));
+								   std::move(windowMetrics), std::move(nativeSurfaces),
+								   std::move(nativeSurfacePublisher));
 #endif
 		default:
 			return nullptr;
@@ -137,4 +137,4 @@ namespace WxRendererAdapters
 		return false;
 #endif
 	}
-}
+} // namespace WxRendererAdapters

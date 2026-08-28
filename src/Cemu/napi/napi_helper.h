@@ -18,16 +18,17 @@ class CurlRequestHelper
 
 		std::string data;
 	};
-public:
+
+  public:
 	enum class SERVER_SSL_CONTEXT
 	{
-		ACT, // account.nintendo.net
-		ECS, // ecs.
-		IAS, // ias.
-		CCS, // ccs.
-		IDBE, // idbe-wup.
+		ACT,	// account.nintendo.net
+		ECS,	// ecs.
+		IAS,	// ias.
+		CCS,	// ccs.
+		IDBE,	// idbe-wup.
 		TAGAYA, // tagaya.wup.shop.nintendo.net
-		OLIVE, // olv.
+		OLIVE,	// olv.
 		CUSTOM, // use cert parameters
 	};
 
@@ -42,7 +43,7 @@ public:
 	void initate(NetworkService service, std::string url, SERVER_SSL_CONTEXT sslContext);
 	void addHeaderField(const char* fieldName, std::string_view value);
 	void addPostField(const char* fieldName, std::string_view value);
-	void setWriteCallback(bool(*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData);
+	void setWriteCallback(bool (*cbWriteCallback)(void* userData, const void* ptr, size_t len, bool isLast), void* userData);
 	void setTimeout(sint32 timeoutSeconds); // maximum duration of the request after connecting. Set to zero to disable limit
 
 	bool submitRequest(bool isPost = false);
@@ -92,7 +93,7 @@ public:
 		return m_httpStatusCode;
 	}
 
-private:
+  private:
 	static size_t __curlWriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata);
 
 	CURL* m_curl;
@@ -109,12 +110,12 @@ private:
 	std::vector<sint32> m_caCertIds;
 	std::vector<sint32> m_clientCertIds;
 	// result
-	sint32 m_httpStatusCode{ 0 };
+	sint32 m_httpStatusCode{0};
 };
 
 class CurlSOAPHelper // todo - make this use CurlRequestHelper
 {
-public:
+  public:
 	CurlSOAPHelper(NetworkService service);
 	~CurlSOAPHelper();
 
@@ -134,7 +135,7 @@ public:
 		return m_receiveBuffer;
 	}
 
-private:
+  private:
 	void SOAP_generateEnvelope();
 
 	static size_t __curlWriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -161,4 +162,4 @@ namespace NAPI
 	bool _findXmlNode(pugi::xml_node& doc, pugi::xml_node& nodeOut, const char* name);
 	bool _parseResponseInit(const CurlSOAPHelper& soapHelper, const char* responseNodeName, pugi::xml_node& node, _NAPI_CommonResultSOAP& result, pugi::xml_document& doc, pugi::xml_node& responseNode);
 
-};
+}; // namespace NAPI

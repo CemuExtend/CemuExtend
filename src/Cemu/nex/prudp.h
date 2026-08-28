@@ -17,7 +17,7 @@ void RC4_transform(RC4Ctx* rc4Ctx, unsigned char* input, int len, unsigned char*
 
 struct prudpStreamSettings
 {
-	uint8 checksumBase; // calculated from key
+	uint8 checksumBase;		   // calculated from key
 	uint8 accessKeyDigest[16]; // MD5 hash of key
 	RC4Ctx rc4Client;
 	RC4Ctx rc4Server;
@@ -46,7 +46,7 @@ struct prudpAuthServerInfo
 
 class prudpPacket
 {
-public:
+  public:
 	static const int PACKET_RAW_SIZE_MAX = 500;
 
 	static const int TYPE_SYN = 0;
@@ -69,15 +69,21 @@ public:
 	void setData(uint8* data, sint32 length);
 	void setFragmentIndex(uint8 fragmentIndex);
 	sint32 buildData(uint8* output, sint32 maxLength);
-	uint8 GetType() const { return type; }
-	uint16 GetSequenceId() const { return m_sequenceId; }
+	uint8 GetType() const
+	{
+		return type;
+	}
+	uint16 GetSequenceId() const
+	{
+		return m_sequenceId;
+	}
 
-private:
+  private:
 	uint32 packetSignature();
 
 	uint8 calculateChecksum(uint8* data, sint32 length);
 
-private:
+  private:
 	uint8 src;
 	uint8 dst;
 	uint8 type;
@@ -89,12 +95,11 @@ private:
 	std::vector<uint8> packetData;
 	bool isEncrypted;
 	uint16 m_sequenceId{0};
-
 };
 
 class prudpIncomingPacket
 {
-public:
+  public:
 	prudpIncomingPacket(prudpStreamSettings* streamSettings, uint8* data, sint32 length);
 
 	bool hasError();
@@ -102,10 +107,10 @@ public:
 	uint8 calculateChecksum(uint8* data, sint32 length);
 	void decrypt();
 
-private:
+  private:
 	prudpIncomingPacket();
 
-public:
+  public:
 	// prudp header
 	uint8 src;
 	uint8 dst;
@@ -118,7 +123,7 @@ public:
 	bool hasData = false;
 	std::vector<uint8> packetData;
 
-private:
+  private:
 	bool isInvalid = false;
 	prudpStreamSettings* streamSettings = nullptr;
 };
@@ -127,35 +132,44 @@ class prudpClient
 {
 	struct PacketWithAckRequired
 	{
-		PacketWithAckRequired(prudpPacket* packet, uint32 initialSendTimestamp) :
-			packet(packet), initialSendTimestamp(initialSendTimestamp), lastRetryTimestamp(initialSendTimestamp) { }
+		PacketWithAckRequired(prudpPacket* packet, uint32 initialSendTimestamp) : packet(packet), initialSendTimestamp(initialSendTimestamp), lastRetryTimestamp(initialSendTimestamp) {}
 		prudpPacket* packet;
 		uint32 initialSendTimestamp;
 		uint32 lastRetryTimestamp;
 		sint32 retryCount{0};
 	};
-public:
+
+  public:
 	enum class ConnectionState : uint8
 	{
-	  Connecting,
-	  Connected,
-	  Disconnected
-  };
+		Connecting,
+		Connected,
+		Disconnected
+	};
 
 	prudpClient(uint32 dstIp, uint16 dstPort, const char* key);
 	prudpClient(uint32 dstIp, uint16 dstPort, const char* key, prudpAuthServerInfo* authInfo);
 	~prudpClient();
 
-	bool IsConnected() const { return m_currentConnectionState == ConnectionState::Connected; }
-	ConnectionState GetConnectionState() const { return m_currentConnectionState; }
-	uint16 GetSourcePort() const { return m_srcPort; }
+	bool IsConnected() const
+	{
+		return m_currentConnectionState == ConnectionState::Connected;
+	}
+	ConnectionState GetConnectionState() const
+	{
+		return m_currentConnectionState;
+	}
+	uint16 GetSourcePort() const
+	{
+		return m_srcPort;
+	}
 
 	bool Update(); // update connection state and check for incoming packets. Returns true if ReceiveDatagram() should be called
 
 	sint32 ReceiveDatagram(std::vector<uint8>& outputBuffer);
 	void SendDatagram(uint8* input, sint32 length, bool reliable = true);
 
-private:
+  private:
 	prudpClient();
 
 	void HandleIncomingPacket(std::unique_ptr<prudpIncomingPacket> incomingPacket);
@@ -168,7 +182,7 @@ private:
 
 	void SendCurrentHandshakePacket();
 
-private:
+  private:
 	uint16 m_srcPort;
 	uint32 m_dstIp;
 	uint16 m_dstPort;

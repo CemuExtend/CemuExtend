@@ -4,12 +4,13 @@
 
 class ELFSymbolTable
 {
-public:
+  public:
 	std::string_view OffsetToSymbol(uint64 ptr, uint64& fromStart) const;
 
 	ELFSymbolTable();
 	~ELFSymbolTable();
-private:
+
+  private:
 	uint8* mappedExecutable = nullptr;
 	size_t mappedExecutableSize = 0;
 
@@ -24,7 +25,7 @@ private:
 
 	uint16 FindSection(int type, const std::string_view& name);
 
-	void* SectionPointer (uint16 index);
+	void* SectionPointer(uint16 index);
 	void* SectionPointer(const Elf64_Shdr& section);
 
 	// ownership of mapped memory, cannot copy.

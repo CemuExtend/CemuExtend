@@ -2,7 +2,7 @@
 
 class LatteTextureView
 {
-public:
+  public:
 	enum class MagFilter
 	{
 		kLinear,
@@ -23,11 +23,11 @@ public:
 	sint32 firstSlice;
 	sint32 numSlice;
 	Latte::E_GX2SURFFMT format; // format of view, can differ from base texture
-	Latte::E_DIM dim; // dimension of view
+	Latte::E_DIM dim;			// dimension of view
 	// state
 	uint32 lastTextureBindIndex = 0;
 	// FBO association
-	std::vector<class LatteCachedFBO*> list_fboLookup; // only set for the first color texture of each FBO, or the depth texture if no color textures are present
+	std::vector<class LatteCachedFBO*> list_fboLookup;	   // only set for the first color texture of each FBO, or the depth texture if no color textures are present
 	std::vector<class LatteCachedFBO*> list_associatedFbo; // list of cached fbos that reference this texture view
 	// view lookup cache
 	std::vector<uint32> viewLookUpCacheKeys;
@@ -36,7 +36,7 @@ public:
 
 class LatteTextureViewLookupCache
 {
-public:
+  public:
 	static void Add(LatteTextureView* view, uint32 baseMip = 0, uint32 baseSlice = 0);
 	static void RemoveAll(LatteTextureView* view);
 
@@ -47,6 +47,4 @@ public:
 	static LatteTextureView* lookupSliceEx(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, bool isDepth);
 
 	static std::unordered_set<LatteTextureView*> GetAllViews();
-
-	
 };

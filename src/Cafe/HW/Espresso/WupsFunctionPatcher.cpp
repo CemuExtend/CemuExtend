@@ -26,7 +26,7 @@ namespace
 	}
 
 	bool RelativeBranch(std::uint32_t from, std::uint32_t to,
-		std::uint32_t& instruction, bool link = false)
+						std::uint32_t& instruction, bool link = false)
 	{
 		const auto displacement =
 			static_cast<std::int64_t>(to) - static_cast<std::int64_t>(from);
@@ -34,9 +34,9 @@ namespace
 			displacement > 0x01fffffcLL)
 			return false;
 		instruction = 0x48000000U |
-			(static_cast<std::uint32_t>(displacement) &
-				kBranchDisplacementMask) |
-			(link ? 1U : 0U);
+					  (static_cast<std::uint32_t>(displacement) &
+					   kBranchDisplacementMask) |
+					  (link ? 1U : 0U);
 		return true;
 	}
 
@@ -62,39 +62,108 @@ namespace
 	{
 		switch (process)
 		{
-		case WupsPatchProcess::RootRpx: return "ROOT_RPX";
-		case WupsPatchProcess::WiiUMenu: return "WII_U_MENU";
-		case WupsPatchProcess::Tvii: return "TVII";
-		case WupsPatchProcess::EManual: return "E_MANUAL";
-		case WupsPatchProcess::HomeMenu: return "HOME_MENU";
-		case WupsPatchProcess::ErrorDisplay: return "ERROR_DISPLAY";
-		case WupsPatchProcess::MiniMiiverse: return "MINI_MIIVERSE";
-		case WupsPatchProcess::Browser: return "BROWSER";
-		case WupsPatchProcess::Miiverse: return "MIIVERSE";
-		case WupsPatchProcess::Eshop: return "ESHOP";
-		case WupsPatchProcess::DownloadManager: return "DOWNLOAD_MANAGER";
-		case WupsPatchProcess::Game: return "GAME";
-		case WupsPatchProcess::GameAndMenu: return "GAME_AND_MENU";
-		case WupsPatchProcess::All: return "ALL";
+		case WupsPatchProcess::RootRpx:
+			return "ROOT_RPX";
+		case WupsPatchProcess::WiiUMenu:
+			return "WII_U_MENU";
+		case WupsPatchProcess::Tvii:
+			return "TVII";
+		case WupsPatchProcess::EManual:
+			return "E_MANUAL";
+		case WupsPatchProcess::HomeMenu:
+			return "HOME_MENU";
+		case WupsPatchProcess::ErrorDisplay:
+			return "ERROR_DISPLAY";
+		case WupsPatchProcess::MiniMiiverse:
+			return "MINI_MIIVERSE";
+		case WupsPatchProcess::Browser:
+			return "BROWSER";
+		case WupsPatchProcess::Miiverse:
+			return "MIIVERSE";
+		case WupsPatchProcess::Eshop:
+			return "ESHOP";
+		case WupsPatchProcess::DownloadManager:
+			return "DOWNLOAD_MANAGER";
+		case WupsPatchProcess::Game:
+			return "GAME";
+		case WupsPatchProcess::GameAndMenu:
+			return "GAME_AND_MENU";
+		case WupsPatchProcess::All:
+			return "ALL";
 		}
 		return "UNKNOWN";
 	}
-}
+} // namespace
 
 std::optional<std::string_view> WupsPatchLibraryName(std::uint32_t library)
 {
 	static constexpr std::array names{
-		"avm", "camera", "coreinit", "dc", "dmae", "drmapp", "erreula",
-		"gx2", "h264", "lzma920", "mic", "nfc", "nio_prof", "nlibcurl",
-		"nlibnss", "nlibnss2", "nn_ac", "nn_acp", "nn_act", "nn_aoc",
-		"nn_boss", "nn_ccr", "nn_cmpt", "nn_dlp", "nn_ec", "nn_fp",
-		"nn_hai", "nn_hpad", "nn_idbe", "nn_ndm", "nn_nets2", "nn_nfp",
-		"nn_nim", "nn_olv", "nn_pdm", "nn_save", "nn_sl", "nn_spm",
-		"nn_temp", "nn_uds", "nn_vctl", "nsysccr", "nsyshid", "nsyskbd",
-		"nsysnet", "nsysuhs", "nsysuvd", "ntag", "padscore", "proc_ui",
-		"snd_core", "snd_user", "sndcore2", "snduser2", "swkbd", "sysapp",
-		"tcl", "tve", "uac", "uac_rpl", "usb_mic", "uvc", "uvd", "vpad",
-		"vpadbase", "zlib125",
+		"avm",
+		"camera",
+		"coreinit",
+		"dc",
+		"dmae",
+		"drmapp",
+		"erreula",
+		"gx2",
+		"h264",
+		"lzma920",
+		"mic",
+		"nfc",
+		"nio_prof",
+		"nlibcurl",
+		"nlibnss",
+		"nlibnss2",
+		"nn_ac",
+		"nn_acp",
+		"nn_act",
+		"nn_aoc",
+		"nn_boss",
+		"nn_ccr",
+		"nn_cmpt",
+		"nn_dlp",
+		"nn_ec",
+		"nn_fp",
+		"nn_hai",
+		"nn_hpad",
+		"nn_idbe",
+		"nn_ndm",
+		"nn_nets2",
+		"nn_nfp",
+		"nn_nim",
+		"nn_olv",
+		"nn_pdm",
+		"nn_save",
+		"nn_sl",
+		"nn_spm",
+		"nn_temp",
+		"nn_uds",
+		"nn_vctl",
+		"nsysccr",
+		"nsyshid",
+		"nsyskbd",
+		"nsysnet",
+		"nsysuhs",
+		"nsysuvd",
+		"ntag",
+		"padscore",
+		"proc_ui",
+		"snd_core",
+		"snd_user",
+		"sndcore2",
+		"snduser2",
+		"swkbd",
+		"sysapp",
+		"tcl",
+		"tve",
+		"uac",
+		"uac_rpl",
+		"usb_mic",
+		"uvc",
+		"uvd",
+		"vpad",
+		"vpadbase",
+		"zlib125",
 	};
 	if (library >= names.size())
 		return std::nullopt;
@@ -102,9 +171,9 @@ std::optional<std::string_view> WupsPatchLibraryName(std::uint32_t library)
 }
 
 bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
-	std::uint32_t sourceAddress, std::uint32_t destinationAddress,
-	std::size_t minimumBytes, std::vector<std::uint32_t>& output,
-	std::size_t& consumedBytes, std::string& error)
+									std::uint32_t sourceAddress, std::uint32_t destinationAddress,
+									std::size_t minimumBytes, std::vector<std::uint32_t>& output,
+									std::size_t& consumedBytes, std::string& error)
 {
 	output.clear();
 	consumedBytes = 0;
@@ -132,17 +201,15 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 		const auto instruction = input[index];
 		const auto opcode = instruction >> 26;
 		const auto source = sourceAddress +
-			static_cast<std::uint32_t>(index * sizeof(std::uint32_t));
+							static_cast<std::uint32_t>(index * sizeof(std::uint32_t));
 		const auto destination = destinationAddress +
-			static_cast<std::uint32_t>(output.size() * sizeof(std::uint32_t));
+								 static_cast<std::uint32_t>(output.size() * sizeof(std::uint32_t));
 		if (opcode == kBranchOpcode)
 		{
 			const bool absolute = (instruction & 2U) != 0;
 			const auto displacement = SignExtend(
 				instruction & kBranchDisplacementMask, 26);
-			const auto target = absolute ?
-				static_cast<std::uint32_t>(displacement) :
-				source + static_cast<std::uint32_t>(displacement);
+			const auto target = absolute ? static_cast<std::uint32_t>(displacement) : source + static_cast<std::uint32_t>(displacement);
 			const bool link = (instruction & 1U) != 0;
 			std::uint32_t relocated{};
 			if (RelativeBranch(destination, target, relocated, link))
@@ -158,9 +225,7 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 			const bool absolute = (instruction & 2U) != 0;
 			const auto displacement = SignExtend(
 				instruction & kConditionalDisplacementMask, 16);
-			const auto target = absolute ?
-				static_cast<std::uint32_t>(displacement) :
-				source + static_cast<std::uint32_t>(displacement);
+			const auto target = absolute ? static_cast<std::uint32_t>(displacement) : source + static_cast<std::uint32_t>(displacement);
 			const auto newDisplacement =
 				static_cast<std::int64_t>(target) - destination;
 			if ((newDisplacement & 3) == 0 &&
@@ -170,12 +235,12 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 				output.push_back(
 					(instruction & ~kConditionalDisplacementMask & ~2U) |
 					(static_cast<std::uint32_t>(newDisplacement) &
-						kConditionalDisplacementMask));
+					 kConditionalDisplacementMask));
 			}
 			else
 			{
 				output.push_back(instruction &
-					~kConditionalDisplacementMask & ~2U);
+								 ~kConditionalDisplacementMask & ~2U);
 				stubs.push_back({output.size() - 1, target, true});
 			}
 		}
@@ -185,9 +250,9 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 	consumedBytes = minimumBytes;
 
 	const auto continuation = sourceAddress +
-		static_cast<std::uint32_t>(consumedBytes);
+							  static_cast<std::uint32_t>(consumedBytes);
 	const auto branchBackAddress = destinationAddress +
-		static_cast<std::uint32_t>(output.size() * 4);
+								   static_cast<std::uint32_t>(output.size() * 4);
 	std::uint32_t branchBack{};
 	if (RelativeBranch(branchBackAddress, continuation, branchBack))
 		output.push_back(branchBack);
@@ -200,9 +265,9 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 	for (const auto& stub : stubs)
 	{
 		const auto stubAddress = destinationAddress +
-			static_cast<std::uint32_t>(output.size() * 4);
+								 static_cast<std::uint32_t>(output.size() * 4);
 		const auto instructionAddress = destinationAddress +
-			static_cast<std::uint32_t>(stub.instructionIndex * 4);
+										static_cast<std::uint32_t>(stub.instructionIndex * 4);
 		if (stub.conditional)
 		{
 			const auto displacement =
@@ -217,8 +282,8 @@ bool PpcFunctionRelocator::Relocate(std::span<const std::uint32_t> input,
 				kConditionalDisplacementMask;
 		}
 		else if (!RelativeBranch(instructionAddress, stubAddress,
-			output[stub.instructionIndex],
-			(input[stub.instructionIndex] & 1U) != 0))
+								 output[stub.instructionIndex],
+								 (input[stub.instructionIndex] & 1U) != 0))
 		{
 			error = "PPC branch repair stub is out of REL24 range";
 			return false;
@@ -248,8 +313,7 @@ struct WupsFunctionPatchManager::Impl
 		bool targetWritten{};
 	};
 
-	explicit Impl(std::shared_ptr<IWupsPatchPlatform> platform_) :
-		platform(std::move(platform_))
+	explicit Impl(std::shared_ptr<IWupsPatchPlatform> platform_) : platform(std::move(platform_))
 	{
 	}
 
@@ -284,8 +348,8 @@ struct WupsFunctionPatchManager::Impl
 	std::map<std::string, std::uint64_t, std::less<>> moduleRevisions;
 
 	bool Resolve(const WupsPatchRequest& request,
-		WupsResolvedPatchTarget& target, bool& unavailable,
-		std::string& error)
+				 WupsResolvedPatchTarget& target, bool& unavailable,
+				 std::string& error)
 	{
 		unavailable = false;
 		switch (request.targetKind)
@@ -327,7 +391,7 @@ struct WupsFunctionPatchManager::Impl
 	}
 
 	bool Restore(PatchRecord& patch, std::string& error,
-		std::vector<ExecutableAllocation>& frees)
+				 std::vector<ExecutableAllocation>& frees)
 	{
 		bool success = true;
 		if (patch.targetWritten)
@@ -335,7 +399,7 @@ struct WupsFunctionPatchManager::Impl
 			const std::array original{patch.originalInstruction};
 			std::string writeError;
 			if (!platform->WriteWords(
-				patch.target.address, original, writeError))
+					patch.target.address, original, writeError))
 			{
 				success = false;
 				error.append(error.empty() ? "" : "; ").append(writeError);
@@ -351,7 +415,7 @@ struct WupsFunctionPatchManager::Impl
 			const std::array oldValue{patch.oldCallThrough};
 			std::string writeError;
 			if (!platform->WriteWords(
-				patch.request.callThroughStorage, oldValue, writeError))
+					patch.request.callThroughStorage, oldValue, writeError))
 			{
 				success = false;
 				error.append(error.empty() ? "" : "; ").append(writeError);
@@ -375,8 +439,8 @@ struct WupsFunctionPatchManager::Impl
 	}
 
 	bool PrepareBuild(const WupsPatchRequest& request,
-		const WupsResolvedPatchTarget& target, PatchRecord& patch,
-		std::uint32_t& patchInstruction, std::string& error)
+					  const WupsResolvedPatchTarget& target, PatchRecord& patch,
+					  std::uint32_t& patchInstruction, std::string& error)
 	{
 		if ((target.address & 3U) != 0 ||
 			(request.replacementAddress & 3U) != 0 ||
@@ -394,29 +458,29 @@ struct WupsFunctionPatchManager::Impl
 		std::array<std::uint32_t, PpcFunctionRelocator::kMaximumInputWords>
 			input{};
 		if (!platform->ReadWords(target.address,
-			std::span<std::uint32_t>(input).first(1), error))
+								 std::span<std::uint32_t>(input).first(1), error))
 			return false;
 		std::array<std::uint32_t, 1> oldStorage{};
 		if (!platform->ReadWords(
-			request.callThroughStorage, oldStorage, error))
+				request.callThroughStorage, oldStorage, error))
 			return false;
 
 		std::uint32_t trampoline{};
 		if (!platform->AllocateExecutableNear(
-			target.address, kMaximumTrampolineBytes, 32,
-			trampoline, error))
+				target.address, kMaximumTrampolineBytes, 32,
+				trampoline, error))
 			return false;
 		std::vector<std::uint32_t> relocated;
 		std::size_t consumed{};
 		if (!PpcFunctionRelocator::Relocate(
-			std::span<const std::uint32_t>(input).first(1),
-			target.address, trampoline, 4, relocated, consumed, error))
+				std::span<const std::uint32_t>(input).first(1),
+				target.address, trampoline, 4, relocated, consumed, error))
 		{
 			platform->FreeExecutable(trampoline, kMaximumTrampolineBytes);
 			return false;
 		}
 		auto bridgeAddress = trampoline +
-			static_cast<std::uint32_t>(relocated.size() * 4);
+							 static_cast<std::uint32_t>(relocated.size() * 4);
 		const auto bridge = FarJump(request.replacementAddress);
 		relocated.insert(relocated.end(), bridge.begin(), bridge.end());
 		if (relocated.size() * 4 > kMaximumTrampolineBytes ||
@@ -429,7 +493,7 @@ struct WupsFunctionPatchManager::Impl
 			trampoline, static_cast<std::uint32_t>(relocated.size() * 4));
 
 		if (!RelativeBranch(target.address, request.replacementAddress,
-			patchInstruction) &&
+							patchInstruction) &&
 			!RelativeBranch(target.address, bridgeAddress, patchInstruction) &&
 			!AbsoluteBranch(bridgeAddress, patchInstruction))
 		{
@@ -456,7 +520,7 @@ struct WupsFunctionPatchManager::Impl
 		for (const auto& request : requests)
 		{
 			if (!WupsFunctionPatchManager::ProcessMatches(
-				request.process, process))
+					request.process, process))
 				continue;
 			PreparedRequest item;
 			item.request = request;
@@ -465,17 +529,17 @@ struct WupsFunctionPatchManager::Impl
 				item.moduleRevision = moduleRevisions[request.moduleName];
 			}
 			item.resolved = Resolve(item.request, item.target,
-				item.unavailable, item.error);
+									item.unavailable, item.error);
 			if (item.resolved)
 				item.built = PrepareBuild(item.request, item.target,
-					item.patch, item.patchInstruction, item.error);
+										  item.patch, item.patchInstruction, item.error);
 			prepared.push_back(std::move(item));
 		}
 		return prepared;
 	}
 
 	bool CommitBuild(PreparedRequest& prepared, std::string& error,
-		std::vector<ExecutableAllocation>& frees)
+					 std::vector<ExecutableAllocation>& frees)
 	{
 		const auto& request = prepared.request;
 		const auto& target = prepared.target;
@@ -505,7 +569,7 @@ struct WupsFunctionPatchManager::Impl
 
 		const std::array callThrough{patch.trampolineAddress};
 		if (!platform->WriteWords(
-			request.callThroughStorage, callThrough, error))
+				request.callThroughStorage, callThrough, error))
 		{
 			frees.push_back({patch.trampolineAddress, patch.trampolineSize});
 			patch.trampolineAddress = 0;
@@ -536,19 +600,19 @@ struct WupsFunctionPatchManager::Impl
 	}
 
 	void DiscardPrepared(std::span<PreparedRequest> prepared,
-		std::vector<ExecutableAllocation>& frees)
+						 std::vector<ExecutableAllocation>& frees)
 	{
 		for (auto& item : prepared)
 		{
 			if (item.patch.trampolineAddress != 0)
 				frees.push_back({item.patch.trampolineAddress,
-					item.patch.trampolineSize});
+								 item.patch.trampolineSize});
 			item.patch.trampolineAddress = 0;
 		}
 	}
 
 	void Rollback(std::vector<PatchRecord>& committed, std::string& error,
-		std::vector<ExecutableAllocation>& frees)
+				  std::vector<ExecutableAllocation>& frees)
 	{
 		for (auto& patch : std::ranges::reverse_view(committed))
 		{
@@ -563,8 +627,8 @@ struct WupsFunctionPatchManager::Impl
 	}
 
 	bool ApplyRequests(std::span<PreparedRequest> requests,
-		bool allowPending, std::string& error,
-		std::vector<ExecutableAllocation>& frees)
+					   bool allowPending, std::string& error,
+					   std::vector<ExecutableAllocation>& frees)
 	{
 		std::vector<PatchRecord> committed;
 		std::vector<WupsPatchRequest> newPending;
@@ -582,8 +646,7 @@ struct WupsFunctionPatchManager::Impl
 					"patch descriptor {} ({}) resolution failed: {}",
 					request.descriptorIndex,
 					request.mandatory ? "mandatory" : "optional",
-					prepared.error.empty() ?
-						"target is not loaded" : prepared.error);
+					prepared.error.empty() ? "target is not loaded" : prepared.error);
 				Rollback(committed, error, frees);
 				DiscardPrepared(requests, frees);
 				return false;
@@ -603,18 +666,17 @@ struct WupsFunctionPatchManager::Impl
 			prepared.patch = {};
 		}
 		patches.insert(patches.end(),
-			std::make_move_iterator(committed.begin()),
-			std::make_move_iterator(committed.end()));
+					   std::make_move_iterator(committed.begin()),
+					   std::make_move_iterator(committed.end()));
 		pending.insert(pending.end(),
-			std::make_move_iterator(newPending.begin()),
-			std::make_move_iterator(newPending.end()));
+					   std::make_move_iterator(newPending.begin()),
+					   std::make_move_iterator(newPending.end()));
 		return true;
 	}
 };
 
 WupsFunctionPatchManager::WupsFunctionPatchManager(
-	std::shared_ptr<IWupsPatchPlatform> platform) :
-	m_impl(std::make_unique<Impl>(std::move(platform)))
+	std::shared_ptr<IWupsPatchPlatform> platform) : m_impl(std::make_unique<Impl>(std::move(platform)))
 {
 }
 
@@ -631,7 +693,7 @@ bool WupsFunctionPatchManager::ProcessMatches(
 		return true;
 	if (descriptor == WupsPatchProcess::GameAndMenu)
 		return current == WupsPatchProcess::Game ||
-			current == WupsPatchProcess::WiiUMenu;
+			   current == WupsPatchProcess::WiiUMenu;
 	return descriptor == current;
 }
 
@@ -660,7 +722,8 @@ bool WupsFunctionPatchManager::Apply(
 	std::unique_lock lock(m_impl->mutex);
 	if (std::ranges::any_of(m_impl->patches, [&](const auto& patch) {
 			return patch.request.owner == owner;
-		}) || std::ranges::any_of(m_impl->pending, [&](const auto& request) {
+		}) ||
+		std::ranges::any_of(m_impl->pending, [&](const auto& request) {
 			return request.owner == owner;
 		}))
 	{
@@ -697,12 +760,12 @@ bool WupsFunctionPatchManager::Add(
 	std::unique_lock lock(m_impl->mutex);
 	const auto sameIdentity = [&](const auto& candidate) {
 		return candidate.request.owner == request.owner &&
-			candidate.request.descriptorIndex == request.descriptorIndex;
+			   candidate.request.descriptorIndex == request.descriptorIndex;
 	};
 	if (std::ranges::any_of(m_impl->patches, sameIdentity) ||
 		std::ranges::any_of(m_impl->pending, [&](const auto& candidate) {
 			return candidate.owner == request.owner &&
-				candidate.descriptorIndex == request.descriptorIndex;
+				   candidate.descriptorIndex == request.descriptorIndex;
 		}))
 	{
 		error = "dynamic function patch descriptor identity already exists";
@@ -719,14 +782,14 @@ bool WupsFunctionPatchManager::Add(
 }
 
 bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
-	std::size_t descriptorIndex, std::string& error)
+									  std::size_t descriptorIndex, std::string& error)
 {
 	std::vector<Impl::ExecutableAllocation> frees;
 	std::unique_lock lock(m_impl->mutex);
 	error.clear();
 	bool found{};
 	for (auto iterator = m_impl->patches.rbegin();
-		iterator != m_impl->patches.rend(); ++iterator)
+		 iterator != m_impl->patches.rend(); ++iterator)
 	{
 		if (iterator->request.owner != owner ||
 			iterator->request.descriptorIndex != descriptorIndex)
@@ -743,7 +806,7 @@ bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
 	const auto oldPending = m_impl->pending.size();
 	std::erase_if(m_impl->pending, [&](const auto& request) {
 		return request.owner == owner &&
-			request.descriptorIndex == descriptorIndex;
+			   request.descriptorIndex == descriptorIndex;
 	});
 	found = found || oldPending != m_impl->pending.size();
 	if (!found)
@@ -755,7 +818,7 @@ bool WupsFunctionPatchManager::Remove(const WupsPatchOwner& owner,
 	}
 	std::erase_if(m_impl->patches, [&](const auto& patch) {
 		return patch.request.owner == owner &&
-			patch.request.descriptorIndex == descriptorIndex;
+			   patch.request.descriptorIndex == descriptorIndex;
 	});
 	lock.unlock();
 	m_impl->Free(frees);
@@ -770,7 +833,7 @@ bool WupsFunctionPatchManager::RemoveOwner(
 	error.clear();
 	bool success = true;
 	for (auto iterator = m_impl->patches.rbegin();
-		iterator != m_impl->patches.rend(); ++iterator)
+		 iterator != m_impl->patches.rend(); ++iterator)
 	{
 		if (iterator->request.owner != owner)
 			continue;
@@ -816,12 +879,12 @@ bool WupsFunctionPatchManager::OnModuleLoaded(
 	std::erase_if(prepared, [&](const auto& item) {
 		const bool removed = std::ranges::none_of(
 			m_impl->pending, [&](const auto& pending) {
-			return pending.owner == item.request.owner &&
-				pending.descriptorIndex == item.request.descriptorIndex;
-		});
+				return pending.owner == item.request.owner &&
+					   pending.descriptorIndex == item.request.descriptorIndex;
+			});
 		if (removed && item.patch.trampolineAddress != 0)
 			frees.push_back({item.patch.trampolineAddress,
-				item.patch.trampolineSize});
+							 item.patch.trampolineSize});
 		return removed;
 	});
 	if (prepared.empty())
@@ -840,7 +903,7 @@ bool WupsFunctionPatchManager::OnModuleLoaded(
 	for (const auto& item : prepared)
 		std::erase_if(m_impl->pending, [&](const auto& pending) {
 			return pending.owner == item.request.owner &&
-				pending.descriptorIndex == item.request.descriptorIndex;
+				   pending.descriptorIndex == item.request.descriptorIndex;
 		});
 	lock.unlock();
 	m_impl->Free(frees);
@@ -857,11 +920,11 @@ bool WupsFunctionPatchManager::OnModuleUnloading(
 	bool success = true;
 	std::vector<WupsPatchRequest> restoredPending;
 	for (auto iterator = m_impl->patches.rbegin();
-		iterator != m_impl->patches.rend(); ++iterator)
+		 iterator != m_impl->patches.rend(); ++iterator)
 	{
 		if (iterator->target.moduleName != event.moduleName ||
 			(event.moduleLifetime != 0 &&
-				iterator->target.moduleLifetime != event.moduleLifetime))
+			 iterator->target.moduleLifetime != event.moduleLifetime))
 			continue;
 		std::string restoreError;
 		if (!m_impl->Restore(*iterator, restoreError, frees))
@@ -882,7 +945,7 @@ bool WupsFunctionPatchManager::OnModuleUnloading(
 		m_impl->pending.push_back(request);
 	std::erase_if(m_impl->patches, [&](const auto& patch) {
 		return patch.target.moduleName == event.moduleName &&
-			(event.moduleLifetime == 0 ||
+			   (event.moduleLifetime == 0 ||
 				patch.target.moduleLifetime == event.moduleLifetime);
 	});
 	lock.unlock();
@@ -919,11 +982,10 @@ std::vector<WupsAppliedPatch> WupsFunctionPatchManager::Applied() const
 	std::vector<WupsAppliedPatch> result;
 	result.reserve(m_impl->patches.size());
 	for (const auto& patch : m_impl->patches)
-		result.push_back({
-			patch.request.owner, patch.request.descriptorIndex,
-			patch.target.address, patch.request.replacementAddress,
-			patch.trampolineAddress, patch.trampolineSize,
-			patch.target.moduleName, patch.target.moduleLifetime});
+		result.push_back({patch.request.owner, patch.request.descriptorIndex,
+						  patch.target.address, patch.request.replacementAddress,
+						  patch.trampolineAddress, patch.trampolineSize,
+						  patch.target.moduleName, patch.target.moduleLifetime});
 	return result;
 }
 

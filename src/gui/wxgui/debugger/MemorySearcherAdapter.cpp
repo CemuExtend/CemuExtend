@@ -4,15 +4,15 @@
 
 namespace WxDebuggerAdapters
 {
-wxWindow* CreateMemorySearcherWindow(wxWindow& parent)
-{
-	return new MemorySearcherTool(&parent);
-}
+	wxWindow* CreateMemorySearcherWindow(wxWindow& parent)
+	{
+		return new MemorySearcherTool(&parent);
+	}
 
-void CloseMemorySearcherWindow(wxWindow& window)
-{
-	auto& memorySearcher = static_cast<MemorySearcherTool&>(window);
-	memorySearcher.PrepareForShutdown();
-	memorySearcher.Close();
-}
-}
+	void CloseMemorySearcherWindow(wxWindow& window)
+	{
+		auto& memorySearcher = static_cast<MemorySearcherTool&>(window);
+		memorySearcher.PrepareForShutdown();
+		memorySearcher.Close();
+	}
+} // namespace WxDebuggerAdapters

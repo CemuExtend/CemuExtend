@@ -33,7 +33,7 @@ namespace coreinit
 
 	uint32 OSAddAtomic(std::atomic<uint32be>* mem, uint32 adder)
 	{
-        // used by SDL Wii U port
+		// used by SDL Wii U port
 		uint32be knownValue;
 		while (true)
 		{
@@ -126,7 +126,7 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSCompareAndSwapAtomic, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSCompareAndSwapAtomicEx, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSAddAtomic, LogType::Placeholder);
-		
+
 		// 64bit atomic operations
 		cafeExportRegister("coreinit", OSSetAtomic64, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSGetAtomic64, LogType::Placeholder);
@@ -137,4 +137,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSCompareAndSwapAtomic64, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSCompareAndSwapAtomicEx64, LogType::Placeholder);
 	}
-}
+} // namespace coreinit

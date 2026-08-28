@@ -30,7 +30,7 @@ namespace nn
 
 			void SetFlag(FLAGS flag)
 			{
-				flags =  (FLAGS)((uint32)flags.value() | (uint32)flag);
+				flags = (FLAGS)((uint32)flags.value() | (uint32)flag);
 			}
 
 			betype<FLAGS> flags;
@@ -84,7 +84,7 @@ namespace nn
 			// GetFeeling__Q3_2nn3olv18DownloadedDataBaseCFv
 			static uint32 GetFeeling(DownloadedDataBase* _this)
 			{
-				if(_this->feeling >= 6)
+				if (_this->feeling >= 6)
 					return 0;
 				return _this->feeling;
 			}
@@ -179,7 +179,7 @@ namespace nn
 					cemuLog_log(LogType::Force, "DownloadedSystemTopicData::GetTitleIconData: uncompress failed");
 					return OLV_RESULT_INVALID_TEXT_FIELD; // status
 				}
-				if(bodyMemoSizeOut)
+				if (bodyMemoSizeOut)
 					*bodyMemoSizeOut = decompressedSize;
 				// todo - verify TGA header
 				return OLV_RESULT_SUCCESS;
@@ -200,7 +200,7 @@ namespace nn
 					return OLV_RESULT_MISSING_DATA;
 				uint32 outputSize = std::min<uint32>(maxSize, _this->appDataLength);
 				memcpy(appDataOut, _this->appData, outputSize);
-				if(appDataSizeOut)
+				if (appDataSizeOut)
 					*appDataSizeOut = outputSize;
 				return OLV_RESULT_SUCCESS;
 			}
@@ -268,7 +268,6 @@ namespace nn
 			{
 				return _this->downloadedDataBase.postId;
 			}
-
 		};
 
 		static_assert(sizeof(DownloadedPostData) == 0xC208);
@@ -410,14 +409,14 @@ namespace nn
 
 				static uint32 GetDownloadedSystemPostDataNum(DownloadedSystemTopicDataList* _this, uint32 topicIndex)
 				{
-					if(topicIndex >= MAX_TOPIC_COUNT)
+					if (topicIndex >= MAX_TOPIC_COUNT)
 						return 0;
 					return _this->topicData[topicIndex].postDataNum;
 				};
 
 				static DownloadedSystemTopicData* GetDownloadedSystemTopicData(DownloadedSystemTopicDataList* _this, uint32 topicIndex)
 				{
-					if(topicIndex >= MAX_TOPIC_COUNT)
+					if (topicIndex >= MAX_TOPIC_COUNT)
 						return nullptr;
 					return &_this->topicData[topicIndex].downloadedSystemTopicData;
 				};
@@ -437,8 +436,7 @@ namespace nn
 			};
 
 			static_assert(sizeof(DownloadedSystemTopicDataList) == 0xC1000);
-		}
-
+		} // namespace hidden
 
 		struct DownloadPostDataListParam
 		{
@@ -448,18 +446,17 @@ namespace nn
 
 			enum class FLAGS
 			{
-				FRIENDS_ONLY = 0x01, // friends only
+				FRIENDS_ONLY = 0x01,   // friends only
 				FOLLOWERS_ONLY = 0x02, // followers only
-				SELF_ONLY = 0x04, // self only
+				SELF_ONLY = 0x04,	   // self only
 				ONLY_TYPE_TEXT = 0x08,
 				ONLY_TYPE_MEMO = 0x10,
 				UKN_20 = 0x20,
-				WITH_MII = 0x40, // with mii
+				WITH_MII = 0x40,	 // with mii
 				WITH_EMPATHY = 0x80, // with yeahs added
 				UKN_100 = 0x100,
 				UKN_200 = 0x200, // "is_delay" parameter
 				UKN_400 = 0x400, // "is_hot" parameter
-
 
 			};
 
@@ -483,7 +480,7 @@ namespace nn
 			SearchKey searchKeyArray[MAX_NUM_SEARCH_KEY];
 			PostId searchPostId[MAX_NUM_POST_ID];
 			uint64be postDate; // OSTime?
-			uint64be titleId; // only used by System posts?
+			uint64be titleId;  // only used by System posts?
 			uint32be bodyTextMaxLength;
 			uint8 padding8C4[1852];
 
@@ -531,7 +528,7 @@ namespace nn
 			// SetSearchKey__Q3_2nn3olv25DownloadPostDataListParamFPCwUc
 			static nnResult SetSearchKey(DownloadPostDataListParam* _this, const uint16be* searchKey, uint8 searchKeyIndex)
 			{
-				if( !searchKey )
+				if (!searchKey)
 				{
 					memset(&_this->searchKeyArray[searchKeyIndex], 0, sizeof(SearchKey));
 					return OLV_RESULT_SUCCESS;
@@ -539,7 +536,7 @@ namespace nn
 				if (searchKeyIndex >= MAX_NUM_SEARCH_KEY)
 					return OLV_RESULT_INVALID_PARAMETER;
 				memset(&_this->searchKeyArray[searchKeyIndex], 0, sizeof(SearchKey));
-				if(olv_wstrnlen((const char16_t*)searchKey, 152) > 50)
+				if (olv_wstrnlen((const char16_t*)searchKey, 152) > 50)
 				{
 					cemuLog_log(LogType::Force, "DownloadPostDataListParam::SetSearchKey: searchKey is too long\n");
 					return OLV_RESULT_INVALID_PARAMETER;
@@ -553,7 +550,7 @@ namespace nn
 			{
 				if (searchKey == nullptr)
 				{
-					cemuLog_logDebug(LogType::NN_OLV, "DownloadPostDataListParam::SetSearchKeySingle: searchKeySingle is Null\n");			
+					cemuLog_logDebug(LogType::NN_OLV, "DownloadPostDataListParam::SetSearchKeySingle: searchKeySingle is Null\n");
 					return OLV_RESULT_INVALID_PARAMETER;
 				}
 				return SetSearchKey(_this, searchKey, 0);
@@ -562,7 +559,7 @@ namespace nn
 			// SetSearchPid__Q3_2nn3olv25DownloadPostDataListParamFUi
 			static nnResult SetSearchPid(DownloadPostDataListParam* _this, uint32 searchPid)
 			{
-				if(_this->_HasFlag(FLAGS::FRIENDS_ONLY) || _this->_HasFlag(FLAGS::FOLLOWERS_ONLY) || _this->_HasFlag(FLAGS::SELF_ONLY))
+				if (_this->_HasFlag(FLAGS::FRIENDS_ONLY) || _this->_HasFlag(FLAGS::FOLLOWERS_ONLY) || _this->_HasFlag(FLAGS::SELF_ONLY))
 					return OLV_RESULT_INVALID_PARAMETER;
 				_this->searchPid[0] = searchPid;
 				return OLV_RESULT_SUCCESS;
@@ -593,7 +590,7 @@ namespace nn
 			// SetPostDataMaxNum__Q3_2nn3olv25DownloadPostDataListParamFUi
 			static nnResult SetPostDataMaxNum(DownloadPostDataListParam* _this, uint32 postDataMaxNum)
 			{
-				if(postDataMaxNum == 0)
+				if (postDataMaxNum == 0)
 					return OLV_RESULT_INVALID_PARAMETER;
 				_this->postDataMaxNum = postDataMaxNum;
 				return OLV_RESULT_SUCCESS;
@@ -602,7 +599,7 @@ namespace nn
 			// SetBodyTextMaxLength__Q3_2nn3olv25DownloadPostDataListParamFUi
 			static nnResult SetBodyTextMaxLength(DownloadPostDataListParam* _this, uint32 bodyTextMaxLength)
 			{
-				if(bodyTextMaxLength >= 256)
+				if (bodyTextMaxLength >= 256)
 					return OLV_RESULT_INVALID_PARAMETER;
 				_this->bodyTextMaxLength = bodyTextMaxLength;
 				return OLV_RESULT_SUCCESS;
@@ -618,5 +615,5 @@ namespace nn
 		bool ParseXML_DownloadedPostData(DownloadedPostData& obj, pugi::xml_node& xmlNode);
 
 		void loadOlivePostAndTopicTypes();
-	}
-}
+	} // namespace olv
+} // namespace nn

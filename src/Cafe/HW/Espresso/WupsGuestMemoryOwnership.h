@@ -94,7 +94,7 @@ class WupsGuestMemoryOwnershipRegistry;
 // pointer beyond the lease's lifetime.
 class WupsGuestRangeLease
 {
-public:
+  public:
 	WupsGuestRangeLease() = default;
 	WupsGuestRangeLease(WupsGuestRangeLease&& other) noexcept;
 	WupsGuestRangeLease& operator=(WupsGuestRangeLease&& other) noexcept;
@@ -103,21 +103,36 @@ public:
 	WupsGuestRangeLease(const WupsGuestRangeLease&) = delete;
 	WupsGuestRangeLease& operator=(const WupsGuestRangeLease&) = delete;
 
-	[[nodiscard]] bool Valid() const { return m_registry != nullptr; }
-	[[nodiscard]] std::uint32_t Base() const { return m_base; }
-	[[nodiscard]] std::uint32_t Size() const { return m_size; }
-	[[nodiscard]] WupsOwnedRangeKind Kind() const { return m_kind; }
-	[[nodiscard]] WupsOwnerToken Owner() const { return m_owner; }
+	[[nodiscard]] bool Valid() const
+	{
+		return m_registry != nullptr;
+	}
+	[[nodiscard]] std::uint32_t Base() const
+	{
+		return m_base;
+	}
+	[[nodiscard]] std::uint32_t Size() const
+	{
+		return m_size;
+	}
+	[[nodiscard]] WupsOwnedRangeKind Kind() const
+	{
+		return m_kind;
+	}
+	[[nodiscard]] WupsOwnerToken Owner() const
+	{
+		return m_owner;
+	}
 
 	void Release();
 
-private:
+  private:
 	friend class WupsGuestMemoryOwnershipRegistry;
 	WupsGuestRangeLease(WupsGuestMemoryOwnershipRegistry* registry,
-		std::uint64_t rangeId, std::uint32_t base, std::uint32_t size,
-		WupsOwnedRangeKind kind, WupsOwnerToken owner)
+						std::uint64_t rangeId, std::uint32_t base, std::uint32_t size,
+						WupsOwnedRangeKind kind, WupsOwnerToken owner)
 		: m_registry(registry), m_rangeId(rangeId), m_base(base), m_size(size),
-			m_kind(kind), m_owner(owner)
+		  m_kind(kind), m_owner(owner)
 	{
 	}
 
@@ -131,7 +146,7 @@ private:
 
 class WupsGuestMemoryOwnershipRegistry
 {
-public:
+  public:
 	WupsGuestMemoryOwnershipRegistry();
 	~WupsGuestMemoryOwnershipRegistry();
 
@@ -158,7 +173,7 @@ public:
 	// Hides a range from new lookups and waits for every existing lease before
 	// removing it. Backing storage may be reclaimed only after this returns.
 	[[nodiscard]] bool RetireRangeAndWait(std::uint64_t rangeId,
-		std::string& error);
+										  std::string& error);
 
 	// Pins the most specific live range owned by `owner` that fully contains
 	// [address, address+size) and satisfies `access` and `policy`. Returns an
@@ -169,13 +184,13 @@ public:
 
 	// Non-pinning membership test with identical acceptance rules to PinRange.
 	[[nodiscard]] bool BelongsTo(WupsOwnerToken owner, std::uint32_t address,
-		std::uint32_t size, WupsGuestAccess access,
-		WupsGuestPointerPolicy policy) const;
+								 std::uint32_t size, WupsGuestAccess access,
+								 WupsGuestPointerPolicy policy) const;
 
 	// Looks up a live range whose base equals `address` and is owned by `owner`.
 	// Used by base-pointer free paths. Returns the rangeId.
 	[[nodiscard]] std::optional<std::uint64_t> FindOwnedBase(WupsOwnerToken owner,
-		std::uint32_t address) const;
+															 std::uint32_t address) const;
 
 	[[nodiscard]] std::optional<WupsOwnedGuestRange> GetRange(
 		std::uint64_t rangeId) const;
@@ -196,7 +211,7 @@ public:
 	[[nodiscard]] std::size_t LiveRangeCount() const;
 	[[nodiscard]] std::size_t OwnerRangeCount(WupsOwnerToken owner) const;
 
-private:
+  private:
 	friend class WupsGuestRangeLease;
 	void ReleaseLease(std::uint64_t rangeId);
 

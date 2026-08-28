@@ -10,8 +10,8 @@
 #include <cstring>
 
 bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
-	std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
-	std::uint32_t& result, std::string& error, bool aggregateByReference)
+							   std::uint32_t targetVirtualAddress, std::span<const std::uint32_t> argumentWords,
+							   std::uint32_t& result, std::string& error, bool aggregateByReference)
 {
 	error.clear();
 	result = 0;
@@ -20,11 +20,12 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		return false;
 	MPTR callbackAddress{};
 	if (!RPLLoader_ResolveModuleAddress(moduleLease, targetVirtualAddress,
-		sizeof(std::uint32_t),
-		RPLModuleAddressKind::Executable, callbackAddress) || (callbackAddress & 3U) != 0)
+										sizeof(std::uint32_t),
+										RPLModuleAddressKind::Executable, callbackAddress) ||
+		(callbackAddress & 3U) != 0)
 	{
 		error = fmt::format("guest callback target 0x{:08x} is not executable module memory",
-			targetVirtualAddress);
+							targetVirtualAddress);
 		return false;
 	}
 	if (argumentWords.size() > 32)
@@ -79,8 +80,8 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 		const MPTR structAddress = cpu->gpr[1];
 		for (std::size_t index = 0; index < argumentWords.size(); ++index)
 			memory_writeU32(structAddress +
-				static_cast<MPTR>(index * sizeof(std::uint32_t)),
-				argumentWords[index]);
+								static_cast<MPTR>(index * sizeof(std::uint32_t)),
+							argumentWords[index]);
 		_PPCCoreCallback_writeGPRArg(callbackData, cpu, structAddress);
 	}
 	else
@@ -114,7 +115,7 @@ bool WupsGuestCallback::Invoke(RPLModule* module, std::uint64_t lifetimeId,
 	if (memoryException)
 	{
 		error = fmt::format("guest callback at 0x{:08x} raised a memory exception",
-			targetVirtualAddress);
+							targetVirtualAddress);
 		return false;
 	}
 	return true;

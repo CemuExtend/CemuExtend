@@ -11,38 +11,38 @@ namespace snd_core
 		struct
 		{
 			uint32 rendererFreq{0}; // 32Khz or 48Khz
-			uint32 frameLength{0}; // 3MS
+			uint32 frameLength{0};	// 3MS
 			uint32 pipelineMode{0};
-		}initParam;
+		} initParam;
 	};
 
 	extern sndGeneric_t sndGeneric;
 
-	const uint32 AX_SYNCFLAG_SRCFILTER = 0x1;				// Voice src type (AXSetVoiceSrcType)
-	const uint32 AX_SYNCFLAG_DEVICEMIXMASK = 0x2;			// Voice mix related (AXSetVoiceDeviceMix)
-	const uint32 AX_SYNCFLAG_PLAYBACKSTATE = 0x4;			// Voice play state (AXSetVoiceState)
-	const uint32 AX_SYNCFLAG_VOICETYPE = 0x8;				// Voice type (AXSetVoiceType)
-	const uint32 AX_SYNCFLAG_DEVICEMIX = 0x10;				// Voice mix related (AXSetVoiceDeviceMix)
-	const uint32 AX_SYNCFLAG_ITD20 = 0x20;					// Voice initial time delay (AXSetVoiceItdOn)
-	const uint32 AX_SYNCFLAG_ITD40 = 0x40;					// Voice initial time delay (AXSetVoiceItdOn, AXSetVoiceItdTarget)
-	const uint32 AX_SYNCFLAG_VE = 0x100;					// Voice ve (AXSetVoiceVe)
-	const uint32 AX_SYNCFLAG_VEDELTA = 0x200;				// Voice ve delta (AXSetVoiceVeDelta)
-	const uint32 AX_SYNCFLAG_OFFSETS = 0x400;				// Voice offset data (AXSetVoiceOffsets)
-	const uint32 AX_SYNCFLAG_LOOPFLAG = 0x800;				// Voice loop flag (AXSetVoiceLoop)
-	const uint32 AX_SYNCFLAG_LOOPOFFSET = 0x1000;			// Voice loop offset (AXSetVoiceLoopOffset)
-	const uint32 AX_SYNCFLAG_ENDOFFSET = 0x2000;			// Voice end offset (AXSetVoiceEndOffset)
-	const uint32 AX_SYNCFLAG_CURRENTOFFSET = 0x4000;		// Voice current offset (AXSetVoiceCurrentOffset)
-	const uint32 AX_SYNCFLAG_ADPCMDATA = 0x8000;			// Voice adpcm data (AXSetVoiceAdpcm)
-	const uint32 AX_SYNCFLAG_SRCDATA = 0x10000;				// Voice src + src ratio (AXSetVoiceSrc)
-	const uint32 AX_SYNCFLAG_SRCRATIO = 0x20000;			// Voice src ratio (AXSetVoiceSrcRatio)
-	const uint32 AX_SYNCFLAG_ADPCMLOOP = 0x40000;			// Voice adpcm loop (AXSetVoiceAdpcmLoop)
-	const uint32 AX_SYNCFLAG_LPFDATA = 0x80000;				// Voice lpf (AXSetVoiceLpf)
-	const uint32 AX_SYNCFLAG_LPFCOEF = 0x100000;			// Voice lpf coef (AXSetVoiceLpfCoefs)
-	const uint32 AX_SYNCFLAG_BIQUADDATA = 0x200000;			// Voice biquad (AXSetVoiceBiquad)
-	const uint32 AX_SYNCFLAG_BIQUADCOEF = 0x400000;			// Voice biquad coef (AXSetVoiceBiquadCoefs)
-	const uint32 AX_SYNCFLAG_VOICEREMOTEON = 0x800000;		// ??? (AXSetVoiceRmtOn?)
-	const uint32 AX_SYNCFLAG_4000000 = 0x4000000;			// ???
-	const uint32 AX_SYNCFLAG_8000000 = 0x8000000;			// ???
+	const uint32 AX_SYNCFLAG_SRCFILTER = 0x1;		   // Voice src type (AXSetVoiceSrcType)
+	const uint32 AX_SYNCFLAG_DEVICEMIXMASK = 0x2;	   // Voice mix related (AXSetVoiceDeviceMix)
+	const uint32 AX_SYNCFLAG_PLAYBACKSTATE = 0x4;	   // Voice play state (AXSetVoiceState)
+	const uint32 AX_SYNCFLAG_VOICETYPE = 0x8;		   // Voice type (AXSetVoiceType)
+	const uint32 AX_SYNCFLAG_DEVICEMIX = 0x10;		   // Voice mix related (AXSetVoiceDeviceMix)
+	const uint32 AX_SYNCFLAG_ITD20 = 0x20;			   // Voice initial time delay (AXSetVoiceItdOn)
+	const uint32 AX_SYNCFLAG_ITD40 = 0x40;			   // Voice initial time delay (AXSetVoiceItdOn, AXSetVoiceItdTarget)
+	const uint32 AX_SYNCFLAG_VE = 0x100;			   // Voice ve (AXSetVoiceVe)
+	const uint32 AX_SYNCFLAG_VEDELTA = 0x200;		   // Voice ve delta (AXSetVoiceVeDelta)
+	const uint32 AX_SYNCFLAG_OFFSETS = 0x400;		   // Voice offset data (AXSetVoiceOffsets)
+	const uint32 AX_SYNCFLAG_LOOPFLAG = 0x800;		   // Voice loop flag (AXSetVoiceLoop)
+	const uint32 AX_SYNCFLAG_LOOPOFFSET = 0x1000;	   // Voice loop offset (AXSetVoiceLoopOffset)
+	const uint32 AX_SYNCFLAG_ENDOFFSET = 0x2000;	   // Voice end offset (AXSetVoiceEndOffset)
+	const uint32 AX_SYNCFLAG_CURRENTOFFSET = 0x4000;   // Voice current offset (AXSetVoiceCurrentOffset)
+	const uint32 AX_SYNCFLAG_ADPCMDATA = 0x8000;	   // Voice adpcm data (AXSetVoiceAdpcm)
+	const uint32 AX_SYNCFLAG_SRCDATA = 0x10000;		   // Voice src + src ratio (AXSetVoiceSrc)
+	const uint32 AX_SYNCFLAG_SRCRATIO = 0x20000;	   // Voice src ratio (AXSetVoiceSrcRatio)
+	const uint32 AX_SYNCFLAG_ADPCMLOOP = 0x40000;	   // Voice adpcm loop (AXSetVoiceAdpcmLoop)
+	const uint32 AX_SYNCFLAG_LPFDATA = 0x80000;		   // Voice lpf (AXSetVoiceLpf)
+	const uint32 AX_SYNCFLAG_LPFCOEF = 0x100000;	   // Voice lpf coef (AXSetVoiceLpfCoefs)
+	const uint32 AX_SYNCFLAG_BIQUADDATA = 0x200000;	   // Voice biquad (AXSetVoiceBiquad)
+	const uint32 AX_SYNCFLAG_BIQUADCOEF = 0x400000;	   // Voice biquad coef (AXSetVoiceBiquadCoefs)
+	const uint32 AX_SYNCFLAG_VOICEREMOTEON = 0x800000; // ??? (AXSetVoiceRmtOn?)
+	const uint32 AX_SYNCFLAG_4000000 = 0x4000000;	   // ???
+	const uint32 AX_SYNCFLAG_8000000 = 0x8000000;	   // ???
 
 	struct axADPCMInternal_t
 	{
@@ -67,8 +67,8 @@ namespace snd_core
 		/* +0x00 / 0x17E */ uint16 loopFlag;
 		/* +0x02 / 0x180 */ uint16 format;
 		/* +0x04 / 0x182 */ uint16 ptrHighExtension; // defines 512mb range (highest 3 bit of current offset ptr counted in bytes)
-		// offsets (relative to NULL, counted in sample words)
-		// note: All offset ptr variables can only store values up to 512MB (PCM8 mask -> 0x1FFFFFFF, PCM16 mask -> 0x0FFFFFFF, ADPCM mask -> 0x3FFFFFFF)
+													 // offsets (relative to NULL, counted in sample words)
+													 // note: All offset ptr variables can only store values up to 512MB (PCM8 mask -> 0x1FFFFFFF, PCM16 mask -> 0x0FFFFFFF, ADPCM mask -> 0x3FFFFFFF)
 		/* +0x06 / 0x184 */ uint16 loopOffsetPtrHigh;
 		/* +0x08 / 0x186 */ uint16 loopOffsetPtrLow;
 		/* +0x0A / 0x188 */ uint16 endOffsetPtrHigh;
@@ -105,14 +105,14 @@ namespace snd_core
 		/* +0x004 */ uint16be selfAddrHigh; // points to shadow copy of self (physical pointer)
 		/* +0x006 */ uint16be selfAddrLow;
 		/* +0x008 */ uint16 srcFilterMode; // AX_FILTER_MODE_*
-		/* +0x00A */ uint16 srcTapFilter; // AX_FILTER_TAP_*
+		/* +0x00A */ uint16 srcTapFilter;  // AX_FILTER_TAP_*
 		/* +0x00C */ uint16be mixerSelect;
 		/* +0x00E */ uint16 voiceType;
 		/* +0x010 */ uint16 deviceMixMaskTV[4];
 		/* +0x018 */ uint16 deviceMixMaskDRC[4 * 2];
-		/* +0x028 */ AXCHMIX_DEPR deviceMixTV[AX_BUS_COUNT * AX_TV_CHANNEL_COUNT]; // TV device mix
+		/* +0x028 */ AXCHMIX_DEPR deviceMixTV[AX_BUS_COUNT * AX_TV_CHANNEL_COUNT];		 // TV device mix
 		/* +0x088 */ AXCHMIX_DEPR deviceMixDRC[AX_BUS_COUNT * AX_DRC_CHANNEL_COUNT * 2]; // DRC device mix
-		/* +0x108 */ AXCHMIX_DEPR deviceMixRMT[0x40 / 4]; // RMT device mix (size unknown)
+		/* +0x108 */ AXCHMIX_DEPR deviceMixRMT[0x40 / 4];								 // RMT device mix (size unknown)
 		/* +0x148 */ uint16 reserved148_voiceRmtOn;
 		/* +0x14A */ uint16 deviceMixMaskRMT[0x10];
 		/* +0x16A */ uint16 playbackState;
@@ -136,7 +136,7 @@ namespace snd_core
 			/* +0x1CE */ uint16 yn1;
 			/* +0x1D0 */ uint16 a0;
 			/* +0x1D2 */ uint16 b0;
-		}lpf;
+		} lpf;
 		struct
 		{
 			/* +0x1D4 */ uint16 on;
@@ -149,7 +149,7 @@ namespace snd_core
 			/* +0x1E2 */ uint16 b2;
 			/* +0x1E4 */ uint16 a1;
 			/* +0x1E6 */ uint16 a2;
-		}biquad;
+		} biquad;
 		uint16 reserved1E8[0x18];
 		uint16 reserved218[0x20]; // not related to device mix?
 		uint16 reserved258[0x10]; // not related to device mix?
@@ -205,7 +205,7 @@ namespace snd_core
 		return (uint32)vpb->index;
 	}
 
-    void AXVBP_Reset();
+	void AXVBP_Reset();
 
 	// AXIst
 	void AXIst_InitThread();
@@ -221,4 +221,4 @@ namespace snd_core
 	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT> __AXTVOutputBuffer;
 	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_DRC_CHANNEL_COUNT * 2> __AXDRCOutputBuffer;
 
-}
+} // namespace snd_core

@@ -18,6 +18,7 @@ namespace ntag
 
 	bool ccrNfcOpened = false;
 	IOSDevHandle gCcrNfcHandle;
+	std::mutex gCcrNfcMutex;
 
 	NTAGFormatSettings gFormatSettings;
 
@@ -25,6 +26,30 @@ namespace ntag
 	MPTR gAbortCallbacks[2];
 	MPTR gReadCallbacks[2];
 	MPTR gWriteCallbacks[2];
+
+	bool EnsureCCRNFCOpen()
+	{
+		std::scoped_lock lock(gCcrNfcMutex);
+		if (ccrNfcOpened)
+			return true;
+		const IOSDevHandle handle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
+		if (IOS_ResultIsError((IOS_ERROR)handle))
+			return false;
+		gCcrNfcHandle = handle;
+		ccrNfcOpened = true;
+		return true;
+	}
+
+	void ResetCCRNFCForTitle()
+	{
+		std::scoped_lock lock(gCcrNfcMutex);
+		ccrNfcOpened = false;
+		gCcrNfcHandle = 0;
+		std::fill(std::begin(gDetectCallbacks), std::end(gDetectCallbacks), MPTR_NULL);
+		std::fill(std::begin(gAbortCallbacks), std::end(gAbortCallbacks), MPTR_NULL);
+		std::fill(std::begin(gReadCallbacks), std::end(gReadCallbacks), MPTR_NULL);
+		std::fill(std::begin(gWriteCallbacks), std::end(gWriteCallbacks), MPTR_NULL);
+	}
 
 	sint32 __NTAGConvertNFCResult(sint32 result)
 	{
@@ -64,10 +89,14 @@ namespace ntag
 	{
 		sint32 result = nfc::NFCShutdown(chan);
 
-		if (ccrNfcOpened)
 		{
-			coreinit::IOS_Close(gCcrNfcHandle);
-			ccrNfcOpened = false;
+			std::scoped_lock lock(gCcrNfcMutex);
+			if (ccrNfcOpened)
+			{
+				coreinit::IOS_Close(gCcrNfcHandle);
+				ccrNfcOpened = false;
+				gCcrNfcHandle = 0;
+			}
 		}
 
 		gDetectCallbacks[chan] = MPTR_NULL;
@@ -130,7 +159,7 @@ namespace ntag
 	sint32 NTAGAbort(uint32 chan, MPTR callback, void* context)
 	{
 		cemu_assert(chan < 2);
-		
+
 		// TODO is it normal that Rumble U calls this?
 
 		gAbortCallbacks[chan] = callback;
@@ -139,7 +168,7 @@ namespace ntag
 	}
 
 	bool __NTAGRawDataToNfcData(iosu::ccr_nfc::CCRNFCCryptData* raw, iosu::ccr_nfc::CCRNFCCryptData* nfc)
-	{  
+	{
 		memcpy(nfc, raw, sizeof(iosu::ccr_nfc::CCRNFCCryptData));
 
 		if (raw->version == 0)
@@ -244,10 +273,8 @@ namespace ntag
 	{
 		StackAllocator<iosu::ccr_nfc::CCRNFCCryptData> nfcRawData, nfcInData, nfcOutData;
 
-		if (!ccrNfcOpened)
-		{
-			gCcrNfcHandle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
-		}
+		if (!EnsureCCRNFCOpen())
+			return IOS_ERROR_INVALID;
 
 		// Prepare nfc buffer
 		nfcRawData->version = 0;
@@ -454,10 +481,8 @@ namespace ntag
 	{
 		StackAllocator<iosu::ccr_nfc::CCRNFCCryptData> nfcRawData, nfcInData, nfcOutData;
 
-		if (!ccrNfcOpened)
-		{
-			gCcrNfcHandle = coreinit::IOS_Open("/dev/ccr_nfc", 0);
-		}
+		if (!EnsureCCRNFCOpen())
+			return IOS_ERROR_INVALID;
 
 		// Prepare nfc buffer
 		nfcRawData->version = 0;
@@ -492,7 +517,7 @@ namespace ntag
 
 			memcpy(decryptedBuffer + _swapEndianU16(rwHeader->offset) + dataSize, randomBuffer, _swapEndianU16(rwHeader->size) - dataSize);
 		}
-		
+
 		// Make sure the data fits into the rw area
 		if (_swapEndianU16(rwHeader->size) < dataSize)
 		{
@@ -586,7 +611,7 @@ namespace ntag
 
 			// Write data to tag
 			error = nfc::NFCWrite(chan, 200, &gWriteData[chan].uid, &gWriteData[chan].uidMask,
-				_swapEndianU16(rwHeader.size) + 0x28, writeBuffer, RPLLoader_MakePPCCallable(__NTAGWriteCallback), context);
+								  _swapEndianU16(rwHeader.size) + 0x28, writeBuffer, RPLLoader_MakePPCCallable(__NTAGWriteCallback), context);
 			if (error >= 0)
 			{
 				osLib_returnFromFunction(hCPU, 0);
@@ -632,7 +657,7 @@ namespace ntag
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "ntag";
@@ -640,11 +665,12 @@ namespace ntag
 
 		void RPLMapped() override
 		{
+			ResetCCRNFCForTitle();
 			cafeExportRegister("ntag", NTAGInit, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGInitEx, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGShutdown, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGIsInit, LogType::Placeholder); // disabled logging, since this gets spammed
-			cafeExportRegister("ntag", NTAGProc, LogType::Placeholder); // disabled logging, since this gets spammed
+			cafeExportRegister("ntag", NTAGProc, LogType::Placeholder);	  // disabled logging, since this gets spammed
 			cafeExportRegister("ntag", NTAGSetFormatSettings, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGSetTagDetectCallback, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGAbort, LogType::NTAG);
@@ -652,10 +678,10 @@ namespace ntag
 			cafeExportRegister("ntag", NTAGWrite, LogType::NTAG);
 			cafeExportRegister("ntag", NTAGFormat, LogType::NTAG);
 		};
-	}s_COSntagModule;
+	} s_COSntagModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSntagModule;
 	}
-}
+} // namespace ntag

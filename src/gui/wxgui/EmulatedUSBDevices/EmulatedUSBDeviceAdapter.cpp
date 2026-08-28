@@ -8,4 +8,4 @@ namespace WxDeviceAdapters
 	{
 		return new EmulatedUSBDeviceFrame(&parent);
 	}
-}
+} // namespace WxDeviceAdapters

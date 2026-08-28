@@ -38,7 +38,7 @@ wxDECLARE_EVENT(wxEVT_SET_WINDOW_TITLE, wxCommandEvent);
 
 class wxLaunchGameEvent : public wxCommandEvent
 {
-public:
+  public:
 	enum class INITIATED_BY
 	{
 		MENU, // via file menu
@@ -51,12 +51,21 @@ public:
 	wxLaunchGameEvent(fs::path path, INITIATED_BY initiatedBy)
 		: wxCommandEvent(wxEVT_LAUNCH_GAME), m_launchPath(path), m_initiatedBy(initiatedBy) {}
 
-	[[nodiscard]] fs::path GetPath() const { return m_launchPath; }
-	[[nodiscard]] INITIATED_BY GetInitiatedBy() const { return m_initiatedBy; }
+	[[nodiscard]] fs::path GetPath() const
+	{
+		return m_launchPath;
+	}
+	[[nodiscard]] INITIATED_BY GetInitiatedBy() const
+	{
+		return m_initiatedBy;
+	}
 
-	wxEvent* Clone() const { return new wxLaunchGameEvent(*this); }
+	wxEvent* Clone() const
+	{
+		return new wxLaunchGameEvent(*this);
+	}
 
-private:
+  private:
 	fs::path m_launchPath;
 	INITIATED_BY m_initiatedBy;
 };
@@ -65,20 +74,23 @@ class MainWindow : public wxFrame
 {
 	friend class CemuApp;
 
-public:
+  public:
 	explicit MainWindow(Application::EmulationController& emulationController,
-		std::shared_ptr<WxFrontendContext> frontendContext);
+						std::shared_ptr<WxFrontendContext> frontendContext);
 	~MainWindow();
 
-    void CreateGameListAndStatusBar();
-    void DestroyGameListAndStatusBar();
+	void CreateGameListAndStatusBar();
+	void DestroyGameListAndStatusBar();
 
 	void UpdateSettingsAfterGameLaunch();
 	void RestoreSettingsAfterGameExited();
 
 	bool FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATED_BY initiatedBy);
 
-	[[nodiscard]] bool IsGameLaunched() const { return m_game_launched; }
+	[[nodiscard]] bool IsGameLaunched() const
+	{
+		return m_game_launched;
+	}
 
 	void SetFullScreen(bool state);
 	void EndEmulation();
@@ -93,7 +105,10 @@ public:
 #endif
 	void OpenSettings();
 
-	PadViewFrame* GetPadView() const { return m_padView; }
+	PadViewFrame* GetPadView() const
+	{
+		return m_padView;
+	}
 
 	void OnSizeEvent(wxSizeEvent& event);
 	void OnDPIChangedEvent(wxDPIChangedEvent& event);
@@ -159,13 +174,13 @@ public:
 	uintptr_t GetRenderCanvasHWND();
 	void RequestGameListRefresh();
 	void RequestLaunchGame(fs::path filePath,
-		wxLaunchGameEvent::INITIATED_BY initiatedBy);
+						   wxLaunchGameEvent::INITIATED_BY initiatedBy);
 
 	// Frontend host entry point for renderer canvas recreation.
 	void RecreateCanvasForHost();
 	void HandlePpcProcessExit();
 
-private:
+  private:
 	bool FullscreenEnabled() const;
 	void RecreateMenu();
 	void UpdateChildWindowTitleRunningState();
@@ -173,7 +188,7 @@ private:
 
 	bool InstallUpdate(const fs::path& metaFilePath);
 	bool ConfirmCemodPermissions(std::uint64_t titleId, std::string gameName,
-		std::vector<Application::CemodPermissionRequest> requests);
+								 std::vector<Application::CemodPermissionRequest> requests);
 	void RollbackFailedLaunchUi();
 	void ClosePpcThreadsViewer();
 
@@ -184,9 +199,9 @@ private:
 	void EnsureCemuExtendTextInputFocus(std::uint64_t sequence);
 	bool HasCemuExtendTextInputNativeFocus() const;
 	void EmitCemuExtendMouseEvent(wxMouseEvent& event, std::int32_t wheelX = 0,
-		std::int32_t wheelY = 0, std::uint32_t changedButtons = 0);
+								  std::int32_t wheelY = 0, std::uint32_t changedButtons = 0);
 	void EmitCemuExtendRawMouseEvent(std::int32_t deltaX, std::int32_t deltaY,
-		std::uint32_t changedButtons = 0);
+									 std::uint32_t changedButtons = 0);
 	bool EnsureCemuExtendRawMouse();
 	void UpdateCemuExtendPointerConfinement(bool confine);
 	bool ApplyCemuExtendPointerPolicy();
@@ -216,9 +231,11 @@ private:
 	std::shared_ptr<WxMainWindowRegistry> m_mainWindowRegistry;
 	std::shared_ptr<IWxUiDispatcher> m_uiDispatcher;
 	std::function<void(std::string_view, std::string_view,
-		std::optional<WxFrontendErrorCategory>)> m_showErrorDialog;
+					   std::optional<WxFrontendErrorCategory>)>
+		m_showErrorDialog;
 	std::function<void(bool, bool, double,
-		std::optional<Application::WindowTitlePresentation>)> m_updateWindowTitles;
+					   std::optional<Application::WindowTitlePresentation>)>
+		m_updateWindowTitles;
 	Host::NativeWindowHandle m_nativeWindowHandle;
 	Host::NativeSurfacePublication m_nativeWindowPublication{};
 	Application::EventSubscription m_applicationEventSubscription;
@@ -234,9 +251,9 @@ private:
 	bool m_menu_visible = false;
 	bool m_game_launched = false;
 
-	#ifdef ENABLE_DISCORD_RPC
+#ifdef ENABLE_DISCORD_RPC
 	std::unique_ptr<DiscordPresence> m_discord;
-	#endif
+#endif
 
 	std::string m_launched_game_name;
 
@@ -255,7 +272,7 @@ private:
 	void OnGraphicWindowOpen(wxTitleIdEvent& event);
 
 	// panels
-	wxPanel* m_main_panel{}, * m_game_panel{};
+	wxPanel *m_main_panel{}, *m_game_panel{};
 	wxTextCtrl* m_cemuextend_text_input{};
 	bool m_cemuextend_text_input_updating{};
 	unsigned m_cemuextend_text_input_focus_retries{};
@@ -302,5 +319,5 @@ private:
 	wxMenu* m_loggingSubmenu{};
 	wxMenuItem* m_asyncCompile{};
 
-wxDECLARE_EVENT_TABLE();
+	wxDECLARE_EVENT_TABLE();
 };

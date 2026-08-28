@@ -13,13 +13,13 @@ namespace coreinit
 		sint32 x;
 		sint32 y;
 		sint32 pitch;
-	}screenSizes[2] =
-	{
-		{ 1280, 720, 1280}, // TV
-		{ 896, 480, 896 } // DRC (values might be incorrect)
+	} screenSizes[2] =
+		{
+			{1280, 720, 1280}, // TV
+			{896, 480, 896}	   // DRC (values might be incorrect)
 	};
 
-	void* currentScreenBasePtr[2] = { 0 };
+	void* currentScreenBasePtr[2] = {0};
 
 	void _OSScreen_Clear(uint32 screenIndex, uint32 color)
 	{
@@ -165,4 +165,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSScreenPutPixelEx, LogType::Placeholder);
 		cafeExportRegister("coreinit", OSScreenPutFontEx, LogType::Placeholder);
 	}
-}
+} // namespace coreinit

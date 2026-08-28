@@ -17,35 +17,34 @@ namespace coreinit
 		Race condition pseudo-code:
 
 		WorkerThreads:
-    		while( task = MPDequeTask() ) MPRunTask(task);
-	
+			while( task = MPDequeTask() ) MPRunTask(task);
+
 		MainThread:
 			QueueTasks();
 			// wait and reset
 			MPWaitForTaskQWithTimeout(DONE)
 			MPTermTaskQ()
 			MPInitTaskQ()
-	
+
 		The race condition then happens when a worker thread calls MPDequeTask()/MPRunTask while MPInitTaskQ() is being executed on the main thread.
 		Since MPInitTaskQ() (re)initializes the internal spinlock it's not thread-safe, leading to a corruption of the spinlock state for other threads
 
 		We work around this by using a global spinlock instead of the taskQ specific one
 	*/
 
-
 	void MPInitTask(MPTask* task, void* func, void* data, uint32 size)
 	{
 		s_workaroundSpinlock.lock();
 		task->thisptr = task;
-		
+
 		task->coreIndex = PPC_CORE_COUNT;
-		
+
 		task->taskFunc.func = func;
 		task->taskFunc.data = data;
 		task->taskFunc.size = size;
-		
+
 		task->taskState = MP_TASK_STATE_INIT;
-		
+
 		task->userdata = nullptr;
 		task->runtime = 0;
 		s_workaroundSpinlock.unlock();
@@ -63,7 +62,7 @@ namespace coreinit
 
 		auto* taskQ = task->taskQ.GetPtr();
 
-		if(taskQ->state != MP_TASKQ_STATE_STOPPING && taskQ->state != MP_TASKQ_STATE_STOP)
+		if (taskQ->state != MP_TASKQ_STATE_STOPPING && taskQ->state != MP_TASKQ_STATE_STOP)
 		{
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskQ->spinlock);
 			if (taskQ->state == MP_TASKQ_STATE_STOPPING || taskQ->state == MP_TASKQ_STATE_STOP)
@@ -77,10 +76,10 @@ namespace coreinit
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskQ->spinlock);
 
 			const auto startTime = OSGetSystemTime();
-			
+
 			task->coreIndex = OSGetCoreId();
 			task->taskState = MP_TASK_STATE_RUN;
-			
+
 			task->taskFunc.result = PPCCoreCallback(task->taskFunc.func, task->taskFunc.data, task->taskFunc.size);
 
 			task->taskState = MP_TASK_STATE_DONE;
@@ -98,7 +97,7 @@ namespace coreinit
 
 			if (taskQ->taskCount == taskQ->taskDoneCount[1])
 				taskQ->state = MP_TASKQ_STATE_DONE;
-			
+
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskQ->spinlock);
 
 			return true;
@@ -135,7 +134,7 @@ namespace coreinit
 		taskQ->taskReadyCount = 0;
 		taskQ->taskCount = 0;
 		taskQ->taskRunCount = 0;
-		for(uint32 i = 0; i < OSGetCoreCount(); ++i)
+		for (uint32 i = 0; i < OSGetCoreCount(); ++i)
 		{
 			taskQ->taskDoneCount[i] = 0;
 			taskQ->nextIndex[i] = 0;
@@ -151,22 +150,21 @@ namespace coreinit
 	bool MPEnqueTask(MPTaskQ* taskq, MPTask* task)
 	{
 		bool result = false;
-		if(task->taskState == MP_TASK_STATE_INIT)
+		if (task->taskState == MP_TASK_STATE_INIT)
 		{
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
 
 			const uint32 taskQState = taskq->state;
-			if((uint32)taskq->endIndex[1] < taskq->taskQueueSize 
-				&& (taskQState == MP_TASKQ_STATE_INIT || taskQState == MP_TASKQ_STATE_RUN || taskQState == MP_TASKQ_STATE_STOPPING || taskQState == MP_TASKQ_STATE_STOP || taskQState == MP_TASKQ_STATE_DONE))
+			if ((uint32)taskq->endIndex[1] < taskq->taskQueueSize && (taskQState == MP_TASKQ_STATE_INIT || taskQState == MP_TASKQ_STATE_RUN || taskQState == MP_TASKQ_STATE_STOPPING || taskQState == MP_TASKQ_STATE_STOP || taskQState == MP_TASKQ_STATE_DONE))
 			{
 				task->taskQ = taskq;
 				task->taskState = MP_TASK_STATE_READY;
-				
+
 				taskq->thisptr = taskq;
-				
+
 				const uint32 endIndex = taskq->endIndex[1];
 				taskq->endIndex[1] = endIndex + 1;
-				
+
 				taskq->taskCount = taskq->taskCount + 1;
 				taskq->taskReadyCount = taskq->taskReadyCount + 1;
 				taskq->taskQueue[endIndex] = task;
@@ -176,7 +174,7 @@ namespace coreinit
 
 				result = true;
 			}
-			
+
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 		}
 
@@ -187,7 +185,7 @@ namespace coreinit
 	{
 		// workaround code for TMS
 		AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
-		//if ((uint32)taskq->taskReadyCount > 0 && taskq->state == MP_TASKQ_STATE_RUN)
+		// if ((uint32)taskq->taskReadyCount > 0 && taskq->state == MP_TASKQ_STATE_RUN)
 		if (taskq->state == MP_TASKQ_STATE_RUN)
 		{
 			taskq->state = MP_TASKQ_STATE_STOP;
@@ -225,7 +223,7 @@ namespace coreinit
 			taskq->state = MP_TASKQ_STATE_RUN;
 			result = true;
 		}
-		
+
 		ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 		return result;
 	}
@@ -241,34 +239,34 @@ namespace coreinit
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
 			const auto nextIndex = taskq->nextIndex[1];
 			const auto endIndex = taskq->endIndex[1];
-			if (nextIndex == endIndex) 
+			if (nextIndex == endIndex)
 				break;
 
 			auto newNextIndex = nextIndex + granularity;
-			if (endIndex < nextIndex + granularity) 
+			if (endIndex < nextIndex + granularity)
 				newNextIndex = endIndex;
 
 			const auto workCount = (newNextIndex - nextIndex);
-			
+
 			taskq->nextIndex[1] = newNextIndex;
 			taskq->taskReadyCount = taskq->taskReadyCount - workCount;
 			taskq->taskRunCount = taskq->taskRunCount + workCount;
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 
 			// since we are having a granularity parameter, we might want to give the scheduler the chance for other stuff when having multiple tasks
-			if(result != 0)
+			if (result != 0)
 				PPCCore_switchToScheduler();
 
 			for (int i = nextIndex; i < newNextIndex; ++i)
 			{
 				const auto startTime = OSGetSystemTime();
-				
+
 				const auto& task = taskq->taskQueue[i];
 				result = task->thisptr.GetMPTR();
-				
+
 				task->taskState = MP_TASK_STATE_RUN;
 				task->coreIndex = OSGetCoreId();
-				
+
 				task->taskFunc.result = PPCCoreCallback(task->taskFunc.func, task->taskFunc.data, task->taskFunc.size);
 
 				task->taskState = MP_TASK_STATE_DONE;
@@ -280,16 +278,16 @@ namespace coreinit
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
 			const auto runRemaining = taskq->taskRunCount - workCount;
 			taskq->taskRunCount = runRemaining;
-			
+
 			const auto doneCount = taskq->taskDoneCount[1] + workCount;
 			taskq->taskDoneCount[1] = doneCount;
-			
-			if (taskq->state == 4 && runRemaining == 0) 
+
+			if (taskq->state == 4 && runRemaining == 0)
 				taskq->state = MP_TASKQ_STATE_STOP;
-			
-			if (taskq->taskCount == doneCount) 
+
+			if (taskq->taskCount == doneCount)
 				taskq->state = MP_TASKQ_STATE_DONE;
-			
+
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 		}
 
@@ -301,12 +299,12 @@ namespace coreinit
 	{
 		bool result = false;
 		AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
-		if (taskq->state == MP_TASKQ_STATE_RUN) 
+		if (taskq->state == MP_TASKQ_STATE_RUN)
 		{
 			taskq->state = MP_TASKQ_STATE_STOPPING;
-			if (taskq->taskRunCount == 0) 
+			if (taskq->taskRunCount == 0)
 				taskq->state = MP_TASKQ_STATE_STOP;
-						
+
 			result = true;
 		}
 		ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
@@ -318,7 +316,7 @@ namespace coreinit
 		bool waitRun = (waitState & MP_TASKQ_STATE_RUN) != 0;
 		bool waitStop = (waitState & MP_TASKQ_STATE_STOP) != 0;
 		bool waitDone = (waitState & MP_TASKQ_STATE_DONE) != 0;
-		
+
 		size_t loopCounter = 0;
 		while (waitStop || waitDone || waitRun)
 		{
@@ -329,14 +327,14 @@ namespace coreinit
 				waitDone = false;
 				continue;
 			}
-			
+
 			if (waitStop && HAS_FLAG(state, MP_TASKQ_STATE_STOP))
 			{
 				waitStop = false;
 				waitDone = false;
 				continue;
 			}
-			
+
 			if (waitDone && HAS_FLAG(state, MP_TASKQ_STATE_DONE))
 			{
 				waitDone = false;
@@ -352,7 +350,7 @@ namespace coreinit
 		}
 		return true;
 	}
-	
+
 	bool MPWaitTaskQWithTimeout(MPTaskQ* taskQ, uint32 waitState, sint64 timeout)
 	{
 		bool waitRun = (waitState & MP_TASKQ_STATE_RUN) != 0;
@@ -403,7 +401,7 @@ namespace coreinit
 	MPTask* MPDequeTask(MPTaskQ* taskq)
 	{
 		MPTask* result = nullptr;
-		if (taskq->state == MP_TASKQ_STATE_RUN) 
+		if (taskq->state == MP_TASKQ_STATE_RUN)
 		{
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
 			if (taskq->state == MP_TASKQ_STATE_RUN && taskq->nextIndex[1] != taskq->endIndex[1])
@@ -422,30 +420,30 @@ namespace coreinit
 		if (taskq->state == MP_TASKQ_STATE_RUN)
 		{
 			AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
-			if (taskq->state == MP_TASKQ_STATE_RUN) 
+			if (taskq->state == MP_TASKQ_STATE_RUN)
 			{
 				auto nextIndex = (sint32)taskq->nextIndex[1];
 				auto newEndIndex = nextIndex + maxTasks;
-				if (taskq->endIndex[1] < nextIndex + maxTasks) 
+				if (taskq->endIndex[1] < nextIndex + maxTasks)
 					newEndIndex = taskq->endIndex[1];
-				
+
 				dequeCount = newEndIndex - nextIndex;
 				taskq->nextIndex[1] = newEndIndex;
 
-				for(int i = 0; nextIndex < newEndIndex; ++nextIndex, ++i)
+				for (int i = 0; nextIndex < newEndIndex; ++nextIndex, ++i)
 				{
 					tasks[i] = taskq->taskQueue[nextIndex].GetPtr();
 				}
-				
+
 				auto idx = 0;
-				while (nextIndex < newEndIndex) 
+				while (nextIndex < newEndIndex)
 				{
 					tasks[idx] = taskq->taskQueue[nextIndex].GetPtr();
 					nextIndex = nextIndex + 1;
 					idx = idx + 1;
 				}
 			}
-			
+
 			ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 		}
 		return dequeCount;
@@ -456,24 +454,24 @@ namespace coreinit
 		debug_printf("MPResetTaskQ called\n");
 		bool result = false;
 		AcquireMPQLock(); // OSUninterruptibleSpinLock_Acquire(&taskq->spinlock);
-		if (taskq->state == MP_TASKQ_STATE_DONE || taskq->state == MP_TASKQ_STATE_STOP) 
+		if (taskq->state == MP_TASKQ_STATE_DONE || taskq->state == MP_TASKQ_STATE_STOP)
 		{
 			taskq->state = MP_TASKQ_STATE_INIT;
 			taskq->taskRunCount = 0;
 			taskq->taskCount = taskq->endIndex[1];
 			taskq->taskReadyCount = taskq->endIndex[1];
-			
-			for(uint32 i = 0; i < OSGetCoreCount(); ++i)
+
+			for (uint32 i = 0; i < OSGetCoreCount(); ++i)
 			{
 				taskq->taskDoneCount[i] = 0;
 				taskq->nextIndex[i] = 0;
 			}
-			
-			for(uint32 i = 0; i < taskq->taskCount; ++i)
+
+			for (uint32 i = 0; i < taskq->taskCount; ++i)
 			{
 				const auto& task = taskq->taskQueue[i];
 				task->taskFunc.result = 0;
-				
+
 				task->coreIndex = PPC_CORE_COUNT;
 				task->runtime = 0;
 				task->taskState = MP_TASK_STATE_READY;
@@ -481,7 +479,7 @@ namespace coreinit
 
 			result = true;
 		}
-		
+
 		ReleaseMPQLock(); // OSUninterruptibleSpinLock_Release(&taskq->spinlock);
 		return result;
 	}
@@ -499,7 +497,7 @@ namespace coreinit
 		// taskq
 		cafeExportRegister("coreinit", MPInitTaskQ, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPResetTaskQ, LogType::CoreinitMP);
-		
+
 		cafeExportRegister("coreinit", MPEnqueTask, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPDequeTask, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPDequeTasks, LogType::CoreinitMP);
@@ -509,8 +507,8 @@ namespace coreinit
 		cafeExportRegister("coreinit", MPWaitTaskQ, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPWaitTaskQWithTimeout, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPStopTaskQ, LogType::CoreinitMP);
-		
+
 		cafeExportRegister("coreinit", MPTermTaskQ, LogType::CoreinitMP);
 		cafeExportRegister("coreinit", MPGetTaskQInfo, LogType::CoreinitMP);
 	}
-}
+} // namespace coreinit

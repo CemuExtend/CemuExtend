@@ -49,7 +49,7 @@ std::optional<std::vector<uint8>> FileStream::LoadIntoMemory(const fs::path& pat
 	if (!fs)
 		return std::nullopt;
 	uint64 fileSize = fs->GetSize();
-	if(fileSize > 0xFFFFFFFFull)
+	if (fileSize > 0xFFFFFFFFull)
 	{
 		delete fs;
 		return std::nullopt;
@@ -123,7 +123,7 @@ bool FileStream::readLine(std::string& line)
 	while (readU8(c))
 	{
 		isEOF = false;
-		if(c == '\r')
+		if (c == '\r')
 			continue;
 		if (c == '\n')
 			break;
@@ -176,7 +176,7 @@ void FileStream::writeLine(const char* str)
 
 FileStream::~FileStream()
 {
-	if(m_isValid)
+	if (m_isValid)
 		CloseHandle(m_hFile);
 }
 

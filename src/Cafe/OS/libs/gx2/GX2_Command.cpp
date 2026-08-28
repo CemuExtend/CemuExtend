@@ -51,14 +51,14 @@ namespace GX2
 {
 
 	struct GX2CommandState // mapped to PPC space since the GPU writes here
-    {
-    	// command pool
+	{
+		// command pool
 		MEMPTR<uint32be> commandPoolBase;
-    	uint32 commandPoolSizeInU32s;
+		uint32 commandPoolSizeInU32s;
 		MEMPTR<uint32be> gpuCommandReadPtr;
 		// timestamp
 		uint64be lastSubmissionTime;
-    };
+	};
 
 	SysAllocator<GX2CommandState> s_commandState;
 	GX2PerCoreCBState s_mainCoreLastCommandState;
@@ -69,8 +69,8 @@ namespace GX2
 	// called from GX2Init. Allocates a 4MB memory chunk from which command buffers are suballocated from
 	void GX2Init_commandBufferPool(void* bufferBase, uint32 bufferSize)
 	{
-		cemu_assert_debug(!s_commandState->commandPoolBase); // should not be allocated already
-    	// setup command buffer pool. If not provided allocate a 4MB or custom size buffer
+		cemu_assert_debug(!s_commandState->commandPoolBase);  // should not be allocated already
+															  // setup command buffer pool. If not provided allocate a 4MB or custom size buffer
 		uint32 poolSize = bufferSize ? bufferSize : 0x400000; // 4MB (can be overwritten by custom GX2Init parameters?)
 		if (bufferBase)
 		{
@@ -253,7 +253,7 @@ namespace GX2
 		if (!coreCBState.currentWritePtr)
 			return;
 		uint32 writeDistance = (uint32)(coreCBState.currentWritePtr - coreCBState.bufferPtr);
-		if ((writeDistance&7) != 0)
+		if ((writeDistance & 7) != 0)
 		{
 			uint32 distanceToPad = 0x8 - (writeDistance & 0x7);
 			while (distanceToPad)
@@ -348,7 +348,7 @@ namespace GX2
 			cemu_assert_debug(!s_perCoreCBState[coreIndex].isDisplayList);
 			s_mainCoreLastCommandState = s_perCoreCBState[coreIndex];
 		}
-		GX2Command_SetupCoreCommandBuffer(MEMPTR<uint32be>(buffer), maxSize/4, true);
+		GX2Command_SetupCoreCommandBuffer(MEMPTR<uint32be>(buffer), maxSize / 4, true);
 	}
 
 	uint32 GX2WriteGather_getDisplayListWriteDistance(sint32 coreIndex)
@@ -370,7 +370,7 @@ namespace GX2
 		// if we are on the main GX2 core then restore the GPU command buffer
 		if (coreIndex == sGX2MainCoreIndex)
 		{
-  			coreCBState = s_mainCoreLastCommandState;
+			coreCBState = s_mainCoreLastCommandState;
 		}
 		else
 		{
@@ -421,13 +421,13 @@ namespace GX2
 
 	void GX2CallDisplayList(MPTR addr, uint32 size)
 	{
-		cemu_assert_debug((size&3) == 0);
+		cemu_assert_debug((size & 3) == 0);
 		// write PM4 command
 		GX2ReserveCmdSpace(4);
 		gx2WriteGather_submit(pm4HeaderType3(IT_INDIRECT_BUFFER_PRIV, 3),
-			memory_virtualToPhysical(addr),
-			0, // high address bits
-			size / 4);
+							  memory_virtualToPhysical(addr),
+							  0, // high address bits
+							  size / 4);
 	}
 
 	void GX2DirectCallDisplayList(void* addr, uint32 size)
@@ -461,12 +461,12 @@ namespace GX2
 
 	enum class GX2_PATCH_TYPE : uint32
 	{
-		FETCH_SHADER			= 1,
-		VERTEX_SHADER			= 2,
-		GEOMETRY_COPY_SHADER	= 3,
-		GEOMETRY_SHADER			= 4,
-		PIXEL_SHADER			= 5,
-		COMPUTE_SHADER			= 6
+		FETCH_SHADER = 1,
+		VERTEX_SHADER = 2,
+		GEOMETRY_COPY_SHADER = 3,
+		GEOMETRY_SHADER = 4,
+		PIXEL_SHADER = 5,
+		COMPUTE_SHADER = 6
 	};
 
 	void GX2PatchDisplayList(uint32be* displayData, GX2_PATCH_TYPE patchType, uint32 patchOffset, void* obj)
@@ -527,12 +527,12 @@ namespace GX2
 		cafeExportRegister("gx2", GX2PatchDisplayList, LogType::GX2);
 	}
 
-    void GX2CommandResetToDefaultState()
-    {
+	void GX2CommandResetToDefaultState()
+	{
 		s_commandState->commandPoolBase = nullptr;
 		s_commandState->commandPoolSizeInU32s = 0;
 		s_commandState->gpuCommandReadPtr = nullptr;
 		s_cbBufferIsInternallyAllocated = false;
-    }
+	}
 
-}
+} // namespace GX2

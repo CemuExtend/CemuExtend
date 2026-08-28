@@ -4,7 +4,7 @@
 
 struct MEMLink_t
 {
-	MPTR prevObject; 
+	MPTR prevObject;
 	MPTR nextObject;
 };
 
@@ -52,12 +52,12 @@ namespace coreinit
 #define MEM_HEAP_INVALID_HANDLE (nullptr)
 #define MEM_HEAP_DEFAULT_ALIGNMENT 4
 #define MIN_ALIGNMENT 4
-#define MIN_ALIGNMENT_MINUS_ONE (MIN_ALIGNMENT-1)
+#define MIN_ALIGNMENT_MINUS_ONE (MIN_ALIGNMENT - 1)
 
-#define MEM_HEAP_OPTION_NONE		(0)
-#define MEM_HEAP_OPTION_CLEAR		(1 << 0)
-#define MEM_HEAP_OPTION_FILL		(1 << 1)
-#define MEM_HEAP_OPTION_THREADSAFE	(1 << 2)
+#define MEM_HEAP_OPTION_NONE (0)
+#define MEM_HEAP_OPTION_CLEAR (1 << 0)
+#define MEM_HEAP_OPTION_FILL (1 << 1)
+#define MEM_HEAP_OPTION_THREADSAFE (1 << 2)
 
 	enum class MEMHeapMagic : uint32
 	{
@@ -180,4 +180,4 @@ namespace coreinit
 	void InitializeMEMUnitHeap();
 
 	void InitializeMEM();
-}
+} // namespace coreinit

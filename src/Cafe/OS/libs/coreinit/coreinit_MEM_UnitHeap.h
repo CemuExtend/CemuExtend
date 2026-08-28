@@ -21,4 +21,4 @@ namespace coreinit
 
 	MEMHeapBase* MEMCreateUnitHeapEx(void* memStart, uint32 heapSize, uint32 memBlockSize, uint32 alignment, uint32 createFlags);
 	void* MEMDestroyUnitHeap(MEMHeapHandle hHeap);
-}
+} // namespace coreinit

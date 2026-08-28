@@ -6,7 +6,7 @@
 
 class LatteQueryObjectMtl : public LatteQueryObject
 {
-public:
+  public:
 	LatteQueryObjectMtl(class MetalRenderer* mtlRenderer) : m_mtlr{mtlRenderer} {}
 	~LatteQueryObjectMtl();
 
@@ -16,10 +16,10 @@ public:
 
 	void GrowRange()
 	{
-	    m_range.end++;
+		m_range.end++;
 	}
 
-private:
+  private:
 	class MetalRenderer* m_mtlr;
 
 	MetalQueryRange m_range = {INVALID_UINT32, INVALID_UINT32};

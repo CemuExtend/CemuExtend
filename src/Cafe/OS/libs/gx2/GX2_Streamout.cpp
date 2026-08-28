@@ -94,7 +94,7 @@ namespace GX2
 			return;
 		}
 		GX2ReserveCmdSpace(6);
-		
+
 		gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_STRMOUT_BUFFER_UPDATE, 5));
 		gx2WriteGather_submitU32AsBE(1 | (3 << 1) | (bufferIndex << 8));
 		gx2WriteGather_submitU32AsBE(memory_virtualToPhysical(streamOutBuffer->ctxPtr.GetMPTR()));
@@ -110,4 +110,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2SetStreamOutContext, LogType::GX2);
 		cafeExportRegister("gx2", GX2SaveStreamOutContext, LogType::GX2);
 	}
-}
+} // namespace GX2

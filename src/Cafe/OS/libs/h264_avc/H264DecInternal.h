@@ -89,7 +89,7 @@ namespace H264
 		bool GetFrameOutputIfReady(DecodeResult& result)
 		{
 			std::unique_lock _l(m_decodeQueueMtx);
-			if(m_displayQueue.empty())
+			if (m_displayQueue.empty())
 				return false;
 			uint32 sliceIndex = m_displayQueue.front();
 			DecodedSlice& ds = m_decodedSliceArray[sliceIndex];
@@ -128,12 +128,12 @@ namespace H264
 		std::mutex m_decodeQueueMtx;
 		std::vector<uint32> m_decodeQueue; // indices into m_decodedSliceArray, in order of decode input
 		CounterSemaphore m_decodeSem;
-		std::vector<uint32> m_displayQueue; // indices into m_decodedSliceArray, in order of frame display output
+		std::vector<uint32> m_displayQueue;	  // indices into m_decodedSliceArray, in order of frame display output
 		coreinit::OSEvent* m_displayQueueEvt; // signalled when a new frame is ready for display
-		coreinit::OSEvent* m_flushEvt; // signalled after flush operation finished and all queued slices are decoded
+		coreinit::OSEvent* m_flushEvt;		  // signalled after flush operation finished and all queued slices are decoded
 
 		// frame output queue
 		std::mutex m_frameOutputMtx;
 		std::array<DecodedSlice, 32> m_decodedSliceArray;
 	};
-}
+} // namespace H264

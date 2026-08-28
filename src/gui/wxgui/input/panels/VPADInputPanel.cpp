@@ -7,37 +7,31 @@
 #include <wx/slider.h>
 #include <wx/checkbox.h>
 
-
 #include "wxgui/helpers/wxControlObject.h"
 #include "wxgui/helpers/wxHelpers.h"
 #include "wxgui/components/wxInputDraw.h"
 #include "input/emulated/VPADController.h"
 
 constexpr VPADController::ButtonId g_kFirstColumnItems[] =
-{
-	VPADController::kButtonId_A, VPADController::kButtonId_B, VPADController::kButtonId_X, VPADController::kButtonId_Y,
-	VPADController::kButtonId_L, VPADController::kButtonId_R, VPADController::kButtonId_ZL, VPADController::kButtonId_ZR,
-	VPADController::kButtonId_Plus, VPADController::kButtonId_Minus
-};
+	{
+		VPADController::kButtonId_A, VPADController::kButtonId_B, VPADController::kButtonId_X, VPADController::kButtonId_Y,
+		VPADController::kButtonId_L, VPADController::kButtonId_R, VPADController::kButtonId_ZL, VPADController::kButtonId_ZR,
+		VPADController::kButtonId_Plus, VPADController::kButtonId_Minus};
 
 constexpr VPADController::ButtonId g_kSecondColumnItems[] =
-{
-	VPADController::kButtonId_StickL, VPADController::kButtonId_StickL_Up, VPADController::kButtonId_StickL_Down, VPADController::kButtonId_StickL_Left, VPADController::kButtonId_StickL_Right
-};
+	{
+		VPADController::kButtonId_StickL, VPADController::kButtonId_StickL_Up, VPADController::kButtonId_StickL_Down, VPADController::kButtonId_StickL_Left, VPADController::kButtonId_StickL_Right};
 
 constexpr VPADController::ButtonId g_kThirdColumnItems[] =
-{
-	VPADController::kButtonId_StickR, VPADController::kButtonId_StickR_Up, VPADController::kButtonId_StickR_Down, VPADController::kButtonId_StickR_Left, VPADController::kButtonId_StickR_Right
-};
+	{
+		VPADController::kButtonId_StickR, VPADController::kButtonId_StickR_Up, VPADController::kButtonId_StickR_Down, VPADController::kButtonId_StickR_Left, VPADController::kButtonId_StickR_Right};
 
 constexpr VPADController::ButtonId g_kFourthRowItems[] =
-{
-	VPADController::kButtonId_Up, VPADController::kButtonId_Down, VPADController::kButtonId_Left, VPADController::kButtonId_Right
-};
-
+	{
+		VPADController::kButtonId_Up, VPADController::kButtonId_Down, VPADController::kButtonId_Left, VPADController::kButtonId_Right};
 
 VPADInputPanel::VPADInputPanel(wxWindow* parent,
-	std::function<bool()> escapeDown)
+							   std::function<bool()> escapeDown)
 	: InputPanel(parent, std::move(escapeDown))
 {
 	auto bold_font = GetFont();
@@ -71,9 +65,9 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent,
 	}
 
 	row++;
-	
+
 	// input drawer
-	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_left_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
@@ -96,7 +90,7 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent,
 	row++;
 
 	// input drawer
-	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
+	m_right_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, {60, 60});
 	main_sizer->Add(m_right_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
 	// Volume
@@ -106,7 +100,7 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent,
 	text->Disable();
 	main_sizer->Add(text, wxGBPosition(row, column), wxDefaultSpan, wxALL, 5);
 
-	auto*m_volume = new wxSlider(this, wxID_ANY, 0, 0, 100);
+	auto* m_volume = new wxSlider(this, wxID_ANY, 0, 0, 100);
 	m_volume->Disable();
 	main_sizer->Add(m_volume, wxGBPosition(row, column + 1), wxDefaultSpan, wxTOP | wxBOTTOM | wxEXPAND, 5);
 
@@ -142,14 +136,14 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent,
 
 	auto toggleScreenText = new wxStaticText(this, wxID_ANY, _("toggle screen"));
 	main_sizer->Add(toggleScreenText,
-		wxGBPosition(row, column),
-		wxDefaultSpan,
-		wxALL | wxALIGN_CENTER_VERTICAL, 5);
+					wxGBPosition(row, column),
+					wxDefaultSpan,
+					wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	m_togglePadViewCheckBox = new wxCheckBox(this, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	wxString toggleScreenTT = _("Makes the \"show screen\" button toggle between the TV and gamepad screens");
 	m_togglePadViewCheckBox->SetToolTip(toggleScreenTT);
 	toggleScreenText->SetToolTip(toggleScreenTT);
-	main_sizer->Add(m_togglePadViewCheckBox, wxGBPosition(row,column+1), wxDefaultSpan, wxALL | wxEXPAND, 5);
+	main_sizer->Add(m_togglePadViewCheckBox, wxGBPosition(row, column + 1), wxDefaultSpan, wxALL | wxEXPAND, 5);
 
 	//////////////////////////////////////////////////////////////////
 
@@ -157,12 +151,14 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent,
 	Layout();
 }
 
-void VPADInputPanel::add_button_row(wxGridBagSizer *sizer, sint32 row, sint32 column, const VPADController::ButtonId &button_id) {
+void VPADInputPanel::add_button_row(wxGridBagSizer* sizer, sint32 row, sint32 column, const VPADController::ButtonId& button_id)
+{
 	add_button_row(sizer, row, column, button_id, wxGetTranslation(wxString::FromUTF8(VPADController::get_button_name(button_id))));
 }
 
-void VPADInputPanel::add_button_row(wxGridBagSizer *sizer, sint32 row, sint32 column,
-                                    const VPADController::ButtonId &button_id, const wxString &label) {
+void VPADInputPanel::add_button_row(wxGridBagSizer* sizer, sint32 row, sint32 column,
+									const VPADController::ButtonId& button_id, const wxString& label)
+{
 	sizer->Add(
 		new wxStaticText(this, wxID_ANY, label),
 		wxGBPosition(row, column),
@@ -184,7 +180,7 @@ void VPADInputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, 
 
 	static_cast<VPADController*>(emulated_controller.get())->set_screen_toggle(m_togglePadViewCheckBox->GetValue());
 
-	if(emulated_controller)
+	if (emulated_controller)
 	{
 		const auto axis = emulated_controller->get_axis();
 		const auto rotation = emulated_controller->get_rotation();
@@ -196,7 +192,6 @@ void VPADInputPanel::on_timer(const EmulatedControllerPtr& emulated_controller, 
 
 void VPADInputPanel::OnVolumeChange(wxCommandEvent& event)
 {
-
 }
 void VPADInputPanel::load_controller(const EmulatedControllerPtr& controller)
 {

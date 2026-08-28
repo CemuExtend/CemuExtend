@@ -3,8 +3,8 @@
 #include "util/helpers/fspinlock.h"
 #include "config/ActiveSettings.h"
 
-#define CACHE_PAGE_SIZE		0x400
-#define CACHE_PAGE_SIZE_M1	(CACHE_PAGE_SIZE-1)
+#define CACHE_PAGE_SIZE 0x400
+#define CACHE_PAGE_SIZE_M1 (CACHE_PAGE_SIZE - 1)
 
 uint32 g_currentCacheChronon = 0;
 
@@ -22,10 +22,10 @@ class IntervalTree
 	{
 		TRangeType values[NUM_SLOTS];
 		sint32 indices[NUM_SLOTS]; // for the second to last layer these are indices into value nodes vector. Otherwise its a relative byte offset to a tree node
-		uint32 selfIndex{ INVALID_NODE_INDEX };
-		uint32 parentNodeIndex{ INVALID_NODE_INDEX };
-		uint8 parentSlot{ 0 };
-		uint8 usedCount{ 0 };
+		uint32 selfIndex{INVALID_NODE_INDEX};
+		uint32 parentNodeIndex{INVALID_NODE_INDEX};
+		uint8 parentSlot{0};
+		uint8 usedCount{0};
 	};
 
 	struct ValueNode
@@ -33,14 +33,15 @@ class IntervalTree
 		ValueNode() = default;
 		ValueNode(TNodeObject* _ptr, TRangeType _rangeBegin, TRangeType _rangeEnd, uint32 _selfIndex) : ptr(_ptr), rangeBegin(_rangeBegin), rangeEnd(_rangeEnd), selfIndex(_selfIndex) {}
 
-		TNodeObject* ptr{ nullptr };
+		TNodeObject* ptr{nullptr};
 		TRangeType rangeBegin{};
 		TRangeType rangeEnd{};
-		uint32 selfIndex{ INVALID_NODE_INDEX };
-		uint32 parentNodeIndex{ INVALID_NODE_INDEX };
-		uint8 parentSlot{ 0 };
+		uint32 selfIndex{INVALID_NODE_INDEX};
+		uint32 parentNodeIndex{INVALID_NODE_INDEX};
+		uint8 parentSlot{0};
 	};
-public:
+
+  public:
 	IntervalTree()
 	{
 		// create root node
@@ -99,14 +100,14 @@ public:
 		sint32 parentSlot = valueNode->parentSlot;
 		// remove value from parent
 		ReduceUsedCount(parentNode, 1);
-		for (sint32 i=parentSlot; i<parentNode->usedCount; i++)
-			SetChildNode(*parentNode, i, m_valueNodes[parentNode->indices[i+1]]);
+		for (sint32 i = parentSlot; i < parentNode->usedCount; i++)
+			SetChildNode(*parentNode, i, m_valueNodes[parentNode->indices[i + 1]]);
 		if (parentSlot == 0 && parentNode->usedCount > 0)
 			PropagateMinValue(parentNode);
 		// release value
 		ReleaseValueNode(valueNode->selfIndex);
 		// if parent node now has few nodes then merge/redistribute it
-		CollapseNode(parentNode, m_treeDepth-1);
+		CollapseNode(parentNode, m_treeDepth - 1);
 		ShortenTreeIfPossible();
 	}
 
@@ -161,7 +162,7 @@ public:
 			ValueNode* valueNode = FindFloorValueNode(rangeBegin);
 			if (valueNode)
 			{
-				insertSlotIndex = valueNode->parentSlot+1; // insert after
+				insertSlotIndex = valueNode->parentSlot + 1; // insert after
 			}
 			else
 			{
@@ -175,8 +176,8 @@ public:
 		// handle the case where the node can still fit more entries
 		if (insertNode->usedCount < NUM_SLOTS)
 		{
-			for (sint32 i=insertNode->usedCount-1; i>=insertSlotIndex; i--)
-				SetChildNode(*insertNode, i+1, m_valueNodes[insertNode->indices[i]]);
+			for (sint32 i = insertNode->usedCount - 1; i >= insertSlotIndex; i--)
+				SetChildNode(*insertNode, i + 1, m_valueNodes[insertNode->indices[i]]);
 			insertNode->usedCount++;
 			SetChildNode(*insertNode, insertSlotIndex, AllocateValueNode(rangeBegin, rangeEnd, nodeObject));
 			if (insertSlotIndex == 0)
@@ -214,16 +215,16 @@ public:
 		maxChildValue = std::numeric_limits<TRangeType>::min();
 		// basic validation
 		cemu_assert(treeNode.usedCount > 0); // empty nodes are not allowed
-		for (uint32 i=0; i<treeNode.usedCount-1; i++)
+		for (uint32 i = 0; i < treeNode.usedCount - 1; i++)
 		{
-			cemu_assert(treeNode.values[i] < treeNode.values[i+1]);
+			cemu_assert(treeNode.values[i] < treeNode.values[i + 1]);
 		}
 		// handle subnodes and check for disallowed overlaps
 		cemu_assert_debug(remainingTreeDepth > 0);
 		if (remainingTreeDepth == 1)
 		{
 			// children are value nodes (leaf)
-			for (uint32 i=0; i<treeNode.usedCount; i++)
+			for (uint32 i = 0; i < treeNode.usedCount; i++)
 			{
 				ValueNode& valueNode = m_valueNodes[treeNode.indices[i]];
 				cemu_assert(treeNode.values[i] == valueNode.rangeBegin);
@@ -234,17 +235,17 @@ public:
 		else
 		{
 			// children are tree nodes (branch)
-			for (uint32 i=0; i<treeNode.usedCount; i++)
+			for (uint32 i = 0; i < treeNode.usedCount; i++)
 			{
 				TreeNode& childTreeNode = GetTreeNodeChild(treeNode, i);
 				cemu_assert(childTreeNode.parentNodeIndex == treeNode.selfIndex);
 				TRangeType currentChildMinVal, currentChildMaxVal;
-				ValidateTree(childTreeNode, remainingTreeDepth-1, currentChildMinVal, currentChildMaxVal);
+				ValidateTree(childTreeNode, remainingTreeDepth - 1, currentChildMinVal, currentChildMaxVal);
 				cemu_assert(currentChildMinVal < currentChildMaxVal);
 				cemu_assert(treeNode.values[i] == currentChildMinVal);
-				if (i < (treeNode.usedCount-1))
+				if (i < (treeNode.usedCount - 1))
 				{
-					cemu_assert(currentChildMaxVal <= treeNode.values[i+1]);
+					cemu_assert(currentChildMaxVal <= treeNode.values[i + 1]);
 				}
 				minChildValue = std::min(minChildValue, currentChildMinVal);
 				maxChildValue = std::max(maxChildValue, currentChildMaxVal);
@@ -265,7 +266,7 @@ public:
 			{
 				cemu_assert_debug(rangeBegin > nodeToInsertInto.values[0]); // if this is not true we are not allowed to move the child
 				MigrateSubnodesFromRight(&nodeToInsertInto, leftNeighbor, 1, !treeNode);
-				cemu_assert_debug(rangeBegin > leftNeighbor->values[leftNeighbor->usedCount-1]);
+				cemu_assert_debug(rangeBegin > leftNeighbor->values[leftNeighbor->usedCount - 1]);
 			}
 			else
 			{
@@ -274,7 +275,7 @@ public:
 				if (rightNeighbor && rightNeighbor->usedCount < NUM_SLOTS)
 				{
 					cemu_assert_debug(nodeToInsertInto.usedCount == NUM_SLOTS);
-					if (rangeBegin > nodeToInsertInto.values[NUM_SLOTS-1])
+					if (rangeBegin > nodeToInsertInto.values[NUM_SLOTS - 1])
 					{
 						// insert into right neighbor instead
 						InsertNode(*rightNeighbor, treeNode, valueNode);
@@ -294,13 +295,13 @@ public:
 			// we can determine from the parameter the children type of nodeToInsertInto. Tree nodes cannot have mixed tree/value nodes as children
 			if (treeNode)
 			{
-				for (sint32 i=nodeToInsertInto.usedCount-1; i>=insertSlotIndex; i--)
-					SetChildNode(nodeToInsertInto, i+1, GetTreeNodeChild(&nodeToInsertInto, i));
+				for (sint32 i = nodeToInsertInto.usedCount - 1; i >= insertSlotIndex; i--)
+					SetChildNode(nodeToInsertInto, i + 1, GetTreeNodeChild(&nodeToInsertInto, i));
 			}
 			else
 			{
-				for (sint32 i=nodeToInsertInto.usedCount-1; i>=insertSlotIndex; i--)
-					SetChildNode(nodeToInsertInto, i+1, m_valueNodes[nodeToInsertInto.indices[i]]);
+				for (sint32 i = nodeToInsertInto.usedCount - 1; i >= insertSlotIndex; i--)
+					SetChildNode(nodeToInsertInto, i + 1, m_valueNodes[nodeToInsertInto.indices[i]]);
 			}
 			nodeToInsertInto.usedCount++;
 			if (treeNode)
@@ -321,12 +322,12 @@ public:
 			cemu_assert_debug(m_treeDepth >= 0);
 			if (valueNode)
 			{
-				for (int i=0; i<NUM_SLOTS; i++)
+				for (int i = 0; i < NUM_SLOTS; i++)
 					SetChildNode(newTreeNode, i, m_valueNodes[nodeToInsertInto.indices[i]]);
 			}
 			else
 			{
-				for (int i=0; i<NUM_SLOTS; i++)
+				for (int i = 0; i < NUM_SLOTS; i++)
 					SetChildNode(newTreeNode, i, GetTreeNodeChild(&nodeToInsertInto, i));
 			}
 			newTreeNode.usedCount = NUM_SLOTS;
@@ -340,7 +341,7 @@ public:
 		}
 		TreeNode& splitLeft = nodeToInsertInto;
 		TreeNode& splitRight = AllocateTreeNode(INVALID_NODE_INDEX, 0);
-		MigrateSubnodesFromLeft(&splitLeft, &splitRight, NUM_SLOTS/2, valueNode);
+		MigrateSubnodesFromLeft(&splitLeft, &splitRight, NUM_SLOTS / 2, valueNode);
 		// insert new node into left or right node
 		TreeNode* insertNode = rangeBegin >= splitRight.values[0] ? &splitRight : &splitLeft;
 		sint32 insertSlotIndex = 0;
@@ -348,13 +349,13 @@ public:
 			insertSlotIndex = (sint32)FindFloorElementIndexMinBound(*insertNode, rangeBegin) + 1;
 		if (valueNode)
 		{
-			for (sint32 i=insertNode->usedCount-1; i>=insertSlotIndex; i--)
-				SetChildNode(*insertNode, i+1, m_valueNodes[insertNode->indices[i]]);
+			for (sint32 i = insertNode->usedCount - 1; i >= insertSlotIndex; i--)
+				SetChildNode(*insertNode, i + 1, m_valueNodes[insertNode->indices[i]]);
 		}
 		else
 		{
-			for (sint32 i=insertNode->usedCount-1; i>=insertSlotIndex; i--)
-				SetChildNode(*insertNode, i+1, GetTreeNodeChild(insertNode, i));
+			for (sint32 i = insertNode->usedCount - 1; i >= insertSlotIndex; i--)
+				SetChildNode(*insertNode, i + 1, GetTreeNodeChild(insertNode, i));
 		}
 		insertNode->usedCount++;
 		if (treeNode)
@@ -390,7 +391,8 @@ public:
 		}
 		cemuLog_log(LogType::Force, "AvgFillAmount: {:.2f}", (double)fillCountTotal / (double)numTreeNodes);
 	}
-private:
+
+  private:
 	TreeNode& GetRootNode()
 	{
 		return m_treeNodes[ROOT_NODE_INDEX];
@@ -430,7 +432,7 @@ private:
 		cemu_assert_debug(num >= 0);
 		cemu_assert_debug(num <= node->usedCount);
 		node->usedCount -= (uint8)num;
-		for (int i=0; i<num; i++)
+		for (int i = 0; i < num; i++)
 		{
 			node->values[node->usedCount + i] = MAX_VALUE;
 		}
@@ -460,30 +462,29 @@ private:
 		{
 			uint32 curNodeCount = (uint32)m_treeNodes.size();
 			m_treeNodes.resize(curNodeCount + 64);
-			for (uint32 i=0; i<64; i++)
+			for (uint32 i = 0; i < 64; i++)
 				m_treeNodes[curNodeCount + i].selfIndex = curNodeCount + i;
 			uint32 freeIndexCount = (uint32)m_freeTreeNodeIndices.size();
 			m_freeTreeNodeIndices.resize(freeIndexCount + 64);
-			for (uint32 i=0; i<64; i++)
+			for (uint32 i = 0; i < 64; i++)
 				m_freeTreeNodeIndices[freeIndexCount + i] = curNodeCount + i;
 		}
 		if (m_freeValueNodeIndices.size() < 16)
 		{
 			uint32 curNodeCount = (uint32)m_valueNodes.size();
 			m_valueNodes.resize(curNodeCount + 128);
-			for (uint32 i=0; i<128; i++)
+			for (uint32 i = 0; i < 128; i++)
 				m_valueNodes[curNodeCount + i].selfIndex = curNodeCount + i;
 			uint32 freeIndexCount = (uint32)m_freeValueNodeIndices.size();
 			m_freeValueNodeIndices.resize(freeIndexCount + 128);
-			for (uint32 i=0; i<128; i++)
+			for (uint32 i = 0; i < 128; i++)
 				m_freeValueNodeIndices[freeIndexCount + i] = curNodeCount + i;
 		}
 	}
 
 	void WriteDotTreeNodeRecursive(std::ofstream& outFile, TreeNode& treeNode, sint32 remainingDepth)
 	{
-		auto writeHex = [&outFile](TRangeType value)
-		{
+		auto writeHex = [&outFile](TRangeType value) {
 			outFile << "0x" << std::hex << static_cast<uint64>(value) << std::dec;
 		};
 		outFile << "  t" << treeNode.selfIndex << " [label=\"";
@@ -537,7 +538,7 @@ private:
 			TreeNode& parentNode = m_treeNodes[treeNode->parentNodeIndex];
 			sint32 slotIndex = treeNode->parentSlot;
 			ReduceUsedCount(&parentNode, 1);
-			for (sint32 i=slotIndex; i<parentNode.usedCount; i++)
+			for (sint32 i = slotIndex; i < parentNode.usedCount; i++)
 				SetChildNode(parentNode, i, GetTreeNodeChild(&parentNode, i + 1));
 		}
 		cemu_assert_debug(nodeIndex != ROOT_NODE_INDEX);
@@ -580,7 +581,7 @@ private:
 		cemu_assert_debug(!IsEmpty());
 		TreeNode* currentNode = &GetRootNode();
 		// traverse branches
-		for (sint32 i=0; i<m_treeDepth-1; i++)
+		for (sint32 i = 0; i < m_treeDepth - 1; i++)
 		{
 			currentNode = GetTreeNodeChild(currentNode, 0);
 		}
@@ -627,7 +628,7 @@ private:
 				return nullptr; // root reached
 			currentSlot = currentNode->parentSlot;
 			currentNode = &m_treeNodes[currentNode->parentNodeIndex];
-			if (currentSlot+1 < currentNode->usedCount)
+			if (currentSlot + 1 < currentNode->usedCount)
 			{
 				currentNode = GetTreeNodeChild(currentNode, currentSlot + 1);
 				break;
@@ -635,7 +636,7 @@ private:
 			remainingTreeDepth++;
 		}
 		// and then traverse always left to get the value
-		for (sint32 i=0; i<remainingTreeDepth; i++)
+		for (sint32 i = 0; i < remainingTreeDepth; i++)
 			currentNode = GetTreeNodeChild(currentNode, 0);
 		return &m_valueNodes[currentNode->indices[0]];
 	}
@@ -667,7 +668,7 @@ private:
 			remainingTreeDepth++;
 		}
 		// and then traverse always right
-		for (sint32 i=0; i<remainingTreeDepth; i++)
+		for (sint32 i = 0; i < remainingTreeDepth; i++)
 			currentNode = GetTreeNodeChild(currentNode, currentNode->usedCount - 1);
 		return GetTreeNodeChild(currentNode, currentNode->usedCount - 1);
 	}
@@ -691,7 +692,7 @@ private:
 				return nullptr; // root reached
 			currentSlot = currentNode->parentSlot;
 			currentNode = &m_treeNodes[currentNode->parentNodeIndex];
-			if (currentSlot+1 < currentNode->usedCount)
+			if (currentSlot + 1 < currentNode->usedCount)
 			{
 				currentNode = GetTreeNodeChild(currentNode, currentSlot + 1);
 				break;
@@ -699,7 +700,7 @@ private:
 			remainingTreeDepth++;
 		}
 		// and then traverse always left
-		for (sint32 i=0; i<remainingTreeDepth; i++)
+		for (sint32 i = 0; i < remainingTreeDepth; i++)
 			currentNode = GetTreeNodeChild(currentNode, 0);
 		return GetTreeNodeChild(currentNode, 0);
 	}
@@ -712,7 +713,7 @@ private:
 			PropagateMinValue(treeNode);
 			return; // node full enough to not collapse
 		}
-		bool hasValueNodeChildren = (depth == m_treeDepth-1);
+		bool hasValueNodeChildren = (depth == m_treeDepth - 1);
 		// check if we can merge with left node
 		TreeNode* leftNeighbor = GetTreeNodeLeftNeighbor(treeNode);
 		if (leftNeighbor && (leftNeighbor->usedCount + treeNode->usedCount) <= NUM_SLOTS && treeNode->usedCount > 0)
@@ -758,7 +759,7 @@ private:
 				cemu_assert_debug(treeNode->selfIndex == ROOT_NODE_INDEX);
 				m_treeDepth = 0;
 				cemu_assert_debug(m_freeValueNodeIndices.size() == m_valueNodes.size());
-				cemu_assert_debug(m_freeTreeNodeIndices.size() == m_treeNodes.size()-1); // -1 for the root node which is always reserved
+				cemu_assert_debug(m_freeTreeNodeIndices.size() == m_treeNodes.size() - 1); // -1 for the root node which is always reserved
 				cemu_assert_debug(GetRootNode().usedCount == 0);
 				return;
 			}
@@ -794,16 +795,16 @@ private:
 		sint32 leftStart = leftNode->usedCount - count;
 		if (hasValueNodes)
 		{
-			for (sint32 i=targetCount-1; i>=0; i--)
+			for (sint32 i = targetCount - 1; i >= 0; i--)
 				SetChildNode(*targetNode, count + i, m_valueNodes[targetNode->indices[i]]);
-			for (sint32 i=0; i<count; i++)
+			for (sint32 i = 0; i < count; i++)
 				SetChildNode(*targetNode, i, m_valueNodes[leftNode->indices[leftStart + i]]);
 		}
 		else
 		{
-			for (sint32 i=targetCount-1; i>=0; i--)
+			for (sint32 i = targetCount - 1; i >= 0; i--)
 				SetChildNode(*targetNode, count + i, GetTreeNodeChild(targetNode, i));
-			for (sint32 i=0; i<count; i++)
+			for (sint32 i = 0; i < count; i++)
 				SetChildNode(*targetNode, i, GetTreeNodeChild(leftNode, leftStart + i));
 		}
 		ReduceUsedCount(leftNode, count);
@@ -829,16 +830,16 @@ private:
 
 		if (hasValueNodes)
 		{
-			for (sint32 i=0; i<count; i++)
+			for (sint32 i = 0; i < count; i++)
 				SetChildNode(*targetNode, targetCount + i, m_valueNodes[rightNode->indices[i]]);
-			for (sint32 i=0; i<remainingCount; i++)
+			for (sint32 i = 0; i < remainingCount; i++)
 				SetChildNode(*rightNode, i, m_valueNodes[rightNode->indices[count + i]]);
 		}
 		else
 		{
-			for (sint32 i=0; i<count; i++)
+			for (sint32 i = 0; i < count; i++)
 				SetChildNode(*targetNode, targetCount + i, GetTreeNodeChild(rightNode, i));
-			for (sint32 i=0; i<remainingCount; i++)
+			for (sint32 i = 0; i < remainingCount; i++)
 				SetChildNode(*rightNode, i, GetTreeNodeChild(rightNode, count + i));
 		}
 		ReduceUsedCount(rightNode, count);
@@ -861,16 +862,16 @@ private:
 			sint32 childCount = onlyChild->usedCount;
 			if (childHasValueNodes)
 			{
-				for (sint32 i=0; i<childCount; i++)
+				for (sint32 i = 0; i < childCount; i++)
 					SetChildNode(rootNode, i, m_valueNodes[onlyChild->indices[i]]);
 			}
 			else
 			{
-				for (sint32 i=0; i<childCount; i++)
+				for (sint32 i = 0; i < childCount; i++)
 					SetChildNode(rootNode, i, GetTreeNodeChild(onlyChild, i));
 			}
 			rootNode.usedCount = (uint8)childCount;
-			for (sint32 i=rootNode.usedCount; i<NUM_SLOTS; i++)
+			for (sint32 i = rootNode.usedCount; i < NUM_SLOTS; i++)
 				rootNode.values[i] = MAX_VALUE;
 			ReleaseTreeNode(onlyChild, false);
 			m_treeDepth--;
@@ -911,7 +912,7 @@ class BufferCacheNode
 	static inline constexpr uint64 c_streamoutSig0 = 0xF0F0F0F0155C5B6Aull;
 	static inline constexpr uint64 c_streamoutSig1 = 0x8BE6336411814F4Full;
 
-public:
+  public:
 	~BufferCacheNode()
 	{
 		if (m_hasCacheAlloc)
@@ -966,10 +967,10 @@ public:
 			// todo - add support for 4 byte granularity for streamout writes and cache
 			// used by Affordable Space Adventures and YWW Level 1-8
 			// also used by CoD Ghosts (8 byte granularity)
-			//cemuLog_logDebug(LogType::Force, "Streamout write size is not aligned to 16 bytes");
+			// cemuLog_logDebug(LogType::Force, "Streamout write size is not aligned to 16 bytes");
 			rangeEnd &= ~0xF;
 		}
-		//cemu_assert_debug((rangeEnd & 0xF) == 0);
+		// cemu_assert_debug((rangeEnd & 0xF) == 0);
 		rangeBegin = std::max(rangeBegin, m_rangeBegin);
 		rangeEnd = std::min(rangeEnd, m_rangeEnd);
 		if (rangeBegin >= rangeEnd)
@@ -1103,7 +1104,7 @@ public:
 				checkAndSyncModifications(m_invalidationRangeBegin, m_invalidationRangeEnd, true);
 				m_invalidationRangeBegin = m_invalidationRangeEnd;
 			}
-			if(m_invalidationRangeEnd <= m_invalidationRangeBegin)
+			if (m_invalidationRangeEnd <= m_invalidationRangeBegin)
 				m_hasInvalidation = false;
 		}
 	}
@@ -1149,39 +1150,54 @@ public:
 		return !m_hasStreamoutData;
 	}
 
-	MPTR GetRangeBegin() const { return m_rangeBegin; }
-	MPTR GetRangeEnd() const { return m_rangeEnd; }
+	MPTR GetRangeBegin() const
+	{
+		return m_rangeBegin;
+	}
+	MPTR GetRangeEnd() const
+	{
+		return m_rangeEnd;
+	}
 
-	uint32 GetDrawcallAge() const { return LatteGPUState.drawCallCounter - m_lastDrawcall; };
-	uint32 GetFrameAge() const { return LatteGPUState.frameCounter - m_lastFrame; };
+	uint32 GetDrawcallAge() const
+	{
+		return LatteGPUState.drawCallCounter - m_lastDrawcall;
+	};
+	uint32 GetFrameAge() const
+	{
+		return LatteGPUState.frameCounter - m_lastFrame;
+	};
 
-	bool HasStreamoutData() const { return m_hasStreamoutData; };
+	bool HasStreamoutData() const
+	{
+		return m_hasStreamoutData;
+	};
 
-private:
+  private:
 	struct CachePageInfo
 	{
-		uint64 hash{ 0 };
-		bool hasStreamoutData{ false };
+		uint64 hash{0};
+		bool hasStreamoutData{false};
 	};
 
 	MPTR m_rangeBegin;
 	MPTR m_rangeEnd; // (exclusive)
-	bool m_hasCacheAlloc{ false };
-	uint32 m_cacheOffset{ 0 };
+	bool m_hasCacheAlloc{false};
+	uint32 m_cacheOffset{0};
 	// usage
 	uint32 m_lastDrawcall;
 	uint32 m_lastFrame;
 	uint32 m_arrayIndex;
 	// state tracking
-	uint32 m_lastModifyCheckCronon{ g_currentCacheChronon - 1 };
+	uint32 m_lastModifyCheckCronon{g_currentCacheChronon - 1};
 	std::vector<CachePageInfo> m_pageInfo;
-	bool m_hasStreamoutData{ false };
+	bool m_hasStreamoutData{false};
 	// invalidation
 	bool m_hasInvalidation{false};
 	MPTR m_invalidationRangeBegin;
 	MPTR m_invalidationRangeEnd;
 
-	BufferCacheNode(MPTR rangeBegin, MPTR rangeEnd): m_rangeBegin(rangeBegin), m_rangeEnd(rangeEnd)
+	BufferCacheNode(MPTR rangeBegin, MPTR rangeEnd) : m_rangeBegin(rangeBegin), m_rangeEnd(rangeEnd)
 	{
 		flagInUse();
 		cemu_assert_debug(rangeBegin < rangeEnd);
@@ -1420,26 +1436,26 @@ private:
 	static inline uint64 c_fullStreamoutPageHash = genStreamoutPageHash();
 	static std::vector<uint32> g_deallocateQueue;
 
-public:
-    static void UnloadAll()
-    {
-        size_t i = 0;
-        while (i < s_allCacheNodes.size())
-        {
-            BufferCacheNode* node = s_allCacheNodes[i];
-            node->ReleaseCacheMemoryImmediately();
-            LatteBufferCache_removeSingleNodeFromTree(node);
-            delete node;
-        }
-        for(auto& it : s_allCacheNodes)
-            delete it;
-        s_allCacheNodes.clear();
-        g_deallocateQueue.clear();
-    }
+  public:
+	static void UnloadAll()
+	{
+		size_t i = 0;
+		while (i < s_allCacheNodes.size())
+		{
+			BufferCacheNode* node = s_allCacheNodes[i];
+			node->ReleaseCacheMemoryImmediately();
+			LatteBufferCache_removeSingleNodeFromTree(node);
+			delete node;
+		}
+		for (auto& it : s_allCacheNodes)
+			delete it;
+		s_allCacheNodes.clear();
+		g_deallocateQueue.clear();
+	}
 
 	static void ProcessDeallocations()
 	{
-		for(auto& itr : g_deallocateQueue)
+		for (auto& itr : g_deallocateQueue)
 			g_gpuBufferHeap->freeOffset(itr);
 		g_deallocateQueue.clear();
 	}
@@ -1456,12 +1472,12 @@ public:
 				i++;
 				continue;
 			}
-			if(!node->isRAMOnly())
+			if (!node->isRAMOnly())
 			{
 				i++;
 				continue;
 			}
-			if(node->GetRangeBegin() < excludedRangeEnd && node->GetRangeEnd() > excludedRangeBegin)
+			if (node->GetRangeBegin() < excludedRangeEnd && node->GetRangeEnd() > excludedRangeBegin)
 			{
 				i++;
 				continue;
@@ -1506,7 +1522,7 @@ public:
 		newRange->syncFromRAM(rangeBegin, rangeEnd); // possible small optimization: only load the ranges from RAM which are not overwritten by ->syncFromNode()
 		for (auto itr : overlappingObjects)
 		{
-			if(itr == nullptr)
+			if (itr == nullptr)
 				continue;
 			newRange->syncFromNode(itr);
 			delete itr;
@@ -1535,7 +1551,7 @@ BufferCacheNode* LatteBufferCache_reserveRange(MPTR physAddress, uint32 size)
 	MPTR rangeEnd = (physAddress + size + CACHE_PAGE_SIZE_M1) & ~CACHE_PAGE_SIZE_M1;
 
 	BufferCacheNode* range = g_gpuBufferCache.GetRange(physAddress);
-	if (range && physAddress >= range->GetRangeBegin() && (physAddress+size) <= range->GetRangeEnd())
+	if (range && physAddress >= range->GetRangeBegin() && (physAddress + size) <= range->GetRangeEnd())
 		return range;
 	// no containing range found, we need to create a range and potentially merge with any overlapping ranges
 	g_gpuBufferCache.GetOverlappingRanges(rangeStart, rangeEnd, s_gpuCacheQueryResult);
@@ -1590,9 +1606,9 @@ void LatteBufferCache_invalidate(MPTR physAddress, uint32 size)
 		return;
 	if (physAddress >= 0xFFFFF000)
 		return;
-	if ((physAddress+size) < physAddress)
+	if ((physAddress + size) < physAddress)
 		return;
-	g_gpuBufferCache.GetOverlappingRanges(physAddress, physAddress+size, s_gpuCacheQueryResult);
+	g_gpuBufferCache.GetOverlappingRanges(physAddress, physAddress + size, s_gpuCacheQueryResult);
 	for (auto& range : s_gpuCacheQueryResult)
 	{
 		cemu_assert_debug(physAddress < range->GetRangeEnd() && (physAddress + size) > range->GetRangeBegin());
@@ -1608,7 +1624,7 @@ void LatteBufferCache_invalidatePage(MPTR physAddress)
 	if (node)
 	{
 		cemu_assert_debug(physAddress >= node->GetRangeBegin() && physAddress < node->GetRangeEnd());
-		node->invalidate(physAddress, physAddress+CACHE_PAGE_SIZE);
+		node->invalidate(physAddress, physAddress + CACHE_PAGE_SIZE);
 	}
 }
 
@@ -1626,7 +1642,7 @@ void LatteBufferCache_init(size_t bufferSize)
 
 void LatteBufferCache_UnloadAll()
 {
-    BufferCacheNode::UnloadAll();
+	BufferCacheNode::UnloadAll();
 }
 
 void LatteBufferCache_getStats(uint32& heapSize, uint32& allocationSize, uint32& allocNum)
@@ -1638,7 +1654,7 @@ class SparseBitset
 {
 	static inline constexpr size_t TABLE_MASK = 0xFF;
 
-public:
+  public:
 	bool Empty() const
 	{
 		return m_numNonEmptyVectors == 0;
@@ -1686,10 +1702,10 @@ public:
 		m_numNonEmptyVectors = 0;
 	}
 
-private:
+  private:
 	std::vector<uint32> m_bits[TABLE_MASK + 1];
 	std::vector<uint32>* m_nonEmptyVectors[TABLE_MASK + 1];
-	size_t m_numNonEmptyVectors{ 0 };
+	size_t m_numNonEmptyVectors{0};
 };
 
 FSpinlock g_spinlockDCFlushQueue;
@@ -1716,17 +1732,16 @@ void LatteBufferCache_processDCFlushQueue()
 	g_spinlockDCFlushQueue.lock();
 	std::swap(s_DCFlushQueue, s_DCFlushQueueAlternate);
 	g_spinlockDCFlushQueue.unlock();
-	s_DCFlushQueueAlternate->ForAllAndClear([](uint32 index) {LatteBufferCache_invalidatePage(index * CACHE_PAGE_SIZE); });
+	s_DCFlushQueueAlternate->ForAllAndClear([](uint32 index) { LatteBufferCache_invalidatePage(index * CACHE_PAGE_SIZE); });
 }
 
 void LatteBufferCache_notifyDrawDone()
 {
-
 }
 
 void LatteBufferCache_notifySwapTVScanBuffer()
 {
-	if( ActiveSettings::FlushGPUCacheOnSwap() )
+	if (ActiveSettings::FlushGPUCacheOnSwap())
 		g_currentCacheChronon++;
 }
 

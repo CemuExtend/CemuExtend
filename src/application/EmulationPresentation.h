@@ -39,4 +39,4 @@ namespace Application
 		PresentationRenderer renderer{PresentationRenderer::Unknown};
 		PresentationGpuVendor gpuVendor{PresentationGpuVendor::Generic};
 	};
-}
+} // namespace Application

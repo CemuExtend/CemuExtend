@@ -9,7 +9,7 @@
 
 struct RPLModule;
 
-#define RPL_INVALID_HANDLE		0xFFFFFFFF
+#define RPL_INVALID_HANDLE 0xFFFFFFFF
 
 enum class RPLExternalMarker : uint8
 {
@@ -98,7 +98,7 @@ struct RPLLoadOptions
 // until the loader has matched both it and lifetimeId under its registry lock.
 class RPLModuleLease
 {
-public:
+  public:
 	RPLModuleLease();
 	~RPLModuleLease();
 	RPLModuleLease(RPLModuleLease&&) noexcept;
@@ -108,18 +108,18 @@ public:
 
 	[[nodiscard]] explicit operator bool() const;
 
-private:
+  private:
 	struct Impl;
 	std::unique_ptr<Impl> m_impl;
 
 	friend bool RPLLoader_AcquireExternalModuleLease(RPLModule*, uint64,
-		RPLModuleLease&, std::string&);
+													 RPLModuleLease&, std::string&);
 	friend bool RPLLoader_ResolveModuleAddress(const RPLModuleLease&, uint32,
-		uint32, RPLModuleAddressKind, MPTR&);
+											   uint32, RPLModuleAddressKind, MPTR&);
 	friend uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease&);
 	friend uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease&);
 	friend bool RPLLoader_QueryMappedLayout(const RPLModuleLease&,
-		RPLMappedLayoutSnapshot&);
+											RPLMappedLayoutSnapshot&);
 };
 
 void RPLLoader_InitState();
@@ -134,22 +134,22 @@ uint32 RPLLoader_GetDataAllocatorAddr();
 
 RPLModule* RPLLoader_LoadFromMemory(uint8* rplData, sint32 size, std::string_view name);
 RPLModule* RPLLoader_LoadExternalModuleFromMemory(std::span<const uint8> image,
-	std::string_view name, const RPLLoadOptions& options, uint64& lifetimeId,
-	std::string& error);
+												  std::string_view name, const RPLLoadOptions& options, uint64& lifetimeId,
+												  std::string& error);
 bool RPLLoader_LinkExternalModule(RPLModule* module, uint64 lifetimeId,
-	std::string& error);
+								  std::string& error);
 bool RPLLoader_UnloadExternalModule(RPLModule* module, uint64 lifetimeId,
-	std::string& error);
+									std::string& error);
 bool RPLLoader_AcquireExternalModuleLease(RPLModule* module, uint64 lifetimeId,
-	RPLModuleLease& lease, std::string& error);
+										  RPLModuleLease& lease, std::string& error);
 bool RPLLoader_ResolveModuleAddress(const RPLModuleLease& lease, uint32 virtualAddress,
-	uint32 size, RPLModuleAddressKind kind, MPTR& mappedAddress);
+									uint32 size, RPLModuleAddressKind kind, MPTR& mappedAddress);
 bool RPLLoader_QueryMappedLayout(const RPLModuleLease& lease,
-	RPLMappedLayoutSnapshot& layout);
+								 RPLMappedLayoutSnapshot& layout);
 bool RPLLoader_QueryMappedAddress(uint32 address, uint32 size,
-	RPLMappedAddressInfo& info);
+								  RPLMappedAddressInfo& info);
 bool RPLLoader_FindLoadedExport(std::string_view moduleName,
-	std::string_view symbolName, bool isData, RPLResolvedExport& result);
+								std::string_view symbolName, bool isData, RPLResolvedExport& result);
 bool RPLLoader_IsModuleAlive(const RPLModule* module, uint64 lifetimeId);
 uint32 RPLLoader_GetModuleSDA1Base(const RPLModuleLease& lease);
 uint32 RPLLoader_GetModuleSDA2Base(const RPLModuleLease& lease);
@@ -198,7 +198,7 @@ void RPLLoader_ReleaseCodeCaveMem(MEMPTR<void> addr);
 
 // exports
 
-uint32 RPLLoader_MakePPCCallable(void(*ppcCallableExport)(struct PPCInterpreter_t* hCPU));
+uint32 RPLLoader_MakePPCCallable(void (*ppcCallableExport)(struct PPCInterpreter_t* hCPU));
 
 // elf loader
 

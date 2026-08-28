@@ -61,8 +61,7 @@ namespace nn
 						header->width != 320 ||
 						header->height != 120 ||
 						header->pixel_depth_bpp != 32 ||
-						header->image_desc_bits != 8
-						)
+						header->image_desc_bits != 8)
 					{
 						throw std::runtime_error("TGACheckType::CHECK_PAINTING - Invalid TGA file!");
 					}
@@ -85,8 +84,7 @@ namespace nn
 					else if (header->width != 200 || header->height != 200)
 						throw std::runtime_error("TGACheckType::CHECK_100x100_200x200 - Invalid TGA file -> Not 100x100 or 200x200");
 				}
-			}
-			catch (const std::runtime_error& error)
+			} catch (const std::runtime_error& error)
 			{
 				// TGA Check Error! illegal format
 				cemuLog_log(LogType::Force, error.what());
@@ -102,7 +100,7 @@ namespace nn
 			{
 				if (CheckTGA(pOutBuffer, decompressedSize, checkType))
 					return decompressedSize;
-				
+
 				return -2;
 			}
 			else
@@ -118,15 +116,15 @@ namespace nn
 			{
 				if (!CheckTGA(pInBuffer, inSize, checkType))
 					return -1;
-				
-					uint32 compressedSize = outSize;
-					if (CompressTGA(pOutBuffer, &compressedSize, pInBuffer, inSize))
-						return compressedSize;
-					else
-					{
-						cemuLog_log(LogType::Force, "OLIVE compress error.\n");
-						return -1;
-					}
+
+				uint32 compressedSize = outSize;
+				if (CompressTGA(pOutBuffer, &compressedSize, pInBuffer, inSize))
+					return compressedSize;
+				else
+				{
+					cemuLog_log(LogType::Force, "OLIVE compress error.\n");
+					return -1;
+				}
 			}
 			else
 			{
@@ -188,7 +186,6 @@ namespace nn
 			uint32 res = code ^ 0x20121002 ^ ((code ^ 0x20121002u) >> 17) ^ ((code ^ 0x20121002u) >> 23) ^ ((code ^ 0x20121002u) >> 29);
 			return res ^ (16 * (res & 0xF0F0F0F)) ^ ((res ^ (16 * (res & 0xF0F0F0F))) << 18) ^ ((res ^ (16 * (res & 0xF0F0F0F))) << 24) ^ ((res ^ (16 * (res & 0xF0F0F0F))) << 30);
 		}
-
 
 		constexpr uint32 GetCommunityCodeTopByte(uint32 communityId)
 		{
@@ -270,16 +267,16 @@ namespace nn
 		{
 			switch (code)
 			{
-				case CURL_FORMADD_OK:
-					return OLV_RESULT_SUCCESS;
+			case CURL_FORMADD_OK:
+				return OLV_RESULT_SUCCESS;
 
-				case CURL_FORMADD_MEMORY:
-					return OLV_RESULT_FATAL(25);
+			case CURL_FORMADD_MEMORY:
+				return OLV_RESULT_FATAL(25);
 
-				case CURL_FORMADD_OPTION_TWICE:
-				default:
-					return OLV_RESULT_LVL6(50);
+			case CURL_FORMADD_OPTION_TWICE:
+			default:
+				return OLV_RESULT_LVL6(50);
 			}
 		}
-	}
-}
+	} // namespace olv
+} // namespace nn

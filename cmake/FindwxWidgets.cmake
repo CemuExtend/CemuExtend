@@ -37,6 +37,9 @@ else()
 				add_library(wx::${component} ALIAS wx::base)
 			endif()
 		endforeach()
+		if (NOT TARGET wxWidgets::wxWidgets)
+			add_library(wxWidgets::wxWidgets ALIAS wx::base)
+		endif()
 	endif()
 
 	find_package_handle_standard_args(wxWidgets

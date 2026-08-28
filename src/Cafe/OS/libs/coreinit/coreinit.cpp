@@ -58,14 +58,13 @@ sint32 ScoreStackTrace(OSThread_t* thread, MPTR sp)
 
 		uint32 returnAddress = 0;
 		returnAddress = memory_readU32(nextStackPtr + 4);
-		//cemuLog_log(LogType::Force, fmt::format("SP {0:08x} ReturnAddress {1:08x}", nextStackPtr, returnAddress));
-		if (returnAddress > 0 && returnAddress < 0x10000000 && (returnAddress&3) == 0)
+		// cemuLog_log(LogType::Force, fmt::format("SP {0:08x} ReturnAddress {1:08x}", nextStackPtr, returnAddress));
+		if (returnAddress > 0 && returnAddress < 0x10000000 && (returnAddress & 3) == 0)
 			score += 5; // within code region
 		else
 			score -= 5;
 
 		currentStackPtr = nextStackPtr;
-
 	}
 	return score;
 }
@@ -108,7 +107,7 @@ void DebugLogStackTrace(OSThread_t* thread, MPTR sp)
 
 		RPLStoredSymbol* symbol = rplSymbolStorage_getByClosestAddress(returnAddress);
 
-		if(symbol)
+		if (symbol)
 			cemuLog_log(LogType::Force, fmt::format("SP {:08x} ReturnAddr {:08x}   ({}.{}+0x{:x})", nextStackPtr, returnAddress, (const char*)symbol->libName, (const char*)symbol->symbolName, returnAddress - symbol->address));
 		else
 			cemuLog_log(LogType::Force, fmt::format("SP {:08x} ReturnAddr {:08x}", nextStackPtr, returnAddress));
@@ -126,7 +125,7 @@ typedef struct
 	/* +0x10 */ uint32be size;
 	/* +0x14 */ uint32be ukn14;
 	/* +0x18 */ uint32be ukn18;
-}coreinitShareddataEntry_t;
+} coreinitShareddataEntry_t;
 
 static_assert(sizeof(coreinitShareddataEntry_t) == 0x1C, "");
 
@@ -226,7 +225,7 @@ namespace coreinit
 	}
 
 	uint32 OSGetSymbolName(uint32 address, char* symbolNameBuffer,
-		uint32 symbolNameBufferSize)
+						   uint32 symbolNameBufferSize)
 	{
 		if (!symbolNameBuffer || symbolNameBufferSize == 0)
 			return 0;
@@ -244,7 +243,7 @@ namespace coreinit
 	}
 
 	bool DisassemblePPCOpcode(const uint32be* opcode, char* outputBuffer,
-		uint32 outputBufferSize, MPTR findSymbolFunction, uint32 flags)
+							  uint32 outputBufferSize, MPTR findSymbolFunction, uint32 flags)
 	{
 		if (!opcode || !outputBuffer || outputBufferSize == 0)
 			return false;
@@ -264,7 +263,7 @@ namespace coreinit
 		std::string text = ppcAssembler_getInstructionName(
 			instruction.ppcAsmCode);
 		std::transform(text.begin(), text.end(), text.begin(),
-			[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+					   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 		bool firstOperand = true;
 		for (uint32 index = 0; index < PPCASM_OPERAND_COUNT; ++index)
 		{
@@ -289,29 +288,26 @@ namespace coreinit
 				break;
 			case PPCASM_OPERAND_TYPE_CR_BIT:
 				text += fmt::format("4*cr{}+{}",
-					operand.registerIndex / 4,
-					std::array{"lt", "gt", "eq", "so"}[operand.registerIndex & 3]);
+									operand.registerIndex / 4,
+									std::array{"lt", "gt", "eq", "so"}[operand.registerIndex & 3]);
 				break;
 			case PPCASM_OPERAND_TYPE_IMM:
 			{
 				sint32 value = operand.immS32;
 				if (operand.isSignedImm && operand.immWidth == 16)
 					value = static_cast<sint16>(value);
-				text += operand.isSignedImm ? fmt::format("{}", value) :
-					fmt::format("0x{:x}", operand.immU32);
+				text += operand.isSignedImm ? fmt::format("{}", value) : fmt::format("0x{:x}", operand.immU32);
 				break;
 			}
 			case PPCASM_OPERAND_TYPE_CIMM:
 			{
 				const auto* symbol = rplSymbolStorage_getByAddress(operand.immU32);
-				text += symbol && symbol->symbolName ?
-					static_cast<const char*>(symbol->symbolName) :
-					fmt::format("0x{:08x}", operand.immU32);
+				text += symbol && symbol->symbolName ? static_cast<const char*>(symbol->symbolName) : fmt::format("0x{:08x}", operand.immU32);
 				break;
 			}
 			case PPCASM_OPERAND_TYPE_MEM:
 				text += fmt::format("{}(r{})", operand.immS32,
-					operand.registerIndex);
+									operand.registerIndex);
 				break;
 			case PPCASM_OPERAND_TYPE_PSQMODE:
 				text += operand.immS32 ? "single" : "paired";
@@ -365,7 +361,8 @@ namespace coreinit
 		cemuLog_log(LogType::Force, "Msg: {}", msg);
 		DebugLogStackTrace(coreinit::OSGetCurrentThread(), coreinit::OSGetStackPointer());
 #ifdef CEMU_DEBUG_ASSERT
-		while (true) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		while (true)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #endif
 	}
 
@@ -393,7 +390,7 @@ namespace coreinit
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "coreinit";
@@ -482,10 +479,10 @@ namespace coreinit
 				// todo
 			}
 		}
-	}s_COSCoreinitModule;
+	} s_COSCoreinitModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSCoreinitModule;
 	}
-}
+} // namespace coreinit

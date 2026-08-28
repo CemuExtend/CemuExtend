@@ -26,7 +26,7 @@ using namespace Latte;
 
 namespace LatteAddrLib
 {
-	
+
 	enum class COMPUTE_SURFACE_RESULT
 	{
 		RESULT_OK = 0,
@@ -397,7 +397,7 @@ namespace LatteAddrLib
 				expTileMode = E_HWTILEMODE::TM_1D_TILED_THIN1;
 			if (numSamples == 2 || numSamples == 4)
 				expTileMode = E_HWTILEMODE::TM_2D_TILED_THICK;
-		break;
+			break;
 		case E_HWTILEMODE::TM_2D_TILED_THIN2:
 			if (2 * m_pipeInterleaveBytes > m_splitSize)
 				expTileMode = E_HWTILEMODE::TM_2D_TILED_THIN1;
@@ -618,7 +618,8 @@ namespace LatteAddrLib
 				swapVal = std::max(swapWidth, swapMin);
 			else
 				swapVal = swapMax;
-			for (bankSwapWidth = swapVal; bankSwapWidth >= 2 * pitch; bankSwapWidth >>= 1);
+			for (bankSwapWidth = swapVal; bankSwapWidth >= 2 * pitch; bankSwapWidth >>= 1)
+				;
 		}
 		return bankSwapWidth;
 	}
@@ -872,7 +873,7 @@ namespace LatteAddrLib
 		return COMPUTE_SURFACE_RESULT::RESULT_OK;
 	}
 
-	void RestoreSurfaceInfo(uint32 elemMode, uint32 expandX, uint32 expandY, uint32*pBpp, uint32 *pWidth, uint32*pHeight)
+	void RestoreSurfaceInfo(uint32 elemMode, uint32 expandX, uint32 expandY, uint32* pBpp, uint32* pWidth, uint32* pHeight)
 	{
 		if (pBpp)
 		{
@@ -987,7 +988,7 @@ namespace LatteAddrLib
 		}
 		else
 		{
-			if(pOut->surfSize == 0 && pOut->depth == 0)
+			if (pOut->surfSize == 0 && pOut->depth == 0)
 				pOut->sliceSize = 0; // edge case for (1D)_ARRAY textures with res 0/0/0
 			else
 				pOut->sliceSize = (uint32)(pOut->surfSize / pOut->depth);
@@ -1002,7 +1003,7 @@ namespace LatteAddrLib
 
 	void GX2CalculateSurfaceInfo(Latte::E_GX2SURFFMT surfaceFormat, uint32 surfaceWidth, uint32 surfaceHeight, uint32 surfaceDepth, E_DIM surfaceDim, E_GX2TILEMODE surfaceTileMode, uint32 surfaceAA, uint32 level, AddrSurfaceInfo_OUT* pSurfOut, bool optimizeForDepthBuffer, bool optimizeForScanBuffer)
 	{
-		AddrSurfaceInfo_IN surfInfoIn = { 0 };
+		AddrSurfaceInfo_IN surfInfoIn = {0};
 		Latte::E_HWSURFFMT hwFormat = Latte::GetHWFormat(surfaceFormat);
 		memset(pSurfOut, 0, sizeof(AddrSurfaceInfo_OUT));
 		pSurfOut->size = sizeof(AddrSurfaceInfo_OUT);
@@ -1059,7 +1060,7 @@ namespace LatteAddrLib
 				pSurfOut->sliceSize = (uint32)pSurfOut->surfSize;
 			else
 			{
-				if(pSurfOut->surfSize == 0 && pSurfOut->depth == 0)
+				if (pSurfOut->surfSize == 0 && pSurfOut->depth == 0)
 					pSurfOut->sliceSize = 0;
 				else
 					pSurfOut->sliceSize = (uint32)(pSurfOut->surfSize / pSurfOut->depth);
@@ -1201,19 +1202,19 @@ namespace LatteAddrLib
 			prevSize = (uint32)surfaceInfo.surfSize;
 		}
 		// calculate slice offset
-		if( mipIndex == 0 ) // make sure surfaceInfo is initialized
+		if (mipIndex == 0) // make sure surfaceInfo is initialized
 			GX2CalculateSurfaceInfo(format, width, height, depth, dim, MakeGX2TileMode(tileMode), surfaceAA, 0, &surfaceInfo);
 		uint32 sliceOffset = 0;
 		uint32 sliceSize = 0;
 
 		// surfaceInfo.sliceSize isn't always correct (especially when depth is misaligned with 4 for THICK tile modes?) so we calculate it manually
 		// this formula only works because both pitch and height are aligned to micro/macro blocks by GX2CalculateSurfaceInfo, normally we would have to use the tile dimensions to calculate the size
-		uint32 correctedSliceSize = surfaceInfo.pitch*surfaceInfo.height*surfaceInfo.bpp / 8;
-	
+		uint32 correctedSliceSize = surfaceInfo.pitch * surfaceInfo.height * surfaceInfo.bpp / 8;
+
 		if (TM_IsThick(surfaceInfo.hwTileMode))
 		{
 			// 4 slices are interleaved
-			sliceOffset = (sliceIndex&~3) * correctedSliceSize;
+			sliceOffset = (sliceIndex & ~3) * correctedSliceSize;
 			sliceSize = correctedSliceSize * 4;
 			*subSliceIndex = sliceIndex & 3;
 		}
@@ -1235,4 +1236,4 @@ namespace LatteAddrLib
 		*outputSliceSize = sliceSize;
 	}
 
-};
+}; // namespace LatteAddrLib

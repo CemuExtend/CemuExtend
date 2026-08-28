@@ -43,7 +43,7 @@ using ImTextureID = void*;
 
 class Renderer
 {
-public:
+  public:
 	enum class INDEX_TYPE
 	{
 		NONE,
@@ -52,7 +52,7 @@ public:
 	};
 
 	Renderer(RendererAPI api, std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
+			 std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces)
 		: m_rendererAPI(api), m_windowMetrics(std::move(windowMetrics)),
 		  m_nativeSurfaces(std::move(nativeSurfaces))
 	{
@@ -60,7 +60,10 @@ public:
 	}
 	virtual ~Renderer() = default;
 
-	RendererAPI GetType() const { return m_rendererAPI; }
+	RendererAPI GetType() const
+	{
+		return m_rendererAPI;
+	}
 	[[nodiscard]] Host::WindowMetricsSnapshot GetWindowMetrics() const
 	{
 		return m_windowMetrics->GetWindowMetrics();
@@ -89,15 +92,15 @@ public:
 	bool CancelScreenshotRequest(ScreenshotRequestId requestId);
 	void CancelScreenshotRequest();
 
-	virtual void HandleScreenshotRequest(LatteTextureView* texView, bool padView){}
+	virtual void HandleScreenshotRequest(LatteTextureView* texView, bool padView) {}
 
 	virtual void DrawBackbufferQuad(LatteTextureView* texView, RendererOutputShader* shader, bool useLinearTexFilter,
-												sint32 imageX, sint32 imageY, sint32 imageWidth, sint32 imageHeight,
-												bool padView, bool clearBackground) = 0;
+									sint32 imageX, sint32 imageY, sint32 imageWidth, sint32 imageHeight,
+									bool padView, bool clearBackground) = 0;
 	virtual bool BeginFrame(bool mainWindow) = 0;
 
 	// flush control
-	virtual void Flush(bool waitIdle = false) = 0; // called when explicit flush is required (e.g. by imgui)
+	virtual void Flush(bool waitIdle = false) = 0;		// called when explicit flush is required (e.g. by imgui)
 	virtual void NotifyLatteCommandProcessorIdle() = 0; // called when command processor has no more commands available or when stalled
 
 	// imgui
@@ -107,8 +110,14 @@ public:
 	virtual void DeleteTexture(ImTextureID id) = 0;
 	virtual void DeleteFontTextures() = 0;
 
-	GfxVendor GetVendor() const { return m_vendor; }
-	virtual bool UseTFViaSSBO() const { return false; }
+	GfxVendor GetVendor() const
+	{
+		return m_vendor;
+	}
+	virtual bool UseTFViaSSBO() const
+	{
+		return false;
+	}
 	virtual void AppendOverlayDebugInfo() = 0;
 
 	// rendertarget
@@ -165,7 +174,7 @@ public:
 	// index
 	struct IndexAllocation
 	{
-		void* mem; // pointer to index data inside buffer
+		void* mem;				// pointer to index data inside buffer
 		void* rendererInternal; // for renderer use
 	};
 
@@ -179,8 +188,8 @@ public:
 	virtual void occlusionQuery_flush() = 0;
 	virtual void occlusionQuery_updateState() = 0;
 
-protected:
-	virtual void GetVendorInformation() { }
+  protected:
+	virtual void GetVendorInformation() {}
 	RendererAPI m_rendererAPI;
 	std::shared_ptr<Host::IWindowMetrics> m_windowMetrics;
 	std::shared_ptr<Host::INativeSurfaceProvider> m_nativeSurfaces;
@@ -205,8 +214,7 @@ protected:
 
 	[[nodiscard]] ScreenshotRequestId GetActiveScreenshotRequestId();
 	void SaveScreenshot(ScreenshotRequestId requestId, const std::vector<uint8>& rgb_data,
-		int width, int height, bool mainWindow);
-
+						int width, int height, bool mainWindow);
 
 	ImFontAtlas* imguiFontAtlas{};
 	ImGuiContext* imguiTVContext{};

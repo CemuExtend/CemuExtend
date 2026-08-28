@@ -12,7 +12,7 @@ namespace coreinit
 	{
 		MPTR addrEnd = (addr + size + 0x1F) & ~0x1F;
 		addr &= ~0x1F;
-		//LatteBufferCache_notifyDCFlush(addr, addrEnd - addr);
+		// LatteBufferCache_notifyDCFlush(addr, addrEnd - addr);
 	}
 
 	void DCFlushRange(MPTR addr, uint32 size)
@@ -33,7 +33,7 @@ namespace coreinit
 	{
 		MPTR addrEnd = (addr + size + 0x1F) & ~0x1F;
 		addr &= ~0x1F;
-		//LatteBufferCache_notifyDCFlush(addr, addrEnd - addr);
+		// LatteBufferCache_notifyDCFlush(addr, addrEnd - addr);
 	}
 
 	void DCStoreRangeNoSync(MPTR addr, uint32 size)
@@ -116,7 +116,7 @@ namespace coreinit
 
 	void* OSBlockSet(MEMPTR<void> dst, uint32 value, uint32 size)
 	{
-		memset(dst.GetPtr(), value&0xFF, size);
+		memset(dst.GetPtr(), value & 0xFF, size);
 		return dst.GetPtr();
 	}
 
@@ -137,7 +137,7 @@ namespace coreinit
 		uint32 memSize = 0;
 
 		/*
- 		Data taken from browser dump:
+		Data taken from browser dump:
 		type	start		size
 		MEM1	0xF4000000	0x02000000
 		MEM2	0x106DE000	0x170C2000
@@ -165,24 +165,24 @@ namespace coreinit
 				titleId == 0x0005000010194200ull || // Lego Dimensions (US)
 				titleId == 0x0005000010195D00ull || // Lego Dimensions (EU)
 				titleId == 0x00050000101A6200ull || // Lego Jurassic World (US)
-				titleId == 0x00050000101A5C00 || // Lego Jurassic World (EU)
-				titleId == 0x000500001014DE00 || // The Lego Movie Videogame (US)
-				titleId == 0x000500001014E000 || // The Lego Movie Videogame (EU)
-				titleId == 0x0005000010168D00 || // Lego The Hobbit (EU)
-				titleId == 0x000500001016A700 || // Lego The Hobbit (JP)
+				titleId == 0x00050000101A5C00 ||	// Lego Jurassic World (EU)
+				titleId == 0x000500001014DE00 ||	// The Lego Movie Videogame (US)
+				titleId == 0x000500001014E000 ||	// The Lego Movie Videogame (EU)
+				titleId == 0x0005000010168D00 ||	// Lego The Hobbit (EU)
+				titleId == 0x000500001016A700 ||	// Lego The Hobbit (JP)
 				// The Hobbit US title id?
 				titleId == 0x00050000101DAB00 || // Lego Star Wars: The Force Awakens  (US)
-				titleId == 0x00050000101DAA00 ||  // Lego Star Wars: The Force Awakens  (EU)
-				// LEGO Batman 3: BEYOND GOTHAM 
+				titleId == 0x00050000101DAA00 || // Lego Star Wars: The Force Awakens  (EU)
+				// LEGO Batman 3: BEYOND GOTHAM
 				titleId == 0x000500001016A400 || // EU
 				titleId == 0x000500001016AD00 || // US
 				// Lego Marvel Avengers
 				titleId == 0x00050000101BE900 || // EU
 				titleId == 0x00050000101BEF00 || // US
-				// LEGO BATMAN 2: DC Super Heroes 
+				// LEGO BATMAN 2: DC Super Heroes
 				titleId == 0x0005000010135500 || // EU
-				titleId == 0x0005000010135E00 // US
-				)
+				titleId == 0x0005000010135E00	 // US
+			)
 			{
 				cemuLog_logDebug(LogType::Force, "Hack: Reduce available memory to simulate loaded RPLs");
 				currentRPLAllocatorOffset += (48 * 1024 * 1024); // 48MB
@@ -222,4 +222,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSGetMemBound, LogType::Placeholder);
 	}
 
-}
+} // namespace coreinit

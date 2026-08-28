@@ -31,8 +31,8 @@ namespace Frontend::ArchiveInstallPolicy
 	}
 
 	CommitResult CommitStagedDirectory(const std::filesystem::path& staging,
-		const std::filesystem::path& target, const std::filesystem::path& backup,
-		bool replaceExisting)
+									   const std::filesystem::path& target, const std::filesystem::path& backup,
+									   bool replaceExisting)
 	{
 		CommitResult result;
 		std::error_code error;
@@ -90,4 +90,4 @@ namespace Frontend::ArchiveInstallPolicy
 		}
 		return result;
 	}
-}
+} // namespace Frontend::ArchiveInstallPolicy

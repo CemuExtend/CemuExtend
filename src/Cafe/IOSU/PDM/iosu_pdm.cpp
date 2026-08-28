@@ -14,7 +14,6 @@ namespace chrono_d = date;
 namespace chrono_d = std::chrono;
 #endif
 
-
 namespace iosu
 {
 	namespace pdm
@@ -49,15 +48,15 @@ namespace iosu
 			return (uint16)(currentDateDay - startDateDay).count();
 		}
 
-		struct PlayStatsEntry 
+		struct PlayStatsEntry
 		{
 			uint32be titleIdHigh;
 			uint32be titleIdLow;
 			uint32be totalMinutesPlayed;
 			uint16be numTimesLaunched;
 			uint16be firstLaunchDayIndex; // first time this title was launched
-			uint16be mostRecentDayIndex; // last time this title was played
-			uint16be ukn12; // maybe just padding?
+			uint16be mostRecentDayIndex;  // last time this title was played
+			uint16be ukn12;				  // maybe just padding?
 		};
 
 		static_assert(sizeof(PlayStatsEntry) == 0x14);
@@ -67,7 +66,7 @@ namespace iosu
 			FileStream* fs{};
 			uint32be numEntries;
 			PlayStatsEntry entry[NUM_PLAY_STATS_ENTRIES];
-		}PlayStats;
+		} PlayStats;
 
 		void CreatePlaystats()
 		{
@@ -129,14 +128,14 @@ namespace iosu
 			std::unique_lock _l(sPlaystatsLock);
 			cemu_assert_debug(!PlayStats.fs); // unloading expects that file is closed
 			PlayStats.numEntries = 0;
-			for(auto& it : PlayStats.entry)
+			for (auto& it : PlayStats.entry)
 				it = PlayStatsEntry{};
 		}
 
 		PlayStatsEntry* PlayStats_GetEntry(uint64 titleId)
 		{
 			std::unique_lock _l(sPlaystatsLock);
-			uint32be titleIdHigh = (uint32)(titleId>>32);
+			uint32be titleIdHigh = (uint32)(titleId >> 32);
 			uint32be titleIdLow = (uint32)(titleId & 0xFFFFFFFF);
 			size_t numEntries = PlayStats.numEntries;
 			for (size_t i = 0; i < numEntries; i++)
@@ -178,7 +177,7 @@ namespace iosu
 			std::unique_lock _l(sPlaystatsLock);
 			bool entryCountChanged = false;
 			PlayStatsEntry* newEntry;
-			if(PlayStats.numEntries < NUM_PLAY_STATS_ENTRIES)
+			if (PlayStats.numEntries < NUM_PLAY_STATS_ENTRIES)
 			{
 				newEntry = PlayStats.entry + PlayStats.numEntries;
 				PlayStats.numEntries += 1;
@@ -190,7 +189,7 @@ namespace iosu
 				newEntry = PlayStats.entry + 0;
 				for (uint32 i = 1; i < NUM_PLAY_STATS_ENTRIES; i++)
 				{
-					if(PlayStats.entry[i].totalMinutesPlayed < newEntry->totalMinutesPlayed)
+					if (PlayStats.entry[i].totalMinutesPlayed < newEntry->totalMinutesPlayed)
 						newEntry = PlayStats.entry + i;
 				}
 			}
@@ -248,7 +247,7 @@ namespace iosu
 			FileStream* fs{};
 			PlayDiaryHeader header;
 			PlayDiaryEntry entry[NUM_PLAY_DIARY_ENTRIES_MAX];
-		}PlayDiaryData;
+		} PlayDiaryData;
 
 		void CreatePlayDiary()
 		{
@@ -334,7 +333,7 @@ namespace iosu
 				*diaryEntries = PlayDiaryData.entry[currentEntryIndex];
 				numReadEntries++;
 				diaryEntries++;
-				currentEntryIndex = (currentEntryIndex+1) % NUM_PLAY_DIARY_ENTRIES_MAX;
+				currentEntryIndex = (currentEntryIndex + 1) % NUM_PLAY_DIARY_ENTRIES_MAX;
 			}
 			return numReadEntries;
 		}
@@ -361,9 +360,9 @@ namespace iosu
 			std::unique_lock _lockGC(GetConfig().game_cache_entries_mutex);
 			for (auto& gameEntry : GetConfig().game_cache_entries)
 			{
-				if(gameEntry.title_id != titleId)
+				if (gameEntry.title_id != titleId)
 					continue;
-				stat.numMinutesPlayed += (gameEntry.legacy_time_played / 60);				
+				stat.numMinutesPlayed += (gameEntry.legacy_time_played / 60);
 				if (gameEntry.legacy_last_played != 0)
 				{
 					time_t td = gameEntry.legacy_last_played;
@@ -384,7 +383,7 @@ namespace iosu
 
 		std::thread sPDMTimeTrackingThread;
 		CounterSemaphore sPDMSem;
-		std::atomic_bool sPDMRequestExitThread{ false };
+		std::atomic_bool sPDMRequestExitThread{false};
 
 		void TimeTrackingThread(uint64 titleId)
 		{
@@ -453,31 +452,30 @@ namespace iosu
 			{
 				sPDMRequestExitThread.store(true);
 				sPDMSem.increment();
-				if(sPDMTimeTrackingThread.joinable())
+				if (sPDMTimeTrackingThread.joinable())
 					sPDMTimeTrackingThread.join();
 				PDMCloseAll();
 			}
-		}sIOSUModuleNNPDM;
+		} sIOSUModuleNNPDM;
 
 		IOSUModule* GetModule()
 		{
 			return static_cast<IOSUModule*>(&sIOSUModuleNNPDM);
 		}
 
-
 		bool GameListStat::LastPlayDate::operator<(const LastPlayDate& b) const
 		{
 			const auto& a = *this;
 
-			if(a.year < b.year)
+			if (a.year < b.year)
 				return true;
-			if(a.year > b.year)
+			if (a.year > b.year)
 				return false;
 
 			// same year
-			if(a.month < b.month)
+			if (a.month < b.month)
 				return true;
-			if(a.month > b.month)
+			if (a.month > b.month)
 				return false;
 
 			// same year and month
@@ -493,5 +491,5 @@ namespace iosu
 		}
 		std::weak_ordering GameListStat::LastPlayDate::operator<=>(const LastPlayDate& b) const = default;
 
-	};
-};
+	}; // namespace pdm
+}; // namespace iosu

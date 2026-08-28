@@ -14,7 +14,7 @@ namespace coreinit
 		uint32be flags; // permissions and channel
 	};
 
-	#define GHS_FOPEN_MAX	100
+#define GHS_FOPEN_MAX 100
 
 	struct GHSAccessibleData
 	{
@@ -41,10 +41,10 @@ namespace coreinit
 	SysAllocator<coreinit::OSMutex, GHS_FOPEN_MAX> _flockMutexArray;
 	bool _flockMutexMask[GHS_FOPEN_MAX]; // if set, mutex in _flockMutexArray is reserved
 
-	#define IOB_FLAG_IN				(0x1)
-	#define IOB_FLAG_OUT			(0x2)
+#define IOB_FLAG_IN (0x1)
+#define IOB_FLAG_OUT (0x2)
 
-	#define IOB_FLAG_CHANNEL(__x)	((__x)<<18)
+#define IOB_FLAG_CHANNEL(__x) ((__x) << 18)
 
 	void PrepareGHSRuntime()
 	{
@@ -223,7 +223,7 @@ namespace coreinit
 	{
 		uint16 ukn00;
 		uint16 tlsModuleIndex;
-		MPTR   ukn04;
+		MPTR ukn04;
 	};
 
 	// Zero-filled block handed out when a TLS lookup cannot be satisfied. Returning
@@ -282,8 +282,8 @@ namespace coreinit
 		if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::UnusableAddress))
 		{
 			cemuLog_log(LogType::Force,
-				"coreinit.__tls_get_addr: tls_index at 0x{:08x} resolves to unusable address 0x{:08x} (block 0x{:08x}, offset 0x{:08x})",
-				indexAddress, address, blockAddress, _swapEndianU32(tlsIndex->ukn04));
+						"coreinit.__tls_get_addr: tls_index at 0x{:08x} resolves to unusable address 0x{:08x} (block 0x{:08x}, offset 0x{:08x})",
+						indexAddress, address, blockAddress, _swapEndianU32(tlsIndex->ukn04));
 		}
 		return GetTLSFallbackBlock();
 	}
@@ -304,9 +304,9 @@ namespace coreinit
 			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingModuleIndex))
 			{
 				cemuLog_log(LogType::Force,
-					"coreinit.__tls_get_addr: tls_index at 0x{:08x} has an unresolved module index, owning module index is {} (thread 0x{:08x})",
-					indexAddress, (sint32)RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress),
-					memory_getVirtualOffsetFromPointer(currentThread));
+							"coreinit.__tls_get_addr: tls_index at 0x{:08x} has an unresolved module index, owning module index is {} (thread 0x{:08x})",
+							indexAddress, (sint32)RPLLoader_FindTLSModuleIndexByDataAddr(indexAddress),
+							memory_getVirtualOffsetFromPointer(currentThread));
 			}
 		}
 
@@ -330,7 +330,7 @@ namespace coreinit
 			return ReturnTLSAddress(tlsIndex, MPTR_NULL);
 		if (tlsBlock->addr != _swapEndianU32(MPTR_NULL))
 		{
-			//osLib_returnFromFunction(hCPU, _swapEndianU32(tlsBlock->addr)+_swapEndianU32(tlsIndex->ukn04));
+			// osLib_returnFromFunction(hCPU, _swapEndianU32(tlsBlock->addr)+_swapEndianU32(tlsIndex->ukn04));
 			return ReturnTLSAddress(tlsIndex, _swapEndianU32(tlsBlock->addr));
 		}
 		// alloc data for TLS block
@@ -353,8 +353,8 @@ namespace coreinit
 			if (ShouldReportTLSIndex(indexAddress, TLSDiagnostic::MissingTemplate))
 			{
 				cemuLog_log(LogType::Force,
-					"coreinit.__tls_get_addr: no TLS template for module index {} (tls_index at 0x{:08x}, lookup {}, size {})",
-					(sint32)(sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), indexAddress, r, tlsSize);
+							"coreinit.__tls_get_addr: no TLS template for module index {} (tls_index at 0x{:08x}, lookup {}, size {})",
+							(sint32)(sint16)_swapEndianU16(tlsIndex->tlsModuleIndex), indexAddress, r, tlsSize);
 			}
 			return GetTLSFallbackBlock();
 		}
@@ -391,4 +391,4 @@ namespace coreinit
 
 		cafeExportRegister("coreinit", __tls_get_addr, LogType::Placeholder);
 	}
-};
+}; // namespace coreinit

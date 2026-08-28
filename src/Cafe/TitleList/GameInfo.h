@@ -3,7 +3,7 @@
 
 class GameInfo2
 {
-public:
+  public:
 	~GameInfo2()
 	{
 		m_base.UnmountAll();
@@ -115,8 +115,8 @@ public:
 
 	fs::path GetSaveFolder();
 
-private:
-  	bool IsPrioritizedVersionOrFormat(const TitleInfo& currentTitle, const TitleInfo& newTitle)
+  private:
+	bool IsPrioritizedVersionOrFormat(const TitleInfo& currentTitle, const TitleInfo& newTitle)
 	{
 		if (!currentTitle.IsValid())
 			return true; // always prefer a valid title over an invalid one

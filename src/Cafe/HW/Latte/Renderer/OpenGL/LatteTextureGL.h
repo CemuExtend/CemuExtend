@@ -5,9 +5,9 @@
 
 class LatteTextureGL : public LatteTexture
 {
-public:
+  public:
 	LatteTextureGL(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels,
-		uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth);
+				   uint32 swizzle, Latte::E_HWTILEMODE tileMode, bool isDepth);
 
 	~LatteTextureGL();
 
@@ -15,10 +15,10 @@ public:
 
 	static void GenerateEmptyTextureFromGX2Dim(Latte::E_DIM dim, GLuint& texId, GLint& texTarget, bool createForTargetType);
 
-protected:
+  protected:
 	LatteTextureView* CreateView(Latte::E_DIM dim, Latte::E_GX2SURFFMT format, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount) override;
 
-public:
+  public:
 	struct FormatInfoGL
 	{
 		sint32 glInternalFormat;
@@ -51,7 +51,7 @@ public:
 
 	// OpenGL stuff
 	GLuint glId_texture;
-	GLint glTexTarget; // GL_TEXTURE_2D, GL_TEXTURE_3D, GL_TEXTURE_2D_ARRAY etc.
+	GLint glTexTarget;			// GL_TEXTURE_2D, GL_TEXTURE_3D, GL_TEXTURE_2D_ARRAY etc.
 	GLint glInternalFormat = 0; // internal format of OpenGL texture (0 if not initialized)
 	bool isAlternativeFormat{}; // if set to true, the OpenGL format is not a bit-perfect match for the GX2 format
 };

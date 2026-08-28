@@ -89,9 +89,9 @@ namespace RPLLoaderInternal
 	}
 
 	[[nodiscard]] inline std::optional<ExternalMappingViolation>
-		FindExternalMappingViolation(
-			std::span<const ExternalSectionMapping> sections,
-			const ExternalFileInfoMapping& fileInfo)
+	FindExternalMappingViolation(
+		std::span<const ExternalSectionMapping> sections,
+		const ExternalFileInfoMapping& fileInfo)
 	{
 		if (fileInfo.trampolineAdjustment > fileInfo.textRegionSize ||
 			fileInfo.loaderAdjustment > fileInfo.loaderRegionSize)
@@ -116,8 +116,7 @@ namespace RPLLoaderInternal
 				dataBegin = dataBegin == unset ? begin : (begin < dataBegin ? begin : dataBegin);
 				break;
 			case ExternalMappingRegion::Loader:
-				loaderBegin = loaderBegin == unset ? begin :
-					(begin < loaderBegin ? begin : loaderBegin);
+				loaderBegin = loaderBegin == unset ? begin : (begin < loaderBegin ? begin : loaderBegin);
 				break;
 			case ExternalMappingRegion::None:
 				break;
@@ -172,4 +171,4 @@ namespace RPLLoaderInternal
 		}
 		return std::nullopt;
 	}
-}
+} // namespace RPLLoaderInternal

@@ -5,24 +5,24 @@
 namespace HW_SI
 {
 
-	struct  
+	struct
 	{
-		struct  
+		struct
 		{
 			HWREG::SICOMCSR sicomcsr{};
 			HWREG::SIPOLL sipoll{};
 			HWREG::SICOUTBUF outBuf[4]{};
-		}registerState;
+		} registerState;
 		struct
 		{
 			uint8 cmd{};
 			uint8 buf[2]{};
-		}outputBufferState[4];
-		struct  
+		} outputBufferState[4];
+		struct
 		{
 			bool hasErrorNoResponse{};
-		}channelStatus[4];
-	}g_si;
+		} channelStatus[4];
+	} g_si;
 
 	// normally we should call this periodically according to the parameters set in SIPOLL
 	// but for now we just call it whenever status registers are read
@@ -31,7 +31,7 @@ namespace HW_SI
 		for (uint32 i = 0; i < 4; i++)
 		{
 			// note: Order of EN and VBCPY is from MSB to LSB
-			bool isEnabled = ((g_si.registerState.sipoll.get_EN() >> (3 - i))&1) != 0;
+			bool isEnabled = ((g_si.registerState.sipoll.get_EN() >> (3 - i)) & 1) != 0;
 			if (isEnabled)
 			{
 				g_si.channelStatus[i].hasErrorNoResponse = true;
@@ -41,7 +41,6 @@ namespace HW_SI
 
 	void handleQueuedTransfers()
 	{
-		
 	}
 
 	void flushAllOutputBuffers()
@@ -139,7 +138,6 @@ namespace HW_SI
 		if (newValue.get_NOREP3())
 			g_si.channelStatus[3].hasErrorNoResponse = false;
 
-
 		if (newValue.get_WR())
 		{
 			// copies contents of SICOUTBUF to the internal shadow buffers
@@ -158,4 +156,4 @@ namespace HW_SI
 		MMU::RegisterMMIO_32<HWREG::SICOMCSR, SI_COMCSR_R32, SI_COMCSR_W32>(MMU::MMIOInterface::INTERFACE_0D000000, 0x6434);
 		MMU::RegisterMMIO_32<HWREG::SISR, SI_SR_R32, SI_SR_W32>(MMU::MMIOInterface::INTERFACE_0D000000, 0x6438);
 	}
-}
+} // namespace HW_SI

@@ -17,7 +17,7 @@
 void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::GX2, "GX2SetSwapInterval({})", hCPU->gpr[3]);
-	if( hCPU->gpr[3] >= 20 )
+	if (hCPU->gpr[3] >= 20)
 	{
 		cemuLog_log(LogType::Force, "GX2SetSwapInterval() called with out of range value ({})", hCPU->gpr[3]);
 	}
@@ -72,7 +72,7 @@ void gx2Export_GX2SampleBottomGPUCycle(PPCInterpreter_t* hCPU)
 
 	GX2::GX2ReserveCmdSpace(2);
 	gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_HLE_SAMPLE_TIMER, 1));
-	gx2WriteGather_submitU32AsBE(hCPU->gpr[3]); 
+	gx2WriteGather_submitU32AsBE(hCPU->gpr[3]);
 	osLib_returnFromFunction(hCPU, 0);
 }
 
@@ -126,9 +126,9 @@ namespace GX2
 					initArgStream++;
 				}
 				else if (paramId == GX2InitArgId::UknArg7 ||
-					paramId == GX2InitArgId::UknArg8 ||
-					paramId == GX2InitArgId::UknArg9 ||
-					paramId == GX2InitArgId::UknArg11)
+						 paramId == GX2InitArgId::UknArg8 ||
+						 paramId == GX2InitArgId::UknArg9 ||
+						 paramId == GX2InitArgId::UknArg11)
 				{
 					initArgStream++;
 				}
@@ -187,9 +187,9 @@ namespace GX2
 	void _GX2DriverReset()
 	{
 		LatteGPUState.gx2InitCalled = 0;
-        sGX2MainCoreIndex = 0;
-        GX2CommandResetToDefaultState();
-        GX2EventResetToDefaultState();
+		sGX2MainCoreIndex = 0;
+		GX2CommandResetToDefaultState();
+		GX2EventResetToDefaultState();
 	}
 
 	sint32 GX2GetMainCoreId(PPCInterpreter_t* hCPU)
@@ -304,9 +304,9 @@ namespace GX2
 			// write PM4 command
 			gx2WriteGather_submitU32AsBE(pm4HeaderType3(IT_SURFACE_SYNC, 4)); // IT_SURFACE_SYNC + 4 data dwords
 			gx2WriteGather_submitU32AsBE(surfaceSyncFlags);
-			gx2WriteGather_submitU32AsBE((invalidationSize + 0xFF) >> 8); // size
+			gx2WriteGather_submitU32AsBE((invalidationSize + 0xFF) >> 8);				   // size
 			gx2WriteGather_submitU32AsBE(memory_virtualToPhysical(invalidationAddr) >> 8); // base address (divided by 0x100)
-			gx2WriteGather_submitU32AsBE(0x00000004); // poll interval
+			gx2WriteGather_submitU32AsBE(0x00000004);									   // poll interval
 		}
 	}
 
@@ -333,4 +333,4 @@ namespace GX2
 
 		sGX2MainCoreIndex = 0;
 	}
-};
+}; // namespace GX2

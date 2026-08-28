@@ -5,8 +5,8 @@
 
 LatteTextureReadbackInfoMtl::~LatteTextureReadbackInfoMtl()
 {
-    if (m_commandBuffer)
-        m_commandBuffer->release();
+	if (m_commandBuffer)
+		m_commandBuffer->release();
 }
 
 void LatteTextureReadbackInfoMtl::StartTransfer()
@@ -28,22 +28,22 @@ void LatteTextureReadbackInfoMtl::StartTransfer()
 
 	m_commandBuffer = m_mtlr->GetCurrentCommandBuffer()->retain();
 	// TODO: uncomment?
-	//m_mtlr->RequestSoonCommit();
+	// m_mtlr->RequestSoonCommit();
 	m_mtlr->CommitCommandBuffer();
 }
 
 bool LatteTextureReadbackInfoMtl::IsFinished()
 {
-    // Command buffer wasn't even comitted, let's commit immediately
-    //if (m_mtlr->GetCurrentCommandBuffer() == m_commandBuffer)
-    //    m_mtlr->CommitCommandBuffer();
+	// Command buffer wasn't even comitted, let's commit immediately
+	// if (m_mtlr->GetCurrentCommandBuffer() == m_commandBuffer)
+	//    m_mtlr->CommitCommandBuffer();
 
-    return CommandBufferCompleted(m_commandBuffer);
+	return CommandBufferCompleted(m_commandBuffer);
 }
 
 void LatteTextureReadbackInfoMtl::ForceFinish()
 {
-    m_commandBuffer->waitUntilCompleted();
+	m_commandBuffer->waitUntilCompleted();
 }
 
 uint8* LatteTextureReadbackInfoMtl::GetData()

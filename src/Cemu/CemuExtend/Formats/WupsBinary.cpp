@@ -63,15 +63,15 @@ namespace
 	std::uint16_t U16(std::span<const std::byte> bytes, std::size_t offset)
 	{
 		return (std::to_integer<std::uint16_t>(bytes[offset]) << 8) |
-			std::to_integer<std::uint16_t>(bytes[offset + 1]);
+			   std::to_integer<std::uint16_t>(bytes[offset + 1]);
 	}
 
 	std::uint32_t U32(std::span<const std::byte> bytes, std::size_t offset)
 	{
 		return (std::to_integer<std::uint32_t>(bytes[offset]) << 24) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
-			std::to_integer<std::uint32_t>(bytes[offset + 3]);
+			   (std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
+			   (std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
+			   std::to_integer<std::uint32_t>(bytes[offset + 3]);
 	}
 
 	bool IsPowerOfTwo(std::uint32_t value)
@@ -85,14 +85,14 @@ namespace
 	}
 
 	bool Overlap(std::uint64_t leftOffset, std::uint64_t leftSize,
-		std::uint64_t rightOffset, std::uint64_t rightSize)
+				 std::uint64_t rightOffset, std::uint64_t rightSize)
 	{
 		return leftSize != 0 && rightSize != 0 && leftOffset < rightOffset + rightSize &&
-			rightOffset < leftOffset + leftSize;
+			   rightOffset < leftOffset + leftSize;
 	}
 
 	bool Inflate(std::span<const std::byte> input, std::uint32_t expected,
-		std::vector<std::byte>& output)
+				 std::vector<std::byte>& output)
 	{
 		if (input.empty() || expected == 0)
 			return false;
@@ -106,13 +106,13 @@ namespace
 			return false;
 		const auto result = inflate(&stream, Z_FINISH);
 		const bool valid = result == Z_STREAM_END && stream.avail_in == 0 &&
-			stream.avail_out == 0 && stream.total_out == expected;
+						   stream.avail_out == 0 && stream.total_out == expected;
 		inflateEnd(&stream);
 		return valid;
 	}
 
 	std::optional<std::string> StringAt(std::span<const std::byte> bytes,
-		std::uint32_t offset, std::size_t maximum = 4096)
+										std::uint32_t offset, std::size_t maximum = 4096)
 	{
 		if (offset >= bytes.size())
 			return std::nullopt;
@@ -127,17 +127,17 @@ namespace
 	bool SafeIdentifier(std::string_view value, std::size_t maximum)
 	{
 		return !value.empty() && value.size() <= maximum &&
-			std::ranges::all_of(value, [](unsigned char c) {
-				return std::isalnum(c) || c == '_' || c == '.' || c == '-';
-			});
+			   std::ranges::all_of(value, [](unsigned char c) {
+				   return std::isalnum(c) || c == '_' || c == '.' || c == '-';
+			   });
 	}
 
 	bool SafeText(std::string_view value, std::size_t maximum)
 	{
 		return !value.empty() && value.size() <= maximum &&
-			std::ranges::all_of(value, [](unsigned char c) {
-				return c >= 0x20 || c == '\t' || c == '\n' || c == '\r';
-			});
+			   std::ranges::all_of(value, [](unsigned char c) {
+				   return c >= 0x20 || c == '\t' || c == '\n' || c == '\r';
+			   });
 	}
 
 	std::optional<WupsVersion> ParseVersion(std::string_view value)
@@ -162,7 +162,7 @@ namespace
 	}
 
 	std::optional<std::string> GuestString(const std::vector<Section>& sections,
-		std::uint32_t address, std::size_t maximum = 255)
+										   std::uint32_t address, std::size_t maximum = 255)
 	{
 		for (const auto& section : sections)
 		{
@@ -175,7 +175,7 @@ namespace
 	}
 
 	bool GuestRange(const std::vector<Section>& sections, std::uint32_t address,
-		std::uint32_t size, std::uint32_t requiredFlags)
+					std::uint32_t size, std::uint32_t requiredFlags)
 	{
 		for (const auto& section : sections)
 		{
@@ -197,22 +197,26 @@ namespace
 	{
 		switch (type)
 		{
-		case 0: return 0;
+		case 0:
+			return 0;
 		case 4:
 		case 5:
 		case 6:
 		case 11:
 		case 251:
 		case 252:
-		case 253: return 2;
+		case 253:
+			return 2;
 		case 1:
 		case 10:
 		case 68:
-		case 78: return 4;
-		default: return std::numeric_limits<std::uint32_t>::max();
+		case 78:
+			return 4;
+		default:
+			return std::numeric_limits<std::uint32_t>::max();
 		}
 	}
-}
+} // namespace
 
 std::string WupsVersion::ToString() const
 {
@@ -247,8 +251,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 	const auto sectionCount = U16(image, 48);
 	const auto nameSectionIndex = U16(image, 50);
 	if (sectionEntrySize != 40 || sectionCount < 5 || sectionCount > kMaximumSections ||
-		nameSectionIndex >= sectionCount || !Range(sectionOffset,
-			static_cast<std::uint64_t>(sectionEntrySize) * sectionCount, image.size()))
+		nameSectionIndex >= sectionCount || !Range(sectionOffset, static_cast<std::uint64_t>(sectionEntrySize) * sectionCount, image.size()))
 	{
 		error = "WPS RPL section table is invalid";
 		return std::nullopt;
@@ -262,9 +265,9 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 	{
 		const auto offset = sectionOffset + index * sectionEntrySize;
 		Section section{U32(image, offset), U32(image, offset + 4), U32(image, offset + 8),
-			U32(image, offset + 12), U32(image, offset + 16), U32(image, offset + 20),
-			U32(image, offset + 24), U32(image, offset + 28), U32(image, offset + 32),
-			U32(image, offset + 36)};
+						U32(image, offset + 12), U32(image, offset + 16), U32(image, offset + 20),
+						U32(image, offset + 24), U32(image, offset + 28), U32(image, offset + 32),
+						U32(image, offset + 36)};
 		if (index == 0 && (section.type != kShtNull || section.storedSize != 0))
 		{
 			error = "WPS RPL null section is invalid";
@@ -304,7 +307,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 			}
 			if (Overlap(section.fileOffset, section.storedSize, 0, 52) ||
 				Overlap(section.fileOffset, section.storedSize, sectionOffset,
-					static_cast<std::uint64_t>(sectionEntrySize) * sectionCount))
+						static_cast<std::uint64_t>(sectionEntrySize) * sectionCount))
 			{
 				error = fmt::format("WPS RPL section {} overlaps structural data", index);
 				return std::nullopt;
@@ -400,7 +403,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 		else if (section.address >= 0xc0000000U)
 		{
 			const bool loaderSection = section.name == ".wut_load_bounds" || section.type == kShtSymtab ||
-				section.type == kShtDynsym || section.type == kShtStrtab;
+									   section.type == kShtDynsym || section.type == kShtStrtab;
 			if (!loaderSection)
 			{
 				error = fmt::format("WPS section '{}' is unexpectedly placed in loader memory", section.name);
@@ -459,8 +462,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 	sectionMappings.reserve(sections.size());
 	for (const auto& section : sections)
 	{
-		sectionMappings.push_back({
-			section.type, section.flags, section.address, section.expandedSize});
+		sectionMappings.push_back({section.type, section.flags, section.address, section.expandedSize});
 	}
 	const RPLLoaderInternal::ExternalFileInfoMapping fileInfoMapping{
 		textRegionSize,
@@ -470,7 +472,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 		loaderAdjustment,
 	};
 	if (const auto violation = RPLLoaderInternal::FindExternalMappingViolation(
-		sectionMappings, fileInfoMapping))
+			sectionMappings, fileInfoMapping))
 	{
 		if (violation->reason ==
 			RPLLoaderInternal::ExternalMappingViolation::Reason::RegionAddressOverflow)
@@ -492,7 +494,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 			continue;
 		const auto expected = U32(crcSection.data, index * 4);
 		const auto actual = static_cast<std::uint32_t>(crc32(0,
-			reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size()));
+															 reinterpret_cast<const Bytef*>(sections[index].data.data()), sections[index].data.size()));
 		if (expected != actual)
 		{
 			error = fmt::format("WPS RPL section '{}' CRC does not match", sections[index].name);
@@ -505,8 +507,8 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 	for (const auto& section : sections)
 	{
 		inspection.sections.push_back({section.name, section.type, section.flags, section.address,
-			section.storedSize, section.expandedSize, section.alignment,
-			(section.flags & kShfRplCompressed) != 0, (section.flags & kShfTls) != 0});
+									   section.storedSize, section.expandedSize, section.alignment,
+									   (section.flags & kShfRplCompressed) != 0, (section.flags & kShfTls) != 0});
 		inspection.usesTls = inspection.usesTls || (section.flags & kShfTls) != 0;
 	}
 
@@ -547,7 +549,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 			return std::nullopt;
 		}
 		Symbol symbol{*name, U32(symbolSection.data, offset + 4), U32(symbolSection.data, offset + 8),
-			std::to_integer<std::uint8_t>(symbolSection.data[offset + 12]), U16(symbolSection.data, offset + 14)};
+					  std::to_integer<std::uint8_t>(symbolSection.data[offset + 12]), U16(symbolSection.data, offset + 14)};
 		if (symbol.section < sections.size() && sections[symbol.section].type == kShtRplImports)
 		{
 			const auto& importSection = sections[symbol.section];
@@ -608,7 +610,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 			}
 			const auto& symbol = symbols[symbolIndex];
 			inspection.relocations.push_back({target.name, targetAddress, type, symbol.name,
-				symbol.importModule, symbol.kind});
+											  symbol.importModule, symbol.kind});
 			relocationTypes.insert(type);
 		}
 	}
@@ -634,8 +636,7 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 		{
 			const auto address = U32(section.data, 8 + index * 8);
 			const auto name = StringAt(section.data, U32(section.data, 12 + index * 8), 1024);
-			const auto requiredFlags = kind == WupsSymbolKind::Function ?
-				(kShfAlloc | kShfExecute) : kShfAlloc;
+			const auto requiredFlags = kind == WupsSymbolKind::Function ? (kShfAlloc | kShfExecute) : kShfAlloc;
 			if (!name || name->empty() || !uniqueExports.emplace(*name, kind).second ||
 				(kind == WupsSymbolKind::Function && (address & 3U) != 0) ||
 				!GuestRange(sections, address, kind == WupsSymbolKind::Function ? 4 : 1, requiredFlags))
@@ -698,18 +699,23 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 		return std::nullopt;
 	}
 	static constexpr std::array<WupsVersion, 5> supported{{
-		{0, 7, 1}, {0, 8, 1}, {0, 8, 2}, {0, 9, 0}, {0, 9, 1},
+		{0, 7, 1},
+		{0, 8, 1},
+		{0, 8, 2},
+		{0, 9, 0},
+		{0, 9, 1},
 	}};
 	if (std::ranges::find(supported, *parsedVersion) == supported.end())
 	{
 		error = fmt::format("plugin '{}' uses unsupported WUPS ABI {}; supported versions are 0.7.1, 0.8.1, 0.8.2, 0.9.0, and 0.9.1",
-			metadata["name"], parsedVersion->ToString());
+							metadata["name"], parsedVersion->ToString());
 		return std::nullopt;
 	}
 	inspection.metadata.name = metadata["name"];
 	inspection.metadata.abiVersion = *parsedVersion;
 	auto take = [&](std::string_view key, std::string& destination) {
-		if (const auto found = metadata.find(std::string(key)); found != metadata.end()) destination = found->second;
+		if (const auto found = metadata.find(std::string(key)); found != metadata.end())
+			destination = found->second;
 	};
 	take("author", inspection.metadata.author);
 	take("version", inspection.metadata.version);
@@ -737,7 +743,8 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 	static const std::set<std::string> knownMetadata{
 		"name", "author", "version", "license", "description", "wups", "buildtimestamp", "storage_id", "debug"};
 	for (const auto& [key, value] : metadata)
-		if (!knownMetadata.contains(key)) inspection.metadata.unknown.emplace(key, value);
+		if (!knownMetadata.contains(key))
+			inspection.metadata.unknown.emplace(key, value);
 	if (*parsedVersion != WupsVersion{0, 9, 1})
 		inspection.compatibilityWarnings.push_back(fmt::format(
 			"plugin uses legacy WUPS ABI {}; runtime compatibility handling is required", parsedVersion->ToString()));
@@ -802,8 +809,8 @@ std::optional<WupsInspection> WupsBinaryInspector::Inspect(
 				return std::nullopt;
 			}
 			inspection.replacements.push_back({static_cast<WupsLoadEntryType>(type), type == 1,
-				physical, virtualAddress, *name, library,
-				*replacementName, target, callThrough, process});
+											   physical, virtualAddress, *name, library,
+											   *replacementName, target, callThrough, process});
 			inspection.usesFixedAddressPatches = inspection.usesFixedAddressPatches || fixedAddress;
 			processTargets.insert(process);
 			if (type == static_cast<std::uint32_t>(WupsLoadEntryType::LegacyExport))

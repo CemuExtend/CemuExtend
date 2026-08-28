@@ -9,19 +9,19 @@
 
 sint32 numAccounts = 1;
 
-#define actPrepareRequest() \
-StackAllocator<iosuActCemuRequest_t> _buf_actRequest; \
-StackAllocator<ioBufferVector_t> _buf_bufferVector; \
-iosuActCemuRequest_t* actRequest = _buf_actRequest.GetPointer(); \
-ioBufferVector_t* actBufferVector = _buf_bufferVector.GetPointer(); \
-memset(actRequest, 0, sizeof(iosuActCemuRequest_t)); \
-memset(actBufferVector, 0, sizeof(ioBufferVector_t)); \
-actBufferVector->buffer = (uint8*)actRequest;
+#define actPrepareRequest()                                             \
+	StackAllocator<iosuActCemuRequest_t> _buf_actRequest;               \
+	StackAllocator<ioBufferVector_t> _buf_bufferVector;                 \
+	iosuActCemuRequest_t* actRequest = _buf_actRequest.GetPointer();    \
+	ioBufferVector_t* actBufferVector = _buf_bufferVector.GetPointer(); \
+	memset(actRequest, 0, sizeof(iosuActCemuRequest_t));                \
+	memset(actBufferVector, 0, sizeof(ioBufferVector_t));               \
+	actBufferVector->buffer = (uint8*)actRequest;
 
-#define actPrepareRequest2() \
-StackAllocator<iosuActCemuRequest_t> _buf_actRequest; \
-iosuActCemuRequest_t* actRequest = _buf_actRequest.GetPointer(); \
-memset(actRequest, 0, sizeof(iosuActCemuRequest_t));
+#define actPrepareRequest2()                                         \
+	StackAllocator<iosuActCemuRequest_t> _buf_actRequest;            \
+	iosuActCemuRequest_t* actRequest = _buf_actRequest.GetPointer(); \
+	memset(actRequest, 0, sizeof(iosuActCemuRequest_t));
 
 uint32 getNNReturnCode(uint32 iosError, iosuActCemuRequest_t* actRequest)
 {
@@ -43,9 +43,9 @@ uint32 _doCemuActRequest(iosuActCemuRequest_t* actRequest)
 
 namespace nn
 {
-namespace act
-{
-		
+	namespace act
+	{
+
 		uint32 GetPersistentIdEx(uint8 slot)
 		{
 			actPrepareRequest();
@@ -134,7 +134,6 @@ namespace act
 
 		sint32 GetUtcOffsetEx(sint64be* pOutOffset, uint8 slotNo)
 		{
-
 			if (!pOutOffset)
 				return 0xc0712c80;
 
@@ -172,14 +171,13 @@ namespace act
 			NN_ERROR_CODE errCode = NNResultToErrorCode(*nnResult, NN_RESULT_MODULE_NN_ACT);
 			return errCode;
 		}
-	}
-}
-
+	} // namespace act
+} // namespace nn
 
 void nnActExport_CreateConsoleAccount(PPCInterpreter_t* hCPU)
 {
 	cemuLog_logDebug(LogType::Force, "CreateConsoleAccount(...)");
-	//numAccounts++;
+	// numAccounts++;
 	osLib_returnFromFunction(hCPU, 0);
 }
 
@@ -193,7 +191,7 @@ void nnActExport_IsSlotOccupied(PPCInterpreter_t* hCPU)
 {
 	cemuLog_logDebug(LogType::Force, "nn_act.IsSlotOccupied({})", hCPU->gpr[3]);
 	ppcDefineParamU8(slot, 0);
-	
+
 	osLib_returnFromFunction(hCPU, nn::act::GetPersistentIdEx(slot) != 0 ? 1 : 0);
 }
 
@@ -252,7 +250,7 @@ uint32 IsNetworkAccount(uint8* isNetworkAccount, uint8 slot)
 
 void nnActExport_IsNetworkAccount(PPCInterpreter_t* hCPU)
 {
-	//cemuLog_logDebug(LogType::Force, "nn_act.IsNetworkAccount()");
+	// cemuLog_logDebug(LogType::Force, "nn_act.IsNetworkAccount()");
 	uint8 isNetAcc = 0;
 	IsNetworkAccount(&isNetAcc, 0xFE);
 	osLib_returnFromFunction(hCPU, isNetAcc);
@@ -300,11 +298,11 @@ void nnActExport_GetPrincipalId(PPCInterpreter_t* hCPU)
 void nnActExport_GetPrincipalIdEx(PPCInterpreter_t* hCPU)
 {
 	// return error for non-nnid accounts?
-	cemuLog_logDebug(LogType::Force, "nn_act.GetPrincipalIdEx(0x{:08x}, {})", hCPU->gpr[3], hCPU->gpr[4]&0xFF);
+	cemuLog_logDebug(LogType::Force, "nn_act.GetPrincipalIdEx(0x{:08x}, {})", hCPU->gpr[3], hCPU->gpr[4] & 0xFF);
 	ppcDefineParamU32BEPtr(principalId, 0);
 	ppcDefineParamU8(slot, 1);
 	GetPrincipalIdEx(principalId, slot);
-	
+
 	osLib_returnFromFunction(hCPU, 0); // ResultSuccess
 }
 
@@ -331,7 +329,7 @@ void nnActExport_GetTransferableIdEx(PPCInterpreter_t* hCPU)
 	ppcDefineParamU8(slot, 2);
 
 	cemuLog_logDebug(LogType::Force, "nn_act.GetTransferableIdEx(0x{:08x}, 0x{:08x}, {})", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5] & 0xFF);
-	
+
 	uint32 r = nn::act::GetTransferableIdEx(transferableId, unique, slot);
 
 	osLib_returnFromFunction(hCPU, 0); // ResultSuccess
@@ -424,7 +422,7 @@ void nnActExport_GetMiiName(PPCInterpreter_t* hCPU)
 		miiName[i] = miiData->miiName[i];
 		if (miiData->miiName[i] == (const uint16be)'\0')
 			break;
-		miiNameLength = i+1;
+		miiNameLength = i + 1;
 	}
 	miiName[miiNameLength] = '\0';
 
@@ -454,10 +452,10 @@ void nnActExport_GetMiiNameEx(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 0);
 }
 
-typedef struct  
+typedef struct
 {
 	uint32be ukn00;
-	uint32be ukn04; // transferable id high?
+	uint32be ukn04;					   // transferable id high?
 	uint32be accountTransferableIdLow; //
 	uint32be ukn0C;
 	uint32be ukn10;
@@ -480,7 +478,7 @@ typedef struct
 	uint32be ukn54;
 	uint32be tlsModuleIndex;
 	uint32be ukn5C;
-}FFLStoreDataDepr_t;
+} FFLStoreDataDepr_t;
 
 static_assert(sizeof(FFLStoreDataDepr_t) == 96);
 
@@ -498,7 +496,7 @@ void nnActExport_UpdateMii(PPCInterpreter_t* hCPU)
 	ppcDefineParamStructPtr(uknNameR9, uint8, 6);
 	ppcDefineParamStructPtr(uknNameR10, uint8, 7);
 	ppcDefineParamStructPtr(uknNameSP4, uint8, 8);
-	
+
 	cemu_assert_unimplemented();
 
 	osLib_returnFromFunction(hCPU, 0);
@@ -514,7 +512,7 @@ void nnActExport_GetUuid(PPCInterpreter_t* hCPU)
 
 void nnActExport_GetUuidEx(PPCInterpreter_t* hCPU)
 {
-	cemuLog_logDebug(LogType::Force, "nn_act.GetUuidEx(0x{:08x},0x{:02x})", hCPU->gpr[3], hCPU->gpr[3]&0xFF);
+	cemuLog_logDebug(LogType::Force, "nn_act.GetUuidEx(0x{:08x},0x{:02x})", hCPU->gpr[3], hCPU->gpr[3] & 0xFF);
 	ppcDefineParamUStr(uuid, 0);
 	ppcDefineParamU8(slot, 1);
 	nn::act::GetUuidEx(uuid, slot);
@@ -552,9 +550,9 @@ void nnActExport_GetParentalControlSlotNoEx(PPCInterpreter_t* hCPU)
 {
 	// GetParentalControlSlotNoEx(uint8* output, uint8 slot)
 	cemuLog_logDebug(LogType::Force, "nn_act.GetParentalControlSlotNoEx(0x{:08x}, 0x{:02x})", hCPU->gpr[3], hCPU->gpr[4]);
-	//memory_writeU8(hCPU->gpr[3], 0x01); // returned slot no (slot indices start at 1)
+	// memory_writeU8(hCPU->gpr[3], 0x01); // returned slot no (slot indices start at 1)
 	memory_writeU8(hCPU->gpr[3], 1); // 0 -> No parental control for slot?
-	//memory_writeU8(hCPU->gpr[3], 0); // 0 -> No parental control for slot?
+	// memory_writeU8(hCPU->gpr[3], 0); // 0 -> No parental control for slot?
 	osLib_returnFromFunction(hCPU, 0);
 }
 
@@ -609,16 +607,16 @@ void nnActExport_HasNfsAccount(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 1); // Nfs = Nintendo Friend System? (Splatoon tries to call nn_fp.RegisterAccount if we set this to false)
 }
 
-typedef struct  
+typedef struct
 {
 	/* +0x000 */ char token[0x201]; // /nex_token/token
 	/* +0x201 */ uint8 padding201[3];
 	/* +0x204 */ char nexPassword[0x41]; // /nex_token/nex_password
 	/* +0x245 */ uint8 padding245[3];
 	/* +0x248 */ char host[0x10]; // /nex_token/host
-	/* +0x258 */ uint16be port; // /nex_token/port
+	/* +0x258 */ uint16be port;	  // /nex_token/port
 	/* +0x25A */ uint16be padding25A;
-}nexServiceToken_t;
+} nexServiceToken_t;
 
 static_assert(sizeof(nexServiceToken_t) == 0x25C, "nexServiceToken_t has invalid size");
 
@@ -654,7 +652,7 @@ void nnActExport_AcquireIndependentServiceToken2(PPCInterpreter_t* hCPU)
 {
 	ppcDefineParamStructPtr(token, independentServiceToken_t, 0);
 	ppcDefineParamMEMPTR(clientId, const char, 1);
-	ppcDefineParamU32(cacheDurationInSeconds, 2); 
+	ppcDefineParamU32(cacheDurationInSeconds, 2);
 	uint32 result = nn::act::AcquireIndependentServiceToken(token, clientId.GetPtr(), cacheDurationInSeconds);
 	osLib_returnFromFunction(hCPU, result);
 }
@@ -687,7 +685,7 @@ namespace nn::act
 {
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_act";
@@ -760,17 +758,12 @@ namespace nn::act
 			osLib_addFunction("nn_act", "GetHostServerSettings__Q2_2nn3actFPcT1Uc", nnActExport_GetHostServerSettings);
 			cafeExportRegisterFunc(nn::act::GetUtcOffset, "nn_act", "GetUtcOffset__Q2_2nn3actFv", LogType::Placeholder);
 			cafeExportRegisterFunc(nn::act::GetUtcOffsetEx, "nn_act", "GetUtcOffsetEx__Q2_2nn3actFPLUc", LogType::Placeholder);
-
 		};
 
-	}s_COSnnActModule;
+	} s_COSnnActModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnActModule;
 	}
-}
-
-
-
-
+} // namespace nn::act

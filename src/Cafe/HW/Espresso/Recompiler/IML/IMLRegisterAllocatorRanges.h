@@ -10,7 +10,8 @@ struct raLivenessSubrangeLink
 struct raInstructionEdge
 {
 	friend struct raInterval;
-public:
+
+  public:
 	raInstructionEdge()
 	{
 		index = 0;
@@ -23,19 +24,19 @@ public:
 
 	void Set(sint32 instructionIndex, bool isInputEdge)
 	{
-		if(instructionIndex == RA_INTER_RANGE_START || instructionIndex == RA_INTER_RANGE_END)
+		if (instructionIndex == RA_INTER_RANGE_START || instructionIndex == RA_INTER_RANGE_END)
 		{
 			index = instructionIndex;
 			return;
 		}
 		index = instructionIndex * 2 + (isInputEdge ? 0 : 1);
-		cemu_assert_debug(index >= 0 && index < 0x100000*2); // make sure index value is sane
+		cemu_assert_debug(index >= 0 && index < 0x100000 * 2); // make sure index value is sane
 	}
 
 	void SetRaw(sint32 index)
 	{
 		this->index = index;
-		cemu_assert_debug(index == RA_INTER_RANGE_START || index == RA_INTER_RANGE_END || (index >= 0 && index < 0x100000*2)); // make sure index value is sane
+		cemu_assert_debug(index == RA_INTER_RANGE_START || index == RA_INTER_RANGE_END || (index >= 0 && index < 0x100000 * 2)); // make sure index value is sane
 	}
 
 	// sint32 GetRaw()
@@ -45,14 +46,14 @@ public:
 
 	std::string GetDebugString()
 	{
-		if(index == RA_INTER_RANGE_START)
+		if (index == RA_INTER_RANGE_START)
 			return "RA_START";
-		else if(index == RA_INTER_RANGE_END)
+		else if (index == RA_INTER_RANGE_END)
 			return "RA_END";
 		std::string str = fmt::format("{}", GetInstructionIndex());
-		if(IsOnInputEdge())
+		if (IsOnInputEdge())
 			str += "i";
-		else if(IsOnOutputEdge())
+		else if (IsOnOutputEdge())
 			str += "o";
 		return str;
 	}
@@ -66,7 +67,7 @@ public:
 	// returns instruction index or RA_INTER_RANGE_START/RA_INTER_RANGE_END
 	sint32 GetInstructionIndexEx() const
 	{
-		if(index == RA_INTER_RANGE_START || index == RA_INTER_RANGE_END)
+		if (index == RA_INTER_RANGE_START || index == RA_INTER_RANGE_END)
 			return index;
 		return index >> 1;
 	}
@@ -79,13 +80,13 @@ public:
 	bool IsOnInputEdge() const
 	{
 		cemu_assert_debug(index != RA_INTER_RANGE_START && index != RA_INTER_RANGE_END);
-		return (index&1) == 0;
+		return (index & 1) == 0;
 	}
 
 	bool IsOnOutputEdge() const
 	{
 		cemu_assert_debug(index != RA_INTER_RANGE_START && index != RA_INTER_RANGE_END);
-		return (index&1) != 0;
+		return (index & 1) != 0;
 	}
 
 	bool ConnectsToPreviousSegment() const
@@ -150,9 +151,8 @@ public:
 		return *this;
 	}
 
-private:
+  private:
 	sint32 index; // can also be RA_INTER_RANGE_START or RA_INTER_RANGE_END, otherwise contains instruction index * 2
-
 };
 
 struct raAccessLocation
@@ -176,7 +176,6 @@ struct raInterval
 {
 	raInterval()
 	{
-
 	}
 
 	raInterval(raInstructionEdge start, raInstructionEdge end)
@@ -254,9 +253,9 @@ struct raInterval
 	// similar to ContainsInstructionIndex, but allows RA_INTER_RANGE_START/END as input
 	bool ContainsInstructionIndexEx(sint32 instructionIndex) const
 	{
-		if(instructionIndex == RA_INTER_RANGE_START)
+		if (instructionIndex == RA_INTER_RANGE_START)
 			return start.ConnectsToPreviousSegment();
-		if(instructionIndex == RA_INTER_RANGE_END)
+		if (instructionIndex == RA_INTER_RANGE_END)
 			return end.ConnectsToNextSegment();
 		return instructionIndex >= start.GetInstructionIndexEx() && instructionIndex <= end.GetInstructionIndexEx();
 	}
@@ -279,16 +278,16 @@ struct raInterval
 	sint32 GetPreciseDistance()
 	{
 		cemu_assert_debug(!start.ConnectsToNextSegment()); // how to handle this?
-		if(start == end)
+		if (start == end)
 			return 1;
 		cemu_assert_debug(!end.ConnectsToPreviousSegment() && !end.ConnectsToNextSegment());
-		if(start.ConnectsToPreviousSegment())
+		if (start.ConnectsToPreviousSegment())
 			return end.GetRaw() + 1;
 
 		return end.GetRaw() - start.GetRaw() + 1; // +1 because end is inclusive
 	}
 
-//private: not making these directly accessible only forces us to create loads of verbose getters and setters
+	// private: not making these directly accessible only forces us to create loads of verbose getters and setters
 	raInstructionEdge start;
 	raInstructionEdge end;
 };
@@ -330,16 +329,22 @@ struct raLivenessRange
 	IMLPhysReg physicalRegister;
 
 	boost::container::small_vector<raLivenessRange*, 128> GetAllSubrangesInCluster();
-	bool GetAllowedRegistersEx(IMLPhysRegisterSet& allowedRegisters); // if the cluster has fixed register requirements in any instruction this returns the combined register mask. Otherwise returns false in which case allowedRegisters is left undefined
+	bool GetAllowedRegistersEx(IMLPhysRegisterSet& allowedRegisters);	// if the cluster has fixed register requirements in any instruction this returns the combined register mask. Otherwise returns false in which case allowedRegisters is left undefined
 	IMLPhysRegisterSet GetAllowedRegisters(IMLPhysRegisterSet regPool); // return regPool with fixed register requirements filtered out
 
 	IMLRegID GetVirtualRegister() const;
 	sint32 GetPhysicalRegister() const;
-	bool HasPhysicalRegister() const { return physicalRegister >= 0; }
+	bool HasPhysicalRegister() const
+	{
+		return physicalRegister >= 0;
+	}
 	IMLName GetName() const;
 	void SetPhysicalRegister(IMLPhysReg physicalRegister);
 	void SetPhysicalRegisterForCluster(IMLPhysReg physicalRegister);
-	void UnsetPhysicalRegister() { physicalRegister = -1; }
+	void UnsetPhysicalRegister()
+	{
+		physicalRegister = -1;
+	}
 
   private:
 	void GetAllowedRegistersExRecursive(raLivenessRange* range, uint32 iterationIndex, IMLPhysRegisterSet& allowedRegs);
@@ -360,5 +365,5 @@ void PPCRecRA_debugValidateSubrange(raLivenessRange* subrange);
 // cost estimation
 sint32 IMLRA_GetSegmentReadWriteCost(IMLSegment* imlSegment);
 sint32 IMLRA_CalculateAdditionalCostOfRangeExplode(raLivenessRange* subrange);
-//sint32 PPCRecRARange_estimateAdditionalCostAfterSplit(raLivenessRange* subrange, sint32 splitIndex);
+// sint32 PPCRecRARange_estimateAdditionalCostAfterSplit(raLivenessRange* subrange, sint32 splitIndex);
 sint32 IMLRA_CalculateAdditionalCostAfterSplit(raLivenessRange* subrange, raInstructionEdge splitPosition);

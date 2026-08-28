@@ -63,7 +63,7 @@ namespace iosu
 			/* +0x0C */ uint32be joinGameMode;
 			/* +0x10 */ uint32be hostPid;
 			/* +0x14 */ uint32be groupId;
-			/* +0x18 */ uint8    appSpecificData[0x14];
+			/* +0x18 */ uint8 appSpecificData[0x14];
 		};
 		static_assert(sizeof(GameMode) == 0x2C);
 
@@ -83,7 +83,7 @@ namespace iosu
 			// sub struct (the part above seems to be shared with friend requests)
 			union
 			{
-				struct 
+				struct
 				{
 					/* +0x0A0 */ Profile profile; // this is returned for nn_fp.GetFriendProfile
 					/* +0x0A4 */ uint32be ukn0A4;
@@ -98,8 +98,8 @@ namespace iosu
 					/* +0x214 */ uint32be _padding214;
 					/* +0x218 */ FPDDate approvalTime;
 					/* +0x220 */ FPDDate lastOnline;
-				}friendExtraData;
-				struct 
+				} friendExtraData;
+				struct
 				{
 					/* +0x0A0 */ uint64be messageId; // guessed. If 0, then relationship is FRIENDSHIP_REQUEST_OUT, otherwise FRIENDSHIP_REQUEST_IN
 					/* +0x0A8 */ uint8 ukn0A8;
@@ -113,14 +113,14 @@ namespace iosu
 					/* +0x15A */ uint8 _padding[6];
 					/* +0x160 */ FPDDate uknData0;
 					/* +0x168 */ FPDDate uknData1;
-				}requestExtraData;
+				} requestExtraData;
 			};
 		};
 		static_assert(sizeof(FriendData) == 0x228);
 		static_assert(offsetof(FriendData, friendExtraData.gameKey) == 0x0A8);
 		static_assert(offsetof(FriendData, friendExtraData.gameModeDescription) == 0x0E4);
 		static_assert(offsetof(FriendData, friendExtraData.comment) == 0x1F0);
-		
+
 		static_assert(offsetof(FriendData, requestExtraData.messageId) == 0x0A0);
 		static_assert(offsetof(FriendData, requestExtraData.comment) == 0x0AA);
 		static_assert(offsetof(FriendData, requestExtraData.uknMessage) == 0x12C);
@@ -156,7 +156,7 @@ namespace iosu
 			/* +0x017 */ uint8 _uknOrPadding17;
 			/* +0x018 */ uint16be screenname[11];
 			/* +0x02E */ uint8 ukn2E; // bool option
-			/* +0x02F */ uint8 ukn2F;  // ukn
+			/* +0x02F */ uint8 ukn2F; // ukn
 			/* +0x030 */ uint8 miiData[0x60];
 			/* +0x090 */ FPDDate uknDate;
 			/* +0x098 */ uint64 ukn98;
@@ -182,10 +182,10 @@ namespace iosu
 		struct FriendPresence
 		{
 			GameMode gameMode;
-			/* +0x2C */ Profile  profile;
-			/* +0x30 */ uint8	 isOnline;
-			/* +0x31 */ uint8    isValid;
-			/* +0x32 */ uint8	 padding[2]; // guessed
+			/* +0x2C */ Profile profile;
+			/* +0x30 */ uint8 isOnline;
+			/* +0x31 */ uint8 isValid;
+			/* +0x32 */ uint8 padding[2]; // guessed
 		};
 		static_assert(sizeof(FriendPresence) == 0x34);
 		static_assert(offsetof(FriendPresence, isOnline) == 0x30);
@@ -199,10 +199,10 @@ namespace iosu
 
 		struct FPDPreference
 		{
-			uint8be showOnline; // show online status to others
-			uint8be showGame; // show played game to others
+			uint8be showOnline;			 // show online status to others
+			uint8be showGame;			 // show played game to others
 			uint8be blockFriendRequests; // block friend requests
-			uint8be ukn; // probably padding?
+			uint8be ukn;				 // probably padding?
 		};
 		static_assert(sizeof(FPDPreference) == 4);
 
@@ -264,5 +264,5 @@ namespace iosu
 		using FriendPID = uint32;
 
 		IOSUModule* GetModule();
-	}
-}
+	} // namespace fpd
+} // namespace iosu

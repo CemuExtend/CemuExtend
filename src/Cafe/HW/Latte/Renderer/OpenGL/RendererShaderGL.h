@@ -5,7 +5,7 @@
 
 class RendererShaderGL : public RendererShader
 {
-public:
+  public:
 	RendererShaderGL(ShaderType type, uint64 baseHash, uint64 auxHash, bool isGameShader, bool isGfxPackShader, const std::string& glslSource);
 
 	virtual ~RendererShaderGL();
@@ -15,8 +15,16 @@ public:
 	bool IsCompiled() override;
 	bool WaitForCompiled() override;
 
-	GLuint GetProgram() const { cemu_assert_debug(m_isCompiled); return m_program; }
-	GLuint GetShaderObject() const { cemu_assert_debug(m_isCompiled); return m_shader_object; }
+	GLuint GetProgram() const
+	{
+		cemu_assert_debug(m_isCompiled);
+		return m_program;
+	}
+	GLuint GetShaderObject() const
+	{
+		cemu_assert_debug(m_isCompiled);
+		return m_shader_object;
+	}
 
 	sint32 GetUniformLocation(const char* name);
 
@@ -27,9 +35,9 @@ public:
 
 	static void ShaderCacheLoading_begin(uint64 cacheTitleId);
 	static void ShaderCacheLoading_end();
-    static void ShaderCacheLoading_Close();
+	static void ShaderCacheLoading_Close();
 
-private:
+  private:
 	GLuint m_program;
 	GLuint m_shader_object;
 
@@ -38,9 +46,8 @@ private:
 
 	std::string m_glslSource;
 
-	bool m_shader_attached{ false };
-	bool m_isCompiled{ false };
+	bool m_shader_attached{false};
+	bool m_isCompiled{false};
 
 	static class FileCache* s_programBinaryCache;
 };
-

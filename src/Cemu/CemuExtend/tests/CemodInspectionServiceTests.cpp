@@ -64,7 +64,7 @@ namespace
 	std::filesystem::path WritePackage()
 	{
 		const auto path = std::filesystem::temp_directory_path() /
-			"cemuextend-inspection-service-test.cemod";
+						  "cemuextend-inspection-service-test.cemod";
 		std::filesystem::remove(path);
 		int error{};
 		auto* archive = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_EXCL, &error);
@@ -86,7 +86,7 @@ namespace
 		assert(zip_close(archive) == 0);
 		return path;
 	}
-}
+} // namespace
 
 int main()
 {
@@ -96,21 +96,20 @@ int main()
 	const auto notifications = CemodInspectionService::PermissionBit(
 		CemodPermission::Notifications);
 	assert(CemodInspectionService::DefaultGrantedPermissions(patching | notifications) ==
-		notifications);
+		   notifications);
 	assert(CemodInspectionService::EvaluateApproval(patching, std::nullopt, false).result ==
-		CemodApprovalResult::DeniedByDefault);
+		   CemodApprovalResult::DeniedByDefault);
 	assert(CemodInspectionService::EvaluateApproval(patching, std::nullopt, true).result ==
-		CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval);
+		   CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval);
 
 	CemodApproval approval{"digest", "identity", patching, patching, true, false};
 	assert(CemodInspectionService::EvaluateApproval(patching, approval, false).result ==
-		CemodApprovalResult::Approved);
+		   CemodApprovalResult::Approved);
 	assert(CemodInspectionService::EvaluateApproval(patching | notifications, approval, false).result ==
-		CemodApprovalResult::NeedsReapproval);
+		   CemodApprovalResult::NeedsReapproval);
 
 	const auto path = WritePackage();
-	CemodPackageDescriptor descriptor{path, "org.example.safe", "unsigned-principal",
-		patching, CemodExecutionMode::Isolated, false, {0x0005000012345678ULL}, {}};
+	CemodPackageDescriptor descriptor{path, "org.example.safe", "unsigned-principal", patching, CemodExecutionMode::Isolated, false, {0x0005000012345678ULL}, {}};
 	auto inspected = CemodInspectionService::Inspect(descriptor, std::nullopt);
 	assert(inspected.Valid());
 	assert(inspected.modIdentity == "org.example.safe");
@@ -124,7 +123,7 @@ int main()
 	assert(inspected.approval.result == CemodApprovalResult::NeedsReapproval);
 	inspected = CemodInspectionService::Inspect(descriptor, approval, true);
 	assert(inspected.approval.result ==
-		CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval);
+		   CemodApprovalResult::DeniedHeadlessRequiresExplicitApproval);
 	descriptor.signedPackage = true;
 	inspected = CemodInspectionService::Inspect(descriptor, std::nullopt);
 	assert(inspected.signedPackage);

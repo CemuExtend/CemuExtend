@@ -20,8 +20,8 @@ namespace GX2
 		Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
 		depthClearReg.set_clearValue(depthClearValue);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 2),
-			Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
-			stencilClearReg, depthClearReg);
+							  Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
+							  stencilClearReg, depthClearReg);
 	}
 
 	// similar to GX2SetClearDepthStencil but only sets depth
@@ -32,8 +32,8 @@ namespace GX2
 		Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
 		depthClearReg.set_clearValue(depthClearValue);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::DB_DEPTH_CLEAR - 0xA000,
-			depthClearReg);
+							  Latte::REGADDR::DB_DEPTH_CLEAR - 0xA000,
+							  depthClearReg);
 	}
 
 	// similar to GX2SetClearDepthStencil but only sets stencil
@@ -44,8 +44,8 @@ namespace GX2
 		Latte::LATTE_DB_STENCIL_CLEAR stencilClearReg;
 		stencilClearReg.set_clearValue(stencilClearValue);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-			Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
-			stencilClearReg);
+							  Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
+							  stencilClearReg);
 	}
 
 	// update DB_STENCIL_CLEAR and DB_STENCIL_CLEAR based on clear flags
@@ -59,8 +59,8 @@ namespace GX2
 			Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
 			depthClearReg.set_clearValue(depthClearValue);
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 2),
-				Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
-				stencilClearReg, depthClearReg);
+								  Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
+								  stencilClearReg, depthClearReg);
 		}
 		else if ((clearFlags & GX2ClearFlags::SET_DEPTH_REG) != 0)
 		{
@@ -68,8 +68,8 @@ namespace GX2
 			Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
 			depthClearReg.set_clearValue(depthClearValue);
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-				Latte::REGADDR::DB_DEPTH_CLEAR - 0xA000,
-				depthClearReg);
+								  Latte::REGADDR::DB_DEPTH_CLEAR - 0xA000,
+								  depthClearReg);
 		}
 		else if ((clearFlags & GX2ClearFlags::SET_STENCIL_REG) != 0)
 		{
@@ -77,8 +77,8 @@ namespace GX2
 			Latte::LATTE_DB_STENCIL_CLEAR stencilClearReg;
 			stencilClearReg.set_clearValue(stencilClearValue);
 			gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
-				Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
-				stencilClearReg);
+								  Latte::REGADDR::DB_STENCIL_CLEAR - 0xA000,
+								  stencilClearReg);
 		}
 	}
 
@@ -133,36 +133,36 @@ namespace GX2
 			depthNumSlices = depthBuffer->viewNumSlices;
 		}
 		gx2WriteGather_submit(pm4HeaderType3(IT_HLE_CLEAR_COLOR_DEPTH_STENCIL, 23),
-		hleClearFlags,
-		colorPhysAddr,
-		colorFormat,
-		colorTileMode,
-		colorWidth,
-		colorHeight,
-		colorPitch,
-		colorFirstSlice,
-		colorNumSlices,
-		depthPhysAddr,
-		depthFormat,
-		depthTileMode,
-		depthWidth,
-		depthHeight,
-		depthPitch,
-		depthFirstSlice,
-		depthNumSlices,
-		(uint32)(colorRGBA[0] * 255.0f),
-		(uint32)(colorRGBA[1] * 255.0f),
-		(uint32)(colorRGBA[2] * 255.0f),
-		(uint32)(colorRGBA[3] * 255.0f),
-		*(uint32*)&depthClearValue,
-		stencilClearValue&0xFF);
+							  hleClearFlags,
+							  colorPhysAddr,
+							  colorFormat,
+							  colorTileMode,
+							  colorWidth,
+							  colorHeight,
+							  colorPitch,
+							  colorFirstSlice,
+							  colorNumSlices,
+							  depthPhysAddr,
+							  depthFormat,
+							  depthTileMode,
+							  depthWidth,
+							  depthHeight,
+							  depthPitch,
+							  depthFirstSlice,
+							  depthNumSlices,
+							  (uint32)(colorRGBA[0] * 255.0f),
+							  (uint32)(colorRGBA[1] * 255.0f),
+							  (uint32)(colorRGBA[2] * 255.0f),
+							  (uint32)(colorRGBA[3] * 255.0f),
+							  *(uint32*)&depthClearValue,
+							  stencilClearValue & 0xFF);
 	}
 
 	void GX2ClearColor(GX2ColorBuffer* colorBuffer, float r, float g, float b, float a)
 	{
 		if ((colorBuffer->surface.resFlag & GX2_RESFLAG_USAGE_COLOR_BUFFER) != 0)
 		{
-			float colorRGBA[4] = { r, g, b, a };
+			float colorRGBA[4] = {r, g, b, a};
 			SubmitHLEClear(colorBuffer, colorRGBA, nullptr, 0.0f, 0, true, false, false);
 		}
 		else
@@ -182,7 +182,7 @@ namespace GX2
 			hleClearFlags |= 4;
 		hleClearFlags |= 1;
 
-		float colorRGBA[4] = { r, g, b, a };
+		float colorRGBA[4] = {r, g, b, a};
 		SubmitHLEClear(colorBuffer, colorRGBA, depthBuffer, depthClearValue, stencilClearValue, true, (clearFlags & GX2ClearFlags::CLEAR_DEPTH) != 0, (clearFlags & GX2ClearFlags::CLEAR_STENCIL) != 0);
 	}
 
@@ -198,7 +198,7 @@ namespace GX2
 
 		_updateDepthStencilClearRegs(depthClearValue, stencilClearValue, clearFlags);
 
-		float colorRGBA[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		float colorRGBA[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 		SubmitHLEClear(nullptr, colorRGBA, depthBuffer, depthClearValue, stencilClearValue, false, (clearFlags & GX2ClearFlags::CLEAR_DEPTH) != 0, (clearFlags & GX2ClearFlags::CLEAR_STENCIL) != 0);
 	}
 
@@ -207,9 +207,9 @@ namespace GX2
 		cafeExportRegister("gx2", GX2SetClearDepthStencil, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetClearDepth, LogType::GX2);
 		cafeExportRegister("gx2", GX2SetClearStencil, LogType::GX2);
-		
+
 		cafeExportRegister("gx2", GX2ClearColor, LogType::GX2);
 		cafeExportRegister("gx2", GX2ClearBuffersEx, LogType::GX2);
 		cafeExportRegister("gx2", GX2ClearDepthStencilEx, LogType::GX2);
 	}
-}
+} // namespace GX2

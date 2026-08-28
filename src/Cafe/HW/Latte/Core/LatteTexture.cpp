@@ -10,6 +10,8 @@
 
 #include <boost/container/small_vector.hpp>
 
+#include <mutex>
+
 struct TexMemOccupancyEntry
 {
 	uint32 addrStart;
@@ -17,25 +19,30 @@ struct TexMemOccupancyEntry
 	LatteTextureSliceMipInfo* sliceMipInfo;
 };
 
-#define TEX_OCCUPANCY_BUCKET_COUNT		(0x800) // each bucket covers a range of 2MB
-#define TEX_OCCUPANCY_BUCKET_SIZE		(0x100000000/TEX_OCCUPANCY_BUCKET_COUNT)
+#define TEX_OCCUPANCY_BUCKET_COUNT (0x800) // each bucket covers a range of 2MB
+#define TEX_OCCUPANCY_BUCKET_SIZE (0x100000000 / TEX_OCCUPANCY_BUCKET_COUNT)
 
-#define loopItrMemOccupancyBuckets(__startAddr, __endAddr)		for(sint32 startBucketIndex = ((__startAddr)/TEX_OCCUPANCY_BUCKET_SIZE), bucketIndex=startBucketIndex; bucketIndex<=((__endAddr-1)/TEX_OCCUPANCY_BUCKET_SIZE); bucketIndex++)
+#define loopItrMemOccupancyBuckets(__startAddr, __endAddr) for (sint32 startBucketIndex = ((__startAddr) / TEX_OCCUPANCY_BUCKET_SIZE), bucketIndex = startBucketIndex; bucketIndex <= ((__endAddr - 1) / TEX_OCCUPANCY_BUCKET_SIZE); bucketIndex++)
 
 std::vector<TexMemOccupancyEntry> list_texMemOccupancyBucket[TEX_OCCUPANCY_BUCKET_COUNT];
 
 std::atomic_bool s_refreshTextureQueryList;
 std::vector<LatteTextureInformation> s_cacheInfoList;
+std::mutex s_cacheInfoQueryMutex;
 
 std::vector<LatteTextureInformation> LatteTexture_QueryCacheInfo()
 {
+	// Multiple diagnostic frontends can request snapshots concurrently. Keep the
+	// request/renderer-publish/copy handshake single-owner so the renderer cannot
+	// swap s_cacheInfoList while another caller is copying it.
+	std::scoped_lock queryLock(s_cacheInfoQueryMutex);
 	// raise request flag to refresh cache
-	s_refreshTextureQueryList.store(true);
+	s_refreshTextureQueryList.store(true, std::memory_order_release);
 	// wait until cleared or until timeout occurred
 	auto begin = std::chrono::high_resolution_clock::now();
 	while (true)
 	{
-		if (!s_refreshTextureQueryList)
+		if (!s_refreshTextureQueryList.load(std::memory_order_acquire))
 			break;
 		auto dur = std::chrono::high_resolution_clock::now() - begin;
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
@@ -56,7 +63,7 @@ void LatteTexture_RefreshInfoCache()
 	for (auto& it : allViews)
 	{
 		LatteTexture* baseTexture = it->baseTexture;
-		if(visitedTextures.find(baseTexture) != visitedTextures.end())
+		if (visitedTextures.find(baseTexture) != visitedTextures.end())
 			continue;
 		visitedTextures.emplace(baseTexture);
 		// add cache info
@@ -85,7 +92,7 @@ void LatteTexture_RefreshInfoCache()
 		// views
 		for (auto& viewItr : baseTexture->views)
 		{
-			if(viewItr == baseTexture->baseView)
+			if (viewItr == baseTexture->baseView)
 				continue;
 			auto& viewEntry = entry.views.emplace_back();
 			viewEntry.physAddress = viewItr->baseTexture->physAddress;
@@ -112,7 +119,8 @@ void LatteTexture_AddTexMemOccupancyInterval(LatteTextureSliceMipInfo* sliceMipI
 	entry.addrEnd = sliceMipInfo->addrEnd;
 	entry.sliceMipInfo = sliceMipInfo;
 	loopItrMemOccupancyBuckets(entry.addrStart, entry.addrEnd)
-		list_texMemOccupancyBucket[bucketIndex].push_back(entry);
+		list_texMemOccupancyBucket[bucketIndex]
+			.push_back(entry);
 }
 
 void LatteTexture_RegisterTextureMemoryOccupancy(LatteTexture* texture)
@@ -235,7 +243,7 @@ void LatteTexture_InitSliceAndMipInfo(LatteTexture* texture)
 // if this function returns false, textures will not be synchronized even if their data overlaps
 bool LatteTexture_IsFormatViewCompatible(Latte::E_GX2SURFFMT formatA, Latte::E_GX2SURFFMT formatB)
 {
-	if(formatA == formatB)
+	if (formatA == formatB)
 		return true; // if the format is identical then compatibility must be guaranteed (otherwise we can't create the necessary default view of a texture)
 
 	// todo - find a better way to handle this
@@ -341,7 +349,7 @@ bool LatteTexture_DoesWidthHeightMatch(Latte::E_GX2SURFFMT format1, uint32 width
 		width2 <<= 2;
 		height2 <<= 2;
 	}
-	if constexpr(bothMustMatch)
+	if constexpr (bothMustMatch)
 		return width1 == width2 && height1 == height2;
 	else
 		return width1 == width2 || height1 == height2;
@@ -384,7 +392,7 @@ void LatteTexture_CopySlice(LatteTexture* srcTexture, sint32 srcSlice, sint32 sr
 			cemuLog_log(LogType::Force, "Source:      {:08x} origResolution {:4}/{:4} effectiveResolution {:4}/{:4} fmt {:04x} mipIndex {} ratioW/H: {:.4}/{:.4}", srcTexture->physAddress, srcTexture->width, srcTexture->height, effectiveWidth_src, effectiveHeight_src, (uint32)srcTexture->format, srcMip, ratioWidth_src, ratioHeight_src);
 			cemuLog_log(LogType::Force, "Destination: {:08x} origResolution {:4}/{:4} effectiveResolution {:4}/{:4} fmt {:04x} mipIndex {} ratioW/H: {:.4}/{:.4}", dstTexture->physAddress, dstTexture->width, dstTexture->height, effectiveWidth_dst, effectiveHeight_dst, (uint32)dstTexture->format, dstMip, ratioWidth_dst, ratioHeight_dst);
 		}
-		//cemuLog_logDebug(LogType::Force, "If these textures are not meant to share data you can ignore this");
+		// cemuLog_logDebug(LogType::Force, "If these textures are not meant to share data you can ignore this");
 		return;
 	}
 	// todo - store 'lastUpdated' value per slice/mip and copy it's value when copying the slice data
@@ -438,9 +446,9 @@ void LatteTexture_SyncSlice(LatteTexture* srcTexture, sint32 srcSliceIndex, sint
 	sint32 dstWidth = dstTexture->width;
 	sint32 dstHeight = dstTexture->height;
 
-	if(srcTexture->overwriteInfo.hasFormatOverwrite != dstTexture->overwriteInfo.hasFormatOverwrite)
+	if (srcTexture->overwriteInfo.hasFormatOverwrite != dstTexture->overwriteInfo.hasFormatOverwrite)
 		return; // dont sync: format overwrite state needs to match. Not strictly necessary but it simplifies logic down the road
-	else if(srcTexture->overwriteInfo.hasFormatOverwrite && srcTexture->overwriteInfo.format != dstTexture->overwriteInfo.format)
+	else if (srcTexture->overwriteInfo.hasFormatOverwrite && srcTexture->overwriteInfo.format != dstTexture->overwriteInfo.format)
 		return; // both are overwritten but with different formats
 
 	if (srcMipIndex == 0 && dstMipIndex == 0 && (srcTexture->tileMode == Latte::E_HWTILEMODE::TM_LINEAR_ALIGNED || srcTexture->tileMode == Latte::E_HWTILEMODE::TM_1D_TILED_THIN1) && srcTexture->height > dstTexture->height && (srcTexture->height % dstTexture->height) == 0)
@@ -497,7 +505,6 @@ void LatteTexture_SyncSlice(LatteTexture* srcTexture, sint32 srcSliceIndex, sint
 	sint32 copyHeight = std::min(srcHeight, dstHeight);
 
 	LatteTexture_CopySlice(srcTexture, srcSliceIndex, srcMipIndex, dstTexture, dstSliceIndex, dstMipIndex, 0, 0, 0, 0, copyWidth, copyHeight);
-
 }
 
 void LatteTexture_UpdateTextureFromDynamicChanges(LatteTexture* texture)
@@ -527,7 +534,7 @@ void LatteTexture_UpdateTextureFromDynamicChanges(LatteTexture* texture)
 					{
 						LatteTexture_SyncSlice(subTexture, cSliceIndex, cMipIndex, baseTexture, texRel->baseSliceIndex + cSliceIndex, texRel->baseMipIndex + cMipIndex);
 						baseSliceMipInfo->lastDynamicUpdate = subSliceMipInfo->lastDynamicUpdate;
-						if(subTexture->isUpdatedOnGPU)
+						if (subTexture->isUpdatedOnGPU)
 							texture->isUpdatedOnGPU = true;
 					}
 				}
@@ -709,7 +716,7 @@ void _LatteTexture_RemoveDataOverlapTracking(LatteTexture* texture, LatteTexture
 
 void LatteTexture_DeleteDataOverlapTracking(LatteTexture* texture, LatteTextureSliceMipInfo* sliceMipInfo)
 {
-	for(auto& it : sliceMipInfo->list_dataOverlap)
+	for (auto& it : sliceMipInfo->list_dataOverlap)
 		_LatteTexture_RemoveDataOverlapTracking(texture, sliceMipInfo, it);
 	sliceMipInfo->list_dataOverlap.resize(0);
 }
@@ -757,8 +764,7 @@ void LatteTexture_GatherTextureRelations(LatteTexture* texture)
 						if (sliceMipInfo->addrStart == occupancy.addrStart && sliceMipInfo->subIndex == occupancy.sliceMipInfo->subIndex)
 						{
 							// overlapping with zero x/y offset
-							if (sliceMipInfo->pitch == occupancy.sliceMipInfo->pitch && LatteTexture_IsTexelSizeCompatibleFormat(texture->format, itrTexture->format)
-								&& sliceMipInfo->tileMode == occupancy.sliceMipInfo->tileMode &&
+							if (sliceMipInfo->pitch == occupancy.sliceMipInfo->pitch && LatteTexture_IsTexelSizeCompatibleFormat(texture->format, itrTexture->format) && sliceMipInfo->tileMode == occupancy.sliceMipInfo->tileMode &&
 								LatteTexture_IsFormatViewCompatible(texture->format, itrTexture->format))
 							{
 								LatteTexture_TrackTextureRelation(texture, itrTexture);
@@ -793,7 +799,7 @@ void LatteTexture_DeleteTextureRelations(LatteTexture* texture)
 
 enum VIEWCOMPATIBILITY
 {
-	VIEW_COMPATIBLE, // subtexture can be represented as view into base texture
+	VIEW_COMPATIBLE,	 // subtexture can be represented as view into base texture
 	VIEW_BASE_TOO_SMALL, // base texture must be extended (depth or mip levels) to fit sub texture
 	VIEW_NOT_COMPATIBLE,
 };
@@ -809,7 +815,7 @@ bool IsDimensionCompatibleForGX2View(Latte::E_DIM baseDim, Latte::E_DIM viewDim)
 		(baseDim == Latte::E_DIM::DIM_CUBEMAP && viewDim == Latte::E_DIM::DIM_2D_ARRAY) ||
 		(baseDim == Latte::E_DIM::DIM_2D_ARRAY && viewDim == Latte::E_DIM::DIM_CUBEMAP) ||
 		(baseDim == Latte::E_DIM::DIM_3D && viewDim == Latte::E_DIM::DIM_2D_ARRAY);
-	if(isCompatible)
+	if (isCompatible)
 		return true;
 	// these combinations have been seen in use by games and are considered incompatible:
 	// (baseDim == Latte::E_DIM::DIM_2D_ARRAY && viewDim == Latte::E_DIM::DIM_3D) -> Not allowed on OpenGL
@@ -862,7 +868,6 @@ VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseT
 		{
 			// view has more slices or mips than existing texture
 			return VIEW_BASE_TOO_SMALL;
-
 		}
 		return VIEW_COMPATIBLE;
 	}
@@ -878,12 +883,12 @@ VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseT
 		{
 			auto sliceMipInfo = baseTexture->sliceMipInfo + baseTexture->GetSliceMipArrayIndex(0, m);
 			// check pitch
-			if(sliceMipInfo->pitch != pitch)
+			if (sliceMipInfo->pitch != pitch)
 				continue;
 			// check all slices
-			if(LatteAddrLib::TM_IsThickAndMacroTiled(baseTexture->tileMode))
+			if (LatteAddrLib::TM_IsThickAndMacroTiled(baseTexture->tileMode))
 				continue; // todo - check only every 4th slice?
-			for (sint32 s=0; s<baseTexture->GetMipDepth(m); s++)
+			for (sint32 s = 0; s < baseTexture->GetMipDepth(m); s++)
 			{
 				sliceMipInfo = baseTexture->sliceMipInfo + baseTexture->GetSliceMipArrayIndex(s, m);
 				if (sliceMipInfo->addrStart != physAddr || sliceMipInfo->pitch != pitch)
@@ -893,7 +898,7 @@ VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseT
 					return VIEW_NOT_COMPATIBLE;
 				if (baseTexture->GetMipWidth(m) != width || baseTexture->GetMipHeight(m) != height)
 					return VIEW_NOT_COMPATIBLE;
-				if (!LatteTexture_IsTexelSizeCompatibleFormat(baseTexture->format, format) )
+				if (!LatteTexture_IsTexelSizeCompatibleFormat(baseTexture->format, format))
 					return VIEW_NOT_COMPATIBLE;
 
 				if (!IsDimensionCompatibleForGX2View(baseTexture->dim, dimView))
@@ -928,10 +933,10 @@ VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseT
 // deletes any related textures that have become redundant (aka textures that can also be represented entirely as a view into the new texture)
 void LatteTexture_DeleteAbsorbedSubtextures(LatteTexture* texture)
 {
-	for(size_t i=0; i<texture->list_compatibleRelations.size(); i++)
+	for (size_t i = 0; i < texture->list_compatibleRelations.size(); i++)
 	{
 		LatteTextureRelation* textureRelation = texture->list_compatibleRelations[i];
-		LatteTexture* relatedTexture = (textureRelation->baseTexture!=texture)? textureRelation->baseTexture:textureRelation->subTexture;
+		LatteTexture* relatedTexture = (textureRelation->baseTexture != texture) ? textureRelation->baseTexture : textureRelation->subTexture;
 
 		sint32 relativeMipIndex;
 		sint32 relativeSliceIndex;
@@ -1054,7 +1059,7 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 			LatteTexture_RecreateTextureWithDifferentMipSliceCount(tex, newPhysMipAddr, newMipCount, newDepth);
 			return LatteTexture_CreateMapping(physAddr, physMipAddr, width, height, depth, pitch, tileMode, swizzle, firstMip, numMip, firstSlice, numSlice, format, dimBase, dimView, isDepth);
 		}
-		else if(viewCompatibility == VIEW_COMPATIBLE)
+		else if (viewCompatibility == VIEW_COMPATIBLE)
 		{
 			LatteTextureView* view = tex->GetOrCreateView(dimView, format, relativeMipIndex + firstMip, numMip, relativeSliceIndex + firstSlice, numSlice);
 			if (relativeMipIndex != 0 || relativeSliceIndex != 0)
@@ -1095,7 +1100,7 @@ LatteTextureView* LatteTC_LookupTextureByData(MPTR physAddr, sint32 width, sint3
 {
 	cemu_assert_debug(firstMip == 0);
 	sint32 cSearchIndex = 0;
-	loopItrMemOccupancyBuckets(physAddr, physAddr+1)
+	loopItrMemOccupancyBuckets(physAddr, physAddr + 1)
 	{
 		auto& bucket = list_texMemOccupancyBucket[bucketIndex];
 		for (sint32 i = 0; i < bucket.size(); i++)
@@ -1145,7 +1150,7 @@ void LatteTC_LookupTexturesByPhysAddr(MPTR physAddr, std::vector<LatteTexture*>&
 LatteTextureView* LatteTC_GetTextureSliceViewOrTryCreate(MPTR srcImagePtr, MPTR srcMipPtr, Latte::E_GX2SURFFMT srcFormat, Latte::E_HWTILEMODE srcTileMode, uint32 srcWidth, uint32 srcHeight, uint32 srcDepth, uint32 srcPitch, uint32 srcSwizzle, uint32 srcSlice, uint32 srcMip, const bool requireExactResolution)
 {
 	LatteTextureView* sourceView;
-	if(requireExactResolution == false)
+	if (requireExactResolution == false)
 		sourceView = LatteTextureViewLookupCache::lookupSliceMinSize(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat);
 	else
 		sourceView = LatteTextureViewLookupCache::lookupSlice(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat);
@@ -1217,7 +1222,7 @@ bool LatteTexture_GX2FormatHasStencil(bool isDepth, Latte::E_GX2SURFFMT format)
 }
 
 LatteTexture::LatteTexture(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddress, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 depth, uint32 pitch, uint32 mipLevels, uint32 swizzle,
-	Latte::E_HWTILEMODE tileMode, bool isDepth)
+						   Latte::E_HWTILEMODE tileMode, bool isDepth)
 {
 	_AddTextureToGlobalList(this);
 	if (depth < 1)

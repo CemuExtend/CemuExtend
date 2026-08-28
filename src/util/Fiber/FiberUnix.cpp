@@ -4,10 +4,10 @@
 
 thread_local Fiber* sCurrentFiber{};
 
-Fiber::Fiber(void(*FiberEntryPoint)(void* userParam), void* userParam, void* privateData) : m_privateData(privateData)
+Fiber::Fiber(void (*FiberEntryPoint)(void* userParam), void* userParam, void* privateData) : m_privateData(privateData)
 {
 	ucontext_t* ctx = (ucontext_t*)malloc(sizeof(ucontext_t));
-	
+
 	const size_t stackSize = 2 * 1024 * 1024;
 	m_stackPtr = malloc(stackSize);
 
@@ -17,9 +17,9 @@ Fiber::Fiber(void(*FiberEntryPoint)(void* userParam), void* userParam, void* pri
 	ctx->uc_link = &ctx[0];
 #ifdef __arm64__
 	// https://www.man7.org/linux/man-pages/man3/makecontext.3.html#NOTES
-	makecontext(ctx, (void(*)())FiberEntryPoint, 2, (uint64) userParam >> 32, userParam);
+	makecontext(ctx, (void (*)())FiberEntryPoint, 2, (uint64)userParam >> 32, userParam);
 #else
-	makecontext(ctx, (void(*)())FiberEntryPoint, 1, userParam);
+	makecontext(ctx, (void (*)())FiberEntryPoint, 1, userParam);
 #endif
 	this->m_implData = (void*)ctx;
 }
@@ -34,7 +34,7 @@ Fiber::Fiber(void* privateData) : m_privateData(privateData)
 
 Fiber::~Fiber()
 {
-	if(m_stackPtr)
+	if (m_stackPtr)
 		free(m_stackPtr);
 	free(m_implData);
 }
@@ -42,14 +42,14 @@ Fiber::~Fiber()
 Fiber* Fiber::PrepareCurrentThread(void* privateData)
 {
 	cemu_assert_debug(sCurrentFiber == nullptr);
-    sCurrentFiber = new Fiber(privateData);
+	sCurrentFiber = new Fiber(privateData);
 	return sCurrentFiber;
 }
 
 void Fiber::Switch(Fiber& targetFiber)
 {
-    Fiber* leavingFiber = sCurrentFiber;
-    sCurrentFiber = &targetFiber;
+	Fiber* leavingFiber = sCurrentFiber;
+	sCurrentFiber = &targetFiber;
 	std::atomic_thread_fence(std::memory_order_seq_cst);
 	swapcontext((ucontext_t*)(leavingFiber->m_implData), (ucontext_t*)(targetFiber.m_implData));
 	std::atomic_thread_fence(std::memory_order_seq_cst);

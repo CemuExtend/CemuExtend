@@ -14,6 +14,12 @@ add_library(CemuFrontendModel STATIC
 
 target_include_directories(CemuFrontendModel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
+add_library(CemuRuntimeOverlay STATIC
+	RuntimeOverlay.cpp
+	RuntimeOverlay.h
+)
+target_include_directories(CemuRuntimeOverlay PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
 if(BUILD_TESTING)
   add_executable(cemuextend_frontend_bridge_tests
     tests/CemuExtendFrontendBridgeTests.cpp
@@ -26,4 +32,11 @@ if(BUILD_TESTING)
   )
   target_link_libraries(archive_install_policy_tests PRIVATE CemuFrontendModel)
   add_test(NAME archive_install_policy_tests COMMAND archive_install_policy_tests)
+
+	add_executable(runtime_overlay_tests
+		RuntimeOverlay.cpp
+		tests/RuntimeOverlayTests.cpp
+	)
+	target_include_directories(runtime_overlay_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+	add_test(NAME runtime_overlay_tests COMMAND runtime_overlay_tests)
 endif()

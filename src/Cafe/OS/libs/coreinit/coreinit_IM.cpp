@@ -4,7 +4,7 @@
 
 namespace coreinit
 {
-	#define IM_ERROR_NONE 0
+#define IM_ERROR_NONE 0
 
 	void coreinitExport_IMIsAPDEnabledBySysSettings(PPCInterpreter_t* hCPU)
 	{
@@ -114,9 +114,8 @@ namespace coreinit
 		memory_writeU32(paramOut + 0x4, 0);
 
 		// for scope.rpx (Download Manager)
-		//memory_writeU32(paramOut + 0x0, 1);
-		//memory_writeU32(paramOut + 0x4, 2); // some sort of index (starting at 1?)
-
+		// memory_writeU32(paramOut + 0x0, 1);
+		// memory_writeU32(paramOut + 0x4, 2); // some sort of index (starting at 1?)
 
 		osLib_returnFromFunction(hCPU, IM_ERROR_NONE);
 	}
@@ -134,4 +133,4 @@ namespace coreinit
 		osLib_addFunction("coreinit", "IM_GetRuntimeParameter", coreinitExport_IM_GetRuntimeParameter);
 	}
 
-};
+}; // namespace coreinit

@@ -5,8 +5,8 @@
 #include "Cafe/CafeSystem.h"
 #include "GX2_Query.h"
 
-#define LATTE_GC_NUM_RB							2
-#define _QUERY_REG_COUNT						8 // each reg/result is 64bits, little endian
+#define LATTE_GC_NUM_RB 2
+#define _QUERY_REG_COUNT 8 // each reg/result is 64bits, little endian
 
 namespace GX2
 {
@@ -120,7 +120,7 @@ namespace GX2
 
 		uint32 flags = 0;
 		if (pixelsMustPassBool)
-			flags |= (1<<31);
+			flags |= (1 << 31);
 		if (queryType == GX2_QUERY_TYPE_OCCLUSION_GPU)
 			flags |= (1 << 13);
 		else
@@ -150,4 +150,4 @@ namespace GX2
 		cafeExportRegister("gx2", GX2QueryBeginConditionalRender, LogType::GX2);
 		cafeExportRegister("gx2", GX2QueryEndConditionalRender, LogType::GX2);
 	}
-};
+}; // namespace GX2

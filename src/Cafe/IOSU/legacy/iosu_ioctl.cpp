@@ -23,7 +23,7 @@ sint32 iosuIoctl_pushAndWait(uint32 ioctlHandle, ioQueueEntry_t* ioQueueEntry)
 	__OSLockScheduler();
 	ioctlMutex.lock();
 	ioQueueEntry->ppcThread = coreinit::OSGetCurrentThread();
-	
+
 	_ioctlRingbuffer[ioctlHandle].Push(ioQueueEntry);
 	ioctlMutex.unlock();
 	_ioctlRingbufferSemaphore[ioctlHandle].increment();

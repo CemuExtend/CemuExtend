@@ -4,10 +4,13 @@
 #include "Cafe/Account/Account.h"
 #include "config/CemuConfig.h"
 #include "config/ActiveSettings.h"
+#include "frontend/RuntimeOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "resource/IconsFontAwesome5.h"
 #include "imgui/imgui_extension.h"
+#endif
 
 #include "input/InputManager.h"
 #include "util/SystemInfo/SystemInfo.h"
@@ -25,9 +28,9 @@ struct OverlayStats
 	double fps{};
 	uint32 draw_calls_per_frame{};
 	uint32 fast_draw_calls_per_frame{};
-	float cpu_usage{}; // cemu cpu usage in %
+	float cpu_usage{};				 // cemu cpu usage in %
 	std::vector<float> cpu_per_core; // global cpu usage in % per core
-	uint32 ram_usage{}; // ram usage in MB
+	uint32 ram_usage{};				 // ram usage in MB
 
 	int vramUsage{}, vramTotal{}; // vram usage in mb
 } g_state{};
@@ -42,17 +45,37 @@ std::atomic_int g_compiling_pipelines_async;
 std::atomic_uint64_t g_compiling_pipelines_syncTimeSum;
 
 extern std::mutex g_friend_notification_mutex;
-extern std::vector< std::pair<std::string, int> > g_friend_notifications;
+extern std::vector<std::pair<std::string, int>> g_friend_notifications;
 
 std::mutex g_notification_mutex;
-std::vector< std::pair<std::string, int> > g_notifications;
+std::vector<std::pair<std::string, int>> g_notifications;
+
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+namespace
+{
+	std::chrono::steady_clock::time_point s_webLastUpdate;
+	std::chrono::steady_clock::time_point s_webLastShaderCompile;
+	std::chrono::steady_clock::time_point s_webLastPipelineCompile;
+	std::vector<std::uint32_t> s_webLowBatteryPlayers;
+	int s_webShaderCount{};
+	int s_webShaderAsyncCount{};
+	int s_webPipelineCount{};
+	int s_webPipelineAsyncCount{};
+	bool s_webStartupPublished{};
+} // namespace
+#endif
 
 void LatteOverlay_pushNotification(const std::string& text, sint32 duration)
 {
+	RuntimeOverlay::Model::Instance().PushNotice(RuntimeOverlay::NoticeKind::Message, text,
+												 std::chrono::milliseconds(std::max<sint32>(0, duration)));
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 	std::unique_lock lock(g_notification_mutex);
 	g_notifications.emplace_back(text, duration);
+#endif
 }
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 struct OverlayList
 {
 	std::wstring text;
@@ -103,14 +126,14 @@ void LatteOverlay_renderOverlay(ImVec2& position, ImVec2& pivot, sint32 directio
 			if (config.overlay.ram_usage)
 				ImGui::Text("RAM: %dMB", g_state.ram_usage);
 
-			if(config.overlay.vram_usage && g_state.vramUsage != -1 && g_state.vramTotal != -1)
+			if (config.overlay.vram_usage && g_state.vramUsage != -1 && g_state.vramTotal != -1)
 				ImGui::Text("VRAM: %dMB / %dMB", g_state.vramUsage, g_state.vramTotal);
 
 			if (config.overlay.debug)
 			{
 				// general debug info
 				ImGui::Text("--- Debug info ---");
-				ImGui::Text("IndexUploadPerFrame: %dKB", (performanceMonitor.stats.indexDataUploadPerFrame+1023)/1024);
+				ImGui::Text("IndexUploadPerFrame: %dKB", (performanceMonitor.stats.indexDataUploadPerFrame + 1023) / 1024);
 				ImGui::Text("SHCSets: %d / %d", g_shaderStateCacheSetCount.load(), g_shaderStateCacheSetAuxCount.load());
 				// backend specific info
 				g_renderer->AppendOverlayDebugInfo();
@@ -158,7 +181,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 					if (s_mii_name.empty())
 					{
 						auto tmp_view = Account::GetAccount(ActiveSettings::GetPersistentId()).GetMiiName();
-						std::wstring tmp{ tmp_view };
+						std::wstring tmp{tmp_view};
 						s_mii_name = boost::nowide::narrow(tmp);
 					}
 					ImGui::TextUnformatted(s_mii_name.c_str());
@@ -166,7 +189,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 					position.y += (ImGui::GetWindowSize().y + 10.0f) * direction;
 				}
 				ImGui::End();
-				
+
 				// controller
 				std::vector<std::pair<int, std::string>> profiles;
 				auto& input_manager = InputManager::instance();
@@ -216,7 +239,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 
 	if (config.notification.friends)
 	{
-		static std::vector< std::pair<std::string, std::chrono::steady_clock::time_point> > s_friend_list;
+		static std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>> s_friend_list;
 
 		std::unique_lock lock(g_friend_notification_mutex);
 		if (!g_friend_notifications.empty())
@@ -341,7 +364,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 
 					if (s_shader_count_async > 0 && GetConfig().async_compile) // the latter condition is to never show async count when async isn't enabled. Since it can be confusing to the user
 					{
-						if(s_shader_count > 1)
+						if (s_shader_count > 1)
 							ImGui::Text("Compiled %d new shaders... (%d async)", s_shader_count, s_shader_count_async);
 						else
 							ImGui::Text("Compiled %d new shader... (%d async)", s_shader_count, s_shader_count_async);
@@ -359,7 +382,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 				ImGui::End();
 			}
 		}
-		
+
 		static int32_t s_pipeline_count = 0;
 		static int32_t s_pipeline_count_async = 0;
 		if (s_pipeline_count > 0 || g_compiling_pipelines > 0)
@@ -434,7 +457,7 @@ void LatteOverlay_RenderNotifications(ImVec2& position, ImVec2& pivot, sint32 di
 	}
 
 	// misc notifications
-	static std::vector< std::pair<std::string, std::chrono::steady_clock::time_point> > s_misc_notifications;
+	static std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>> s_misc_notifications;
 
 	std::unique_lock misc_lock(g_notification_mutex);
 	if (!g_notifications.empty())
@@ -479,33 +502,33 @@ void LatteOverlay_translateScreenPosition(ScreenPosition pos, const Vector2f& wi
 	switch (pos)
 	{
 	case ScreenPosition::kTopLeft:
-		position = { 10, 10 };
-		pivot = { 0, 0 };
+		position = {10, 10};
+		pivot = {0, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kTopCenter:
-		position = { window_size.x / 2.0f, 10 };
-		pivot = { 0.5f, 0 };
+		position = {window_size.x / 2.0f, 10};
+		pivot = {0.5f, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kTopRight:
-		position = { window_size.x - 10, 10 };
-		pivot = { 1, 0 };
+		position = {window_size.x - 10, 10};
+		pivot = {1, 0};
 		direction = 1;
 		break;
 	case ScreenPosition::kBottomLeft:
-		position = { 10, window_size.y - 10 };
-		pivot = { 0, 1 };
+		position = {10, window_size.y - 10};
+		pivot = {0, 1};
 		direction = -1;
 		break;
 	case ScreenPosition::kBottomCenter:
-		position = { window_size.x / 2.0f, window_size.y - 10 };
-		pivot = { 0.5f, 1 };
+		position = {window_size.x / 2.0f, window_size.y - 10};
+		pivot = {0.5f, 1};
 		direction = -1;
 		break;
 	case ScreenPosition::kBottomRight:
-		position = { window_size.x - 10, window_size.y - 10 };
-		pivot = { 1, 1 };
+		position = {window_size.x - 10, window_size.y - 10};
+		pivot = {1, 1};
 		direction = -1;
 		break;
 	default:
@@ -516,21 +539,19 @@ void LatteOverlay_translateScreenPosition(ScreenPosition pos, const Vector2f& wi
 void LatteOverlay_render(bool pad_view)
 {
 	const auto& config = GetConfig();
-	if(config.overlay.position == ScreenPosition::kDisabled && config.notification.position == ScreenPosition::kDisabled)
+	if (config.overlay.position == ScreenPosition::kDisabled && config.notification.position == ScreenPosition::kDisabled)
 		return;
 
-	const auto window = g_renderer ? g_renderer->GetWindowMetrics() :
-		Host::WindowMetricsSnapshot{};
+	const auto window = g_renderer ? g_renderer->GetWindowMetrics() : Host::WindowMetricsSnapshot{};
 	const sint32 w = pad_view && window.padOpen ? window.physicalPadWidth : window.physicalWidth;
 	const sint32 h = pad_view && window.padOpen ? window.physicalPadHeight : window.physicalHeight;
 
 	if (w == 0 || h == 0)
 		return;
 
-	const Vector2f window_size{ (float)w,(float)h };
+	const Vector2f window_size{(float)w, (float)h};
 
-	const float fontDPIScale = static_cast<float>(!pad_view ? window.dpiScale :
-		(window.padOpen ? window.padDpiScale : 1.0));
+	const float fontDPIScale = static_cast<float>(!pad_view ? window.dpiScale : (window.padOpen ? window.padDpiScale : 1.0));
 
 	float overlayFontSize = 14.0f * (float)config.overlay.text_scale / 100.0f * fontDPIScale;
 
@@ -539,7 +560,7 @@ void LatteOverlay_render(bool pad_view)
 		return;
 
 	float notificationsFontSize = 14.0f * (float)config.notification.text_scale / 100.0f * fontDPIScale;
-	
+
 	if (!ImGui_GetFont(notificationsFontSize))
 		return;
 
@@ -551,19 +572,210 @@ void LatteOverlay_render(bool pad_view)
 		LatteOverlay_translateScreenPosition(config.overlay.position, window_size, position, pivot, direction);
 		LatteOverlay_renderOverlay(position, pivot, direction, overlayFontSize, pad_view);
 	}
-	
 
 	if (config.notification.position != ScreenPosition::kDisabled)
 	{
-		if(config.overlay.position != config.notification.position)
+		if (config.overlay.position != config.notification.position)
 			LatteOverlay_translateScreenPosition(config.notification.position, window_size, position, pivot, direction);
 
 		LatteOverlay_RenderNotifications(position, pivot, direction, notificationsFontSize, pad_view);
 	}
 }
+#else
+void LatteOverlay_render(bool)
+{
+}
+#endif
+
+namespace
+{
+	RuntimeOverlay::Position ToOverlayPosition(ScreenPosition position)
+	{
+		switch (position)
+		{
+		case ScreenPosition::kTopLeft:
+			return RuntimeOverlay::Position::TopLeft;
+		case ScreenPosition::kTopCenter:
+			return RuntimeOverlay::Position::TopCenter;
+		case ScreenPosition::kTopRight:
+			return RuntimeOverlay::Position::TopRight;
+		case ScreenPosition::kBottomLeft:
+			return RuntimeOverlay::Position::BottomLeft;
+		case ScreenPosition::kBottomCenter:
+			return RuntimeOverlay::Position::BottomCenter;
+		case ScreenPosition::kBottomRight:
+			return RuntimeOverlay::Position::BottomRight;
+		default:
+			return RuntimeOverlay::Position::Disabled;
+		}
+	}
+
+	void PublishPresentation()
+	{
+		const auto& config = GetConfig();
+		RuntimeOverlay::Stats stats{
+			.fps = g_state.fps,
+			.drawCalls = g_state.draw_calls_per_frame,
+			.fastDrawCalls = g_state.fast_draw_calls_per_frame,
+			.cpuUsage = g_state.cpu_usage,
+			.ramUsageMb = g_state.ram_usage,
+			.vramUsageMb = g_state.vramUsage,
+			.vramTotalMb = g_state.vramTotal,
+		};
+		stats.cpuPerCore.reserve(g_state.cpu_per_core.size());
+		for (const auto usage : g_state.cpu_per_core)
+			stats.cpuPerCore.push_back(usage);
+		if (config.overlay.debug)
+		{
+			stats.debugLines.emplace_back(
+				"IndexUploadPerFrame",
+				fmt::format("{} KB", (performanceMonitor.stats.indexDataUploadPerFrame + 1023) / 1024));
+			stats.debugLines.emplace_back(
+				"SHCSets", fmt::format("{} / {}", g_shaderStateCacheSetCount.load(),
+									   g_shaderStateCacheSetAuxCount.load()));
+		}
+
+		RuntimeOverlay::Model::Instance().SetPresentation(
+			{ToOverlayPosition(config.overlay.position), config.overlay.text_color,
+			 static_cast<std::uint32_t>(std::max(1, config.overlay.text_scale))},
+			{ToOverlayPosition(config.notification.position), config.notification.text_color,
+			 static_cast<std::uint32_t>(std::max(1, config.notification.text_scale))},
+			{.fps = config.overlay.fps,
+			 .drawCalls = config.overlay.drawcalls,
+			 .cpuUsage = config.overlay.cpu_usage,
+			 .cpuPerCore = config.overlay.cpu_per_core_usage,
+			 .ramUsage = config.overlay.ram_usage,
+			 .vramUsage = config.overlay.vram_usage,
+			 .debug = config.overlay.debug},
+			std::move(stats));
+	}
+} // namespace
+
+void LatteOverlay_updateWebSnapshot()
+{
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	const auto now = std::chrono::steady_clock::now();
+	if (now - s_webLastUpdate < std::chrono::milliseconds(100))
+		return;
+	s_webLastUpdate = now;
+
+	PublishPresentation();
+	const auto& config = GetConfig();
+	auto& model = RuntimeOverlay::Model::Instance();
+	if (!s_webStartupPublished && config.notification.controller_profiles)
+	{
+		s_webStartupPublished = true;
+		const auto account = Account::GetAccount(ActiveSettings::GetPersistentId());
+		const std::wstring miiName{account.GetMiiName()};
+		if (!miiName.empty())
+			model.PushNotice(RuntimeOverlay::NoticeKind::Account,
+							 boost::nowide::narrow(miiName), std::chrono::seconds(5));
+		for (int index = 0; index < InputManager::kMaxController; ++index)
+		{
+			const auto controller = InputManager::instance().get_controller(index);
+			if (controller && !controller->get_profile_name().empty())
+				model.PushNotice(RuntimeOverlay::NoticeKind::Controller,
+								 fmt::format("Player {}: {}", index + 1, controller->get_profile_name()),
+								 std::chrono::seconds(5), static_cast<std::uint32_t>(index));
+		}
+	}
+
+	std::vector<std::uint32_t> lowBatteryPlayers;
+	if (config.notification.controller_battery)
+	{
+		for (int index = 0; index < InputManager::kMaxController; ++index)
+		{
+			const auto controller = InputManager::instance().get_controller(index);
+			if (controller && controller->is_battery_low())
+				lowBatteryPlayers.push_back(static_cast<std::uint32_t>(index));
+		}
+	}
+	if (lowBatteryPlayers != s_webLowBatteryPlayers)
+	{
+		s_webLowBatteryPlayers = lowBatteryPlayers;
+		std::vector<RuntimeOverlay::Notice> notices;
+		for (const auto player : lowBatteryPlayers)
+			notices.push_back({.kind = RuntimeOverlay::NoticeKind::Battery,
+							   .text = fmt::format("Player {} battery is low", player + 1),
+							   .player = player});
+		model.ReplaceNotices(RuntimeOverlay::NoticeKind::Battery, std::move(notices));
+	}
+
+	if (config.notification.friends)
+	{
+		std::vector<std::pair<std::string, int>> friends;
+		{
+			std::unique_lock lock(g_friend_notification_mutex);
+			friends.swap(g_friend_notifications);
+		}
+		for (auto& [text, duration] : friends)
+			model.PushNotice(RuntimeOverlay::NoticeKind::Friend, std::move(text),
+							 std::chrono::milliseconds(std::max(0, duration)));
+	}
+
+	if (config.notification.shader_compiling)
+	{
+		const auto newShaders = g_compiled_shaders_total.exchange(0);
+		const auto newAsyncShaders = g_compiled_shaders_async.exchange(0);
+		if (newShaders > 0)
+		{
+			if (now - s_webLastShaderCompile >= std::chrono::milliseconds(2500))
+			{
+				s_webShaderCount = 0;
+				s_webShaderAsyncCount = 0;
+			}
+			s_webShaderCount += newShaders;
+			s_webShaderAsyncCount += newAsyncShaders;
+			s_webLastShaderCompile = now;
+			const auto asyncText = s_webShaderAsyncCount > 0 && config.async_compile
+									   ? fmt::format(" ({} async)", s_webShaderAsyncCount)
+									   : std::string{};
+			model.ReplaceNotices(RuntimeOverlay::NoticeKind::Shader,
+								 {{.kind = RuntimeOverlay::NoticeKind::Shader,
+								   .text = fmt::format("Compiled {} new shader{}...{}", s_webShaderCount,
+													   s_webShaderCount == 1 ? "" : "s", asyncText),
+								   .expiresAt = now + std::chrono::milliseconds(2500)}});
+		}
+
+		const auto newPipelines = g_compiling_pipelines.exchange(0);
+		const auto newAsyncPipelines = g_compiling_pipelines_async.exchange(0);
+		if (newPipelines > 0)
+		{
+			if (now - s_webLastPipelineCompile >= std::chrono::milliseconds(2500))
+			{
+				s_webPipelineCount = 0;
+				s_webPipelineAsyncCount = 0;
+			}
+			s_webPipelineCount += newPipelines;
+			s_webPipelineAsyncCount += newAsyncPipelines;
+			s_webLastPipelineCompile = now;
+			const auto asyncText = s_webPipelineAsyncCount > 0
+									   ? fmt::format(" ({} async)", s_webPipelineAsyncCount)
+									   : std::string{};
+			model.ReplaceNotices(RuntimeOverlay::NoticeKind::Pipeline,
+								 {{.kind = RuntimeOverlay::NoticeKind::Pipeline,
+								   .text = fmt::format("Compiled {} new pipeline{}...{}", s_webPipelineCount,
+													   s_webPipelineCount == 1 ? "" : "s", asyncText),
+								   .expiresAt = now + std::chrono::milliseconds(2500)}});
+		}
+	}
+#endif
+}
 
 void LatteOverlay_init()
 {
+	RuntimeOverlay::Model::Instance().Reset();
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	s_webLastUpdate = {};
+	s_webLastShaderCompile = {};
+	s_webLastPipelineCompile = {};
+	s_webLowBatteryPlayers.clear();
+	s_webShaderCount = 0;
+	s_webShaderAsyncCount = 0;
+	s_webPipelineCount = 0;
+	s_webPipelineAsyncCount = 0;
+	s_webStartupPublished = false;
+#endif
 	g_state.processor_count = GetProcessorCount();
 
 	g_state.processor_times.resize(g_state.processor_count);
@@ -574,10 +786,10 @@ static void UpdateStats_CemuCpu()
 {
 	ProcessorTime now;
 	QueryProcTime(now);
-	
+
 	double cpu = ProcessorTime::Compare(g_state.processor_time_cemu, now);
 	cpu /= g_state.processor_count;
-	
+
 	g_state.cpu_usage = cpu * 100;
 	g_state.processor_time_cemu = now;
 }
@@ -612,4 +824,5 @@ void LatteOverlay_updateStats(double fps, sint32 drawcalls, sint32 fastDrawcalls
 
 	// update vram
 	g_renderer->GetVRAMInfo(g_state.vramUsage, g_state.vramTotal);
+	PublishPresentation();
 }

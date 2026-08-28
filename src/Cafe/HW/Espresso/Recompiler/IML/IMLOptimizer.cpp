@@ -101,7 +101,7 @@ void PPCRecompiler_optimizeDirectFloatCopiesScanForward(ppcImlGenContext_t* ppcI
 			cemu_assert_debug(imlMoveInstruction->type == PPCREC_IML_TYPE_FPR_R_R && imlMoveInstruction->op_fpr_r_r.regA.GetRegID() == fprIndex);
 			cemu_assert_debug(imlMoveInstruction->op_fpr_r_r.regA.GetRegFormat() == IMLRegFormat::F64);
 			auto dstReg = imlMoveInstruction->op_fpr_r_r.regR;
-			IMLInstruction* newExpand = PPCRecompiler_insertInstruction(imlSegment, realPosition+1); // one after the move
+			IMLInstruction* newExpand = PPCRecompiler_insertInstruction(imlSegment, realPosition + 1); // one after the move
 			newExpand->make_fpr_r(PPCREC_IML_OP_FPR_EXPAND_F32_TO_F64, dstReg);
 			positionBias++;
 		}
@@ -112,16 +112,16 @@ void PPCRecompiler_optimizeDirectFloatCopiesScanForward(ppcImlGenContext_t* ppcI
 }
 
 /*
-* Scans for patterns:
-* <Load sp float into register f>
-* <Random unrelated instructions>
-* <Store sp float from register f>
-* For these patterns the store and load is modified to work with un-extended values (float remains as float, no double conversion)
-* The float->double extension is then executed later
-* Advantages:
-* Keeps denormals and other special float values intact
-* Slightly improves performance
-*/
+ * Scans for patterns:
+ * <Load sp float into register f>
+ * <Random unrelated instructions>
+ * <Store sp float from register f>
+ * For these patterns the store and load is modified to work with un-extended values (float remains as float, no double conversion)
+ * The float->double extension is then executed later
+ * Advantages:
+ * Keeps denormals and other special float values intact
+ * Slightly improves performance
+ */
 void IMLOptimizer_OptimizeDirectFloatCopies(ppcImlGenContext_t* ppcImlGenContext)
 {
 	for (IMLSegment* segIt : ppcImlGenContext->segmentList2)
@@ -148,7 +148,7 @@ void PPCRecompiler_optimizeDirectIntegerCopiesScanForward(ppcImlGenContext_t* pp
 
 	IMLRegID gprIndex = gprReg.GetRegID();
 	IMLInstruction* imlInstructionLoad = imlSegment->imlList.data() + imlIndexLoad;
-	if ( imlInstructionLoad->op_storeLoad.flags2.swapEndian == false )
+	if (imlInstructionLoad->op_storeLoad.flags2.swapEndian == false)
 		return;
 	bool foundMatch = false;
 	IMLUsedRegisters registersUsed;
@@ -160,7 +160,7 @@ void PPCRecompiler_optimizeDirectIntegerCopiesScanForward(ppcImlGenContext_t* pp
 		if (imlInstruction->IsSuffixInstruction())
 			break;
 		// check if GPR is stored
-		if ((imlInstruction->type == PPCREC_IML_TYPE_STORE && imlInstruction->op_storeLoad.copyWidth == 32 ) )
+		if ((imlInstruction->type == PPCREC_IML_TYPE_STORE && imlInstruction->op_storeLoad.copyWidth == 32))
 		{
 			if (imlInstruction->op_storeLoad.registerMem.GetRegID() == gprIndex)
 				break;
@@ -197,15 +197,15 @@ void PPCRecompiler_optimizeDirectIntegerCopiesScanForward(ppcImlGenContext_t* pp
 }
 
 /*
-* Scans for patterns:
-* <Load sp integer into register r>
-* <Random unrelated instructions>
-* <Store sp integer from register r>
-* For these patterns the store and load is modified to work with non-swapped values
-* The big_endian->little_endian conversion is then executed later
-* Advantages:
-* Slightly improves performance
-*/
+ * Scans for patterns:
+ * <Load sp integer into register r>
+ * <Random unrelated instructions>
+ * <Store sp integer from register r>
+ * For these patterns the store and load is modified to work with non-swapped values
+ * The big_endian->little_endian conversion is then executed later
+ * Advantages:
+ * Slightly improves performance
+ */
 void IMLOptimizer_OptimizeDirectIntegerCopies(ppcImlGenContext_t* ppcImlGenContext)
 {
 	for (IMLSegment* segIt : ppcImlGenContext->segmentList2)
@@ -213,7 +213,7 @@ void IMLOptimizer_OptimizeDirectIntegerCopies(ppcImlGenContext_t* ppcImlGenConte
 		for (sint32 i = 0; i < segIt->imlList.size(); i++)
 		{
 			IMLInstruction* imlInstruction = segIt->imlList.data() + i;
-			if (imlInstruction->type == PPCREC_IML_TYPE_LOAD && imlInstruction->op_storeLoad.copyWidth == 32 && imlInstruction->op_storeLoad.flags2.swapEndian )
+			if (imlInstruction->type == PPCREC_IML_TYPE_LOAD && imlInstruction->op_storeLoad.copyWidth == 32 && imlInstruction->op_storeLoad.flags2.swapEndian)
 			{
 				PPCRecompiler_optimizeDirectIntegerCopiesScanForward(ppcImlGenContext, segIt, i, imlInstruction->op_storeLoad.registerData);
 			}
@@ -271,9 +271,9 @@ class IMLOptimizerRegIOAnalysis
 	struct IMLSegmentRegisterInOut
 	{
 		// todo - since our register ID range is usually pretty small (<64) we could use integer bitmasks to accelerate this? There is a helper class used in RA code already
-		std::unordered_set<IMLRegID> regWritten; // registers which are modified in this segment
+		std::unordered_set<IMLRegID> regWritten;  // registers which are modified in this segment
 		std::unordered_set<IMLRegID> regImported; // registers which are read in this segment before they are written (importing value from previous segments)
-		std::unordered_set<IMLRegID> regForward; // registers which are not read or written in this segment, but are imported into a later segment (propagated info)
+		std::unordered_set<IMLRegID> regForward;  // registers which are not read or written in this segment, but are imported into a later segment (propagated info)
 	};
 
 	// calculate which registers are imported (read-before-written) and forwarded (read-before-written by a later segment) per segment
@@ -283,11 +283,11 @@ class IMLOptimizerRegIOAnalysis
 		std::vector<IMLSegmentRegisterInOut>& segRegisterInOutList = m_segRegisterInOutList;
 		IMLSegmentRegisterInOut* segIO = segRegisterInOutList.data();
 		uint32 index = 0;
-		for(auto& seg : m_segmentList)
+		for (auto& seg : m_segmentList)
 		{
 			seg->momentaryIndex = index;
 			index++;
-			for(auto& instr : seg->imlList)
+			for (auto& instr : seg->imlList)
 			{
 				IMLUsedRegisters registerUsage;
 				instr.CheckRegisterUsage(&registerUsage);
@@ -307,14 +307,14 @@ class IMLOptimizerRegIOAnalysis
 			segIO++;
 		}
 		// for every exit segment, import all registers
-		for(auto& seg : m_segmentList)
+		for (auto& seg : m_segmentList)
 		{
 			if (!seg->nextSegmentIsUncertain)
 				continue;
-			if(seg->deadCodeEliminationHintSeg)
+			if (seg->deadCodeEliminationHintSeg)
 				continue;
 			IMLSegmentRegisterInOut& segIO = segRegisterInOutList[seg->momentaryIndex];
-			for(uint32 i=0; i<=m_maxRegId; i++)
+			for (uint32 i = 0; i <= m_maxRegId; i++)
 			{
 				segIO.regImported.insert((IMLRegID)i);
 			}
@@ -325,7 +325,7 @@ class IMLOptimizerRegIOAnalysis
 		{
 			segIdsWhichNeedUpdate.insert(i);
 		}
-		while(!segIdsWhichNeedUpdate.empty())
+		while (!segIdsWhichNeedUpdate.empty())
 		{
 			auto firstIt = segIdsWhichNeedUpdate.begin();
 			uint32 segId = *firstIt;
@@ -333,39 +333,39 @@ class IMLOptimizerRegIOAnalysis
 			// forward regImported and regForward to earlier segments into their regForward, unless the register is written
 			auto& curSeg = m_segmentList[segId];
 			IMLSegmentRegisterInOut& curSegIO = segRegisterInOutList[segId];
-			for(auto& prevSeg : curSeg->list_prevSegments)
+			for (auto& prevSeg : curSeg->list_prevSegments)
 			{
 				IMLSegmentRegisterInOut& prevSegIO = segRegisterInOutList[prevSeg->momentaryIndex];
 				bool prevSegChanged = false;
-				for(auto& regId : curSegIO.regImported)
+				for (auto& regId : curSegIO.regImported)
 				{
 					if (!prevSegIO.regWritten.contains(regId))
 						prevSegChanged |= prevSegIO.regForward.insert(regId).second;
 				}
-				for(auto& regId : curSegIO.regForward)
+				for (auto& regId : curSegIO.regForward)
 				{
 					if (!prevSegIO.regWritten.contains(regId))
 						prevSegChanged |= prevSegIO.regForward.insert(regId).second;
 				}
-				if(prevSegChanged)
+				if (prevSegChanged)
 					segIdsWhichNeedUpdate.insert(prevSeg->momentaryIndex);
 			}
 			// same for hint links
-			for(auto& prevSeg : curSeg->list_deadCodeHintBy)
+			for (auto& prevSeg : curSeg->list_deadCodeHintBy)
 			{
 				IMLSegmentRegisterInOut& prevSegIO = segRegisterInOutList[prevSeg->momentaryIndex];
 				bool prevSegChanged = false;
-				for(auto& regId : curSegIO.regImported)
+				for (auto& regId : curSegIO.regImported)
 				{
 					if (!prevSegIO.regWritten.contains(regId))
 						prevSegChanged |= prevSegIO.regForward.insert(regId).second;
 				}
-				for(auto& regId : curSegIO.regForward)
+				for (auto& regId : curSegIO.regForward)
 				{
 					if (!prevSegIO.regWritten.contains(regId))
 						prevSegChanged |= prevSegIO.regForward.insert(regId).second;
 				}
-				if(prevSegChanged)
+				if (prevSegChanged)
 					segIdsWhichNeedUpdate.insert(prevSeg->momentaryIndex);
 			}
 		}
@@ -374,9 +374,9 @@ class IMLOptimizerRegIOAnalysis
 	std::unordered_set<IMLRegID> GetRegistersNeededAtEndOfSegment(IMLSegment& seg)
 	{
 		std::unordered_set<IMLRegID> regsNeeded;
-		if(seg.nextSegmentIsUncertain)
+		if (seg.nextSegmentIsUncertain)
 		{
-			if(seg.deadCodeEliminationHintSeg)
+			if (seg.deadCodeEliminationHintSeg)
 			{
 				auto& nextSegIO = m_segRegisterInOutList[seg.deadCodeEliminationHintSeg->momentaryIndex];
 				regsNeeded.insert(nextSegIO.regImported.begin(), nextSegIO.regImported.end());
@@ -385,18 +385,18 @@ class IMLOptimizerRegIOAnalysis
 			else
 			{
 				// add all regs
-				for(uint32 i = 0; i <= m_maxRegId; i++)
+				for (uint32 i = 0; i <= m_maxRegId; i++)
 					regsNeeded.insert(i);
 			}
 			return regsNeeded;
 		}
-		if(seg.nextSegmentBranchTaken)
+		if (seg.nextSegmentBranchTaken)
 		{
 			auto& nextSegIO = m_segRegisterInOutList[seg.nextSegmentBranchTaken->momentaryIndex];
 			regsNeeded.insert(nextSegIO.regImported.begin(), nextSegIO.regImported.end());
 			regsNeeded.insert(nextSegIO.regForward.begin(), nextSegIO.regForward.end());
 		}
-		if(seg.nextSegmentBranchNotTaken)
+		if (seg.nextSegmentBranchNotTaken)
 		{
 			auto& nextSegIO = m_segRegisterInOutList[seg.nextSegmentBranchNotTaken->momentaryIndex];
 			regsNeeded.insert(nextSegIO.regImported.begin(), nextSegIO.regImported.end());
@@ -407,31 +407,31 @@ class IMLOptimizerRegIOAnalysis
 
 	bool IsRegisterNeededAtEndOfSegment(IMLSegment& seg, IMLRegID regId)
 	{
-		if(seg.nextSegmentIsUncertain)
+		if (seg.nextSegmentIsUncertain)
 		{
-			if(!seg.deadCodeEliminationHintSeg)
+			if (!seg.deadCodeEliminationHintSeg)
 				return true;
 			auto& nextSegIO = m_segRegisterInOutList[seg.deadCodeEliminationHintSeg->momentaryIndex];
-			if(nextSegIO.regImported.contains(regId))
+			if (nextSegIO.regImported.contains(regId))
 				return true;
-			if(nextSegIO.regForward.contains(regId))
+			if (nextSegIO.regForward.contains(regId))
 				return true;
 			return false;
 		}
-		if(seg.nextSegmentBranchTaken)
+		if (seg.nextSegmentBranchTaken)
 		{
 			auto& nextSegIO = m_segRegisterInOutList[seg.nextSegmentBranchTaken->momentaryIndex];
-			if(nextSegIO.regImported.contains(regId))
+			if (nextSegIO.regImported.contains(regId))
 				return true;
-			if(nextSegIO.regForward.contains(regId))
+			if (nextSegIO.regForward.contains(regId))
 				return true;
 		}
-		if(seg.nextSegmentBranchNotTaken)
+		if (seg.nextSegmentBranchNotTaken)
 		{
 			auto& nextSegIO = m_segRegisterInOutList[seg.nextSegmentBranchNotTaken->momentaryIndex];
-			if(nextSegIO.regImported.contains(regId))
+			if (nextSegIO.regImported.contains(regId))
 				return true;
-			if(nextSegIO.regForward.contains(regId))
+			if (nextSegIO.regForward.contains(regId))
 				return true;
 		}
 		return false;
@@ -442,7 +442,6 @@ class IMLOptimizerRegIOAnalysis
 	uint32 m_maxRegId;
 
 	std::vector<IMLSegmentRegisterInOut> m_segRegisterInOutList;
-
 };
 
 // scan backwards starting from index and return the index of the first found instruction which writes to the given register (by id)
@@ -476,9 +475,9 @@ bool IMLUtil_CanMoveInstructionTo(IMLSegment& seg, sint32 initialIndex, sint32 t
 			regsRead.push_back(reg.GetRegID());
 	});
 	// check all the instructions inbetween
-	if(initialIndex < targetIndex)
+	if (initialIndex < targetIndex)
 	{
-		sint32 scanStartIndex = initialIndex+1; // +1 to skip the moving instruction itself
+		sint32 scanStartIndex = initialIndex + 1; // +1 to skip the moving instruction itself
 		sint32 scanEndIndex = targetIndex;
 		for (sint32 i = scanStartIndex; i < scanEndIndex; i++)
 		{
@@ -494,7 +493,7 @@ bool IMLUtil_CanMoveInstructionTo(IMLSegment& seg, sint32 initialIndex, sint32 t
 				else
 					canMove = canMove && std::find(regsRead.begin(), regsRead.end(), regId) == regsRead.end();
 			});
-			if(!canMove)
+			if (!canMove)
 				return false;
 		}
 	}
@@ -534,8 +533,8 @@ sint32 IMLUtil_MoveInstructionTo(IMLSegment& seg, sint32 initialIndex, sint32 ta
 	{
 		cemu_assert_debug(targetIndex > 0);
 		targetIndex--;
-		for(size_t i=initialIndex; i<targetIndex; i++)
-			seg.imlList[i] = seg.imlList[i+1];
+		for (size_t i = initialIndex; i < targetIndex; i++)
+			seg.imlList[i] = seg.imlList[i + 1];
 		seg.imlList[targetIndex] = temp;
 		return targetIndex;
 	}
@@ -552,9 +551,9 @@ sint32 IMLUtil_MoveInstructionTo(IMLSegment& seg, sint32 initialIndex, sint32 ta
 bool IMLOptimizerX86_ModifiesEFlags(IMLInstruction& inst)
 {
 	// this is a very conservative implementation. There are more cases but this is good enough for now
-	if(inst.type == PPCREC_IML_TYPE_NAME_R || inst.type == PPCREC_IML_TYPE_R_NAME)
+	if (inst.type == PPCREC_IML_TYPE_NAME_R || inst.type == PPCREC_IML_TYPE_R_NAME)
 		return false;
-	if((inst.type == PPCREC_IML_TYPE_R_R || inst.type == PPCREC_IML_TYPE_R_S32) && inst.operation == PPCREC_IML_OP_ASSIGN)
+	if ((inst.type == PPCREC_IML_TYPE_R_R || inst.type == PPCREC_IML_TYPE_R_S32) && inst.operation == PPCREC_IML_OP_ASSIGN)
 		return false;
 	return true; // if we dont know for sure, assume it does
 }
@@ -578,7 +577,7 @@ void IMLOptimizer_RemoveDeadCodeFromSegment(IMLOptimizerRegIOAnalysis& regIoAnal
 	std::unordered_set<IMLRegID> regsNeeded = regIoAnalysis.GetRegistersNeededAtEndOfSegment(seg);
 
 	// start with suffix instruction
-	if(seg.HasSuffixInstruction())
+	if (seg.HasSuffixInstruction())
 	{
 		IMLInstruction& imlInstruction = seg.imlList[seg.GetSuffixInstructionIndex()];
 		IMLUsedRegisters registersUsed;
@@ -591,7 +590,7 @@ void IMLOptimizer_RemoveDeadCodeFromSegment(IMLOptimizerRegIOAnalysis& regIoAnal
 		});
 	}
 	// iterate instructions backwards
-	for (sint32 i = seg.imlList.size() - (seg.HasSuffixInstruction() ? 2:1); i >= 0; i--)
+	for (sint32 i = seg.imlList.size() - (seg.HasSuffixInstruction() ? 2 : 1); i >= 0; i--)
 	{
 		IMLInstruction& imlInstruction = seg.imlList[i];
 		IMLUsedRegisters registersUsed;
@@ -612,7 +611,7 @@ void IMLOptimizer_RemoveDeadCodeFromSegment(IMLOptimizerRegIOAnalysis& regIoAnal
 		registersUsed.ForEachReadGPR([&](IMLReg reg) {
 			regsNeeded.insert(reg.GetRegID());
 		});
-		if(!imlInstruction.HasSideEffects() && onlyWritesRedundantRegisters)
+		if (!imlInstruction.HasSideEffects() && onlyWritesRedundantRegisters)
 		{
 			imlInstruction.make_no_op();
 		}
@@ -627,46 +626,46 @@ void IMLOptimizerX86_SubstituteCJumpForEflagsJump(IMLOptimizerRegIOAnalysis& reg
 	// - Further detect and optimize patterns like DEC + CMP + JCC into fused ops (todo)
 
 	// check if this segment ends with a conditional jump
-	if(!seg.HasSuffixInstruction())
+	if (!seg.HasSuffixInstruction())
 		return;
 	sint32 cjmpInstIndex = seg.GetSuffixInstructionIndex();
-	if(cjmpInstIndex < 0)
+	if (cjmpInstIndex < 0)
 		return;
 	IMLInstruction& cjumpInstr = seg.imlList[cjmpInstIndex];
-	if( cjumpInstr.type != PPCREC_IML_TYPE_CONDITIONAL_JUMP )
+	if (cjumpInstr.type != PPCREC_IML_TYPE_CONDITIONAL_JUMP)
 		return;
 	IMLReg regCondBool = cjumpInstr.op_conditional_jump.registerBool;
 	bool invertedCondition = !cjumpInstr.op_conditional_jump.mustBeTrue;
 	// find the instruction which sets the bool
-	sint32 cmpInstrIndex = IMLUtil_FindInstructionWhichWritesRegister(seg, cjmpInstIndex-1, regCondBool, 20);
-	if(cmpInstrIndex < 0)
+	sint32 cmpInstrIndex = IMLUtil_FindInstructionWhichWritesRegister(seg, cjmpInstIndex - 1, regCondBool, 20);
+	if (cmpInstrIndex < 0)
 		return;
 	// check if its an instruction combo which can be optimized (currently only cmp + cjump) and get the condition
 	IMLInstruction& condSetterInstr = seg.imlList[cmpInstrIndex];
 	IMLCondition cond;
-	if(condSetterInstr.type == PPCREC_IML_TYPE_COMPARE)
+	if (condSetterInstr.type == PPCREC_IML_TYPE_COMPARE)
 		cond = condSetterInstr.op_compare.cond;
-	else if(condSetterInstr.type == PPCREC_IML_TYPE_COMPARE_S32)
+	else if (condSetterInstr.type == PPCREC_IML_TYPE_COMPARE_S32)
 		cond = condSetterInstr.op_compare_s32.cond;
 	else
 		return;
 	// check if instructions inbetween modify eflags
 	sint32 indexEflagsSafeStart = -1; // index of the first instruction which does not modify eflags up to cjump
-	for(sint32 i = cjmpInstIndex-1; i > cmpInstrIndex; i--)
+	for (sint32 i = cjmpInstIndex - 1; i > cmpInstrIndex; i--)
 	{
-		if(IMLOptimizerX86_ModifiesEFlags(seg.imlList[i]))
+		if (IMLOptimizerX86_ModifiesEFlags(seg.imlList[i]))
 		{
-			indexEflagsSafeStart = i+1;
+			indexEflagsSafeStart = i + 1;
 			break;
 		}
 	}
-	if(indexEflagsSafeStart >= 0)
+	if (indexEflagsSafeStart >= 0)
 	{
 		cemu_assert(indexEflagsSafeStart > 0);
 		// there are eflags-modifying instructions inbetween the bool setter and cjump
 		// try to move the eflags setter close enough to the cjump (to indexEflagsSafeStart)
 		bool canMove = IMLUtil_CanMoveInstructionTo(seg, cmpInstrIndex, indexEflagsSafeStart);
-		if(!canMove)
+		if (!canMove)
 		{
 			return;
 		}
@@ -684,7 +683,7 @@ void IMLOptimizerX86_SubstituteCJumpForEflagsJump(IMLOptimizerRegIOAnalysis& reg
 
 	auto& cmpInstr = seg.imlList[cmpInstrIndex];
 	cemu_assert_debug(cmpInstr.type == PPCREC_IML_TYPE_COMPARE || cmpInstr.type == PPCREC_IML_TYPE_COMPARE_S32);
-	if(cmpInstr.type == PPCREC_IML_TYPE_COMPARE)
+	if (cmpInstr.type == PPCREC_IML_TYPE_COMPARE)
 	{
 		IMLReg regA = cmpInstr.op_compare.regA;
 		IMLReg regB = cmpInstr.op_compare.regB;
@@ -696,7 +695,6 @@ void IMLOptimizerX86_SubstituteCJumpForEflagsJump(IMLOptimizerRegIOAnalysis& reg
 		sint32 val = cmpInstr.op_compare_s32.immS32;
 		seg.imlList[cmpInstrIndex].make_r_s32(PPCREC_IML_OP_X86_CMP, regA, val);
 	}
-
 }
 
 void IMLOptimizer_StandardOptimizationPassForSegment(IMLOptimizerRegIOAnalysis& regIoAnalysis, IMLSegment& seg)

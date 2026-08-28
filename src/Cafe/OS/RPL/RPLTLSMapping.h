@@ -55,4 +55,4 @@ namespace RPLLoaderInternal
 			return std::nullopt;
 		return TLSMapping{virtualBase, mappedBase, static_cast<std::uint32_t>(size)};
 	}
-}
+} // namespace RPLLoaderInternal

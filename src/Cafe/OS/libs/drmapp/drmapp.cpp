@@ -29,7 +29,7 @@ namespace drmapp
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "drmapp";
@@ -42,7 +42,7 @@ namespace drmapp
 			cafeExportRegisterFunc(AocChkIsFinished, "drmapp", "AocChkIsFinished__3RplFv", LogType::Placeholder);
 			cafeExportRegisterFunc(TicketChkIsFinished, "drmapp", "TicketChkIsFinished__3RplFv", LogType::Placeholder);
 		}
-	}s_COSdrmappModule;
+	} s_COSdrmappModule;
 
 	COSModule* GetModule()
 	{

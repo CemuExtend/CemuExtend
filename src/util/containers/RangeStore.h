@@ -3,15 +3,14 @@
 template<typename _OBJ, typename _ADDR, size_t count, size_t granularity>
 class RangeStore
 {
-public:
-
+  public:
 	typedef struct
 	{
 		_ADDR start;
 		_ADDR end;
 		_OBJ data;
 		size_t lastIterationIndex;
-	}rangeEntry_t;
+	} rangeEntry_t;
 
 	RangeStore() = default;
 
@@ -74,7 +73,7 @@ public:
 		delete rangeEntry;
 	}
 
-	void findRanges(_ADDR start, _ADDR end, std::function <void(_ADDR start, _ADDR end, _OBJ data)> f)
+	void findRanges(_ADDR start, _ADDR end, std::function<void(_ADDR start, _ADDR end, _OBJ data)> f)
 	{
 		currentIterationIndex++;
 		size_t bucketFirst;
@@ -122,20 +121,20 @@ public:
 		return false;
 	}
 
-    void clear()
-    {
-        for(auto& bucket : rangeBuckets)
-        {
-            while(!bucket.list_ranges.empty())
-                deleteRange(bucket.list_ranges[0]);
-        }
-    }
+	void clear()
+	{
+		for (auto& bucket : rangeBuckets)
+		{
+			while (!bucket.list_ranges.empty())
+				deleteRange(bucket.list_ranges[0]);
+		}
+	}
 
-private:
+  private:
 	typedef struct
 	{
 		std::vector<rangeEntry_t*> list_ranges;
-	}rangeBucket_t;
+	} rangeBucket_t;
 
 	std::array<rangeBucket_t, count> rangeBuckets;
 

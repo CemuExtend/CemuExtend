@@ -31,7 +31,7 @@ void curlDebug_markActiveRequest(CURL_t* curl)
 	if (curl->debug.file_requestParam)
 	{
 		auto t = std::localtime(&now);
-		curl->debug.file_requestParam->writeStringFmt("Request %d %d-%d-%d %d:%02d:%02d\r\n", (sint32)curl->debug.activeRequestIndex, t->tm_year+1900, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+		curl->debug.file_requestParam->writeStringFmt("Request %d %d-%d-%d %d:%02d:%02d\r\n", (sint32)curl->debug.activeRequestIndex, t->tm_year + 1900, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
 	}
 }
 
@@ -65,7 +65,7 @@ void curlDebug_logEasySetOptStr(CURL_t* curl, const char* optName, const char* o
 	if (curl->debug.file_requestParam)
 	{
 		curl->debug.file_requestParam->writeStringFmt("SetOpt %s: ", optName, optValue ? optValue : "NULL");
-		if(optValue)
+		if (optValue)
 			curl->debug.file_requestParam->writeString(optValue);
 		else
 			curl->debug.file_requestParam->writeString("NULL");
@@ -96,7 +96,7 @@ void curlDebug_resultWrite(CURL_t* curl, char* ptr, size_t size, size_t nmemb)
 	}
 	if (curl->debug.file_responseRaw)
 	{
-		curl->debug.file_responseRaw->writeData(ptr, size*nmemb);
+		curl->debug.file_responseRaw->writeData(ptr, size * nmemb);
 	}
 }
 
@@ -114,7 +114,7 @@ void curlDebug_headerWrite(CURL_t* curl, char* ptr, size_t size, size_t nmemb)
 	}
 	if (curl->debug.file_responseHeaders)
 	{
-		curl->debug.file_responseHeaders->writeData(ptr, size*nmemb);
+		curl->debug.file_responseHeaders->writeData(ptr, size * nmemb);
 	}
 }
 

@@ -7,7 +7,7 @@ class wxListView;
 
 class BreakpointWindow : public wxFrame
 {
-public:
+  public:
 	BreakpointWindow(wxFrame& parent, const wxPoint& main_position, const wxSize& main_size, bool pinToMain);
 	virtual ~BreakpointWindow();
 
@@ -15,7 +15,7 @@ public:
 	void OnUpdateView();
 	void OnGameLoaded();
 
-private:
+  private:
 	void OnBreakpointToggled(wxListEvent& event);
 	void OnLeftDClick(wxMouseEvent& event);
 	void OnRightDown(wxMouseEvent& event);

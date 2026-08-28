@@ -8,7 +8,7 @@
 wxDEFINE_EVENT(wxEVT_CHECKTREE_FOCUS, wxTreeEvent);
 wxDEFINE_EVENT(wxEVT_CHECKTREE_CHOICE, wxTreeEvent);
 
-//IMPLEMENT_DYNAMIC_CLASS(wxCheckTree, wxTreeCtrl)
+// IMPLEMENT_DYNAMIC_CLASS(wxCheckTree, wxTreeCtrl)
 
 bool on_check_or_label(int flags)
 {
@@ -40,7 +40,6 @@ void unhighlight(wxTreeCtrl* m_treeCtrl1, wxTreeItemId& id)
 		m_treeCtrl1->SetItemState(id, wxCheckTree::CHECKED);
 	}
 }
-
 
 void mohighlight(wxTreeCtrl* m_treeCtrl1, wxTreeItemId& id, bool toggle)
 {
@@ -99,7 +98,6 @@ wxCheckTree::wxCheckTree(wxWindow* parent, const wxWindowID id, const wxPoint& p
 {
 	Init();
 }
-
 
 void wxCheckTree::Init()
 {
@@ -180,22 +178,22 @@ void wxCheckTree::Init()
 
 	AssignStateImageList(states);
 
-	Connect(wxEVT_TREE_SEL_CHANGING, wxTreeEventHandler( wxCheckTree::On_Tree_Sel_Changed ), nullptr, this);
+	Connect(wxEVT_TREE_SEL_CHANGING, wxTreeEventHandler(wxCheckTree::On_Tree_Sel_Changed), nullptr, this);
 
-	Connect(wxEVT_CHAR, wxKeyEventHandler( wxCheckTree::On_Char ), nullptr, this);
-	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler( wxCheckTree::On_KeyDown ), nullptr, this);
-	Connect(wxEVT_KEY_UP, wxKeyEventHandler( wxCheckTree::On_KeyUp ), nullptr, this);
+	Connect(wxEVT_CHAR, wxKeyEventHandler(wxCheckTree::On_Char), nullptr, this);
+	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(wxCheckTree::On_KeyDown), nullptr, this);
+	Connect(wxEVT_KEY_UP, wxKeyEventHandler(wxCheckTree::On_KeyUp), nullptr, this);
 
-	Connect(wxEVT_ENTER_WINDOW, wxMouseEventHandler( wxCheckTree::On_Mouse_Enter_Tree ), nullptr, this);
-	Connect(wxEVT_LEAVE_WINDOW, wxMouseEventHandler( wxCheckTree::On_Mouse_Leave_Tree ), nullptr, this);
-	Connect(wxEVT_LEFT_DCLICK, wxMouseEventHandler( wxCheckTree::On_Left_DClick ), nullptr, this);
-	Connect(wxEVT_LEFT_DOWN, wxMouseEventHandler( wxCheckTree::On_Left_Down ), nullptr, this);
-	Connect(wxEVT_LEFT_UP, wxMouseEventHandler( wxCheckTree::On_Left_Up ), nullptr, this);
-	Connect(wxEVT_MOTION, wxMouseEventHandler( wxCheckTree::On_Mouse_Motion ), nullptr, this);
-	Connect(wxEVT_MOUSEWHEEL, wxMouseEventHandler( wxCheckTree::On_Mouse_Wheel ), nullptr, this);
+	Connect(wxEVT_ENTER_WINDOW, wxMouseEventHandler(wxCheckTree::On_Mouse_Enter_Tree), nullptr, this);
+	Connect(wxEVT_LEAVE_WINDOW, wxMouseEventHandler(wxCheckTree::On_Mouse_Leave_Tree), nullptr, this);
+	Connect(wxEVT_LEFT_DCLICK, wxMouseEventHandler(wxCheckTree::On_Left_DClick), nullptr, this);
+	Connect(wxEVT_LEFT_DOWN, wxMouseEventHandler(wxCheckTree::On_Left_Down), nullptr, this);
+	Connect(wxEVT_LEFT_UP, wxMouseEventHandler(wxCheckTree::On_Left_Up), nullptr, this);
+	Connect(wxEVT_MOTION, wxMouseEventHandler(wxCheckTree::On_Mouse_Motion), nullptr, this);
+	Connect(wxEVT_MOUSEWHEEL, wxMouseEventHandler(wxCheckTree::On_Mouse_Wheel), nullptr, this);
 
-	Connect(wxEVT_SET_FOCUS, wxFocusEventHandler( wxCheckTree::On_Tree_Focus_Set ), nullptr, this);
-	Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler( wxCheckTree::On_Tree_Focus_Lost ), nullptr, this);
+	Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(wxCheckTree::On_Tree_Focus_Set), nullptr, this);
+	Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(wxCheckTree::On_Tree_Focus_Lost), nullptr, this);
 }
 
 void wxCheckTree::Sort(const wxTreeItemId& node, bool recursive)
@@ -203,13 +201,13 @@ void wxCheckTree::Sort(const wxTreeItemId& node, bool recursive)
 	if (recursive)
 	{
 		wxTreeItemIdValue cookie;
-		for(auto it = GetFirstChild(node, cookie); it.IsOk(); it = GetNextChild(it, cookie))
+		for (auto it = GetFirstChild(node, cookie); it.IsOk(); it = GetNextChild(it, cookie))
 		{
 			Sort(it, true);
 		}
 	}
 
-	if(GetChildrenCount(node, false) > 0)
+	if (GetChildrenCount(node, false) > 0)
 		this->SortChildren(node);
 }
 
@@ -227,12 +225,11 @@ int wxCheckTree::OnCompareItems(const wxTreeItemId& item1, const wxTreeItemId& i
 	return GetItemText(item1).Lower().compare(GetItemText(item2).Lower());
 }
 
-
 void wxCheckTree::SetItemTextColour(const wxTreeItemId& item, const wxColour& col)
 {
 	const auto it = m_colors.find(item);
 	if (it == m_colors.end())
-		m_colors.emplace(std::pair<wxTreeItemId,wxColour>(item, col));
+		m_colors.emplace(std::pair<wxTreeItemId, wxColour>(item, col));
 	else
 		m_colors[item] = col;
 
@@ -243,7 +240,7 @@ bool wxCheckTree::EnableCheckBox(const wxTreeItemId& item, bool enable)
 {
 	if (!item.IsOk())
 		return false;
-	
+
 	const int state = GetItemState(item);
 
 	if (state < 0 || state > CHECKED_DISABLED)
@@ -267,8 +264,8 @@ bool wxCheckTree::EnableCheckBox(const wxTreeItemId& item, bool enable)
 	}
 	if (state == UNCHECKED_DISABLED || state == CHECKED_DISABLED)
 	{
-		//don't disable a second time or we'll lose the
-		//text color information.
+		// don't disable a second time or we'll lose the
+		// text color information.
 		return true;
 	}
 
@@ -347,7 +344,7 @@ void wxCheckTree::On_Char(wxKeyEvent& event)
 {
 	if (!GetSelection().IsOk() && GetCount() > 0)
 	{
-		//If there is no selection, any keypress should just select the first item
+		// If there is no selection, any keypress should just select the first item
 		wxTreeItemIdValue cookie;
 		const auto new_item = HasFlag(wxTR_HIDE_ROOT) ? GetFirstChild(GetRootItem(), cookie) : GetRootItem();
 		SelectItem(new_item);
@@ -373,8 +370,8 @@ void wxCheckTree::On_KeyUp(wxKeyEvent& event)
 {
 	if (event.GetKeyCode() == WXK_SPACE)
 	{
-		//last_kf = this->GetSelection();
- 		mohighlight(this, last_kf, true);
+		// last_kf = this->GetSelection();
+		mohighlight(this, last_kf, true);
 	}
 	else if (event.GetKeyCode() == WXK_ESCAPE)
 	{
@@ -385,7 +382,6 @@ void wxCheckTree::On_KeyUp(wxKeyEvent& event)
 
 	event.Skip();
 }
-
 
 void wxCheckTree::On_Mouse_Enter_Tree(wxMouseEvent& event)
 {
@@ -409,10 +405,10 @@ void wxCheckTree::On_Left_DClick(wxMouseEvent& event)
 
 	HitTest(event.GetPosition(), flags);
 
-	//double clicks on buttons can be annoying, so we'll ignore those
-	//but all other double clicks will just have 1 more click added to them
+	// double clicks on buttons can be annoying, so we'll ignore those
+	// but all other double clicks will just have 1 more click added to them
 
-	//without this, the check boxes are not as responsive as they should be
+	// without this, the check boxes are not as responsive as they should be
 	if (!(flags & wxTREE_HITTEST_ONITEMBUTTON))
 	{
 		On_Left_Down(event);
@@ -501,7 +497,7 @@ void wxCheckTree::On_Left_Up(wxMouseEvent& event)
 	}
 	else
 	{
-		//id is not ok
+		// id is not ok
 		unhighlight(this, last_left_down);
 		unhighlight(this, last_mouse_over);
 		last_left_down = wxTreeItemId();
@@ -513,7 +509,7 @@ void wxCheckTree::On_Mouse_Motion(wxMouseEvent& event)
 {
 	if (mouse_entered_tree_with_left_down)
 	{
-		//just ignore everything until the left button is released
+		// just ignore everything until the left button is released
 		return;
 	}
 
@@ -527,14 +523,14 @@ void wxCheckTree::On_Mouse_Motion(wxMouseEvent& event)
 	}
 	else if (event.LeftIsDown() && last_left_down.IsOk())
 	{
-		//to match the behavior of ordinary check boxes,
-		//if we've moved to a new item while holding the mouse button down
-		//we want to set the item where the left down click occured to have
-		//mouse over highlight.  And if we return to the box where the
-		//left down occured, we want to return it to the having the left down highlight
+		// to match the behavior of ordinary check boxes,
+		// if we've moved to a new item while holding the mouse button down
+		// we want to set the item where the left down click occured to have
+		// mouse over highlight.  And if we return to the box where the
+		// left down occured, we want to return it to the having the left down highlight
 
-		//I don't understand why this is the behavior
-		//of ordinary check boxes, but I'm goin to match it anyway.
+		// I don't understand why this is the behavior
+		// of ordinary check boxes, but I'm goin to match it anyway.
 
 		if (id == last_left_down)
 		{
@@ -549,10 +545,10 @@ void wxCheckTree::On_Mouse_Motion(wxMouseEvent& event)
 	}
 	else
 	{
-		//4 cases 1 we're still on the same item, but we've moved off the state icon or label
-		//        2 we're still on the same item and on the state icon or label - do nothing
-		//        3 we're on a new item but not on its state icon or label (or the new item has no state)
-		//        4 we're on a new item, it has a state icon, and we're on the state icon or label
+		// 4 cases 1 we're still on the same item, but we've moved off the state icon or label
+		//         2 we're still on the same item and on the state icon or label - do nothing
+		//         3 we're on a new item but not on its state icon or label (or the new item has no state)
+		//         4 we're on a new item, it has a state icon, and we're on the state icon or label
 
 		const int state = GetItemState(id);
 		if (id == last_mouse_over)
@@ -587,11 +583,11 @@ void wxCheckTree::On_Mouse_Wheel(wxMouseEvent& event)
 
 void wxCheckTree::On_Tree_Focus_Set(wxFocusEvent& event)
 {
-	//event.Skip();
+	// event.Skip();
 
-	//skipping this event will set the last selected item
-	//to be highlighted and I want the tree items to only be
-	//highlighted by keyboard actions.
+	// skipping this event will set the last selected item
+	// to be highlighted and I want the tree items to only be
+	// highlighted by keyboard actions.
 }
 
 void wxCheckTree::On_Tree_Focus_Lost(wxFocusEvent& event)

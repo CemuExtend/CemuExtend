@@ -14,7 +14,6 @@ static void PPCInterpreter_setXerOV(PPCInterpreter_t* hCPU, bool hasOverflow)
 
 static bool checkAdditionOverflow(uint32 x, uint32 y, uint32 r)
 {
-
 	/*
 		x	y	r	result	(has overflow)
 		0	0	0	0
@@ -490,7 +489,7 @@ static void PPCInterpreter_DIVWO(PPCInterpreter_t* hCPU, uint32 opcode)
 		PPCInterpreter_setXerOV(hCPU, true);
 		hCPU->gpr[rD] = a < 0 ? 0xFFFFFFFF : 0;
 	}
-	else if(a == 0x80000000 && b == 0xFFFFFFFF)
+	else if (a == 0x80000000 && b == 0xFFFFFFFF)
 	{
 		PPCInterpreter_setXerOV(hCPU, true);
 		hCPU->gpr[rD] = 0xFFFFFFFF;
@@ -531,7 +530,7 @@ static void PPCInterpreter_DIVWUO(PPCInterpreter_t* hCPU, uint32 opcode)
 		PPCInterpreter_setXerOV(hCPU, true);
 		hCPU->gpr[rD] = 0;
 	}
-	else if(a == 0x80000000 && b == 0xFFFFFFFF)
+	else if (a == 0x80000000 && b == 0xFFFFFFFF)
 	{
 		PPCInterpreter_setXerOV(hCPU, false);
 		hCPU->gpr[rD] = 0;
@@ -556,21 +555,21 @@ static void PPCInterpreter_CREQV(PPCInterpreter_t* hCPU, uint32 opcode)
 static void PPCInterpreter_CRAND(PPCInterpreter_t* hCPU, uint32 opcode)
 {
 	PPC_OPC_TEMPL_X_CR();
-	ppc_setCRBit(hCPU, crD, ppc_getCRBit(hCPU, crA)&ppc_getCRBit(hCPU, crB));
+	ppc_setCRBit(hCPU, crD, ppc_getCRBit(hCPU, crA) & ppc_getCRBit(hCPU, crB));
 	PPCInterpreter_nextInstruction(hCPU);
 }
 
 static void PPCInterpreter_CRANDC(PPCInterpreter_t* hCPU, uint32 opcode)
 {
 	PPC_OPC_TEMPL_X_CR();
-	ppc_setCRBit(hCPU, crD, ppc_getCRBit(hCPU, crA)&(ppc_getCRBit(hCPU, crB) ^ 1));
+	ppc_setCRBit(hCPU, crD, ppc_getCRBit(hCPU, crA) & (ppc_getCRBit(hCPU, crB) ^ 1));
 	PPCInterpreter_nextInstruction(hCPU);
 }
 
 static void PPCInterpreter_CRNAND(PPCInterpreter_t* hCPU, uint32 opcode)
 {
 	PPC_OPC_TEMPL_X_CR();
-	ppc_setCRBit(hCPU, crD, (ppc_getCRBit(hCPU, crA)&ppc_getCRBit(hCPU, crB)) ^ 1);
+	ppc_setCRBit(hCPU, crD, (ppc_getCRBit(hCPU, crA) & ppc_getCRBit(hCPU, crB)) ^ 1);
 	PPCInterpreter_nextInstruction(hCPU);
 }
 
@@ -606,7 +605,7 @@ static void PPCInterpreter_NEG(PPCInterpreter_t* hCPU, uint32 opcode)
 {
 	PPC_OPC_TEMPL3_XO();
 	PPC_ASSERT(rB == 0);
-	hCPU->gpr[rD] = (uint32)-((sint32)hCPU->gpr[rA]);
+	hCPU->gpr[rD] = (uint32) - ((sint32)hCPU->gpr[rA]);
 	if (opHasRC())
 		ppc_update_cr0(hCPU, hCPU->gpr[rD]);
 	PPCInterpreter_nextInstruction(hCPU);
@@ -617,7 +616,7 @@ static void PPCInterpreter_NEGO(PPCInterpreter_t* hCPU, uint32 opcode)
 	PPC_OPC_TEMPL3_XO();
 	PPC_ASSERT(rB == 0);
 	PPCInterpreter_setXerOV(hCPU, hCPU->gpr[rA] == 0x80000000);
-	hCPU->gpr[rD] = (uint32)-((sint32)hCPU->gpr[rA]);
+	hCPU->gpr[rD] = (uint32) - ((sint32)hCPU->gpr[rA]);
 	if (opHasRC())
 		ppc_update_cr0(hCPU, hCPU->gpr[rD]);
 	PPCInterpreter_nextInstruction(hCPU);
@@ -807,7 +806,7 @@ static void PPCInterpreter_SRAW(PPCInterpreter_t* hCPU, uint32 opcode)
 	hCPU->gpr[rA] = hCPU->gpr[rD];
 	if (sh > 31)
 	{
-		hCPU->xer_ca = (hCPU->gpr[rA] >> 31) & 1; // copy sign bit to ca
+		hCPU->xer_ca = (hCPU->gpr[rA] >> 31) & 1;			   // copy sign bit to ca
 		hCPU->gpr[rA] = (uint32)((sint32)hCPU->gpr[rA] >> 31); // fill all bits with sign bit
 	}
 	else
@@ -874,11 +873,30 @@ static uint32 _CNTLZW(uint32 v)
 	uint32 result = 0;
 	if (v == 0)
 		return 32;
-	if ((v & 0xFFFF0000) != 0) { result |= 16; v >>= 16; }
-	if ((v & 0xFF00FF00) != 0) { result |= 8; v >>= 8; }
-	if ((v & 0xF0F0F0F0) != 0) { result |= 4; v >>= 4; }
-	if ((v & 0xCCCCCCCC) != 0) { result |= 2; v >>= 2; }
-	if ((v & 0xAAAAAAAA) != 0) { result |= 1; }
+	if ((v & 0xFFFF0000) != 0)
+	{
+		result |= 16;
+		v >>= 16;
+	}
+	if ((v & 0xFF00FF00) != 0)
+	{
+		result |= 8;
+		v >>= 8;
+	}
+	if ((v & 0xF0F0F0F0) != 0)
+	{
+		result |= 4;
+		v >>= 4;
+	}
+	if ((v & 0xCCCCCCCC) != 0)
+	{
+		result |= 2;
+		v >>= 2;
+	}
+	if ((v & 0xAAAAAAAA) != 0)
+	{
+		result |= 1;
+	}
 	result = 31 - result;
 	return result;
 }
@@ -929,7 +947,7 @@ static void PPCInterpreter_CMP(PPCInterpreter_t* hCPU, uint32 opcode)
 		hCPU->cr[cr * 4 + CR_BIT_LT] = 1;
 	else if (a > b)
 		hCPU->cr[cr * 4 + CR_BIT_GT] = 1;
-	else 
+	else
 		hCPU->cr[cr * 4 + CR_BIT_EQ] = 1;
 	hCPU->cr[cr * 4 + CR_BIT_SO] = hCPU->xer_so;
 	PPCInterpreter_nextInstruction(hCPU);
@@ -974,7 +992,7 @@ static void PPCInterpreter_CMPI(PPCInterpreter_t* hCPU, uint32 opcode)
 		hCPU->cr[cr * 4 + CR_BIT_LT] = 1;
 	else if (a > b)
 		hCPU->cr[cr * 4 + CR_BIT_GT] = 1;
-	else 
+	else
 		hCPU->cr[cr * 4 + CR_BIT_EQ] = 1;
 	hCPU->cr[cr * 4 + CR_BIT_SO] = hCPU->xer_so;
 	PPCInterpreter_nextInstruction(hCPU);
@@ -1002,4 +1020,3 @@ static void PPCInterpreter_CMPLI(PPCInterpreter_t* hCPU, uint32 opcode)
 	hCPU->cr[cr * 4 + CR_BIT_SO] = hCPU->xer_so;
 	PPCInterpreter_nextInstruction(hCPU);
 }
-

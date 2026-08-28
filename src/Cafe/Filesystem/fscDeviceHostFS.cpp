@@ -135,7 +135,7 @@ bool FSCVirtualFile_Host::fscDirNext(FSCDirEntry* dirEntry)
 		return false;
 
 	const fs::directory_entry& entry = **m_dirIterator;
-	
+
 	std::string fileName = entry.path().filename().generic_string();
 	if (fileName.size() >= sizeof(dirEntry->path) - 1)
 		fileName.resize(sizeof(dirEntry->path) - 1);
@@ -220,7 +220,7 @@ FSCVirtualFile* FSCVirtualFile_Host::OpenFile(const fs::path& path, FSC_ACCESS_F
 
 class fscDeviceHostFSC : public fscDeviceC
 {
-public:
+  public:
 	FSCVirtualFile* fscDeviceOpenByPath(std::string_view path, FSC_ACCESS_FLAG accessFlags, void* ctx, sint32* fscStatus) override
 	{
 		*fscStatus = FSC_STATUS_OK;
@@ -281,7 +281,7 @@ public:
 	}
 
 	// singleton
-public:
+  public:
 	static fscDeviceHostFSC& instance()
 	{
 		static fscDeviceHostFSC _instance;

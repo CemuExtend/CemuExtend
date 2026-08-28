@@ -33,10 +33,10 @@ uint64 muldiv64(uint64 a, uint64 b, uint64 d)
 
 uint64 PPCTimer_estimateRDTSCFrequency()
 {
-    #if defined(ARCH_X86_64)
+#if defined(ARCH_X86_64)
 	if (!g_CPUFeatures.x86.invariant_tsc)
 		cemuLog_log(LogType::Force, "Invariant TSC not supported");
-    #endif
+#endif
 
 	_mm_mfence();
 	uint64 tscStart = __rdtsc();
@@ -59,12 +59,12 @@ uint64 PPCTimer_estimateRDTSCFrequency()
 	uint64 tsc_freq = muldiv64(tsc_diff, hrtFreq, hrtDiff);
 
 	// uint64 freqMultiplier = tsc_freq / hrtFreq;
-	//cemuLog_log(LogType::Force, "RDTSC measurement test:");
-	//cemuLog_log(LogType::Force, "TSC-diff:   0x{:016x}", tsc_diff);
-	//cemuLog_log(LogType::Force, "TSC-freq:   0x{:016x}", tsc_freq);
-	//cemuLog_log(LogType::Force, "HPC-diff:   0x{:016x}", qpc_diff);
-	//cemuLog_log(LogType::Force, "HPC-freq:   0x{:016x}", (uint64)qpc_freq.QuadPart);
-	//cemuLog_log(LogType::Force, "Multiplier: 0x{:016x}", freqMultiplier);
+	// cemuLog_log(LogType::Force, "RDTSC measurement test:");
+	// cemuLog_log(LogType::Force, "TSC-diff:   0x{:016x}", tsc_diff);
+	// cemuLog_log(LogType::Force, "TSC-freq:   0x{:016x}", tsc_freq);
+	// cemuLog_log(LogType::Force, "HPC-diff:   0x{:016x}", qpc_diff);
+	// cemuLog_log(LogType::Force, "HPC-freq:   0x{:016x}", (uint64)qpc_freq.QuadPart);
+	// cemuLog_log(LogType::Force, "Multiplier: 0x{:016x}", freqMultiplier);
 
 	return tsc_freq;
 }
@@ -118,7 +118,8 @@ bool PPCTimer_isReady()
 
 void PPCTimer_waitForInit()
 {
-	while (!PPCTimer_isReady()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	while (!PPCTimer_isReady())
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 FSpinlock sTimerSpinlock;
@@ -136,18 +137,18 @@ uint64 PPCTimer_getFromRDTSC()
 	uint128_t diff{};
 	diff.low = _umul128(rdtscDif, Espresso::CORE_CLOCK, &diff.high);
 
-	if(rdtscCurrentMeasure > _rdtscLastMeasure)
+	if (rdtscCurrentMeasure > _rdtscLastMeasure)
 		_rdtscLastMeasure = rdtscCurrentMeasure; // only travel forward in time
 
 	uint8 c = 0;
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	c = _addcarry_u64(c, _rdtscAcc.low, diff.low, &_rdtscAcc.low);
 	_addcarry_u64(c, _rdtscAcc.high, diff.high, &_rdtscAcc.high);
-	#else
+#else
 	// requires casting because of long / long long nonesense
 	c = _addcarry_u64(c, _rdtscAcc.low, diff.low, (unsigned long long*)&_rdtscAcc.low);
 	_addcarry_u64(c, _rdtscAcc.high, diff.high, (unsigned long long*)&_rdtscAcc.high);
-	#endif
+#endif
 
 	uint64 remainder;
 	uint64 elapsedTick = _udiv128(_rdtscAcc.high, _rdtscAcc.low, _rdtscFrequency, &remainder);

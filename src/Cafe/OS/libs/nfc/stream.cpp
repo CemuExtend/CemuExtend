@@ -3,7 +3,7 @@
 #include <algorithm>
 
 Stream::Stream(std::endian endianness)
- : mError(ERROR_OK), mEndianness(endianness)
+	: mError(ERROR_OK), mEndianness(endianness)
 {
 }
 
@@ -88,7 +88,7 @@ bool Stream::NeedsSwap()
 }
 
 VectorStream::VectorStream(std::vector<std::byte>& vector, std::endian endianness)
- : Stream(endianness), mVector(vector), mPosition(0)
+	: Stream(endianness), mVector(vector), mPosition(0)
 {
 }
 
@@ -145,7 +145,7 @@ std::size_t VectorStream::GetRemaining() const
 }
 
 SpanStream::SpanStream(std::span<const std::byte> span, std::endian endianness)
- : Stream(endianness), mSpan(std::move(span)), mPosition(0)
+	: Stream(endianness), mSpan(std::move(span)), mPosition(0)
 {
 }
 

@@ -7,4 +7,4 @@ namespace camera
 	sint32 CAMClose(sint32 camHandle);
 
 	COSModule* GetModule();
-};
+}; // namespace camera

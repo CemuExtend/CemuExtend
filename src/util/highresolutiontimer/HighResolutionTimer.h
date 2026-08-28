@@ -4,7 +4,7 @@ using HRTick = uint64;
 
 class HighResolutionTimer
 {
-public:
+  public:
 	HighResolutionTimer()
 	{
 		m_timePoint = 0;
@@ -46,7 +46,7 @@ public:
 		return ticks * 1000000 / m_freq;
 	}
 
-private:
+  private:
 	HighResolutionTimer(uint64 timePoint) : m_timePoint(timePoint) {};
 
 	uint64 m_timePoint;
@@ -57,7 +57,7 @@ private:
 // measures time between Start() and Stop() call
 class BenchmarkTimer
 {
-public:
+  public:
 	void Start()
 	{
 		m_startTime = HighResolutionTimer::now().getTick();
@@ -78,8 +78,7 @@ public:
 		return elapsedMS;
 	}
 
-private:
+  private:
 	HRTick m_startTime{};
 	HRTick m_stopTime{};
 };
-

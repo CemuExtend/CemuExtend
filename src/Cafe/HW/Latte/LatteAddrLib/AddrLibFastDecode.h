@@ -12,7 +12,7 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8(LatteTextureLoaderCtx* textureLoad
 			sint32 baseOffset = LatteAddrLib::ComputeSurfaceAddrFromCoordMacroTiledCached_tm04_sample1(xt, yt, &textureLoader->computeAddrInfo); // this is only 10-20% of execution time
 			for (sint32 ry = 0; ry < 8; ry++)
 			{
-				sint32 pixelOffset = ((yt + ry)*textureLoader->decodedTexelCountX + (xt)) * (sizeof(texelBaseType)*texelBaseTypeCount);
+				sint32 pixelOffset = ((yt + ry) * textureLoader->decodedTexelCountX + (xt)) * (sizeof(texelBaseType) * texelBaseTypeCount);
 				texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
 
 				uint16* pixelOffsets = tableBase + (ry << 3);
@@ -21,12 +21,12 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8(LatteTextureLoaderCtx* textureLoad
 				{
 					uint32 pixelIndex = *pixelOffsets;
 					pixelOffsets++;
-					uint32 pixelOffset = pixelIndex * sizeof(texelBaseType)*texelBaseTypeCount;
+					uint32 pixelOffset = pixelIndex * sizeof(texelBaseType) * texelBaseTypeCount;
 					uint32 elemOffset = pixelOffset;
-					if ((sizeof(texelBaseType)*texelBaseTypeCount * 8 * 8) > 256)
+					if ((sizeof(texelBaseType) * texelBaseTypeCount * 8 * 8) > 256)
 					{
 						// separate group bytes, for small formats this step is not necessary since elemOffset is never over 0xFF (maximum is 8*8*bpp)
-						elemOffset = (elemOffset & 0xFF) | ((elemOffset&~0xFF) << 3);
+						elemOffset = (elemOffset & 0xFF) | ((elemOffset & ~0xFF) << 3);
 					}
 
 					sint32 offset = baseOffset + elemOffset;
@@ -74,18 +74,18 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy(LatteTextureLoade
 			sint32 baseOffset = ComputeSurfaceAddrFromCoordMacroTiledCached_tm04_sample1(xt, yt, &textureLoader->computeAddrInfo); // this is only 10-20% of execution time
 			for (sint32 ry = 0; ry < 8; ry++)
 			{
-				sint32 pixelOffset = ((yt + ry)*textureLoader->decodedTexelCountX + (xt)) * (sizeof(texelBaseType)*texelBaseTypeCount);
+				sint32 pixelOffset = ((yt + ry) * textureLoader->decodedTexelCountX + (xt)) * (sizeof(texelBaseType) * texelBaseTypeCount);
 				texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
 
 				uint16* pixelOffsets = tableBase + (ry << 3);
 
 				uint32 pixelIndex = *pixelOffsets;
 				pixelOffsets++;
-				uint32 elemOffset = pixelIndex * sizeof(texelBaseType)*texelBaseTypeCount;
-				if ((sizeof(texelBaseType)*texelBaseTypeCount * 8 * 8) > 256)
+				uint32 elemOffset = pixelIndex * sizeof(texelBaseType) * texelBaseTypeCount;
+				if ((sizeof(texelBaseType) * texelBaseTypeCount * 8 * 8) > 256)
 				{
 					// separate group bytes, for small formats this step is not necessary since elemOffset is never over 0xFF (maximum is 8*8*bpp)
-					elemOffset = (elemOffset & 0xFF) | ((elemOffset&~0xFF) << 3);
+					elemOffset = (elemOffset & 0xFF) | ((elemOffset & ~0xFF) << 3);
 				}
 
 				sint32 offset = baseOffset + elemOffset;
@@ -111,8 +111,7 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy(LatteTextureLoade
 				// 6	->	10
 				// 7	->	11
 
-
-				if ((sizeof(texelBaseType)*texelBaseTypeCount) == 8)
+				if ((sizeof(texelBaseType) * texelBaseTypeCount) == 8)
 				{
 					// bpp = 64
 					if (texelBaseTypeCount == 1)
@@ -144,7 +143,7 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy(LatteTextureLoade
 					else
 						assert_dbg();
 				}
-				else if ((sizeof(texelBaseType)*texelBaseTypeCount) == 4)
+				else if ((sizeof(texelBaseType) * texelBaseTypeCount) == 4)
 				{
 					// bpp = 32
 					if (texelBaseTypeCount == 1)
@@ -170,7 +169,7 @@ void optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy(LatteTextureLoade
 					else
 						cemu_assert_unimplemented();
 				}
-				else if ((sizeof(texelBaseType)*texelBaseTypeCount) == 1)
+				else if ((sizeof(texelBaseType) * texelBaseTypeCount) == 1)
 				{
 					// bpp = 8
 					if (texelBaseTypeCount == 1)
@@ -220,15 +219,15 @@ void optimizedDecodeLoops(LatteTextureLoaderCtx* textureLoader, uint8* outputDat
 		// calculate offsets in loop
 
 		// unsure if this variant is faster:
-		if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType)*texelBaseTypeCount) == 8)
+		if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType) * texelBaseTypeCount) == 8)
 		{
 			optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy<texelBaseType, texelBaseTypeCount, isEncodeDirection, isCompressed>(textureLoader, outputData, texelCountX, texelCountY);
 		}
-		else if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType)*texelBaseTypeCount) == 4)
+		else if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType) * texelBaseTypeCount) == 4)
 		{
 			optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy<texelBaseType, texelBaseTypeCount, isEncodeDirection, isCompressed>(textureLoader, outputData, texelCountX, texelCountY);
 		}
-		else if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType)*texelBaseTypeCount) == 1)
+		else if (textureLoader->computeAddrInfo.microTileType == 0 && (sizeof(texelBaseType) * texelBaseTypeCount) == 1)
 		{
 			optimizedDecodeLoop_tm04_numSamples1_8x8_optimizedRowCopy<texelBaseType, texelBaseTypeCount, isEncodeDirection, isCompressed>(textureLoader, outputData, texelCountX, texelCountY);
 		}
@@ -240,7 +239,7 @@ void optimizedDecodeLoops(LatteTextureLoaderCtx* textureLoader, uint8* outputDat
 		// right border
 		for (sint32 yt = 0; yt < texelCountY; yt++)
 		{
-			sint32 pixelOffset = (yt*textureLoader->decodedTexelCountX + texelCountX) * (sizeof(texelBaseType)*texelBaseTypeCount);
+			sint32 pixelOffset = (yt * textureLoader->decodedTexelCountX + texelCountX) * (sizeof(texelBaseType) * texelBaseTypeCount);
 			texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
 			for (sint32 xt = texelCountX; xt < texelCountOrigX; xt++)
 			{
@@ -274,7 +273,7 @@ void optimizedDecodeLoops(LatteTextureLoaderCtx* textureLoader, uint8* outputDat
 		// bottom border (with bottom right corner)
 		for (sint32 yt = texelCountY; yt < texelCountOrigY; yt++)
 		{
-			sint32 pixelOffset = (yt*textureLoader->decodedTexelCountX) * (sizeof(texelBaseType)*texelBaseTypeCount);
+			sint32 pixelOffset = (yt * textureLoader->decodedTexelCountX) * (sizeof(texelBaseType) * texelBaseTypeCount);
 			texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
 			for (sint32 xt = 0; xt < texelCountOrigX; xt++)
 			{
@@ -312,15 +311,15 @@ void optimizedDecodeLoops(LatteTextureLoaderCtx* textureLoader, uint8* outputDat
 		uint32 sliceOffset = textureLoader->sliceIndex * textureLoader->height * textureLoader->pitch;
 		for (sint32 y = 0; y < texelCountY; y++)
 		{
-			sint32 pixelOffset = (y*textureLoader->decodedTexelCountX) * (sizeof(texelBaseType)*texelBaseTypeCount);
+			sint32 pixelOffset = (y * textureLoader->decodedTexelCountX) * (sizeof(texelBaseType) * texelBaseTypeCount);
 			texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
-			texelBaseType* blockData = (texelBaseType*)(textureLoader->inputData + (textureLoader->pitch * y + sliceOffset) * (sizeof(texelBaseType)*texelBaseTypeCount));
+			texelBaseType* blockData = (texelBaseType*)(textureLoader->inputData + (textureLoader->pitch * y + sliceOffset) * (sizeof(texelBaseType) * texelBaseTypeCount));
 			for (sint32 x = 0; x < texelCountX; x++)
 			{
 				// copy as-is
 				if (texelBaseTypeCount == 1)
 				{
-					if(isEncodeDirection)
+					if (isEncodeDirection)
 						*(texelBaseType*)blockData = *blockOutput;
 					else
 						*blockOutput = *(texelBaseType*)blockData;
@@ -350,7 +349,7 @@ void optimizedDecodeLoops(LatteTextureLoaderCtx* textureLoader, uint8* outputDat
 		// generic handler
 		for (sint32 y = 0; y < textureLoader->height; y += textureLoader->stepY)
 		{
-			sint32 pixelOffset = ((y / textureLoader->stepY)*textureLoader->decodedTexelCountX) * (sizeof(texelBaseType)*texelBaseTypeCount);
+			sint32 pixelOffset = ((y / textureLoader->stepY) * textureLoader->decodedTexelCountX) * (sizeof(texelBaseType) * texelBaseTypeCount);
 			texelBaseType* blockOutput = (texelBaseType*)(outputData + pixelOffset);
 			for (sint32 x = 0; x < textureLoader->width; x += textureLoader->stepX)
 			{

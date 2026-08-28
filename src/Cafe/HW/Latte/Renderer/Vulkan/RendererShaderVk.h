@@ -20,10 +20,10 @@ class RendererShaderVk : public RendererShader
 		DONE
 	};
 
-public:
+  public:
 	static void ShaderCacheLoading_begin(uint64 cacheTitleId);
-    static void ShaderCacheLoading_end();
-    static void ShaderCacheLoading_Close();
+	static void ShaderCacheLoading_end();
+	static void ShaderCacheLoading_Close();
 
 	RendererShaderVk(ShaderType type, uint64 baseHash, uint64 auxHash, bool isGameShader, bool isGfxPackShader, const std::string& glslCode);
 	virtual ~RendererShaderVk();
@@ -31,7 +31,10 @@ public:
 	static void Init();
 	static void Shutdown();
 
-	VkShaderModule& GetShaderModule() { return m_shader_module; }
+	VkShaderModule& GetShaderModule()
+	{
+		return m_shader_module;
+	}
 
 	static inline FSpinlock s_dependencyLock;
 
@@ -53,14 +56,14 @@ public:
 	bool IsCompiled() override;
 	bool WaitForCompiled() override;
 
-private:
+  private:
 	void CompileInternal(bool isRenderThread);
 
 	void FinishCompilation();
 
 	VkShaderModule m_shader_module = nullptr;
 
-	StateSemaphore<COMPILATION_STATE> m_compilationState{ COMPILATION_STATE::NONE };
+	StateSemaphore<COMPILATION_STATE> m_compilationState{COMPILATION_STATE::NONE};
 
 	std::string m_glslCode;
 

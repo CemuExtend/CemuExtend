@@ -32,4 +32,4 @@ namespace snd_user
 
 	COSModule* GetModuleSndUser1();
 	COSModule* GetModuleSndUser2();
-}
+} // namespace snd_user

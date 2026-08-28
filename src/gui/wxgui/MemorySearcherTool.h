@@ -45,7 +45,7 @@ struct TableEntry_t
 
 class MemorySearcherTool : public wxFrame
 {
-public:
+  public:
 	explicit MemorySearcherTool(wxWindow* parent);
 	virtual ~MemorySearcherTool();
 	void PrepareForShutdown();
@@ -58,12 +58,12 @@ public:
 	void OnFilter(wxCommandEvent& event);
 	void OnResultListClick(wxMouseEvent& event);
 	void OnEntryListRightClick(wxDataViewEvent& event);
-	//void OnEntryListRightClick2(wxContextMenuEvent& event);
+	// void OnEntryListRightClick2(wxContextMenuEvent& event);
 	void OnPopupClick(wxCommandEvent& event);
 
 	void OnItemEdited(wxDataViewEvent& event);
 
-private:
+  private:
 	void Reset();
 	bool VerifySearchValue() const;
 	void FillResultList();
@@ -83,13 +83,14 @@ private:
 		iss >> std::noskipws >> outValue;
 		return iss && iss.eof();
 	}
-	
+
 	using ListType_t = std::vector<MEMPTR<void>>;
 	ListType_t SearchValues(SearchDataType type, void* ptr, uint32 size)
 	{
 		/*if (type == SearchDataType_String)
 			return SearchValues((const char* )ptr, size);
-		else */if (type == SearchDataType_Float)
+		else */
+		if (type == SearchDataType_Float)
 			return SearchValues((float*)ptr, size);
 		else if (type == SearchDataType_Double)
 			return SearchValues((double*)ptr, size);
@@ -103,12 +104,13 @@ private:
 			return SearchValues((sint64*)ptr, size);
 		return {};
 	}
-	
+
 	ListType_t FilterValues(SearchDataType type)
 	{
 		/*if (type == SearchDataType_String)
 			return FilterValues<const char*>();
-		else */if (type == SearchDataType_Float)
+		else */
+		if (type == SearchDataType_Float)
 			return FilterValues<float>();
 		else if (type == SearchDataType_Double)
 			return FilterValues<double>();
@@ -125,7 +127,7 @@ private:
 
 	constexpr static int kGaugeStep = 0x10000;
 
-	template <typename T>
+	template<typename T>
 	ListType_t SearchValues(T* ptr, uint32 size)
 	{
 		const auto search_value = ConvertString<T>(m_textValue->GetValue().ToStdString());
@@ -144,7 +146,7 @@ private:
 				result.emplace_back(ptr);
 
 			counter += sizeof(T);
-			if(counter >= kGaugeStep)
+			if (counter >= kGaugeStep)
 			{
 				wxQueueEvent(this, new wxSetGaugeValue(1, m_gauge));
 				counter -= kGaugeStep;
@@ -154,7 +156,7 @@ private:
 		return result;
 	}
 
-	template <typename T>
+	template<typename T>
 	ListType_t FilterValues()
 	{
 		const auto search_value = ConvertString<T>(m_textValue->GetValue().ToStdString());
@@ -168,16 +170,16 @@ private:
 				return newSearchBuffer;
 
 			const auto tmp = (betype<T>*)it.GetPtr();
-			if (equals(search_value , tmp->value()))
+			if (equals(search_value, tmp->value()))
 				newSearchBuffer.emplace_back(it);
-			
+
 			wxQueueEvent(this, new wxSetGaugeValue(1, m_gauge));
 		}
 
 		return newSearchBuffer;
 	}
 
-wxDECLARE_EVENT_TABLE();
+	wxDECLARE_EVENT_TABLE();
 
 	SearchDataType m_searchDataType = SearchDataType_None;
 	wxComboBox* m_cbDataType;
@@ -191,7 +193,7 @@ wxDECLARE_EVENT_TABLE();
 
 	ListType_t m_searchBuffer;
 	std::vector<TableEntry_t> m_tableEntries;
-	
+
 	std::mutex m_mutex;
 	std::thread m_worker;
 
@@ -206,8 +208,8 @@ template<>
 bool MemorySearcherTool::ConvertStringToType(const std::string& inValue, sint8& outValue) const;
 
 //
-//template <typename T>
-//void MemorySearcherTool::FilterValues()
+// template <typename T>
+// void MemorySearcherTool::FilterValues()
 //{
 //	auto s1 = m_textValue->GetValue();
 //	auto s2 = s1.c_str();

@@ -244,4 +244,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", MEMRecordStateForFrmHeap, LogType::CoreinitMem);
 		cafeExportRegister("coreinit", MEMFreeByStateToFrmHeap, LogType::CoreinitMem);
 	}
-}
+} // namespace coreinit

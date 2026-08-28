@@ -17,4 +17,4 @@ namespace nn::olv
 	sint32 GetOlvAccessKey(uint32* pOutKey);
 
 	COSModule* GetModule();
-}
+} // namespace nn::olv

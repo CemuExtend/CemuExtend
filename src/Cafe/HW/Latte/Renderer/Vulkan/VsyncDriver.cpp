@@ -11,22 +11,23 @@ typedef UINT D3DDDI_VIDEO_PRESENT_SOURCE_ID;
 
 typedef struct _D3DKMT_OPENADAPTERFROMHDC
 {
-	HDC                            hDc;
-	D3DKMT_HANDLE                  hAdapter;
-	LUID                           AdapterLuid;
+	HDC hDc;
+	D3DKMT_HANDLE hAdapter;
+	LUID AdapterLuid;
 	D3DDDI_VIDEO_PRESENT_SOURCE_ID VidPnSourceId;
-}D3DKMT_OPENADAPTERFROMHDC;
+} D3DKMT_OPENADAPTERFROMHDC;
 
-typedef struct _D3DKMT_WAITFORVERTICALBLANKEVENT {
-	D3DKMT_HANDLE                  hAdapter;
-	D3DKMT_HANDLE                  hDevice;
+typedef struct _D3DKMT_WAITFORVERTICALBLANKEVENT
+{
+	D3DKMT_HANDLE hAdapter;
+	D3DKMT_HANDLE hDevice;
 	D3DDDI_VIDEO_PRESENT_SOURCE_ID VidPnSourceId;
 } D3DKMT_WAITFORVERTICALBLANKEVENT;
 
 class DeviceVsyncHandler
 {
-public:
-	DeviceVsyncHandler(void(*cbVSync)()) : m_vsyncDriverVSyncCb(cbVSync)
+  public:
+	DeviceVsyncHandler(void (*cbVSync)()) : m_vsyncDriverVSyncCb(cbVSync)
 	{
 		m_shutdownThread = false;
 		if (!pfnD3DKMTOpenAdapterFromHdc)
@@ -52,12 +53,11 @@ public:
 		m_checkMonitorChange = true;
 	}
 
-private:
+  private:
 	bool HasMonitorChanged()
 	{
 		const auto* renderer = VulkanRenderer::GetInstance();
-		const auto window = renderer ? renderer->GetNativeSurfaces() :
-			Host::NativeSurfaceSnapshot{};
+		const auto window = renderer ? renderer->GetNativeSurfaces() : Host::NativeSurfaceSnapshot{};
 		HWND hWnd = static_cast<HWND>(window.mainSurface.surface);
 		if (hWnd == 0)
 			return true;
@@ -70,15 +70,14 @@ private:
 
 		if (wcscmp(monitorInfo.szDevice, m_activeMonitorDevice) == 0)
 			return false;
-		
+
 		return true;
 	}
 
 	HRESULT GetAdapterHandleFromHwnd(D3DKMT_HANDLE* phAdapter, UINT* pOutput)
 	{
 		const auto* renderer = VulkanRenderer::GetInstance();
-		const auto window = renderer ? renderer->GetNativeSurfaces() :
-			Host::NativeSurfaceSnapshot{};
+		const auto window = renderer ? renderer->GetNativeSurfaces() : Host::NativeSurfaceSnapshot{};
 		HWND hWnd = static_cast<HWND>(window.mainSurface.surface);
 		if (hWnd == 0)
 			return E_FAIL;
@@ -98,9 +97,9 @@ private:
 		if (GetMonitorInfoW(hMonitor, &monitorInfo) == 0)
 			return E_FAIL;
 
-
 		HDC hdc = CreateDCW(NULL, monitorInfo.szDevice, NULL, NULL);
-		if (hdc == NULL) {
+		if (hdc == NULL)
+		{
 			return E_FAIL;
 		}
 
@@ -135,7 +134,7 @@ private:
 			NTSTATUS r = pfnD3DKMTWaitForVerticalBlankEvent(&arg);
 			if (r != 0)
 			{
-				//cemuLog_log(LogType::Force, "Wait for VerticalBlank failed");
+				// cemuLog_log(LogType::Force, "Wait for VerticalBlank failed");
 				Sleep(1000 / 60);
 				failCount++;
 				if (failCount >= 10)
@@ -169,16 +168,16 @@ private:
 
 	void signalVsync()
 	{
-		if(m_vsyncDriverVSyncCb)
+		if (m_vsyncDriverVSyncCb)
 			m_vsyncDriverVSyncCb();
 	}
 
-	void setCallback(void(*cbVSync)())
+	void setCallback(void (*cbVSync)())
 	{
 		m_vsyncDriverVSyncCb = cbVSync;
 	}
 
-private:
+  private:
 	NTSTATUS(__stdcall* pfnD3DKMTOpenAdapterFromHdc)(D3DKMT_OPENADAPTERFROMHDC* Arg1) = nullptr;
 	NTSTATUS(__stdcall* pfnD3DKMTWaitForVerticalBlankEvent)(const D3DKMT_WAITFORVERTICALBLANKEVENT* Arg1) = nullptr;
 
@@ -194,7 +193,7 @@ DeviceVsyncHandler* s_vsyncDriver = nullptr;
 
 std::mutex s_driverAccess;
 
-void VsyncDriver_startThread(void(*cbVSync)())
+void VsyncDriver_startThread(void (*cbVSync)())
 {
 	std::unique_lock<std::mutex> ul(s_driverAccess);
 	if (!s_vsyncDriver)
@@ -210,14 +209,13 @@ void VsyncDriver_notifyWindowPosChanged()
 
 #else
 
-void VsyncDriver_startThread(void(*cbVSync)())
+void VsyncDriver_startThread(void (*cbVSync)())
 {
 	cemu_assert_unimplemented();
 }
 
 void VsyncDriver_notifyWindowPosChanged()
 {
-
 }
 
 #endif

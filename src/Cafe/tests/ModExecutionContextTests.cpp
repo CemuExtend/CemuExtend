@@ -12,7 +12,13 @@ namespace
 		std::abort();
 	}
 
-#define CHECK(condition) do { if (!(condition)) CheckFailed(#condition, __LINE__); } while (false)
+#define CHECK(condition)                       \
+	do                                         \
+	{                                          \
+		if (!(condition))                      \
+			CheckFailed(#condition, __LINE__); \
+	}                                          \
+	while (false)
 
 	constexpr std::uint32_t kBase = 0x10000000;
 	constexpr std::uint32_t kSize = 4 * ModExecutionContext::kPageSize;
@@ -27,30 +33,30 @@ namespace
 	{
 		auto context = NewContext();
 		CHECK(context.Map(kBase, kCode, ModExecutionContext::kPageSize,
-			ModMemoryPermission::Read | ModMemoryPermission::Execute));
+						  ModMemoryPermission::Read | ModMemoryPermission::Execute));
 		CHECK(context.Map(kBase + ModExecutionContext::kPageSize, {},
-			ModExecutionContext::kPageSize, ModMemoryPermission::Read | ModMemoryPermission::Write));
+						  ModExecutionContext::kPageSize, ModMemoryPermission::Read | ModMemoryPermission::Write));
 		CHECK(context.Resolve(kBase, kCode.size(), ModMemoryPermission::Execute) != nullptr);
 		CHECK(context.Resolve(kBase + ModExecutionContext::kPageSize, 4,
-			ModMemoryPermission::Write) != nullptr);
+							  ModMemoryPermission::Write) != nullptr);
 		CHECK(context.Resolve(kBase, 1, ModMemoryPermission::Write) == nullptr);
 		CHECK(context.IsStopped());
 		CHECK(context.Fault().reason == ModFaultReason::PermissionDenied);
 
 		auto nx = NewContext();
 		CHECK(nx.Map(kBase, {}, ModExecutionContext::kPageSize,
-			ModMemoryPermission::Read | ModMemoryPermission::Write));
+					 ModMemoryPermission::Read | ModMemoryPermission::Write));
 		CHECK(nx.Resolve(kBase, 4, ModMemoryPermission::Execute) == nullptr);
 		CHECK(nx.Fault().reason == ModFaultReason::PermissionDenied);
 
 		auto unmapped = NewContext();
 		CHECK(unmapped.Resolve(kBase + 3 * ModExecutionContext::kPageSize, 4,
-			ModMemoryPermission::Read) == nullptr);
+							   ModMemoryPermission::Read) == nullptr);
 		CHECK(unmapped.Fault().reason == ModFaultReason::Unmapped);
 
 		auto wx = NewContext();
 		CHECK(!wx.Map(kBase, {}, ModExecutionContext::kPageSize,
-			ModMemoryPermission::Read | ModMemoryPermission::Write | ModMemoryPermission::Execute));
+					  ModMemoryPermission::Read | ModMemoryPermission::Write | ModMemoryPermission::Execute));
 		CHECK(wx.Fault().reason == ModFaultReason::InvalidMapping);
 	}
 
@@ -78,7 +84,7 @@ namespace
 		}
 		CHECK(wallClock.Fault().reason == ModFaultReason::WallClockQuota);
 	}
-}
+} // namespace
 
 int main()
 {

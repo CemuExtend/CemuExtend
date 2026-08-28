@@ -145,7 +145,7 @@ namespace coreinit
 #endif
 
 	std::vector<std::thread::native_handle_type>& OSGetSchedulerThreads();
-}
+} // namespace coreinit
 
 GDBServer::AccessBreakpoint::AccessBreakpoint(MPTR address, AccessPointType type)
 	: m_address(address), m_type(type)
@@ -199,11 +199,11 @@ GDBServer::AccessBreakpoint::AccessBreakpoint(MPTR address, AccessPointType type
 			DRType dr2 = (uint64)memory_getPointerFromVirtualOffset(address);
 			DRType dr3 = (uint64)memory_getPointerFromVirtualOffset(address);
 			// breakpoint 2
-			SetBits(dr7, 4, 1, 1);  // breakpoint #3 enabled: true
+			SetBits(dr7, 4, 1, 1);	// breakpoint #3 enabled: true
 			SetBits(dr7, 24, 2, 1); // breakpoint #3 condition: 1 (write)
 			SetBits(dr7, 26, 2, 3); // breakpoint #3 length: 3 (4 bytes)
 			// breakpoint 3
-			SetBits(dr7, 6, 1, 1);  // breakpoint #4 enabled: true
+			SetBits(dr7, 6, 1, 1);	// breakpoint #4 enabled: true
 			SetBits(dr7, 28, 2, 3); // breakpoint #4 condition: 3 (read & write)
 			SetBits(dr7, 30, 2, 3); // breakpoint #4 length: 3 (4 bytes)
 

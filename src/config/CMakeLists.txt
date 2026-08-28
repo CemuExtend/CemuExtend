@@ -19,3 +19,9 @@ target_link_libraries(CemuConfig PRIVATE
 	CemuCommon
 	CemuComponents
 )
+
+if(BUILD_TESTING)
+	add_executable(frontend_settings_config_tests tests/FrontendSettingsConfigTests.cpp)
+	target_link_libraries(frontend_settings_config_tests PRIVATE CemuConfig CemuCommon)
+	add_test(NAME frontend_settings_config_tests COMMAND frontend_settings_config_tests)
+endif()

@@ -46,13 +46,16 @@ struct ModuleProviderHandle
 {
 	std::uint64_t value{};
 
-	[[nodiscard]] explicit operator bool() const { return value != 0; }
+	[[nodiscard]] explicit operator bool() const
+	{
+		return value != 0;
+	}
 	[[nodiscard]] auto operator<=>(const ModuleProviderHandle&) const = default;
 };
 
 class ModuleExportLease
 {
-public:
+  public:
 	ModuleExportLease();
 	~ModuleExportLease();
 	ModuleExportLease(ModuleExportLease&&) noexcept;
@@ -65,7 +68,7 @@ public:
 	[[nodiscard]] WupsSymbolKind Kind() const;
 	[[nodiscard]] ModuleProviderDescriptor Provider() const;
 
-private:
+  private:
 	struct Impl;
 	std::unique_ptr<Impl> m_impl;
 
@@ -93,7 +96,7 @@ struct ModuleRegistryDiagnostic
 // RPL/HLE lookup. The registry never contains normal Cafe exports.
 class ModuleExportRegistry
 {
-public:
+  public:
 	ModuleExportRegistry();
 	~ModuleExportRegistry();
 
@@ -101,12 +104,12 @@ public:
 	ModuleExportRegistry& operator=(const ModuleExportRegistry&) = delete;
 
 	[[nodiscard]] bool Publish(const ModuleProviderDescriptor& provider,
-		std::span<const ModuleExportDescriptor> exports,
-		ModuleProviderHandle& handle, std::string& error);
+							   std::span<const ModuleExportDescriptor> exports,
+							   ModuleProviderHandle& handle, std::string& error);
 	[[nodiscard]] bool Unpublish(ModuleProviderHandle handle,
-		const ModuleProviderOwner& owner, std::string& error);
+								 const ModuleProviderOwner& owner, std::string& error);
 	[[nodiscard]] bool UnpublishOwner(const ModuleProviderOwner& owner,
-		std::string& error);
+									  std::string& error);
 
 	[[nodiscard]] std::optional<ModuleExportLease> Resolve(
 		std::string_view moduleName, std::string_view symbolName,
@@ -122,7 +125,7 @@ public:
 
 	[[nodiscard]] static unsigned Priority(ModuleProviderKind kind);
 
-private:
+  private:
 	struct Impl;
 	std::unique_ptr<Impl> m_impl;
 };

@@ -7,7 +7,7 @@
 
 class CemuUpdateWorkerMailbox
 {
-public:
+  public:
 	enum class Work
 	{
 		CheckVersion,
@@ -53,7 +53,7 @@ public:
 		return work;
 	}
 
-private:
+  private:
 	mutable std::mutex m_mutex;
 	std::condition_variable m_condition;
 	std::optional<Work> m_pendingWork;

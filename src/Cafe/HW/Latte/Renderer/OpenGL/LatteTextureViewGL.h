@@ -5,7 +5,7 @@
 
 class LatteTextureViewGL : public LatteTextureView
 {
-public:
+  public:
 	LatteTextureViewGL(class LatteTextureGL* texture, Latte::E_DIM dim, Latte::E_GX2SURFFMT format, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount, bool registerView = true, bool forceCreateNewTexId = false);
 	~LatteTextureViewGL();
 
@@ -22,7 +22,8 @@ public:
 	GLint glTexTarget;
 	sint32 glInternalFormat;
 
-	LatteTextureViewGL* m_alternativeView{ nullptr };
-private:
+	LatteTextureViewGL* m_alternativeView{nullptr};
+
+  private:
 	void InitAliasView();
 };

@@ -11,7 +11,7 @@ libusbWrapper::libusbWrapper()
 void libusbWrapper::init()
 {
 #if BOOST_OS_WINDOWS
-    if (m_isInitialized)
+	if (m_isInitialized)
 		return;
 	m_isInitialized = true;
 	// load module

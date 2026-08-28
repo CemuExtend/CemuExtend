@@ -22,4 +22,4 @@ namespace TcpGecko::CodeHandler
 	void Tick();
 
 	void NotifyMemoryUploaded(uint32_t destinationAddress, uint32_t length);
-}
+} // namespace TcpGecko::CodeHandler

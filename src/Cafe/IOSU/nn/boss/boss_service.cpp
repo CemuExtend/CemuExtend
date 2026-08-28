@@ -34,8 +34,8 @@ namespace iosu::boss
 	static constexpr nnResult RESULT_STORAGE_NOTEXIST = 0xA025AA00;
 	static constexpr nnResult RESULT_FADENTRY_NOTEXIST = 0xA021FB00;
 
-	template <typename ... TArgs>
-	void AppendHeaderParam(CurlRequestHelper& request, const char* fieldName, const char* format, TArgs&& ... args)
+	template<typename... TArgs>
+	void AppendHeaderParam(CurlRequestHelper& request, const char* fieldName, const char* format, TArgs&&... args)
 	{
 		request.addHeaderField(fieldName, fmt::format(fmt::runtime(format), std::forward<TArgs>(args)...).c_str());
 	}
@@ -44,14 +44,14 @@ namespace iosu::boss
 	{
 		static constexpr uint32 FAD_ENTRY_MAX_COUNT = 512; // max entries in a single FAD file
 
-	public:
+	  public:
 		struct BossStorageFadEntry
 		{
 			CafeString<32> fileName; // 0x00
-			uint32be fileId; // 0x20
-			uint32 ukn24; // 0x24
-			uint32 flags; // 0x28
-			uint32 memo_2C; // 0x2C
+			uint32be fileId;		 // 0x20
+			uint32 ukn24;			 // 0x24
+			uint32 flags;			 // 0x28
+			uint32 memo_2C;			 // 0x2C
 			uint64be entryCreationTimestamp;
 			// flags:
 			// 0x80000000		ReadFlag
@@ -166,7 +166,7 @@ namespace iosu::boss
 				return false;
 			DeleteEntryByFileName(fileName);
 			cemu_assert_debug(m_hasValidFadData);
-			for (sint32 i=0; i<FAD_ENTRY_MAX_COUNT; i++)
+			for (sint32 i = 0; i < FAD_ENTRY_MAX_COUNT; i++)
 			{
 				if (m_fadData.entries[i].fileId == 0)
 				{
@@ -215,7 +215,7 @@ namespace iosu::boss
 			return false;
 		}
 
-	private:
+	  private:
 		BossStorageFadFile m_fadData;
 		bool m_hasValidFadData = false;
 		fs::path m_fadFilePath;
@@ -224,7 +224,7 @@ namespace iosu::boss
 
 	class NsDataAccessor
 	{
-	public:
+	  public:
 		nnResult Open(const DirectoryName& bossDirectory, uint64 titleId, uint32 persistentId, DataName& fileName)
 		{
 			m_isValid = false;
@@ -253,7 +253,7 @@ namespace iosu::boss
 		{
 			cemu_assert_debug(m_isValid); // only call this after successful Open()
 			std::error_code ec;
-			if (!fs::remove(m_nsDataPath, ec) )
+			if (!fs::remove(m_nsDataPath, ec))
 				cemuLog_log(LogType::Force, "Failed to delete BOSS file {}", _pathToUtf8(m_nsDataPath));
 			// remove from FAD
 			TaskId taskId(m_bossDirectory.name2.c_str());
@@ -302,7 +302,7 @@ namespace iosu::boss
 			return true;
 		}
 
-	private:
+	  private:
 		fs::path BuildNsDataPath(const DirectoryName& bossDirectory, uint64 titleId, uint32 persistentId, uint32 dataId)
 		{
 			return ActiveSettings::GetMlcPath("usr/boss/{:08x}/{:08x}/user/common/data/{}/{:08x}", (uint32)(titleId >> 32), (uint32)(titleId & 0xFFFFFFFF), bossDirectory.name2.c_str(), dataId);
@@ -322,7 +322,7 @@ namespace iosu::boss
 
 	class RegisteredTask
 	{
-	public:
+	  public:
 		RegisteredTask(const TaskId& taskId, const TaskSettingCore& taskSettings)
 			: m_taskId(taskId), m_taskSettings(taskSettings)
 		{
@@ -554,8 +554,12 @@ namespace iosu::boss
 			return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_BOSS, 0);
 		}
 
-		std::recursive_mutex& GetMutex() { return m_mutex; }
-	private:
+		std::recursive_mutex& GetMutex()
+		{
+			return m_mutex;
+		}
+
+	  private:
 		struct NbdlQueuedFile
 		{
 			NbdlQueuedFile(std::string_view url, std::string_view fileName, uint32 dataId, uint32 fileType, uint32 size)
@@ -658,8 +662,7 @@ namespace iosu::boss
 						fileName.child_value(),
 						dataId.text().as_int(),
 						fileType,
-						size.text().as_int()
-					);
+						size.text().as_int());
 				}
 			}
 			return fileList;
@@ -669,7 +672,7 @@ namespace iosu::boss
 		{
 			request.ClearCaCertIds();
 			request.ClearClientCertIds();
-			for (sint32 i=0; i<3; i++)
+			for (sint32 i = 0; i < 3; i++)
 			{
 				if (m_taskSettings.internalCaCert[i] != 0)
 					request.AddCaCertId(m_taskSettings.internalCaCert[i]);
@@ -695,11 +698,11 @@ namespace iosu::boss
 			std::error_code ec;
 			if (fs::exists(dataFilePath))
 			{
-				cemuLog_log(LogType::Force, "\t- {} (DataId:{:08x} {}KB) (Skipping, already downloaded)", nbdlFile.fileName, nbdlFile.dataId, (nbdlFile.size+1023)/1024);
+				cemuLog_log(LogType::Force, "\t- {} (DataId:{:08x} {}KB) (Skipping, already downloaded)", nbdlFile.fileName, nbdlFile.dataId, (nbdlFile.size + 1023) / 1024);
 				TrackDownloadedNbdlFile(nbdlFile);
 				return;
 			}
-			cemuLog_log(LogType::Force, "\t- {} (DataId:{:08x} {}KB)", nbdlFile.fileName, nbdlFile.dataId, (nbdlFile.size+1023)/1024);
+			cemuLog_log(LogType::Force, "\t- {} (DataId:{:08x} {}KB)", nbdlFile.fileName, nbdlFile.dataId, (nbdlFile.size + 1023) / 1024);
 
 			CurlRequestHelper request;
 			request.initate(ActiveSettings::GetNetworkService(), nbdlFile.url, CurlRequestHelper::SERVER_SSL_CONTEXT::CUSTOM);
@@ -717,12 +720,12 @@ namespace iosu::boss
 			struct BossNbdlHeader
 			{
 				/* +0x00 */ uint32be magic;
-				/* +0x04 */	uint32be version; // guessed
-				/* +0x08 */	uint16be ukn08; // must always be 1
-				/* +0x0A */	uint16be ukn0A; // must always be 2
-				/* +0x0C */	uint8 nonce[0xC];
-				/* +0x18 */	uint32 padding18; // unused
-				/* +0x1C */	uint32 padding1C; // unused
+				/* +0x04 */ uint32be version; // guessed
+				/* +0x08 */ uint16be ukn08;	  // must always be 1
+				/* +0x0A */ uint16be ukn0A;	  // must always be 2
+				/* +0x0C */ uint8 nonce[0xC];
+				/* +0x18 */ uint32 padding18; // unused
+				/* +0x1C */ uint32 padding1C; // unused
 				/* +0x20 */
 				struct
 				{
@@ -762,7 +765,7 @@ namespace iosu::boss
 			memcpy(aesNonce, nbdlHeader.nonce, 0xC);
 			aesNonce[0xF] = 1;
 			// decrypt
-			uint8 bossAesKey[16] = { 0x39,0x70,0x57,0x35,0x58,0x70,0x34,0x58,0x37,0x41,0x7a,0x30,0x71,0x5a,0x70,0x74 };
+			uint8 bossAesKey[16] = {0x39, 0x70, 0x57, 0x35, 0x58, 0x70, 0x34, 0x58, 0x37, 0x41, 0x7a, 0x30, 0x71, 0x5a, 0x70, 0x74};
 			memset(aesNonce, 0, sizeof(aesNonce));
 			memcpy(aesNonce, nbdlHeader.nonce, 0xC);
 			aesNonce[0xF] = 1;
@@ -825,15 +828,15 @@ namespace iosu::boss
 		uint32 m_persistentId;
 		TaskSettingCore m_taskSettings;
 		std::recursive_mutex m_mutex;
-		TaskState m_taskState{ TaskState::Initial };
-		TaskTurnState m_taskTurnState{ TaskTurnState::Ukn };
-		sint32 m_httpStatusCode{ 0 };
-		uint32 m_contentLength{ 0 }; // content length of the last request
+		TaskState m_taskState{TaskState::Initial};
+		TaskTurnState m_taskTurnState{TaskTurnState::Ukn};
+		sint32 m_httpStatusCode{0};
+		uint32 m_contentLength{0}; // content length of the last request
 	};
 
 	class BossDaemon
 	{
-	public:
+	  public:
 		void Start()
 		{
 			if (m_threadRunning.exchange(true))
@@ -904,7 +907,7 @@ namespace iosu::boss
 				// handling automatic scheduling and task state transitions is quite complex
 				// for now we only run the task once
 				std::shared_ptr<RegisteredTask> registeredTask = GetRegisteredTask2(persistentId, taskId);
-				if(!registeredTask)
+				if (!registeredTask)
 					return;
 				TaskState state = registeredTask->GetState();
 				if (state == TaskState::Stopped || state == TaskState::Initial)
@@ -937,11 +940,11 @@ namespace iosu::boss
 			return nullptr;
 		}
 
-	private:
+	  private:
 		void BossDaemonThread()
 		{
 			CURL* curl = curl_easy_init();
-			while ( m_threadRunning )
+			while (m_threadRunning)
 			{
 				// check for tasks to run
 				{
@@ -969,15 +972,15 @@ namespace iosu::boss
 		}
 
 		std::thread m_bossDaemonThread;
-		std::atomic_bool m_threadRunning{ false };
+		std::atomic_bool m_threadRunning{false};
 		// task list
 		std::mutex m_taskMtx;
 		std::map<TaskId, std::shared_ptr<RegisteredTask>> m_registeredTasks;
-	}s_bossDaemon;
+	} s_bossDaemon;
 
 	class BossMainService : public iosu::nn::IPCService
 	{
-	public:
+	  public:
 		BossMainService() : iosu::nn::IPCService("/dev/boss") {}
 
 		nnResult ServiceCall(IPCServiceCall& serviceCall) override
@@ -1051,7 +1054,8 @@ namespace iosu::boss
 			if (persistentId != 0)
 				return persistentId;
 			uint32 currentPersistentId;
-			bool r = iosu::act::GetPersistentId(iosu::act::ACT_SLOT_CURRENT, &currentPersistentId);;
+			bool r = iosu::act::GetPersistentId(iosu::act::ACT_SLOT_CURRENT, &currentPersistentId);
+			;
 			if (!r)
 				return 0;
 			return currentPersistentId;
@@ -1225,7 +1229,7 @@ namespace iosu::boss
 			TaskId taskId = serviceCall.ReadParameter<TaskId>();
 			std::shared_ptr<RegisteredTask> registeredTask = s_bossDaemon.GetRegisteredTask2(persistentId, taskId);
 			uint32 processedLength = registeredTask ? registeredTask->GetProcessedLength() : 0;
-			serviceCall.WriteResponse<uint32be>(1); // execution counter - todo
+			serviceCall.WriteResponse<uint32be>(1);				  // execution counter - todo
 			serviceCall.WriteResponse<uint64be>(processedLength); // this the actual length?
 			if (!registeredTask)
 				return RESULT_NOTEXIST;
@@ -1270,7 +1274,7 @@ namespace iosu::boss
 			cemu_assert_debug(ukn == 0);
 			IPCServiceCall::UnalignedBuffer dataListOutputBuffer = serviceCall.ReadUnalignedOutputBufferInfo();
 			uint32 startOffset = serviceCall.ReadParameter<uint32be>(); // guessed
-			cemu_assert_debug(startOffset == 0); // todo - implement offset
+			cemu_assert_debug(startOffset == 0);						// todo - implement offset
 			size_t dataListSize = dataListOutputBuffer.GetSize() / sizeof(DataName);
 			std::vector<DataName> dataListTmp;
 			uint64 titleId = CafeSystem::GetForegroundTitleId();
@@ -1407,8 +1411,6 @@ namespace iosu::boss
 			// no response data
 			return RESULT_SUCCESS;
 		}
-
-
 	};
 
 	BossMainService s_bossService;
@@ -1426,10 +1428,10 @@ namespace iosu::boss
 			m_fadDb.Clear();
 			m_nsDataAccessor.Close();
 		}
-	}sIOSUModuleNNBOSS;
+	} sIOSUModuleNNBOSS;
 
 	IOSUModule* GetModule()
 	{
 		return static_cast<IOSUModule*>(&sIOSUModuleNNBOSS);
 	}
-}
+} // namespace iosu::boss

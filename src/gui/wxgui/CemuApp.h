@@ -13,7 +13,7 @@ class wxTimerEvent;
 
 class CemuApp : public wxApp
 {
-public:
+  public:
 	static void SetFrontendContext(std::shared_ptr<WxFrontendContext> context);
 	bool OnInit() override;
 	int OnExit() override;
@@ -29,7 +29,8 @@ public:
 
 	static void InitializeNewMLCOrFail(fs::path mlc);
 	static void InitializeExistingMLCOrFail(fs::path mlc);
-private:
+
+  private:
 	void LocalizeUI(wxLanguage languageToUse);
 
 	void DeterminePaths(std::set<fs::path>& failedWriteAccess);

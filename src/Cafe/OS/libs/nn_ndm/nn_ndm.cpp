@@ -17,7 +17,7 @@ namespace nn
 		enum class DAEMON_STATUS : uint32
 		{
 			STATUS_UKN_0 = 0, // probably: Ready or initializing?
-			RUNNING = 1, // most likely running, but not 100% sure
+			RUNNING = 1,	  // most likely running, but not 100% sure
 			STATUS_UKN_2 = 2, // probably: ready, starting or something like that?
 			SUSPENDED = 3,
 		};
@@ -39,7 +39,7 @@ namespace nn
 
 		uint32 Finalize()
 		{
-			if(s_initializeRefCount == 0)
+			if (s_initializeRefCount == 0)
 				return BUILD_NN_RESULT(NN_RESULT_LEVEL_STATUS, NN_RESULT_MODULE_NN_NDM, 0);
 			s_initializeRefCount++;
 			return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NDM, 0);
@@ -48,7 +48,7 @@ namespace nn
 		uint32 GetDaemonStatus(betype<DAEMON_STATUS>* statusOut, DAEMON_NAME daemonName)
 		{
 			size_t daemonIndex = (size_t)daemonName;
-			if(daemonIndex >= NUM_DAEMONS)
+			if (daemonIndex >= NUM_DAEMONS)
 				return BUILD_NN_RESULT(NN_RESULT_LEVEL_STATUS, NN_RESULT_MODULE_NN_NDM, 0);
 			*statusOut = s_daemonStatus[daemonIndex];
 			return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NDM, 0);
@@ -56,9 +56,9 @@ namespace nn
 
 		uint32 SuspendDaemons(uint32 daemonNameBitmask)
 		{
-			for(size_t i=0; i<NUM_DAEMONS; i++)
+			for (size_t i = 0; i < NUM_DAEMONS; i++)
 			{
-				if(daemonNameBitmask & (1 << i))
+				if (daemonNameBitmask & (1 << i))
 					s_daemonStatus[i] = DAEMON_STATUS::SUSPENDED;
 			}
 			return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NDM, 0);
@@ -66,9 +66,9 @@ namespace nn
 
 		uint32 ResumeDaemons(uint32 daemonNameBitmask)
 		{
-			for(size_t i=0; i<NUM_DAEMONS; i++)
+			for (size_t i = 0; i < NUM_DAEMONS; i++)
 			{
-				if(daemonNameBitmask & (1 << i))
+				if (daemonNameBitmask & (1 << i))
 					s_daemonStatus[i] = DAEMON_STATUS::RUNNING;
 			}
 			return BUILD_NN_RESULT(NN_RESULT_LEVEL_SUCCESS, NN_RESULT_MODULE_NN_NDM, 0);
@@ -76,7 +76,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_ndm";
@@ -84,7 +84,7 @@ namespace nn
 
 			void RPLMapped() override
 			{
-				for(size_t i=0; i<NUM_DAEMONS; i++)
+				for (size_t i = 0; i < NUM_DAEMONS; i++)
 					s_daemonStatus[i] = DAEMON_STATUS::RUNNING;
 				s_initializeRefCount = 0;
 
@@ -96,11 +96,11 @@ namespace nn
 				cafeExportRegisterFunc(ResumeDaemons, "nn_ndm", "ResumeDaemons__Q2_2nn3ndmFUi", LogType::Placeholder);
 			};
 
-		}s_COSnnNdmModule;
+		} s_COSnnNdmModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnNdmModule;
 		}
-	}
-}
+	} // namespace ndm
+} // namespace nn

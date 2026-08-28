@@ -1,0 +1,132 @@
+#include "webview/cef/CefOverlayRuntime.h"
+
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <string>
+#include <thread>
+
+namespace
+{
+	std::string Response(std::uint64_t windowId, std::string_view request)
+	{
+		const auto idKey = request.find(R"("id":")");
+		if (idKey == std::string_view::npos)
+			return R"({"id":"","ok":false,"error":{"code":"malformed","message":"missing id"}})";
+		const auto idStart = idKey + 6;
+		const auto idEnd = request.find('"', idStart);
+		if (idEnd == std::string_view::npos)
+			return R"({"id":"","ok":false,"error":{"code":"malformed","message":"bad id"}})";
+		const std::string id(request.substr(idStart, idEnd - idStart));
+		constexpr std::string_view snapshot = R"({
+			"sequence":"1",
+			"overlayStyle":{"position":"topLeft","color":4294967295,"scale":100},
+			"notificationStyle":{"position":"topRight","color":4294967295,"scale":100},
+			"visibility":{"fps":true,"drawCalls":false,"cpuUsage":false,"cpuPerCore":false,"ramUsage":false,"vramUsage":false,"debug":false},
+			"stats":{"fps":60.0,"drawCalls":0,"fastDrawCalls":0,"cpuUsage":0.0,"cpuPerCore":[],"ramUsageMb":0,"vramUsageMb":-1,"vramTotalMb":-1,"debugLines":[]},
+			"notices":[{"id":"1","kind":"message","text":"CEF OSR smoke","remainingMs":0}],
+			"shaderProgress":{"generation":"0","visible":false,"pipelines":false,"current":0,"total":0,"vertexShaders":0,"pixelShaders":0,"geometryShaders":0,"backgroundImageAvailable":false},
+			"keyboard":{"generation":"0","active":false,"keyboardOnly":false,"shifted":false,"maximumLength":0,"text":""},
+			"errorDialog":{"generation":"0","active":false,"title":"","message":"","leftButton":"","rightButton":"","opacity":1.0},
+			"interaction":"passive"
+		})";
+		std::string result;
+		if (request.find(R"("method":"system.bootstrap")") != std::string_view::npos)
+		{
+			result = "{\"windowId\":\"" + std::to_string(windowId) +
+				"\",\"windowRole\":\"runtime-overlay\",\"appVersion\":\"smoke\","
+				"\"platform\":\"linux\",\"activeAccountName\":\"\",\"theme\":\"dark\","
+				"\"themeRevision\":\"0\",\"language\":\"en\",\"languageRevision\":\"0\","
+				"\"shuttingDown\":false}";
+		}
+		else if (request.find(R"("method":"theme.get")") != std::string_view::npos)
+			result = R"({"theme":"dark","revision":"0"})";
+		else if (request.find(R"("method":"overlay.getSnapshot")") != std::string_view::npos)
+			result = std::string(snapshot);
+		else
+			return "{\"id\":\"" + id +
+				"\",\"ok\":false,\"error\":{\"code\":\"unknown_method\",\"message\":\"unsupported smoke RPC\"}}";
+		return "{\"id\":\"" + id + "\",\"ok\":true,\"result\":" + result + "}";
+	}
+
+	struct PixelState
+	{
+		bool frameSeen{};
+		bool transparent{};
+		bool painted{};
+
+		bool Complete() const { return frameSeen && transparent && painted; }
+	};
+
+	void AccumulatePixels(const Host::OverlayFrameSnapshot& frame, PixelState& state)
+	{
+		if (!frame.bgra || frame.bgra->size() < 4)
+			return;
+		state.frameSeen = true;
+		for (std::size_t offset = 0; offset + 3 < frame.bgra->size(); offset += 4)
+		{
+			const auto alpha = (*frame.bgra)[offset + 3];
+			state.transparent |= alpha == 0;
+			state.painted |= alpha != 0 && ((*frame.bgra)[offset] != 0 ||
+				(*frame.bgra)[offset + 1] != 0 || (*frame.bgra)[offset + 2] != 0);
+		}
+	}
+
+	void PrintState(std::string_view name, const PixelState& state)
+	{
+		std::cerr << name << " frame=" << state.frameSeen
+			<< " transparent=" << state.transparent
+			<< " painted=" << state.painted << '\n';
+	}
+}
+
+int main(int argc, char* argv[])
+{
+	using namespace WebFrontend::CefOverlay;
+	const int subprocess = ExecuteSubprocess(argc, argv);
+	if (subprocess >= 0)
+		return subprocess;
+	if (!InitializeProcessRuntime())
+	{
+		std::cerr << "CefInitialize failed\n";
+		return 1;
+	}
+	auto runtime = CreateBrowserRuntime(
+		[](std::uint64_t windowId, std::string_view request) { return Response(windowId, request); },
+		[](Host::PointerSurface) {});
+	if (!runtime || !runtime->Create(Host::PointerSurface::Main, 1, 640, 360, 1.0) ||
+		!runtime->Create(Host::PointerSurface::Pad, 2, 480, 270, 1.0))
+	{
+		std::cerr << "CEF browser creation failed\n";
+		if (runtime)
+			runtime->CloseAll();
+		runtime.reset();
+		ShutdownProcessRuntime();
+		return 1;
+	}
+
+	PixelState mainState;
+	PixelState padState;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+	while (std::chrono::steady_clock::now() < deadline &&
+		(!mainState.Complete() || !padState.Complete()))
+	{
+		DoProcessMessageLoopWork();
+		if (auto frame = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main, 0))
+			AccumulatePixels(*frame, mainState);
+		if (auto frame = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Pad, 0))
+			AccumulatePixels(*frame, padState);
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	runtime->CloseAll();
+	runtime.reset();
+	ShutdownProcessRuntime();
+	if (!mainState.Complete() || !padState.Complete())
+	{
+		std::cerr << "CEF OSR did not produce transparent, painted Main and Pad frames\n";
+		PrintState("Main", mainState);
+		PrintState("Pad", padState);
+		return 1;
+	}
+	return 0;
+}

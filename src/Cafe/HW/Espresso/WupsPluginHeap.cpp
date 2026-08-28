@@ -12,11 +12,11 @@
 
 namespace
 {
-// Arbitrary stable key used only for the heap tracker's own bookkeeping maps;
-// this heap never registers its backing as a single owned range (see the
-// comment in WupsPluginHeap::CreateBackingLocked), so the value only needs to
-// be distinguishable from the handles other allocator kinds use.
-constexpr std::uint32_t kTrackerHeapHandle = 0;
+	// Arbitrary stable key used only for the heap tracker's own bookkeeping maps;
+	// this heap never registers its backing as a single owned range (see the
+	// comment in WupsPluginHeap::CreateBackingLocked), so the value only needs to
+	// be distinguishable from the handles other allocator kinds use.
+	constexpr std::uint32_t kTrackerHeapHandle = 0;
 } // namespace
 
 WupsPluginHeap::WupsPluginHeap(
@@ -45,7 +45,7 @@ bool WupsPluginHeap::CreateBackingLocked(std::string& error)
 	if (!backing)
 	{
 		error = "failed to reserve the WUPS plugin heap backing from the "
-			"game's default heap";
+				"game's default heap";
 		return false;
 	}
 	const auto backingAddress = memory_getVirtualOffsetFromPointer(backing);
@@ -65,8 +65,8 @@ bool WupsPluginHeap::CreateBackingLocked(std::string& error)
 	m_heapHandle = heapHandle;
 	m_usable = true;
 	cemuLog_log(LogType::Force,
-		"WUPS: plugin heap backing allocated at 0x{:08x}, size 0x{:x}",
-		backingAddress, kBackingSize);
+				"WUPS: plugin heap backing allocated at 0x{:08x}, size 0x{:x}",
+				backingAddress, kBackingSize);
 	return true;
 }
 
@@ -81,7 +81,7 @@ bool WupsPluginHeap::EnsureInitialized(std::string& error)
 	if (m_attempted)
 	{
 		error = "WUPS plugin heap failed to initialize earlier and stays "
-			"disabled for this title";
+				"disabled for this title";
 		return false;
 	}
 	m_attempted = true;
@@ -106,7 +106,7 @@ std::uint32_t WupsPluginHeap::Alloc(WupsOwnerToken owner, std::uint32_t size)
 }
 
 std::uint32_t WupsPluginHeap::AllocEx(WupsOwnerToken owner, std::uint32_t size,
-	std::int32_t alignment)
+									  std::int32_t alignment)
 {
 	std::lock_guard lock(m_mutex);
 	if (!m_usable || size == 0)
@@ -121,7 +121,7 @@ std::uint32_t WupsPluginHeap::AllocEx(WupsOwnerToken owner, std::uint32_t size,
 		const auto trackedAlignment = static_cast<std::uint32_t>(
 			alignment < 0 ? -alignment : alignment);
 		m_heapTracker->OnAllocation(owner, WupsHeapAllocatorKind::ExpHeap,
-			kTrackerHeapHandle, address, size, size, trackedAlignment);
+									kTrackerHeapHandle, address, size, size, trackedAlignment);
 	}
 	return address;
 }
@@ -140,9 +140,9 @@ void WupsPluginHeap::Free(WupsOwnerToken owner, std::uint32_t address)
 		// it is the only safe option: freeing it here would either corrupt
 		// this heap's own metadata or reach outside the backing entirely.
 		cemuLog_log(LogType::Force,
-			"WUPS: plugin heap free rejected out-of-range pointer 0x{:08x} "
-			"(backing 0x{:08x}+0x{:x})",
-			address, m_backingBase, m_backingSize);
+					"WUPS: plugin heap free rejected out-of-range pointer 0x{:08x} "
+					"(backing 0x{:08x}+0x{:x})",
+					address, m_backingBase, m_backingSize);
 		return;
 	}
 	auto* handle = static_cast<coreinit::MEMHeapHandle>(m_heapHandle);
@@ -163,21 +163,21 @@ void WupsPluginHeap::Reset()
 
 namespace cafe::wups
 {
-namespace
-{
-std::mutex g_pluginHeapMutex;
-std::shared_ptr<WupsPluginHeap> g_pluginHeap;
-} // namespace
+	namespace
+	{
+		std::mutex g_pluginHeapMutex;
+		std::shared_ptr<WupsPluginHeap> g_pluginHeap;
+	} // namespace
 
-void SetActivePluginHeap(std::shared_ptr<WupsPluginHeap> heap)
-{
-	std::lock_guard lock(g_pluginHeapMutex);
-	g_pluginHeap = std::move(heap);
-}
+	void SetActivePluginHeap(std::shared_ptr<WupsPluginHeap> heap)
+	{
+		std::lock_guard lock(g_pluginHeapMutex);
+		g_pluginHeap = std::move(heap);
+	}
 
-std::shared_ptr<WupsPluginHeap> ActivePluginHeap()
-{
-	std::lock_guard lock(g_pluginHeapMutex);
-	return g_pluginHeap;
-}
+	std::shared_ptr<WupsPluginHeap> ActivePluginHeap()
+	{
+		std::lock_guard lock(g_pluginHeapMutex);
+		return g_pluginHeap;
+	}
 } // namespace cafe::wups

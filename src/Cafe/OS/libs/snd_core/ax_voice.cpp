@@ -76,12 +76,12 @@ namespace snd_core
 		return __AXVoicesPerPriority[priority];
 	}
 
-    void AXVoiceList_Reset()
-    {
-        __AXFreeVoices.clear();
-        for (uint32 i = 0; i < AX_PRIORITY_MAX; i++)
-            __AXVoicesPerPriority[i].clear();
-    }
+	void AXVoiceList_Reset()
+	{
+		__AXFreeVoices.clear();
+		for (uint32 i = 0; i < AX_PRIORITY_MAX; i++)
+			__AXVoicesPerPriority[i].clear();
+	}
 
 	SysAllocator<AXVPBInternal_t, AX_MAX_VOICES> _buffer__AXVPBInternalVoiceArray;
 	AXVPBInternal_t* __AXVPBInternalVoiceArray;
@@ -102,8 +102,8 @@ namespace snd_core
 	};
 
 	uint32 __AXUserProtectionArraySize = 0;
-	AXUSERPROTECTION __AXUserProtectionArray[AX_MAX_VOICES] = { 0 };
-	AXUSERPROTECTION __AXVoiceProtection[AX_MAX_VOICES] = { 0 };
+	AXUSERPROTECTION __AXUserProtectionArray[AX_MAX_VOICES] = {0};
+	AXUSERPROTECTION __AXVoiceProtection[AX_MAX_VOICES] = {0};
 
 	bool AXUserIsProtected()
 	{
@@ -112,7 +112,7 @@ namespace snd_core
 
 	sint32 AXUserBegin()
 	{
-		// some games (e.g. Color Splash) can block themselves from calling AXSetVoice* API in time if a thread gets 
+		// some games (e.g. Color Splash) can block themselves from calling AXSetVoice* API in time if a thread gets
 		// rescheduled while inside a AXUserBegin() + AXUserEnd() block
 		// to prevent this from happening we extend the current thread's quantum while the protection is raised
 		PPCCore_boostQuantum(10000);
@@ -171,7 +171,7 @@ namespace snd_core
 					else
 					{
 						// remove entry by shifting all remaining entries
-						//for (sint32 f = i; f >= 0; f--)
+						// for (sint32 f = i; f >= 0; f--)
 						//{
 						//	__AXUserProtectionArray[f].threadMPTR = __AXUserProtectionArray[f + 1].threadMPTR;
 						//	__AXUserProtectionArray[f].count = __AXUserProtectionArray[f + 1].count;
@@ -444,22 +444,22 @@ namespace snd_core
 		__AXVoiceListSpinlock.unlock();
 	}
 
-    void __AXVPBResetVoices()
-    {
-        __AXVPBInternalVoiceArray = _buffer__AXVPBInternalVoiceArray.GetPtr();
-        __AXVPBInternalVoiceShadowCopyArrayPtr = _buffer__AXVPBInternalVoiceShadowCopyArray.GetPtr();
-        __AXVPBArrayPtr = _buffer__AXVPBArray.GetPtr();
-        __AXVPBItdArrayPtr = _buffer__AXVPBItdArray.GetPtr();
+	void __AXVPBResetVoices()
+	{
+		__AXVPBInternalVoiceArray = _buffer__AXVPBInternalVoiceArray.GetPtr();
+		__AXVPBInternalVoiceShadowCopyArrayPtr = _buffer__AXVPBInternalVoiceShadowCopyArray.GetPtr();
+		__AXVPBArrayPtr = _buffer__AXVPBArray.GetPtr();
+		__AXVPBItdArrayPtr = _buffer__AXVPBItdArray.GetPtr();
 
-        memset(__AXVPBInternalVoiceShadowCopyArrayPtr, 0, sizeof(AXVPBInternal_t)*AX_MAX_VOICES);
-        memset(__AXVPBInternalVoiceArray, 0, sizeof(AXVPBInternal_t)*AX_MAX_VOICES);
-        memset(__AXVPBItdArrayPtr, 0, sizeof(AXVPBItd)*AX_MAX_VOICES);
-        memset(__AXVPBArrayPtr, 0, sizeof(AXVPB)*AX_MAX_VOICES);
-    }
+		memset(__AXVPBInternalVoiceShadowCopyArrayPtr, 0, sizeof(AXVPBInternal_t) * AX_MAX_VOICES);
+		memset(__AXVPBInternalVoiceArray, 0, sizeof(AXVPBInternal_t) * AX_MAX_VOICES);
+		memset(__AXVPBItdArrayPtr, 0, sizeof(AXVPBItd) * AX_MAX_VOICES);
+		memset(__AXVPBArrayPtr, 0, sizeof(AXVPB) * AX_MAX_VOICES);
+	}
 
 	void AXVPBInit()
 	{
-        __AXVPBResetVoices();
+		__AXVPBResetVoices();
 		for (sint32 i = 0; i < AX_MAX_VOICES; i++)
 		{
 			AXVPBItd* itd = __AXVPBItdArrayPtr + i;
@@ -505,11 +505,11 @@ namespace snd_core
 		AXVPBInit();
 	}
 
-    void AXVBP_Reset()
-    {
-        AXVoiceList_Reset();
-        __AXVPBResetVoices();
-    }
+	void AXVBP_Reset()
+	{
+		AXVoiceList_Reset();
+		__AXVPBResetVoices();
+	}
 
 	sint32 AXIsValidDevice(sint32 device, sint32 deviceIndex)
 	{
@@ -532,7 +532,6 @@ namespace snd_core
 			return -1;
 		return 0;
 	}
-
 
 	void __AXSetVoiceChannelMix(AXCHMIX_DEPR* mixOut, AXCHMIX_DEPR* mixIn, sint16* mixMask)
 	{
@@ -1198,7 +1197,7 @@ namespace snd_core
 		uint32 srcRatio;
 		if (internal->srcFilterMode == AX_FILTER_MODE_NONE)
 			srcRatio = 0x10000;
-		else 
+		else
 			srcRatio = internal->src.GetSrcRatio32();
 
 		uint32 loopLength = 0;
@@ -1227,4 +1226,4 @@ namespace snd_core
 		vpbLoopTracker_prevCurrentOffset[voiceIndex] = currentOffset;
 		return vpbLoopTracker_loopCount[voiceIndex];
 	}
-}
+} // namespace snd_core

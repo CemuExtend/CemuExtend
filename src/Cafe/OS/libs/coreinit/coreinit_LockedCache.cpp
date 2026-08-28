@@ -10,23 +10,23 @@
 	core2:	0xFFC80000	0x4000
 */
 
-#define LC_LOCKED_CACHE_GRANULARITY		(0x200)	 // 512B
-#define LC_LOCKED_CACHE_SIZE			(0x4000) // 16KB
+#define LC_LOCKED_CACHE_GRANULARITY (0x200) // 512B
+#define LC_LOCKED_CACHE_SIZE (0x4000)		// 16KB
 
-#define LC_MASK_FREE			(0)
-#define LC_MASK_RESERVED		(1)
-#define LC_MASK_RESERVED_END	(2) // indicates end of reserved block
+#define LC_MASK_FREE (0)
+#define LC_MASK_RESERVED (1)
+#define LC_MASK_RESERVED_END (2) // indicates end of reserved block
 
 namespace coreinit
 {
-	uint8   lcCacheMask[PPC_CORE_COUNT][(LC_LOCKED_CACHE_SIZE + LC_LOCKED_CACHE_GRANULARITY - 1) / LC_LOCKED_CACHE_GRANULARITY] = { 0 };
-	uint32  lcAllocatedBlocks[PPC_CORE_COUNT] = { 0 };
+	uint8 lcCacheMask[PPC_CORE_COUNT][(LC_LOCKED_CACHE_SIZE + LC_LOCKED_CACHE_GRANULARITY - 1) / LC_LOCKED_CACHE_GRANULARITY] = {0};
+	uint32 lcAllocatedBlocks[PPC_CORE_COUNT] = {0};
 
 	MPTR lcAddr[] =
-	{
-		0xFFC00000, // core 0
-		0xFFC40000, // core 1
-		0xFFC80000  // core 2
+		{
+			0xFFC00000, // core 0
+			0xFFC40000, // core 1
+			0xFFC80000	// core 2
 	};
 
 	void coreinitExport_LCGetMaxSize(PPCInterpreter_t* hCPU)
@@ -36,7 +36,7 @@ namespace coreinit
 
 	void coreinitExport_LCAlloc(PPCInterpreter_t* hCPU)
 	{
-		//debug_printf("LCAlloc(0x%04x) Thread %08x Core %d", hCPU->gpr[3], coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
+		// debug_printf("LCAlloc(0x%04x) Thread %08x Core %d", hCPU->gpr[3], coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
 		uint32 size = hCPU->gpr[3];
 		if (size == 0 || size > LC_LOCKED_CACHE_SIZE)
 		{
@@ -78,22 +78,21 @@ namespace coreinit
 				// update allocation counter
 				lcAllocatedBlocks[coreIndex] += entryMaskLength;
 				// return allocAddr
-				//debug_printf("LCAlloc result %08x Thread %08x Core %d", (uint32)allocAddr, coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
+				// debug_printf("LCAlloc result %08x Thread %08x Core %d", (uint32)allocAddr, coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
 				osLib_returnFromFunction(hCPU, allocAddr);
 				return;
 			}
 		}
-		// not enough space left	
-		//debug_printf("LCAlloc failed Thread %08x Core %d", coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
+		// not enough space left
+		// debug_printf("LCAlloc failed Thread %08x Core %d", coreinitThread_getCurrentThread(hCPU), PPCInterpreter_getCoreIndex(hCPU));
 		osLib_returnFromFunction(hCPU, MPTR_NULL);
 	}
-
 
 	void coreinitExport_LCDealloc(PPCInterpreter_t* hCPU)
 	{
 		uint32 coreIndex = PPCInterpreter_getCoreIndex(hCPU);
 		uint8* cacheMask = lcCacheMask[coreIndex];
-		//printf("LCDealloc(0x%08x)\n", hCPU->gpr[3]);
+		// printf("LCDealloc(0x%08x)\n", hCPU->gpr[3]);
 
 		MPTR deallocAddr = hCPU->gpr[3];
 		if (deallocAddr < lcAddr[coreIndex] || deallocAddr >= (lcAddr[coreIndex] + LC_LOCKED_CACHE_SIZE))
@@ -148,7 +147,7 @@ namespace coreinit
 		uint32 unallocatedBytes = 0;
 		uint32 coreIndex = PPCInterpreter_getCoreIndex(hCPU);
 		unallocatedBytes = LC_LOCKED_CACHE_SIZE - (lcAllocatedBlocks[coreIndex] * LC_LOCKED_CACHE_GRANULARITY);
-		//debug_printf("LCGetUnallocated() Result: 0x%x\n", unallocatedBytes);
+		// debug_printf("LCGetUnallocated() Result: 0x%x\n", unallocatedBytes);
 		osLib_returnFromFunction(hCPU, unallocatedBytes);
 	}
 
@@ -178,11 +177,11 @@ namespace coreinit
 		osLib_returnFromFunction(hCPU, largestFreeRange * LC_LOCKED_CACHE_GRANULARITY);
 	}
 
-	uint32 LCIsEnabled[PPC_CORE_COUNT] = { 0 };
+	uint32 LCIsEnabled[PPC_CORE_COUNT] = {0};
 
 	void coreinitExport_LCEnableDMA(PPCInterpreter_t* hCPU)
 	{
-		//debug_printf("LCEnableDMA()\n");
+		// debug_printf("LCEnableDMA()\n");
 
 		LCIsEnabled[PPCInterpreter_getCoreIndex(hCPU)]++;
 		osLib_returnFromFunction(hCPU, 1);
@@ -192,7 +191,7 @@ namespace coreinit
 
 	void coreinitExport_LCDisableDMA(PPCInterpreter_t* hCPU)
 	{
-		//debug_printf("LCDisableDMA()\n");
+		// debug_printf("LCDisableDMA()\n");
 #ifndef PUBLIC_RELASE
 		if (LCIsEnabled[PPCInterpreter_getCoreIndex(hCPU)] == 0)
 			assert_dbg();
@@ -233,7 +232,7 @@ namespace coreinit
 
 	void coreinitExport_LCLoadDMABlocks(PPCInterpreter_t* hCPU)
 	{
-		//printf("LCLoadDMABlocks(0x%08x, 0x%08x, 0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5]);
+		// printf("LCLoadDMABlocks(0x%08x, 0x%08x, 0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5]);
 		uint32 numBlocks = hCPU->gpr[5];
 		if (numBlocks == 0)
 			numBlocks = 128;
@@ -248,11 +247,11 @@ namespace coreinit
 
 	void coreinitExport_LCStoreDMABlocks(PPCInterpreter_t* hCPU)
 	{
-		//printf("LCStoreDMABlocks(0x%08x, 0x%08x, 0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5]);
+		// printf("LCStoreDMABlocks(0x%08x, 0x%08x, 0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5]);
 		uint32 numBlocks = hCPU->gpr[5];
 		if (numBlocks == 0)
 			numBlocks = 128;
-		//uint32 transferSize = numBlocks*32;
+		// uint32 transferSize = numBlocks*32;
 		uint8* destPtr = memory_getPointerFromVirtualOffset(hCPU->gpr[3]);
 		uint8* srcPtr = memory_getPointerFromVirtualOffset(hCPU->gpr[4]);
 		// copy right away, we don't emulate the DMAQueue currently
@@ -265,7 +264,7 @@ namespace coreinit
 
 	void coreinitExport_LCWaitDMAQueue(PPCInterpreter_t* hCPU)
 	{
-		//printf("LCWaitDMAQueue(%d)\n", hCPU->gpr[3]);
+		// printf("LCWaitDMAQueue(%d)\n", hCPU->gpr[3]);
 		uint32 len = hCPU->gpr[3];
 		// todo: Implement (be aware DMA queue is per core)
 		osLib_returnFromFunction(hCPU, 0);
@@ -293,7 +292,6 @@ namespace coreinit
 		osLib_addFunction("coreinit", "LCLoadDMABlocks", coreinitExport_LCLoadDMABlocks);
 		osLib_addFunction("coreinit", "LCStoreDMABlocks", coreinitExport_LCStoreDMABlocks);
 		osLib_addFunction("coreinit", "LCWaitDMAQueue", coreinitExport_LCWaitDMAQueue);
-
 	}
 
-}
+} // namespace coreinit

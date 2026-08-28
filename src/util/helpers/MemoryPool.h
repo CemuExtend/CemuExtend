@@ -5,7 +5,7 @@ class MemoryPool
 {
 	static_assert(sizeof(T) >= sizeof(void*)); // object must be large enough to store a single pointer
 
-public:
+  public:
 	MemoryPool(int allocationGranularity)
 		: m_numObjectsAllocated(0)
 	{
@@ -13,7 +13,7 @@ public:
 		m_nextFreeObject = nullptr;
 	}
 
-	template <typename... Ts>
+	template<typename... Ts>
 	T* allocObj(Ts&&... args)
 	{
 		if (m_nextFreeObject)
@@ -37,7 +37,7 @@ public:
 		pushElementOnFreeStack(obj);
 	}
 
-private:
+  private:
 	void pushElementOnFreeStack(T* obj)
 	{
 		*(T**)obj = m_nextFreeObject;
@@ -55,7 +55,7 @@ private:
 		}
 	}
 
-private:
+  private:
 	T* m_nextFreeObject;
 	int m_allocationGranularity;
 	int m_numObjectsAllocated;
@@ -72,7 +72,7 @@ class MemoryPoolPermanentObjects
 		internalObject_t* next;
 	};
 
-public:
+  public:
 	MemoryPoolPermanentObjects(int allocationGranularity)
 		: m_numObjectsAllocated(0)
 	{
@@ -80,7 +80,7 @@ public:
 		m_nextFreeObject = nullptr;
 	}
 
-	template <typename... Ts>
+	template<typename... Ts>
 	T* acquireObj(Ts&&... args)
 	{
 		if (m_nextFreeObject)
@@ -102,7 +102,7 @@ public:
 		pushElementOnFreeStack(internalObj);
 	}
 
-private:
+  private:
 	void pushElementOnFreeStack(internalObject_t* obj)
 	{
 		obj->next = m_nextFreeObject;
@@ -121,7 +121,7 @@ private:
 		}
 	}
 
-private:
+  private:
 	internalObject_t* m_nextFreeObject;
 	int m_allocationGranularity;
 	int m_numObjectsAllocated;

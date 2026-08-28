@@ -4,13 +4,13 @@
 
 class VKRMoveableRefCounterRef
 {
-public:
+  public:
 	class VKRMoveableRefCounter* ref;
 };
 
 class VKRMoveableRefCounter
 {
-public:
+  public:
 	VKRMoveableRefCounter()
 	{
 		selfRef = new VKRMoveableRefCounterRef();
@@ -82,14 +82,15 @@ public:
 			RefCountReachedZero();
 	}
 
-protected:
-  	virtual void RefCountReachedZero()
+  protected:
+	virtual void RefCountReachedZero()
 	{
 		// does nothing by default
 	}
 
 	std::atomic_int_least32_t m_refCount{};
-private:
+
+  private:
 	VKRMoveableRefCounterRef* selfRef;
 	std::vector<VKRMoveableRefCounterRef*> refs;
 #ifdef CEMU_DEBUG_ASSERT
@@ -99,12 +100,13 @@ private:
 
 class VKRDestructibleObject : public VKRMoveableRefCounter
 {
-public:
+  public:
 	void flagForCurrentCommandBuffer();
 	bool canDestroy();
 
 	virtual ~VKRDestructibleObject() {};
-private:
+
+  private:
 	uint64 m_lastCmdBufferId{};
 };
 
@@ -112,28 +114,26 @@ private:
 
 class VKRObjectTexture : public VKRDestructibleObject
 {
-public:
+  public:
 	VKRObjectTexture();
 	~VKRObjectTexture() override;
 
-	VkImage m_image{ VK_NULL_HANDLE };
+	VkImage m_image{VK_NULL_HANDLE};
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
 	VkImageCreateFlags m_flags;
 	VkImageAspectFlags m_imageAspect;
 	struct VkImageMemAllocation* m_allocation{};
-
 };
 
 class VKRObjectTextureView : public VKRDestructibleObject
 {
-public:
+  public:
 	VKRObjectTextureView(VKRObjectTexture* tex, VkImageView view);
 	~VKRObjectTextureView() override;
 
-	VkImageView m_textureImageView{ VK_NULL_HANDLE };
-	VkSampler m_textureDefaultSampler[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE }; // relict from LatteTextureViewVk, get rid of it eventually
+	VkImageView m_textureImageView{VK_NULL_HANDLE};
+	VkSampler m_textureDefaultSampler[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE}; // relict from LatteTextureViewVk, get rid of it eventually
 };
-
 
 class VKRObjectSampler : public VKRDestructibleObject
 {
@@ -146,16 +146,20 @@ class VKRObjectSampler : public VKRDestructibleObject
 
 	void RefCountReachedZero() override; // sampler objects are destroyed when not referenced anymore
 
-	VkSampler GetSampler() const { return m_sampler; }
+	VkSampler GetSampler() const
+	{
+		return m_sampler;
+	}
+
   private:
 	static std::unordered_map<uint64, VKRObjectSampler*> s_samplerCache;
-	VkSampler m_sampler{ VK_NULL_HANDLE };
+	VkSampler m_sampler{VK_NULL_HANDLE};
 	uint64 m_hash;
 };
 
 class VKRObjectRenderPass : public VKRDestructibleObject
 {
-public:
+  public:
 	struct AttachmentEntryColor_t
 	{
 		VKRObjectTextureView* viewObj{};
@@ -189,10 +193,10 @@ public:
 		return m_depthAttachmentFormat;
 	}
 
-public:
+  public:
 	VKRObjectRenderPass(AttachmentInfo_t& attachmentInfo, sint32 colorAttachmentCount = Latte::GPU_LIMITS::NUM_COLOR_ATTACHMENTS);
 	~VKRObjectRenderPass() override;
-	VkRenderPass m_renderPass{ VK_NULL_HANDLE };
+	VkRenderPass m_renderPass{VK_NULL_HANDLE};
 	VkFormat m_colorAttachmentFormat[Latte::GPU_LIMITS::NUM_COLOR_ATTACHMENTS];
 	VkFormat m_depthAttachmentFormat;
 	uint64 m_hashForPipeline; // helper var. Holds hash of all the renderpass creation parameters (mainly the formats) that affect the pipeline state
@@ -200,34 +204,37 @@ public:
 
 class VKRObjectFramebuffer : public VKRDestructibleObject
 {
-public:
+  public:
 	VKRObjectFramebuffer(VKRObjectRenderPass* renderPass, std::span<VKRObjectTextureView*> attachments, Vector2i size);
 	~VKRObjectFramebuffer() override;
 
-	VkFramebuffer m_frameBuffer{ VK_NULL_HANDLE };
+	VkFramebuffer m_frameBuffer{VK_NULL_HANDLE};
 };
 
 class VKRObjectPipeline : public VKRDestructibleObject
 {
-public:
+  public:
 	VKRObjectPipeline();
 	~VKRObjectPipeline() override;
 
 	void SetPipeline(VkPipeline newPipeline);
-	VkPipeline GetPipeline() const { return m_pipeline; }
+	VkPipeline GetPipeline() const
+	{
+		return m_pipeline;
+	}
 
 	VkDescriptorSetLayout m_vertexDSL = VK_NULL_HANDLE, m_pixelDSL = VK_NULL_HANDLE, m_geometryDSL = VK_NULL_HANDLE;
 	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 
-private:
+  private:
 	VkPipeline m_pipeline = VK_NULL_HANDLE;
 };
 
 class VKRObjectDescriptorSet : public VKRDestructibleObject
 {
-public:
+  public:
 	VKRObjectDescriptorSet();
 	~VKRObjectDescriptorSet() override;
 
-	VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
+	VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
 };

@@ -33,4 +33,4 @@ namespace Frontend::ArchiveInstallPolicy
 		const std::filesystem::path& target,
 		const std::filesystem::path& backup,
 		bool replaceExisting);
-}
+} // namespace Frontend::ArchiveInstallPolicy

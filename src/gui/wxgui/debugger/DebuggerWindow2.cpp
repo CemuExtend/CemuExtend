@@ -56,24 +56,24 @@ wxDEFINE_EVENT(wxEVT_DEBUGGER_CLOSE, wxCloseEvent);
 
 wxBEGIN_EVENT_TABLE(DebuggerWindow2, wxFrame)
 	EVT_SHOW(DebuggerWindow2::OnShow)
-	EVT_CLOSE(DebuggerWindow2::OnClose)
-	EVT_COMMAND(wxID_ANY, wxEVT_UPDATE_VIEW, DebuggerWindow2::OnUpdateView)
-	EVT_COMMAND(wxID_ANY, wxEVT_BREAKPOINT_CHANGE, DebuggerWindow2::OnBreakpointChange)
-	EVT_COMMAND(wxID_ANY, wxEVT_MOVE_TO_DISASM_ADDR, DebuggerWindow2::OnMoveToDisasmAddr)
-	EVT_COMMAND(wxID_ANY, wxEVT_COMMAND_TOOL_CLICKED, DebuggerWindow2::OnToolClicked)
-	EVT_COMMAND(wxID_ANY, wxEVT_BREAKPOINT_HIT, DebuggerWindow2::OnBreakpointHit)
-	EVT_COMMAND(wxID_ANY, wxEVT_RUN, DebuggerWindow2::OnRunProgram)
-	EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_MODULE_LOADED, DebuggerWindow2::OnNotifyModuleLoaded)
-	EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_MODULE_UNLOADED, DebuggerWindow2::OnNotifyModuleUnloaded)
-	EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_GRAPHIC_PACKS_MODIFIED, DebuggerWindow2::OnNotifyGraphicPacksModified)
-	EVT_COMMAND(wxID_ANY, wxEVT_DISASMCTRL_NOTIFY_GOTO_ADDRESS, DebuggerWindow2::OnDisasmCtrlGotoAddress)
+		EVT_CLOSE(DebuggerWindow2::OnClose)
+			EVT_COMMAND(wxID_ANY, wxEVT_UPDATE_VIEW, DebuggerWindow2::OnUpdateView)
+				EVT_COMMAND(wxID_ANY, wxEVT_BREAKPOINT_CHANGE, DebuggerWindow2::OnBreakpointChange)
+					EVT_COMMAND(wxID_ANY, wxEVT_MOVE_TO_DISASM_ADDR, DebuggerWindow2::OnMoveToDisasmAddr)
+						EVT_COMMAND(wxID_ANY, wxEVT_COMMAND_TOOL_CLICKED, DebuggerWindow2::OnToolClicked)
+							EVT_COMMAND(wxID_ANY, wxEVT_BREAKPOINT_HIT, DebuggerWindow2::OnBreakpointHit)
+								EVT_COMMAND(wxID_ANY, wxEVT_RUN, DebuggerWindow2::OnRunProgram)
+									EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_MODULE_LOADED, DebuggerWindow2::OnNotifyModuleLoaded)
+										EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_MODULE_UNLOADED, DebuggerWindow2::OnNotifyModuleUnloaded)
+											EVT_COMMAND(wxID_ANY, wxEVT_NOTIFY_GRAPHIC_PACKS_MODIFIED, DebuggerWindow2::OnNotifyGraphicPacksModified)
+												EVT_COMMAND(wxID_ANY, wxEVT_DISASMCTRL_NOTIFY_GOTO_ADDRESS, DebuggerWindow2::OnDisasmCtrlGotoAddress)
 	// file menu
 	EVT_MENU(MENU_ID_FILE_EXIT, DebuggerWindow2::OnExit)
 	// window
 	EVT_MENU_RANGE(MENU_ID_WINDOW_REGISTERS, MENU_ID_WINDOW_MODULE, DebuggerWindow2::OnWindowMenu)
-wxEND_EVENT_TABLE()
+		wxEND_EVENT_TABLE()
 
-DebuggerModuleInfo::DebuggerModuleInfo(RPLModule* module)
+			DebuggerModuleInfo::DebuggerModuleInfo(RPLModule* module)
 {
 	moduleName = module->moduleName;
 	patchCRC = module->patchCRC;
@@ -300,7 +300,7 @@ void DebuggerModuleStorage::Save(XMLConfigParser& parser)
 	}
 }
 
-void DebuggerWindow2::CreateToolBar() 
+void DebuggerWindow2::CreateToolBar()
 {
 	m_toolbar = wxFrame::CreateToolBar(wxTB_HORIZONTAL, wxID_ANY);
 	m_toolbar->SetToolBitmapSize(wxSize(16, 16));
@@ -327,7 +327,6 @@ void DebuggerWindow2::CreateToolBar()
 
 	m_toolbar->EnableTool(TOOL_ID_STEP_INTO, false);
 	m_toolbar->EnableTool(TOOL_ID_STEP_OVER, false);
-
 }
 
 void DebuggerWindow2::LoadModuleStorage(const DebuggerModuleInfo& moduleInfo)
@@ -336,7 +335,7 @@ void DebuggerWindow2::LoadModuleStorage(const DebuggerModuleInfo& moduleInfo)
 	bool already_loaded = std::any_of(m_modulesStorage.begin(), m_modulesStorage.end(), [path](const std::unique_ptr<XMLDebuggerModuleConfig>& debug) { return debug->GetFilename() == path; });
 	if (!path.empty() && !already_loaded)
 	{
-		auto& moduleStorage = m_modulesStorage.emplace_back(new XMLDebuggerModuleConfig(path, { moduleInfo, false }));
+		auto& moduleStorage = m_modulesStorage.emplace_back(new XMLDebuggerModuleConfig(path, {moduleInfo, false}));
 		moduleStorage->Load();
 		LoadModuleMap(moduleStorage->data());
 	}
@@ -411,7 +410,7 @@ void DebuggerWindow2::UnloadModuleMap(DebuggerModuleStorage& moduleStorage)
 
 DebuggerWindow2::DebuggerWindow2(wxFrame& parent, const wxRect& display_size)
 	: wxFrame(&parent, wxID_ANY, _("PPC Debugger"), wxDefaultPosition, wxSize(1280, 300), wxMINIMIZE_BOX | wxMAXIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN | wxRESIZE_BORDER | wxFRAME_FLOAT_ON_PARENT),
-		m_module_address(0)
+	  m_module_address(0)
 {
 	g_debuggerDispatcher.SetDebuggerCallbacks(this);
 
@@ -526,7 +525,7 @@ void DebuggerWindow2::CleanupForDestroy()
 void DebuggerWindow2::OnClose(wxCloseEvent& event)
 {
 	debugger_setOptionBreakOnEntry(false);
-	
+
 	const wxCloseEvent parentEvent(wxEVT_DEBUGGER_CLOSE);
 	wxPostEvent(m_parent, parentEvent);
 
@@ -605,8 +604,8 @@ void DebuggerWindow2::OnGameLoaded()
 	m_symbol_window->OnGameLoaded();
 
 	RPLModule* current_rpl_module = RPLLoader_FindModuleByCodeAddr(MEMORY_CODEAREA_ADDR);
-	if(current_rpl_module)
-		m_module_label->SetLabel(wxString::Format("> %s", current_rpl_module->moduleName.c_str()));	
+	if (current_rpl_module)
+		m_module_label->SetLabel(wxString::Format("> %s", current_rpl_module->moduleName.c_str()));
 
 	this->SendSizeEvent();
 }
@@ -642,13 +641,15 @@ bool DebuggerWindow2::Show(bool show)
 
 std::wstring DebuggerWindow2::GetModuleStoragePath(std::string module_name, uint32_t crc_hash) const
 {
-	if (module_name.empty() || crc_hash == 0) return {};
+	if (module_name.empty() || crc_hash == 0)
+		return {};
 	return ActiveSettings::GetConfigPath("debugger/{}_{:#10x}.xml", module_name, crc_hash).generic_wstring();
 }
 
 std::wstring DebuggerWindow2::GetModuleMapPath(std::string module_name, uint32_t crc_hash) const
 {
-	if (module_name.empty() || crc_hash == 0) return {};
+	if (module_name.empty() || crc_hash == 0)
+		return {};
 	return ActiveSettings::GetConfigPath("debugger/{}_{:#10x}.map", module_name, crc_hash).generic_wstring();
 }
 
@@ -682,7 +683,7 @@ void DebuggerWindow2::OnRunProgram(wxCommandEvent& event)
 
 void DebuggerWindow2::OnToolClicked(wxCommandEvent& event)
 {
-	switch(event.GetId())
+	switch (event.GetId())
 	{
 	case TOOL_ID_GOTO:
 		m_disasm_ctrl->GoToAddressDialog();
@@ -833,7 +834,7 @@ void DebuggerWindow2::OnShow(wxShowEvent& event)
 void DebuggerWindow2::CreateMenuBar()
 {
 	auto menu_bar = new wxMenuBar;
-	
+
 	// file
 	wxMenu* file_menu = new wxMenu;
 	file_menu->Append(MENU_ID_FILE_EXIT, _("&Exit"));
@@ -856,7 +857,7 @@ void DebuggerWindow2::CreateMenuBar()
 	window_menu->Append(MENU_ID_WINDOW_BREAKPOINTS, _("&Breakpoints"), wxEmptyString, wxITEM_CHECK)->Check(m_config.data().show_breakpoints);
 	window_menu->Append(MENU_ID_WINDOW_MODULE, _("Module&list"), wxEmptyString, wxITEM_CHECK)->Check(m_config.data().show_modules);
 	window_menu->Append(MENU_ID_WINDOW_SYMBOL, _("&Symbols"), wxEmptyString, wxITEM_CHECK)->Check(m_config.data().show_symbols);
-	
+
 	menu_bar->Append(window_menu, _("&Window"));
 
 	SetMenuBar(menu_bar);

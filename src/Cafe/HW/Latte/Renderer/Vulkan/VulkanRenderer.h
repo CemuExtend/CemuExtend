@@ -36,21 +36,24 @@ struct VkDescriptorSetInfo
 	class PipelineInfo* pipeline_info{};
 
 	// tracking for allocated descriptors
-	uint8 statsNumSamplerTextures{ 0 };
-	uint8 statsNumDynUniformBuffers{ 0 };
-	uint8 statsNumStorageBuffers{ 0 };
+	uint8 statsNumSamplerTextures{0};
+	uint8 statsNumDynUniformBuffers{0};
+	uint8 statsNumStorageBuffers{0};
 };
 
 class VkException : public std::runtime_error
 {
-public:
+  public:
 	VkException(VkResult result, const std::string& message)
 		: runtime_error(message), m_result(result)
 	{}
 
-	VkResult GetResult() const { return m_result; }
+	VkResult GetResult() const
+	{
+		return m_result;
+	}
 
-private:
+  private:
 	VkResult m_result;
 };
 
@@ -60,7 +63,7 @@ namespace VulkanRendererConst
 	static const inline int SHADER_STAGE_INDEX_FRAGMENT = static_cast<int>(LatteConst::ShaderType::Pixel);
 	static const inline int SHADER_STAGE_INDEX_GEOMETRY = static_cast<int>(LatteConst::ShaderType::Geometry);
 	static const inline int SHADER_STAGE_INDEX_COUNT = 4;
-};
+}; // namespace VulkanRendererConst
 
 // the order doesnt really matter but the types should cover range 0-2 since we use them as an array index
 static_assert(static_cast<int>(LatteConst::ShaderType::Vertex) == 0);
@@ -69,7 +72,7 @@ static_assert(static_cast<int>(LatteConst::ShaderType::Geometry) == 2);
 
 class PipelineInfo
 {
-public:
+  public:
 	PipelineInfo(uint64 minimalStateHash, uint64 pipelineHash, struct LatteFetchShader* fetchShader, LatteDecompilerShader* vertexShader, LatteDecompilerShader* pixelShader, LatteDecompilerShader* geometryShader);
 	PipelineInfo(const PipelineInfo& info) = delete;
 	~PipelineInfo();
@@ -78,7 +81,6 @@ public:
 	{
 		return true;
 	}
-
 
 	template<typename T>
 	struct direct_hash
@@ -116,15 +118,15 @@ public:
 	uint64 minimalStateHash;
 	uint64 stateHash;
 
-	bool usesBlendConstants{ false };
-	bool usesDepthBias{ false };
+	bool usesBlendConstants{false};
+	bool usesDepthBias{false};
 
 	struct
 	{
 		bool hasUniformVar[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
 		bool hasUniformBuffers[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
 		std::vector<uint8> list_uniformBuffers[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
-	}dynamicOffsetInfo{};
+	} dynamicOffsetInfo{};
 
 	// primitive rects emulation
 	RendererShaderVk* rectEmulationGS = nullptr;
@@ -147,11 +149,13 @@ class VulkanRenderer : public Renderer
 
 	static const inline int OCCLUSION_QUERY_POOL_SIZE = 1024;
 
-public:
-
+  public:
 	// memory management
 	std::unique_ptr<VKRMemoryManager> memoryManager;
-	VKRMemoryManager* GetMemoryManager() const { return memoryManager.get(); };
+	VKRMemoryManager* GetMemoryManager() const
+	{
+		return memoryManager.get();
+	};
 
 	VkSupportedFormatInfo_t m_supportedFormatInfo;
 
@@ -167,7 +171,7 @@ public:
 
 		sint32 texelCountX;
 		sint32 texelCountY;
-	}FormatInfoVK;
+	} FormatInfoVK;
 
 	struct DeviceInfo
 	{
@@ -183,7 +187,9 @@ public:
 
 	static std::vector<DeviceInfo> GetDevices(const Host::NativeWindowHandle& mainWindow);
 	VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-		std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces);
+				   std::shared_ptr<Host::INativeSurfaceProvider> nativeSurfaces,
+				   std::function<void(bool mainWindow)> framePresented = {},
+				   std::shared_ptr<Host::IOverlayFrameSource> overlayFrames = {});
 	virtual ~VulkanRenderer();
 
 	static VulkanRenderer* GetInstance();
@@ -193,6 +199,7 @@ public:
 	void GetDeviceFeatures();
 	void DetermineVendor();
 	void InitializeSurface(const Vector2i& size, bool mainWindow);
+	void ShutdownPadSurface();
 
 	const std::unique_ptr<SwapchainInfoVk>& GetChainInfoPtr(bool mainWindow) const;
 	SwapchainInfoVk& GetChainInfo(bool mainWindow) const;
@@ -210,25 +217,40 @@ public:
 #endif
 #if BOOST_OS_LINUX || BOOST_OS_BSD
 	static VkSurfaceKHR CreateXlibSurface(VkInstance instance, Display* dpy, Window window);
-    static VkSurfaceKHR CreateXcbSurface(VkInstance instance, xcb_connection_t* connection, xcb_window_t window);
-	#ifdef HAS_WAYLAND
+	static VkSurfaceKHR CreateXcbSurface(VkInstance instance, xcb_connection_t* connection, xcb_window_t window);
+#ifdef HAS_WAYLAND
 	static VkSurfaceKHR CreateWaylandSurface(VkInstance instance, wl_display* display, wl_surface* surface);
-	#endif
+#endif
 #endif
 
 	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance,
-		const Host::NativeWindowHandle& windowInfo);
+												 const Host::NativeWindowHandle& windowInfo);
 
 	void AppendOverlayDebugInfo() override;
 
 	void ImguiInit();
-	VkInstance GetVkInstance() const { return m_instance; }
-	VkDevice GetLogicalDevice() const { return m_logicalDevice; }
-	VkPhysicalDevice GetPhysicalDevice() const { return m_physicalDevice; }
+	VkInstance GetVkInstance() const
+	{
+		return m_instance;
+	}
+	VkDevice GetLogicalDevice() const
+	{
+		return m_logicalDevice;
+	}
+	VkPhysicalDevice GetPhysicalDevice() const
+	{
+		return m_physicalDevice;
+	}
 
-	VkDescriptorPool GetDescriptorPool() const { return m_descriptorPool; }
+	VkDescriptorPool GetDescriptorPool() const
+	{
+		return m_descriptorPool;
+	}
 
-	void WaitDeviceIdle() const { vkDeviceWaitIdle(m_logicalDevice); }
+	void WaitDeviceIdle() const
+	{
+		vkDeviceWaitIdle(m_logicalDevice);
+	}
 
 	void Initialize() override;
 	void Shutdown() override;
@@ -271,7 +293,7 @@ public:
 	void CreateDescriptorPool();
 	VkDescriptorSet backbufferBlit_createDescriptorSet(VkDescriptorSetLayout descriptor_set_layout, LatteTextureViewVk* texViewVk, bool useLinearTexFilter);
 
-	robin_hood::unordered_flat_map<uint64, robin_hood::unordered_flat_map<uint64, PipelineInfo*> > m_pipeline_info_cache; // using robin_hood::unordered_flat_map is twice as fast (1-2% overall CPU time reduction)
+	robin_hood::unordered_flat_map<uint64, robin_hood::unordered_flat_map<uint64, PipelineInfo*>> m_pipeline_info_cache; // using robin_hood::unordered_flat_map is twice as fast (1-2% overall CPU time reduction)
 	void draw_debugPipelineHashState();
 	PipelineInfo* draw_getCachedPipeline();
 
@@ -310,12 +332,12 @@ public:
 	void surfaceCopy_copySurfaceWithFormatConversion(LatteTexture* sourceTexture, sint32 srcMip, sint32 srcSlice, LatteTexture* destinationTexture, sint32 dstMip, sint32 dstSlice, sint32 width, sint32 height) override;
 	void surfaceCopy_notifyTextureRelease(LatteTextureVk* hostTexture);
 
-	private:
+  private:
 	void surfaceCopy_viaDrawcall(LatteTextureVk* srcTextureVk, sint32 texSrcMip, sint32 texSrcSlice, LatteTextureVk* dstTextureVk, sint32 texDstMip, sint32 texDstSlice, sint32 effectiveCopyWidth, sint32 effectiveCopyHeight);
 
 	void surfaceCopy_cleanup();
 
-private:
+  private:
 	uint64 copySurface_getPipelineStateHash(struct VkCopySurfaceState_t& state);
 	struct CopySurfacePipelineInfo* copySurface_getCachedPipeline(struct VkCopySurfaceState_t& state);
 	struct CopySurfacePipelineInfo* copySurface_getOrCreateGraphicsPipeline(struct VkCopySurfaceState_t& state);
@@ -327,7 +349,7 @@ private:
 
 	std::unordered_map<uint64, struct CopySurfacePipelineInfo*> m_copySurfacePipelineCache;
 
-public:
+  public:
 	// renderer interface
 	void bufferCache_init(const sint32 bufferSize) override;
 	void bufferCache_upload(uint8* buffer, sint32 size, uint32 bufferOffset) override;
@@ -348,7 +370,7 @@ public:
 	void GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_DIM dim, sint32 width, sint32 height, FormatInfoVK* formatInfoOut);
 	void unregisterGraphicsPipeline(PipelineInfo* pipelineInfo);
 
-private:
+  private:
 	struct VkRendererState
 	{
 		VkRendererState() = default;
@@ -365,17 +387,17 @@ private:
 		VkCommandBuffer currentCommandBuffer{};
 
 		// pipeline
-		VkPipeline currentPipeline{ VK_NULL_HANDLE };
+		VkPipeline currentPipeline{VK_NULL_HANDLE};
 
 		// renderpass
 		CachedFBOVk* activeRenderpassFBO{}; // the FBO of the currently active Vulkan renderpass
 
 		// drawcall state
-		PipelineInfo* activePipelineInfo{ nullptr };
-		VkDescriptorSetInfo* activeVertexDS{ nullptr };
-		VkDescriptorSetInfo* activePixelDS{ nullptr };
-		VkDescriptorSetInfo* activeGeometryDS{ nullptr };
-		bool descriptorSetsChanged{ false };
+		PipelineInfo* activePipelineInfo{nullptr};
+		VkDescriptorSetInfo* activeVertexDS{nullptr};
+		VkDescriptorSetInfo* activePixelDS{nullptr};
+		VkDescriptorSetInfo* activeGeometryDS{nullptr};
+		bool descriptorSetsChanged{false};
 		VkImageAspectFlags feedbackLoopImageAspect{0xFFFFFFFF};
 		// viewport and scissor box
 		VkViewport currentViewport{};
@@ -385,7 +407,7 @@ private:
 		struct
 		{
 			uint32 offset;
-		}currentVertexBinding[LATTE_MAX_VERTEX_BUFFERS]{};
+		} currentVertexBinding[LATTE_MAX_VERTEX_BUFFERS]{};
 
 		// index buffer
 		Renderer::INDEX_TYPE activeIndexType{};
@@ -393,9 +415,9 @@ private:
 		uint32 activeIndexBufferOffset{};
 
 		// polygon offset
-		uint32 prevPolygonFrontOffsetU32{ 0xFFFFFFFF };
-		uint32 prevPolygonFrontScaleU32{ 0xFFFFFFFF };
-		uint32 prevPolygonFrontClampU32{ 0xFFFFFFFF };
+		uint32 prevPolygonFrontOffsetU32{0xFFFFFFFF};
+		uint32 prevPolygonFrontScaleU32{0xFFFFFFFF};
+		uint32 prevPolygonFrontClampU32{0xFFFFFFFF};
 
 		void resetCommandBufferState()
 		{
@@ -415,11 +437,11 @@ private:
 
 		// invalidation / flushing
 		uint64 currentFlushIndex{0};
-		bool requestFlush{ false }; // flush after every draw operation. The renderpass dependencies dont handle dependencies across multiple drawcalls inside a single renderpass
+		bool requestFlush{false}; // flush after every draw operation. The renderpass dependencies dont handle dependencies across multiple drawcalls inside a single renderpass
 
 		// draw sequence
 		bool drawSequenceSkip; // if true, skip draw_execute()
-	}m_state;
+	} m_state;
 
 	std::unique_ptr<SwapchainInfoVk> m_mainSwapchainInfo{}, m_padSwapchainInfo{};
 	std::atomic_flag m_destroyPadSwapchainNextAcquire{};
@@ -435,12 +457,14 @@ private:
 		int32_t graphicsFamily = -1;
 		int32_t presentFamily = -1;
 
-		bool IsComplete() const	{ return graphicsFamily >= 0 && presentFamily >= 0;	}
+		bool IsComplete() const
+		{
+			return graphicsFamily >= 0 && presentFamily >= 0;
+		}
 	};
 	static QueueFamilyIndices FindQueueFamilies(VkSurfaceKHR surface, VkPhysicalDevice device);
 
   private:
-
 	struct FeatureControl
 	{
 		struct
@@ -450,31 +474,31 @@ private:
 			bool depth_range_unrestricted = false;
 			bool nv_fill_rectangle = false; // NV_fill_rectangle
 			bool pipeline_feedback = false;
-			bool pipeline_creation_cache_control = false; // VK_EXT_pipeline_creation_cache_control
-			bool custom_border_color = false; // VK_EXT_custom_border_color
-			bool custom_border_color_without_format = false; // VK_EXT_custom_border_color (specifically customBorderColorWithoutFormat)
-			bool cubic_filter = false; // VK_EXT_FILTER_CUBIC_EXTENSION_NAME
-			bool driver_properties = false; // VK_KHR_driver_properties
-			bool external_memory_host = false; // VK_EXT_external_memory_host
-			bool synchronization2 = false; // VK_KHR_synchronization2
-			bool dynamic_rendering = false; // VK_KHR_dynamic_rendering
-			bool shader_float_controls = false; // VK_KHR_shader_float_controls
-			bool present_wait = false; // VK_KHR_present_wait
-			bool depth_clip_enable = false; // VK_EXT_depth_clip_enable
-			bool pipeline_robustness = false; // VK_EXT_pipeline_robustness
-			bool attachment_feedback_loop_layout = false; // VK_EXT_attachment_feedback_loop_layout
+			bool pipeline_creation_cache_control = false;		 // VK_EXT_pipeline_creation_cache_control
+			bool custom_border_color = false;					 // VK_EXT_custom_border_color
+			bool custom_border_color_without_format = false;	 // VK_EXT_custom_border_color (specifically customBorderColorWithoutFormat)
+			bool cubic_filter = false;							 // VK_EXT_FILTER_CUBIC_EXTENSION_NAME
+			bool driver_properties = false;						 // VK_KHR_driver_properties
+			bool external_memory_host = false;					 // VK_EXT_external_memory_host
+			bool synchronization2 = false;						 // VK_KHR_synchronization2
+			bool dynamic_rendering = false;						 // VK_KHR_dynamic_rendering
+			bool shader_float_controls = false;					 // VK_KHR_shader_float_controls
+			bool present_wait = false;							 // VK_KHR_present_wait
+			bool depth_clip_enable = false;						 // VK_EXT_depth_clip_enable
+			bool pipeline_robustness = false;					 // VK_EXT_pipeline_robustness
+			bool attachment_feedback_loop_layout = false;		 // VK_EXT_attachment_feedback_loop_layout
 			bool attachment_feedback_loop_dynamic_state = false; // VK_EXT_attachment_feedback_loop_dynamic_state (this is forced to false if VK_EXT_attachment_feedback_loop_layout is not supported)
-		}deviceExtensions;
+		} deviceExtensions;
 
 		struct
 		{
-			bool shaderRoundingModeRTEFloat32{ false };
-		}shaderFloatControls; // from VK_KHR_shader_float_controls
+			bool shaderRoundingModeRTEFloat32{false};
+		} shaderFloatControls; // from VK_KHR_shader_float_controls
 
 		struct
 		{
 			bool debug_utils = false; // VK_EXT_DEBUG_UTILS
-		}instanceExtensions;
+		} instanceExtensions;
 
 		struct
 		{
@@ -482,13 +506,13 @@ private:
 			uint32 nonCoherentAtomSize = 256;
 			// calculated
 			uint32 calcUniformBufferAlignmentM1{};
-		}limits;
+		} limits;
 
-		bool usingDebugMarkerTool{ false }; // validation layer or other tool capable of handling debug markers is used
-		bool usingTracingTool{ false }; // frame debugger or other API replaying tool is used
-		bool disableMultithreadedCompilation{ false }; // for old nvidia drivers
+		bool usingDebugMarkerTool{false};			 // validation layer or other tool capable of handling debug markers is used
+		bool usingTracingTool{false};				 // frame debugger or other API replaying tool is used
+		bool disableMultithreadedCompilation{false}; // for old nvidia drivers
 
-	}m_featureControl{};
+	} m_featureControl{};
 	static bool CheckDeviceExtensionSupport(const VkPhysicalDevice device, FeatureControl& info);
 	std::vector<const char*> CheckInstanceExtensionSupport(FeatureControl& info);
 
@@ -498,6 +522,8 @@ private:
 	VkDescriptorSetLayout m_swapchainDescriptorSetLayout;
 
 	VkQueue m_graphicsQueue, m_presentQueue;
+	std::function<void(bool)> m_framePresented;
+	std::shared_ptr<Host::IOverlayFrameSource> m_overlayFrames;
 
 	// swapchain
 
@@ -509,6 +535,51 @@ private:
 	void CreateCommandBuffers();
 
 	void swapchain_createDescriptorSetLayout();
+
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+	struct OverlayStagingBuffer
+	{
+		VkBuffer buffer{VK_NULL_HANDLE};
+		VkDeviceMemory memory{VK_NULL_HANDLE};
+		std::uint8_t* mapped{};
+		bool coherent{};
+		bool inUse{};
+		std::uint64_t commandBufferId{};
+	};
+	struct OverlaySurfaceResources
+	{
+		VkImage image{VK_NULL_HANDLE};
+		VkDeviceMemory imageMemory{VK_NULL_HANDLE};
+		VkImageView imageView{VK_NULL_HANDLE};
+		VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
+		VkPipeline pipeline{VK_NULL_HANDLE};
+		VkRenderPass pipelineRenderPass{VK_NULL_HANDLE};
+		std::array<OverlayStagingBuffer, 3> staging;
+		std::size_t stagingCapacity{};
+		std::size_t stagingIndex{};
+		std::uint64_t uploadedSequence{};
+		std::uint64_t resizeGeneration{};
+		std::int32_t width{};
+		std::int32_t height{};
+		bool imageInitialized{};
+		bool drawable{};
+	};
+	void overlayInitialize();
+	void overlayCleanup();
+	void overlayDestroySurface(OverlaySurfaceResources& surface);
+	void overlayCreateSurface(OverlaySurfaceResources& surface, int width, int height);
+	void overlayUpload(bool mainWindow);
+	void overlayDraw(bool mainWindow);
+	VkPipeline overlayCreatePipeline(VkRenderPass renderPass);
+	OverlaySurfaceResources& overlaySurface(bool mainWindow)
+	{
+		return m_overlaySurfaces[mainWindow ? 0 : 1];
+	}
+	std::array<OverlaySurfaceResources, 2> m_overlaySurfaces;
+	VkDescriptorSetLayout m_overlayDescriptorSetLayout{VK_NULL_HANDLE};
+	VkPipelineLayout m_overlayPipelineLayout{VK_NULL_HANDLE};
+	VkSampler m_overlaySampler{VK_NULL_HANDLE};
+#endif
 
 	// shader
 
@@ -557,7 +628,10 @@ private:
 	void sync_RenderPassStoreTextures(CachedFBOVk* fboVk);
 
 	// command buffer
-	VkCommandBuffer getCurrentCommandBuffer() const { return m_state.currentCommandBuffer; }
+	VkCommandBuffer getCurrentCommandBuffer() const
+	{
+		return m_state.currentCommandBuffer;
+	}
 
 	// uniform
 	uint32 uniformData_uploadUniformDataBufferGetOffset(std::span<uint8, std::dynamic_extent> data);
@@ -585,11 +659,11 @@ private:
 	void occlusionQuery_notifyEndCommandBuffer();
 	void occlusionQuery_notifyBeginCommandBuffer();
 
-private:
+  private:
 	std::vector<const char*> m_layerNames;
 	VkInstance m_instance = VK_NULL_HANDLE;
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-	VkDevice  m_logicalDevice = VK_NULL_HANDLE;
+	VkDevice m_logicalDevice = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT m_debugCallback = nullptr;
 	volatile bool m_destructionRequested = false;
 
@@ -598,11 +672,11 @@ private:
 	Semaphore m_pipeline_cache_semaphore;
 	std::shared_mutex m_pipeline_cache_save_mutex;
 	std::thread m_pipeline_cache_save_thread;
-	VkPipelineCache m_pipeline_cache{ nullptr };
+	VkPipelineCache m_pipeline_cache{nullptr};
 	std::unordered_map<uint64, VkPipeline> m_backbufferBlitPipelineCache;
 	std::unordered_map<uint64, VkDescriptorSet> m_backbufferBlitDescriptorSetCache;
 	VkPipelineLayout m_pipelineLayout{nullptr};
-	VkCommandPool m_commandPool{ nullptr };
+	VkCommandPool m_commandPool{nullptr};
 
 	// buffer to cache uniform vars
 	VkBuffer m_uniformVarBuffer = VK_NULL_HANDLE;
@@ -646,7 +720,7 @@ private:
 	// if VK_EXT_external_memory_host is supported we can (optionally) import all of the Wii U memory into a Vulkan memory object
 	// this allows us to skip any vertex/uniform caching logic and let the GPU directly read the memory from main RAM
 	// Wii U memory imported into a buffer
-	static constexpr bool m_useHostMemoryForCache{ false }; // currently disabled and made constexpr so the compiler eliminates the branches that will never be taken
+	static constexpr bool m_useHostMemoryForCache{false}; // currently disabled and made constexpr so the compiler eliminates the branches that will never be taken
 	VkBuffer m_importedMem = VK_NULL_HANDLE;
 	VkDeviceMemory m_importedMemMemory = VK_NULL_HANDLE;
 	MPTR m_importedMemBaseAddress = 0;
@@ -654,10 +728,10 @@ private:
 	// command buffer, garbage collection, synchronization
 	static constexpr uint32 kCommandBufferPoolSize = 128;
 
-	size_t m_commandBufferIndex = 0; // current buffer being filled
+	size_t m_commandBufferIndex = 0;	 // current buffer being filled
 	size_t m_commandBufferSyncIndex = 0; // latest buffer that finished execution (updated on submit)
 	size_t m_commandBufferIDOfPrevFrame = 0;
-	std::array<size_t, kCommandBufferPoolSize> m_cmdBufferUniformRingbufIndices {}; // read index in the uniform ringbuffer after the command buffer finishes
+	std::array<size_t, kCommandBufferPoolSize> m_cmdBufferUniformRingbufIndices{}; // read index in the uniform ringbuffer after the command buffer finishes
 	std::array<VkFence, kCommandBufferPoolSize> m_cmdBufferFences;
 	std::array<VkCommandBuffer, kCommandBufferPoolSize> m_commandBuffers;
 	std::array<VkSemaphore, kCommandBufferPoolSize> m_commandBufferSemaphores;
@@ -671,8 +745,8 @@ private:
 	uint64 m_countCommandBufferFinished{};
 
 	uint32 m_recordedDrawcalls{}; // number of drawcalls recorded into current command buffer
-	uint32 m_submitThreshold{}; // submit current buffer if recordedDrawcalls exceeds this number
-	bool m_submitOnIdle{}; // submit current buffer if Latte command processor goes into idle state (no more commands or waiting for externally signaled condition)
+	uint32 m_submitThreshold{};	  // submit current buffer if recordedDrawcalls exceeds this number
+	bool m_submitOnIdle{};		  // submit current buffer if Latte command processor goes into idle state (no more commands or waiting for externally signaled condition)
 
 	// drawcall handling
 	void draw_execute_first(uint32 baseVertex, uint32 baseInstance, uint32 instanceCount, uint32 count, MPTR indexDataMPTR, Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE indexType, const LatteDrawcallContext& drawcallContext);
@@ -685,8 +759,8 @@ private:
 		struct
 		{
 			uint32 uniformBufferOffset[LATTE_NUM_MAX_UNIFORM_BUFFERS];
-		}shaderUB[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
-	}dynamicOffsetInfo{};
+		} shaderUB[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
+	} dynamicOffsetInfo{};
 
 	// streamout
 	struct
@@ -695,9 +769,9 @@ private:
 		{
 			bool enabled;
 			uint32 ringBufferOffset;
-		}buffer[LATTE_NUM_STREAMOUT_BUFFER];
+		} buffer[LATTE_NUM_STREAMOUT_BUFFER];
 		sint32 verticesPerInstance;
-	}m_streamoutState{};
+	} m_streamoutState{};
 
 	struct
 	{
@@ -711,26 +785,25 @@ private:
 		VkDeviceMemory memoryQueryResults;
 		uint64* ptrQueryResults;
 		std::vector<uint16> list_availableQueryIndices;
-	}m_occlusionQueries;
+	} m_occlusionQueries;
 
 	// barrier
 
 	enum SYNC_OP : uint32
 	{
-		/* name */						/* operations */
-		HOST_WRITE			= 0x01,
-		HOST_READ			= 0x02,
+		/* name */ /* operations */
+		HOST_WRITE = 0x01,
+		HOST_READ = 0x02,
 
 		// BUFFER_INDEX_READ (should be separated?)
-		BUFFER_SHADER_READ	= 0x04,		// any form of shader read access
-		BUFFER_SHADER_WRITE	= 0x08,		// any form of shader write access
-		ANY_TRANSFER		= 0x10,		// previous transfer to/from buffer or image
-		TRANSFER_READ		= 0x80,		// transfer from image/buffer
-		TRANSFER_WRITE		= 0x100,	// transfer to image/buffer
+		BUFFER_SHADER_READ = 0x04,	// any form of shader read access
+		BUFFER_SHADER_WRITE = 0x08, // any form of shader write access
+		ANY_TRANSFER = 0x10,		// previous transfer to/from buffer or image
+		TRANSFER_READ = 0x80,		// transfer from image/buffer
+		TRANSFER_WRITE = 0x100,		// transfer to image/buffer
 
-
-		IMAGE_READ			= 0x20,
-		IMAGE_WRITE			= 0x40,
+		IMAGE_READ = 0x20,
+		IMAGE_WRITE = 0x40,
 
 	};
 
@@ -754,13 +827,13 @@ private:
 
 		if constexpr ((TSyncOp & ANY_TRANSFER) != 0)
 		{
-			//stages |= VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT;
-			//accessFlags |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT;
+			// stages |= VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT;
+			// accessFlags |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT;
 			stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 			accessFlags |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
 
-			//accessFlags |= VK_ACCESS_MEMORY_READ_BIT;
-			//accessFlags |= VK_ACCESS_MEMORY_WRITE_BIT;
+			// accessFlags |= VK_ACCESS_MEMORY_READ_BIT;
+			// accessFlags |= VK_ACCESS_MEMORY_WRITE_BIT;
 		}
 
 		if constexpr ((TSyncOp & TRANSFER_READ) != 0)
@@ -768,7 +841,7 @@ private:
 			stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 			accessFlags |= VK_ACCESS_TRANSFER_READ_BIT;
 
-			//accessFlags |= VK_ACCESS_MEMORY_READ_BIT;
+			// accessFlags |= VK_ACCESS_MEMORY_READ_BIT;
 		}
 
 		if constexpr ((TSyncOp & TRANSFER_WRITE) != 0)
@@ -776,7 +849,7 @@ private:
 			stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 			accessFlags |= VK_ACCESS_TRANSFER_WRITE_BIT;
 
-			//accessFlags |= VK_ACCESS_MEMORY_WRITE_BIT;
+			// accessFlags |= VK_ACCESS_MEMORY_WRITE_BIT;
 		}
 
 		if constexpr ((TSyncOp & HOST_WRITE) != 0)
@@ -872,7 +945,7 @@ private:
 		bufMemBarrier[1].offset = offsetB;
 		bufMemBarrier[1].size = sizeB;
 
-		vkCmdPipelineBarrier(m_state.currentCommandBuffer, srcStagesA|srcStagesB, dstStagesA|dstStagesB, 0, 0, nullptr, 2, bufMemBarrier, 0, nullptr);
+		vkCmdPipelineBarrier(m_state.currentCommandBuffer, srcStagesA | srcStagesB, dstStagesA | dstStagesB, 0, 0, nullptr, 2, bufMemBarrier, 0, nullptr);
 	}
 
 	void barrier_sequentializeTransfer()
@@ -945,16 +1018,29 @@ private:
 		vkTexture->SetImageLayout(subresourceRange, newLayout);
 	}
 
+  public:
+	bool GetDisableMultithreadedCompilation() const
+	{
+		return m_featureControl.disableMultithreadedCompilation;
+	}
+	bool HasSPRIVRoundingModeRTE32() const
+	{
+		return m_featureControl.shaderFloatControls.shaderRoundingModeRTEFloat32;
+	}
+	bool IsDebugMarkersEnabled() const
+	{
+		return m_featureControl.usingDebugMarkerTool;
+	}
+	bool IsTracingToolEnabled() const
+	{
+		return m_featureControl.usingTracingTool;
+	}
+	bool UseAttachmentFeedbackLoop() const
+	{
+		return m_featureControl.deviceExtensions.attachment_feedback_loop_dynamic_state;
+	}
 
-public:
-	bool GetDisableMultithreadedCompilation() const { return m_featureControl.disableMultithreadedCompilation; }
-	bool HasSPRIVRoundingModeRTE32() const { return m_featureControl.shaderFloatControls.shaderRoundingModeRTEFloat32; }
-	bool IsDebugMarkersEnabled() const { return m_featureControl.usingDebugMarkerTool; }
-	bool IsTracingToolEnabled() const { return m_featureControl.usingTracingTool; }
-	bool UseAttachmentFeedbackLoop() const { return m_featureControl.deviceExtensions.attachment_feedback_loop_dynamic_state; }
-
-private:
-
+  private:
 	// debug
 	void debug_genericBarrier();
 
@@ -964,7 +1050,5 @@ private:
 		RendererShaderVk* copySurface_vs{};
 		RendererShaderVk* copySurface_psDepth2Color{};
 		RendererShaderVk* copySurface_psColor2Depth{};
-	}defaultShaders;
-
-
+	} defaultShaders;
 };

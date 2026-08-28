@@ -6,15 +6,17 @@
 
 XMLNetworkConfig_t n_config(L"network_services.xml");
 
-
-void NetworkConfig::LoadOnce() 
+void NetworkConfig::LoadOnce()
 {
-	n_config.SetFilename(ActiveSettings::GetConfigPath("network_services.xml").generic_wstring());
-	if (XMLExists())
-		n_config.Load();
+	static std::once_flag loaded;
+	std::call_once(loaded, [] {
+		n_config.SetFilename(ActiveSettings::GetConfigPath("network_services.xml").generic_wstring());
+		if (XMLExists())
+			n_config.Load();
+	});
 }
 
-void NetworkConfig::Load(XMLConfigParser& parser) 
+void NetworkConfig::Load(XMLConfigParser& parser)
 {
 	auto config = parser.get("content");
 	networkname = config.get("networkname", "Custom");
@@ -32,10 +34,10 @@ void NetworkConfig::Load(XMLConfigParser& parser)
 	urls.OLV = u.get("olv", NintendoURLs::OLVURL);
 }
 
-bool NetworkConfig::XMLExists() 
+bool NetworkConfig::XMLExists()
 {
 	static std::optional<bool> s_exists; // caches result of fs::exists
-	if(s_exists.has_value())
+	if (s_exists.has_value())
 		return *s_exists;
 	std::error_code ec;
 	if (!fs::exists(ActiveSettings::GetConfigPath("network_services.xml"), ec))

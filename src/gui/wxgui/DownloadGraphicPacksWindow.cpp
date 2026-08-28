@@ -38,14 +38,14 @@ namespace
 		for (std::uint32_t attempt = 0; attempt < 1000; ++attempt)
 		{
 			auto candidate = target.parent_path() /
-				fmt::format(".{}.{}.{}.{}", _pathToUtf8(target.filename()), suffix, seed, attempt);
+							 fmt::format(".{}.{}.{}.{}", _pathToUtf8(target.filename()), suffix, seed, attempt);
 			std::error_code error;
 			if (!fs::exists(candidate, error) && !error)
 				return candidate;
 		}
 		throw std::runtime_error("Unable to allocate graphic-pack transaction path");
 	}
-}
+} // namespace
 
 struct DownloadGraphicPacksWindow::curlDownloadFileState_t
 {
@@ -54,7 +54,7 @@ struct DownloadGraphicPacksWindow::curlDownloadFileState_t
 	std::atomic<bool> isCanceled{false};
 };
 
-size_t DownloadGraphicPacksWindow::curlDownloadFile_writeData(void *ptr, size_t size, size_t nmemb, curlDownloadFileState_t* downloadState)
+size_t DownloadGraphicPacksWindow::curlDownloadFile_writeData(void* ptr, size_t size, size_t nmemb, curlDownloadFileState_t* downloadState)
 {
 	const size_t writeSize = size * nmemb;
 	const size_t currentSize = downloadState->fileData.size();
@@ -78,12 +78,12 @@ int DownloadGraphicPacksWindow::progress_callback(curlDownloadFileState_t* downl
 	return 0;
 }
 
-bool DownloadGraphicPacksWindow::curlDownloadFile(const char *url, curlDownloadFileState_t* downloadState)
+bool DownloadGraphicPacksWindow::curlDownloadFile(const char* url, curlDownloadFileState_t* downloadState)
 {
 	CURL* curl = curl_easy_init();
 	if (curl == nullptr)
 		return false;
-	
+
 	downloadState->progress = 0.0;
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlDownloadFile_writeData);
@@ -109,7 +109,7 @@ bool DownloadGraphicPacksWindow::curlDownloadFile(const char *url, curlDownloadF
 
 // returns true if the version matches
 bool checkGraphicPackDownloadedVersion(const Host::IPathProvider& pathProvider,
-	const char* nameVersion, bool& hasVersionFile)
+									   const char* nameVersion, bool& hasVersionFile)
 {
 	hasVersionFile = false;
 	const auto path = pathProvider.GetUserDataPath(
@@ -239,7 +239,7 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 	zip_error_t zipError;
 	zip_error_init(&zipError);
 	zip_source_t* source = zip_source_buffer_create(m_downloadState->fileData.data(),
-		m_downloadState->fileData.size(), 0, &zipError);
+													m_downloadState->fileData.size(), 0, &zipError);
 	if (!source)
 	{
 		zip_error_fini(&zipError);
@@ -291,7 +291,7 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 		}
 		const auto nameLength = std::strlen(stat.name);
 		const bool directory = nameLength > 0 &&
-			(stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
+							   (stat.name[nameLength - 1] == '/' || stat.name[nameLength - 1] == '\\');
 		if (!directory)
 		{
 			if (stat.size > kMaximumGraphicPackFileSize ||
@@ -330,8 +330,7 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 			extractionFailed = true;
 			break;
 		}
-		m_extractionProgress = plan.empty() ? 1.0 :
-			static_cast<double>(planIndex) / static_cast<double>(plan.size());
+		m_extractionProgress = plan.empty() ? 1.0 : static_cast<double>(planIndex) / static_cast<double>(plan.size());
 		const auto& entry = plan[planIndex];
 		const auto destination = staging / entry.relativePath;
 		if (entry.directory)
@@ -416,14 +415,14 @@ void DownloadGraphicPacksWindow::DownloadAndInstall()
 		cleanupStaging();
 		if (commit.error == Frontend::ArchiveInstallPolicy::CommitError::RollbackFailed)
 			cemuLog_log(LogType::Force, "Graphic-pack rollback failed: {}",
-				commit.filesystemError.message());
+						commit.filesystemError.message());
 		SetThreadResult(ThreadError);
 		return;
 	}
 	if (commit.error == Frontend::ArchiveInstallPolicy::CommitError::BackupCleanupFailed)
 	{
 		cemuLog_log(LogType::Force, "Unable to remove old graphic-pack backup: {}",
-			commit.filesystemError.message());
+					commit.filesystemError.message());
 	}
 	m_extractionProgress = 1.0;
 	SetThreadResult(ThreadFinished);
@@ -436,12 +435,12 @@ void DownloadGraphicPacksWindow::SetThreadResult(ThreadState_t result)
 }
 
 DownloadGraphicPacksWindow::DownloadGraphicPacksWindow(wxWindow* parent,
-	Application::EmulationController& emulationController,
-	std::shared_ptr<Host::IPathProvider> pathProvider)
+													   Application::EmulationController& emulationController,
+													   std::shared_ptr<Host::IPathProvider> pathProvider)
 	: wxDialog(parent, wxID_ANY, _("Checking version..."), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL | wxCLOSE_BOX),
-	m_threadState(ThreadRunning), m_stage(StageCheckVersion), m_currentStage(StageCheckVersion),
-	m_emulationController(emulationController),
-	m_pathProvider(std::move(pathProvider))
+	  m_threadState(ThreadRunning), m_stage(StageCheckVersion), m_currentStage(StageCheckVersion),
+	  m_emulationController(emulationController),
+	  m_pathProvider(std::move(pathProvider))
 {
 	cemu_assert(m_pathProvider != nullptr);
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
@@ -466,7 +465,6 @@ DownloadGraphicPacksWindow::DownloadGraphicPacksWindow(wxWindow* parent,
 	this->Bind(wxEVT_CLOSE_WINDOW, &DownloadGraphicPacksWindow::OnClose, this);
 	m_timer->Start(250);
 
-
 	m_downloadState = std::make_unique<curlDownloadFileState_t>();
 }
 
@@ -489,14 +487,12 @@ void DownloadGraphicPacksWindow::StartWorker(void (DownloadGraphicPacksWindow::*
 		try
 		{
 			(this->*worker)();
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			m_threadException = error.what();
 			if (!m_downloadState->isCanceled)
 				SetThreadResult(ThreadError);
-		}
-		catch (...)
+		} catch (...)
 		{
 			m_threadException = "Unknown graphic-pack worker error";
 			if (!m_downloadState->isCanceled)
@@ -507,7 +503,7 @@ void DownloadGraphicPacksWindow::StartWorker(void (DownloadGraphicPacksWindow::*
 
 int DownloadGraphicPacksWindow::ShowModal()
 {
-	if(m_emulationController.IsTitleRunning())
+	if (m_emulationController.IsTitleRunning())
 	{
 		wxMessageBox(_("Graphic packs cannot be updated while a game is running."), _("Graphic packs"), 5, this);
 		return wxID_CANCEL;
@@ -523,8 +519,8 @@ void DownloadGraphicPacksWindow::OnClose(wxCloseEvent& event)
 	m_downloadState->isCanceled = true;
 	if (m_threadState == ThreadRunning || m_threadState == ThreadAwaitingConfirmation || m_threadState == ThreadPrompting)
 	{
-		//wxMessageDialog dialog(this, _("Do you really want to cancel the update process?\n\nCanceling the process will delete the applied update."), _("Info"), wxCENTRE | wxYES_NO);
-		//if (dialog.ShowModal() != wxID_YES)
+		// wxMessageDialog dialog(this, _("Do you really want to cancel the update process?\n\nCanceling the process will delete the applied update."), _("Info"), wxCENTRE | wxYES_NO);
+		// if (dialog.ShowModal() != wxID_YES)
 		//	return;
 
 		m_threadState = ThreadCanceled;
@@ -570,11 +566,9 @@ void DownloadGraphicPacksWindow::OnUpdate(const wxTimerEvent& event)
 		m_timer->Stop();
 		if (threadState == ThreadError)
 		{
-			const auto details = m_threadException.empty() ?
-				_("The downloaded graphic-pack archive could not be installed safely.") :
-				wxString::FromUTF8(m_threadException);
+			const auto details = m_threadException.empty() ? _("The downloaded graphic-pack archive could not be installed safely.") : wxString::FromUTF8(m_threadException);
 			wxMessageBox(details, _("Graphic pack update failed"),
-				wxOK | wxCENTRE | wxICON_ERROR, this);
+						 wxOK | wxCENTRE | wxICON_ERROR, this);
 		}
 		switch (m_notification.exchange(NotificationNone))
 		{

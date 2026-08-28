@@ -36,10 +36,10 @@ CachedFBOMtl::CachedFBOMtl(class MetalRenderer* metalRenderer, uint64 key) : Lat
 		// setup stencil attachment
 		if (depthBuffer.hasStencil && GetMtlPixelFormatInfo(depthBuffer.texture->format, true).hasStencil)
 		{
-		    auto stencilAttachment = m_renderPassDescriptor->stencilAttachment();
-            stencilAttachment->setTexture(textureView->GetRGBAView());
-            stencilAttachment->setLoadAction(MTL::LoadActionLoad);
-            stencilAttachment->setStoreAction(MTL::StoreActionStore);
+			auto stencilAttachment = m_renderPassDescriptor->stencilAttachment();
+			stencilAttachment->setTexture(textureView->GetRGBAView());
+			stencilAttachment->setLoadAction(MTL::LoadActionLoad);
+			stencilAttachment->setStoreAction(MTL::StoreActionStore);
 		}
 
 		hasAttachment = true;
@@ -48,10 +48,10 @@ CachedFBOMtl::CachedFBOMtl(class MetalRenderer* metalRenderer, uint64 key) : Lat
 	// HACK: setup a dummy color attachment to prevent Metal from discarding draws for stremout draws in Super Smash Bros. for Wii U (works fine on MoltenVK without this hack though)
 	if (!hasAttachment)
 	{
-        auto colorAttachment = m_renderPassDescriptor->colorAttachments()->object(0);
-    	colorAttachment->setTexture(metalRenderer->GetNullTexture2D());
-    	colorAttachment->setLoadAction(MTL::LoadActionDontCare);
-    	colorAttachment->setStoreAction(MTL::StoreActionDontCare);
+		auto colorAttachment = m_renderPassDescriptor->colorAttachments()->object(0);
+		colorAttachment->setTexture(metalRenderer->GetNullTexture2D());
+		colorAttachment->setLoadAction(MTL::LoadActionDontCare);
+		colorAttachment->setStoreAction(MTL::StoreActionDontCare);
 	}
 
 	// Visibility buffer

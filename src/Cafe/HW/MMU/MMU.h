@@ -34,7 +34,7 @@ struct GuestMappedMemoryAllocation
 std::optional<GuestMappedMemoryAllocation> memory_allocateMappedMemory(
 	uint32 size, uint32 alignment, bool writable, std::string& error);
 bool memory_freeMappedMemory(const GuestMappedMemoryAllocation& allocation,
-	std::string& error);
+							 std::string& error);
 
 extern uint8* memory_base; // points to base of PowerPC address space
 
@@ -66,7 +66,7 @@ struct MMURange
 {
 	enum MFLAG
 	{
-		FLAG_OPTIONAL = (1 << 0), // allocate only on explicit request
+		FLAG_OPTIONAL = (1 << 0),  // allocate only on explicit request
 		FLAG_MAP_EARLY = (1 << 1), // map at Cemu launch, normally memory is mapped when a game is loaded
 	};
 
@@ -125,9 +125,18 @@ struct MMURange
 		return addr >= getBase() && addr < getEnd();
 	}
 
-	bool isMapped() const { return m_isMapped; };
-	bool isOptional() const { return (flags & MFLAG::FLAG_OPTIONAL) != 0; };
-	bool isMappedEarly() const { return (flags & MFLAG::FLAG_MAP_EARLY) != 0; };
+	bool isMapped() const
+	{
+		return m_isMapped;
+	};
+	bool isOptional() const
+	{
+		return (flags & MFLAG::FLAG_OPTIONAL) != 0;
+	};
+	bool isMappedEarly() const
+	{
+		return (flags & MFLAG::FLAG_MAP_EARLY) != 0;
+	};
 
 	const uint32 baseAddress;
 	const uint32 initSize; // initial size
@@ -138,7 +147,6 @@ struct MMURange
 	uint32 size;
 	bool m_isMapped{};
 };
-
 
 extern MMURange mmuRange_LOW0;
 extern MMURange mmuRange_TRAMPOLINE_AREA;
@@ -161,51 +169,51 @@ MMURange* memory_getMMURangeByAddress(MPTR address);
 
 bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size);
 
-#define MEMORY_CODELOW0_ADDR				(0x00010000)
-#define MEMORY_CODELOW0_SIZE				(0x000F0000) // ~1MB
+#define MEMORY_CODELOW0_ADDR (0x00010000)
+#define MEMORY_CODELOW0_SIZE (0x000F0000) // ~1MB
 
-#define MEMORY_CODE_TRAMPOLINE_AREA_ADDR	(0x00E00000) // code area for trampolines and imports
-#define MEMORY_CODE_TRAMPOLINE_AREA_SIZE	(0x00200000) // 2MB
+#define MEMORY_CODE_TRAMPOLINE_AREA_ADDR (0x00E00000) // code area for trampolines and imports
+#define MEMORY_CODE_TRAMPOLINE_AREA_SIZE (0x00200000) // 2MB
 
-#define MEMORY_LEGACY_OS_AREA_ADDR			(0x01000000)
-#define MEMORY_LEGACY_OS_AREA_SIZE			(0x00600000) // 6MB, includes known firmware aliases and TCPGecko buffers
+#define MEMORY_LEGACY_OS_AREA_ADDR (0x01000000)
+#define MEMORY_LEGACY_OS_AREA_SIZE (0x00600000) // 6MB, includes known firmware aliases and TCPGecko buffers
 
-#define MEMORY_CODECAVEAREA_ADDR			(0x01600000)
-#define MEMORY_CODECAVEAREA_SIZE			(0x00A00000) // 10MB, up to the code-area boundary
+#define MEMORY_CODECAVEAREA_ADDR (0x01600000)
+#define MEMORY_CODECAVEAREA_SIZE (0x00A00000) // 10MB, up to the code-area boundary
 
-#define MEMORY_CODEAREA_ADDR				(0x02000000)
-#define MEMORY_CODEAREA_SIZE				(0x0E000000) // 224MB
+#define MEMORY_CODEAREA_ADDR (0x02000000)
+#define MEMORY_CODEAREA_SIZE (0x0E000000) // 224MB
 
 static_assert(MEMORY_LEGACY_OS_AREA_ADDR + MEMORY_LEGACY_OS_AREA_SIZE == MEMORY_CODECAVEAREA_ADDR);
 static_assert(MEMORY_CODECAVEAREA_ADDR + MEMORY_CODECAVEAREA_SIZE == MEMORY_CODEAREA_ADDR);
 
-#define MEMORY_DATA_AREA_ADDR				(0x10000000)
-#define MEMORY_DATA_AREA_SIZE				(0x40000000)
+#define MEMORY_DATA_AREA_ADDR (0x10000000)
+#define MEMORY_DATA_AREA_SIZE (0x40000000)
 
 // Owner-managed GX2 resources live after the largest supported opt-in MEM2
 // mapping and before the optional overlay arena. Pages are committed on
 // demand, so reserving this 1 GiB guest window does not eagerly consume 1 GiB
 // of host memory.
-#define MEMORY_MAPPED_AREA_ADDR				(0x60000000)
-#define MEMORY_MAPPED_AREA_SIZE				(0x40000000)
+#define MEMORY_MAPPED_AREA_ADDR (0x60000000)
+#define MEMORY_MAPPED_AREA_SIZE (0x40000000)
 
-#define MEMORY_FGBUCKET_AREA_ADDR			(0xE0000000) // actual offset is 0xE0000000 according to PPC kernel
-#define MEMORY_FGBUCKET_AREA_SIZE			(0x04000000) // 64MB split up into multiple subareas, size is verified with value from PPC kernel
+#define MEMORY_FGBUCKET_AREA_ADDR (0xE0000000) // actual offset is 0xE0000000 according to PPC kernel
+#define MEMORY_FGBUCKET_AREA_SIZE (0x04000000) // 64MB split up into multiple subareas, size is verified with value from PPC kernel
 
-#define MEMORY_TILINGAPERTURE_AREA_ADDR		(0xE8000000)
-#define MEMORY_TILINGAPERTURE_AREA_SIZE		(0x02000000) // 32MB
+#define MEMORY_TILINGAPERTURE_AREA_ADDR (0xE8000000)
+#define MEMORY_TILINGAPERTURE_AREA_SIZE (0x02000000) // 32MB
 
-#define MEMORY_OVERLAY_AREA_OFFSET			(0xA0000000)
-#define MEMORY_OVERLAY_AREA_SIZE			(448*1024*1024) // 448MB (recycled background app memory)
+#define MEMORY_OVERLAY_AREA_OFFSET (0xA0000000)
+#define MEMORY_OVERLAY_AREA_SIZE (448 * 1024 * 1024) // 448MB (recycled background app memory)
 
-#define MEMORY_MEM1_AREA_ADDR				(0xF4000000)
-#define MEMORY_MEM1_AREA_SIZE				(0x02000000) // 32MB
+#define MEMORY_MEM1_AREA_ADDR (0xF4000000)
+#define MEMORY_MEM1_AREA_SIZE (0x02000000) // 32MB
 
-#define MEMORY_RPLLOADER_AREA_ADDR			(0xF6000000) // workarea for RPLLoader (normally this is kernel workspace)
-#define MEMORY_RPLLOADER_AREA_SIZE			(0x02000000) // 32MB
+#define MEMORY_RPLLOADER_AREA_ADDR (0xF6000000) // workarea for RPLLoader (normally this is kernel workspace)
+#define MEMORY_RPLLOADER_AREA_SIZE (0x02000000) // 32MB
 
-#define MEMORY_SHAREDDATA_AREA_ADDR			(0xF8000000)
-#define MEMORY_SHAREDDATA_AREA_SIZE			(0x02000000) // 32MB
+#define MEMORY_SHAREDDATA_AREA_ADDR (0xF8000000)
+#define MEMORY_SHAREDDATA_AREA_SIZE (0x02000000) // 32MB
 
 #if BOOST_OS_WINDOWS
 #define CPU_swapEndianU64(_v) _byteswap_uint64((uint64)(_v))
@@ -254,12 +262,14 @@ void memory_readBytes(VAddr address, std::array<uint8, count>& buffer)
 	memcpy(buffer.data(), memory_getPointerFromVirtualOffset(address), count);
 }
 
-template <typename T> inline T memory_read(VAddr address)
+template<typename T>
+inline T memory_read(VAddr address)
 {
 	return *(betype<T>*)(memory_base + address);
 }
 
-template <typename T> inline void memory_write(VAddr address, T value)
+template<typename T>
+inline void memory_write(VAddr address, T value)
 {
 	*(betype<T>*)(memory_base + address) = value;
 }
@@ -272,14 +282,14 @@ namespace MMU
 	using MMIOFuncWrite32 = void (*)(PAddr addr, uint32 value);
 	using MMIOFuncWrite16 = void (*)(PAddr addr, uint16 value);
 
-	using MMIOFuncRead32 = uint32(*)(PAddr addr);
-	using MMIOFuncRead16 = uint16(*)(PAddr addr);
+	using MMIOFuncRead32 = uint32 (*)(PAddr addr);
+	using MMIOFuncRead16 = uint16 (*)(PAddr addr);
 
 	enum class MMIOInterface
 	{
 		INTERFACE_0C000000,
 		INTERFACE_0D000000,
-		//INTERFACE_0D000000,
+		// INTERFACE_0D000000,
 	};
 
 	void RegisterMMIO_W16(MMIOInterface interfaceLocation, uint32 relativeAddress, MMIOFuncWrite16 ptr);
@@ -291,17 +301,15 @@ namespace MMU
 	void RegisterMMIO_32(MMIOInterface interfaceLocation, uint32 relativeAddress)
 	{
 		RegisterMMIO_W32(interfaceLocation, relativeAddress,
-			[](PAddr addr, uint32 value) -> void
-		{
-			TRegType temp;
-			temp.setFromRaw(value);
-			TWriteFunc(addr, temp);
-		});
+						 [](PAddr addr, uint32 value) -> void {
+							 TRegType temp;
+							 temp.setFromRaw(value);
+							 TWriteFunc(addr, temp);
+						 });
 		RegisterMMIO_R32(interfaceLocation, relativeAddress,
-			[](PAddr addr) -> uint32
-		{
-			return TReadFunc(addr).getRawValue();
-		});
+						 [](PAddr addr) -> uint32 {
+							 return TReadFunc(addr).getRawValue();
+						 });
 	}
 
 	void WriteMMIO_32(PAddr address, uint32 value);
@@ -309,6 +317,6 @@ namespace MMU
 	uint32 ReadMMIO_32(PAddr address);
 	uint16 ReadMMIO_16(PAddr address);
 
-}
+} // namespace MMU
 
 #define MMU_IsInPPCMemorySpace(__ptr) ((const uint8*)(__ptr) >= memory_base && (const uint8*)(__ptr) < (memory_base + 0x100000000))

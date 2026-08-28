@@ -2,32 +2,35 @@
 #include "Cafe/OS/libs/coreinit/coreinit_FS.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "frontend/RuntimeOverlay.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
 #include "imgui/imgui_extension.h"
 #include "util/helpers/helpers.h"
 #include "resource/IconsFontAwesome5.h"
+#endif
 
-#define SWKBD_FORM_STRING_MAX_LENGTH	(4096) // counted in 16-bit characters
+#define SWKBD_FORM_STRING_MAX_LENGTH (4096) // counted in 16-bit characters
 
-#define SWKBD_STATE_BLANK				(0)	// not visible
-#define SWKBD_STATE_APPEARING			(1)	// fade-in ?
-#define SWKBD_STATE_DISPLAYED			(2)	// visible
-#define SWKBD_STATE_DISAPPEARING		(3)	// fade-out ?
+#define SWKBD_STATE_BLANK (0)		 // not visible
+#define SWKBD_STATE_APPEARING (1)	 // fade-in ?
+#define SWKBD_STATE_DISPLAYED (2)	 // visible
+#define SWKBD_STATE_DISAPPEARING (3) // fade-out ?
 
-typedef struct  
+typedef struct
 {
-	uint32 ukn00; // constructor?
-	uint32 ukn04; // destructor?
-	uint32 ukn08; // ?
+	uint32 ukn00;			   // constructor?
+	uint32 ukn04;			   // destructor?
+	uint32 ukn08;			   // ?
 	MEMPTR<void> changeString; // some function address
-}SwkbdIEventReceiverVTable_t;
+} SwkbdIEventReceiverVTable_t;
 
-typedef struct  
+typedef struct
 {
 	MEMPTR<SwkbdIEventReceiverVTable_t> vTable;
 	// todo - more elements? (currently separated from this struct)
-}SwkbdIEventReceiver_t;
+} SwkbdIEventReceiver_t;
 
 struct swkbdReceiverArg_t
 {
@@ -39,7 +42,7 @@ struct swkbdReceiverArg_t
 	sint32be selectFrom;
 };
 
-typedef struct  
+typedef struct
 {
 	uint32 ukn000;
 	uint32 controllerType;
@@ -59,12 +62,12 @@ typedef struct
 	uint32 ukn090[4];
 	uint32 ukn0A0;
 	uint32 ukn0A4;
-	//uint32 ukn0A8;
-	//MEMPTR<SwkbdIEventReceiver_t> IEventReceiver;
+	// uint32 ukn0A8;
+	// MEMPTR<SwkbdIEventReceiver_t> IEventReceiver;
 	swkbdReceiverArg_t receiverArg;
-}SwkbdKeyboardArg_t;
+} SwkbdKeyboardArg_t;
 
-typedef struct  
+typedef struct
 {
 	// this structure resides in PPC addressable memory space
 	wchar_t formStringBuffer[SWKBD_FORM_STRING_MAX_LENGTH];
@@ -72,7 +75,7 @@ typedef struct
 	// big endian version of the string buffer (converted whenever GetInputFormString is called)
 	uint16be formStringBufferBE[SWKBD_FORM_STRING_MAX_LENGTH];
 	bool isActive; // set when SwkbdAppearInputForm() is called
-	//bool isDisplayed; // set when keyboard is rendering
+	// bool isDisplayed; // set when keyboard is rendering
 	bool decideButtonWasPressed; // set to false when keyboard appears, and set to true when enter is pressed. Remains on true after the keyboard is disappeared (todo: Investigate how this really works)
 	// keyboard only mode (no input form)
 	bool keyboardOnlyMode;
@@ -83,15 +86,35 @@ typedef struct
 	bool shiftActivated;
 	bool returnState;
 	bool cancelState;
-}swkbdInternalState_t;
+} swkbdInternalState_t;
 
 swkbdInternalState_t* swkbdInternalState = nullptr;
+std::uint64_t swkbdOverlayGeneration = 0;
 sint32 isNeedCalcSubThreadFont = 0;
 sint32 isNeedCalcSubThreadPredict = 0;
 
+namespace
+{
+	void PublishSoftwareKeyboard()
+	{
+		RuntimeOverlay::SoftwareKeyboard keyboard{.generation = swkbdOverlayGeneration};
+		if (swkbdInternalState)
+		{
+			keyboard.active = swkbdInternalState->isActive;
+			keyboard.keyboardOnly = swkbdInternalState->keyboardOnlyMode;
+			keyboard.shifted = swkbdInternalState->shiftActivated;
+			keyboard.maximumLength = static_cast<std::uint32_t>(
+				std::max<sint32>(0, swkbdInternalState->maxTextLength));
+			keyboard.text = boost::nowide::narrow(
+				fmt::format(L"{}", swkbdInternalState->formStringBuffer));
+		}
+		RuntimeOverlay::Model::Instance().SetSoftwareKeyboard(std::move(keyboard));
+	}
+} // namespace
+
 void SwkbdCreate(uint8* workMemory, uint32 regionType, uint32 unk, coreinit::FSClient_t* fsClient)
 {
-	if( swkbdInternalState == nullptr )
+	if (swkbdInternalState == nullptr)
 	{
 		MPTR swkbdInternalStateMPTR = coreinit_allocFromSysArea(sizeof(swkbdInternalState_t), 4);
 		swkbdInternalState = (swkbdInternalState_t*)memory_getPointerFromVirtualOffset(swkbdInternalStateMPTR);
@@ -106,7 +129,7 @@ void SwkbdCreate(uint8* workMemory, uint32 regionType, uint32 unk, coreinit::FSC
 uint32 SwkbdGetStateKeyboard()
 {
 	uint32 r = SWKBD_STATE_BLANK;
-	if( swkbdInternalState->isActive )
+	if (swkbdInternalState->isActive)
 		r = SWKBD_STATE_DISPLAYED;
 	return r;
 }
@@ -114,12 +137,12 @@ uint32 SwkbdGetStateKeyboard()
 uint32 SwkbdGetStateInputForm()
 {
 	uint32 r = SWKBD_STATE_BLANK;
-	if( swkbdInternalState->isActive )
+	if (swkbdInternalState->isActive)
 		r = SWKBD_STATE_DISPLAYED;
 	return r;
 }
 
-//ReceiverArg:
+// ReceiverArg:
 //+0x00	IEventReceiver*
 //+0x04	stringBuf
 //+ 0x08	stringBufSize
@@ -127,13 +150,13 @@ uint32 SwkbdGetStateInputForm()
 //+ 0x10	cursorPos
 //+ 0x14	selectFrom(-1)
 //
-//IEventReceiver:
+// IEventReceiver:
 //+0x00 IEventReceiver_vTable*
 //+0x04 ?
 //+0x08 ?
 //+0x0C ?
 //
-//IEventReceiver_vTable :
+// IEventReceiver_vTable :
 //	+0x00 ?
 //	+0x04 ?
 //	+0x08 ?
@@ -150,18 +173,18 @@ struct swkdbIEventReceiverVTable_t
 	uint32 ukn00;
 	uint32 ukn04;
 	uint32 ukn08;
-	MPTR   onDirtyString;
+	MPTR onDirtyString;
 };
 
 uint32 SwkbdSetReceiver(const swkbdReceiverArg_t* receiverArg)
 {
-	if(swkbdInternalState == nullptr)
+	if (swkbdInternalState == nullptr)
 		return 0;
 	swkbdInternalState->keyboardArg.receiverArg = *receiverArg;
 	return 0;
 }
 
-typedef struct  
+typedef struct
 {
 	/* +0x00 */ uint32 ukn00;
 	/* +0x04 */ uint32 ukn04;
@@ -186,12 +209,13 @@ typedef struct
 	/* +0xC8 */ MEMPTR<uint16be> initialText;
 	/* +0xCC */ MEMPTR<uint16be> infoText;
 	/* +0xD0 */ uint32be maxTextLength;
-}swkbdAppearArg_t;
+} swkbdAppearArg_t;
 
 static_assert(offsetof(swkbdAppearArg_t, cursorIndex) == 0xC4, "appearArg.cursorIndex has invalid offset");
 
 uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 {
+	++swkbdOverlayGeneration;
 	swkbdInternalState->formStringLength = 0;
 	swkbdInternalState->isActive = true;
 	swkbdInternalState->decideButtonWasPressed = false;
@@ -211,7 +235,7 @@ uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 		for (sint32 i = 0; i < swkbdInternalState->maxTextLength; i++)
 		{
 			wchar_t c = (uint16)initialString[i];
-			if( c == '\0' )
+			if (c == '\0')
 				break;
 			swkbdInternalState->formStringBuffer[i] = c;
 			swkbdInternalState->formStringLength++;
@@ -222,16 +246,18 @@ uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 		swkbdInternalState->formStringBuffer[0] = '\0';
 		swkbdInternalState->formStringLength = 0;
 	}
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
 uint32 SwkbdAppearKeyboard(const SwkbdKeyboardArg_t* keyboardArg)
 {
+	++swkbdOverlayGeneration;
 	// todo: Figure out what the difference between AppearInputForm and AppearKeyboard is?
 	uint32 argPtr = MEMPTR(keyboardArg).GetMPTR();
-	for(sint32 i=0; i<0x180; i += 4)
+	for (sint32 i = 0; i < 0x180; i += 4)
 	{
-		debug_printf("+0x%03x: 0x%08x\n", i, memory_readU32(argPtr+i));
+		debug_printf("+0x%03x: 0x%08x\n", i, memory_readU32(argPtr + i));
 	}
 
 	swkbdInternalState->formStringLength = 0;
@@ -241,6 +267,7 @@ uint32 SwkbdAppearKeyboard(const SwkbdKeyboardArg_t* keyboardArg)
 	swkbdInternalState->formStringBuffer[0] = '\0';
 	swkbdInternalState->formStringLength = 0;
 	swkbdInternalState->keyboardArg = *keyboardArg;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
@@ -248,6 +275,7 @@ uint32 SwkbdDisappearInputForm()
 {
 	debug_printf("SwkbdDisappearInputForm__3RplFv\n");
 	swkbdInternalState->isActive = false;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
@@ -255,12 +283,13 @@ uint32 SwkbdDisappearKeyboard()
 {
 	debug_printf("SwkbdDisappearKeyboard__3RplFv\n");
 	swkbdInternalState->isActive = false;
+	PublishSoftwareKeyboard();
 	return 1;
 }
 
 uint16be* SwkbdGetInputFormString()
 {
-	for(sint32 i=0; i<swkbdInternalState->formStringLength; i++)
+	for (sint32 i = 0; i < swkbdInternalState->formStringLength; i++)
 		swkbdInternalState->formStringBufferBE[i] = swkbdInternalState->formStringBuffer[i];
 	cemu_assert(swkbdInternalState->formStringLength < SWKBD_FORM_STRING_MAX_LENGTH);
 	swkbdInternalState->formStringBufferBE[swkbdInternalState->formStringLength] = 0;
@@ -274,7 +303,7 @@ uint32 SwkbdIsDecideOkButton(uint8*)
 	return 0;
 }
 
-typedef struct  
+typedef struct
 {
 	uint32be ukn00;
 	uint32be ukn04;
@@ -284,7 +313,7 @@ typedef struct
 	uint32be ukn14;
 	uint8 ukn18;
 	// there might be padding here?
-}SwkbdDrawStringInfo_t;
+} SwkbdDrawStringInfo_t;
 
 static_assert(sizeof(SwkbdDrawStringInfo_t) != 0x19, "SwkbdDrawStringInfo_t has invalid size");
 
@@ -339,7 +368,6 @@ uint32 SwkbdInitLearnDic(SwkbdLearnDic* dictionary)
 	cemuLog_logDebug(LogType::Force, "SwkbdInitLearnDic(0x{:08x})", MEMPTR(dictionary).GetMPTR());
 	if (swkbdInternalState == nullptr || dictionary == nullptr)
 		return 0;
-
 
 	uint32 firstIndexOffset = 0x48;
 	uint32 secondIndexOffset = firstIndexOffset + SWKBD_LEARN_DIC_INDEX_COUNT * sizeof(uint16be);
@@ -397,12 +425,13 @@ void SwkbdCalc(void* controllerInfo)
 }
 
 void swkbd_keyInput(uint32 keyCode);
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 void swkbd_render(bool mainWindow)
 {
 	// only render if active
-	if( swkbdInternalState == NULL || swkbdInternalState->isActive == false)
+	if (swkbdInternalState == NULL || swkbdInternalState->isActive == false)
 		return;
-	
+
 	auto& io = ImGui::GetIO();
 	const auto font = ImGui_GetFont(48.0f);
 	const auto textFont = ImGui_GetFont(24.0f);
@@ -413,22 +442,22 @@ void swkbd_render(bool mainWindow)
 
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
 
-	ImGui::SetNextWindowPos({ 0,0 }, ImGuiCond_Always);
+	ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Always);
 	ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0,0 });
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
 	ImGui::SetNextWindowBgAlpha(0.8f);
 	ImGui::Begin("Background overlay", nullptr, kPopupFlags | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	ImGui::End();
 	ImGui::PopStyleVar(2);
 
-	ImVec2 position = { io.DisplaySize.x / 2.0f, io.DisplaySize.y / 3.0f };
-	ImVec2 pivot = { 0.5f, 0.5f };
+	ImVec2 position = {io.DisplaySize.x / 2.0f, io.DisplaySize.y / 3.0f};
+	ImVec2 pivot = {0.5f, 0.5f};
 
 	const auto button_len = font->GetCharAdvance('W');
 	const float len = button_len * std::max(4, std::max(swkbdInternalState->maxTextLength, (sint32)swkbdInternalState->keyboardArg.receiverArg.stringBufSize));
 
-	ImVec2 box_size = { std::min(io.DisplaySize.x * 0.9f, len + 90), 0 };
+	ImVec2 box_size = {std::min(io.DisplaySize.x * 0.9f, len + 90), 0};
 	ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
 	ImGui::SetNextWindowSize(box_size, ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(0.9f);
@@ -462,27 +491,26 @@ void swkbd_render(bool mainWindow)
 	ImGui::PopFont();
 
 	ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
-	//ImGui::SetNextWindowSize({ io.DisplaySize.x * 0.9f , 0.0f}, ImGuiCond_Always);
+	// ImGui::SetNextWindowSize({ io.DisplaySize.x * 0.9f , 0.0f}, ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(0.9f);
 	ImGui::PushFont(textFont);
 
-	if (ImGui::Begin(fmt::format("Software keyboard##SoftwareKeyboard{}",mainWindow).c_str(), nullptr, kPopupFlags))
+	if (ImGui::Begin(fmt::format("Software keyboard##SoftwareKeyboard{}", mainWindow).c_str(), nullptr, kPopupFlags))
 	{
-		if(swkbdInternalState->shiftActivated)
+		if (swkbdInternalState->shiftActivated)
 		{
 			const char* keys[] =
-			{
-				"#", "[", "]", "$", "%", "^", "&", "*", "(", ")", "_", _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT), "\n",
-				"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "@", "\n",
-				"A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "\"", "\n",
-				"Z", "X", "C", "V", "B", "N", "M", "<", ">", "+", "=", "\n",
-				_utf8WrapperPtr(ICON_FA_ARROW_UP), " ", _utf8WrapperPtr(ICON_FA_CHECK)
-			};
+				{
+					"#", "[", "]", "$", "%", "^", "&", "*", "(", ")", "_", _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT), "\n",
+					"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "@", "\n",
+					"A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "\"", "\n",
+					"Z", "X", "C", "V", "B", "N", "M", "<", ">", "+", "=", "\n",
+					_utf8WrapperPtr(ICON_FA_ARROW_UP), " ", _utf8WrapperPtr(ICON_FA_CHECK)};
 			for (auto key : keys)
 			{
 				if (*key != '\n')
 				{
-					if (ImGui::Button(key, { *key == ' ' ? 537 : (button_len + 5), 0}))
+					if (ImGui::Button(key, {*key == ' ' ? 537 : (button_len + 5), 0}))
 					{
 						if (strcmp(key, _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT)) == 0)
 							swkbd_keyInput(8);
@@ -503,18 +531,17 @@ void swkbd_render(bool mainWindow)
 		else
 		{
 			const char* keys[] =
-			{
-				"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT), "\n",
-				"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "/", "\n",
-				"a", "s", "d", "f", "g", "h", "j", "k", "l", ":", "'", "\n",
-				"z", "x", "c", "v", "b", "n", "m", ",", ".", "?", "!", "\n",
-				_utf8WrapperPtr(ICON_FA_ARROW_UP), " ", _utf8WrapperPtr(ICON_FA_CHECK)
-			};
+				{
+					"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT), "\n",
+					"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "/", "\n",
+					"a", "s", "d", "f", "g", "h", "j", "k", "l", ":", "'", "\n",
+					"z", "x", "c", "v", "b", "n", "m", ",", ".", "?", "!", "\n",
+					_utf8WrapperPtr(ICON_FA_ARROW_UP), " ", _utf8WrapperPtr(ICON_FA_CHECK)};
 			for (auto key : keys)
 			{
 				if (*key != '\n')
 				{
-					if (ImGui::Button(key, { *key == ' ' ? 537 : (button_len + 5), 0 }))
+					if (ImGui::Button(key, {*key == ' ' ? 537 : (button_len + 5), 0}))
 					{
 						if (strcmp(key, _utf8WrapperPtr(ICON_FA_ARROW_CIRCLE_LEFT)) == 0)
 							swkbd_keyInput(8);
@@ -538,7 +565,7 @@ void swkbd_render(bool mainWindow)
 
 	if (io.NavInputs[ImGuiNavInput_Cancel] > 0)
 	{
-		if(!swkbdInternalState->cancelState)
+		if (!swkbdInternalState->cancelState)
 			swkbd_keyInput(8); // backspace
 		swkbdInternalState->cancelState = true;
 	}
@@ -557,10 +584,20 @@ void swkbd_render(bool mainWindow)
 	ImGui::PopFont();
 	ImGui::PopStyleColor();
 }
+#else
+void swkbd_render(bool)
+{
+}
+#endif
 
 bool swkbd_hasKeyboardInputHook()
 {
 	return swkbdInternalState != NULL && swkbdInternalState->isActive;
+}
+
+std::uint64_t swkbd_overlayGeneration()
+{
+	return swkbdOverlayGeneration;
 }
 
 void swkbd_finishInput()
@@ -568,32 +605,32 @@ void swkbd_finishInput()
 	swkbdInternalState->decideButtonWasPressed = true; // currently we always accept the input
 }
 
-typedef struct  
+typedef struct
 {
 	uint32be beginIndex;
 	uint32be endIndex;
-}changeStringParam_t;
+} changeStringParam_t;
 
 SysAllocator<changeStringParam_t> _changeStringParam;
 
 void swkbd_inputStringChanged()
 {
-	if( true )//swkbdInternalState->keyboardOnlyMode )
+	if (true) // swkbdInternalState->keyboardOnlyMode )
 	{
 		// write changed string to application's string buffer
 		uint32 stringBufferSize = swkbdInternalState->keyboardArg.receiverArg.stringBufSize; // in 2-byte words
-		if( stringBufferSize > 1 )
+		if (stringBufferSize > 1)
 		{
 			stringBufferSize--; // don't count the null-termination character
 			const auto stringBufferBE = swkbdInternalState->keyboardArg.receiverArg.stringBuf.GetPtr();
 			sint32 copyLength = std::min((sint32)stringBufferSize, swkbdInternalState->formStringLength);
-			for(sint32 i=0; i<copyLength; i++)
+			for (sint32 i = 0; i < copyLength; i++)
 			{
 				stringBufferBE[i] = swkbdInternalState->formStringBuffer[i];
 			}
 			stringBufferBE[copyLength] = '\0';
 
-			//swkbdInternalState->keyboardArg.cursorPos = copyLength;
+			// swkbdInternalState->keyboardArg.cursorPos = copyLength;
 		}
 		// IEventReceiver callback
 		if (swkbdInternalState->keyboardArg.receiverArg.IEventReceiver)
@@ -619,11 +656,13 @@ void swkbd_keyInput(uint32 keyCode)
 			swkbdInternalState->formStringLength--;
 		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
 		swkbd_inputStringChanged();
+		PublishSoftwareKeyboard();
 		return;
 	}
 	else if (keyCode == 13) // return
 	{
 		swkbd_finishInput();
+		PublishSoftwareKeyboard();
 		return;
 	}
 	// check if allowed character
@@ -646,7 +685,7 @@ void swkbd_keyInput(uint32 keyCode)
 		return;
 	}
 	else
-		;// return;
+		; // return;
 	// get max length
 	sint32 maxLength = swkbdInternalState->maxTextLength;
 	if (swkbdInternalState->keyboardOnlyMode)
@@ -666,6 +705,7 @@ void swkbd_keyInput(uint32 keyCode)
 		swkbdInternalState->formStringLength++;
 		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
 		swkbd_inputStringChanged();
+		PublishSoftwareKeyboard();
 	}
 }
 
@@ -673,7 +713,7 @@ namespace swkbd
 {
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "swkbd";
@@ -711,10 +751,10 @@ namespace swkbd
 				// todo
 			}
 		}
-	}s_COSswkbdModule;
+	} s_COSswkbdModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSswkbdModule;
 	}
-}
+} // namespace swkbd

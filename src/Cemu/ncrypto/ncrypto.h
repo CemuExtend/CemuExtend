@@ -12,9 +12,9 @@ namespace NCrypto
 	/* Base 64 */
 	std::string base64Encode(const void* inputMem, size_t inputLen);
 	std::vector<uint8> base64Decode(std::string_view inputStr);
-	
+
 	/* key and iv helper struct */
-	struct AesKey 
+	struct AesKey
 	{
 		static constexpr size_t SIZE = 16;
 		uint8 b[SIZE];
@@ -81,19 +81,19 @@ namespace NCrypto
 	{
 		enum class SIGTYPE : uint32
 		{
-			ECC_SHA1   = 0x00010002, // guessed
+			ECC_SHA1 = 0x00010002, // guessed
 			ECC_SHA256 = 0x00010005
 		};
 
-		/* +0x000 */ betype<SIGTYPE>	signatureType; // 01 00 02 00
-		/* +0x004 */ ECCSig				signature; //uint8				signature[0x3C]; // from OTP 0xA3*4
-		/* +0x040 */ uint8				ukn040[0x40]; // seems to be just padding
-		/* +0x080 */ char				issuer[0x40]; // "Root - CA%08x - MS%08x" 
-		/* +0x0C0 */ char				ukn0C0[0x4]; // ??? 00 00 00 02 ?
-		/* +0x0C4 */ char				ngName[0x40]; // "NG%08X"
-		/* +0x104 */ uint32				date; // big endian? (from OTP 0xA2*4)
-		/* +0x108 */ ECCPubKey			publicKey; //uint8				publicKey[0x3C];
-		/* +0x144 */ uint8				padding[0x180 - 0x144];
+		/* +0x000 */ betype<SIGTYPE> signatureType; // 01 00 02 00
+		/* +0x004 */ ECCSig signature;				// uint8				signature[0x3C]; // from OTP 0xA3*4
+		/* +0x040 */ uint8 ukn040[0x40];			// seems to be just padding
+		/* +0x080 */ char issuer[0x40];				// "Root - CA%08x - MS%08x"
+		/* +0x0C0 */ char ukn0C0[0x4];				// ??? 00 00 00 02 ?
+		/* +0x0C4 */ char ngName[0x40];				// "NG%08X"
+		/* +0x104 */ uint32 date;					// big endian? (from OTP 0xA2*4)
+		/* +0x108 */ ECCPubKey publicKey;			// uint8				publicKey[0x3C];
+		/* +0x144 */ uint8 padding[0x180 - 0x144];
 
 		bool decodeFromBase64(std::string_view input);
 		std::string encodeToBase64();
@@ -107,12 +107,11 @@ namespace NCrypto
 
 	static_assert(sizeof(CertECC) == 0x180);
 
-
 	/* ETicket */
 
-	class ETicketParser  // .tik parser
+	class ETicketParser // .tik parser
 	{
-	public:
+	  public:
 		bool parse(const uint8* data, size_t size);
 		static bool Depersonalize(uint8* ticketData, size_t ticketSize, uint32 deviceId, const ECCPrivKey& devicePrivKey);
 
@@ -145,7 +144,7 @@ namespace NCrypto
 			return m_contentRights[index];
 		}
 
-	private:
+	  private:
 		uint64 m_titleId;
 		uint16 m_titleVersion;
 		uint64 m_ticketId;
@@ -163,11 +162,11 @@ namespace NCrypto
 
 	class TMDParser
 	{
-	public:
+	  public:
 		enum class TMDContentFlags : uint16
 		{
 			// 0x0001 -> Is encrypted?
-			FLAG_SHA1 = 0x2000, // if not set, use SHA256
+			FLAG_SHA1 = 0x2000,			  // if not set, use SHA256
 			FLAG_HASHED_CONTENT = 0x0002, // .app uses hashed format
 		};
 
@@ -196,7 +195,7 @@ namespace NCrypto
 			return m_content;
 		}
 
-	private:
+	  private:
 		uint64 m_titleId;
 		uint16 m_titleVersion;
 		std::vector<ContentEntry> m_content;
@@ -219,4 +218,4 @@ namespace NCrypto
 	bool HasDataForConsoleCert();
 
 	void unitTests();
-}
+} // namespace NCrypto

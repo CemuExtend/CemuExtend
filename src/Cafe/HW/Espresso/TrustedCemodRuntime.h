@@ -8,17 +8,20 @@
 #include <optional>
 #include <string>
 
-namespace cemuextend_hle { class Cex2Owner; }
+namespace cemuextend_hle
+{
+	class Cex2Owner;
+}
 
 class TrustedCemodRuntime
 {
-public:
+  public:
 	TrustedCemodRuntime();
 	~TrustedCemodRuntime();
 
 	[[nodiscard]] std::optional<std::uint64_t> Load(CemodPackage package,
-		std::uint32_t titlePermissions, const ModServicePermissions& services,
-		std::string& error);
+													std::uint32_t titlePermissions, const ModServicePermissions& services,
+													std::string& error);
 	// Starts the trusted lifetime for a title. A retained image from an earlier
 	// title is a hard error because its patch target belongs to the old RPL map.
 	[[nodiscard]] bool BeginTitle(std::uint64_t titleId, std::string& error);

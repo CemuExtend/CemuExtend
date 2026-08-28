@@ -30,12 +30,12 @@ namespace iosu
 				bool operator<(const LastPlayDate& b) const;
 				bool operator==(const LastPlayDate& b) const;
 				std::weak_ordering operator<=>(const LastPlayDate& b) const;
-			}last_played;
+			} last_played;
 			uint32 numMinutesPlayed;
 		};
 
 		bool GetStatForGamelist(uint64 titleId, GameListStat& stat);
 
 		IOSUModule* GetModule();
-	};
-};
+	}; // namespace pdm
+}; // namespace iosu

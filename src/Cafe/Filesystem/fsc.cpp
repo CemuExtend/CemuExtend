@@ -7,8 +7,8 @@ struct FSCMountPathNode
 	std::vector<FSCMountPathNode*> subnodes;
 	FSCMountPathNode* parent;
 	// associated device target and path
-	fscDeviceC* device{ nullptr };
-	void* ctx{ nullptr };
+	fscDeviceC* device{nullptr};
+	void* ctx{nullptr};
 	std::string deviceTargetPath; // the destination base path for the device, utf8
 	// priority
 	sint32 priority{};
@@ -17,24 +17,24 @@ struct FSCMountPathNode
 	{
 	}
 
-    void AssignDevice(fscDeviceC* device, void* ctx, std::string_view deviceBasePath)
-    {
-        this->device = device;
-        this->ctx = ctx;
-        this->deviceTargetPath = deviceBasePath;
-    }
+	void AssignDevice(fscDeviceC* device, void* ctx, std::string_view deviceBasePath)
+	{
+		this->device = device;
+		this->ctx = ctx;
+		this->deviceTargetPath = deviceBasePath;
+	}
 
-    void UnassignDevice()
-    {
-        this->device = nullptr;
-        this->ctx = nullptr;
-        this->deviceTargetPath.clear();
-    }
+	void UnassignDevice()
+	{
+		this->device = nullptr;
+		this->ctx = nullptr;
+		this->deviceTargetPath.clear();
+	}
 
-    bool IsRootNode() const
-    {
-        return !parent;
-    }
+	bool IsRootNode() const
+	{
+		return !parent;
+	}
 
 	~FSCMountPathNode()
 	{
@@ -99,7 +99,7 @@ FSCMountPathNode* fsc_createMountPath(const FSCPath& mountPath, sint32 priority)
 	cemu_assert(priority >= 0 && priority < FSC_PRIORITY_COUNT);
 	fscEnter();
 	FSCMountPathNode* nodeParent = s_fscRootNodePerPrio[priority];
-	for (size_t i=0; i< mountPath.GetNodeCount(); i++)
+	for (size_t i = 0; i < mountPath.GetNodeCount(); i++)
 	{
 		// search for subdirectory
 		FSCMountPathNode* nodeSub = nullptr; // set if we found a subnode with a matching name, else this is used to store the new nodes
@@ -153,14 +153,14 @@ sint32 fsc_mount(std::string_view mountPath, std::string_view targetPath, fscDev
 	// register path
 	fscEnter();
 	FSCMountPathNode* node = fsc_createMountPath(parsedMountPath, priority);
-	if( !node )
+	if (!node)
 	{
 		// path empty, invalid or already used
 		cemuLog_log(LogType::Force, "fsc_mount failed (virtual path: {})", mountPath);
 		fscLeave();
 		return FSC_STATUS_INVALID_PATH;
 	}
-    node->AssignDevice(fscDevice, ctx, targetPathWithSlash);
+	node->AssignDevice(fscDevice, ctx, targetPathWithSlash);
 	fscLeave();
 	return FSC_STATUS_OK;
 }
@@ -177,13 +177,13 @@ bool fsc_unmount(std::string_view mountPath, sint32 priority)
 	}
 	cemu_assert(mountPathNode->priority == priority);
 	cemu_assert(mountPathNode->device);
-    // unassign device
-    mountPathNode->UnassignDevice();
+	// unassign device
+	mountPathNode->UnassignDevice();
 	// prune empty branch
 	while (mountPathNode && !mountPathNode->IsRootNode() && mountPathNode->subnodes.empty() && !mountPathNode->device)
 	{
 		FSCMountPathNode* parent = mountPathNode->parent;
-        std::erase(parent->subnodes, mountPathNode);
+		std::erase(parent->subnodes, mountPathNode);
 		delete mountPathNode;
 		mountPathNode = parent;
 	}
@@ -209,8 +209,8 @@ bool fsc_lookupPath(const char* path, std::string& devicePathOut, fscDeviceC** f
 	{
 		// search for subdirectory
 		FSCMountPathNode* nodeSub = nullptr;
-		for(auto& nodeItr : nodeParent->subnodes)
-		{			
+		for (auto& nodeItr : nodeParent->subnodes)
+		{
 			if (parsedPath.MatchNodeName(i, nodeItr->path))
 			{
 				nodeSub = nodeItr;
@@ -284,7 +284,7 @@ FSCMountPathNode* fsc_lookupPathVirtualNode(const char* path, sint32 priority)
 // this wraps multiple iterated directories from different devices into one unified virtual representation
 class FSCVirtualFileDirectoryIterator : public FSCVirtualFile
 {
-public:
+  public:
 	sint32 fscGetType() override
 	{
 		return FSC_TYPE_DIRECTORY;
@@ -323,7 +323,7 @@ public:
 		if (!dirIterator)
 			return true;
 
-		dirIterator->index  = 0;
+		dirIterator->index = 0;
 		return true;
 	}
 
@@ -338,7 +338,7 @@ public:
 		dirIterator->dirEntries.emplace_back(dirEntry);
 	}
 
-private:
+  private:
 	void PopulateIterationList()
 	{
 		cemu_assert_debug(!dirIterator);
@@ -369,7 +369,7 @@ private:
 		fscLeave();
 	}
 
-private:
+  private:
 	std::string m_path;
 	std::vector<FSCVirtualFile*> m_folders; // list of all folders mapped to the same directory (at different priorities)
 };
@@ -395,7 +395,7 @@ FSCVirtualFile* fsc_open(const char* path, FSC_ACCESS_FLAG accessFlags, sint32* 
 				if (fscVirtualFile->fscGetType() == FSC_TYPE_DIRECTORY)
 				{
 					cemu_assert_debug(HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::OPEN_DIR));
-					// collect all folders 
+					// collect all folders
 					dirList[dirListCount] = fscVirtualFile;
 					dirListCount++;
 				}
@@ -406,7 +406,7 @@ FSCVirtualFile* fsc_open(const char* path, FSC_ACCESS_FLAG accessFlags, sint32* 
 					fscVirtualFile->m_isAppend = HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::IS_APPEND);
 					fscLeave();
 					return fscVirtualFile;
-				}				
+				}
 			}
 		}
 	}
@@ -423,7 +423,7 @@ FSCVirtualFile* fsc_open(const char* path, FSC_ACCESS_FLAG accessFlags, sint32* 
 		}
 		if (folderExists)
 		{
-			FSCVirtualFileDirectoryIterator* dirIteratorFile = new FSCVirtualFileDirectoryIterator(path, { dirList, dirListCount});
+			FSCVirtualFileDirectoryIterator* dirIteratorFile = new FSCVirtualFileDirectoryIterator(path, {dirList, dirListCount});
 			*fscStatus = FSC_STATUS_OK;
 			fscLeave();
 			return dirIteratorFile;
@@ -447,9 +447,9 @@ FSCVirtualFile* fsc_openDirIterator(const char* path, sint32* fscStatus)
 }
 
 /*
-* Iterate next node in directory
-* Returns false if there is no node left
-*/
+ * Iterate next node in directory
+ * Returns false if there is no node left
+ */
 bool fsc_nextDir(FSCVirtualFile* fscFile, FSCDirEntry* dirEntry)
 {
 	fscEnter();
@@ -474,7 +474,7 @@ bool fsc_createDir(const char* path, sint32* fscStatus)
 	void* ctx;
 	std::string devicePath;
 	fscEnter();
-	if( fsc_lookupPath(path, devicePath, &fscDevice, &ctx) )
+	if (fsc_lookupPath(path, devicePath, &fscDevice, &ctx))
 	{
 		sint32 status = fscDevice->fscDeviceCreateDir(devicePath, ctx, fscStatus);
 		fscLeave();
@@ -496,9 +496,9 @@ bool fsc_rename(const char* srcPath, const char* dstPath, sint32* fscStatus)
 	fscDeviceC* fscSrcDevice = NULL;
 	fscDeviceC* fscDstDevice = NULL;
 	*fscStatus = FSC_STATUS_UNDEFINED;
-	if( fsc_lookupPath(srcPath, srcDevicePath, &fscSrcDevice, &srcCtx) && fsc_lookupPath(dstPath, dstDevicePath, &fscDstDevice, &dstCtx) )
+	if (fsc_lookupPath(srcPath, srcDevicePath, &fscSrcDevice, &srcCtx) && fsc_lookupPath(dstPath, dstDevicePath, &fscDstDevice, &dstCtx))
 	{
-		if( fscSrcDevice == fscDstDevice )
+		if (fscSrcDevice == fscDstDevice)
 			return fscSrcDevice->fscDeviceRename(srcDevicePath, dstDevicePath, srcCtx, fscStatus);
 	}
 	return false;
@@ -513,7 +513,7 @@ bool fsc_remove(const char* path, sint32* fscStatus)
 	fscDeviceC* fscDevice = NULL;
 	*fscStatus = FSC_STATUS_UNDEFINED;
 	void* ctx;
-	if( fsc_lookupPath(path, devicePath, &fscDevice, &ctx) )
+	if (fsc_lookupPath(path, devicePath, &fscDevice, &ctx))
 	{
 		return fscDevice->fscDeviceRemoveFileOrDir(devicePath, ctx, fscStatus);
 	}
@@ -596,7 +596,7 @@ bool fsc_isFile(FSCVirtualFile* fscFile)
  * Returns true if the file is writable
  */
 bool fsc_isWritable(FSCVirtualFile* fscFile)
-{	
+{
 	return fscFile->fscQueryValueU64(FSC_QUERY_WRITEABLE) != 0;
 }
 
@@ -639,7 +639,7 @@ uint8* fsc_extractFile(const char* path, uint32* fileSize, sint32 maxPriority)
 	sint32 fscStatus = FSC_STATUS_UNDEFINED;
 	fscEnter();
 	FSCVirtualFile* fscFile = fsc_open(path, FSC_ACCESS_FLAG::OPEN_FILE | FSC_ACCESS_FLAG::READ_PERMISSION, &fscStatus, maxPriority);
-	if( !fscFile )
+	if (!fscFile)
 	{
 		*fileSize = 0;
 		fscLeave();
@@ -648,7 +648,7 @@ uint8* fsc_extractFile(const char* path, uint32* fileSize, sint32 maxPriority)
 	uint32 fscFileSize = fsc_getFileSize(fscFile);
 	*fileSize = fscFileSize;
 	uint8* fileMem = (uint8*)malloc(fscFileSize);
-	if( fsc_readFile(fscFile, fileMem, fscFileSize) != fscFileSize )
+	if (fsc_readFile(fscFile, fileMem, fscFileSize) != fscFileSize)
 	{
 		free(fileMem);
 		fsc_close(fscFile);

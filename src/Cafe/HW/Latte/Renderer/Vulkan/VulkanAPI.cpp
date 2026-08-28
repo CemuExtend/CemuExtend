@@ -7,7 +7,7 @@
 #include <dlfcn.h>
 #endif
 
-#define VULKAN_API_CPU_BENCHMARK 0	// if 1, Cemu will log the CPU time spent per Vulkan API function
+#define VULKAN_API_CPU_BENCHMARK 0 // if 1, Cemu will log the CPU time spent per Vulkan API function
 
 bool g_vulkan_available = false;
 
@@ -29,15 +29,30 @@ auto VkWrapperFuncGenTest(TRet (*func)(Args...), const char* name)
 	static VulkanBenchmarkFuncInfo _FuncInfo;
 	static auto _FuncPtrCopy = func;
 	TRet (*newFunc)(Args...);
-	if constexpr(std::is_void_v<TRet>)
+	if constexpr (std::is_void_v<TRet>)
 	{
-		newFunc = +[](Args... args) { uint64 t = __rdtsc(); _mm_mfence(); _FuncPtrCopy(args...); _mm_mfence(); _FuncInfo.cycles += (__rdtsc() - t); _FuncInfo.numCalls++; };
+		newFunc = +[](Args... args) {
+			uint64 t = __rdtsc();
+			_mm_mfence();
+			_FuncPtrCopy(args...);
+			_mm_mfence();
+			_FuncInfo.cycles += (__rdtsc() - t);
+			_FuncInfo.numCalls++;
+		};
 	}
 	else
-		newFunc = +[](Args... args) -> TRet { uint64 t = __rdtsc(); _mm_mfence(); TRet r = _FuncPtrCopy(args...); _mm_mfence(); _FuncInfo.cycles += (__rdtsc() - t); _FuncInfo.numCalls++; return r; };
-	if(func && func != newFunc)
+		newFunc = +[](Args... args) -> TRet {
+			uint64 t = __rdtsc();
+			_mm_mfence();
+			TRet r = _FuncPtrCopy(args...);
+			_mm_mfence();
+			_FuncInfo.cycles += (__rdtsc() - t);
+			_FuncInfo.numCalls++;
+			return r;
+		};
+	if (func && func != newFunc)
 		_FuncPtrCopy = func;
-	if(_FuncInfo.funcName.empty())
+	if (_FuncInfo.funcName.empty())
 	{
 		_FuncInfo = {.funcName = name, .cycles = 0, .numCalls = 0};
 		s_vulkanBenchmarkFuncs.emplace_back(&_FuncInfo);
@@ -75,7 +90,7 @@ void VulkanBenchmarkPrintResults()
 	for (sint32 idx : sortedIndices)
 	{
 		auto& func = s_vulkanBenchmarkFuncs[idx];
-		if(func->cycles == 0)
+		if (func->cycles == 0)
 			return;
 		cemuLog_log(LogType::Force, "{}: {} cycles ({:.4}%) {} calls", func->funcName.c_str(), func->cycles, ((double)func->cycles / elapsedCyclesDbl) * 100.0, func->numCalls);
 		func->cycles = 0;
@@ -90,7 +105,7 @@ bool InitializeGlobalVulkan()
 {
 	const auto hmodule = LoadLibraryA("vulkan-1.dll");
 
-	if(g_vulkan_available)
+	if (g_vulkan_available)
 		return true;
 
 	if (hmodule == nullptr)
@@ -99,16 +114,16 @@ bool InitializeGlobalVulkan()
 		return false;
 	}
 
-	#define VKFUNC_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 
-	if(!vkEnumerateInstanceVersion)
+	if (!vkEnumerateInstanceVersion)
 	{
 		cemuLog_log(LogType::Force, "vkEnumerateInstanceVersion not available. Outdated graphics driver or Vulkan runtime?");
 		FreeLibrary(hmodule);
 		return false;
 	}
-	
+
 	g_vulkan_available = true;
 	return true;
 }
@@ -119,9 +134,9 @@ bool InitializeInstanceVulkan(VkInstance instance)
 	if (hmodule == nullptr)
 		return false;
 
-	#define VKFUNC_INSTANCE_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
-	
+#define VKFUNC_INSTANCE_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+
 	return true;
 }
 
@@ -131,12 +146,12 @@ bool InitializeDeviceVulkan(VkDevice device)
 	if (hmodule == nullptr)
 		return false;
 
-	#define VKFUNC_DEVICE_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_DEVICE_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 
 #if VULKAN_API_CPU_BENCHMARK != 0
-	#define VKFUNC_DEFINE_CUSTOM(__func) __func = VkWrapperFuncGenTest(__func, #__func)
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_DEFINE_CUSTOM(__func) __func = VkWrapperFuncGenTest(__func, #__func)
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #endif
 
 	return true;
@@ -148,7 +163,7 @@ void* dlopen_vulkan_loader()
 {
 #if BOOST_OS_LINUX || BOOST_OS_BSD
 	void* vulkan_so = dlopen("libvulkan.so", RTLD_NOW);
-	if(!vulkan_so)
+	if (!vulkan_so)
 		vulkan_so = dlopen("libvulkan.so.1", RTLD_NOW);
 #elif BOOST_OS_MACOS
 	void* vulkan_so = dlopen("libMoltenVK.dylib", RTLD_NOW);
@@ -160,7 +175,7 @@ bool InitializeGlobalVulkan()
 {
 	void* vulkan_so = dlopen_vulkan_loader();
 
-	if(g_vulkan_available)
+	if (g_vulkan_available)
 		return true;
 
 	if (!vulkan_so)
@@ -169,15 +184,15 @@ bool InitializeGlobalVulkan()
 		return false;
 	}
 
-	#define VKFUNC_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 
-	if(!vkEnumerateInstanceVersion)
+	if (!vkEnumerateInstanceVersion)
 	{
 		cemuLog_log(LogType::Force, "vkEnumerateInstanceVersion not available. Outdated graphics driver or Vulkan runtime?");
 		return false;
 	}
-	
+
 	g_vulkan_available = true;
 	return true;
 }
@@ -188,9 +203,9 @@ bool InitializeInstanceVulkan(VkInstance instance)
 	if (!vulkan_so)
 		return false;
 
-	#define VKFUNC_INSTANCE_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
-	
+#define VKFUNC_INSTANCE_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+
 	return true;
 }
 
@@ -200,12 +215,12 @@ bool InitializeDeviceVulkan(VkDevice device)
 	if (!vulkan_so)
 		return false;
 
-	#define VKFUNC_DEVICE_INIT
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_DEVICE_INIT
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 
 #if VULKAN_API_CPU_BENCHMARK != 0
-	#define VKFUNC_DEFINE_CUSTOM(__func) __func = VkWrapperFuncGenTest(__func, #__func)
-	#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+#define VKFUNC_DEFINE_CUSTOM(__func) __func = VkWrapperFuncGenTest(__func, #__func)
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #endif
 
 	return true;

@@ -103,4 +103,4 @@ namespace NAPI
 		result.isValid = true;
 		return result;
 	}
-};
+}; // namespace NAPI

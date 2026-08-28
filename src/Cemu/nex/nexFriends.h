@@ -1,12 +1,14 @@
 #pragma once
 
+#include <thread>
+
 #ifndef FFL_SIZE
-#define FFL_SIZE	0x60
+#define FFL_SIZE 0x60
 #endif
 
 class nexGameKey : public nexType
 {
-public:
+  public:
 	nexGameKey() = default;
 
 	nexGameKey(uint64 titleId, uint16 ukn)
@@ -30,14 +32,15 @@ public:
 		titleId = pb->readU64();
 		ukn = pb->readU16();
 	}
-public:
+
+  public:
 	uint64 titleId;
 	uint16 ukn;
 };
 
 class nexMiiV2 : public nexType
 {
-public:
+  public:
 	nexMiiV2()
 	{
 		miiNickname[0] = '\0';
@@ -73,17 +76,17 @@ public:
 		pb->readBuffer(this->miiData, FFL_SIZE);
 		pb->readU64(); // ukn
 	}
-public:
+
+  public:
 	uint8 miiData[FFL_SIZE];
 	char miiNickname[128];
 };
 
 class nexPresenceV2 : public nexType
 {
-public:
+  public:
 	nexPresenceV2()
 	{
-
 	}
 
 	nexPresenceV2(int ukn)
@@ -109,8 +112,8 @@ public:
 		pb->writeU64(gameKey.titleId);
 		pb->writeU16(gameKey.ukn);
 
-		pb->writeU8(1); //	uint8			ukn3(example value : 1)
-		pb->writeString("");//	String			msg(current game ? )
+		pb->writeU8(1);		 //	uint8			ukn3(example value : 1)
+		pb->writeString(""); //	String			msg(current game ? )
 
 		pb->writeU32(joinFlagMask);
 		pb->writeU8(joinAvailability);
@@ -145,7 +148,8 @@ public:
 		ukn12 = pb->readU8();
 		ukn13 = pb->readU8();
 	}
-public:
+
+  public:
 	uint32 ukn0; // seen values: 0 -> offline, 1 -> online (menu, but not always), 8 and 0x1E6 -> in Splatoon
 	uint8 isOnline;
 	nexGameKey gameKey;
@@ -165,7 +169,7 @@ public:
 
 class nexPrincipalBasicInfo : public nexType
 {
-public:
+  public:
 	nexPrincipalBasicInfo()
 	{
 		this->nnid[0] = '\0';
@@ -198,7 +202,7 @@ public:
 		regionGuessed = pb->readU8();
 	}
 
-public:
+  public:
 	uint32 principalId;
 	char nnid[32];
 	nexMiiV2 mii;
@@ -207,10 +211,9 @@ public:
 
 class nexNNAInfo : public nexType
 {
-public:
+  public:
 	nexNNAInfo()
 	{
-
 	}
 
 	nexNNAInfo(uint8 countryCode, uint8 countrySubCode, const nexPrincipalBasicInfo& principalBasicInfo)
@@ -235,7 +238,8 @@ public:
 		countryCode = pb->readU8();
 		countrySubCode = pb->readU8();
 	}
-public:
+
+  public:
 	uint8 countryCode;
 	uint8 countrySubCode;
 	nexPrincipalBasicInfo principalInfo;
@@ -243,7 +247,7 @@ public:
 
 class nexPrincipalPreference : public nexType
 {
-public:
+  public:
 	nexPrincipalPreference() = default;
 
 	nexPrincipalPreference(uint8 ukn0, uint8 ukn1, uint8 ukn2)
@@ -264,14 +268,15 @@ public:
 		pb->writeU8(showGame);
 		pb->writeU8(blockFriendRequests);
 	}
-	
+
 	void readData(nexPacketBuffer* pb) override
 	{
 		showOnline = pb->readU8();
 		showGame = pb->readU8();
 		blockFriendRequests = pb->readU8();
 	}
-public:
+
+  public:
 	uint8 showOnline;
 	uint8 showGame;
 	uint8 blockFriendRequests;
@@ -279,10 +284,9 @@ public:
 
 class nexComment : public nexType
 {
-public:
+  public:
 	nexComment()
 	{
-
 	}
 
 	nexComment(uint8 todo)
@@ -311,7 +315,8 @@ public:
 		commentString = std::string(stringBuffer);
 		ukn1 = pb->readU64();
 	}
-public:
+
+  public:
 	uint8 ukn0;
 	std::string commentString;
 	uint64 ukn1;
@@ -319,10 +324,9 @@ public:
 
 class nexFriendRequestMessage : public nexType
 {
-public:
+  public:
 	nexFriendRequestMessage()
 	{
-
 	}
 
 	nexFriendRequestMessage(uint8 todo)
@@ -356,7 +360,8 @@ public:
 		ukn7 = pb->readU64();
 		expireTimestamp = pb->readU64();
 	}
-public:
+
+  public:
 	uint64 messageId;
 	uint8 isMarkedAsReceived;
 	uint8 ukn2;
@@ -370,7 +375,7 @@ public:
 
 class nexFriendRequest : public nexType
 {
-public:
+  public:
 	nexFriendRequest()
 	{
 	}
@@ -401,15 +406,16 @@ public:
 		message.readData(pb);
 		ukn = pb->readU64();
 	}
-public:
-	nexPrincipalBasicInfo	principalInfo;
-	nexFriendRequestMessage	message;
-	uint64					ukn;
+
+  public:
+	nexPrincipalBasicInfo principalInfo;
+	nexFriendRequestMessage message;
+	uint64 ukn;
 };
 
 class nexFriend : public nexType
 {
-public:
+  public:
 	nexFriend()
 	{
 	}
@@ -438,18 +444,19 @@ public:
 		lastOnlineTimestamp = pb->readU64();
 		ukn6 = pb->readU64();
 	}
-public:
-	nexNNAInfo		nnaInfo;
-	nexPresenceV2	presence;
-	nexComment		comment;
-	uint64			friendsSinceTimestamp;
-	uint64			lastOnlineTimestamp;
-	uint64			ukn6;
+
+  public:
+	nexNNAInfo nnaInfo;
+	nexPresenceV2 presence;
+	nexComment comment;
+	uint64 friendsSinceTimestamp;
+	uint64 lastOnlineTimestamp;
+	uint64 ukn6;
 };
 
 class nexBlacklisted : public nexType
 {
-public:
+  public:
 	nexBlacklisted()
 	{
 	}
@@ -469,16 +476,16 @@ public:
 		gameKey.readData(pb);
 		ukn = pb->readU64();
 	}
-public:
+
+  public:
 	nexPrincipalBasicInfo basicInfo;
 	nexGameKey gameKey;
 	uint64 ukn;
 };
 
-
 class nexPersistentNotification : public nexType
 {
-public:
+  public:
 	nexPersistentNotification()
 	{
 	}
@@ -500,18 +507,19 @@ public:
 		type = pb->readU32();
 		pb->readStdString(msg);
 	}
-public:
-	uint64		messageId;
-	uint32		pid1; // principal id 1 (might differ depending on type)
-	uint32		pid2; // principal id 2 (might differ depending on type)
-	uint32		type;
-	std::string	msg;
+
+  public:
+	uint64 messageId;
+	uint32 pid1; // principal id 1 (might differ depending on type)
+	uint32 pid2; // principal id 2 (might differ depending on type)
+	uint32 type;
+	std::string msg;
 };
 
 class NexFriends
 {
-public:
-  	using RpcErrorCode = int; // replace with enum class later
+  public:
+	using RpcErrorCode = int; // replace with enum class later
 
 	static const int ERR_NONE = 0;
 	static const int ERR_RPC_FAILED = 1;
@@ -533,10 +541,9 @@ public:
 		NOTIFICATION_TYPE_ADDED_INCOMING_REQUEST = 17,
 		NOTIFICATION_TYPE_REMOVED_INCOMING_REQUEST = 18
 
-
 	};
 
-public:
+  public:
 	NexFriends(uint32 authServerIp, uint16 authServerPort, const char* accessKey, uint32 pid, const char* nexPassword, const char* nexToken, const char* nnid, uint8* miiData, const wchar_t* miiNickname, uint8 countryCode, nexPresenceV2& myPresence);
 
 	~NexFriends();
@@ -571,13 +578,13 @@ public:
 	bool updateCommentAsync(const nexComment newComment, std::function<void(RpcErrorCode)> cb);
 	void updateMyPresence(nexPresenceV2& myPresence);
 
-	void setNotificationHandler(void(*notificationHandler)(NOTIFICATION_TYPE notificationType, uint32 pid));
+	void setNotificationHandler(void (*notificationHandler)(NOTIFICATION_TYPE notificationType, uint32 pid));
 
 	void update();
 
 	void processServerNotification(uint32 notificationType, uint32 pid, nexPacketBuffer* notificationData);
 
-private:
+  private:
 	void doAsyncLogin();
 	void initiateLogin();
 
@@ -586,7 +593,7 @@ private:
 
 	void generateNotification(NOTIFICATION_TYPE notificationType, uint32 pid);
 	void trackNotifications();
-	
+
 	// notification-service handlers
 	void processServerNotification_friendOffline(uint32 pid);
 	void processServerNotification_presenceChange(uint32 pid, nexPresenceV2& presence);
@@ -594,8 +601,8 @@ private:
 	void processServerNotification_incomingFriendRequest(uint32 pid, nexFriendRequest& friendRequest);
 	void processServerNotification_addedFriend(uint32 pid, nexFriend& frd);
 
-private:
-	void(*notificationHandler)(NOTIFICATION_TYPE notificationType, uint32 pid);
+  private:
+	void (*notificationHandler)(NOTIFICATION_TYPE notificationType, uint32 pid);
 	bool isCurrentlyConnected;
 	bool hasData; // set after connect when information request response was received
 	bool firstInformationRequest;
@@ -607,19 +614,20 @@ private:
 	uint8 countryCode;
 	// login tracking
 	std::recursive_mutex mtx_login;
+	std::thread loginThread;
 	bool loginInProcess;
 	uint32 lastLoginAttemptTime;
 	uint32 numFailedLogins;
 	uint32 numSuccessfulLogins;
 	// auth
-	struct  
+	struct
 	{
 		uint32 serverIp;
 		uint16 port;
 		std::string accessKey;
 		std::string nexPassword;
 		std::string nexToken;
-	}auth;
+	} auth;
 	// local friend state
 	nexPresenceV2 myPresence;
 	nexPrincipalPreference myPreference;
@@ -629,10 +637,10 @@ private:
 	std::vector<nexFriend> list_friends;
 	std::vector<nexFriendRequest> list_friendReqOutgoing;
 	std::vector<nexFriendRequest> list_friendReqIncoming;
-	struct  
+	struct
 	{
 		std::vector<nexFriend> list_friends;
 		std::vector<nexFriendRequest> list_friendReqOutgoing;
 		std::vector<nexFriendRequest> list_friendReqIncoming;
-	}previousState;
+	} previousState;
 };

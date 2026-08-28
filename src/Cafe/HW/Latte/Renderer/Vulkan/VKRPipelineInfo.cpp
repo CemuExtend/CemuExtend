@@ -6,8 +6,10 @@
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
 
+#if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_extension.h"
+#endif
 #include "config/CemuConfig.h"
 
 PipelineInfo::PipelineInfo(uint64 minimalStateHash, uint64 pipelineHash, LatteFetchShader* fetchShader, LatteDecompilerShader* vertexShader, LatteDecompilerShader* pixelShader, LatteDecompilerShader* geometryShader)
@@ -47,7 +49,6 @@ PipelineInfo::PipelineInfo(uint64 minimalStateHash, uint64 pipelineHash, LatteFe
 			neverSkipAccurateBarrier = true;
 	}
 }
-
 
 PipelineInfo::~PipelineInfo()
 {

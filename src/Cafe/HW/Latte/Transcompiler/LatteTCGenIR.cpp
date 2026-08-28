@@ -109,7 +109,6 @@ void LatteTCGenIR::CF_CALL_FS_emitFetchAttribute(LatteParsedFetchShaderAttribute
 
 			// todo - we need a sign-extend instruction for this which should take arbitrary bit count
 
-
 			this->m_irGenContext.activeVars.set(dstGPR, t, resultHolder); // set GPR.channel to the result
 			break;
 		}
@@ -141,7 +140,7 @@ void LatteTCGenIR::processCF_CALL_FS(const LatteCFInstruction_DEFAULT& cfInstruc
 
 	// generate IR to decode vertex attributes
 	cemu_assert_debug(fetchShader->bufferGroupsInvalid.size() == 0); // todo
-	for(auto& bufferGroup : fetchShader->bufferGroups)
+	for (auto& bufferGroup : fetchShader->bufferGroups)
 	{
 		for (sint32 i = 0; i < bufferGroup.attribCount; i++)
 		{
@@ -159,7 +158,7 @@ void LatteTCGenIR::processCF_CALL_FS(const LatteCFInstruction_DEFAULT& cfInstruc
 				}
 			}
 			if (attributeShaderLoc == 0xFFFFFFFF)
-				continue; // attribute is not mapped to VS input
+				continue;					 // attribute is not mapped to VS input
 			dstGPR = attributeShaderLoc + 1; // R0 is skipped
 
 			// emit IR code for attribute import (decode into GPR)
@@ -192,7 +191,7 @@ ZpIR::IRReg LatteTCGenIR::getIRRegFromGPRElement(uint32 gprIndex, uint32 channel
 
 	// otherwise create import and resolve later during register allocation
 	r = m_irGenContext.irBuilder->createReg(typeHint);
-	m_irGenContext.irBuilder->addImport(r, gprIndex*4 + channel);
+	m_irGenContext.irBuilder->addImport(r, gprIndex * 4 + channel);
 
 	return r;
 }
@@ -225,13 +224,13 @@ ZpIR::IRReg LatteTCGenIR::loadALUOperand(LatteALUSrcSel srcSel, uint8 srcChan, b
 {
 	if (srcSel.isGPR())
 	{
-		//LatteTCGenIR::GPRElement gprElement = srcSel.getGPR() * 4 + srcChan;
+		// LatteTCGenIR::GPRElement gprElement = srcSel.getGPR() * 4 + srcChan;
 		if (isRel)
 			assert_dbg();
 
 		ZpIR::IRReg reg;
-		
-		if(convertOnTypeMismatch)
+
+		if (convertOnTypeMismatch)
 			reg = getTypedIRRegFromGPRElement(srcSel.getGPR(), srcChan, typeHint);
 		else
 			reg = getIRRegFromGPRElement(srcSel.getGPR(), srcChan, typeHint);
@@ -266,7 +265,7 @@ ZpIR::IRReg LatteTCGenIR::loadALUOperand(LatteALUSrcSel srcSel, uint8 srcChan, b
 		// constant registers / uniform registers
 		uint32 cfileIndex = srcSel.getCFile();
 		auto newReg = m_irGenContext.irBuilder->createReg(typeHint);
-		ZpIR::LocationSymbolName importSource = ZpIR::ShaderSubset::ShaderImportLocation().SetUniformRegister(cfileIndex*4 + srcChan);
+		ZpIR::LocationSymbolName importSource = ZpIR::ShaderSubset::ShaderImportLocation().SetUniformRegister(cfileIndex * 4 + srcChan);
 		m_irGenContext.irBuilder->emit_IMPORT(importSource, newReg);
 		return newReg;
 	}
@@ -278,18 +277,17 @@ ZpIR::IRReg LatteTCGenIR::loadALUOperand(LatteALUSrcSel srcSel, uint8 srcChan, b
 
 void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], const uint32* literalData)
 {
-	//struct
+	// struct
 	//{
 	//	uint32 gprElementIndex;
 	//	ZpIR::IRReg irReg;
 	//	bool isSet;
-	//}groupOutput[5] = {};
+	// }groupOutput[5] = {};
 
 	ZpIR::BasicBlockBuilder* irBuilder = m_irGenContext.irBuilder;
 
 	// used by MOV instruction which can be used with any 32bit type (float, int, uint)
-	auto getMOVSourceType = [&](const LatteClauseInstruction_ALU_OP2* instrOP2) -> ZpIR::DataType
-	{
+	auto getMOVSourceType = [&](const LatteClauseInstruction_ALU_OP2* instrOP2) -> ZpIR::DataType {
 		auto sel = instrOP2->getSrc0Sel();
 		if (sel.isGPR())
 		{
@@ -312,8 +310,7 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 		return ZpIR::DataType::S32;
 	};
 
-	auto getOp0Reg = [&](const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg
-	{
+	auto getOp0Reg = [&](const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg {
 		// todo - pass type hint, so internally correct type is used if register needs to be created
 		ZpIR::IRReg r = loadALUOperand(instrOP2->getSrc0Sel(), instrOP2->getSrc0Chan(), instrOP2->isSrc0Neg(), false, instrOP2->isSrc0Rel(), instrOP2->getIndexMode(), literalData, type, true);
 		// make sure type matches with 'type' (loadALUOperand should convert)
@@ -321,8 +318,7 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 		return r;
 	};
 
-	auto getOp1Reg = [&](const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg
-	{
+	auto getOp1Reg = [&](const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg {
 		// todo - pass type hint, so internally correct type is used if register needs to be created
 		ZpIR::IRReg r = loadALUOperand(instrOP2->getSrc1Sel(), instrOP2->getSrc1Chan(), instrOP2->isSrc1Neg(), false, instrOP2->isSrc1Rel(), instrOP2->getIndexMode(), literalData, type, true);
 		// make sure type matches with 'type' (loadALUOperand should convert)
@@ -330,14 +326,13 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 		return r;
 	};
 
-	auto getResultReg = [&](uint8 aluUnit, const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg
-	{
+	auto getResultReg = [&](uint8 aluUnit, const LatteClauseInstruction_ALU_OP2* instrOP2, ZpIR::DataType type) -> ZpIR::IRReg {
 		// create output register
 		ZpIR::IRReg r = m_irGenContext.irBuilder->createReg(type);
 
 		cemu_assert_debug(instrOP2->getDestClamp() == 0); // todo
-		cemu_assert_debug(instrOP2->getDestRel() == 0); // todo
-		cemu_assert_debug(instrOP2->getOMod() == 0); // todo
+		cemu_assert_debug(instrOP2->getDestRel() == 0);	  // todo
+		cemu_assert_debug(instrOP2->getOMod() == 0);	  // todo
 
 		if (instrOP2->getWriteMask())
 		{
@@ -357,13 +352,13 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 		// also assign PV/PS
 		// todo
 
-		//ZpIR::IRReg r;
-		//if (m_irGenContext.activeVars.get(gprIndex, channel, r))
+		// ZpIR::IRReg r;
+		// if (m_irGenContext.activeVars.get(gprIndex, channel, r))
 		//	return r;
 
 		//// if GPR not present then create import for it
-		//r = m_irGenContext.irBuilder->createReg(typeHint);
-		//m_irGenContext.irBuilder->addImport(r, 0x12345678);
+		// r = m_irGenContext.irBuilder->createReg(typeHint);
+		// m_irGenContext.irBuilder->addImport(r, 0x12345678);
 
 		return r;
 	};
@@ -445,7 +440,8 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 				// todo - do we need to update the other units?
 
 				aluUnitIndex += 3;
-				continue;;
+				continue;
+				;
 			}
 			default:
 				assert_dbg();
@@ -457,29 +453,28 @@ void LatteTCGenIR::emitALUGroup(const LatteClauseInstruction_ALU* aluUnit[5], co
 				assert_dbg();
 			}
 
-			//uint32 src0Sel = (aluWord0 >> 0) & 0x1FF; // source selection
-			//uint32 src1Sel = (aluWord0 >> 13) & 0x1FF;
-			//uint32 src0Rel = (aluWord0 >> 9) & 0x1; // relative addressing mode
-			//uint32 src1Rel = (aluWord0 >> 22) & 0x1;
-			//uint32 src0Chan = (aluWord0 >> 10) & 0x3; // component selection x/y/z/w
-			//uint32 src1Chan = (aluWord0 >> 23) & 0x3;
-			//uint32 src0Neg = (aluWord0 >> 12) & 0x1; // negate input
-			//uint32 src1Neg = (aluWord0 >> 25) & 0x1;
-			//uint32 indexMode = (aluWord0 >> 26) & 7;
-			//uint32 predSel = (aluWord0 >> 29) & 3;
+			// uint32 src0Sel = (aluWord0 >> 0) & 0x1FF; // source selection
+			// uint32 src1Sel = (aluWord0 >> 13) & 0x1FF;
+			// uint32 src0Rel = (aluWord0 >> 9) & 0x1; // relative addressing mode
+			// uint32 src1Rel = (aluWord0 >> 22) & 0x1;
+			// uint32 src0Chan = (aluWord0 >> 10) & 0x3; // component selection x/y/z/w
+			// uint32 src1Chan = (aluWord0 >> 23) & 0x3;
+			// uint32 src0Neg = (aluWord0 >> 12) & 0x1; // negate input
+			// uint32 src1Neg = (aluWord0 >> 25) & 0x1;
+			// uint32 indexMode = (aluWord0 >> 26) & 7;
+			// uint32 predSel = (aluWord0 >> 29) & 3;
 
-			//uint32 src0Abs = (aluWord1 >> 0) & 1;
-			//uint32 src1Abs = (aluWord1 >> 1) & 1;
-			//uint32 updateExecuteMask = (aluWord1 >> 2) & 1;
-			//uint32 updatePredicate = (aluWord1 >> 3) & 1;
-			//uint32 writeMask = (aluWord1 >> 4) & 1;
-			//uint32 omod = (aluWord1 >> 5) & 3;
+			// uint32 src0Abs = (aluWord1 >> 0) & 1;
+			// uint32 src1Abs = (aluWord1 >> 1) & 1;
+			// uint32 updateExecuteMask = (aluWord1 >> 2) & 1;
+			// uint32 updatePredicate = (aluWord1 >> 3) & 1;
+			// uint32 writeMask = (aluWord1 >> 4) & 1;
+			// uint32 omod = (aluWord1 >> 5) & 3;
 
-			//uint32 destGpr = (aluWord1 >> 21) & 0x7F;
-			//uint32 destRel = (aluWord1 >> 28) & 1;
-			//uint32 destElem = (aluWord1 >> 29) & 3;
-			//uint32 destClamp = (aluWord1 >> 31) & 1;
-
+			// uint32 destGpr = (aluWord1 >> 21) & 0x7F;
+			// uint32 destRel = (aluWord1 >> 28) & 1;
+			// uint32 destElem = (aluWord1 >> 29) & 3;
+			// uint32 destClamp = (aluWord1 >> 31) & 1;
 		}
 	}
 	// update IR vars with outputs from group
@@ -493,14 +488,14 @@ void LatteTCGenIR::processCF_ALU(const LatteCFInstruction_ALU& cfInstruction)
 
 	const uint32* clauseCode = m_ctx.programData + aluAddr * 2;
 	uint32 clauseLength = aluCount;
-	
+
 	const LatteClauseInstruction_ALU* aluCode = (const LatteClauseInstruction_ALU*)clauseCode;
-	
+
 	const LatteClauseInstruction_ALU* aluUnit[5] = {};
-	
+
 	const LatteClauseInstruction_ALU* instr = aluCode;
 	const LatteClauseInstruction_ALU* instrLast = aluCode + clauseLength;
-	
+
 	// process instructions in groups
 	uint8 literalMask = 0;
 	while (instr < instrLast)
@@ -524,14 +519,14 @@ void LatteTCGenIR::processCF_ALU(const LatteCFInstruction_ALU& cfInstruction)
 			}
 			cemu_assert_debug(!aluUnit[unitIndex]); // unit already used
 			aluUnit[unitIndex] = op;
-	
+
 			// check for literal access
 			if (op->getSrc0Sel().isLiteral())
 				literalMask |= (op->getSrc0Chan() >= 2 ? 2 : 1);
 			if (op->getSrc1Sel().isLiteral())
 				literalMask |= (op->getSrc1Chan() >= 2 ? 2 : 1);
 		}
-	
+
 		if (instr->isLastInGroup())
 		{
 			// emit code for group
@@ -611,12 +606,12 @@ void LatteTCGenIR::processCF_EXPORT(const LatteCFInstruction_EXPORT_IMPORT& cfIn
 			break;
 		}
 		}
-		//ZpIR::IRReg r;
-		//if (m_irGenContext.activeVars.get(gprIndex, channel, r))
+		// ZpIR::IRReg r;
+		// if (m_irGenContext.activeVars.get(gprIndex, channel, r))
 		//	return r;
 	}
 
-	//ZpIR::LocationSymbolName exportSymbolName;
+	// ZpIR::LocationSymbolName exportSymbolName;
 	ZpIR::ShaderSubset::ShaderExportLocation loc;
 
 	if (exportType == LatteCFInstruction_EXPORT_IMPORT::EXPORT_TYPE::POSITION)
@@ -626,7 +621,7 @@ void LatteTCGenIR::processCF_EXPORT(const LatteCFInstruction_EXPORT_IMPORT& cfIn
 	else if (exportType == LatteCFInstruction_EXPORT_IMPORT::EXPORT_TYPE::PARAMETER)
 	{
 		loc.SetOutputAttribute(arrayBase);
-		//exportSymbolName = 0x20000 + arrayBase;
+		// exportSymbolName = 0x20000 + arrayBase;
 	}
 	else
 	{
@@ -637,5 +632,4 @@ void LatteTCGenIR::processCF_EXPORT(const LatteCFInstruction_EXPORT_IMPORT& cfIn
 	cemu_assert_debug(regExportCount == 4); // todo - encode channel mask (e.g. xyz, xw, w, etc.) into export symbol name
 
 	m_irGenContext.irBuilder->emit_EXPORT(loc, std::span(regArray, regArray + regExportCount));
-
 }

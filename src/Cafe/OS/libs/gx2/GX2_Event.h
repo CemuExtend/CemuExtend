@@ -24,4 +24,4 @@ namespace GX2
 	void __GX2NotifyNewRetirementTimestamp(uint64 tsRetire);
 	void __GX2NotifyEvent(GX2CallbackEventType eventType);
 
-}
+} // namespace GX2

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 struct LatteSurfaceCopyParam;
 struct LatteSurfaceCopyRect;
 
@@ -7,5 +9,7 @@ void LatteAsyncCommands_queueForceTextureReadback(MPTR physAddr, MPTR mipAddr, u
 void LatteAsyncCommand_queueTextureCopy(const LatteSurfaceCopyParam& src, const LatteSurfaceCopyParam& dst, const LatteSurfaceCopyRect& rect);
 void LatteAsyncCommands_queueDeleteShader(uint64 shaderBaseHash, uint64 shaderAuxHash, LatteConst::ShaderType shaderType);
 void LatteAsyncCommands_waitUntilAllProcessed();
+void LatteAsyncCommands_runOnRendererThread(std::function<void()> task);
+void LatteAsyncCommands_runWithRendererPaused(std::function<void()> task);
 
 void LatteAsyncCommands_checkAndExecute();

@@ -7,7 +7,7 @@ namespace coreinit
 	struct
 	{
 		bool isEnabled;
-	}g_coreinitOverlayArena = { 0 };
+	} g_coreinitOverlayArena = {0};
 
 	uint32 OSIsEnabledOverlayArena()
 	{
@@ -31,4 +31,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSEnableOverlayArena, LogType::Placeholder);
 		g_coreinitOverlayArena.isEnabled = false;
 	}
-}
+} // namespace coreinit

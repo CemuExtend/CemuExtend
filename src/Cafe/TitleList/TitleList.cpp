@@ -5,7 +5,7 @@
 
 #include <zarchive/zarchivereader.h>
 
-bool sTLInitialized{ false };
+bool sTLInitialized{false};
 fs::path sTLCacheFilePath;
 
 // lists for tracking known titles
@@ -24,13 +24,12 @@ std::vector<fs::path> sTLScanPaths;
 std::thread sTLRefreshWorker;
 bool sTLRefreshWorkerActive{false};
 std::atomic_uint32_t sTLRefreshRequests{};
-std::atomic_bool sTLIsScanMandatory{ false };
+std::atomic_bool sTLIsScanMandatory{false};
 
 // callback list
-struct TitleListCallbackEntry 
+struct TitleListCallbackEntry
 {
-	TitleListCallbackEntry(void(*cb)(CafeTitleListCallbackEvent* evt, void* ctx), void* ctx, uint64 uniqueId) :
-		cb(cb), ctx(ctx), uniqueId(uniqueId) {};
+	TitleListCallbackEntry(void (*cb)(CafeTitleListCallbackEvent* evt, void* ctx), void* ctx, uint64 uniqueId) : cb(cb), ctx(ctx), uniqueId(uniqueId) {};
 	void (*cb)(CafeTitleListCallbackEvent* evt, void* ctx);
 	void* ctx;
 	uint64 uniqueId;
@@ -62,7 +61,7 @@ void CafeTitleList::LoadCacheFile()
 	for (const auto& titleInfoNode : doc.child("title_list"))
 	{
 		TitleId titleId;
-		if( !TitleIdParser::ParseFromStr(titleInfoNode.attribute("titleId").as_string(), titleId))
+		if (!TitleIdParser::ParseFromStr(titleInfoNode.attribute("titleId").as_string(), titleId))
 			continue;
 		uint16 titleVersion = titleInfoNode.attribute("version").as_uint();
 		uint32 sdkVersion = titleInfoNode.attribute("sdk_version").as_uint();
@@ -124,7 +123,7 @@ void CafeTitleList::StoreCacheFile()
 		titleInfoNode.append_child("name").append_child(pugi::node_pcdata).set_value(info.titleName.c_str());
 		titleInfoNode.append_child("format").append_child(pugi::node_pcdata).set_value(fmt::format("{}", (uint32)info.titleDataFormat).c_str());
 		titleInfoNode.append_child("path").append_child(pugi::node_pcdata).set_value(_pathToUtf8(info.path).c_str());
-		if(!info.subPath.empty())
+		if (!info.subPath.empty())
 			titleInfoNode.append_child("sub_path").append_child(pugi::node_pcdata).set_value(_pathToUtf8(info.subPath).c_str());
 	}
 
@@ -150,7 +149,7 @@ void CafeTitleList::ClearScanPaths()
 }
 
 void CafeTitleList::AddScanPath(fs::path path)
-{	
+{
 	std::unique_lock _lock(sTLMutex);
 	sTLScanPaths.emplace_back(path);
 }
@@ -228,9 +227,9 @@ void CafeTitleList::AddTitleFromPath(fs::path path)
 		for (uint32 i = 0; i < zar->GetDirEntryCount(rootDir); i++)
 		{
 			ZArchiveReader::DirEntry dirEntry;
-			if( !zar->GetDirEntry(rootDir, i, dirEntry) )
+			if (!zar->GetDirEntry(rootDir, i, dirEntry))
 				continue;
-			if(!dirEntry.isDirectory)
+			if (!dirEntry.isDirectory)
 				continue;
 			TitleId parsedId;
 			uint16 parsedVersion;
@@ -264,9 +263,9 @@ bool CafeTitleList::ReplaceTitleFromPath(const fs::path& path)
 
 	std::unique_lock lock(sTLMutex);
 	auto existing = std::find_if(sTLList.begin(), sTLList.end(),
-		[&replacement](const TitleInfo* title) {
-			return replacement->IsEqualByLocation(*title);
-		});
+								 [&replacement](const TitleInfo* title) {
+									 return replacement->IsEqualByLocation(*title);
+								 });
 	if (existing != sTLList.end())
 	{
 		TitleInfo* removed = *existing;
@@ -364,7 +363,7 @@ bool _IsKnownFileNameOrExtension(const fs::path& path)
 	std::string fileExtension = _pathToUtf8(path.extension());
 	for (auto& it : fileExtension)
 		it = _ansiToLower(it);
-	if(fileExtension == ".tmd")
+	if (fileExtension == ".tmd")
 	{
 		// must be "title.tmd"
 		std::string fileName = _pathToUtf8(path.filename());
@@ -372,12 +371,11 @@ bool _IsKnownFileNameOrExtension(const fs::path& path)
 			it = _ansiToLower(it);
 		return fileName == "title.tmd";
 	}
-	return
-		fileExtension == ".wud" ||
-		fileExtension == ".wux" ||
-		fileExtension == ".iso" ||
-		fileExtension == ".wua" ||
-		fileExtension == ".wuhb";
+	return fileExtension == ".wud" ||
+		   fileExtension == ".wux" ||
+		   fileExtension == ".iso" ||
+		   fileExtension == ".wua" ||
+		   fileExtension == ".wuhb";
 	// note: To detect extracted titles with RPX we rely on the presence of the content,code,meta directory structure
 }
 
@@ -389,7 +387,7 @@ void CafeTitleList::ScanGamePath(const fs::path& path)
 	bool hasContentFolder = false, hasCodeFolder = false, hasMetaFolder = false;
 	std::error_code ec;
 	for (auto& it : fs::directory_iterator(path, ec))
-	{		
+	{
 		if (it.is_regular_file(ec))
 		{
 			filesInDirectory.emplace_back(it.path());
@@ -455,19 +453,19 @@ void CafeTitleList::ScanMLCPath(const fs::path& path)
 			continue;
 		// only scan directories which match the title id naming scheme
 		std::string dirName = _pathToUtf8(it.path().filename());
-		if(dirName.size() != 8)
+		if (dirName.size() != 8)
 			continue;
 		bool containsNoHexCharacter = false;
 		for (auto& it : dirName)
 		{
-			if(it >= 'A' && it <= 'F' ||
+			if (it >= 'A' && it <= 'F' ||
 				it >= 'a' && it <= 'f' ||
 				it >= '0' && it <= '9')
 				continue;
 			containsNoHexCharacter = true;
 			break;
 		}
-		if(containsNoHexCharacter)
+		if (containsNoHexCharacter)
 			continue;
 
 		if (fs::is_directory(it.path() / "code", ec) &&
@@ -491,7 +489,7 @@ void CafeTitleList::AddDiscoveredTitle(TitleInfo* titleInfo)
 	auto pendingIt = std::find_if(sTLListPending.begin(), sTLListPending.end(), [titleInfo](const TitleInfo* it) { return it->IsEqualByLocation(*titleInfo); });
 	if (pendingIt != sTLListPending.end())
 		sTLListPending.erase(pendingIt);
-	AddTitle(titleInfo);	
+	AddTitle(titleInfo);
 }
 
 void CafeTitleList::AddTitle(TitleInfo* titleInfo)
@@ -538,7 +536,7 @@ void CafeTitleList::AddTitle(TitleInfo* titleInfo)
 	sTLCacheDirty = true;
 }
 
-uint64 CafeTitleList::RegisterCallback(void(*cb)(CafeTitleListCallbackEvent* evt, void* ctx), void* ctx)
+uint64 CafeTitleList::RegisterCallback(void (*cb)(CafeTitleListCallbackEvent* evt, void* ctx), void* ctx)
 {
 	static std::atomic<uint64_t> sCallbackIdGen = 1;
 	uint64 id = sCallbackIdGen.fetch_add(1);
@@ -621,7 +619,7 @@ std::vector<TitleId> CafeTitleList::GetAllTitleIds()
 std::span<TitleInfo*> CafeTitleList::AcquireInternalList()
 {
 	sTLMutex.lock();
-	return { sTLList.data(), sTLList.size() };
+	return {sTLList.data(), sTLList.size()};
 }
 
 void CafeTitleList::ReleaseInternalList()
@@ -675,7 +673,7 @@ GameInfo2 CafeTitleList::GetGameInfo(TitleId titleId)
 	bool hasSeparateUpdateTitleId = tip.CanHaveSeparateUpdateTitleId();
 	uint64 updateTitleId = 0;
 	if (hasSeparateUpdateTitleId)
-		updateTitleId = tip.GetSeparateUpdateTitleId();	
+		updateTitleId = tip.GetSeparateUpdateTitleId();
 	// scan the title list for base and update
 	std::unique_lock _lock(sTLMutex);
 	for (auto& it : sTLList)

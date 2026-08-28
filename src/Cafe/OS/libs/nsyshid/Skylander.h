@@ -9,7 +9,8 @@
 
 namespace nsyshid
 {
-	class SkylanderPortalDevice final : public Device {
+	class SkylanderPortalDevice final : public Device
+	{
 	  public:
 		SkylanderPortalDevice();
 		~SkylanderPortalDevice() = default;
@@ -47,7 +48,8 @@ namespace nsyshid
 	constexpr uint16 SKY_FIGURE_SIZE = SKY_BLOCK_COUNT * SKY_BLOCK_SIZE;
 	constexpr uint8 MAX_SKYLANDERS = 16;
 
-	class SkylanderUSB {
+	class SkylanderUSB
+	{
 	  public:
 		struct Skylander final
 		{

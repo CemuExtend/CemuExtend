@@ -47,4 +47,4 @@ namespace nsysnet
 	void wuSetFD(struct wu_fd_set* fdset, sint32 fd);
 
 	COSModule* GetModule();
-}
+} // namespace nsysnet

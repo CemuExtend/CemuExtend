@@ -20,8 +20,7 @@ class LookupTableL3
 	TableY* m_placeholderTableY{};
 	TableZ* m_placeholderTableZ{};
 
-
-public:
+  public:
 	LookupTableL3()
 	{
 		// init placeholder table Z
@@ -69,7 +68,7 @@ public:
 		lookupZ->arr[indexZ] = t;
 	}
 
-private:
+  private:
 	// generate a new Y lookup table which will initially contain only pointers to m_placeholderTableZ
 	TableY* GenerateNewTableY()
 	{

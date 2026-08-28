@@ -16,6 +16,7 @@ namespace iosu
 			virtual ~IPCSimpleService() {};
 
 			virtual void StartService() {};
+			virtual void BeforeStopService() {};
 			virtual void StopService() {};
 
 			virtual std::string GetThreadName() = 0;
@@ -38,7 +39,7 @@ namespace iosu
 
 			IOSDevHandle GetFreeHandle()
 			{
-				while(m_clientObjects.find(m_nextHandle) != m_clientObjects.end() || m_nextHandle == 0)
+				while (m_clientObjects.find(m_nextHandle) != m_clientObjects.end() || m_nextHandle == 0)
 				{
 					m_nextHandle++;
 					m_nextHandle &= 0x7FFFFFFF;
@@ -52,7 +53,7 @@ namespace iosu
 			void* GetClientObjectByHandle(IOSDevHandle handle) const
 			{
 				auto it = m_clientObjects.find(handle);
-				if(it == m_clientObjects.end())
+				if (it == m_clientObjects.end())
 					return nullptr;
 				return it->second;
 			}
@@ -61,7 +62,7 @@ namespace iosu
 			std::thread m_serviceThread;
 			std::atomic_bool m_requestStop{false};
 			std::atomic_bool m_isRunning{false};
-			std::atomic_bool m_threadInitialized{ false };
+			std::atomic_bool m_threadInitialized{false};
 			std::unordered_map<IOSDevHandle, void*> m_clientObjects;
 			IOSDevHandle m_nextHandle{1};
 			IOSTimerId m_timerId{IOSInvalidTimerId};
@@ -90,10 +91,11 @@ namespace iosu
 			{
 				uint32be nnResultCode;
 			};
-		public:
+
+		  public:
 			class IPCParameterStream // input stream for parameters
 			{
-			public:
+			  public:
 				IPCParameterStream() = default;
 				IPCParameterStream(void* data, uint32 size) : m_data((uint8_t*)data), m_size(size) {}
 
@@ -112,10 +114,16 @@ namespace iosu
 					return value;
 				}
 
-				uint8* GetData() { return m_data; }
-				uint32 GetSize() const { return m_size; }
+				uint8* GetData()
+				{
+					return m_data;
+				}
+				uint32 GetSize() const
+				{
+					return m_size;
+				}
 
-			private:
+			  private:
 				uint8* m_data{nullptr};
 				uint32 m_size{0};
 				uint32 m_readIndex{0};
@@ -123,7 +131,7 @@ namespace iosu
 
 			class IPCResponseStream // output stream for response data
 			{
-			public:
+			  public:
 				IPCResponseStream() = default;
 				IPCResponseStream(void* data, uint32 size) : m_data((uint8*)data), m_size(size) {}
 
@@ -139,10 +147,16 @@ namespace iosu
 					m_writtenSize += sizeof(T);
 				}
 
-				uint8* GetData() { return m_data; }
-				uint32 GetSize() const { return m_size; }
+				uint8* GetData()
+				{
+					return m_data;
+				}
+				uint32 GetSize() const
+				{
+					return m_size;
+				}
 
-			private:
+			  private:
 				uint8* m_data{nullptr};
 				uint32 m_writtenSize{0};
 				uint32 m_size{0};
@@ -160,7 +174,8 @@ namespace iosu
 					uint8be tailSize;
 				};
 				static_assert(sizeof(LargeBufferHeader) == 8);
-			public:
+
+			  public:
 				struct UnalignedBuffer
 				{
 					UnalignedBuffer(bool isOutput, std::span<uint8> head, std::span<uint8> middle, std::span<uint8> tail) : m_isOutput(isOutput)
@@ -211,7 +226,7 @@ namespace iosu
 						return headSize + middleSize + tailSize;
 					}
 
-				private:
+				  private:
 					void* headPtr;
 					uint32 headSize;
 					void* middlePtr; // aligned
@@ -263,11 +278,11 @@ namespace iosu
 					// The buffer layout is then also serialized into the parameter stream
 					LargeBufferHeader header = ReadParameter<LargeBufferHeader>();
 					// get aligned buffer part
-					void* alignedBuffer = m_paramStreamArray[m_inputBufferIndex+0].GetData();
-					cemu_assert(m_paramStreamArray[m_inputBufferIndex+0].GetSize() == header.alignedSize);
+					void* alignedBuffer = m_paramStreamArray[m_inputBufferIndex + 0].GetData();
+					cemu_assert(m_paramStreamArray[m_inputBufferIndex + 0].GetSize() == header.alignedSize);
 					// get head and tail buffer parts
-					uint8* unalignedDataBuffer = m_paramStreamArray[m_inputBufferIndex+1].GetData();
-					cemu_assert((header.headSize + header.tailSize) <= m_paramStreamArray[m_inputBufferIndex+1].GetSize());
+					uint8* unalignedDataBuffer = m_paramStreamArray[m_inputBufferIndex + 1].GetData();
+					cemu_assert((header.headSize + header.tailSize) <= m_paramStreamArray[m_inputBufferIndex + 1].GetSize());
 					UnalignedBuffer largeBuffer(false, {(uint8*)unalignedDataBuffer, header.headSize}, {(uint8*)alignedBuffer, header.alignedSize}, {(uint8*)unalignedDataBuffer + header.headSize, header.tailSize});
 					m_inputBufferIndex += 2; // if there is no unaligned data then are both buffers still present?
 					return largeBuffer;
@@ -277,11 +292,11 @@ namespace iosu
 				{
 					LargeBufferHeader header = ReadParameter<LargeBufferHeader>();
 					// get aligned buffer part
-					void* alignedBuffer = m_responseStreamArray[m_outputBufferIndex+0].GetData();
-					cemu_assert(m_responseStreamArray[m_outputBufferIndex+0].GetSize() == header.alignedSize);
+					void* alignedBuffer = m_responseStreamArray[m_outputBufferIndex + 0].GetData();
+					cemu_assert(m_responseStreamArray[m_outputBufferIndex + 0].GetSize() == header.alignedSize);
 					// get head and tail buffer parts
-					uint8* unalignedDataBuffer = m_responseStreamArray[m_outputBufferIndex+1].GetData();
-					cemu_assert((header.headSize + header.tailSize) <= m_responseStreamArray[m_outputBufferIndex+1].GetSize());
+					uint8* unalignedDataBuffer = m_responseStreamArray[m_outputBufferIndex + 1].GetData();
+					cemu_assert((header.headSize + header.tailSize) <= m_responseStreamArray[m_outputBufferIndex + 1].GetSize());
 					UnalignedBuffer largeBuffer(true, {(uint8*)unalignedDataBuffer, header.headSize}, {(uint8*)alignedBuffer, header.alignedSize}, {(uint8*)unalignedDataBuffer + header.headSize, header.tailSize});
 					m_outputBufferIndex += 2; // if there is no unaligned data then are both buffers still present?
 					return largeBuffer;
@@ -293,7 +308,7 @@ namespace iosu
 					m_responseStreamArray[0].Write<T>(value);
 				}
 
-			private:
+			  private:
 				IOSDevHandle m_clientHandle;
 				uint32 m_serviceId;
 				uint32 m_commandId;
@@ -316,7 +331,6 @@ namespace iosu
 
 			virtual void CloseClientHandle(IOSDevHandle handle)
 			{
-				
 			}
 
 			virtual nnResult ServiceCall(IPCServiceCall& serviceCall)
@@ -328,18 +342,18 @@ namespace iosu
 			void Start();
 			void Stop();
 
-		private:
+		  private:
 			void ServiceThread();
 
 			std::string m_devicePath;
 			std::thread m_serviceThread;
 			std::atomic_bool m_requestStop{false};
 			std::atomic_bool m_isRunning{false};
-			std::atomic_bool m_threadInitialized{ false };
+			std::atomic_bool m_threadInitialized{false};
 
 			IOSMsgQueueId m_msgQueueId;
 			SysAllocator<iosu::kernel::IOSMessage, 128> _m_msgBuffer;
 		};
 
-	};
-};
+	}; // namespace nn
+}; // namespace iosu

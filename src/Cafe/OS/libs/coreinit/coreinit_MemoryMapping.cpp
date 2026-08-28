@@ -1,14 +1,14 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "util/MemMapper/MemMapper.h"
 
-#define OS_MAP_READ_ONLY		(1)
-#define OS_MAP_READ_WRITE		(2)
+#define OS_MAP_READ_ONLY (1)
+#define OS_MAP_READ_WRITE (2)
 
-#define VIRT_RANGE_ADDR			(0xA0000000) // todo: Process specific. For the main ram pid this overlaps with the overlay arena?
-#define VIRT_RANGE_SIZE			(0x40000000)
+#define VIRT_RANGE_ADDR (0xA0000000) // todo: Process specific. For the main ram pid this overlaps with the overlay arena?
+#define VIRT_RANGE_SIZE (0x40000000)
 
-#define PHYS_RANGE_ADDR			(0x10000000) // todo: Process specific
-#define PHYS_RANGE_SIZE			(0x40000000)
+#define PHYS_RANGE_ADDR (0x10000000) // todo: Process specific
+#define PHYS_RANGE_SIZE (0x40000000)
 
 namespace coreinit
 {
@@ -31,7 +31,7 @@ namespace coreinit
 	}
 
 	bool __OSValidateAddressSpaceRange(sint32 unused, uint32 virtualAddress,
-		uint32 size)
+									   uint32 size)
 	{
 		(void)unused;
 		if (size != 0 && virtualAddress > UINT32_MAX - (size - 1))
@@ -61,7 +61,7 @@ namespace coreinit
 			}
 			// check for overlapping regions
 			bool emptySpaceFound = true;
-			for(auto& virtMemIt : s_allocatedVirtMemory)
+			for (auto& virtMemIt : s_allocatedVirtMemory)
 			{
 				// check for range collision
 				if (currentAddress < (virtMemIt.virtualAddress + virtMemIt.size) && currentEndAddress > virtMemIt.virtualAddress)
@@ -121,7 +121,7 @@ namespace coreinit
 	uint32 OSFreeVirtAddr(MEMPTR<void> address)
 	{
 		bool r = _OSFreeVirtAddr(address.GetMPTR());
-		if(!r)
+		if (!r)
 			cemuLog_log(LogType::APIErrors, "OSFreeVirtAddr: Could not find allocation with address 0x{:08x}\n", address.GetMPTR());
 		return r ? 1 : 0;
 	}
@@ -176,4 +176,4 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSMapMemory, LogType::CoreinitMemoryMapping);
 		cafeExportRegister("coreinit", OSUnmapMemory, LogType::CoreinitMemoryMapping);
 	}
-}
+} // namespace coreinit

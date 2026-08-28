@@ -74,7 +74,7 @@ namespace
 		SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
 #endif
 	}
-}
+} // namespace
 
 void CemuCommonInit()
 {
@@ -87,13 +87,13 @@ void CemuCommonInit()
 		InitializeWorkingDirectory();
 
 		cemuLog_configureRuntime(ActiveSettings::GetUserDataPath("log.txt"),
-			GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
+								 GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
 		ExceptionHandler_Init();
 		GetConfigHandle().Load();
 		cemuLog_configureRuntime(ActiveSettings::GetUserDataPath("log.txt"),
-			GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
-		if (NetworkConfig::XMLExists())
-			n_config.Load();
+								 GetConfig().advanced_ppc_logging.GetValue(), LaunchSettings::Verbose());
+		NetworkConfig::LoadOnce();
+		ActiveSettings::Init();
 
 		auto audioInitialization = std::async(std::launch::async, [] {
 			IAudioAPI::InitializeStatic();
@@ -139,7 +139,8 @@ void HandlePostUpdate()
 	{
 		lock = CreateMutexW(nullptr, TRUE, L"Global\\cemu_update_lock");
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-	} while (lock == nullptr);
+	}
+	while (lock == nullptr);
 	const DWORD waitResult = WaitForSingleObject(lock, 2000);
 	CloseHandle(lock);
 	if (waitResult == WAIT_OBJECT_0)

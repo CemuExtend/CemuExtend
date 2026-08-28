@@ -6,13 +6,12 @@ namespace Latte
 {
 	class ShaderDescription
 	{
-	public:
+	  public:
 		bool analyzeShaderCode(void* shaderProgram, size_t sizeInBytes, LatteConst::ShaderType shaderType);
 
 		// public data
 
 		// pixel shader only
 		SmallBitset<8> renderTargetWriteMask; // true if render target is written
-
 	};
-};
+}; // namespace Latte

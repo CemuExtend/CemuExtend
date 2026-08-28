@@ -11,15 +11,16 @@ namespace nsyshid::backend::libusb
 {
 	enum : uint8
 	{
-		HID_CLASS_GET_REPORT   = 0x01,
-		HID_CLASS_GET_IDLE     = 0x02,
+		HID_CLASS_GET_REPORT = 0x01,
+		HID_CLASS_GET_IDLE = 0x02,
 		HID_CLASS_GET_PROTOCOL = 0x03,
-		HID_CLASS_SET_REPORT   = 0x09,
-		HID_CLASS_SET_IDLE     = 0x0A,
+		HID_CLASS_SET_REPORT = 0x09,
+		HID_CLASS_SET_IDLE = 0x0A,
 		HID_CLASS_SET_PROTOCOL = 0x0B
 	};
 
-	class BackendLibusb : public nsyshid::Backend {
+	class BackendLibusb : public nsyshid::Backend
+	{
 	  public:
 		BackendLibusb();
 
@@ -58,7 +59,8 @@ namespace nsyshid::backend::libusb
 
 	using ConfigDescriptor = UniquePtr<libusb_config_descriptor>;
 
-	class DeviceLibusb : public nsyshid::Device {
+	class DeviceLibusb : public nsyshid::Device
+	{
 	  public:
 		DeviceLibusb(libusb_context* ctx,
 					 uint16 vendorId,
@@ -117,7 +119,8 @@ namespace nsyshid::backend::libusb
 		libusb_device_handle* m_libusbHandle;
 		std::vector<ConfigDescriptor> m_config_descriptors;
 
-		class HandleLock {
+		class HandleLock
+		{
 		  public:
 			HandleLock() = delete;
 

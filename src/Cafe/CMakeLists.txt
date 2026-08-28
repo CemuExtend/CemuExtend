@@ -744,13 +744,14 @@ target_link_libraries(CemuCafe PRIVATE
   CemuHostContracts
   CemuInput
   CemuExtendDomain
+	CemuRuntimeOverlay
 	CemuResource
   CemuUtil
   Boost::program_options
   cemuextend::wire
   ZArchive::zarchive
-  imguiImpl
   pugixml::pugixml
+	PNG::PNG
   ZLIB::ZLIB
   CURL::libcurl
   ih264d
@@ -761,6 +762,10 @@ target_link_libraries(CemuCafe PRIVATE
   OpenSSL::Crypto
   libzip::zip
 )
+
+if(CEMU_OVERLAY_BACKEND STREQUAL "imgui" AND NOT CEMU_FRONTEND STREQUAL "headless")
+	target_link_libraries(CemuCafe PRIVATE imguiImpl)
+endif()
 
 if (ENABLE_WAYLAND)
 	# PUBLIC because wayland-client.h is included in VulkanAPI.h

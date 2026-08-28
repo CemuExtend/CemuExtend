@@ -7,36 +7,36 @@
 uint32 coreinit_allocFromSysArea(uint32 size, uint32 alignment);
 class SysAllocatorBase;
 
-#define SYSALLOCATOR_GUARDS		0	// if 1, create a magic constant at the top of each memory allocation which is used to check for memory corruption
+#define SYSALLOCATOR_GUARDS 0 // if 1, create a magic constant at the top of each memory allocation which is used to check for memory corruption
 
 class SysAllocatorContainer
 {
-public:
+  public:
 	void Initialize();
 	void PushSysAllocator(SysAllocatorBase* base);
 
 	static SysAllocatorContainer& GetInstance();
 
-private:
+  private:
 	std::vector<SysAllocatorBase*> m_sysAllocList;
 };
-
 
 class SysAllocatorBase
 {
 	friend class SysAllocatorContainer;
-public:
+
+  public:
 	SysAllocatorBase();
 	virtual ~SysAllocatorBase() = default;
 
-private:
+  private:
 	virtual void Initialize() = 0;
 };
 
 template<typename T, size_t count = 1, size_t alignment = 32>
 class SysAllocator : public SysAllocatorBase
 {
-public:
+  public:
 	SysAllocator()
 	{
 		m_tempData.resize(count);
@@ -51,8 +51,8 @@ public:
 			m_tempData.insert(m_tempData.end(), count - l.size(), T());
 	}
 
-	template <size_t N>
-	SysAllocator(const char(&str)[N])
+	template<size_t N>
+	SysAllocator(const char (&str)[N])
 	{
 		m_tempData.reserve(count);
 		m_tempData.insert(m_tempData.begin(), str, str + N);
@@ -71,7 +71,7 @@ public:
 	T* GetPtr() const
 	{
 #if SYSALLOCATOR_GUARDS
-		cemu_assert(*(uint32*)((uint8*)m_sysMem.GetPtr()+(sizeof(T) * count)) == 0x112A33C4);
+		cemu_assert(*(uint32*)((uint8*)m_sysMem.GetPtr() + (sizeof(T) * count)) == 0x112A33C4);
 #endif
 		return m_sysMem.GetPtr();
 	}
@@ -79,7 +79,7 @@ public:
 	uint32 GetMPTR() const
 	{
 #if SYSALLOCATOR_GUARDS
-		cemu_assert(*(uint32*)((uint8*)m_sysMem.GetPtr()+(sizeof(T) * count)) == 0x112A33C4);
+		cemu_assert(*(uint32*)((uint8*)m_sysMem.GetPtr() + (sizeof(T) * count)) == 0x112A33C4);
 #endif
 		return m_sysMem.GetMPTR();
 	}
@@ -114,7 +114,10 @@ public:
 		return this->GetPtr() - v;
 	}
 
-	operator void*() { return m_sysMem->GetPtr(); }
+	operator void*()
+	{
+		return m_sysMem->GetPtr();
+	}
 
 	// for all arrays except bool
 	T& operator[](int index)
@@ -128,6 +131,7 @@ public:
 
 		return m_sysMem[index];
 	}
+
   private:
 	SysAllocator(uint32 memptr)
 		: m_sysMem(memptr)
@@ -142,11 +146,11 @@ public:
 #if SYSALLOCATOR_GUARDS
 		guardSize = 4;
 #endif
-		m_sysMem = { coreinit_allocFromSysArea(sizeof(T) * count + guardSize, alignment) };
+		m_sysMem = {coreinit_allocFromSysArea(sizeof(T) * count + guardSize, alignment)};
 		// copy temp buffer to mem and clear it
-		memcpy(m_sysMem.GetPtr(), m_tempData.data(), sizeof(T)*count);
+		memcpy(m_sysMem.GetPtr(), m_tempData.data(), sizeof(T) * count);
 #if SYSALLOCATOR_GUARDS
-		*(uint32*)((uint8*)m_sysMem.GetPtr()+(sizeof(T) * count)) = 0x112A33C4;
+		*(uint32*)((uint8*)m_sysMem.GetPtr() + (sizeof(T) * count)) = 0x112A33C4;
 #endif
 		m_tempData.clear();
 	}
@@ -155,13 +159,13 @@ public:
 	std::vector<T> m_tempData;
 };
 
-template <size_t N>
-SysAllocator(const char(&str)[N]) -> SysAllocator<char, N>;
+template<size_t N>
+SysAllocator(const char (&str)[N]) -> SysAllocator<char, N>;
 
 template<typename T>
 class SysAllocator<T, 1> : public SysAllocatorBase
 {
-public:
+  public:
 	SysAllocator()
 	{
 		m_tempData = {};
@@ -198,20 +202,23 @@ public:
 		return m_sysMem.GetMPTR();
 	}
 
-	T* operator&() { return (T*)m_sysMem.GetPtr(); }
+	T* operator&()
+	{
+		return (T*)m_sysMem.GetPtr();
+	}
 
 	T* operator->() const
 	{
 		return this->GetPtr();
 	}
 
-private:
+  private:
 	void Initialize() override
 	{
 		if (m_sysMem.GetMPTR() != 0)
 			return;
 		// alloc mem
-		m_sysMem = { coreinit_allocFromSysArea(sizeof(T), 32) };
+		m_sysMem = {coreinit_allocFromSysArea(sizeof(T), 32)};
 		// copy temp buffer to mem and clear it
 		*m_sysMem = m_tempData;
 	}

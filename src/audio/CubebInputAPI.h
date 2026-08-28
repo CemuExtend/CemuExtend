@@ -6,17 +6,23 @@
 
 class CubebInputAPI : public IAudioInputAPI
 {
-public:
+  public:
 	class CubebDeviceDescription : public DeviceDescription
 	{
-	public:
+	  public:
 		CubebDeviceDescription(cubeb_devid devid, std::string device_id, const std::wstring& name)
-			: DeviceDescription(name), m_devid(devid), m_device_id(std::move(device_id)) { }
+			: DeviceDescription(name), m_devid(devid), m_device_id(std::move(device_id)) {}
 
-		std::wstring GetIdentifier() const override { return  boost::nowide::widen(m_device_id); }
-		cubeb_devid GetDeviceId() const { return m_devid; }
+		std::wstring GetIdentifier() const override
+		{
+			return boost::nowide::widen(m_device_id);
+		}
+		cubeb_devid GetDeviceId() const
+		{
+			return m_devid;
+		}
 
-	private:
+	  private:
 		cubeb_devid m_devid;
 		std::string m_device_id;
 	};
@@ -26,12 +32,18 @@ public:
 	CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample);
 	~CubebInputAPI();
 
-	AudioInputAPI GetType() const override { return Cubeb; }
+	AudioInputAPI GetType() const override
+	{
+		return Cubeb;
+	}
 
 	bool ConsumeBlock(sint16* data) override;
 	bool Play() override;
 	bool Stop() override;
-	bool IsPlaying() const override { return m_is_playing;  };
+	bool IsPlaying() const override
+	{
+		return m_is_playing;
+	};
 	void SetVolume(sint32 volume) override;
 
 	static std::vector<DeviceDescriptionPtr> GetDevices();
@@ -39,7 +51,7 @@ public:
 	static bool InitializeStatic();
 	static void Destroy();
 
-private:
+  private:
 	inline static cubeb* s_context = nullptr;
 
 	cubeb_stream* m_stream = nullptr;

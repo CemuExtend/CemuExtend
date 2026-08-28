@@ -17,7 +17,7 @@ PPCInterpreter_t* PPCInterpreter_createInstance(unsigned int Entrypoint)
 	PPCInterpreter_t* pData;
 	// create instance
 	uint32 prefixAreaSize = 0x6000; // we need to allocate some bytes before the interpreter struct because the recompiler will use it as stack area (specifically when the exception handler is called)
-	pData = (PPCInterpreter_t*)((uint8*)malloc(sizeof(PPCInterpreter_t)+prefixAreaSize)+prefixAreaSize);
+	pData = (PPCInterpreter_t*)((uint8*)malloc(sizeof(PPCInterpreter_t) + prefixAreaSize) + prefixAreaSize);
 	memset((void*)pData, 0x00, sizeof(PPCInterpreter_t));
 	// set instruction pointer to entrypoint
 	pData->instructionPointer = (uint32)Entrypoint;
@@ -112,7 +112,7 @@ void PPCInterpreterModifyStackPointer(sint32 offset)
 	PPCInterpreter_getCurrentInstance()->gpr[1] -= offset;
 }
 
-uint32 RPLLoader_MakePPCCallable(void(*ppcCallableExport)(PPCInterpreter_t* hCPU));
+uint32 RPLLoader_MakePPCCallable(void (*ppcCallableExport)(PPCInterpreter_t* hCPU));
 
 // deprecated wrapper, use RPLLoader_MakePPCCallable directly
 uint32 PPCInterpreter_makeCallableExportDepr(void (*ppcCallableExport)(PPCInterpreter_t* hCPU))

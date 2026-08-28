@@ -14,7 +14,7 @@ namespace camera
 		/* +0x00 */ uint32be ukn00;
 		/* +0x04 */ uint32be width;
 		/* +0x08 */ uint32be height;
-		
+
 		/* +0x0C */ uint32be workMemorySize;
 		/* +0x10 */ MEMPTR<void> workMemory;
 
@@ -26,7 +26,7 @@ namespace camera
 		/* +0x20 */ uint32be ukn20;
 	};
 
-	struct CAMTargetSurface 
+	struct CAMTargetSurface
 	{
 		/* +0x00 */ uint32be surfaceSize;
 		/* +0x04 */ MEMPTR<void> surfacePtr;
@@ -38,11 +38,10 @@ namespace camera
 		/* +0x1C */ uint32be ukn1C;
 	};
 
-	struct CAMCallbackParam 
+	struct CAMCallbackParam
 	{
 		// type 0 - frame decoded | field1 - imagePtr, field2 - imageSize, field3 - ukn (0)
 		// type 1 - ???
-
 
 		/* +0x0 */ uint32be type; // 0 -> Frame decoded
 		/* +0x4 */ uint32be field1;
@@ -50,14 +49,13 @@ namespace camera
 		/* +0xC */ uint32be field3;
 	};
 
-
-	#define CAM_ERROR_SUCCESS			0
-	#define CAM_ERROR_INVALID_HANDLE		-8
+#define CAM_ERROR_SUCCESS 0
+#define CAM_ERROR_INVALID_HANDLE -8
 
 	std::vector<struct CameraInstance*> g_table_cameraHandles;
 	std::vector<struct CameraInstance*> g_activeCameraInstances;
 	std::recursive_mutex g_mutex_camera;
-	std::atomic_int g_cameraCounter{ 0 };
+	std::atomic_int g_cameraCounter{0};
 	SysAllocator<coreinit::OSAlarm_t, 1> g_alarm_camera;
 	SysAllocator<CAMCallbackParam, 1> g_cameraHandlerParam;
 
@@ -72,12 +70,22 @@ namespace camera
 		return g_table_cameraHandles[camHandle];
 	}
 
-	struct CameraInstance 
+	struct CameraInstance
 	{
-		CameraInstance(uint32 frameWidth, uint32 frameHeight, MPTR handlerFunc) : width(frameWidth), height(frameHeight), handlerFunc(handlerFunc) { AcquireHandle(); };
-		~CameraInstance() { if (isOpen) { CloseCam(); } ReleaseHandle(); };
+		CameraInstance(uint32 frameWidth, uint32 frameHeight, MPTR handlerFunc) : width(frameWidth), height(frameHeight), handlerFunc(handlerFunc)
+		{
+			AcquireHandle();
+		};
+		~CameraInstance()
+		{
+			if (isOpen)
+			{
+				CloseCam();
+			}
+			ReleaseHandle();
+		};
 
-		sint32 handle{ 0 };
+		sint32 handle{0};
 		uint32 width;
 		uint32 height;
 		bool isOpen{false};
@@ -109,7 +117,7 @@ namespace camera
 			queue_targetSurfaces.push(*targetSurface);
 		}
 
-	private:
+	  private:
 		void AcquireHandle()
 		{
 			std::unique_lock<std::recursive_mutex> _lock(g_mutex_camera);
@@ -154,8 +162,8 @@ namespace camera
 	{
 		// update all open camera instances
 		size_t numCamInstances = g_activeCameraInstances.size();
-		//for (auto& itr : g_activeCameraInstances)
-		for(size_t i=0; i<numCamInstances; i++)
+		// for (auto& itr : g_activeCameraInstances)
+		for (size_t i = 0; i < numCamInstances; i++)
 		{
 			std::unique_lock<std::recursive_mutex> _lock(g_mutex_camera);
 			if (i >= g_activeCameraInstances.size())
@@ -176,7 +184,6 @@ namespace camera
 		}
 		osLib_returnFromFunction(hCPU, 0);
 	}
-
 
 	sint32 CAMInit(uint32 cameraId, CAMInitInfo_t* camInitInfo, uint32be* error)
 	{
@@ -231,7 +238,7 @@ namespace camera
 		CameraInstance* camInstance = GetCameraInstanceByHandle(camHandle);
 		if (!camInstance)
 			return CAM_ERROR_INVALID_HANDLE;
-		
+
 		camInstance->QueueTargetSurface(targetSurface);
 
 		return CAM_ERROR_SUCCESS;
@@ -244,7 +251,7 @@ namespace camera
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "camera";
@@ -272,11 +279,10 @@ namespace camera
 				// todo
 			}
 		}
-	}s_COScameraModule;
+	} s_COScameraModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COScameraModule;
 	}
-}
-
+} // namespace camera

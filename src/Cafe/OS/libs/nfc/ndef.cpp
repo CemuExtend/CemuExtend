@@ -6,7 +6,7 @@ namespace ndef
 {
 
 	Record::Record()
-	 : mFlags(0), mTNF(NDEF_TNF_EMPTY)
+		: mFlags(0), mTNF(NDEF_TNF_EMPTY)
 	{
 	}
 
@@ -216,7 +216,8 @@ namespace ndef
 			if (!rec)
 			{
 				cemuLog_log(LogType::Force, "Warning: Failed to parse NDEF Record #{}."
-							"Ignoring the remaining {} bytes in NDEF message", msg.mRecords.size(), stream.GetRemaining());
+											"Ignoring the remaining {} bytes in NDEF message",
+							msg.mRecords.size(), stream.GetRemaining());
 				break;
 			}
 
@@ -237,7 +238,7 @@ namespace ndef
 		if (!msg.mRecords.back().IsLast())
 		{
 			cemuLog_log(LogType::Force, "Error: NDEF message missing end record");
-			return {}; 
+			return {};
 		}
 
 		return msg;

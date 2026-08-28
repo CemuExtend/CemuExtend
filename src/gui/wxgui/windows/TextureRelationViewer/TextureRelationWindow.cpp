@@ -15,15 +15,15 @@ enum
 };
 
 wxBEGIN_EVENT_TABLE(TextureRelationViewerWindow, wxFrame)
-EVT_BUTTON(CLOSE_ID, TextureRelationViewerWindow::OnCloseButton)
-EVT_BUTTON(REFRESH_ID, TextureRelationViewerWindow::OnRefreshButton)
-EVT_CHECKBOX(CHECKBOX_SHOW_ONLY_ACTIVE, TextureRelationViewerWindow::OnCheckbox)
-EVT_CHECKBOX(CHECKBOX_SHOW_VIEWS, TextureRelationViewerWindow::OnCheckbox)
+	EVT_BUTTON(CLOSE_ID, TextureRelationViewerWindow::OnCloseButton)
+		EVT_BUTTON(REFRESH_ID, TextureRelationViewerWindow::OnRefreshButton)
+			EVT_CHECKBOX(CHECKBOX_SHOW_ONLY_ACTIVE, TextureRelationViewerWindow::OnCheckbox)
+				EVT_CHECKBOX(CHECKBOX_SHOW_VIEWS, TextureRelationViewerWindow::OnCheckbox)
 
-EVT_CLOSE(TextureRelationViewerWindow::OnClose)
-wxEND_EVENT_TABLE()
+					EVT_CLOSE(TextureRelationViewerWindow::OnClose)
+						wxEND_EVENT_TABLE()
 
-wxListCtrl* textureRelationListA;
+							wxListCtrl* textureRelationListA;
 bool isTextureViewerOpen = false;
 
 void openTextureViewer(wxFrame& parentFrame)
@@ -46,67 +46,79 @@ TextureRelationViewerWindow::TextureRelationViewerWindow(wxFrame& parent)
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 	textureRelationListA = new wxListCtrl(mainPane, TEX_LIST_A_ID, wxPoint(0, 0), wxSize(1008, 440), wxLC_REPORT);
 
-	textureRelationListA->SetFont(wxFont(8, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Courier New"));//wxSystemSettings::GetFont(wxSYS_OEM_FIXED_FONT));
+	textureRelationListA->SetFont(wxFont(8, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Courier New")); // wxSystemSettings::GetFont(wxSYS_OEM_FIXED_FONT));
 
 	// add columns
 	wxListItem colType;
 	sint32 columnIndex = 0;
-	colType.SetId(columnIndex); columnIndex++;
+	colType.SetId(columnIndex);
+	columnIndex++;
 	colType.SetText("Type");
 	colType.SetWidth(85);
-	textureRelationListA->InsertColumn(columnIndex-1, colType);
-    wxListItem colPhysAddr;
-    colPhysAddr.SetId(columnIndex); columnIndex++;
-    colPhysAddr.SetText("PhysAddr");
-    colPhysAddr.SetWidth(80);
-    textureRelationListA->InsertColumn(columnIndex-1, colPhysAddr);
-    wxListItem colPhysMipAddr;
-    colPhysMipAddr.SetId(columnIndex); columnIndex++;
-    colPhysMipAddr.SetText("MipPAddr");
-    colPhysMipAddr.SetWidth(80);
-    textureRelationListA->InsertColumn(columnIndex-1, colPhysMipAddr);
+	textureRelationListA->InsertColumn(columnIndex - 1, colType);
+	wxListItem colPhysAddr;
+	colPhysAddr.SetId(columnIndex);
+	columnIndex++;
+	colPhysAddr.SetText("PhysAddr");
+	colPhysAddr.SetWidth(80);
+	textureRelationListA->InsertColumn(columnIndex - 1, colPhysAddr);
+	wxListItem colPhysMipAddr;
+	colPhysMipAddr.SetId(columnIndex);
+	columnIndex++;
+	colPhysMipAddr.SetText("MipPAddr");
+	colPhysMipAddr.SetWidth(80);
+	textureRelationListA->InsertColumn(columnIndex - 1, colPhysMipAddr);
 	wxListItem colDim;
-	colDim.SetId(columnIndex); columnIndex++;
+	colDim.SetId(columnIndex);
+	columnIndex++;
 	colDim.SetText("Dim");
 	colDim.SetWidth(80);
-	textureRelationListA->InsertColumn(columnIndex-1, colDim);
+	textureRelationListA->InsertColumn(columnIndex - 1, colDim);
 	wxListItem colResolution;
-	colResolution.SetId(columnIndex); columnIndex++;
+	colResolution.SetId(columnIndex);
+	columnIndex++;
 	colResolution.SetText("Resolution");
 	colResolution.SetWidth(110);
-	textureRelationListA->InsertColumn(columnIndex-1, colResolution);
+	textureRelationListA->InsertColumn(columnIndex - 1, colResolution);
 	wxListItem colFormat;
-	colFormat.SetId(columnIndex); columnIndex++;
+	colFormat.SetId(columnIndex);
+	columnIndex++;
 	colFormat.SetText("Format");
 	colFormat.SetWidth(70);
-	textureRelationListA->InsertColumn(columnIndex-1, colFormat);
+	textureRelationListA->InsertColumn(columnIndex - 1, colFormat);
 	wxListItem colPitch;
-	colPitch.SetId(columnIndex); columnIndex++;
+	colPitch.SetId(columnIndex);
+	columnIndex++;
 	colPitch.SetText("Pitch");
 	colPitch.SetWidth(80);
-	textureRelationListA->InsertColumn(columnIndex-1, colPitch);
+	textureRelationListA->InsertColumn(columnIndex - 1, colPitch);
 	wxListItem colTilemode;
-	colTilemode.SetId(columnIndex); columnIndex++;
+	colTilemode.SetId(columnIndex);
+	columnIndex++;
 	colTilemode.SetText("Tilemode");
 	colTilemode.SetWidth(80);
-	textureRelationListA->InsertColumn(columnIndex-1, colTilemode);
+	textureRelationListA->InsertColumn(columnIndex - 1, colTilemode);
 	wxListItem colSliceRange;
-	colSliceRange.SetId(columnIndex); columnIndex++;
+	colSliceRange.SetId(columnIndex);
+	columnIndex++;
 	colSliceRange.SetText("SliceRange");
 	colSliceRange.SetWidth(90);
-	textureRelationListA->InsertColumn(columnIndex-1, colSliceRange);
+	textureRelationListA->InsertColumn(columnIndex - 1, colSliceRange);
 	wxListItem colMipRange;
-	colMipRange.SetId(columnIndex); columnIndex++;
+	colMipRange.SetId(columnIndex);
+	columnIndex++;
 	colMipRange.SetText("MipRange");
 	colMipRange.SetWidth(90);
-	textureRelationListA->InsertColumn(columnIndex-1, colMipRange);
+	textureRelationListA->InsertColumn(columnIndex - 1, colMipRange);
 	wxListItem colAge;
-	colAge.SetId(columnIndex); columnIndex++;
+	colAge.SetId(columnIndex);
+	columnIndex++;
 	colAge.SetText("Last access");
 	colAge.SetWidth(90);
 	textureRelationListA->InsertColumn(columnIndex - 1, colAge);
 	wxListItem colOverwriteRes;
-	colOverwriteRes.SetId(columnIndex); columnIndex++;
+	colOverwriteRes.SetId(columnIndex);
+	columnIndex++;
 	colOverwriteRes.SetText("OverwriteRes");
 	colOverwriteRes.SetWidth(110);
 	textureRelationListA->InsertColumn(columnIndex - 1, colOverwriteRes);
@@ -128,7 +140,7 @@ TextureRelationViewerWindow::TextureRelationViewerWindow(wxFrame& parent)
 
 	sizer->Add(
 		sizerBottom,
-		0,                // vertically unstretchable
+		0, // vertically unstretchable
 		wxALIGN_LEFT);
 	mainPane->SetSizer(sizer);
 
@@ -189,12 +201,12 @@ void TextureRelationViewerWindow::_setTextureRelationListItemTexture(wxListCtrl*
 	uiList->InsertItem(item);
 
 	sint32 columnIndex = 1;
-    // phys address
-    uiList->SetItem(rowIndex, columnIndex, wxString::Format("%08X", texInfo->physAddress));
-    columnIndex++;
-    // phys mip address
-    uiList->SetItem(rowIndex, columnIndex, wxString::Format("%08X", texInfo->physMipAddress));
-    columnIndex++;
+	// phys address
+	uiList->SetItem(rowIndex, columnIndex, wxString::Format("%08X", texInfo->physAddress));
+	columnIndex++;
+	// phys mip address
+	uiList->SetItem(rowIndex, columnIndex, wxString::Format("%08X", texInfo->physMipAddress));
+	columnIndex++;
 	// dim
 	wxString dimLabel;
 	if (texInfo->dim == Latte::E_DIM::DIM_2D)
@@ -225,7 +237,7 @@ void TextureRelationViewerWindow::_setTextureRelationListItemTexture(wxListCtrl*
 	columnIndex++;
 	// format
 	wxString formatLabel;
-	if(texInfo->isDepth)
+	if (texInfo->isDepth)
 		formatLabel = wxString::Format("%04x(d)", (uint32)texInfo->format);
 	else
 		formatLabel = wxString::Format("%04x", (uint32)texInfo->format);
@@ -250,7 +262,7 @@ void TextureRelationViewerWindow::_setTextureRelationListItemTexture(wxListCtrl*
 	wxString overwriteResLabel;
 	if (texInfo->overwriteInfo.hasResolutionOverwrite)
 	{
-		if(texInfo->overwriteInfo.depth != 1 || texInfo->depth != 1)
+		if (texInfo->overwriteInfo.depth != 1 || texInfo->depth != 1)
 			overwriteResLabel = wxString::Format("%dx%dx%d", texInfo->overwriteInfo.width, texInfo->overwriteInfo.height, texInfo->overwriteInfo.depth);
 		else
 			overwriteResLabel = wxString::Format("%dx%d", texInfo->overwriteInfo.width, texInfo->overwriteInfo.height);
@@ -267,17 +279,17 @@ void TextureRelationViewerWindow::_setTextureRelationListItemView(wxListCtrl* ui
 	// find and handle highlight entry
 	wxListItem item;
 	item.SetId(rowIndex);
-	item.SetText(alternativeViewCount == 0 ? "> VIEW" : wxString::Format("> VIEW(%d)", alternativeViewCount+1));
+	item.SetText(alternativeViewCount == 0 ? "> VIEW" : wxString::Format("> VIEW(%d)", alternativeViewCount + 1));
 	item.SetBackgroundColour(wxHelper::CalculateAccentColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
 	uiList->InsertItem(item);
-	//uiList->SetItemPtrData(item, (wxUIntPtr)viewInfo);
+	// uiList->SetItemPtrData(item, (wxUIntPtr)viewInfo);
 	sint32 columnIndex = 1;
-    // phys address
-    uiList->SetItem(rowIndex, columnIndex, "");
-    columnIndex++;
-    // phys mip address
-    uiList->SetItem(rowIndex, columnIndex, "");
-    columnIndex++;
+	// phys address
+	uiList->SetItem(rowIndex, columnIndex, "");
+	columnIndex++;
+	// phys mip address
+	uiList->SetItem(rowIndex, columnIndex, "");
+	columnIndex++;
 	// dim
 	wxString dimLabel;
 	if (viewInfo->dim == Latte::E_DIM::DIM_2D)
@@ -311,7 +323,7 @@ void TextureRelationViewerWindow::_setTextureRelationListItemView(wxListCtrl* ui
 	uiList->SetItem(rowIndex, columnIndex, "");
 	columnIndex++;
 	// sliceRange
-	uiList->SetItem(rowIndex, columnIndex, wxString::Format("%d-%d", viewInfo->firstSlice, viewInfo->firstSlice+ viewInfo->numSlice-1));
+	uiList->SetItem(rowIndex, columnIndex, wxString::Format("%d-%d", viewInfo->firstSlice, viewInfo->firstSlice + viewInfo->numSlice - 1));
 	columnIndex++;
 	// mipRange
 	uiList->SetItem(rowIndex, columnIndex, wxString::Format("%d-%d", viewInfo->firstMip, viewInfo->firstMip + viewInfo->numMip - 1));
@@ -331,7 +343,7 @@ void TextureRelationViewerWindow::RefreshTextureList()
 	// sort by physAddr in ascending order
 	for (sint32 i1 = 0; i1 < texCache.size(); i1++)
 	{
-		for (sint32 i2 = i1+1; i2 < texCache.size(); i2++)
+		for (sint32 i2 = i1 + 1; i2 < texCache.size(); i2++)
 		{
 			if (texCache[i1].physAddress > texCache[i2].physAddress)
 			{

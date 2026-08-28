@@ -17,4 +17,4 @@ namespace Latte
 
 	void SerializeRegisterState(GPUCompactedRegisterState& regState, MemStreamWriter& memWriter);
 	bool DeserializeRegisterState(GPUCompactedRegisterState& regState, MemStreamReader& memReader);
-}
+} // namespace Latte

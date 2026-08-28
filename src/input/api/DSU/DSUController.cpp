@@ -7,7 +7,7 @@ DSUController::DSUController(uint32 index)
 {
 	if (index >= DSUControllerProvider::kMaxClients)
 		throw std::runtime_error(fmt::format("max {} dsu controllers are supported! given index: {}",
-		                                     DSUControllerProvider::kMaxClients, index));
+											 DSUControllerProvider::kMaxClients, index));
 }
 
 DSUController::DSUController(uint32 index, const DSUProviderSettings& settings)
@@ -15,17 +15,15 @@ DSUController::DSUController(uint32 index, const DSUProviderSettings& settings)
 {
 	if (index >= DSUControllerProvider::kMaxClients)
 		throw std::runtime_error(fmt::format("max {} dsu controllers are supported! given index: {}",
-			DSUControllerProvider::kMaxClients, index));
+											 DSUControllerProvider::kMaxClients, index));
 }
 
 void DSUController::save(pugi::xml_node& node)
 {
 	base_type::save(node);
 
-	node.append_child("ip").append_child(pugi::node_pcdata).set_value(
-		fmt::format("{}", m_provider->get_settings().ip).c_str());
-	node.append_child("port").append_child(pugi::node_pcdata).set_value(
-		fmt::format("{}", m_provider->get_settings().port).c_str());
+	node.append_child("ip").append_child(pugi::node_pcdata).set_value(fmt::format("{}", m_provider->get_settings().ip).c_str());
+	node.append_child("port").append_child(pugi::node_pcdata).set_value(fmt::format("{}", m_provider->get_settings().port).c_str());
 }
 
 void DSUController::load(const pugi::xml_node& node)
@@ -104,25 +102,42 @@ std::string DSUController::get_button_name(uint64 button) const
 {
 	switch (button)
 	{
-	case kButton0: return "Share";
-	case kButton1: return "Stick L";
-	case kButton2: return "Stick R";
-	case kButton3: return "Options";
-	case kButton4: return "Up";
-	case kButton5: return "Right";
-	case kButton6: return "Down";
-	case kButton7: return "Left";
+	case kButton0:
+		return "Share";
+	case kButton1:
+		return "Stick L";
+	case kButton2:
+		return "Stick R";
+	case kButton3:
+		return "Options";
+	case kButton4:
+		return "Up";
+	case kButton5:
+		return "Right";
+	case kButton6:
+		return "Down";
+	case kButton7:
+		return "Left";
 
-	case kButton8: return "ZL";
-	case kButton9: return "ZR";
-	case kButton10: return "L";
-	case kButton11: return "R";
-	case kButton12: return "Triangle";
-	case kButton13: return "Circle";
-	case kButton14: return "Cross";
-	case kButton15: return "Square";
+	case kButton8:
+		return "ZL";
+	case kButton9:
+		return "ZR";
+	case kButton10:
+		return "L";
+	case kButton11:
+		return "R";
+	case kButton12:
+		return "Triangle";
+	case kButton13:
+		return "Circle";
+	case kButton14:
+		return "Cross";
+	case kButton15:
+		return "Square";
 
-	case kButton16: return "Touch";
+	case kButton16:
+		return "Touch";
 	}
 	return base_type::get_button_name(button);
 }
@@ -171,8 +186,8 @@ ControllerState DSUController::raw_state()
 	result.rotation.y = (float)state.data.ry / std::numeric_limits<uint8>::max();
 	result.rotation.y = (result.rotation.y * 2.0f) - 1.0f;
 
-    result.trigger.x = (float)state.data.l2 / std::numeric_limits<uint8>::max();
-    result.trigger.y = (float)state.data.r2 / std::numeric_limits<uint8>::max();
+	result.trigger.x = (float)state.data.l2 / std::numeric_limits<uint8>::max();
+	result.trigger.y = (float)state.data.r2 / std::numeric_limits<uint8>::max();
 
-    return result;
+	return result;
 }

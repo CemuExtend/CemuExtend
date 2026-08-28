@@ -11,74 +11,73 @@
 #include <netinet/tcp.h>
 #endif
 
-#define WU_AF_INET			2
+#define WU_AF_INET 2
 
-#define WU_SOCK_STREAM		1
-#define WU_SOCK_DGRAM		2
+#define WU_SOCK_STREAM 1
+#define WU_SOCK_DGRAM 2
 
-#define WU_IPPROTO_IP		0
-#define WU_IPPROTO_TCP		6
-#define WU_IPPROTO_UDP		17
+#define WU_IPPROTO_IP 0
+#define WU_IPPROTO_TCP 6
+#define WU_IPPROTO_UDP 17
 
-#define WU_SO_REUSEADDR		0x0004
-#define WU_SO_KEEPALIVE		0x0008
-#define WU_SO_DONTROUTE		0x0010
-#define WU_SO_BROADCAST		0x0020
-#define WU_SO_LINGER		0x0080
-#define WU_SO_OOBINLINE		0x0100
-#define WU_SO_TCPSACK		0x0200
-#define WU_SO_WINSCALE		0x0400
-#define WU_SO_SNDBUF		0x1001
-#define WU_SO_RCVBUF		0x1002
-#define WU_SO_SNDLOWAT		0x1003
-#define WU_SO_RCVLOWAT		0x1004
-#define WU_SO_LASTERROR		0x1007
-#define WU_SO_TYPE			0x1008
-#define WU_SO_HOPCNT		0x1009
-#define WU_SO_MAXMSG		0x1010
-#define WU_SO_RXDATA		0x1011
-#define WU_SO_TXDATA		0x1012
-#define WU_SO_MYADDR		0x1013
-#define WU_SO_NBIO			0x1014
-#define WU_SO_BIO			0x1015
-#define WU_SO_NONBLOCK		0x1016
-#define WU_SO_UNKNOWN1019	0x1019 // tcp related
-#define WU_SO_UNKNOWN101A	0x101A // tcp related
-#define WU_SO_UNKNOWN101B	0x101B // tcp related
-#define WU_SO_NOSLOWSTART	0x4000
-#define WU_SO_RUSRBUF		0x10000
+#define WU_SO_REUSEADDR 0x0004
+#define WU_SO_KEEPALIVE 0x0008
+#define WU_SO_DONTROUTE 0x0010
+#define WU_SO_BROADCAST 0x0020
+#define WU_SO_LINGER 0x0080
+#define WU_SO_OOBINLINE 0x0100
+#define WU_SO_TCPSACK 0x0200
+#define WU_SO_WINSCALE 0x0400
+#define WU_SO_SNDBUF 0x1001
+#define WU_SO_RCVBUF 0x1002
+#define WU_SO_SNDLOWAT 0x1003
+#define WU_SO_RCVLOWAT 0x1004
+#define WU_SO_LASTERROR 0x1007
+#define WU_SO_TYPE 0x1008
+#define WU_SO_HOPCNT 0x1009
+#define WU_SO_MAXMSG 0x1010
+#define WU_SO_RXDATA 0x1011
+#define WU_SO_TXDATA 0x1012
+#define WU_SO_MYADDR 0x1013
+#define WU_SO_NBIO 0x1014
+#define WU_SO_BIO 0x1015
+#define WU_SO_NONBLOCK 0x1016
+#define WU_SO_UNKNOWN1019 0x1019 // tcp related
+#define WU_SO_UNKNOWN101A 0x101A // tcp related
+#define WU_SO_UNKNOWN101B 0x101B // tcp related
+#define WU_SO_NOSLOWSTART 0x4000
+#define WU_SO_RUSRBUF 0x10000
 
-#define WU_TCP_ACKDELAYTIME		0x2001
-#define WU_TCP_NOACKDELAY		0x2002
-#define WU_TCP_MAXSEG			0x2003
-#define WU_TCP_NODELAY			0x2004
-#define WU_TCP_UNKNOWN			0x2005 // amount of mss received before sending an ack
+#define WU_TCP_ACKDELAYTIME 0x2001
+#define WU_TCP_NOACKDELAY 0x2002
+#define WU_TCP_MAXSEG 0x2003
+#define WU_TCP_NODELAY 0x2004
+#define WU_TCP_UNKNOWN 0x2005 // amount of mss received before sending an ack
 
-#define WU_IP_TOS				3
-#define WU_IP_TTL				4
-#define WU_IP_MULTICAST_IF		9
-#define WU_IP_MULTICAST_TTL		10
-#define WU_IP_MULTICAST_LOOP	11
-#define WU_IP_ADD_MEMBERSHIP	12
-#define WU_IP_DROP_MEMBERSHIP	13
-#define WU_IP_UNKNOWN			14
+#define WU_IP_TOS 3
+#define WU_IP_TTL 4
+#define WU_IP_MULTICAST_IF 9
+#define WU_IP_MULTICAST_TTL 10
+#define WU_IP_MULTICAST_LOOP 11
+#define WU_IP_ADD_MEMBERSHIP 12
+#define WU_IP_DROP_MEMBERSHIP 13
+#define WU_IP_UNKNOWN 14
 
-#define WU_SOL_SOCKET		-1 // this constant differs from Win32 socket API
+#define WU_SOL_SOCKET -1 // this constant differs from Win32 socket API
 
-#define WU_MSG_PEEK			0x02
-#define WU_MSG_DONTWAIT		0x20
+#define WU_MSG_PEEK 0x02
+#define WU_MSG_DONTWAIT 0x20
 
 // error codes
-#define WU_SO_SUCCESS		0x0000
-#define WU_SO_EWOULDBLOCK	0x0006
-#define WU_SO_ECONNRESET	0x0008
-#define WU_SO_ENOTCONN		0x0009
-#define WU_SO_EINVAL		0x000B
-#define WU_SO_EINPROGRESS	0x0016
-#define WU_SO_EAFNOSUPPORT  0x0021
+#define WU_SO_SUCCESS 0x0000
+#define WU_SO_EWOULDBLOCK 0x0006
+#define WU_SO_ECONNRESET 0x0008
+#define WU_SO_ENOTCONN 0x0009
+#define WU_SO_EINVAL 0x000B
+#define WU_SO_EINPROGRESS 0x0016
+#define WU_SO_EAFNOSUPPORT 0x0021
 
-#define WU_SO_ESHUTDOWN		0x000F
-
+#define WU_SO_ESHUTDOWN 0x000F
 
 typedef signed int WUSOCKET;
 
@@ -90,7 +89,7 @@ void nsysnetExport_socket_lib_init(PPCInterpreter_t* hCPU)
 #if BOOST_OS_WINDOWS
 	WSADATA wsa;
 	WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif // BOOST_OS_WINDOWS
+#endif								   // BOOST_OS_WINDOWS
 	osLib_returnFromFunction(hCPU, 0); // 0 -> Success
 }
 
@@ -99,7 +98,7 @@ void nsysnetExport_socket_lib_finish(PPCInterpreter_t* hCPU)
 	sockLibReady = false;
 #if BOOST_OS_WINDOWS
 	WSACleanup();
-#endif // BOOST_OS_WINDOWS
+#endif								   // BOOST_OS_WINDOWS
 	osLib_returnFromFunction(hCPU, 0); // 0 -> Success
 }
 
@@ -114,9 +113,9 @@ sint32 _getSockError()
 }
 
 // error translation modes for _translateError
-#define _ERROR_MODE_DEFAULT		0
-#define _ERROR_MODE_CONNECT		1
-#define _ERROR_MODE_ACCEPT		2
+#define _ERROR_MODE_DEFAULT 0
+#define _ERROR_MODE_CONNECT 1
+#define _ERROR_MODE_ACCEPT 2
 
 sint32 _translateError(sint32 returnCode, sint32 wsaError, sint32 mode = _ERROR_MODE_DEFAULT)
 {
@@ -145,7 +144,7 @@ sint32 _translateError(sint32 returnCode, sint32 wsaError, sint32 mode = _ERROR_
 		_setSockError(WU_SO_SUCCESS);
 		break;
 	case WSAEWOULDBLOCK:
-		if( mode == _ERROR_MODE_CONNECT )
+		if (mode == _ERROR_MODE_CONNECT)
 			_setSockError(WU_SO_EINPROGRESS);
 		else
 			_setSockError(WU_SO_EWOULDBLOCK);
@@ -178,7 +177,7 @@ void nsysnetExport_socketlasterr(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, _getSockError());
 }
 
-typedef struct  
+typedef struct
 {
 	uint32 handle;
 	bool isShutdownRecv;
@@ -191,17 +190,17 @@ typedef struct
 	SOCKET s;
 	// socket options
 	bool isNonBlocking;
-}virtualSocket_t;
+} virtualSocket_t;
 
 typedef struct
 {
 	uint32 wu_s_addr;
-}wu_in_addr;
+} wu_in_addr;
 
 struct wu_sockaddr
 {
 	uint16 sa_family;
-	uint8  sa_data[14]; // IPv4
+	uint8 sa_data[14]; // IPv4
 };
 
 void sockaddr_guest2host(wu_sockaddr* input, sockaddr* output)
@@ -216,21 +215,21 @@ void sockaddr_host2guest(sockaddr* input, wu_sockaddr* output)
 	memcpy(output->sa_data, input->sa_data, 14);
 }
 
-struct wu_addrinfo 
+struct wu_addrinfo
 {
 	sint32 ai_flags;
 	sint32 ai_family;
 	sint32 ai_socktype;
 	sint32 ai_protocol;
 	sint32 ai_addrlen;
-	MPTR   ai_canonname;
-	MPTR   ai_addr;
-	MPTR   ai_next;
+	MPTR ai_canonname;
+	MPTR ai_addr;
+	MPTR ai_next;
 };
 
-#define WU_SOCKET_LIMIT			(32) // only 32 socket handles are supported per running process
+#define WU_SOCKET_LIMIT (32) // only 32 socket handles are supported per running process
 
-virtualSocket_t* virtualSocketTable[WU_SOCKET_LIMIT] = { 0 };
+virtualSocket_t* virtualSocketTable[WU_SOCKET_LIMIT] = {0};
 
 sint32 _getFreeSocketHandle()
 {
@@ -243,7 +242,7 @@ sint32 _getFreeSocketHandle()
 }
 
 #if BOOST_OS_WINDOWS
-#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
 #endif // BOOST_OS_WINDOWS
 
 WUSOCKET nsysnet_createVirtualSocket(sint32 family, sint32 type, sint32 protocol)
@@ -263,7 +262,7 @@ WUSOCKET nsysnet_createVirtualSocket(sint32 family, sint32 type, sint32 protocol
 	virtualSocketTable[s - 1] = vs;
 	// init host socket
 	vs->s = socket(family, type, protocol);
-	#if BOOST_OS_WINDOWS
+#if BOOST_OS_WINDOWS
 	// disable reporting of PORT_UNREACHABLE for UDP sockets
 	if (protocol == IPPROTO_UDP)
 	{
@@ -271,14 +270,13 @@ WUSOCKET nsysnet_createVirtualSocket(sint32 family, sint32 type, sint32 protocol
 		DWORD dwBytesReturned = 0;
 		WSAIoctl(vs->s, SIO_UDP_CONNRESET, &bNewBehavior, sizeof bNewBehavior, NULL, 0, &dwBytesReturned, NULL, NULL);
 	}
-	#endif // BOOST_OS_WINDOWS
+#endif // BOOST_OS_WINDOWS
 	return vs->handle;
 }
 
 WUSOCKET nsysnet_createVirtualSocketFromExistingSocket(SOCKET existingSocket)
 {
 	cemuLog_logDebug(LogType::Force, "nsysnet_createVirtualSocketFromExistingSocket - incomplete");
-
 
 	sint32 s = _getFreeSocketHandle();
 	if (s == 0)
@@ -293,10 +291,10 @@ WUSOCKET nsysnet_createVirtualSocketFromExistingSocket(SOCKET existingSocket)
 	// SO_BSP_STATE -> protocol + other info
 	// SO_PROTOCOL_INFO -> protocol + type?
 
-	WSAPROTOCOL_INFO protocolInfo = { 0 };
+	WSAPROTOCOL_INFO protocolInfo = {0};
 	int optLen = sizeof(protocolInfo);
 	getsockopt(existingSocket, SOL_SOCKET, SO_PROTOCOL_INFO, (char*)&protocolInfo, &optLen);
-	// todo - translate protocolInfo 
+	// todo - translate protocolInfo
 	vs->family = protocolInfo.iAddressFamily;
 	vs->type = protocolInfo.iSocketType;
 	vs->protocol = protocolInfo.iSocketType;
@@ -464,7 +462,7 @@ sint32 _socket_nonblock(SOCKET s, u_long mode)
 	return ioctlsocket(s, FIONBIO, &mode);
 #else
 	int flags = fcntl(s, F_GETFL);
-	if(mode)
+	if (mode)
 		flags |= O_NONBLOCK;
 	else
 		flags &= ~O_NONBLOCK;
@@ -517,7 +515,7 @@ void nsysnetExport_setsockopt(PPCInterpreter_t* hCPU)
 					cemu_assert_suspicious();
 				bool setNonBlocking = optname == WU_SO_NBIO;
 				u_long mode = setNonBlocking ? 1 : 0;
-				_socket_nonblock(vs->s,  mode);
+				_socket_nonblock(vs->s, mode);
 				vs->isNonBlocking = setNonBlocking;
 			}
 			else if (optname == WU_SO_NONBLOCK)
@@ -525,8 +523,8 @@ void nsysnetExport_setsockopt(PPCInterpreter_t* hCPU)
 				if (optlen != 4)
 					assert_dbg();
 				sint32 optvalLE = _swapEndianU32(*(uint32*)optval);
-				u_long mode = optvalLE;  // 1 -> enable, 0 -> disable
-				_socket_nonblock(vs->s,  mode);
+				u_long mode = optvalLE; // 1 -> enable, 0 -> disable
+				_socket_nonblock(vs->s, mode);
 				vs->isNonBlocking = mode != 0;
 			}
 			else if (optname == WU_SO_KEEPALIVE)
@@ -570,7 +568,7 @@ void nsysnetExport_setsockopt(PPCInterpreter_t* hCPU)
 				if (optlen != 4)
 					assert_dbg();
 				sint32 optvalLE = _swapEndianU32(*(uint32*)optval);
-				u_long mode = optvalLE;  // 1 -> enable, 0 -> disable
+				u_long mode = optvalLE; // 1 -> enable, 0 -> disable
 				if (setsockopt(vs->s, IPPROTO_TCP, TCP_NODELAY, (const char*)&mode, sizeof(u_long)) != 0)
 					assert_dbg();
 			}
@@ -588,13 +586,12 @@ void nsysnetExport_setsockopt(PPCInterpreter_t* hCPU)
 			{
 				cemuLog_logDebug(LogType::Socket, "todo: setsockopt() for multicast");
 			}
-			else if(optname == WU_IP_TTL || optname == WU_IP_TOS)
+			else if (optname == WU_IP_TTL || optname == WU_IP_TOS)
 			{
 				cemuLog_logDebug(LogType::Force, "setsockopt(WU_IPPROTO_IP): Unsupported optname 0x{:08x}", optname);
 			}
 			else
 				assert_dbg();
-
 		}
 		else
 			assert_dbg();
@@ -674,16 +671,16 @@ void nsysnetExport_getsockopt(PPCInterpreter_t* hCPU)
 			*(uint32*)optval = _swapEndianU32(vs->type);
 			r = WU_SO_SUCCESS;
 		}
-        else if (optname == WU_SO_NONBLOCK)
-        {
-            if (memory_readU32(optlenMPTR) != 4)
-                assert_dbg();
-            int optvalLE = 0;
-            socklen_t optlenLE = 4;
-            memory_writeU32(optlenMPTR, 4);
-            *(uint32*)optval = _swapEndianU32(vs->isNonBlocking ? 1 : 0);
-            r = WU_SO_SUCCESS;
-        }
+		else if (optname == WU_SO_NONBLOCK)
+		{
+			if (memory_readU32(optlenMPTR) != 4)
+				assert_dbg();
+			int optvalLE = 0;
+			socklen_t optlenLE = 4;
+			memory_writeU32(optlenMPTR, 4);
+			*(uint32*)optval = _swapEndianU32(vs->isNonBlocking ? 1 : 0);
+			r = WU_SO_SUCCESS;
+		}
 		else
 		{
 			cemuLog_logDebug(LogType::Force, "getsockopt(WU_SOL_SOCKET): Unsupported optname 0x{:08x}", optname);
@@ -708,7 +705,7 @@ void nsysnetExport_inet_aton(PPCInterpreter_t* hCPU)
 	if (sscanf(ip, "%d.%d.%d.%d", &d0, &d1, &d2, &d3) != 4)
 	{
 		cemu_assert_debug(false);
-		osLib_returnFromFunction(hCPU,  0); // todo - return correct error code
+		osLib_returnFromFunction(hCPU, 0); // todo - return correct error code
 		return;
 	}
 
@@ -732,7 +729,7 @@ void nsysnetExport_inet_pton(PPCInterpreter_t* hCPU)
 	ppcDefineParamS32(af, 0);
 	ppcDefineParamStr(ip, 1);
 	ppcDefineParamStructPtr(addr, wu_in_addr, 2);
-	
+
 	if (af != 2)
 	{
 		cemuLog_log(LogType::Force, "inet_pton() only supports AF_INET");
@@ -755,7 +752,7 @@ void nsysnetExport_inet_pton(PPCInterpreter_t* hCPU)
 	if (invalidIp)
 	{
 		cemuLog_log(LogType::Socket, "inet_pton({}, \"{}\", 0x{:08x}) -> Invalid ip", af, ip, hCPU->gpr[5]);
-        _setSockError(WU_SO_EAFNOSUPPORT);
+		_setSockError(WU_SO_EAFNOSUPPORT);
 		osLib_returnFromFunction(hCPU, 0); // 0 -> invalid address
 		return;
 	}
@@ -768,29 +765,29 @@ void nsysnetExport_inet_pton(PPCInterpreter_t* hCPU)
 
 namespace nsysnet
 {
-    const char* inet_ntop(sint32 af, const void* src, char* dst, uint32 size)
-    {
-        if( af != WU_AF_INET)
-        {
-            // set error
-            _setSockError(WU_SO_EAFNOSUPPORT);
-            return nullptr;
-        }
-        const uint8* ip = (const uint8*)src;
-        char buf[32];
-        sprintf(buf, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-        size_t bufLen = strlen(buf);
-        if( (bufLen+1) > size )
-        {
-            // set error
-            _setSockError(WU_SO_EAFNOSUPPORT);
-            return nullptr;
-        }
-        strcpy(dst, buf);
-        cemuLog_log(LogType::Socket, "inet_ntop -> {}", buf);
-        return dst;
-    }
-}
+	const char* inet_ntop(sint32 af, const void* src, char* dst, uint32 size)
+	{
+		if (af != WU_AF_INET)
+		{
+			// set error
+			_setSockError(WU_SO_EAFNOSUPPORT);
+			return nullptr;
+		}
+		const uint8* ip = (const uint8*)src;
+		char buf[32];
+		sprintf(buf, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+		size_t bufLen = strlen(buf);
+		if ((bufLen + 1) > size)
+		{
+			// set error
+			_setSockError(WU_SO_EAFNOSUPPORT);
+			return nullptr;
+		}
+		strcpy(dst, buf);
+		cemuLog_log(LogType::Socket, "inet_ntop -> {}", buf);
+		return dst;
+	}
+} // namespace nsysnet
 
 MEMPTR<char> _ntoa_tempString = nullptr;
 
@@ -842,7 +839,6 @@ void nsysnetExport_bind(PPCInterpreter_t* hCPU)
 	ppcDefineParamStructPtr(addr, struct wu_sockaddr, 1);
 	ppcDefineParamS32(len, 2);
 
-
 	if (len != sizeof(struct wu_sockaddr))
 		assert_dbg();
 
@@ -862,9 +858,7 @@ void nsysnetExport_bind(PPCInterpreter_t* hCPU)
 		sint32 hr = bind(vs->s, &hostAddr, sizeof(sockaddr));
 		r = _translateError(hr, GETLASTERR);
 
-
 		cemuLog_log(LogType::Socket, "bind address: {}.{}.{}.{}:{} result: {}", addr->sa_data[2], addr->sa_data[3], addr->sa_data[4], addr->sa_data[5], _swapEndianU16(*(uint16*)addr->sa_data), hr);
-
 	}
 
 	osLib_returnFromFunction(hCPU, r);
@@ -964,7 +958,7 @@ void nsysnetExport_connect(PPCInterpreter_t* hCPU)
 	hostAddr.sa_family = _swapEndianU16(addr->sa_family);
 	memcpy(hostAddr.sa_data, addr->sa_data, 14);
 	sint32 hr = connect(vs->s, &hostAddr, sizeof(sockaddr));
-	cemuLog_log(LogType::Force, "Attempt connect to {}.{}.{}.{}:{}", (sint32)(uint8)hostAddr.sa_data[2], (sint32)(uint8)hostAddr.sa_data[3], (sint32)(uint8)hostAddr.sa_data[4], (sint32)(uint8)hostAddr.sa_data[5], _swapEndianU16(*(uint16*)hostAddr.sa_data+0));
+	cemuLog_log(LogType::Force, "Attempt connect to {}.{}.{}.{}:{}", (sint32)(uint8)hostAddr.sa_data[2], (sint32)(uint8)hostAddr.sa_data[3], (sint32)(uint8)hostAddr.sa_data[4], (sint32)(uint8)hostAddr.sa_data[5], _swapEndianU16(*(uint16*)hostAddr.sa_data + 0));
 
 	r = _translateError(hr, GETLASTERR, _ERROR_MODE_CONNECT);
 
@@ -974,7 +968,7 @@ void nsysnetExport_connect(PPCInterpreter_t* hCPU)
 void _setSocketSendRecvNonBlockingMode(SOCKET s, bool isNonBlocking)
 {
 	u_long mode = isNonBlocking ? 1 : 0;
-	sint32 r = _socket_nonblock(s,  mode);
+	sint32 r = _socket_nonblock(s, mode);
 }
 
 void nsysnetExport_send(PPCInterpreter_t* hCPU)
@@ -993,7 +987,7 @@ void nsysnetExport_send(PPCInterpreter_t* hCPU)
 		return;
 	}
 	int hostFlags = 0;
-	bool requestIsNonBlocking = (flags&WU_MSG_DONTWAIT) != 0;
+	bool requestIsNonBlocking = (flags & WU_MSG_DONTWAIT) != 0;
 	flags &= ~WU_MSG_DONTWAIT;
 	if (requestIsNonBlocking != vs->isNonBlocking && vs->isNonBlocking == false)
 		assert_dbg();
@@ -1025,9 +1019,9 @@ void nsysnetExport_recv(PPCInterpreter_t* hCPU)
 		return;
 	}
 	int hostFlags = 0;
-	bool requestIsNonBlocking = (flags&WU_MSG_DONTWAIT) != 0;
+	bool requestIsNonBlocking = (flags & WU_MSG_DONTWAIT) != 0;
 	flags &= ~WU_MSG_DONTWAIT;
-	if (flags&WU_MSG_PEEK)
+	if (flags & WU_MSG_PEEK)
 	{
 		hostFlags |= MSG_PEEK;
 		flags &= ~WU_MSG_PEEK;
@@ -1056,7 +1050,7 @@ void nsysnetExport_recv(PPCInterpreter_t* hCPU)
 				break;
 			// yield thread
 			coreinit::OSSleepTicks(coreinit::EspressoTime::GetTimerClock() / 5000); // let thread wait 0.2ms to give other threads CPU time
-			// todo - eventually we should find a way to asynchronously signal recv instead of busy-looping here
+																					// todo - eventually we should find a way to asynchronously signal recv instead of busy-looping here
 		}
 		_setSocketSendRecvNonBlockingMode(vs->s, requestIsNonBlocking);
 	}
@@ -1071,13 +1065,13 @@ void nsysnetExport_recv(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, r);
 }
 
-struct wu_timeval 
+struct wu_timeval
 {
 	uint32 tv_sec;
 	uint32 tv_usec;
 };
 
-void _translateFDSet(fd_set* hostSet, struct wu_fd_set* fdset, sint32 nfds, int *hostnfds)
+void _translateFDSet(fd_set* hostSet, struct wu_fd_set* fdset, sint32 nfds, int* hostnfds)
 {
 	FD_ZERO(hostSet);
 	if (fdset == NULL)
@@ -1085,7 +1079,7 @@ void _translateFDSet(fd_set* hostSet, struct wu_fd_set* fdset, sint32 nfds, int 
 
 #if BOOST_OS_UNIX
 	int maxfd;
-	if(hostnfds)
+	if (hostnfds)
 		maxfd = *hostnfds;
 	else
 		maxfd = -1;
@@ -1094,15 +1088,15 @@ void _translateFDSet(fd_set* hostSet, struct wu_fd_set* fdset, sint32 nfds, int 
 	uint32 mask = fdset->mask;
 	for (sint32 i = 0; i < nfds; i++)
 	{
-		if( ((mask>>i)&1) == 0 )
+		if (((mask >> i) & 1) == 0)
 			continue;
 		sint32 socketHandle = i;
 		virtualSocket_t* vs = nsysnet_getVirtualSocketObject(socketHandle);
-		if(vs == NULL)
+		if (vs == NULL)
 			continue; // socket invalid
 
 #if BOOST_OS_UNIX
-		if(vs->s > maxfd)
+		if (vs->s > maxfd)
 			maxfd = vs->s;
 #endif
 
@@ -1110,7 +1104,7 @@ void _translateFDSet(fd_set* hostSet, struct wu_fd_set* fdset, sint32 nfds, int 
 	}
 
 #if BOOST_OS_UNIX
-	if(hostnfds)
+	if (hostnfds)
 		*hostnfds = maxfd;
 #endif
 }
@@ -1126,7 +1120,7 @@ void _translateFDSetRev(struct wu_fd_set* fdset, fd_set* hostSet, sint32 nfds)
 		sint32 virtualSocketHandle = nsysnet_getVirtualSocketHandleFromHostHandle(hostSet->fd_array[i]);
 		if (virtualSocketHandle < 0)
 			cemu_assert_debug(false);
-		mask |= (1<<virtualSocketHandle);
+		mask |= (1 << virtualSocketHandle);
 	}
 #else
 	for (sint32 i = 0; i < WU_SOCKET_LIMIT; i++)
@@ -1136,7 +1130,6 @@ void _translateFDSetRev(struct wu_fd_set* fdset, fd_set* hostSet, sint32 nfds)
 	}
 #endif
 	fdset->mask = mask;
-
 }
 
 void nsysnetExport_select(PPCInterpreter_t* hCPU)
@@ -1148,7 +1141,7 @@ void nsysnetExport_select(PPCInterpreter_t* hCPU)
 	ppcDefineParamStructPtr(exceptfds, struct wu_fd_set, 3);
 	ppcDefineParamStructPtr(timeOut, struct wu_timeval, 4);
 
-	//cemuLog_log(LogType::Socket, "rm {:08x} wm {:08x} em {:08x}", readfds ? _swapEndianU32(readfds->mask) : 0, writefds ? _swapEndianU32(writefds->mask) : 0, exceptfds ? _swapEndianU32(exceptfds->mask) : 0);
+	// cemuLog_log(LogType::Socket, "rm {:08x} wm {:08x} em {:08x}", readfds ? _swapEndianU32(readfds->mask) : 0, writefds ? _swapEndianU32(writefds->mask) : 0, exceptfds ? _swapEndianU32(exceptfds->mask) : 0);
 
 	sint32 r = 0;
 
@@ -1169,8 +1162,8 @@ void nsysnetExport_select(PPCInterpreter_t* hCPU)
 		{
 			//// empty select with timeout is not allowed
 			//_setSockError(WU_SO_EINVAL);
-			//osLib_returnFromFunction(hCPU, -1);
-			//cemuLog_log(LogType::Socket, "select returned SO_EINVAL because of empty fdsets with timeout");
+			// osLib_returnFromFunction(hCPU, -1);
+			// cemuLog_log(LogType::Socket, "select returned SO_EINVAL because of empty fdsets with timeout");
 
 			// when fd sets are empty but timeout is set, then just wait and do nothing?
 			// Lost Reavers seems to expect this case to return 0 (it hardcodes empty fd sets and timeout comes from curl_multi_timeout)
@@ -1181,14 +1174,12 @@ void nsysnetExport_select(PPCInterpreter_t* hCPU)
 			select(0, nullptr, nullptr, nullptr, &tv);
 			cemuLog_log(LogType::Socket, "select returned 0 because of empty fdsets with timeout");
 			osLib_returnFromFunction(hCPU, 0);
-			
+
 			return;
 		}
 	}
 
-
-
-	timeval tv = { 0 };
+	timeval tv = {0};
 
 	if (timeOut == NULL)
 	{
@@ -1225,7 +1216,7 @@ void nsysnetExport_select(PPCInterpreter_t* hCPU)
 		else if (r == 0)
 		{
 			// check for timeout
-			if ((GetTickCount() - startTime) >= msTimeout )
+			if ((GetTickCount() - startTime) >= msTimeout)
 			{
 				// timeout
 				_setSockError(WU_SO_SUCCESS);
@@ -1253,10 +1244,9 @@ void nsysnetExport_select(PPCInterpreter_t* hCPU)
 			break;
 		}
 	}
-	//cemuLog_log(LogType::Force, "selectEndTime {}", timeGetTime());
+	// cemuLog_log(LogType::Force, "selectEndTime {}", timeGetTime());
 
-
-	//extern int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
+	// extern int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 	//	struct timeval *timeout);
 
 	cemuLog_log(LogType::Socket, "select returned {}", r);
@@ -1290,8 +1280,8 @@ void nsysnetExport_getsockname(PPCInterpreter_t* hCPU)
 		{
 			assert_dbg();
 		}
-		//sint32 hr = listen(vs->s, queueSize);
-		//if (hr != 0)
+		// sint32 hr = listen(vs->s, queueSize);
+		// if (hr != 0)
 		//	r = -1;
 		//// todo: Set proper coreinit errno (via _setSockError)
 	}
@@ -1336,12 +1326,12 @@ typedef struct
 	sint32 h_addrType;
 	sint32 h_length;
 	MPTR h_addr_list;
-}wu_hostent;
+} wu_hostent;
 
 MPTR _allocString(char* str)
 {
 	sint32 len = (sint32)strlen(str);
-	MPTR strMPTR = coreinit_allocFromSysArea(len+1, 4);
+	MPTR strMPTR = coreinit_allocFromSysArea(len + 1, 4);
 	strcpy((char*)memory_getPointerFromVirtualOffset(strMPTR), str);
 	return strMPTR;
 }
@@ -1359,8 +1349,7 @@ void nsysnetExport_gethostbyname(PPCInterpreter_t* hCPU)
 		return;
 	}
 
-
-	MPTR hostentMPTR = coreinit_allocFromSysArea(sizeof(wu_hostent)*1, 4);
+	MPTR hostentMPTR = coreinit_allocFromSysArea(sizeof(wu_hostent) * 1, 4);
 	MPTR hostentAddrListMPTR = coreinit_allocFromSysArea(sizeof(MPTR) * 2, 4);
 	MPTR hostentAddrListEntriesMPTR = coreinit_allocFromSysArea(sizeof(wu_in_addr) * 1, 4);
 
@@ -1373,8 +1362,8 @@ void nsysnetExport_gethostbyname(PPCInterpreter_t* hCPU)
 	wuHostent->h_name = _swapEndianU32(_allocString(he->h_name));
 	wuHostent->h_addr_list = _swapEndianU32(hostentAddrListMPTR);
 
-	//memory_writeU32(hostentAddrListEntriesMPTR, _swapEndianU32(*(uint32*)he->h_addr_list[0]));
- 
+	// memory_writeU32(hostentAddrListEntriesMPTR, _swapEndianU32(*(uint32*)he->h_addr_list[0]));
+
 	wu_in_addr* addrListEntries = (wu_in_addr*)memory_getPointerFromVirtualOffset(hostentAddrListEntriesMPTR);
 	addrListEntries->wu_s_addr = *(uint32*)he->h_addr_list[0]; // address is already in network (big-endian) order
 
@@ -1416,7 +1405,7 @@ void nsysnetExport_gethostbyaddr(PPCInterpreter_t* hCPU)
 #endif
 
 	wu_hostent* wuHostent = _staticHostent.GetPtr();
-	// setup wuHostent->h_name	
+	// setup wuHostent->h_name
 	wuHostent->h_name = _swapEndianU32(_staticHostentName.GetMPTR());
 	if (he->h_name && strlen(he->h_name) < 255)
 	{
@@ -1457,13 +1446,13 @@ void nsysnetExport_getaddrinfo(PPCInterpreter_t* hCPU)
 	ppcDefineParamMPTR(results, 3);
 
 	cemuLog_log(LogType::Socket, "getaddrinfo(\"{}\",0x{:08x},0x{:08x},0x{:08x})", nodeName, hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6]);
-	
+
 	sint32 r = 0;
 
 	// todo1: This is really slow. Make it asynchronous
-	// todo2: Should this set the socket last error code? 
+	// todo2: Should this set the socket last error code?
 
-	struct addrinfo hint = { 0 };
+	struct addrinfo hint = {0};
 	if (hints)
 	{
 		hint.ai_family = _swapEndianU32(hints->ai_family);
@@ -1511,8 +1500,8 @@ void nsysnetExport_getaddrinfo(PPCInterpreter_t* hCPU)
 			cemu_assert_debug(false);
 		}
 		// allocate entries
-		MPTR addrInfoMPTR = coreinit_allocFromSysArea(sizeof(wu_addrinfo)*resultCount + sizeof(wu_sockaddr)*resultCount, 4);
-		MPTR addrInfoSockAddrMPTR = addrInfoMPTR + sizeof(wu_addrinfo)*resultCount;
+		MPTR addrInfoMPTR = coreinit_allocFromSysArea(sizeof(wu_addrinfo) * resultCount + sizeof(wu_sockaddr) * resultCount, 4);
+		MPTR addrInfoSockAddrMPTR = addrInfoMPTR + sizeof(wu_addrinfo) * resultCount;
 		wu_addrinfo* wuAddrInfo = (wu_addrinfo*)memory_getPointerFromVirtualOffset(addrInfoMPTR);
 		// fill entries
 		currentAddrInfo = result;
@@ -1521,7 +1510,7 @@ void nsysnetExport_getaddrinfo(PPCInterpreter_t* hCPU)
 		while (currentAddrInfo)
 		{
 			if (currentAddrInfo->ai_addrlen != 16)
-			{ 
+			{
 				// skip this entry (IPv6)
 				currentAddrInfo = currentAddrInfo->ai_next;
 				continue;
@@ -1529,7 +1518,7 @@ void nsysnetExport_getaddrinfo(PPCInterpreter_t* hCPU)
 
 			memset(&wuAddrInfo[entryIndex], 0, sizeof(wu_addrinfo));
 			// setup pointers
-			wuAddrInfo[entryIndex].ai_addr = _swapEndianU32(addrInfoSockAddrMPTR + sizeof(wu_sockaddr)*entryIndex);
+			wuAddrInfo[entryIndex].ai_addr = _swapEndianU32(addrInfoSockAddrMPTR + sizeof(wu_sockaddr) * entryIndex);
 			wuAddrInfo[entryIndex].ai_next = MPTR_NULL;
 			wuAddrInfo[entryIndex].ai_canonname = _swapEndianU32(MPTR_NULL);
 			// set ai_next for previous element
@@ -1540,7 +1529,7 @@ void nsysnetExport_getaddrinfo(PPCInterpreter_t* hCPU)
 			previousWuAddrInfo = &wuAddrInfo[entryIndex];
 			// fill addrinfo struct
 			wuAddrInfo[entryIndex].ai_addrlen = _swapEndianU32((uint32)currentAddrInfo->ai_addrlen);
-			//wuAddrInfo[entryIndex].ai_canonname; todo
+			// wuAddrInfo[entryIndex].ai_canonname; todo
 			wuAddrInfo[entryIndex].ai_family = _swapEndianU32(currentAddrInfo->ai_family);
 			wuAddrInfo[entryIndex].ai_flags = _swapEndianU32(currentAddrInfo->ai_flags); // todo: These flags might need to be translated
 			wuAddrInfo[entryIndex].ai_protocol = _swapEndianU32(currentAddrInfo->ai_protocol);
@@ -1574,7 +1563,6 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 	ppcDefineParamStructPtr(fromAddr, wu_sockaddr, 4);
 	ppcDefineParamU32BEPtr(fromLen, 5);
 
-
 	virtualSocket_t* vs = nsysnet_getVirtualSocketObject(s);
 	sint32 r = 0;
 	if (vs == NULL)
@@ -1584,9 +1572,9 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 	}
 
 	int hostFlags = 0;
-	bool requestIsNonBlocking = (flags&WU_MSG_DONTWAIT) != 0;
+	bool requestIsNonBlocking = (flags & WU_MSG_DONTWAIT) != 0;
 	flags &= ~WU_MSG_DONTWAIT;
-	if (flags&WU_MSG_PEEK)
+	if (flags & WU_MSG_PEEK)
 	{
 		assert_dbg();
 		hostFlags |= MSG_PEEK;
@@ -1599,7 +1587,7 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 	socklen_t fromLenHost = sizeof(fromAddrHost);
 	sint32 wsaError = 0;
 
-	while( true )
+	while (true)
 	{
 		// is socket recv shutdown?
 		if (vs->isShutdownRecv)
@@ -1640,7 +1628,8 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 				cemuLog_logDebug(LogType::Force, "recvfrom returned {} bytes", r);
 
 				// fromAddr and fromLen can be NULL
-				if (fromAddr && fromLen) {
+				if (fromAddr && fromLen)
+				{
 					*fromLen = fromLenHost;
 					fromAddr->sa_family = _swapEndianU16(fromAddrHost.sa_family);
 					memcpy(fromAddr->sa_data, fromAddrHost.sa_data, 14);
@@ -1680,7 +1669,7 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 			{
 				if (wsaError != WSAEWOULDBLOCK)
 					break;
-				coreinit::OSSleepTicks(ESPRESSO_CORE_CLOCK/100); // pause for 10ms
+				coreinit::OSSleepTicks(ESPRESSO_CORE_CLOCK / 100); // pause for 10ms
 				PPCCore_switchToScheduler();
 				continue;
 			}
@@ -1695,7 +1684,8 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 	}
 
 	// fromAddr and fromLen can be NULL
-	if (fromAddr && fromLen) {
+	if (fromAddr && fromLen)
+	{
 		*fromLen = fromLenHost;
 		fromAddr->sa_family = _swapEndianU16(fromAddrHost.sa_family);
 		memcpy(fromAddr->sa_data, fromAddrHost.sa_data, 14);
@@ -1705,7 +1695,6 @@ void nsysnetExport_recvfrom(PPCInterpreter_t* hCPU)
 
 	osLib_returnFromFunction(hCPU, r);
 }
-
 
 void nsysnetExport_recvfrom_ex(PPCInterpreter_t* hCPU)
 {
@@ -1728,9 +1717,9 @@ void nsysnetExport_recvfrom_ex(PPCInterpreter_t* hCPU)
 	}
 
 	int hostFlags = 0;
-	bool requestIsNonBlocking = (flags&WU_MSG_DONTWAIT) != 0;
+	bool requestIsNonBlocking = (flags & WU_MSG_DONTWAIT) != 0;
 	flags &= ~WU_MSG_DONTWAIT;
-	if (flags&WU_MSG_PEEK)
+	if (flags & WU_MSG_PEEK)
 	{
 		cemu_assert_debug(false);
 		hostFlags |= MSG_PEEK;
@@ -1821,13 +1810,11 @@ void nsysnetExport_recvfrom_ex(PPCInterpreter_t* hCPU)
 	cemu_assert_debug(false); // should no longer be reached
 }
 
-
 void _convertSockaddrToHostFormat(wu_sockaddr* sockaddru, sockaddr* sockaddrHost)
 {
 	sockaddrHost->sa_family = _swapEndianU16(sockaddru->sa_family);
 	memcpy(sockaddrHost->sa_data, sockaddru->sa_data, 14);
 }
-
 
 void nsysnetExport_sendto(PPCInterpreter_t* hCPU)
 {
@@ -1848,9 +1835,9 @@ void nsysnetExport_sendto(PPCInterpreter_t* hCPU)
 	}
 
 	int hostFlags = 0;
-	bool requestIsNonBlocking = (flags&WU_MSG_DONTWAIT) != 0;
+	bool requestIsNonBlocking = (flags & WU_MSG_DONTWAIT) != 0;
 	flags &= ~WU_MSG_DONTWAIT;
-	if (flags&WU_MSG_PEEK)
+	if (flags & WU_MSG_PEEK)
 	{
 		assert_dbg();
 		hostFlags |= MSG_PEEK;
@@ -1898,7 +1885,6 @@ void nsysnetExport_sendto(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, r);
 }
 
-
 void nsysnetExport_sendto_multi(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::Socket, "sendto_multi({},0x{:08x},0x{:08x},{})", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6]);
@@ -1936,15 +1922,15 @@ void nsysnetExport_sendto_multi(PPCInterpreter_t* hCPU)
 
 typedef struct
 {
-	MEMPTR<uint8>				data;
-	uint32be					dataLen;
-	MEMPTR<uint32be>			sendLenArray;
-	uint32be					sendLenArraySize;
-	MEMPTR<wu_sockaddr>			destArray;
-	uint32be					destArraySize;
-	MEMPTR<uint32be>			resultArray;
-	uint32be					resultArrayLen;
-}sendtomultiBuffer_t;
+	MEMPTR<uint8> data;
+	uint32be dataLen;
+	MEMPTR<uint32be> sendLenArray;
+	uint32be sendLenArraySize;
+	MEMPTR<wu_sockaddr> destArray;
+	uint32be destArraySize;
+	MEMPTR<uint32be> resultArray;
+	uint32be resultArrayLen;
+} sendtomultiBuffer_t;
 
 void nsysnetExport_sendto_multi_ex(PPCInterpreter_t* hCPU)
 {
@@ -1967,7 +1953,7 @@ void nsysnetExport_sendto_multi_ex(PPCInterpreter_t* hCPU)
 	// verify multiBuf
 	if ((uint32)multiBuf->sendLenArraySize < num ||
 		(uint32)multiBuf->destArraySize < num ||
-		(uint32)multiBuf->resultArrayLen < num )
+		(uint32)multiBuf->resultArrayLen < num)
 	{
 		cemu_assert_debug(false);
 	}
@@ -2007,7 +1993,7 @@ namespace nsysnet
 
 		if (g_nsslInternalStates[index].destroyed)
 			cemu_assert_suspicious();
-	
+
 		return &g_nsslInternalStates[index];
 	}
 
@@ -2072,7 +2058,7 @@ namespace nsysnet
 			return;
 		}
 
-		g_nsslInternalStates[nsslHandle].serverCustomPKIs.push_back(std::vector<uint8>(certData.GetPtr(), certData.GetPtr()+certLen));
+		g_nsslInternalStates[nsslHandle].serverCustomPKIs.push_back(std::vector<uint8>(certData.GetPtr(), certData.GetPtr() + certLen));
 
 		osLib_returnFromFunction(hCPU, NSSL_OK);
 	}
@@ -2093,16 +2079,15 @@ namespace nsysnet
 
 		if (HAS_FLAG(groupMask, 1))
 		{
-			g_nsslInternalStates[nsslHandle].serverPKIs.insert({ 100,101,102,103,104,105 });
+			g_nsslInternalStates[nsslHandle].serverPKIs.insert({100, 101, 102, 103, 104, 105});
 		}
 
 		if (HAS_FLAG(groupMask, 2))
 		{
-			g_nsslInternalStates[nsslHandle].serverPKIs.insert({
-				1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009,
-				1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019,
-				1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029,
-				1030, 1031, 1032, 1033 });
+			g_nsslInternalStates[nsslHandle].serverPKIs.insert({1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009,
+																1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019,
+																1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029,
+																1030, 1031, 1032, 1033});
 		}
 
 		if (validCountOut)
@@ -2143,7 +2128,7 @@ namespace nsysnet
 			cemu_assert_debug(false);
 		}
 
-		if( output )
+		if (output)
 			memcpy(output, certificateData, certificateSize);
 		*outputSize = (uint32)certificateSize;
 		*certType = 0;
@@ -2198,14 +2183,14 @@ namespace nsysnet
 		fdset->mask |= (1 << fd);
 	}
 
-}
+} // namespace nsysnet
 
 namespace nsysnet
 {
 
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nsysnet";
@@ -2215,9 +2200,9 @@ namespace nsysnet
 		{
 			cafeExportRegister("nsysnet", inet_ntop, LogType::Socket);
 
-		    // the below code is the old way of registering API which is deprecated
+			// the below code is the old way of registering API which is deprecated
 
-		    osLib_addFunction("nsysnet", "socket_lib_init", nsysnetExport_socket_lib_init);
+			osLib_addFunction("nsysnet", "socket_lib_init", nsysnetExport_socket_lib_init);
 			osLib_addFunction("nsysnet", "socket_lib_finish", nsysnetExport_socket_lib_finish);
 
 			// socket API
@@ -2258,7 +2243,6 @@ namespace nsysnet
 			osLib_addFunction("nsysnet", "sendto_multi", nsysnetExport_sendto_multi);
 			osLib_addFunction("nsysnet", "sendto_multi_ex", nsysnetExport_sendto_multi_ex);
 
-
 			// NSSL API
 			osLib_addFunction("nsysnet", "NSSLCreateContext", nsysnet::export_NSSLCreateContext);
 			osLib_addFunction("nsysnet", "NSSLSetClientPKI", nsysnet::export_NSSLSetClientPKI);
@@ -2270,10 +2254,10 @@ namespace nsysnet
 			osLib_addFunction("nsysnet", "NSSLExportInternalServerCertificate", nsysnet::export_NSSLExportInternalServerCertificate);
 			osLib_addFunction("nsysnet", "NSSLExportInternalClientCertificate", nsysnet::export_NSSLExportInternalClientCertificate);
 		};
-	}s_COSnsysnetModule;
+	} s_COSnsysnetModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnsysnetModule;
 	}
-}
+} // namespace nsysnet

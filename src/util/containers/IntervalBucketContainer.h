@@ -13,8 +13,7 @@ class IntervalBucketContainer
 	};
 	std::vector<bucketEntry_t> list_bucket[TBucketCount];
 
-public:
-
+  public:
 	IntervalBucketContainer() = default;
 
 	// range is defined as inclusive rangeStart and exclusive rangeEnd
@@ -96,5 +95,4 @@ public:
 			bucketStartIndex = (bucketStartIndex + 1) % TBucketCount;
 		}
 	}
-
 };

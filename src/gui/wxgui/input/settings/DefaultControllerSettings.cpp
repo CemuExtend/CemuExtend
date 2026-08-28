@@ -14,10 +14,10 @@
 #include "wxgui/components/wxInputDraw.h"
 #include "wxgui/input/InputAPIAddWindow.h"
 
-
 DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxPoint& position, std::shared_ptr<ControllerBase> controller)
 	: wxDialog(parent, wxID_ANY, _("Controller settings"), position, wxDefaultSize,
-	           wxDEFAULT_DIALOG_STYLE), m_controller(std::move(controller))
+			   wxDEFAULT_DIALOG_STYLE),
+	  m_controller(std::move(controller))
 {
 	m_settings = m_controller->get_settings();
 	m_rumble_backup = m_settings.rumble;
@@ -51,7 +51,7 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 
 		box_sizer->Add(rumbleSizer);
 
-		sizer->Add(box_sizer, 1, wxALL|wxEXPAND, 5);
+		sizer->Add(box_sizer, 1, wxALL | wxEXPAND, 5);
 	}
 
 	auto* row_sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -73,8 +73,7 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(deadzone_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_axis_deadzone->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_deadzone_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(deadzone_text));
-
+								  new wxControlObject(deadzone_text));
 
 			// Range
 			const auto range = (int)(m_settings.axis.range * 100);
@@ -86,10 +85,10 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(range_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_axis_range->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_range_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(range_text));
+							   new wxControlObject(range_text));
 
 			content_sizer->AddSpacer(1);
-			m_axis_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, { 60, 60 });
+			m_axis_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, {60, 60});
 			content_sizer->Add(m_axis_draw, 0, wxTOP | wxBOTTOM | wxALIGN_CENTER, 5);
 
 			box_sizer->Add(content_sizer, 1, wxEXPAND, 0);
@@ -97,7 +96,7 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 
 		row_sizer->Add(box_sizer, 0, wxALL | wxEXPAND, 5);
 	}
-	
+
 	// Rotation
 	{
 		auto* box = new wxStaticBox(this, wxID_ANY, _("Rotation"));
@@ -116,8 +115,7 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(deadzone_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_rotation_deadzone->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_deadzone_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(deadzone_text));
-
+									  new wxControlObject(deadzone_text));
 
 			// Range
 			const auto range = (int)(m_settings.rotation.range * 100);
@@ -129,10 +127,10 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(range_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_rotation_range->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_range_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(range_text));
+								   new wxControlObject(range_text));
 
 			content_sizer->AddSpacer(1);
-			m_rotation_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, { 60, 60 });
+			m_rotation_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, {60, 60});
 			content_sizer->Add(m_rotation_draw, 0, wxTOP | wxBOTTOM | wxALIGN_CENTER, 5);
 
 			box_sizer->Add(content_sizer, 1, wxEXPAND, 0);
@@ -159,8 +157,7 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(deadzone_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_trigger_deadzone->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_deadzone_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(deadzone_text));
-
+									 new wxControlObject(deadzone_text));
 
 			// Range
 			const auto range = (int)(m_settings.trigger.range * 100);
@@ -172,10 +169,10 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 			content_sizer->Add(range_text, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 			m_trigger_range->Bind(wxEVT_SLIDER, &DefaultControllerSettings::on_range_change, this, wxID_ANY, wxID_ANY,
-				new wxControlObject(range_text));
+								  new wxControlObject(range_text));
 
 			content_sizer->AddSpacer(1);
-			m_trigger_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, { 60, 60 });
+			m_trigger_draw = new wxInputDraw(box, wxID_ANY, wxDefaultPosition, {60, 60});
 			content_sizer->Add(m_trigger_draw, 0, wxTOP | wxBOTTOM | wxALIGN_CENTER, 5);
 
 			box_sizer->Add(content_sizer, 1, wxEXPAND, 0);
@@ -206,8 +203,6 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
 		sizer->Add(control_sizer, 0, wxEXPAND, 5);
 	}
 
-	
-
 	this->SetSizer(sizer);
 	this->Layout();
 	this->Fit();
@@ -235,7 +230,7 @@ void DefaultControllerSettings::update_settings()
 
 void DefaultControllerSettings::on_timer(wxTimerEvent& event)
 {
-	if (m_rumble_time.has_value() && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_rumble_time.value()).count() > 500 )
+	if (m_rumble_time.has_value() && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_rumble_time.value()).count() > 500)
 	{
 		m_controller->stop_rumble();
 		m_rumble_time = {};

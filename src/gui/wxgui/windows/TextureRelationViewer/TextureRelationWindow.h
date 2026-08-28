@@ -6,7 +6,7 @@ class wxListCtrl;
 
 class TextureRelationViewerWindow : public wxFrame
 {
-public:
+  public:
 	TextureRelationViewerWindow(wxFrame& parent);
 	~TextureRelationViewerWindow();
 
@@ -19,8 +19,7 @@ public:
 
 	void Close();
 
-private:
-
+  private:
 	wxDECLARE_EVENT_TABLE();
 
 	void _setTextureRelationListItemTexture(wxListCtrl* uiList, sint32 rowIndex, struct LatteTextureInformation* texInfo);

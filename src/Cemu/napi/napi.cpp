@@ -9,4 +9,4 @@ namespace NAPI
 	{
 		return serviceOverwrite.value_or(ActiveSettings::GetNetworkService());
 	}
-}
+} // namespace NAPI

@@ -451,8 +451,8 @@ namespace nsyshid
 	}
 
 	bool InfinityBaseDevice::SetIdle(uint8 ifIndex,
-										 uint8 reportId,
-										 uint8 duration)
+									 uint8 reportId,
+									 uint8 duration)
 	{
 		return true;
 	}

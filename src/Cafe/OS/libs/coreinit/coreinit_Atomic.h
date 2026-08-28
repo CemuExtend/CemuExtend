@@ -7,7 +7,7 @@ namespace coreinit
 	bool OSCompareAndSwapAtomic(std::atomic<uint32be>* mem, uint32 compareValue, uint32 swapValue);
 	bool OSCompareAndSwapAtomicEx(std::atomic<uint32be>* mem, uint32 compareValue, uint32 swapValue, uint32be* previousValue);
 	uint32 OSAddAtomic(std::atomic<uint32be>* mem, uint32 adder);
-	
+
 	uint64 OSSwapAtomic64(std::atomic<uint64be>* mem, uint64 newValue);
 	uint64 OSSetAtomic64(std::atomic<uint64be>* mem, uint64 newValue);
 	uint64 OSGetAtomic64(std::atomic<uint64be>* mem);
@@ -18,4 +18,4 @@ namespace coreinit
 	bool OSCompareAndSwapAtomicEx64(std::atomic<uint64be>* mem, uint64 compareValue, uint64 swapValue, uint64be* previousValue);
 
 	void InitializeAtomic();
-}
+} // namespace coreinit

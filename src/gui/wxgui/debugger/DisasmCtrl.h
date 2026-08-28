@@ -14,8 +14,8 @@ class DisasmCtrl : public TextList
 		IDContextMenu_CopyUnrelocatedAddress,
 		IDContextMenu_Last
 	};
-public:
 
+  public:
 	DisasmCtrl(wxWindow* parent, const wxWindowID& id, const wxPoint& pos, const wxSize& size, long style);
 
 	void Init();
@@ -30,7 +30,7 @@ public:
 	void CenterOffset(uint32 offset);
 	void GoToAddressDialog();
 
-protected:
+  protected:
 	void OnDraw(wxDC& dc, sint32 start, sint32 count, const wxPoint& start_position) override;
 	void OnMouseMove(const wxPoint& position, uint32 line) override;
 	void OnKeyPressed(sint32 key_code, const wxPoint& position) override;
@@ -45,7 +45,7 @@ protected:
 
 	void SelectCodeRegion(uint32 newAddress);
 
-private:
+  private:
 	void CopyToClipboard(std::string text);
 
 	sint32 m_mouse_line, m_mouse_line_drawn;

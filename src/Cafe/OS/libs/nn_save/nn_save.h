@@ -3,9 +3,9 @@
 
 namespace nn::save
 {
-    void ResetToDefaultState();
+	void ResetToDefaultState();
 
 	bool GetPersistentIdEx(uint8 accountSlot, uint32* persistentId);
 
 	COSModule* GetModule();
-}
+} // namespace nn::save

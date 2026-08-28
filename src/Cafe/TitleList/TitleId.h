@@ -6,15 +6,15 @@ static_assert(sizeof(TitleId) == 8);
 
 class TitleIdParser
 {
-public:
+  public:
 	enum class TITLE_TYPE
 	{
-		/* XX */ UNKNOWN = 0xFF, // placeholder
+		/* XX */ UNKNOWN = 0xFF,	// placeholder
 		/* 00 */ BASE_TITLE = 0x00, // eShop and disc titles
 		/* 02 */ BASE_TITLE_DEMO = 0x02,
 		/* 0E */ BASE_TITLE_UPDATE = 0x0E, // update for BASE_TITLE (and maybe BASE_TITLE_DEMO?)
 		/* 0F */ HOMEBREW = 0x0F,
-		/* 0C */ AOC = 0x0C, // DLC
+		/* 0C */ AOC = 0x0C,		  // DLC
 		/* 10 */ SYSTEM_TITLE = 0x10, // eShop etc
 		/* 1B */ SYSTEM_DATA = 0x1B,
 		/* 30 */ SYSTEM_OVERLAY_TITLE = 0x30,
@@ -23,7 +23,7 @@ public:
 	TitleIdParser(uint64 titleId) : m_titleId(titleId) {};
 
 	// controls whether this title installs to /usr/title or /sys/title
-	bool IsSystemTitle() const 
+	bool IsSystemTitle() const
 	{
 		return (GetTypeByte() & 0x10) != 0;
 	};
@@ -88,7 +88,7 @@ public:
 		if (strView.size() < 16)
 			return false;
 		uint64 tmp = 0;
-		for (size_t i = 0; i < 8*2; i++)
+		for (size_t i = 0; i < 8 * 2; i++)
 		{
 			tmp <<= 4;
 			char c = strView[i];
@@ -105,7 +105,7 @@ public:
 		return true;
 	}
 
-private:
+  private:
 	uint8 GetTypeByte() const
 	{
 		return (m_titleId >> 32) & 0xFF;

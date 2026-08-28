@@ -46,7 +46,7 @@ long CubebInputAPI::data_cb(cubeb_stream* stream, void* user, const void* inputb
 }
 
 CubebInputAPI::CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block,
-                   uint32 bits_per_sample)
+							 uint32 bits_per_sample)
 	: IAudioInputAPI(samplerate, channels, samples_per_block, bits_per_sample)
 {
 	cubeb_stream_params input_params;
@@ -81,9 +81,9 @@ CubebInputAPI::CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channe
 	m_buffer.reserve((size_t)m_bytesPerBlock * kBlockCount);
 
 	if (cubeb_stream_init(s_context, &m_stream, "Cemu Cubeb input",
-	                      devid, &input_params,
-                          nullptr, nullptr,
-	                      latency, data_cb, state_cb, this) != CUBEB_OK)
+						  devid, &input_params,
+						  nullptr, nullptr,
+						  latency, data_cb, state_cb, this) != CUBEB_OK)
 	{
 		throw std::runtime_error("can't initialize cubeb device");
 	}

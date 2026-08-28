@@ -58,7 +58,7 @@ namespace LatteDecompiler
 		if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex && hasAnyViewportScaleDisabled)
 		{
 			// aka GX2 special state 0
-			uniformCurrentOffset = (uniformCurrentOffset + 7)&~7;
+			uniformCurrentOffset = (uniformCurrentOffset + 7) & ~7;
 			shaderSrc->add("uniform vec2 uf_windowSpaceToClipSpaceTransform;" _CRLF);
 			uniformOffsets.offset_windowSpaceToClipSpaceTransform = uniformCurrentOffset;
 			uniformCurrentOffset += 8;
@@ -66,7 +66,7 @@ namespace LatteDecompiler
 		bool alphaTestEnable = decompilerContext->contextRegistersNew->SX_ALPHA_TEST_CONTROL.get_ALPHA_TEST_ENABLE();
 		if (decompilerContext->shaderType == LatteConst::ShaderType::Pixel && alphaTestEnable)
 		{
-			uniformCurrentOffset = (uniformCurrentOffset + 3)&~3;
+			uniformCurrentOffset = (uniformCurrentOffset + 3) & ~3;
 			shaderSrc->add("uniform float uf_alphaTestRef;" _CRLF);
 			uniformOffsets.offset_alphaTestRef = uniformCurrentOffset;
 			uniformCurrentOffset += 4;
@@ -76,7 +76,7 @@ namespace LatteDecompiler
 			if ((decompilerContext->shaderType == LatteConst::ShaderType::Vertex && !decompilerContext->options->usesGeometryShader) ||
 				decompilerContext->shaderType == LatteConst::ShaderType::Geometry)
 			{
-				uniformCurrentOffset = (uniformCurrentOffset + 3)&~3;
+				uniformCurrentOffset = (uniformCurrentOffset + 3) & ~3;
 				shaderSrc->add("uniform float uf_pointSize;" _CRLF);
 				uniformOffsets.offset_pointSize = uniformCurrentOffset;
 				uniformCurrentOffset += 4;
@@ -93,7 +93,7 @@ namespace LatteDecompiler
 			}
 			else if (rendererType == RendererAPI::OpenGL)
 			{
-				uniformCurrentOffset = (uniformCurrentOffset + 7)&~7;
+				uniformCurrentOffset = (uniformCurrentOffset + 7) & ~7;
 				shaderSrc->add("uniform vec2 uf_fragCoordScale;" _CRLF);
 				uniformOffsets.offset_fragCoordScale = uniformCurrentOffset;
 				uniformCurrentOffset += 8;
@@ -101,7 +101,7 @@ namespace LatteDecompiler
 			else
 			{
 				// in Vulkan uf_fragCoordScale stores the origin in zw
-				uniformCurrentOffset = (uniformCurrentOffset + 15)&~15;
+				uniformCurrentOffset = (uniformCurrentOffset + 15) & ~15;
 				shaderSrc->add("uniform vec4 uf_fragCoordScale;" _CRLF);
 				uniformOffsets.offset_fragCoordScale = uniformCurrentOffset;
 				uniformCurrentOffset += 16;
@@ -116,13 +116,15 @@ namespace LatteDecompiler
 			{
 				if (rendererType == RendererAPI::OpenGL)
 				{
-					uniformCurrentOffset = (uniformCurrentOffset + 7)&~7;
-					shaderSrc->add("uniform vec2 uf_fragCoordScaleCompatPadding;" _CRLF); uniformCurrentOffset += 8;
+					uniformCurrentOffset = (uniformCurrentOffset + 7) & ~7;
+					shaderSrc->add("uniform vec2 uf_fragCoordScaleCompatPadding;" _CRLF);
+					uniformCurrentOffset += 8;
 				}
 				else
 				{
-					uniformCurrentOffset = (uniformCurrentOffset + 15)&~15;
-					shaderSrc->add("uniform vec4 uf_fragCoordScaleCompatPadding;" _CRLF); uniformCurrentOffset += 16;
+					uniformCurrentOffset = (uniformCurrentOffset + 15) & ~15;
+					shaderSrc->add("uniform vec4 uf_fragCoordScaleCompatPadding;" _CRLF);
+					uniformCurrentOffset += 16;
 				}
 				compatNeedFragCoordScalePadding = false;
 			}
@@ -133,8 +135,8 @@ namespace LatteDecompiler
 		}
 		// define uf_verticesPerInstance + uf_streamoutBufferBaseX
 		if (decompilerContext->analyzer.useSSBOForStreamout &&
-			(shader->shaderType == LatteConst::ShaderType::Vertex && decompilerContext->options->usesGeometryShader == false) ||
-			(shader->shaderType == LatteConst::ShaderType::Geometry) )
+				(shader->shaderType == LatteConst::ShaderType::Vertex && decompilerContext->options->usesGeometryShader == false) ||
+			(shader->shaderType == LatteConst::ShaderType::Geometry))
 		{
 			// note - we dont need to handle compatNeedFragCoordScalePadding here because it's pixel shader only
 			shaderSrc->add("uniform int uf_verticesPerInstance;" _CRLF);
@@ -245,7 +247,7 @@ namespace LatteDecompiler
 				src->add("Shadow"); // shadow sampler
 
 			src->addFmt(" {}{};", _getTextureUnitVariablePrefixName(shaderContext->shaderType), i);
-			
+
 			src->add(_CRLF);
 		}
 	}
@@ -353,7 +355,7 @@ namespace LatteDecompiler
 
 			uint32 gsOutPrimType = decompilerContext->contextRegisters[mmVGT_GS_OUT_PRIM_TYPE];
 			uint32 bytesPerVertex = decompilerContext->contextRegisters[mmSQ_GS_VERT_ITEMSIZE] * 4;
-			
+
 			uint32 maxVerticesInGS = ((decompilerContext->contextRegisters[mmSQ_GSVS_RING_ITEMSIZE] & 0x7FFF) * 4) / bytesPerVertex;
 
 			if (!decompilerContext->analyzer.hasLoops && decompilerContext->analyzer.numEmitVertex < maxVerticesInGS)
@@ -381,7 +383,7 @@ namespace LatteDecompiler
 		auto parameterMask = shaderContext->shader->outputParameterMask;
 		for (uint32 i = 0; i < 32; i++)
 		{
-			if ((parameterMask&(1 << i)) == 0)
+			if ((parameterMask & (1 << i)) == 0)
 				continue;
 			uint32 vsSemanticId = _getVertexShaderOutParamSemanticId(shaderContext->contextRegisters, i);
 			if (vsSemanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
@@ -529,7 +531,7 @@ namespace LatteDecompiler
 			// generate pixel outputs for pixel shader
 			for (uint32 i = 0; i < LATTE_NUM_COLOR_TARGET; i++)
 			{
-				if ((decompilerContext->shader->pixelColorOutputMask&(1 << i)) != 0)
+				if ((decompilerContext->shader->pixelColorOutputMask & (1 << i)) != 0)
 				{
 					src->addFmt("layout(location = {}) out vec4 passPixelColor{};" _CRLF, i, i);
 				}
@@ -569,7 +571,7 @@ namespace LatteDecompiler
 	void emitHeader(LatteDecompilerShaderContext* decompilerContext)
 	{
 		const bool dump_shaders_enabled = ActiveSettings::DumpShadersEnabled();
-		if(dump_shaders_enabled)
+		if (dump_shaders_enabled)
 			decompilerContext->shaderSource->add("// start of shader inputs/outputs, predetermined by Cemu. Do not touch" _CRLF);
 		// macros
 		_emitHeaderMacros(decompilerContext);
@@ -591,4 +593,4 @@ namespace LatteDecompiler
 		if (dump_shaders_enabled)
 			decompilerContext->shaderSource->add("// end of shader inputs/outputs" _CRLF);
 	}
-}
+} // namespace LatteDecompiler

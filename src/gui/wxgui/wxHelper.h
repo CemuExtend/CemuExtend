@@ -5,12 +5,12 @@
 
 namespace wxHelper
 {
-    inline fs::path MakeFSPath(const wxString& str)
-    {
-        auto tmpUtf8 = str.ToUTF8();
-        auto sv = std::basic_string_view<char8_t>((const char8_t*)tmpUtf8.data(), tmpUtf8.length());
-        return fs::path(sv);
-    }
+	inline fs::path MakeFSPath(const wxString& str)
+	{
+		auto tmpUtf8 = str.ToUTF8();
+		auto sv = std::basic_string_view<char8_t>((const char8_t*)tmpUtf8.data(), tmpUtf8.length());
+		return fs::path(sv);
+	}
 
 	inline wxString FromPath(const fs::path& path)
 	{
@@ -30,10 +30,10 @@ namespace wxHelper
 	}
 
 	static wxBitmap LoadThemedBitmapFromPNG(const uint8* data, size_t size, const wxColour& tint)
-    {
-    	wxMemoryInputStream strm(data, size);
-    	wxImage img(strm, wxBITMAP_TYPE_PNG);
-    	img.Replace(0x00, 0x00, 0x00, tint.Red(), tint.Green(), tint.Blue());
-    	return wxBitmap(img);
-    }
-};
+	{
+		wxMemoryInputStream strm(data, size);
+		wxImage img(strm, wxBITMAP_TYPE_PNG);
+		img.Replace(0x00, 0x00, 0x00, tint.Red(), tint.Green(), tint.Blue());
+		return wxBitmap(img);
+	}
+}; // namespace wxHelper

@@ -12,6 +12,10 @@ namespace iosu
 
 		void IOS_DestroyResourceManagerForQueueId(IOSMsgQueueId msgQueueId);
 		void _IPCDestroyAllHandlesForMsgQueue(IOSMsgQueueId msgQueueId);
+		void _IPCAbandonCommandsForMsgQueue(IOSMsgQueueId msgQueueId);
+		void _IPCReclaimRetiredCommands();
+		void _IPCAbandonAllCommandsForTitle();
+		void _IPCDestroyAllHandlesForTitle();
 
 		static void _assume_lock()
 		{
@@ -22,7 +26,7 @@ namespace iosu
 
 		/* message queue */
 
-		struct IOSMessageQueue 
+		struct IOSMessageQueue
 		{
 			// placeholder
 			/* +0x00 */ uint32be ukn00;
@@ -56,7 +60,7 @@ namespace iosu
 			if (index >= sMsgQueuePool.size())
 				return IOS_ERROR_INVALID;
 			IOSMessageQueue& q = sMsgQueuePool.at(index);
-			if(q.queueHandle != queueHandle)
+			if (q.queueHandle != queueHandle)
 				return IOS_ERROR_INVALID;
 			queueOut = &q;
 			return IOS_ERROR_OK;
@@ -76,7 +80,7 @@ namespace iosu
 			IOSMessageQueue& msgQueue = sMsgQueuePool.at(index);
 			// create queue handle
 			static uint32 sQueueHandleCounter = 0;
-			uint32 queueHandle = (uint32)index | ((sQueueHandleCounter<<12)&0x7FFFFFFF);
+			uint32 queueHandle = (uint32)index | ((sQueueHandleCounter << 12) & 0x7FFFFFFF);
 			sQueueHandleCounter++;
 
 			msgQueue.queueHandle = queueHandle;
@@ -182,8 +186,7 @@ namespace iosu
 		std::vector<IOSTimer> sTimers;
 		std::vector<IOSTimerId> sTimersFreeHandles;
 
-		auto sTimerSortComparator = [](const IOSTimerId& idA, const IOSTimerId& idB)
-		{
+		auto sTimerSortComparator = [](const IOSTimerId& idA, const IOSTimerId& idB) {
 			// order by nextFire, then by timerId to avoid duplicate keys
 			IOSTimer& timerA = sTimers[idA];
 			IOSTimer& timerB = sTimers[idB];
@@ -208,10 +211,10 @@ namespace iosu
 			cemu_assert_debug(!sTimerMutex.try_lock()); // lock must be held by current thread
 			IOSTimerId timerId = &timer - sTimers.data();
 			auto it = sTimerByFireTime.find(timerId);
-			if(it != sTimerByFireTime.end())
+			if (it != sTimerByFireTime.end())
 				sTimerByFireTime.erase(it);
 			timer.nextFire = nextFire;
-			if(nextFire != 0)
+			if (nextFire != 0)
 				sTimerByFireTime.insert(timerId);
 		}
 
@@ -271,7 +274,7 @@ namespace iosu
 				HRTick now = HighResolutionTimer::now().getTick();
 				if (now >= timer.nextFire)
 				{
-					if(timer.repeat == 0)
+					if (timer.repeat == 0)
 						IOS_TimerSetNextFireTime(timer, 0);
 					else
 						IOS_TimerSetNextFireTime(timer, timer.nextFire + timer.repeat);
@@ -301,11 +304,11 @@ namespace iosu
 		};
 
 		std::array<IOSResourceManager, 512> sDeviceResources;
-		
+
 		IOSResourceManager* _IOS_FindResourceManager(const char* devicePath)
 		{
 			_assume_lock();
-			std::string_view devicePathSV{ devicePath };
+			std::string_view devicePathSV{devicePath};
 			for (auto& it : sDeviceResources)
 			{
 				if (it.isSet && it.path == devicePathSV)
@@ -317,7 +320,7 @@ namespace iosu
 		IOSResourceManager* _IOS_CreateNewResourceManager(const char* devicePath, IOSMsgQueueId msgQueueId)
 		{
 			_assume_lock();
-			std::string_view devicePathSV{ devicePath };
+			std::string_view devicePathSV{devicePath};
 			for (auto& it : sDeviceResources)
 			{
 				if (!it.isSet)
@@ -357,6 +360,10 @@ namespace iosu
 		void IOS_DestroyResourceManagerForQueueId(IOSMsgQueueId msgQueueId)
 		{
 			_assume_lock();
+			// The service has stopped, so no delayed command for this queue may
+			// notify guest memory. Retire every host dispatch slot before its raw
+			// originalBody pointer can survive into the next title.
+			_IPCAbandonCommandsForMsgQueue(msgQueueId);
 			// destroy all IPC handles associated with this queue
 			_IPCDestroyAllHandlesForMsgQueue(msgQueueId);
 			// destroy device resource manager
@@ -378,21 +385,91 @@ namespace iosu
 		}
 
 		/* IPC */
-		
+
 		struct IOSDispatchableCommand
 		{
 			// stores a copy of incoming IPC requests with some extra information required for replies
-			IPCCommandBody body; // our dispatchable copy
-			IPCIoctlVector vecCopy[8]; // our copy of the Ioctlv vector array
+			IPCCommandBody body;		  // our dispatchable copy
+			IPCIoctlVector vecCopy[8];	  // our copy of the Ioctlv vector array
 			IPCCommandBody* originalBody; // the original command that was sent to us
 			uint32 ppcCoreIndex;
 			IOSDevHandle replyHandle; // handle for outgoing replies
+			IOSMsgQueueId dispatchQueueId{UINT32_MAX};
 			bool isAllocated{false};
+			// Do not immediately reuse an abandoned raw-pointer slot. A producer
+			// escaping teardown could otherwise reply into the next title's command.
+			bool isRetired{false};
+			bool isReplying{false};
 		};
 
 		SysAllocator<IOSDispatchableCommand, 96> sIPCDispatchableCommandPool;
 		std::queue<IOSDispatchableCommand*> sIPCFreeDispatchableCommands;
 		FSpinlock sIPCDispatchableCommandPoolLock;
+
+		void _IPCAbandonCommandsForMsgQueue(IOSMsgQueueId msgQueueId)
+		{
+			size_t abandonedCount{};
+			sIPCDispatchableCommandPoolLock.lock();
+			for (size_t i = 0; i < sIPCDispatchableCommandPool.GetCount(); i++)
+			{
+				auto* cmd = sIPCDispatchableCommandPool.GetPtr() + i;
+				if (!cmd->isAllocated || cmd->isReplying ||
+					cmd->dispatchQueueId != msgQueueId)
+					continue;
+				cmd->isAllocated = false;
+				cmd->isRetired = true;
+				cmd->originalBody = nullptr;
+				cmd->dispatchQueueId = UINT32_MAX;
+				abandonedCount++;
+			}
+			sIPCDispatchableCommandPoolLock.unlock();
+			if (abandonedCount != 0)
+				cemuLog_log(LogType::Force,
+							"IOSU-Kernel: abandoned {} delayed IPC command(s) for stopped queue {}",
+							abandonedCount, msgQueueId);
+		}
+
+		void _IPCReclaimRetiredCommands()
+		{
+			size_t reclaimedCount{};
+			sIPCDispatchableCommandPoolLock.lock();
+			for (size_t i = 0; i < sIPCDispatchableCommandPool.GetCount(); i++)
+			{
+				auto* cmd = sIPCDispatchableCommandPool.GetPtr() + i;
+				if (cmd->isAllocated || !cmd->isRetired)
+					continue;
+				cmd->isRetired = false;
+				sIPCFreeDispatchableCommands.push(cmd);
+				reclaimedCount++;
+			}
+			sIPCDispatchableCommandPoolLock.unlock();
+			if (reclaimedCount != 0)
+				cemuLog_log(LogType::Force,
+							"IOSU-Kernel: reclaimed {} retired IPC command(s) for the next title",
+							reclaimedCount);
+		}
+
+		void _IPCAbandonAllCommandsForTitle()
+		{
+			size_t abandonedCount{};
+			sIPCDispatchableCommandPoolLock.lock();
+			for (size_t i = 0; i < sIPCDispatchableCommandPool.GetCount(); i++)
+			{
+				auto* cmd = sIPCDispatchableCommandPool.GetPtr() + i;
+				if (!cmd->isAllocated || cmd->isReplying)
+					continue;
+				cmd->isAllocated = false;
+				cmd->isRetired = true;
+				cmd->originalBody = nullptr;
+				cmd->dispatchQueueId = UINT32_MAX;
+				abandonedCount++;
+			}
+			sIPCDispatchableCommandPoolLock.unlock();
+			if (abandonedCount != 0)
+				cemuLog_log(LogType::Force,
+							"IOSU-Kernel: abandoned {} IPC command(s) at title boundary",
+							abandonedCount);
+		}
 
 		void _IPCInitDispatchablePool()
 		{
@@ -400,7 +477,15 @@ namespace iosu
 			while (!sIPCFreeDispatchableCommands.empty())
 				sIPCFreeDispatchableCommands.pop();
 			for (size_t i = 0; i < sIPCDispatchableCommandPool.GetCount(); i++)
-				sIPCFreeDispatchableCommands.push(sIPCDispatchableCommandPool.GetPtr()+i);
+			{
+				auto* cmd = sIPCDispatchableCommandPool.GetPtr() + i;
+				cmd->isAllocated = false;
+				cmd->isRetired = false;
+				cmd->isReplying = false;
+				cmd->originalBody = nullptr;
+				cmd->dispatchQueueId = UINT32_MAX;
+				sIPCFreeDispatchableCommands.push(cmd);
+			}
 			sIPCDispatchableCommandPoolLock.unlock();
 		}
 
@@ -417,6 +502,10 @@ namespace iosu
 			sIPCFreeDispatchableCommands.pop();
 			cemu_assert_debug(!cmd->isAllocated);
 			cmd->isAllocated = true;
+			cmd->isRetired = false;
+			cmd->isReplying = false;
+			cmd->originalBody = nullptr;
+			cmd->dispatchQueueId = UINT32_MAX;
 			sIPCDispatchableCommandPoolLock.unlock();
 			return cmd;
 		}
@@ -426,6 +515,10 @@ namespace iosu
 			sIPCDispatchableCommandPoolLock.lock();
 			cemu_assert_debug(cmd->isAllocated);
 			cmd->isAllocated = false;
+			cmd->isRetired = false;
+			cmd->isReplying = false;
+			cmd->originalBody = nullptr;
+			cmd->dispatchQueueId = UINT32_MAX;
 			sIPCFreeDispatchableCommands.push(cmd);
 			sIPCDispatchableCommandPoolLock.unlock();
 		}
@@ -479,7 +572,7 @@ namespace iosu
 			sActiveDeviceHandles[deviceHandleIndex].handleCheckValue = devHandle;
 			sActiveDeviceHandles[deviceHandleIndex].path = devicePath;
 			sActiveDeviceHandles[deviceHandleIndex].msgQueueId = msgQueueId;
-			sActiveDeviceHandles[deviceHandleIndex].hasDispatchTargetHandle = false;			
+			sActiveDeviceHandles[deviceHandleIndex].hasDispatchTargetHandle = false;
 			handleOut = devHandle;
 			return IOS_ERROR_OK;
 		}
@@ -514,11 +607,24 @@ namespace iosu
 				if (it.isSet && it.msgQueueId == msgQueueId)
 				{
 					it.isSet = false;
-					it.path.clear();
 					it.handleCheckValue = 0;
 					it.hasDispatchTargetHandle = false;
 					it.msgQueueId = 0;
 				}
+			}
+		}
+
+		void _IPCDestroyAllHandlesForTitle()
+		{
+			_assume_lock();
+			for (auto& it : sActiveDeviceHandles)
+			{
+				if (!it.isSet)
+					continue;
+				it.isSet = false;
+				it.handleCheckValue = 0;
+				it.hasDispatchTargetHandle = false;
+				it.msgQueueId = 0;
 			}
 		}
 
@@ -548,18 +654,36 @@ namespace iosu
 		{
 			std::unique_lock _lock(sInternalMutex);
 			uint32 index = devHandle & 0xFFF;
-			cemu_assert(index < MAX_NUM_ACTIVE_DEV_HANDLES);
+			if (index >= MAX_NUM_ACTIVE_DEV_HANDLES)
+			{
+				cemuLog_log(LogType::Force,
+							"_IPCDispatchToResourceManager(): Invalid handle {:#010x} for command {}",
+							devHandle, (uint32)dispatchCmd->body.cmdId.value());
+				return IOS_ERROR_INVALID;
+			}
 			if (!sActiveDeviceHandles[index].isSet)
 			{
-				cemuLog_log(LogType::Force, "_IPCDispatchToResourceManager(): Resource manager destroyed before all IPC commands were processed");
+				cemuLog_log(LogType::Force,
+							"_IPCDispatchToResourceManager(): Resource manager for handle {:#010x} "
+							"was destroyed before command {} was processed (last device {})",
+							devHandle, (uint32)dispatchCmd->body.cmdId.value(),
+							sActiveDeviceHandles[index].path.empty()
+								? std::string_view{"unknown"}
+								: std::string_view{sActiveDeviceHandles[index].path});
 				return IOS_ERROR_INVALID;
 			}
 			if (devHandle != sActiveDeviceHandles[index].handleCheckValue)
 			{
-				cemuLog_log(LogType::Force, "_IPCDispatchToResourceManager(): Mismatching handle");
+				cemuLog_log(LogType::Force,
+							"_IPCDispatchToResourceManager(): Stale handle {:#010x} for {} "
+							"(current {:#010x}, command {})",
+							devHandle, sActiveDeviceHandles[index].path,
+							sActiveDeviceHandles[index].handleCheckValue,
+							(uint32)dispatchCmd->body.cmdId.value());
 				return IOS_ERROR_INVALID;
 			}
 			IOSMsgQueueId msgQueueId = sActiveDeviceHandles[index].msgQueueId;
+			dispatchCmd->dispatchQueueId = msgQueueId;
 			if (dispatchCmd->body.cmdId == IPCCommandId::IOS_OPEN)
 			{
 				cemu_assert(!sActiveDeviceHandles[index].hasDispatchTargetHandle);
@@ -571,9 +695,9 @@ namespace iosu
 				dispatchCmd->body.devHandle = sActiveDeviceHandles[index].dispatchTargetHandle;
 			}
 			_lock.unlock();
-			MEMPTR<IOSDispatchableCommand> msgVal{ dispatchCmd };
+			MEMPTR<IOSDispatchableCommand> msgVal{dispatchCmd};
 			IOS_ERROR r = IOS_SendMessage(msgQueueId, msgVal.GetMPTR(), 1);
-			if(r != IOS_ERROR_OK)
+			if (r != IOS_ERROR_OK)
 				cemuLog_log(LogType::Force, "_IPCDispatchToResourceManager(): SendMessage returned {}", (sint32)r);
 			return r;
 		}
@@ -584,7 +708,7 @@ namespace iosu
 		{
 			cemu_assert(dispatchCmd->ppcCoreIndex < 3);
 			std::unique_lock _l(sMtxReply[(uint32)dispatchCmd->ppcCoreIndex]);
-			cemu_assert(dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() && dispatchCmd < sIPCDispatchableCommandPool.GetPtr() + sIPCDispatchableCommandPool.GetCount());	
+			cemu_assert(dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() && dispatchCmd < sIPCDispatchableCommandPool.GetPtr() + sIPCDispatchableCommandPool.GetCount());
 			dispatchCmd->originalBody->result = result;
 			// submit to COS
 			IPCCommandBody* responseArray[1];
@@ -602,7 +726,7 @@ namespace iosu
 			uint32 flags = cmd.args[2];
 			cemu_assert_debug(flags == 0);
 
-			std::string devicePath{ name, nameLenPlusOne - 1 };
+			std::string devicePath{name, nameLenPlusOne - 1};
 
 			IOSDevHandle handle;
 			IOS_ERROR r = _IPCCreateResourceHandle(devicePath.c_str(), handle);
@@ -674,6 +798,13 @@ namespace iosu
 		{
 			// create a copy of the cmd
 			IOSDispatchableCommand* dispatchCmd = _IPCAllocateDispatchableCommand();
+			if (!dispatchCmd)
+			{
+				cmd->result = IOS_ERROR_MAXIMUM_REACHED;
+				IPCCommandBody* responseArray[1]{cmd};
+				coreinit::IPCDriver_NotifyResponses(ppcCoreIndex, responseArray, 1);
+				return;
+			}
 			dispatchCmd->body = *cmd;
 			dispatchCmd->originalBody = cmd;
 			dispatchCmd->ppcCoreIndex = ppcCoreIndex;
@@ -694,7 +825,7 @@ namespace iosu
 				break;
 			case IPCCommandId::IOS_IOCTLV:
 				r = _IPCHandlerIn_TranslateVectorAddresses(dispatchCmd);
-				if(r < 0)
+				if (r < 0)
 					cemuLog_log(LogType::Force, "Ioctlv error");
 				else
 					r = _IPCHandlerIn_IOS_Ioctlv(dispatchCmd);
@@ -705,7 +836,7 @@ namespace iosu
 			}
 			if (r < 0)
 			{
-				cemuLog_log(LogType::Force, "Error occurred while trying to dispatch IPC");			
+				cemuLog_log(LogType::Force, "Error occurred while trying to dispatch IPC");
 				_IPCReplyAndRelease(dispatchCmd, r);
 				// in non-error case the device handler will send the result asynchronously via IOS_ResourceReply
 			}
@@ -714,8 +845,19 @@ namespace iosu
 		IOS_ERROR IOS_ResourceReply(IPCCommandBody* cmd, IOS_ERROR result)
 		{
 			IOSDispatchableCommand* dispatchCmd = (IOSDispatchableCommand*)cmd;
-			cemu_assert(dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() && dispatchCmd < sIPCDispatchableCommandPool.GetPtr() + sIPCDispatchableCommandPool.GetCount());
-			cemu_assert_debug(dispatchCmd->isAllocated);
+			if (dispatchCmd < sIPCDispatchableCommandPool.GetPtr() ||
+				dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() +
+								   sIPCDispatchableCommandPool.GetCount())
+				return IOS_ERROR_INVALID;
+			sIPCDispatchableCommandPoolLock.lock();
+			if (!dispatchCmd->isAllocated || dispatchCmd->isRetired ||
+				dispatchCmd->isReplying || !dispatchCmd->originalBody)
+			{
+				sIPCDispatchableCommandPoolLock.unlock();
+				return IOS_ERROR_INVALID;
+			}
+			dispatchCmd->isReplying = true;
+			sIPCDispatchableCommandPoolLock.unlock();
 			dispatchCmd->originalBody->result = result;
 			if (dispatchCmd->originalBody->cmdId == IPCCommandId::IOS_OPEN)
 			{
@@ -750,6 +892,28 @@ namespace iosu
 			return IOS_ERROR_OK;
 		}
 
+		IOS_ERROR IOS_AbandonResourceReply(IPCCommandBody* cmd)
+		{
+			auto* dispatchCmd = reinterpret_cast<IOSDispatchableCommand*>(cmd);
+			if (dispatchCmd < sIPCDispatchableCommandPool.GetPtr() ||
+				dispatchCmd >= sIPCDispatchableCommandPool.GetPtr() +
+								   sIPCDispatchableCommandPool.GetCount())
+				return IOS_ERROR_INVALID;
+
+			sIPCDispatchableCommandPoolLock.lock();
+			if (!dispatchCmd->isAllocated || dispatchCmd->isReplying)
+			{
+				sIPCDispatchableCommandPoolLock.unlock();
+				return IOS_ERROR_INVALID;
+			}
+			dispatchCmd->isAllocated = false;
+			dispatchCmd->isRetired = true;
+			dispatchCmd->originalBody = nullptr;
+			dispatchCmd->dispatchQueueId = UINT32_MAX;
+			sIPCDispatchableCommandPoolLock.unlock();
+			return IOS_ERROR_OK;
+		}
+
 		class : public ::IOSUModule
 		{
 			void SystemLaunch() override
@@ -770,14 +934,31 @@ namespace iosu
 				// todo
 			}
 
+			void TitleStart() override
+			{
+				// TitleStop joins delayed-reply producers before the kernel module is
+				// started first for the next title, making retired addresses reusable.
+				_IPCReclaimRetiredCommands();
+			}
+
+			void TitleStop() override
+			{
+				// Resource managers such as /dev/fsa and /dev/ccr_nfc persist for the
+				// process, but every IOS handle belongs to the terminating Cafe title.
+				// Leaving those handles alive lets host-side HLE state accidentally carry
+				// them into the next title.
+				std::unique_lock lock(sInternalMutex);
+				_IPCAbandonAllCommandsForTitle();
+				_IPCDestroyAllHandlesForTitle();
+			}
+
 			std::thread m_timerThread;
-		}sIOSUModuleKernel;
+		} sIOSUModuleKernel;
 
 		IOSUModule* GetModule()
 		{
 			return static_cast<IOSUModule*>(&sIOSUModuleKernel);
 		}
 
-
-	}
-}
+	} // namespace kernel
+} // namespace iosu

@@ -32,6 +32,7 @@ RUN apt-get update \
         libglu1-mesa-dev \
         libgtk-3-dev \
         libpulse-dev \
+        libnss3-dev \
         libsecret-1-dev \
         libssl-dev \
         libsystemd-dev \
@@ -69,6 +70,13 @@ RUN apt-get update \
         libglm-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# CEF OSR smoke tests need a display server even though no native browser
+# window is created. Keep it in a separate layer so the large toolchain layer
+# remains reusable.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y xauth xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
 FROM cemu-extend-base AS dev
 
 WORKDIR /workspace/CemuExtend
@@ -84,7 +92,11 @@ ARG BUILD_TYPE=Release
 ARG GIT_HASH=unknown
 ARG CEMU_EXTEND_COMMIT_HASH=unknown
 ARG SOURCE_FINGERPRINT=unknown
-ARG ENABLE_WXWIDGETS=ON
+ARG CEMU_FRONTEND=cef
+ARG CEMU_OVERLAY_BACKEND=
+# Preserve the CMake/Ninja cache by default. Set CLEAN_BUILD=1 only when a
+# dependency, toolchain, or configuration change requires a full rebuild.
+ARG CLEAN_BUILD=0
 
 WORKDIR /workspace/CemuExtend
 
@@ -94,9 +106,17 @@ WORKDIR /workspace/CemuExtend
 RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
     --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
+    --mount=type=cache,id=cemu-extend-cef,target=/root/.cache/cemu-cef,sharing=locked \
     --mount=type=cache,id=cemu-extend-cmake,target=/workspace/CemuExtend/build/docker,sharing=locked \
     test -n "${SOURCE_FINGERPRINT}" \
     && bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
+    && cef_root_arg="" \
+    && if [ "${CEMU_FRONTEND}" = "cef" ] || [ "${CEMU_FRONTEND}" = "webview" ]; then \
+        CEMU_CEF_DOWNLOAD_DIR=/root/.cache/cemu-cef/downloads \
+            CEF_ROOT=/root/.cache/cemu-cef/sdk \
+            bash ./scripts/fetch-cef.sh; \
+        cef_root_arg="-DCEF_ROOT=/root/.cache/cemu-cef/sdk"; \
+    fi \
     && for attempt in 1 2 3; do \
         cmake -S . -B build/docker \
             -G Ninja \
@@ -104,7 +124,9 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DGIT_HASH=${GIT_HASH} \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
-            -DENABLE_WXWIDGETS=${ENABLE_WXWIDGETS} \
+            -DCEMU_FRONTEND=${CEMU_FRONTEND} \
+            ${cef_root_arg} \
+            ${CEMU_OVERLAY_BACKEND:+-DCEMU_OVERLAY_BACKEND=${CEMU_OVERLAY_BACKEND}} \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
         && break; \
@@ -112,12 +134,22 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
         echo "CMake configure failed (attempt $attempt/3); retrying in 5 seconds..."; \
         sleep 5; \
     done \
-    && cmake --build build/docker --parallel \
+    && if [ "${CLEAN_BUILD}" = "1" ]; then \
+        cmake --build build/docker --clean-first --parallel; \
+    else \
+        cmake --build build/docker --parallel; \
+    fi \
     && ctest --test-dir build/docker --output-on-failure \
-    && build_type_lower="$(printf '%s' "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')" \
-    && cp "bin/Cemu_${build_type_lower}" "/Cemu_${build_type_lower}" \
-    && mkdir -p /cemu-bin \
-    && cp -r bin/. /cemu-bin/
+	&& build_type_lower="$(printf '%s' "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')" \
+	&& cp "bin/Cemu_${build_type_lower}" "/Cemu_${build_type_lower}" \
+	&& mkdir -p /cemu-bin \
+	&& cp -r bin/. /cemu-bin/ \
+	&& if [ "${CEMU_FRONTEND}" = "headless" ]; then \
+		mkdir -p /Cemu_release.bundle \
+		&& cp bin/Cemu_release /Cemu_release.bundle/Cemu_release; \
+	else \
+		tools/bundle-linux-runtime.sh bin/Cemu_release /Cemu_release.bundle; \
+	fi
 
 CMD ["bash"]
 
@@ -206,7 +238,8 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DGIT_HASH=${GIT_HASH} \
             -DCEMU_EXTEND_COMMIT_HASH=${CEMU_EXTEND_COMMIT_HASH} \
             -DENABLE_VCPKG=ON \
-            -DENABLE_WXWIDGETS=${ENABLE_WXWIDGETS} \
+			-DCEMU_FRONTEND=wx \
+			-DCEMU_OVERLAY_BACKEND=imgui \
             -DALLOW_PORTABLE=OFF \
             -DBUILD_TESTING=ON \
             -DVCPKG_TARGET_TRIPLET=x64-mingw-cemu-static \
@@ -223,6 +256,36 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     && file "${windows_executable}" | grep -Eq 'PE32\+ executable.*x86-64' \
     && ! x86_64-w64-mingw32-objdump -p "${windows_executable}" \
         | grep -Eqi 'DLL Name: (libgcc_s[^ ]*|libstdc\+\+[^ ]*|libwinpthread[^ ]*)\.dll' \
-    && cp "${windows_executable}" /Cemu_release.exe
+	&& cp "${windows_executable}" /Cemu_release.exe
 
 CMD ["bash"]
+
+# Runnable desktop image. The build stage intentionally remains separate so
+# CI can keep extracting the bare binary, while this stage supplies the GTK,
+# CEF, graphics, input, and audio runtime required to launch it.
+FROM cemu-extend-base AS runtime
+
+ARG CEMU_FRONTEND=cef
+
+COPY --from=build /Cemu_release.bundle /opt/cemu
+COPY bin/resources /opt/cemu/resources
+COPY bin/gameProfiles /opt/cemu/gameProfiles
+COPY dist/network_services.xml /opt/cemu/network_services.xml
+
+RUN mkdir -p \
+        /home/cemu/.cache/Cemu \
+        /home/cemu/.config/Cemu \
+        /home/cemu/.local/share/Cemu \
+        /tmp/cemu-runtime \
+    && chmod 1777 /tmp/cemu-runtime
+
+ENV HOME=/home/cemu \
+    XDG_CACHE_HOME=/home/cemu/.cache \
+    XDG_CONFIG_HOME=/home/cemu/.config \
+    XDG_DATA_HOME=/home/cemu/.local/share \
+    XDG_RUNTIME_DIR=/tmp/cemu-runtime \
+    MESA_SHADER_CACHE_DIR=/home/cemu/.cache/Cemu/mesa_shader_cache \
+    GDK_BACKEND=wayland,x11
+
+WORKDIR /opt/cemu
+ENTRYPOINT ["/opt/cemu/Cemu_release"]

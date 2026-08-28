@@ -13,11 +13,12 @@
 class wxDownloadManagerList : public wxListView
 {
 	friend class TitleManager;
-public:
+
+  public:
 	wxDownloadManagerList(wxWindow* parent,
-		std::function<void()> requestGameListRefresh,
-		wxWindowID id = wxID_ANY);
-	
+						  std::function<void()> requestGameListRefresh,
+						  wxWindowID id = wxID_ANY);
+
 	enum ItemColumn
 	{
 		ColumnTitleId = 0,
@@ -40,11 +41,11 @@ public:
 	enum class TitleDownloadStatus
 	{
 		None,
-		Available, // available for download
-		Error, // error state
-		Queued, // queued for download
+		Available,	  // available for download
+		Error,		  // error state
+		Queued,		  // queued for download
 		Initializing, // downloading/parsing TMD
-		Checking, // checking for previously downloaded files
+		Checking,	  // checking for previously downloaded files
 		Downloading,
 		Verifying, // verifying downloaded files
 		Installing,
@@ -72,9 +73,9 @@ public:
 		bool isPackage;
 		uint64 titleId;
 		wxString name;
-		uint32_t version{ 0 };
+		uint32_t version{0};
 		uint32 progress; // downloading: in 1/10th of a percent, installing: number of files
-		uint32 progressMax{ 0 };
+		uint32 progressMax{0};
 		CafeConsoleRegion region;
 
 		TitleDownloadStatus status = TitleDownloadStatus::None;
@@ -84,17 +85,20 @@ public:
 		{
 			return type == e.type && titleId == e.titleId && version == e.version;
 		}
-		bool operator!=(const TitleEntry& e) const { return !(*this == e); }
+		bool operator!=(const TitleEntry& e) const
+		{
+			return !(*this == e);
+		}
 	};
 	boost::optional<const TitleEntry&> GetSelectedTitleEntry() const;
 
-private:
+  private:
 	std::function<void()> m_requestGameListRefresh;
 	void AddColumns();
 	int Filter(const wxString& filter, const wxString& prefix, ItemColumn column);
 	boost::optional<TitleEntry&> GetSelectedTitleEntry();
 	boost::optional<TitleEntry&> GetTitleEntry(uint64 titleId, uint16 titleVersion);
-	
+
 	class wxPanel* m_tooltip_window;
 	class wxStaticText* m_tooltip_text;
 	class wxTimer* m_tooltip_timer;
@@ -118,23 +122,23 @@ private:
 	[[nodiscard]] boost::optional<TitleEntry&> GetTitleEntry(long item);
 	//[[nodiscard]] boost::optional<const TitleEntry&> GetTitleEntry(const fs::path& path) const;
 	//[[nodiscard]] boost::optional<TitleEntry&> GetTitleEntry(const fs::path& path);
-	
+
 	void SetCurrentDownloadMgr(class DownloadManager* dlMgr);
 
-	//bool FixEntry(TitleEntry& entry);
-	//bool VerifyEntryFiles(TitleEntry& entry);
+	// bool FixEntry(TitleEntry& entry);
+	// bool VerifyEntryFiles(TitleEntry& entry);
 	bool StartDownloadEntry(const TitleEntry& entry);
 	bool RetryDownloadEntry(const TitleEntry& entry);
 	bool PauseDownloadEntry(const TitleEntry& entry);
 
 	void RemoveItem(long item);
 	void RemoveItem(const TitleEntry& entry);
-	
+
 	struct ItemData
 	{
 		ItemData(bool visible, const TitleEntry& entry)
 			: visible(visible), entry(entry) {}
-		
+
 		bool visible;
 		TitleEntry entry;
 	};

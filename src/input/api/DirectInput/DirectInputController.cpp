@@ -3,9 +3,8 @@
 
 DirectInputController::DirectInputController(const GUID& guid)
 	: base_type(StringFromGUID(guid), fmt::format("[{}]", StringFromGUID(guid))),
-	m_guid{ guid }
+	  m_guid{guid}
 {
-	
 }
 
 DirectInputController::DirectInputController(const GUID& guid, std::string_view display_name)
@@ -33,7 +32,7 @@ DirectInputController::~DirectInputController()
 		}
 
 		// info.guidProduct = {18440079-0000-0000-0000-504944564944}
-		constexpr GUID kGameCubeController = { 0x18440079, 0, 0, {0,0,0x50,0x49,0x44,0x56,0x49,0x44} };
+		constexpr GUID kGameCubeController = {0x18440079, 0, 0, {0, 0, 0x50, 0x49, 0x44, 0x56, 0x49, 0x44}};
 		if (kGameCubeController == m_product_guid)
 			should_release_device = false;
 
@@ -46,21 +45,21 @@ void DirectInputController::save(pugi::xml_node& node)
 {
 	base_type::save(node);
 
-	node.append_child("product_guid").append_child(pugi::node_pcdata).set_value(
-		fmt::format("{}", StringFromGUID(m_product_guid)).c_str());
+	node.append_child("product_guid").append_child(pugi::node_pcdata).set_value(fmt::format("{}", StringFromGUID(m_product_guid)).c_str());
 }
 
 void DirectInputController::load(const pugi::xml_node& node)
 {
 	base_type::load(node);
 
-	if (const auto value = node.child("product_guid")) {
+	if (const auto value = node.child("product_guid"))
+	{
 		if (GUIDFromString(value.child_value(), m_product_guid) && m_product_guid != GUID{} && !is_connected())
 		{
 			// test if another controller with the same product guid is connectable and replace
-			for(const auto& c : m_provider->get_controllers())
+			for (const auto& c : m_provider->get_controllers())
 			{
-				if(const auto ptr = std::dynamic_pointer_cast<DirectInputController>(c))
+				if (const auto ptr = std::dynamic_pointer_cast<DirectInputController>(c))
 				{
 					if (ptr->is_connected() && ptr->get_product_guid() == m_product_guid)
 					{
@@ -73,7 +72,6 @@ void DirectInputController::load(const pugi::xml_node& node)
 						m_guid = tmp_guid;
 					}
 				}
-				
 			}
 		}
 	}
@@ -121,24 +119,24 @@ bool DirectInputController::connect()
 	{
 		GUID guid_effect = GUID_NULL;
 		// check if constant force is supported
-		HRESULT result = m_device->EnumEffects([](LPCDIEFFECTINFOW eff, LPVOID guid) -> BOOL
-			{
-				*(GUID*)guid = eff->guid;
-				return DIENUM_STOP;
-			}, &guid_effect, DIEFT_CONSTANTFORCE);
+		HRESULT result = m_device->EnumEffects([](LPCDIEFFECTINFOW eff, LPVOID guid) -> BOOL {
+			*(GUID*)guid = eff->guid;
+			return DIENUM_STOP;
+		},
+											   &guid_effect, DIEFT_CONSTANTFORCE);
 
 		if (SUCCEEDED(result) && guid_effect != GUID_NULL)
 		{
-			DWORD dwAxes[2] = { DIJOFS_X, DIJOFS_Y };
-			LONG lDirection[2] = { 1, 0 };
+			DWORD dwAxes[2] = {DIJOFS_X, DIJOFS_Y};
+			LONG lDirection[2] = {1, 0};
 
-			DICONSTANTFORCE constant_force = { DI_FFNOMINALMAX }; // DI_FFNOMINALMAX -> should be max normally?!
+			DICONSTANTFORCE constant_force = {DI_FFNOMINALMAX}; // DI_FFNOMINALMAX -> should be max normally?!
 
 			DIEFFECT effect{};
 			effect.dwSize = sizeof(DIEFFECT);
 			effect.dwFlags = DIEFF_CARTESIAN | DIEFF_OBJECTOFFSETS;
-			effect.dwDuration = INFINITE; // DI_SECONDS;
-			effect.dwGain = DI_FFNOMINALMAX; // No scaling
+			effect.dwDuration = INFINITE;			 // DI_SECONDS;
+			effect.dwGain = DI_FFNOMINALMAX;		 // No scaling
 			effect.dwTriggerButton = DIEB_NOTRIGGER; // Not a button response DIEB_NOTRIGGER DIJOFS_BUTTON0
 			effect.cAxes = 2;
 			effect.rgdwAxes = dwAxes;
@@ -159,17 +157,16 @@ bool DirectInputController::connect()
 	std::fill(m_min_axis.begin(), m_min_axis.end(), 0);
 	std::fill(m_max_axis.begin(), m_max_axis.end(), std::numeric_limits<uint16>::max());
 	m_device->EnumObjects(
-		[](LPCDIDEVICEOBJECTINSTANCEW lpddoi, LPVOID pvRef) -> BOOL
-		{
+		[](LPCDIDEVICEOBJECTINSTANCEW lpddoi, LPVOID pvRef) -> BOOL {
 			auto* thisptr = (DirectInputController*)pvRef;
 
 			const auto instance = DIDFT_GETINSTANCE(lpddoi->dwType);
 			// some tools may use state.rglSlider properties, so they have 8 instead of 6 axis
-			if(instance >= thisptr->m_min_axis.size())
+			if (instance >= thisptr->m_min_axis.size())
 			{
 				return DIENUM_CONTINUE;
 			}
-			
+
 			DIPROPRANGE range{};
 			range.diph.dwSize = sizeof(range);
 			range.diph.dwHeaderSize = sizeof(range.diph);
@@ -182,7 +179,8 @@ bool DirectInputController::connect()
 			}
 
 			return DIENUM_CONTINUE;
-		}, this, DIDFT_AXIS);
+		},
+		this, DIDFT_AXIS);
 
 	m_device->Acquire();
 	return true;
@@ -213,25 +211,37 @@ void DirectInputController::stop_rumble()
 
 std::string DirectInputController::get_button_name(uint64 button) const
 {
-	switch(button)
+	switch (button)
 	{
-	case kAxisXP: return "X+";
-	case kAxisYP: return "Y+";
+	case kAxisXP:
+		return "X+";
+	case kAxisYP:
+		return "Y+";
 
-	case kAxisXN: return "X-";
-	case kAxisYN: return "Y-";
+	case kAxisXN:
+		return "X-";
+	case kAxisYN:
+		return "Y-";
 
-	case kRotationXP: return "RX+";
-	case kRotationYP: return "RY+";
+	case kRotationXP:
+		return "RX+";
+	case kRotationYP:
+		return "RY+";
 
-	case kRotationXN: return "RX-";
-	case kRotationYN: return "RY-";
+	case kRotationXN:
+		return "RX-";
+	case kRotationYN:
+		return "RY-";
 
-	case kTriggerXP: return "Z+";
-	case kTriggerYP: return "RZ+";
+	case kTriggerXP:
+		return "Z+";
+	case kTriggerYP:
+		return "RZ+";
 
-	case kTriggerXN: return "Z-";
-	case kTriggerYN: return "RZ-";
+	case kTriggerXN:
+		return "Z-";
+	case kTriggerYN:
+		return "RZ-";
 	}
 
 	return base_type::get_button_name(button);
@@ -275,7 +285,7 @@ ControllerState DirectInputController::raw_state()
 		if (HAS_BIT(state.rgbButtons[i], 7))
 			result.buttons.SetButtonState(i, true);
 	}
-	
+
 	// axis
 	constexpr float kThreshold = 0.001f;
 	float v = (float(state.lX - m_min_axis[0]) / float(m_max_axis[0] - m_min_axis[0])) * 2.0f - 1.0f;
@@ -310,19 +320,27 @@ ControllerState DirectInputController::raw_state()
 	{
 		switch (pov)
 		{
-		case 0: result.buttons.SetButtonState(kButtonUp, true);
+		case 0:
+			result.buttons.SetButtonState(kButtonUp, true);
 			break;
-		case 4500: result.buttons.SetButtonState(kButtonUp, true); // up + right
-		case 9000: result.buttons.SetButtonState(kButtonRight, true);
+		case 4500:
+			result.buttons.SetButtonState(kButtonUp, true); // up + right
+		case 9000:
+			result.buttons.SetButtonState(kButtonRight, true);
 			break;
-		case 13500: result.buttons.SetButtonState(kButtonRight, true); // right + down
-		case 18000: result.buttons.SetButtonState(kButtonDown, true);
+		case 13500:
+			result.buttons.SetButtonState(kButtonRight, true); // right + down
+		case 18000:
+			result.buttons.SetButtonState(kButtonDown, true);
 			break;
-		case 22500: result.buttons.SetButtonState(kButtonDown, true); // down + left
-		case 27000: result.buttons.SetButtonState(kButtonLeft, true);
+		case 22500:
+			result.buttons.SetButtonState(kButtonDown, true); // down + left
+		case 27000:
+			result.buttons.SetButtonState(kButtonLeft, true);
 			break;
-		case 31500: result.buttons.SetButtonState(kButtonLeft, true); // left + up
-					result.buttons.SetButtonState(kButtonUp, true); // left + up
+		case 31500:
+			result.buttons.SetButtonState(kButtonLeft, true); // left + up
+			result.buttons.SetButtonState(kButtonUp, true);	  // left + up
 			break;
 		}
 	}

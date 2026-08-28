@@ -5,7 +5,7 @@ class FSCDeviceWudFileCtx : public FSCVirtualFile
 {
 	friend class fscDeviceWUDC;
 
-protected:
+  protected:
 	FSCDeviceWudFileCtx(FSTVolume* _volume, FSTFileHandle _fstFileHandle)
 	{
 		this->m_volume = _volume;
@@ -21,7 +21,7 @@ protected:
 		this->m_dirIterator = _dirIterator;
 	}
 
-public:
+  public:
 	sint32 fscGetType() override
 	{
 		return m_fscType;
@@ -108,7 +108,7 @@ public:
 		return true;
 	}
 
-private:
+  private:
 	FSTVolume* m_volume{nullptr};
 	sint32 m_fscType;
 	FSTFileHandle m_fstFileHandle;
@@ -148,7 +148,7 @@ class fscDeviceWUDC : public fscDeviceC
 	}
 
 	// singleton
-public:
+  public:
 	static fscDeviceWUDC& instance()
 	{
 		static fscDeviceWUDC _instance;

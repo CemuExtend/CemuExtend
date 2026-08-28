@@ -80,7 +80,7 @@ bool SaveScreenshotToClipboard(const wxImage& image)
 }
 
 std::optional<std::string> SaveScreenshot(const Host::IPathProvider& pathProvider,
-	std::vector<uint8> data, int width, int height, bool mainWindow)
+										  std::vector<uint8> data, int width, int height, bool mainWindow)
 {
 #if BOOST_OS_WINDOWS
 	// on Windows wxWidgets uses OLE API for the clipboard
@@ -176,13 +176,14 @@ HotkeySettings::~HotkeySettings()
 	m_controllerTimer->Stop();
 	if (m_needToSave)
 	{
+		SyncWxFrontendSettingsToNeutral();
 		GetConfigHandle().Save();
 	}
 }
 
 void HotkeySettings::Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
-	std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry,
-	std::shared_ptr<Host::IPathProvider> pathProvider)
+						  std::shared_ptr<WxMainWindowRegistry> mainWindowRegistry,
+						  std::shared_ptr<Host::IPathProvider> pathProvider)
 {
 	cemu_assert(uiDispatcher && mainWindowRegistry && pathProvider);
 	s_uiDispatcher = uiDispatcher;
@@ -217,11 +218,11 @@ void HotkeySettings::Init(std::shared_ptr<IWxUiDispatcher> uiDispatcher,
 			 });
 		 }},
 		{&s_cfgHotkeys.exitApplication, [](void) {
-			RunOnUi([](MainWindow& window) {
-				auto closeEvent = new wxCloseEvent{wxEVT_CLOSE_WINDOW, window.GetId()};
-				closeEvent->SetCanVeto(false);
-				wxQueueEvent(&window, closeEvent);
-			});
+			 RunOnUi([](MainWindow& window) {
+				 auto closeEvent = new wxCloseEvent{wxEVT_CLOSE_WINDOW, window.GetId()};
+				 closeEvent->SetCanVeto(false);
+				 wxQueueEvent(&window, closeEvent);
+			 });
 		 }},
 #ifdef CEMU_DEBUG_ASSERT
 		{&s_cfgHotkeys.endEmulation, [](void) {
@@ -255,8 +256,8 @@ void HotkeySettings::RunOnUi(std::function<void(MainWindow&)> action)
 	(void)uiDispatcher->Queue(
 		[mainWindowRegistry = std::move(mainWindowRegistry),
 		 action = std::move(action)] {
-		(void)mainWindowRegistry->InvokeForUi(
-			[&](MainWindow& window) { action(window); });
+			(void)mainWindowRegistry->InvokeForUi(
+				[&](MainWindow& window) { action(window); });
 		});
 }
 
@@ -349,7 +350,8 @@ void HotkeySettings::OnKeyboardHotkeyInputLeftClick(wxCommandEvent& event)
 	if (m_activeInputButton)
 	{
 		/* ignore multiple clicks of the same button */
-		if (inputButton == m_activeInputButton) return;
+		if (inputButton == m_activeInputButton)
+			return;
 		RestoreInputButton<uKeyboardHotkey>();
 	}
 	inputButton->Bind(wxEVT_KEY_UP, &HotkeySettings::OnKeyUp, this);
@@ -363,7 +365,8 @@ void HotkeySettings::OnControllerHotkeyInputLeftClick(wxCommandEvent& event)
 	if (m_activeInputButton)
 	{
 		/* ignore multiple clicks of the same button */
-		if (inputButton == m_activeInputButton) return;
+		if (inputButton == m_activeInputButton)
+			return;
 		RestoreInputButton<ControllerHotkey_t>();
 	}
 	m_controllerTimer->Stop();
@@ -494,7 +497,8 @@ bool HotkeySettings::IsValidKeycodeUp(int keycode)
 
 wxString HotkeySettings::To_wxString(uKeyboardHotkey hotkey)
 {
-	if (hotkey.raw == sHotkeyCfg::keyboardNone) {
+	if (hotkey.raw == sHotkeyCfg::keyboardNone)
+	{
 		return m_disabledHotkeyText;
 	}
 	wxString ret{};
@@ -516,7 +520,8 @@ wxString HotkeySettings::To_wxString(uKeyboardHotkey hotkey)
 
 wxString HotkeySettings::To_wxString(ControllerHotkey_t hotkey)
 {
-	if ((hotkey == sHotkeyCfg::controllerNone) || m_activeController.expired()) {
+	if ((hotkey == sHotkeyCfg::controllerNone) || m_activeController.expired())
+	{
 		return m_disabledHotkeyText;
 	}
 	return m_activeController.lock()->get_button_name(hotkey);

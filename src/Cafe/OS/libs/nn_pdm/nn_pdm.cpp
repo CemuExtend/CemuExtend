@@ -33,7 +33,7 @@ namespace nn
 
 		class : public COSModule
 		{
-			public:
+		  public:
 			std::string_view GetName() override
 			{
 				return "nn_pdm";
@@ -47,12 +47,12 @@ namespace nn
 				cafeExportRegisterFunc(GetPlayDiary, "nn_pdm", "GetPlayDiary__Q2_2nn3pdmFPiPQ3_2nn3pdm9PlayDiaryiT3", LogType::NN_PDM);
 			};
 
-		}s_COSnnPdmModule;
+		} s_COSnnPdmModule;
 
 		COSModule* GetModule()
 		{
 			return &s_COSnnPdmModule;
 		}
 
-	}
-}
+	} // namespace pdm
+} // namespace nn

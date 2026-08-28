@@ -16,29 +16,31 @@ namespace
 		std::numeric_limits<std::size_t>::max() / 2;
 
 	[[nodiscard]] std::uint32_t ReadBe32(std::span<const std::byte> bytes,
-		std::size_t offset)
+										 std::size_t offset)
 	{
 		return (std::to_integer<std::uint32_t>(bytes[offset]) << 24) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
-			(std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
-			std::to_integer<std::uint32_t>(bytes[offset + 3]);
+			   (std::to_integer<std::uint32_t>(bytes[offset + 1]) << 16) |
+			   (std::to_integer<std::uint32_t>(bytes[offset + 2]) << 8) |
+			   std::to_integer<std::uint32_t>(bytes[offset + 3]);
 	}
 
 	class FunctionPatcherFacade final : public IWupsFunctionPatcherFacade
 	{
-	public:
+	  public:
 		FunctionPatcherFacade(std::shared_ptr<IWupsPlatform> platform,
-			std::shared_ptr<WupsFunctionPatchManager> manager) :
-			m_platform(std::move(platform)), m_manager(std::move(manager))
+							  std::shared_ptr<WupsFunctionPatchManager> manager) : m_platform(std::move(platform)), m_manager(std::move(manager))
 		{
 		}
 
-		std::uint32_t ApiVersion() const override { return 2; }
+		std::uint32_t ApiVersion() const override
+		{
+			return 2;
+		}
 
 		WupsServiceStatus AddPatch(WupsOwnerToken owner,
-			std::uint32_t descriptorAddress, bool allowPhysicalAddress,
-			std::uint32_t& handle, bool& applied,
-			std::string& error) override
+								   std::uint32_t descriptorAddress, bool allowPhysicalAddress,
+								   std::uint32_t& handle, bool& applied,
+								   std::string& error) override
 		{
 			handle = 0;
 			applied = false;
@@ -52,8 +54,9 @@ namespace
 
 			WupsPatchRequest request;
 			const auto parsed = Parse(owner, descriptorAddress,
-				allowPhysicalAddress, request, error);
-			if (parsed != WupsServiceStatus::Success) return parsed;
+									  allowPhysicalAddress, request, error);
+			if (parsed != WupsServiceStatus::Success)
+				return parsed;
 
 			std::lock_guard lock(m_mutex);
 			const auto latest = m_latestGeneration.find(owner.owner);
@@ -66,8 +69,8 @@ namespace
 					return WupsServiceStatus::StaleGeneration;
 				}
 				if (std::ranges::any_of(m_records, [&](const auto& entry) {
-					return entry.second.owner.owner == owner.owner;
-				}))
+						return entry.second.owner.owner == owner.owner;
+					}))
 				{
 					error = "FunctionPatcher owner generation changed with live handles";
 					return WupsServiceStatus::Busy;
@@ -82,16 +85,16 @@ namespace
 				return WupsServiceStatus::Conflict;
 			}
 			applied = std::ranges::any_of(m_manager->Applied(),
-				[&](const auto& patch) {
-					return patch.owner == request.owner &&
-						patch.descriptorIndex == request.descriptorIndex;
-				});
+										  [&](const auto& patch) {
+											  return patch.owner == request.owner &&
+													 patch.descriptorIndex == request.descriptorIndex;
+										  });
 			m_records.emplace(handle, Record{owner, request.descriptorIndex});
 			return WupsServiceStatus::Success;
 		}
 
 		WupsServiceStatus RemovePatch(WupsOwnerToken owner,
-			std::uint32_t handle, std::string& error) override
+									  std::uint32_t handle, std::string& error) override
 		{
 			error.clear();
 			std::lock_guard lock(m_mutex);
@@ -101,12 +104,10 @@ namespace
 			if (found->second.owner != owner)
 			{
 				error = "FunctionPatcher handle belongs to another owner generation";
-				return found->second.owner.owner == owner.owner ?
-					WupsServiceStatus::StaleGeneration :
-					WupsServiceStatus::OwnerMismatch;
+				return found->second.owner.owner == owner.owner ? WupsServiceStatus::StaleGeneration : WupsServiceStatus::OwnerMismatch;
 			}
 			if (!m_manager->Remove({owner.owner, owner.generation},
-				found->second.descriptorIndex, error))
+								   found->second.descriptorIndex, error))
 			{
 				// Deactivation may already have removed the manager record. The
 				// public handle is still retired exactly once by this facade.
@@ -118,27 +119,26 @@ namespace
 		}
 
 		WupsServiceStatus IsPatchApplied(WupsOwnerToken owner,
-			std::uint32_t handle, bool& applied,
-			std::string& error) const override
+										 std::uint32_t handle, bool& applied,
+										 std::string& error) const override
 		{
 			applied = false;
 			error.clear();
 			std::lock_guard lock(m_mutex);
 			const auto found = m_records.find(handle);
-			if (found == m_records.end()) return WupsServiceStatus::NotFound;
+			if (found == m_records.end())
+				return WupsServiceStatus::NotFound;
 			if (found->second.owner != owner)
 			{
 				error = "FunctionPatcher handle belongs to another owner generation";
-				return found->second.owner.owner == owner.owner ?
-					WupsServiceStatus::StaleGeneration :
-					WupsServiceStatus::OwnerMismatch;
+				return found->second.owner.owner == owner.owner ? WupsServiceStatus::StaleGeneration : WupsServiceStatus::OwnerMismatch;
 			}
 			applied = std::ranges::any_of(m_manager->Applied(),
-				[&](const auto& patch) {
-					return patch.owner == WupsPatchOwner{
-						owner.owner, owner.generation} &&
-						patch.descriptorIndex == found->second.descriptorIndex;
-				});
+										  [&](const auto& patch) {
+											  return patch.owner == WupsPatchOwner{
+																		owner.owner, owner.generation} &&
+													 patch.descriptorIndex == found->second.descriptorIndex;
+										  });
 			return WupsServiceStatus::Success;
 		}
 
@@ -154,12 +154,12 @@ namespace
 				}
 				std::string ignored;
 				(void)m_manager->Remove({owner.owner, owner.generation},
-					iterator->second.descriptorIndex, ignored);
+										iterator->second.descriptorIndex, ignored);
 				iterator = m_records.erase(iterator);
 			}
 		}
 
-	private:
+	  private:
 		struct Record
 		{
 			WupsOwnerToken owner;
@@ -167,20 +167,20 @@ namespace
 		};
 
 		WupsServiceStatus Parse(WupsOwnerToken owner, std::uint32_t address,
-			bool allowPhysicalAddress, WupsPatchRequest& request,
-			std::string& error) const
+								bool allowPhysicalAddress, WupsPatchRequest& request,
+								std::string& error) const
 		{
 			std::array<std::byte, kDescriptorV3RplSize> bytes{};
 			if (!m_platform->ValidateGuestRangeForOwner(
-				owner, address, 4, WupsGuestAccess::Read) ||
+					owner, address, 4, WupsGuestAccess::Read) ||
 				!m_platform->ReadGuest(address, std::span(bytes).first(4)))
 			{
 				error = "FunctionPatcher descriptor version is not readable";
 				return WupsServiceStatus::InvalidArgument;
 			}
 			const auto version = ReadBe32(bytes, 0);
-			const auto size = version == 2 ? kDescriptorV2Size :
-				version == 3 ? kDescriptorV3RplSize : 0;
+			const auto size = version == 2 ? kDescriptorV2Size : version == 3 ? kDescriptorV3RplSize
+																			  : 0;
 			if (size == 0)
 			{
 				error = fmt::format(
@@ -190,7 +190,7 @@ namespace
 			}
 			if ((address & 3U) != 0 ||
 				!m_platform->ValidateGuestRangeForOwner(owner, address, size,
-					WupsGuestAccess::Read) ||
+														WupsGuestAccess::Read) ||
 				!m_platform->ReadGuest(address, std::span(bytes).first(size)))
 			{
 				error = "FunctionPatcher descriptor is misaligned or truncated";
@@ -235,27 +235,27 @@ namespace
 			}
 			if ((replacement & 3U) != 0 || (callThrough & 3U) != 0 ||
 				!m_platform->ValidateGuestRangeForOwner(owner, replacement, 4,
-					WupsGuestAccess::Execute) ||
+														WupsGuestAccess::Execute) ||
 				!m_platform->ValidateGuestRangeForOwner(owner, callThrough, 4,
-					WupsGuestAccess::Write))
+														WupsGuestAccess::Write))
 			{
 				error = "FunctionPatcher replacement/call-through pointer has invalid ownership, alignment, or permission";
 				return WupsServiceStatus::InvalidArgument;
 			}
 			if (process != static_cast<std::uint32_t>(WupsPatchProcess::All) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::RootRpx) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::WiiUMenu) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::Tvii) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::EManual) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::HomeMenu) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::ErrorDisplay) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::MiniMiiverse) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::Browser) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::Miiverse) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::Eshop) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::DownloadManager) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::Game) &&
-				 process != static_cast<std::uint32_t>(WupsPatchProcess::GameAndMenu))
+				process != static_cast<std::uint32_t>(WupsPatchProcess::RootRpx) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::WiiUMenu) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::Tvii) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::EManual) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::HomeMenu) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::ErrorDisplay) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::MiniMiiverse) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::Browser) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::Miiverse) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::Eshop) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::DownloadManager) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::Game) &&
+				process != static_cast<std::uint32_t>(WupsPatchProcess::GameAndMenu))
 			{
 				error = "FunctionPatcher descriptor has an invalid process target";
 				return WupsServiceStatus::InvalidArgument;
@@ -309,7 +309,7 @@ namespace
 		}
 
 		bool ReadString(WupsOwnerToken owner, std::uint32_t address,
-			std::string& value, std::string& error) const
+						std::string& value, std::string& error) const
 		{
 			value.clear();
 			if (address == 0)
@@ -321,18 +321,19 @@ namespace
 			{
 				if (address > std::numeric_limits<std::uint32_t>::max() - index ||
 					!m_platform->ValidateGuestRangeForOwner(owner,
-						address + static_cast<std::uint32_t>(index), 1,
-						WupsGuestAccess::Read))
+															address + static_cast<std::uint32_t>(index), 1,
+															WupsGuestAccess::Read))
 				{
 					error = "FunctionPatcher function name leaves readable guest memory";
 					return false;
 				}
 				std::byte byte{};
 				if (!m_platform->ReadGuest(
-					address + static_cast<std::uint32_t>(index),
-					std::span{&byte, 1}))
+						address + static_cast<std::uint32_t>(index),
+						std::span{&byte, 1}))
 					return false;
-				if (byte == std::byte{}) return !value.empty();
+				if (byte == std::byte{})
+					return !value.empty();
 				value.push_back(static_cast<char>(std::to_integer<unsigned char>(byte)));
 			}
 			error = "FunctionPatcher function name is not NUL-terminated";
@@ -344,7 +345,8 @@ namespace
 			do
 			{
 				++m_nextHandle;
-			} while (m_nextHandle == 0 || m_records.contains(m_nextHandle));
+			}
+			while (m_nextHandle == 0 || m_records.contains(m_nextHandle));
 			return m_nextHandle;
 		}
 
@@ -355,13 +357,14 @@ namespace
 		std::unordered_map<std::uint64_t, std::uint32_t> m_latestGeneration;
 		std::uint32_t m_nextHandle{};
 	};
-}
+} // namespace
 
 std::shared_ptr<IWupsFunctionPatcherFacade>
 CreateWupsFunctionPatcherFacade(std::shared_ptr<IWupsPlatform> platform,
-	std::shared_ptr<WupsFunctionPatchManager> manager)
+								std::shared_ptr<WupsFunctionPatchManager> manager)
 {
-	if (!platform || !manager) return {};
+	if (!platform || !manager)
+		return {};
 	return std::make_shared<FunctionPatcherFacade>(
 		std::move(platform), std::move(manager));
 }

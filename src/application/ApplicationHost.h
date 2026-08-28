@@ -9,7 +9,7 @@ namespace Host
 	class IInputFocus;
 	class ICanvasHost;
 	class IWindowMetrics;
-}
+} // namespace Host
 
 namespace Application
 {
@@ -26,4 +26,4 @@ namespace Application
 	// cannot use constructor injection. Each module receives only its narrow port.
 	void ConnectHost(const HostBindings& bindings);
 	void DisconnectHost();
-}
+} // namespace Application

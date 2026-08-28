@@ -1,14 +1,14 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "nn_ec.h"
 
-typedef struct  
+typedef struct
 {
 	/* +0x00 */ uint8 ukn00[0x10];
 	/* +0x10 */ uint8 ukn10[0x0C];
 	/* +0x2C */ uint8 ukn2C[0x10]; // currency string?
-	/* +0x3C */ uint32 ukn3C; // money amount?
-	// size of struct is 0x40
-}nnEcUknMoneyStruct_t;
+	/* +0x3C */ uint32 ukn3C;	   // money amount?
+								   // size of struct is 0x40
+} nnEcUknMoneyStruct_t;
 
 void nnEcExport___ct__Q3_2nn2ec5MoneyFPCcN21(PPCInterpreter_t* hCPU)
 {
@@ -22,7 +22,7 @@ namespace nn::ec
 {
 	class : public COSModule
 	{
-		public:
+	  public:
 		std::string_view GetName() override
 		{
 			return "nn_ec";
@@ -33,10 +33,10 @@ namespace nn::ec
 			osLib_addFunction("nn_ec", "__ct__Q3_2nn2ec5MoneyFPCcN21", nnEcExport___ct__Q3_2nn2ec5MoneyFPCcN21);
 		};
 
-	}s_COSnnEcModule;
+	} s_COSnnEcModule;
 
 	COSModule* GetModule()
 	{
 		return &s_COSnnEcModule;
 	}
-}
+} // namespace nn::ec

@@ -17,8 +17,14 @@
 #include <unordered_map>
 
 uint64 s_loggingFlagMask = 1ULL << static_cast<uint64>(LogType::Force);
-bool cemuLog_log(LogType, std::string_view) { return true; }
-bool cemuLog_log(LogType, std::u8string_view) { return true; }
+bool cemuLog_log(LogType, std::string_view)
+{
+	return true;
+}
+bool cemuLog_log(LogType, std::u8string_view)
+{
+	return true;
+}
 
 namespace
 {
@@ -27,39 +33,53 @@ namespace
 		std::cerr << "CHECK failed at line " << line << ": " << expression << '\n';
 		std::abort();
 	}
-#define CHECK(value) do { if (!(value)) Failed(#value, __LINE__); } while (false)
+#define CHECK(value)                  \
+	do                                \
+	{                                 \
+		if (!(value))                 \
+			Failed(#value, __LINE__); \
+	}                                 \
+	while (false)
 
 	class FakePlatform final : public IWupsPlatform
 	{
-	public:
+	  public:
 		bool ValidateGuestRange(std::uint32_t address, std::uint32_t size,
-			WupsGuestAccess) const override
+								WupsGuestAccess) const override
 		{
 			return address >= 0x1000 && static_cast<std::uint64_t>(address) + size <= 0x20000;
 		}
 		bool ReadGuest(std::uint32_t address, std::span<std::byte> output) const override
 		{
-			if (!ValidateGuestRange(address, output.size(), WupsGuestAccess::Read)) return false;
+			if (!ValidateGuestRange(address, output.size(), WupsGuestAccess::Read))
+				return false;
 			std::ranges::copy(std::span(memory).subspan(address, output.size()), output.begin());
 			return true;
 		}
 		bool WriteGuest(std::uint32_t address, std::span<const std::byte> input) override
 		{
-			if (failWriteAddress == address) return false;
-			if (!ValidateGuestRange(address, input.size(), WupsGuestAccess::Write)) return false;
+			if (failWriteAddress == address)
+				return false;
+			if (!ValidateGuestRange(address, input.size(), WupsGuestAccess::Write))
+				return false;
 			std::ranges::copy(input, memory.begin() + address);
 			return true;
 		}
 		std::optional<std::uint32_t> AllocateGuestData(WupsOwnerToken,
-			std::uint32_t size, std::uint32_t alignment, std::string&) override
+													   std::uint32_t size, std::uint32_t alignment, std::string&) override
 		{
 			nextData = (nextData + alignment - 1) & ~(alignment - 1);
-			const auto result = nextData; nextData += size; return result;
+			const auto result = nextData;
+			nextData += size;
+			return result;
 		}
-		void FreeGuestData(WupsOwnerToken, std::uint32_t) override { ++guestFrees; }
+		void FreeGuestData(WupsOwnerToken, std::uint32_t) override
+		{
+			++guestFrees;
+		}
 		std::optional<std::uint32_t> RegisterFunction(WupsOwnerToken,
-			std::string_view, std::string_view, WupsHostExportHandler handler,
-			std::string&) override
+													  std::string_view, std::string_view, WupsHostExportHandler handler,
+													  std::string&) override
 		{
 			std::uint32_t address;
 			{
@@ -78,48 +98,68 @@ namespace
 		}
 		void ReleaseOwnerExports(WupsOwnerToken) override
 		{
-			if (registrationInProgress) prematureExportRelease = true;
+			if (registrationInProgress)
+				prematureExportRelease = true;
 			++exportReleases;
 		}
-		std::uint64_t CurrentGuestThreadId() const override { return 7; }
+		std::uint64_t CurrentGuestThreadId() const override
+		{
+			return 7;
+		}
 		bool QueueCpuTask(WupsOwnerToken, std::function<void()> task, std::string&) override
 		{
-			std::lock_guard lock(mutex); tasks.push_back(std::move(task)); return true;
+			std::lock_guard lock(mutex);
+			tasks.push_back(std::move(task));
+			return true;
 		}
 		void CancelCpuTasks(WupsOwnerToken) override
 		{
 			{
-				std::lock_guard lock(mutex); tasks.clear();
+				std::lock_guard lock(mutex);
+				tasks.clear();
 			}
 			++taskCancellations;
 		}
-		bool SupportsMappedMemory() const override { return supportsMappedMemory; }
+		bool SupportsMappedMemory() const override
+		{
+			return supportsMappedMemory;
+		}
 		bool SupportsOwnerScopedHeapPointers() const override
 		{
 			return supportsOwnerScopedHeapPointers;
 		}
 		std::optional<WupsMappedMemoryInfo> AllocateMappedMemory(WupsOwnerToken,
-			std::uint32_t size, std::uint32_t alignment, bool writable,
-			WupsMappedMemoryPurpose purpose, std::string&) override
+																 std::uint32_t size, std::uint32_t alignment, bool writable,
+																 WupsMappedMemoryPurpose purpose, std::string&) override
 		{
-			if (allocateHook) allocateHook();
+			if (allocateHook)
+				allocateHook();
 			std::lock_guard lock(mappingMutex);
 			WupsMappedMemoryInfo result{nextMapping, nextPhysical,
-				size + mappingSizeExtra, alignment, writable, purpose};
-			if (!forceOverlap) { nextMapping += 0x10000; nextPhysical += 0x10000; }
+										size + mappingSizeExtra, alignment, writable, purpose};
+			if (!forceOverlap)
+			{
+				nextMapping += 0x10000;
+				nextPhysical += 0x10000;
+			}
 			return result;
 		}
 		bool FreeMappedMemory(WupsOwnerToken, const WupsMappedMemoryInfo&, std::string&) override
 		{
-			if (freeHook) freeHook();
-			++mappingFrees; return !failFree;
+			if (freeHook)
+				freeHook();
+			++mappingFrees;
+			return !failFree;
 		}
 		void ShowNotification(WupsOwnerToken, const WupsNotificationModel&) override {}
 		void Log(WupsOwnerToken, WupsLogLevel, std::string_view,
-			std::string_view, std::string_view) override { ++logs; }
+				 std::string_view, std::string_view) override
+		{
+			++logs;
+		}
 
 		std::int32_t Dispatch(std::uint32_t address,
-			std::span<const std::uint32_t> arguments, std::string& error)
+							  std::span<const std::uint32_t> arguments, std::string& error)
 		{
 			WupsHostExportHandler handler;
 			{
@@ -131,8 +171,12 @@ namespace
 		void RunTasks()
 		{
 			std::vector<std::function<void()>> copy;
-			{ std::lock_guard lock(mutex); copy.swap(tasks); }
-			for (auto& task : copy) task();
+			{
+				std::lock_guard lock(mutex);
+				copy.swap(tasks);
+			}
+			for (auto& task : copy)
+				task();
 		}
 
 		std::array<std::byte, 0x20000> memory{};
@@ -160,10 +204,13 @@ namespace
 
 	class FakeFunctionPatcher final : public IWupsFunctionPatcherFacade
 	{
-	public:
-		std::uint32_t ApiVersion() const override { return 2; }
+	  public:
+		std::uint32_t ApiVersion() const override
+		{
+			return 2;
+		}
 		WupsServiceStatus AddPatch(WupsOwnerToken, std::uint32_t, bool,
-			std::uint32_t& handle, bool& applied, std::string&) override
+								   std::uint32_t& handle, bool& applied, std::string&) override
 		{
 			++adds;
 			handle = 0x12345678;
@@ -172,7 +219,7 @@ namespace
 			return WupsServiceStatus::Success;
 		}
 		WupsServiceStatus RemovePatch(WupsOwnerToken, std::uint32_t handle,
-			std::string&) override
+									  std::string&) override
 		{
 			CHECK(handle == 0x12345678);
 			++removes;
@@ -180,24 +227,27 @@ namespace
 			return WupsServiceStatus::Success;
 		}
 		WupsServiceStatus IsPatchApplied(WupsOwnerToken, std::uint32_t,
-			bool& applied, std::string&) const override
+										 bool& applied, std::string&) const override
 		{
 			applied = true;
 			return WupsServiceStatus::Success;
 		}
-		void ReleaseOwner(WupsOwnerToken) override { live = false; }
+		void ReleaseOwner(WupsOwnerToken) override
+		{
+			live = false;
+		}
 
 		std::size_t adds{}, removes{};
 		bool live{};
 	};
 
 	std::uint32_t ReadGuestU32(const FakePlatform& platform,
-		std::uint32_t address)
+							   std::uint32_t address)
 	{
 		return (std::to_integer<std::uint32_t>(platform.memory[address]) << 24) |
-			(std::to_integer<std::uint32_t>(platform.memory[address + 1]) << 16) |
-			(std::to_integer<std::uint32_t>(platform.memory[address + 2]) << 8) |
-			std::to_integer<std::uint32_t>(platform.memory[address + 3]);
+			   (std::to_integer<std::uint32_t>(platform.memory[address + 1]) << 16) |
+			   (std::to_integer<std::uint32_t>(platform.memory[address + 2]) << 8) |
+			   std::to_integer<std::uint32_t>(platform.memory[address + 3]);
 	}
 
 	CemodPackage Package(std::string id, std::vector<std::string> modules)
@@ -222,8 +272,10 @@ namespace
 		package.grantedPermissions = 0x15;
 		package.serviceReadMask = 0x02;
 		package.serviceInjectMask = 0x02;
-		WupsMetadata metadata; metadata.name = "CEX2 owner";
-		std::string error; const WupsOwnerToken token{77, 3};
+		WupsMetadata metadata;
+		metadata.name = "CEX2 owner";
+		std::string error;
+		const WupsOwnerToken token{77, 3};
 		CHECK(runtime.RegisterOwner(package, metadata, token, error));
 		auto owner = runtime.Cex2OwnerFor(token);
 		CHECK(owner);
@@ -242,15 +294,17 @@ namespace
 	void TestStorageAndOwnerGeneration(const std::filesystem::path& root)
 	{
 		auto platform = std::make_shared<FakePlatform>();
-		AromaRuntimeOptions options{.storageRoot = root, .platform = platform,
-			.maximumStorageBytes = 64, .maximumStorageItems = 2};
+		AromaRuntimeOptions options{.storageRoot = root, .platform = platform, .maximumStorageBytes = 64, .maximumStorageItems = 2};
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("storage", {"homebrew_wupsbackend"});
-		WupsMetadata metadata; metadata.name = "Storage"; metadata.storageId = "safe-id";
-		std::string error; const WupsOwnerToken owner{1, 1};
+		WupsMetadata metadata;
+		metadata.name = "Storage";
+		metadata.storageId = "safe-id";
+		std::string error;
+		const WupsOwnerToken owner{1, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
 		WupsStorageValue value{WupsStorageValueType::String,
-			{std::byte{'o'}, std::byte{'k'}}};
+							   {std::byte{'o'}, std::byte{'k'}}};
 		CHECK(runtime.StorageStore(owner, 0, "value", value) == WupsServiceStatus::Success);
 		CHECK(runtime.StorageStore(owner, 0, "../escape", value) == WupsServiceStatus::InvalidArgument);
 		std::uint32_t child{};
@@ -262,7 +316,7 @@ namespace
 			return runtime.StorageForceReload(owner, reloadError);
 		});
 		CHECK(reloadTask.wait_for(std::chrono::seconds(2)) ==
-			std::future_status::ready);
+			  std::future_status::ready);
 		CHECK(reloadTask.get() == WupsServiceStatus::Success);
 		WupsStorageValue loaded;
 		CHECK(runtime.StorageGet(owner, 0, "value", WupsStorageValueType::String, loaded) == WupsServiceStatus::Success);
@@ -273,13 +327,17 @@ namespace
 		CHECK(runtime.StorageGet(owner, 0, "value", WupsStorageValueType::String, loaded) == WupsServiceStatus::StaleGeneration);
 		std::filesystem::path storageFile;
 		for (const auto& entry : std::filesystem::recursive_directory_iterator(root))
-			if (entry.path().extension() == ".wups-storage") storageFile = entry.path();
+			if (entry.path().extension() == ".wups-storage")
+				storageFile = entry.path();
 		CHECK(!storageFile.empty());
-		{ std::ofstream stream(storageFile, std::ios::binary | std::ios::trunc); stream << "corrupt"; }
+		{
+			std::ofstream stream(storageFile, std::ios::binary | std::ios::trunc);
+			stream << "corrupt";
+		}
 		AromaCompatibilityRuntime reload(options);
 		CHECK(reload.RegisterOwner(package, metadata, {1, 2}, error));
 		CHECK(reload.StorageGet({1, 2}, 0, "value", WupsStorageValueType::String,
-			loaded) == WupsServiceStatus::CorruptData);
+								loaded) == WupsServiceStatus::CorruptData);
 	}
 
 	void TestBackendDescriptorAndPendingPlan()
@@ -313,7 +371,7 @@ namespace
 		const auto secondHandle = management.CreatePluginData(std::move(second));
 		CHECK(firstHandle && duplicateHandle && secondHandle);
 		const std::array handles{*firstHandle, 0xffffffffU,
-			*duplicateHandle, *secondHandle};
+								 *duplicateHandle, *secondHandle};
 		const WupsProcessKey key{2, 0x0005000012345678ULL};
 		CHECK(management.ScheduleNextLaunch(key, handles));
 		CHECK(management.HasPendingPlan(key));
@@ -332,14 +390,14 @@ namespace
 	{
 		auto platform = std::make_shared<FakePlatform>();
 		auto management = std::make_shared<WupsBackendManagementRuntime>();
-		AromaRuntimeOptions options{.storageRoot = root, .platform = platform,
-			.backendManagement = management};
+		AromaRuntimeOptions options{.storageRoot = root, .platform = platform, .backendManagement = management};
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("backend", {"homebrew_wupsbackend"});
 		package.manifest.packageVersion = 3;
 		package.manifest.nativePermissions.pluginManagement = true;
 		package.targetTitleId = 0x0005000012345678ULL;
-		WupsMetadata metadata; metadata.name = "Backend";
+		WupsMetadata metadata;
+		metadata.name = "Backend";
 		std::string error;
 		const WupsOwnerToken owner{90, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
@@ -347,8 +405,8 @@ namespace
 		for (const auto& descriptor : WupsBackendExportDescriptors())
 		{
 			const auto address = runtime.ResolveRuntimeModuleExport(owner,
-				"homebrew_wupsbackend", descriptor.name,
-				WupsSymbolKind::Function, error);
+																	"homebrew_wupsbackend", descriptor.name,
+																	WupsSymbolKind::Function, error);
 			CHECK(address);
 			if (descriptor.id == WupsBackendExportId::GetApiVersion)
 				apiVersionExport = *address;
@@ -361,8 +419,8 @@ namespace
 		auto denied = Package("backend-denied", {"homebrew_wupsbackend"});
 		CHECK(runtime.RegisterOwner(denied, metadata, {91, 1}, error));
 		CHECK(!runtime.ResolveRuntimeModuleExport({91, 1},
-			"homebrew_wupsbackend", "WUPSGetAPIVersion",
-			WupsSymbolKind::Function, error));
+												  "homebrew_wupsbackend", "WUPSGetAPIVersion",
+												  WupsSymbolKind::Function, error));
 		CHECK(error.find("plugin_management") != std::string::npos);
 	}
 
@@ -371,28 +429,30 @@ namespace
 		auto platform = std::make_shared<FakePlatform>();
 		AromaRuntimeOptions options{.storageRoot = root, .platform = platform};
 		AromaCompatibilityRuntime runtime(options);
-		WupsMetadata metadata; metadata.name = "Services"; metadata.abiVersion = {0, 9, 1};
+		WupsMetadata metadata;
+		metadata.name = "Services";
+		metadata.abiVersion = {0, 9, 1};
 		std::string error;
 		auto denied = Package("denied", {});
 		CHECK(runtime.RegisterOwner(denied, metadata, {2, 1}, error));
 		WupsMappedMemoryInfo allocation;
 		CHECK(runtime.MappedMemoryAllocate({2, 1}, 4096, 4096, true,
-			WupsMappedMemoryPurpose::Cpu, allocation, error) == WupsServiceStatus::PermissionDenied);
+										   WupsMappedMemoryPurpose::Cpu, allocation, error) == WupsServiceStatus::PermissionDenied);
 
 		auto allowed = Package("allowed", {"homebrew_memorymapping", "homebrew_logging"});
 		allowed.manifest.nativePermissions.mappedMemory = true;
 		CHECK(runtime.RegisterOwner(allowed, metadata, {3, 1}, error));
 		CHECK(runtime.MappedMemoryAllocate({3, 1}, 4096, 4096, true,
-			WupsMappedMemoryPurpose::Cpu, allocation, error) == WupsServiceStatus::Success);
+										   WupsMappedMemoryPurpose::Cpu, allocation, error) == WupsServiceStatus::Success);
 		platform->forceOverlap = true;
 		WupsMappedMemoryInfo second;
 		CHECK(runtime.MappedMemoryAllocate({3, 1}, 4096, 4096, true,
-			WupsMappedMemoryPurpose::Cpu, second, error) == WupsServiceStatus::Success);
+										   WupsMappedMemoryPurpose::Cpu, second, error) == WupsServiceStatus::Success);
 		WupsMappedMemoryInfo overlap;
 		CHECK(runtime.MappedMemoryAllocate({3, 1}, 4096, 4096, true,
-			WupsMappedMemoryPurpose::Cpu, overlap, error) == WupsServiceStatus::Conflict);
+										   WupsMappedMemoryPurpose::Cpu, overlap, error) == WupsServiceStatus::Conflict);
 		const auto address = runtime.ResolveImport(allowed, metadata, 3, 1,
-			"homebrew_logging", "WUMSLogWrite", WupsSymbolKind::Function, error);
+												   "homebrew_logging", "WUMSLogWrite", WupsSymbolKind::Function, error);
 		CHECK(address);
 		const std::array text{std::byte{'h'}, std::byte{'i'}};
 		CHECK(platform->WriteGuest(0x1000, text));
@@ -408,28 +468,26 @@ namespace
 			.storageRoot = root, .platform = unsupportedPlatform};
 		AromaCompatibilityRuntime unsupportedRuntime(unsupportedOptions);
 		CHECK(!unsupportedRuntime.ResolveImport(allowed, metadata, 30, 1,
-			"homebrew_memorymapping", "MEMAllocFromMappedMemory",
-			WupsSymbolKind::Data, error));
+												"homebrew_memorymapping", "MEMAllocFromMappedMemory",
+												WupsSymbolKind::Data, error));
 		CHECK(error.find("no safe guest effective/physical") !=
-			std::string::npos);
+			  std::string::npos);
 
 		auto unscopedHeapPlatform = std::make_shared<FakePlatform>();
 		unscopedHeapPlatform->supportsOwnerScopedHeapPointers = false;
-		AromaCompatibilityRuntime unscopedHeapRuntime({
-			.storageRoot = root, .platform = unscopedHeapPlatform});
+		AromaCompatibilityRuntime unscopedHeapRuntime({.storageRoot = root, .platform = unscopedHeapPlatform});
 		CHECK(!unscopedHeapRuntime.ResolveImport(allowed, metadata, 31, 1,
-			"homebrew_logging", "WUMSLogWrite", WupsSymbolKind::Function,
-			error));
+												 "homebrew_logging", "WUMSLogWrite", WupsSymbolKind::Function,
+												 error));
 		CHECK(error.find("heap-taking ABI is explicitly unsupported") !=
-			std::string::npos);
+			  std::string::npos);
 	}
 
 	void TestFunctionPatcherAbiOutputs(const std::filesystem::path& root)
 	{
 		auto platform = std::make_shared<FakePlatform>();
 		auto patcher = std::make_shared<FakeFunctionPatcher>();
-		AromaCompatibilityRuntime runtime({
-			.storageRoot = root, .platform = platform, .functionPatcher = patcher});
+		AromaCompatibilityRuntime runtime({.storageRoot = root, .platform = platform, .functionPatcher = patcher});
 		auto package = Package("function-patcher", {"homebrew_functionpatcher"});
 		package.manifest.nativePermissions.functionPatching = true;
 		WupsMetadata metadata;
@@ -437,11 +495,11 @@ namespace
 		const WupsOwnerToken owner{32, 1};
 		std::string error;
 		const auto add = runtime.ResolveImport(package, metadata,
-			owner.owner, owner.generation, "homebrew_functionpatcher",
-			"FPAddFunctionPatch", WupsSymbolKind::Function, error);
+											   owner.owner, owner.generation, "homebrew_functionpatcher",
+											   "FPAddFunctionPatch", WupsSymbolKind::Function, error);
 		const auto isPatched = runtime.ResolveImport(package, metadata,
-			owner.owner, owner.generation, "homebrew_functionpatcher",
-			"FPIsFunctionPatched", WupsSymbolKind::Function, error);
+													 owner.owner, owner.generation, "homebrew_functionpatcher",
+													 "FPIsFunctionPatched", WupsSymbolKind::Function, error);
 		CHECK(add && isPatched);
 
 		platform->memory[0x1204] = std::byte{0xa5};
@@ -492,11 +550,13 @@ namespace
 		auto package = Package("content", {"homebrew_content_redirection"});
 		package.manifest.nativePermissions.filesystemRead = true;
 		package.manifest.nativePermissions.contentRedirection = true;
-		WupsMetadata metadata; metadata.name = "Content";
-		std::string error; CHECK(runtime.RegisterOwner(package, metadata, {4, 1}, error));
+		WupsMetadata metadata;
+		metadata.name = "Content";
+		std::string error;
+		CHECK(runtime.RegisterOwner(package, metadata, {4, 1}, error));
 		std::uint32_t handle{};
 		CHECK(runtime.ContentRedirectAdd({4, 1}, "/vol/content", content / "safe", 1,
-			false, handle, error) == WupsServiceStatus::Success);
+										 false, handle, error) == WupsServiceStatus::Success);
 		CHECK(runtime.ResolveContentPath({4, 1}, "/vol/content/file.bin", false, error));
 		CHECK(!runtime.ResolveContentPath({4, 1}, "/vol/content/../escape", false, error));
 		std::error_code code;
@@ -514,16 +574,18 @@ namespace
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("callback", {"homebrew_notifications"});
 		package.manifest.nativePermissions.notifications = true;
-		WupsMetadata metadata; metadata.name = "Callback";
-		std::string error; const WupsOwnerToken owner{5, 1};
+		WupsMetadata metadata;
+		metadata.name = "Callback";
+		std::string error;
+		const WupsOwnerToken owner{5, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
 		std::size_t invocations{};
-		CHECK(runtime.BindGuestInvoker(owner.owner, owner.generation,
-			[&](std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&,
-				std::string&) { ++invocations; return true; }, error));
+		CHECK(runtime.BindGuestInvoker(owner.owner, owner.generation, [&](std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&, std::string&) { ++invocations; return true; }, error));
 		WupsNotificationModel notification;
-		notification.text = "done"; notification.dynamic = true;
-		notification.callback = 0x1200; notification.duration = std::chrono::seconds(1);
+		notification.text = "done";
+		notification.dynamic = true;
+		notification.callback = 0x1200;
+		notification.duration = std::chrono::seconds(1);
 		std::uint32_t handle{};
 		CHECK(runtime.NotificationAdd(owner, notification, handle, error) == WupsServiceStatus::Success);
 		CHECK(runtime.NotificationFinish(owner, handle, error) == WupsServiceStatus::Success);
@@ -541,43 +603,42 @@ namespace
 		AromaRuntimeOptions options{.storageRoot = root, .platform = platform};
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("reentrant", {"homebrew_wupsbackend",
-			"homebrew_logging", "homebrew_notifications"});
+											 "homebrew_logging", "homebrew_notifications"});
 		package.manifest.nativePermissions.notifications = true;
-		WupsMetadata metadata; metadata.name = "Reentrant";
-		std::string error; const WupsOwnerToken owner{6, 1};
+		WupsMetadata metadata;
+		metadata.name = "Reentrant";
+		std::string error;
+		const WupsOwnerToken owner{6, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
 
 		std::optional<std::uint32_t> nestedExport;
 		platform->registerHook = [&] {
 			std::string nestedError;
 			nestedExport = runtime.ResolveImport(package, metadata,
-				owner.owner, owner.generation, "homebrew_wupsbackend",
-				"WUPSConfigAPI_GetVersion", WupsSymbolKind::Function,
-				nestedError);
+												 owner.owner, owner.generation, "homebrew_wupsbackend",
+												 "WUPSConfigAPI_GetVersion", WupsSymbolKind::Function,
+												 nestedError);
 		};
 		auto resolve = std::async(std::launch::async, [&] {
 			std::string resolveError;
 			return runtime.ResolveImport(package, metadata,
-				owner.owner, owner.generation, "homebrew_logging",
-				"WUMSLogWrite", WupsSymbolKind::Function, resolveError);
+										 owner.owner, owner.generation, "homebrew_logging",
+										 "WUMSLogWrite", WupsSymbolKind::Function, resolveError);
 		});
 		CHECK(resolve.wait_for(std::chrono::seconds(2)) ==
-			std::future_status::ready);
+			  std::future_status::ready);
 		const auto loggingExport = resolve.get();
 		CHECK(loggingExport && nestedExport);
 
 		const std::array text{std::byte{'o'}, std::byte{'k'}};
 		CHECK(platform->WriteGuest(0x1000, text));
 		std::atomic_size_t invocations{};
-		CHECK(runtime.BindGuestInvoker(owner.owner, owner.generation,
-			[&](std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&,
-				std::string& invokeError) {
+		CHECK(runtime.BindGuestInvoker(owner.owner, owner.generation, [&](std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&, std::string& invokeError) {
 				const std::array arguments{0x1000U, 2U};
 				if (platform->Dispatch(*loggingExport, arguments, invokeError) != 0)
 					return false;
 				++invocations;
-				return true;
-			}, error));
+				return true; }, error));
 		WupsNotificationModel notification;
 		notification.text = "reenter";
 		notification.dynamic = true;
@@ -585,9 +646,9 @@ namespace
 		notification.duration = std::chrono::seconds(1);
 		std::uint32_t handle{};
 		CHECK(runtime.NotificationAdd(owner, notification, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(runtime.NotificationFinish(owner, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		auto run = std::async(std::launch::async, [&] { platform->RunTasks(); });
 		CHECK(run.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
 		run.get();
@@ -595,9 +656,9 @@ namespace
 		CHECK(runtime.ResourceCounts(owner).pendingCallbacks == 0);
 
 		CHECK(runtime.NotificationAdd(owner, notification, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(runtime.NotificationFinish(owner, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(runtime.ResourceCounts(owner).pendingCallbacks == 1);
 		platform->CancelCpuTasks(owner);
 		CHECK(runtime.ResourceCounts(owner).pendingCallbacks == 0);
@@ -612,23 +673,22 @@ namespace
 		auto runtime = std::make_unique<AromaCompatibilityRuntime>(options);
 		auto package = Package("destroy-callback", {"homebrew_notifications"});
 		package.manifest.nativePermissions.notifications = true;
-		WupsMetadata metadata; metadata.name = "Destroy callback";
-		std::string error; const WupsOwnerToken owner{7, 1};
+		WupsMetadata metadata;
+		metadata.name = "Destroy callback";
+		std::string error;
+		const WupsOwnerToken owner{7, 1};
 		CHECK(runtime->RegisterOwner(package, metadata, owner, error));
 		std::mutex callbackMutex;
 		std::condition_variable callbackCondition;
 		bool callbackEntered{};
 		bool releaseCallback{};
-		CHECK(runtime->BindGuestInvoker(owner.owner, owner.generation,
-			[&](std::uint32_t, std::span<const std::uint32_t>,
-				std::uint32_t&, std::string&) {
+		CHECK(runtime->BindGuestInvoker(owner.owner, owner.generation, [&](std::uint32_t, std::span<const std::uint32_t>, std::uint32_t&, std::string&) {
 				std::unique_lock lock(callbackMutex);
 				callbackEntered = true;
 				callbackCondition.notify_all();
 				callbackCondition.wait(lock, [&] { return releaseCallback; });
 				++invocations;
-				return true;
-			}, error));
+				return true; }, error));
 		WupsNotificationModel notification;
 		notification.text = "destroy";
 		notification.dynamic = true;
@@ -636,19 +696,19 @@ namespace
 		notification.duration = std::chrono::seconds(1);
 		std::uint32_t handle{};
 		CHECK(runtime->NotificationAdd(owner, notification, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(runtime->NotificationFinish(owner, handle, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 		CHECK(runtime->ResourceCounts(owner).pendingCallbacks == 1);
 		auto run = std::async(std::launch::async, [&] { platform->RunTasks(); });
 		{
 			std::unique_lock lock(callbackMutex);
 			CHECK(callbackCondition.wait_for(lock, std::chrono::seconds(2),
-				[&] { return callbackEntered; }));
+											 [&] { return callbackEntered; }));
 		}
 		auto destroy = std::async(std::launch::async, [&] { runtime.reset(); });
 		CHECK(destroy.wait_for(std::chrono::milliseconds(50)) ==
-			std::future_status::timeout);
+			  std::future_status::timeout);
 		{
 			std::lock_guard lock(callbackMutex);
 			releaseCallback = true;
@@ -662,20 +722,21 @@ namespace
 	void TestConcurrentMappingAccounting(const std::filesystem::path& root)
 	{
 		auto platform = std::make_shared<FakePlatform>();
-		AromaRuntimeOptions options{.storageRoot = root, .platform = platform,
-			.maximumMappedBytes = 4096};
+		AromaRuntimeOptions options{.storageRoot = root, .platform = platform, .maximumMappedBytes = 4096};
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("mapping-races", {"homebrew_memorymapping"});
 		package.manifest.nativePermissions.mappedMemory = true;
-		WupsMetadata metadata; metadata.name = "Mapping races";
-		std::string error; const WupsOwnerToken owner{8, 1};
+		WupsMetadata metadata;
+		metadata.name = "Mapping races";
+		std::string error;
+		const WupsOwnerToken owner{8, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
 		const auto allocCell = runtime.ResolveImport(package, metadata,
-			owner.owner, owner.generation, "homebrew_memorymapping",
-			"MEMAllocFromMappedMemory", WupsSymbolKind::Data, error);
+													 owner.owner, owner.generation, "homebrew_memorymapping",
+													 "MEMAllocFromMappedMemory", WupsSymbolKind::Data, error);
 		const auto freeCell = runtime.ResolveImport(package, metadata,
-			owner.owner, owner.generation, "homebrew_memorymapping",
-			"MEMFreeToMappedMemory", WupsSymbolKind::Data, error);
+													owner.owner, owner.generation, "homebrew_memorymapping",
+													"MEMFreeToMappedMemory", WupsSymbolKind::Data, error);
 		CHECK(allocCell && freeCell);
 		const auto allocExport = ReadGuestU32(*platform, *allocCell);
 		const auto freeExport = ReadGuestU32(*platform, *freeCell);
@@ -696,12 +757,12 @@ namespace
 		auto allocate = std::async(std::launch::async, [&] {
 			std::string allocateError;
 			return runtime.MappedMemoryAllocate(owner, 4096, 4, true,
-				WupsMappedMemoryPurpose::Cpu, allocation, allocateError);
+												WupsMappedMemoryPurpose::Cpu, allocation, allocateError);
 		});
 		{
 			std::unique_lock lock(waitMutex);
 			CHECK(waitCondition.wait_for(lock, std::chrono::seconds(2),
-				[&] { return allocateEntered; }));
+										 [&] { return allocateEntered; }));
 		}
 		const std::array allocArguments{4096U};
 		CHECK(platform->Dispatch(allocExport, allocArguments, error) == 0);
@@ -731,7 +792,7 @@ namespace
 		{
 			std::unique_lock lock(waitMutex);
 			CHECK(waitCondition.wait_for(lock, std::chrono::seconds(2),
-				[&] { return freeEntered; }));
+										 [&] { return freeEntered; }));
 		}
 		const std::array freeArguments{allocation.address};
 		CHECK(platform->Dispatch(freeExport, freeArguments, error) == 0);
@@ -747,19 +808,19 @@ namespace
 
 		platform->mappingSizeExtra = 4096;
 		CHECK(runtime.MappedMemoryAllocate(owner, 4096, 4, true,
-			WupsMappedMemoryPurpose::Cpu, allocation, error) ==
-			WupsServiceStatus::LimitExceeded);
+										   WupsMappedMemoryPurpose::Cpu, allocation, error) ==
+			  WupsServiceStatus::LimitExceeded);
 		platform->mappingSizeExtra = 0;
 		CHECK(runtime.MappedMemoryAllocate(owner, 4096, 4, true,
-			WupsMappedMemoryPurpose::Cpu, allocation, error) ==
-			WupsServiceStatus::Success);
+										   WupsMappedMemoryPurpose::Cpu, allocation, error) ==
+			  WupsServiceStatus::Success);
 		platform->failFree = true;
 		CHECK(runtime.MappedMemoryFree(owner, allocation.address, error) ==
-			WupsServiceStatus::IoError);
+			  WupsServiceStatus::IoError);
 		CHECK(runtime.ResourceCounts(owner).mappedAllocations == 1);
 		platform->failFree = false;
 		CHECK(runtime.MappedMemoryFree(owner, allocation.address, error) ==
-			WupsServiceStatus::Success);
+			  WupsServiceStatus::Success);
 	}
 
 	void TestExportRegistrationCleanupRace(const std::filesystem::path& root)
@@ -768,8 +829,10 @@ namespace
 		AromaRuntimeOptions options{.storageRoot = root, .platform = platform};
 		AromaCompatibilityRuntime runtime(options);
 		auto package = Package("registration-race", {"homebrew_logging"});
-		WupsMetadata metadata; metadata.name = "Registration race";
-		std::string error; const WupsOwnerToken owner{9, 1};
+		WupsMetadata metadata;
+		metadata.name = "Registration race";
+		std::string error;
+		const WupsOwnerToken owner{9, 1};
 		CHECK(runtime.RegisterOwner(package, metadata, owner, error));
 		std::mutex registrationMutex;
 		std::condition_variable registrationCondition;
@@ -780,18 +843,18 @@ namespace
 			registrationEntered = true;
 			registrationCondition.notify_all();
 			registrationCondition.wait(lock,
-				[&] { return releaseRegistration; });
+									   [&] { return releaseRegistration; });
 		};
 		auto resolve = std::async(std::launch::async, [&] {
 			std::string resolveError;
 			return runtime.ResolveImport(package, metadata,
-				owner.owner, owner.generation, "homebrew_logging",
-				"WUMSLogWrite", WupsSymbolKind::Function, resolveError);
+										 owner.owner, owner.generation, "homebrew_logging",
+										 "WUMSLogWrite", WupsSymbolKind::Function, resolveError);
 		});
 		{
 			std::unique_lock lock(registrationMutex);
 			CHECK(registrationCondition.wait_for(lock, std::chrono::seconds(2),
-				[&] { return registrationEntered; }));
+												 [&] { return registrationEntered; }));
 		}
 		auto release = std::async(std::launch::async, [&] {
 			std::string releaseError;
@@ -799,9 +862,9 @@ namespace
 				owner.owner, owner.generation, releaseError));
 		});
 		const auto deadline = std::chrono::steady_clock::now() +
-			std::chrono::seconds(2);
+							  std::chrono::seconds(2);
 		while (platform->taskCancellations == 0 &&
-			std::chrono::steady_clock::now() < deadline)
+			   std::chrono::steady_clock::now() < deadline)
 			std::this_thread::yield();
 		CHECK(platform->taskCancellations == 1);
 		CHECK(platform->exportReleases == 0);
@@ -816,9 +879,12 @@ namespace
 		CHECK(platform->exportReleases == 1);
 		CHECK(!platform->prematureExportRelease);
 	}
-}
+} // namespace
 
-std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader() { return {}; }
+std::shared_ptr<IWupsModuleLoader> CreateRplWupsModuleLoader()
+{
+	return {};
+}
 std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 {
 	return {};
@@ -827,7 +893,7 @@ std::shared_ptr<IWupsRuntimeServices> CreateRplAromaCompatibilityRuntime()
 int main()
 {
 	const auto root = std::filesystem::temp_directory_path() /
-		fmt::format("cemuext-wups-services-{}", std::uint64_t{std::random_device{}()});
+					  fmt::format("cemuext-wups-services-{}", std::uint64_t{std::random_device{}()});
 	std::filesystem::create_directories(root);
 	TestStorageAndOwnerGeneration(root);
 	TestCex2OwnerIdentityAndGrants();
@@ -841,6 +907,7 @@ int main()
 	TestExportRegistrationCleanupRace(root);
 	TestBackendDescriptorAndPendingPlan();
 	TestBackendExportsAndVersionDispatch(root);
-	std::error_code code; std::filesystem::remove_all(root, code);
+	std::error_code code;
+	std::filesystem::remove_all(root, code);
 	std::cout << "WUPS services tests passed\n";
 }

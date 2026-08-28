@@ -95,42 +95,42 @@ MetalPipelineCache* g_mtlPipelineCache = nullptr;
 
 MetalPipelineCache& MetalPipelineCache::GetInstance()
 {
-    return *g_mtlPipelineCache;
+	return *g_mtlPipelineCache;
 }
 
 MetalPipelineCache::MetalPipelineCache(class MetalRenderer* metalRenderer) : m_mtlr{metalRenderer}
 {
-    g_mtlPipelineCache = this;
+	g_mtlPipelineCache = this;
 }
 
 MetalPipelineCache::~MetalPipelineCache()
 {
-    for (auto& [key, pipelineObj] : m_pipelineCache)
-    {
-        pipelineObj->m_pipeline->release();
-        delete pipelineObj;
-    }
+	for (auto& [key, pipelineObj] : m_pipelineCache)
+	{
+		pipelineObj->m_pipeline->release();
+		delete pipelineObj;
+	}
 }
 
 PipelineObject* MetalPipelineCache::GetRenderPipelineState(const LatteFetchShader* fetchShader, const LatteDecompilerShader* vertexShader, const LatteDecompilerShader* geometryShader, const LatteDecompilerShader* pixelShader, const MetalAttachmentsInfo& lastUsedAttachmentsInfo, const MetalAttachmentsInfo& activeAttachmentsInfo, Vector2i extend, uint32 indexCount, const LatteContextRegister& lcr)
 {
-    uint64 hash = CalculatePipelineHash(fetchShader, vertexShader, geometryShader, pixelShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
-    PipelineObject*& pipelineObj = m_pipelineCache[hash];
-    if (pipelineObj)
-        return pipelineObj;
+	uint64 hash = CalculatePipelineHash(fetchShader, vertexShader, geometryShader, pixelShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
+	PipelineObject*& pipelineObj = m_pipelineCache[hash];
+	if (pipelineObj)
+		return pipelineObj;
 
-    pipelineObj = new PipelineObject();
+	pipelineObj = new PipelineObject();
 
-    MetalPipelineCompiler* compiler = new MetalPipelineCompiler(m_mtlr, *pipelineObj);
-    compiler->InitFromState(fetchShader, vertexShader, geometryShader, pixelShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
+	MetalPipelineCompiler* compiler = new MetalPipelineCompiler(m_mtlr, *pipelineObj);
+	compiler->InitFromState(fetchShader, vertexShader, geometryShader, pixelShader, lastUsedAttachmentsInfo, activeAttachmentsInfo, lcr);
 
-    bool allowAsyncCompile = false;
-    if (GetConfig().async_compile)
+	bool allowAsyncCompile = false;
+	if (GetConfig().async_compile)
 		allowAsyncCompile = IsAsyncPipelineAllowed(activeAttachmentsInfo, extend, indexCount);
 
 	if (allowAsyncCompile)
 	{
-	    if (!g_compilePipelineThreadInit)
+		if (!g_compilePipelineThreadInit)
 		{
 			initCompileThread();
 			g_compilePipelineThreadInit = true;
@@ -140,34 +140,34 @@ PipelineObject* MetalPipelineCache::GetRenderPipelineState(const LatteFetchShade
 	}
 	else
 	{
-	    // Also force compile to ensure that the pipeline is ready
-        cemu_assert_debug(compiler->Compile(true, true, true));
-        delete compiler;
+		// Also force compile to ensure that the pipeline is ready
+		cemu_assert_debug(compiler->Compile(true, true, true));
+		delete compiler;
 	}
 
 	// Save to cache
-    AddCurrentStateToCache(hash, lastUsedAttachmentsInfo);
+	AddCurrentStateToCache(hash, lastUsedAttachmentsInfo);
 
-    return pipelineObj;
+	return pipelineObj;
 }
 
 uint64 MetalPipelineCache::CalculatePipelineHash(const LatteFetchShader* fetchShader, const LatteDecompilerShader* vertexShader, const LatteDecompilerShader* geometryShader, const LatteDecompilerShader* pixelShader, const MetalAttachmentsInfo& lastUsedAttachmentsInfo, const MetalAttachmentsInfo& activeAttachmentsInfo, const LatteContextRegister& lcr)
 {
-    // Hash
-    uint64 stateHash = 0;
-    for (int i = 0; i < Latte::GPU_LIMITS::NUM_COLOR_ATTACHMENTS; ++i)
+	// Hash
+	uint64 stateHash = 0;
+	for (int i = 0; i < Latte::GPU_LIMITS::NUM_COLOR_ATTACHMENTS; ++i)
 	{
-	    Latte::E_GX2SURFFMT format = lastUsedAttachmentsInfo.colorFormats[i];
+		Latte::E_GX2SURFFMT format = lastUsedAttachmentsInfo.colorFormats[i];
 		if (format == Latte::E_GX2SURFFMT::INVALID_FORMAT)
-            continue;
+			continue;
 
 		stateHash += GetMtlPixelFormat(format, false) + i * 31;
 		stateHash = std::rotl<uint64>(stateHash, 7);
 
 		if (activeAttachmentsInfo.colorFormats[i] == Latte::E_GX2SURFFMT::INVALID_FORMAT)
 		{
-            stateHash += 1;
-		    stateHash = std::rotl<uint64>(stateHash, 1);
+			stateHash += 1;
+			stateHash = std::rotl<uint64>(stateHash, 1);
 		}
 	}
 
@@ -178,8 +178,8 @@ uint64 MetalPipelineCache::CalculatePipelineHash(const LatteFetchShader* fetchSh
 
 		if (activeAttachmentsInfo.depthFormat == Latte::E_GX2SURFFMT::INVALID_FORMAT)
 		{
-            stateHash += 1;
-		    stateHash = std::rotl<uint64>(stateHash, 1);
+			stateHash += 1;
+			stateHash = std::rotl<uint64>(stateHash, 1);
 		}
 	}
 
@@ -196,7 +196,7 @@ uint64 MetalPipelineCache::CalculatePipelineHash(const LatteFetchShader* fetchSh
 	stateHash += lcr.GetRawView()[mmVGT_STRMOUT_EN];
 	stateHash = std::rotl<uint64>(stateHash, 7);
 
-	if(lcr.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL())
+	if (lcr.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL())
 		stateHash += 0x333333;
 
 	stateHash = (stateHash >> 8) + (stateHash * 0x370531ull) % 0x7F980D3BF9B4639Dull;
@@ -239,15 +239,15 @@ uint64 MetalPipelineCache::CalculatePipelineHash(const LatteFetchShader* fetchSh
 
 	// Mesh pipeline
 	const LattePrimitiveMode primitiveMode = static_cast<LattePrimitiveMode>(LatteGPUState.contextRegister[mmVGT_PRIMITIVE_TYPE]);
-    bool isPrimitiveRect = (primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::RECTS);
+	bool isPrimitiveRect = (primitiveMode == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::RECTS);
 
-    bool usesGeometryShader = (geometryShader != nullptr || isPrimitiveRect);
+	bool usesGeometryShader = (geometryShader != nullptr || isPrimitiveRect);
 
-    if (usesGeometryShader)
-    {
-        stateHash += lcr.GetRawView()[mmVGT_PRIMITIVE_TYPE];
-        stateHash = std::rotl<uint64>(stateHash, 7);
-    }
+	if (usesGeometryShader)
+	{
+		stateHash += lcr.GetRawView()[mmVGT_PRIMITIVE_TYPE];
+		stateHash = std::rotl<uint64>(stateHash, 7);
+	}
 
 	return stateHash;
 }
@@ -281,7 +281,7 @@ uint32 MetalPipelineCache::BeginLoading(uint64 cacheTitleId)
 	uint32 cpuCoreCount = GetPhysicalCoreCount();
 	m_numCompilationThreads = std::clamp(cpuCoreCount, 1u, 8u);
 	// TODO: uncomment?
-	//if (VulkanRenderer::GetInstance()->GetDisableMultithreadedCompilation())
+	// if (VulkanRenderer::GetInstance()->GetDisableMultithreadedCompilation())
 	//	m_numCompilationThreads = 1;
 
 	for (uint32 i = 0; i < m_numCompilationThreads; i++)
@@ -352,11 +352,11 @@ void MetalPipelineCache::EndLoading()
 
 void MetalPipelineCache::Close()
 {
-    if(s_cache)
-    {
-        delete s_cache;
-        s_cache = nullptr;
-    }
+	if (s_cache)
+	{
+		delete s_cache;
+		s_cache = nullptr;
+	}
 }
 
 struct CachedPipeline
@@ -460,10 +460,10 @@ void MetalPipelineCache::LoadPipelineFromCache(std::span<uint8> fileData)
 	}
 
 	// Cache the pipeline
-   	uint64 pipelineStateHash = CalculatePipelineHash(vertexShader->compatibleFetchShader, vertexShader, geometryShader, pixelShader, cachedPipeline->lastUsedAttachmentsInfo, attachmentsInfo, *lcr);
-   	m_pipelineCacheLock.lock();
-   	m_pipelineCache[pipelineStateHash] = pipelineObject;
-   	m_pipelineCacheLock.unlock();
+	uint64 pipelineStateHash = CalculatePipelineHash(vertexShader->compatibleFetchShader, vertexShader, geometryShader, pixelShader, cachedPipeline->lastUsedAttachmentsInfo, attachmentsInfo, *lcr);
+	m_pipelineCacheLock.lock();
+	m_pipelineCache[pipelineStateHash] = pipelineObject;
+	m_pipelineCacheLock.unlock();
 
 	// clean up
 	s_spinlockSharedInternal.lock();
@@ -529,7 +529,7 @@ bool MetalPipelineCache::SerializePipeline(MemStreamWriter& memWriter, CachedPip
 	}
 
 	for (uint8 i = 0; i < LATTE_NUM_COLOR_TARGET; i++)
-	    memWriter.writeBE<uint16>((uint16)cachedPipeline.lastUsedAttachmentsInfo.colorFormats[i]);
+		memWriter.writeBE<uint16>((uint16)cachedPipeline.lastUsedAttachmentsInfo.colorFormats[i]);
 	memWriter.writeBE<uint16>((uint16)cachedPipeline.lastUsedAttachmentsInfo.depthFormat);
 
 	Latte::SerializeRegisterState(cachedPipeline.gpuState, memWriter);
@@ -567,7 +567,7 @@ bool MetalPipelineCache::DeserializePipeline(MemStreamReader& memReader, CachedP
 	}
 
 	for (uint8 i = 0; i < LATTE_NUM_COLOR_TARGET; i++)
-	    cachedPipeline.lastUsedAttachmentsInfo.colorFormats[i] = (Latte::E_GX2SURFFMT)memReader.readBE<uint16>();
+		cachedPipeline.lastUsedAttachmentsInfo.colorFormats[i] = (Latte::E_GX2SURFFMT)memReader.readBE<uint16>();
 	cachedPipeline.lastUsedAttachmentsInfo.depthFormat = (Latte::E_GX2SURFFMT)memReader.readBE<uint16>();
 
 	// deserialize GPU state
@@ -586,7 +586,7 @@ int MetalPipelineCache::CompilerThread()
 	while (m_numCompilationThreads != 0)
 	{
 		std::vector<uint8> pipelineData = m_compilationQueue.pop();
-		if(pipelineData.empty())
+		if (pipelineData.empty())
 			continue;
 		LoadPipelineFromCache(pipelineData);
 		++g_mtlCacheState.pipelinesLoaded;
@@ -615,7 +615,7 @@ void MetalPipelineCache::WorkerThread()
 		SHA256(blob.data(), blob.size(), hash);
 		uint64 nameA = *(uint64be*)(hash + 0);
 		uint64 nameB = *(uint64be*)(hash + 8);
-		s_cache->AddFileAsync({ nameA, nameB }, blob.data(), blob.size());
+		s_cache->AddFileAsync({nameA, nameB}, blob.data(), blob.size());
 		delete job;
 	}
 }

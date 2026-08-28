@@ -40,26 +40,26 @@ sint32 __depr__IOS_Ioctl(uint32 fd, uint32 request, void* inBuffer, uint32 inSiz
 {
 	switch (fd)
 	{
-		case IOS_DEVICE_ODM:
+	case IOS_DEVICE_ODM:
+	{
+		// Home Menu uses ioctl cmd 5 on startup and then repeats cmd 4 every frame
+		if (request == 4)
 		{
-			// Home Menu uses ioctl cmd 5 on startup and then repeats cmd 4 every frame
-			if (request == 4)
-			{
-				// check drive state
-				debug_printf("checkDriveState()\n");
-				*(uint32be*)outBuffer = 0xA;
-			}
-			else
-			{
-				debug_printf("odm unsupported ioctl %d\n", request);
-			}
-			break;
+			// check drive state
+			debug_printf("checkDriveState()\n");
+			*(uint32be*)outBuffer = 0xA;
 		}
-		default:
+		else
 		{
-			// todo
-			cemuLog_logDebug(LogType::Force, "Unsupported Ioctl command");
+			debug_printf("odm unsupported ioctl %d\n", request);
 		}
+		break;
+	}
+	default:
+	{
+		// todo
+		cemuLog_logDebug(LogType::Force, "Unsupported Ioctl command");
+	}
 	}
 	return 0;
 }

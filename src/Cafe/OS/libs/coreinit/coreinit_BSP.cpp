@@ -16,4 +16,4 @@ namespace coreinit
 	{
 		cafeExportRegister("coreinit", bspGetHardwareVersion, LogType::Placeholder);
 	}
-}
+} // namespace coreinit

@@ -108,7 +108,7 @@ namespace Application
 
 	class ITitleInstallService
 	{
-	public:
+	  public:
 		virtual ~ITitleInstallService() = default;
 		[[nodiscard]] virtual TitleInstallPlanResult PlanTitleInstall(
 			const std::filesystem::path& sourcePath) const = 0;
@@ -117,4 +117,4 @@ namespace Application
 			TitleInstallProgressHandler progress,
 			TitleInstallCancellationCheck cancelled) = 0;
 	};
-}
+} // namespace Application

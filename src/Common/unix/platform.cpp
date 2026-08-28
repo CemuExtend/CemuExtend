@@ -14,5 +14,4 @@ uint32_t GetTickCount()
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (1000 * ts.tv_sec + ts.tv_nsec / 1000000);
 #endif
-
 }

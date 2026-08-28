@@ -28,7 +28,7 @@ bool _relocateAddress(PatchGroup* group, PatchContext_t* ctx, uint32 addr, uint3
 	return false;
 }
 
-struct  
+struct
 {
 	bool hasUnknownVariable;
 	PatchContext_t* activePatchContext;
@@ -36,7 +36,7 @@ struct
 	// additional error information tracking
 	sint32 lineNumber; // line number of the expression being processed, negative if not available
 	bool captureUnresolvedSymbols;
-}resolverState{};
+} resolverState{};
 
 bool GraphicPack2::ResolvePresetConstant(const std::string& varname, double& value) const
 {
@@ -54,7 +54,7 @@ T _expressionFuncReloc(T input)
 {
 	uint32 addr = (uint32)input;
 	uint32 relocatedAddress = 0;
-	if(!_relocateAddress(resolverState.currentGroup, resolverState.activePatchContext, addr, relocatedAddress))
+	if (!_relocateAddress(resolverState.currentGroup, resolverState.activePatchContext, addr, relocatedAddress))
 	{
 		resolverState.activePatchContext->errorHandler.printError(resolverState.currentGroup, resolverState.lineNumber, fmt::format("reloc({0:#08x}): Address does not point to a known memory region", addr));
 		return (T)0;
@@ -183,8 +183,7 @@ EXPRESSION_RESOLVE_RESULT _resolveExpression(PatchContext_t& ctx, std::string& e
 		result = (T)ep.Evaluate(expressionString);
 		if (resolverState.hasUnknownVariable)
 			return EXPRESSION_RESOLVE_RESULT::UNKNOWN_VARIABLE;
-	}
-	catch (const std::exception&)
+	} catch (const std::exception&)
 	{
 		cemu_assert_debug(false);
 		ctx.errorHandler.printError(nullptr, -1, fmt::format("Unexpected error in expression \"{}\"", expressionString));
@@ -358,7 +357,6 @@ PATCH_RESOLVE_RESULT PatchEntryInstruction::resolveReloc(PatchContext_t& ctx, PP
 			return PATCH_RESOLVE_RESULT::RESOLVED;
 		}
 
-
 		// *internalCtx.opcode |= (relativeAddr & 0xFFFC);
 		cemu_assert_debug(false);
 	}
@@ -381,7 +379,7 @@ PATCH_RESOLVE_RESULT PatchEntryInstruction::resolve(PatchContext_t& ctx)
 	// apply relocations to instruction
 	for (auto& itr : this->m_relocs)
 	{
-		if(itr.isApplied())
+		if (itr.isApplied())
 			continue;
 		// evaluate expression and apply reloc to internal buffer
 		auto r = resolveReloc(ctx, &itr);
@@ -476,7 +474,7 @@ PATCH_RESOLVE_RESULT PatchEntryLabel::resolve(PatchContext_t& ctx)
 		}
 		return PATCH_RESOLVE_RESULT::RESOLVED;
 	}
-	if(resolverState.captureUnresolvedSymbols)
+	if (resolverState.captureUnresolvedSymbols)
 		ctx.errorHandler.printError(resolverState.currentGroup, m_lineNumber, fmt::format("Address {:#08x} of label {} does not point to any module section or code cave", m_address, m_symbolName));
 	return PATCH_RESOLVE_RESULT::INVALID_ADDRESS;
 }
@@ -531,7 +529,7 @@ bool _resolverPass(PatchContext_t& patchContext, std::vector<UnresolvedPatches_t
 				continue;
 			}
 			else if (r == PATCH_RESOLVE_RESULT::INVALID_ADDRESS ||
-				r == PATCH_RESOLVE_RESULT::VARIABLE_CONFLICT)
+					 r == PATCH_RESOLVE_RESULT::VARIABLE_CONFLICT)
 			{
 				// errors handled and printed inside resolve()
 				it++;
@@ -598,8 +596,7 @@ void GraphicPack2::ApplyPatchGroups(std::vector<PatchGroup*>& groups, const RPLM
 		unresolvedPatches[i].list_unresolvedPatches = groups[i]->list_patches;
 	}
 
-	auto isUnresolvedPatchesEmpty = [&unresolvedPatches]()
-	{
+	auto isUnresolvedPatchesEmpty = [&unresolvedPatches]() {
 		for (auto& itr : unresolvedPatches)
 			if (!itr.list_unresolvedPatches.empty())
 				return false;
@@ -620,7 +617,7 @@ void GraphicPack2::ApplyPatchGroups(std::vector<PatchGroup*>& groups, const RPLM
 			patchContext.unresolvedSymbols.clear();
 			_resolverPass(patchContext, unresolvedPatches, true);
 			// generate messages
-			if(isLastPass)
+			if (isLastPass)
 				patchContext.errorHandler.printError(nullptr, -1, "Some symbols could not be resolved because the dependency chain is too deep");
 			for (auto& itr : patchContext.unresolvedSymbols)
 				patchContext.errorHandler.printError(itr.patchGroup, itr.lineNumber, fmt::format("Unresolved symbol: {}", itr.symbolName));
@@ -643,20 +640,20 @@ void GraphicPack2::ApplyPatchGroups(std::vector<PatchGroup*>& groups, const RPLM
 				continue;
 			patchInstruction->applyPatch();
 		}
-		
+
 		for (const auto& [name, type] : patchGroup->list_callbacks)
 		{
-            auto it = patchContext.map_values.find(name);
-            if (it != patchContext.map_values.end())
-            {
-                m_callbacks.push_back(std::make_pair(it->second, type));
-            }
-            else
-            {
-                patchContext.errorHandler.printError(patchGroup, -1, fmt::format("Failed to resolve .callback symbol: {}", name));
-                patchContext.errorHandler.showStageErrorMessageBox();
-                return;
-            }
+			auto it = patchContext.map_values.find(name);
+			if (it != patchContext.map_values.end())
+			{
+				m_callbacks.push_back(std::make_pair(it->second, type));
+			}
+			else
+			{
+				patchContext.errorHandler.printError(patchGroup, -1, fmt::format("Failed to resolve .callback symbol: {}", name));
+				patchContext.errorHandler.showStageErrorMessageBox();
+				return;
+			}
 		}
 	}
 	// mark groups as applied

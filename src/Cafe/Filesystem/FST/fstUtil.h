@@ -36,7 +36,7 @@ class FSCPath
 		m_names.insert(m_names.end(), name, name + nameLen);
 	}
 
-public:
+  public:
 	FSCPath(std::string_view path)
 	{
 		if (path.empty())
@@ -122,7 +122,6 @@ template<typename F>
 class FSAFileTree
 {
   private:
-
 	enum NODETYPE : uint8
 	{
 		NODETYPE_DIRECTORY,
@@ -221,7 +220,7 @@ class FSAFileTree
 		size_t m_subnodeIndex;
 	};
 
-public:
+  public:
 	FSAFileTree()
 	{
 		rootNode.type = NODETYPE_DIRECTORY;
@@ -243,7 +242,7 @@ public:
 		return true;
 	}
 
-	bool getFile(std::string_view path, F* &custom)
+	bool getFile(std::string_view path, F*& custom)
 	{
 		FSCPath p(path);
 		if (p.GetNodeCount() == 0)
@@ -320,7 +319,7 @@ public:
 		return true;
 	}
 
-private:
+  private:
 	node_t rootNode;
 };
 
@@ -363,9 +362,3 @@ static void FSTPathUnitTest()
 	cemu_assert_debug(p7.MatchNodeName(1, "content"));
 	cemu_assert_debug(p7.MatchNodeName(2, ".."));
 }
-
-
-
-
-
-
