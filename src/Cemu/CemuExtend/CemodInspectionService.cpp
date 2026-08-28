@@ -173,7 +173,14 @@ namespace CemuExtend
 		result.modId = package->manifest.modId;
 		result.modIdentity = result.modId.empty() ? descriptor.principal : result.modId;
 		result.isWups = package->manifest.payload.format == CemodPayloadFormat::Wups;
-		std::uint64_t requested = descriptor.requestedPermissions;
+		// Isolated packages use bit 6 for the CEX2 Web UI service, while the
+		// approval namespace already uses bit 6 for trusted-native mapped memory.
+		// Keep only the legacy isolated service bits here and map Web UI to its
+		// dedicated approval bit below.
+		constexpr std::uint32_t legacyServicePermissionMask = 0x3fU;
+		std::uint64_t requested = descriptor.executionMode == CemodExecutionMode::Isolated
+			? descriptor.requestedPermissions & legacyServicePermissionMask
+			: descriptor.requestedPermissions;
 		const auto& declaredPermissions = package->manifest.nativePermissions;
 		const std::array declared{
 			declaredPermissions.nativeMemory, declaredPermissions.functionPatching,
@@ -189,6 +196,15 @@ namespace CemuExtend
 				if (declared[index])
 					requested |= 1ULL << index;
 		}
+		// The package manifest's Web capabilities remain independently visible for
+		// trusted ELF and WUPS packages. Network intentionally shares the existing
+		// dangerous Network approval; UI uses its own non-colliding approval bit.
+		constexpr std::uint32_t networkPermission = 1U << 5U;
+		constexpr std::uint32_t uiPermission = 1U << 6U;
+		if ((package->manifest.requestedPermissions & networkPermission) != 0)
+			requested |= PermissionBit(CemodPermission::Network);
+		if ((package->manifest.requestedPermissions & uiPermission) != 0)
+			requested |= PermissionBit(CemodPermission::WebUi);
 		result.approval = EvaluateApproval(requested, approval, headless);
 		if (approval && (approval->packageDigest != result.packageDigest ||
 						 approval->modIdentity != result.modIdentity))
@@ -216,9 +232,11 @@ namespace CemuExtend
 		{
 			const auto bit = PermissionBit(permission);
 			const auto index = static_cast<std::size_t>(permission);
+			const bool manifestMismatch = index < declared.size() &&
+				(requested & bit) != 0 && !declared[index];
 			result.permissions.push_back({permission, bit, (requested & bit) != 0,
 										  (result.approval.granted & bit) != 0, IsDangerous(permission),
-										  (requested & bit) != 0 && !declared[index]});
+										  manifestMismatch});
 		}
 
 		if (package->wups)

@@ -11,6 +11,11 @@ namespace Host
 	class IWindowMetrics;
 } // namespace Host
 
+namespace cemuextend_hle
+{
+	class ICemodWebUiHost;
+}
+
 namespace Application
 {
 	struct HostBindings
@@ -20,6 +25,7 @@ namespace Application
 		std::shared_ptr<Host::IExternalLauncher> externalLauncher;
 		std::shared_ptr<Host::IInputFocus> inputFocus;
 		std::shared_ptr<Host::ICanvasHost> canvas;
+		std::shared_ptr<cemuextend_hle::ICemodWebUiHost> cemodWebUi;
 	};
 
 	// Composition-root wiring for legacy Cafe modules whose guest ABI entrypoints

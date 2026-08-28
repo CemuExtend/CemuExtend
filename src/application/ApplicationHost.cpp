@@ -11,7 +11,7 @@ namespace Application
 	void ConnectHost(const HostBindings& bindings)
 	{
 		cemuextend_hle::Cex2Host::Instance().ConfigureHost(
-			bindings.clipboard, bindings.windowMetrics);
+			bindings.clipboard, bindings.windowMetrics, bindings.cemodWebUi);
 		sysapp::ConfigureExternalLauncher(bindings.externalLauncher);
 		CafeHost::ConfigureInputFocus(bindings.inputFocus);
 		CafeSystem::ConfigureCanvasHost(bindings.canvas);
@@ -22,6 +22,6 @@ namespace Application
 		CafeSystem::ConfigureCanvasHost({});
 		CafeHost::ConfigureInputFocus({});
 		sysapp::ConfigureExternalLauncher({});
-		cemuextend_hle::Cex2Host::Instance().ConfigureHost({}, {});
+		cemuextend_hle::Cex2Host::Instance().ConfigureHost({}, {}, {});
 	}
 } // namespace Application

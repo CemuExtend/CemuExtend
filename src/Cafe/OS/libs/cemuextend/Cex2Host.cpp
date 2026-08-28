@@ -5,6 +5,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
+#include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "host/contracts/HostContracts.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
@@ -21,6 +22,7 @@
 #include "cemuextend/transport.hpp"
 
 #include <openssl/crypto.h>
+#include <rapidjson/document.h>
 
 #include <deque>
 #include <condition_variable>
@@ -112,6 +114,7 @@ namespace cemuextend_hle
 			Capture,
 			Diagnostics,
 			Http,
+			Ui,
 		};
 
 		struct OperationDefinition
@@ -163,6 +166,15 @@ namespace cemuextend_hle
 			OperationDefinition{10, 1, 1, kCemodNetworkPermission, sizeof(cemuextend::wire::HttpStartRequest) + 2048, sizeof(cemuextend::wire::HttpStartResponse), 0, 0, Handler::Http},
 			OperationDefinition{10, 2, 1, kCemodNetworkPermission, sizeof(cemuextend::wire::HttpPollRequest), 65520, 0, 0, Handler::Http},
 			OperationDefinition{10, 3, 1, kCemodNetworkPermission, 4, 0, 0, 0, Handler::Http},
+			OperationDefinition{11, 1, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiCreateRequestHeader) + cemuextend::wire::kMaximumUiNameBytes + cemuextend::wire::kMaximumUiContextBytes, sizeof(cemuextend::wire::UiCreateResponse), 4, 8, Handler::Ui},
+			OperationDefinition{11, 2, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiHandleRequest), 0, 20, 40, Handler::Ui},
+			OperationDefinition{11, 3, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiMessageHeader) + cemuextend::wire::kMaximumUiNameBytes + cemuextend::wire::kMaximumUiJsonBytes, 0, 100, 200, Handler::Ui},
+			OperationDefinition{11, 4, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiReplyHeader) + cemuextend::wire::kMaximumUiJsonBytes, 0, 100, 200, Handler::Ui},
+			OperationDefinition{11, 5, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiVisibleRequest), 0, 30, 60, Handler::Ui},
+			OperationDefinition{11, 6, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiBoundsRequest), 0, 30, 60, Handler::Ui},
+			OperationDefinition{11, 7, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiHandleRequest), 0, 30, 60, Handler::Ui},
+			OperationDefinition{11, 8, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiTitleRequestHeader) + 256, 0, 20, 40, Handler::Ui},
+			OperationDefinition{11, 9, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiInteractiveRequest), 0, 30, 60, Handler::Ui},
 		};
 
 		const OperationDefinition* FindOperation(std::uint16_t service, std::uint16_t operation)
@@ -184,6 +196,7 @@ namespace cemuextend_hle
 			ServiceDefinition{8, 1, 16, 64, 64U * 1024U},
 			ServiceDefinition{9, 1, 1, 64, 4U * 1024U},
 			ServiceDefinition{10, 1, 32, 64U * 1024U, 64U * 1024U},
+			ServiceDefinition{11, 1, kCemodUiPermission, 64U * 1024U, 64U * 1024U},
 		};
 
 		struct WireServiceDefinition
@@ -238,6 +251,7 @@ namespace cemuextend_hle
 			std::uint64_t nextInputEventId{1};
 			std::size_t reservedResponses{};
 			std::unordered_map<std::uint32_t, Pending> pending;
+			std::shared_ptr<const CemodWebUiContent> webUiContent;
 			// Compact exact-once admission history. Sequential IDs occupy one range;
 			// pathological sparse IDs are bounded and reap the session.
 			std::map<std::uint32_t, std::uint32_t> admittedRanges;
@@ -268,6 +282,9 @@ namespace cemuextend_hle
 		std::mutex mutex;
 		std::shared_ptr<Host::IClipboard> clipboard;
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics;
+		std::shared_ptr<ICemodWebUiHost> webUi;
+		std::map<std::pair<std::uint64_t, std::uint32_t>,
+			std::shared_ptr<const CemodWebUiContent>> webUiContents;
 		std::uint64_t nextTextInputSequence{1};
 		std::function<void()> textInputWakeCallback;
 		std::unordered_map<std::uint32_t, Session> sessions;
@@ -365,6 +382,22 @@ namespace cemuextend_hle
 			--session.reservedResponses;
 		}
 
+		void PushUiEvent(CemodWebUiHostEvent event)
+		{
+			std::lock_guard lock(mutex);
+			const auto found = sessions.find(event.sessionId);
+			if (found == sessions.end() || found->second.addressSpaceId != event.addressSpaceId ||
+				found->second.generation != event.generation)
+				return;
+			auto& session = found->second;
+			if (!HasPermission(session, kCemodUiPermission,
+							   static_cast<std::uint16_t>(ServiceId::Ui)) ||
+				!session.subscriptions.contains(static_cast<std::uint16_t>(ServiceId::Ui)) ||
+				event.payload.size() > cemuextend::transport::kMaximumMessageSize - sizeof(ResponseHeader))
+				return;
+			EmitEvent(session, ServiceId::Ui, static_cast<std::uint16_t>(event.event), event.payload);
+		}
+
 		static bool Owns(const Session& session, Cex2Owner& owner)
 		{
 			return session.owner == &owner && session.addressSpaceId == owner.AddressSpaceId() &&
@@ -381,8 +414,18 @@ namespace cemuextend_hle
 			const bool networkService =
 				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Http) &&
 				permission == kCemodNetworkPermission;
-			return granted && (service == 0 || networkService ||
+			const bool uiService =
+				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Ui) &&
+				permission == kCemodUiPermission;
+			return granted && (service == 0 || networkService || uiService ||
 							   session.owner->IsServiceAllowed(service, permission, operation));
+		}
+
+		static std::uint32_t EventPermission(std::uint16_t service)
+		{
+			return service == static_cast<std::uint16_t>(ServiceId::Ui)
+				? kCemodUiPermission
+				: 1U;
 		}
 
 		static bool IsValidPointerPolicy(const cemuextend::wire::PointerPolicyPayload& policy)
@@ -486,11 +529,31 @@ namespace cemuextend_hle
 			return true;
 		}
 
+		static bool IsValidUiName(std::string_view value)
+		{
+			return !value.empty() && value.size() <= cemuextend::wire::kMaximumUiNameBytes &&
+				   !value.starts_with("cemu.") &&
+				   std::ranges::all_of(value, [](unsigned char character) {
+					   return std::isalnum(character) || character == '_' || character == '.' ||
+						  character == '-';
+				   });
+		}
+
+		static bool IsValidJson(std::string_view value, std::size_t maximum)
+		{
+			if (value.empty() || value.size() > maximum || !IsValidUtf8(value))
+				return false;
+			rapidjson::Document document;
+			document.Parse(value.data(), value.size());
+			return !document.HasParseError();
+		}
+
 		void EmitEvent(Session& session, ServiceId service, std::uint16_t operation,
 					   std::span<const std::byte> payload)
 		{
 			const auto serviceId = static_cast<std::uint16_t>(service);
-			if ((service != ServiceId::Core && !HasPermission(session, 1, serviceId, operation)) ||
+			if ((service != ServiceId::Core &&
+				 !HasPermission(session, EventPermission(serviceId), serviceId, operation)) ||
 				!session.subscriptions.contains(serviceId) ||
 				session.responses.size() + session.reservedResponses >=
 					cemuextend::transport::kMaximumResponseQueue)
@@ -930,11 +993,12 @@ namespace cemuextend_hle
 														[service](const ServiceDefinition& definition) { return definition.id == service; });
 				const bool supportsEvents = service == static_cast<std::uint16_t>(ServiceId::Core) ||
 											service == static_cast<std::uint16_t>(ServiceId::Input) ||
-											service == static_cast<std::uint16_t>(ServiceId::Window);
+											service == static_cast<std::uint16_t>(ServiceId::Window) ||
+											service == static_cast<std::uint16_t>(ServiceId::Ui);
 				if (!exists || !supportsEvents)
 					return MakeResponse(request, Status::NotSupported);
 				if (service != static_cast<std::uint16_t>(ServiceId::Core) &&
-					!HasPermission(session, 1, service))
+					!HasPermission(session, EventPermission(service), service))
 					return MakeResponse(request, Status::PermissionDenied);
 				if (static_cast<CoreOperation>(request.operation.get()) == CoreOperation::Subscribe)
 					session.subscriptions.insert(service);
@@ -974,11 +1038,26 @@ namespace cemuextend_hle
 	}
 
 	void Cex2Host::ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
-								 std::shared_ptr<Host::IWindowMetrics> windowMetrics)
+								 std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+								 std::shared_ptr<ICemodWebUiHost> webUi)
 	{
-		std::scoped_lock lock(m_impl->mutex);
-		m_impl->clipboard = std::move(clipboard);
-		m_impl->windowMetrics = std::move(windowMetrics);
+		std::shared_ptr<ICemodWebUiHost> previous;
+		{
+			std::scoped_lock lock(m_impl->mutex);
+			m_impl->clipboard = std::move(clipboard);
+			m_impl->windowMetrics = std::move(windowMetrics);
+			previous = std::exchange(m_impl->webUi, webUi);
+		}
+		if (previous && previous != webUi)
+			previous->SetEventSink({});
+		if (webUi)
+		{
+			const std::weak_ptr weak = m_impl;
+			webUi->SetEventSink([weak](CemodWebUiHostEvent event) {
+				if (const auto impl = weak.lock())
+					impl->PushUiEvent(std::move(event));
+			});
+		}
 	}
 
 	std::int32_t Cex2Host::Query(Cex2Owner& owner, std::uint32_t query,
@@ -1266,6 +1345,253 @@ namespace cemuextend_hle
 #endif
 			return static_cast<std::int32_t>(Error::Ok);
 		}
+		if (definition && request.operationVersion.get() == definition->version &&
+			definition->handler == Handler::Ui)
+		{
+			using namespace cemuextend::wire;
+			if (!Impl::HasPermission(session, definition->permission,
+									 request.serviceId.get(), request.operation.get()))
+			{
+				session.responses.push_back(MakeResponse(request, Status::PermissionDenied));
+				++session.acceptedRequests;
+				return static_cast<std::int32_t>(Error::Ok);
+			}
+			if (payload.size() > definition->maximumRequest)
+			{
+				session.responses.push_back(MakeResponse(request, Status::TooLarge));
+				++session.acceptedRequests;
+				return static_cast<std::int32_t>(Error::Ok);
+			}
+			const auto* package = owner.Package();
+			if (!package || !package->manifest.webUi || package->uiAssets.empty())
+			{
+				session.responses.push_back(MakeResponse(request, Status::NotFound));
+				++session.acceptedRequests;
+				return static_cast<std::int32_t>(Error::Ok);
+			}
+			const auto& webUiManifest = *package->manifest.webUi;
+
+			Status validation = Status::Ok;
+			const auto operation = static_cast<UiOperation>(request.operation.get());
+			switch (operation)
+			{
+			case UiOperation::Create:
+			{
+				if (payload.size() < sizeof(UiCreateRequestHeader))
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				UiCreateRequestHeader header{};
+				std::memcpy(&header, payload.data(), sizeof(header));
+				const auto viewBytes = header.viewBytes.get();
+				const auto contextBytes = header.contextBytes.get();
+				if (viewBytes == 0 || viewBytes > kMaximumUiNameBytes ||
+					contextBytes > kMaximumUiContextBytes ||
+					viewBytes > payload.size() - sizeof(header) ||
+					contextBytes != payload.size() - sizeof(header) - viewBytes ||
+					header.mode > static_cast<std::uint8_t>(UiMode::Overlay) ||
+					header.surface > static_cast<std::uint8_t>(UiSurface::Drc) ||
+					header.visible > 1 || header.interactive > 1 ||
+					header.width.get() < 0 || header.height.get() < 0 ||
+					(header.width.get() == 0) != (header.height.get() == 0) ||
+					header.width.get() > 16384 || header.height.get() > 16384)
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				const auto* text = reinterpret_cast<const char*>(payload.data() + sizeof(header));
+				const std::string_view viewId(text, viewBytes);
+				const std::string_view context(text + viewBytes, contextBytes);
+				const auto view = webUiManifest.views.find(std::string(viewId));
+				if (!Impl::IsValidUiName(viewId) ||
+					!Impl::IsValidJson(context, kMaximumUiContextBytes))
+					validation = Status::InvalidArgument;
+				else if (view == webUiManifest.views.end())
+					validation = Status::NotFound;
+				else if ((header.mode == static_cast<std::uint8_t>(UiMode::Window) &&
+						  !view->second.windowMode) ||
+						 (header.mode == static_cast<std::uint8_t>(UiMode::Overlay) &&
+						  (!view->second.overlayMode ||
+						   std::ranges::none_of(view->second.overlay->surfaces,
+							[&](CemodWebUiSurface surface) {
+								return static_cast<std::uint8_t>(surface) == header.surface;
+							}) ||
+						   (header.interactive != 0 && !view->second.overlay->interactive))))
+					validation = Status::PermissionDenied;
+				break;
+			}
+			case UiOperation::Close:
+			case UiOperation::Focus:
+			{
+				UiHandleRequest value{};
+				if (payload.size() != sizeof(value))
+					validation = Status::InvalidArgument;
+				else
+				{
+					std::memcpy(&value, payload.data(), sizeof(value));
+					if (!value.handle.get()) validation = Status::InvalidArgument;
+				}
+				break;
+			}
+			case UiOperation::Emit:
+			{
+				UiMessageHeader header{};
+				if (payload.size() < sizeof(header))
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				std::memcpy(&header, payload.data(), sizeof(header));
+				const auto nameBytes = header.nameBytes.get();
+				const auto jsonBytes = header.jsonBytes.get();
+				if (!header.handle.get() || header.callId.get() || header.flags.get() ||
+					nameBytes > kMaximumUiNameBytes || jsonBytes > kMaximumUiJsonBytes ||
+					nameBytes > payload.size() - sizeof(header) ||
+					jsonBytes != payload.size() - sizeof(header) - nameBytes)
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				const auto* text = reinterpret_cast<const char*>(payload.data() + sizeof(header));
+				if (!Impl::IsValidUiName({text, nameBytes}) ||
+					!Impl::IsValidJson({text + nameBytes, jsonBytes}, kMaximumUiJsonBytes))
+					validation = Status::InvalidArgument;
+				break;
+			}
+			case UiOperation::Reply:
+			{
+				UiReplyHeader header{};
+				if (payload.size() < sizeof(header))
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				std::memcpy(&header, payload.data(), sizeof(header));
+				const auto jsonBytes = header.jsonBytes.get();
+				if (!header.handle.get() || !header.callId.get() || header.success > 1 ||
+					header.reserved != std::array<std::byte, 3>{} ||
+					jsonBytes > kMaximumUiJsonBytes ||
+					jsonBytes != payload.size() - sizeof(header) ||
+					!Impl::IsValidJson({reinterpret_cast<const char*>(payload.data() + sizeof(header)),
+										   jsonBytes}, kMaximumUiJsonBytes))
+					validation = Status::InvalidArgument;
+				break;
+			}
+			case UiOperation::SetVisible:
+			{
+				UiVisibleRequest value{};
+				if (payload.size() != sizeof(value))
+					validation = Status::InvalidArgument;
+				else
+				{
+					std::memcpy(&value, payload.data(), sizeof(value));
+					if (!value.handle.get() || value.visible > 1 ||
+						value.reserved != std::array<std::byte, 3>{})
+						validation = Status::InvalidArgument;
+				}
+				break;
+			}
+			case UiOperation::SetBounds:
+			{
+				UiBoundsRequest value{};
+				if (payload.size() != sizeof(value))
+					validation = Status::InvalidArgument;
+				else
+				{
+					std::memcpy(&value, payload.data(), sizeof(value));
+					if (!value.handle.get() || value.width.get() <= 0 || value.height.get() <= 0 ||
+						value.width.get() > 16384 || value.height.get() > 16384)
+						validation = Status::InvalidArgument;
+				}
+				break;
+			}
+			case UiOperation::SetTitle:
+			{
+				UiTitleRequestHeader header{};
+				if (payload.size() < sizeof(header))
+				{
+					validation = Status::InvalidArgument;
+					break;
+				}
+				std::memcpy(&header, payload.data(), sizeof(header));
+				const auto titleBytes = header.titleBytes.get();
+				if (!header.handle.get() || titleBytes == 0 || titleBytes > 256 ||
+					titleBytes != payload.size() - sizeof(header) ||
+					!Impl::IsValidUtf8({reinterpret_cast<const char*>(payload.data() + sizeof(header)),
+										   titleBytes}))
+					validation = Status::InvalidArgument;
+				break;
+			}
+			case UiOperation::SetInteractive:
+			{
+				UiInteractiveRequest value{};
+				if (payload.size() != sizeof(value))
+					validation = Status::InvalidArgument;
+				else
+				{
+					std::memcpy(&value, payload.data(), sizeof(value));
+					if (!value.handle.get() || value.interactive > 1 ||
+						value.reserved != std::array<std::byte, 3>{})
+						validation = Status::InvalidArgument;
+				}
+				break;
+			}
+			default:
+				validation = Status::NotSupported;
+			}
+			if (validation != Status::Ok)
+			{
+				session.responses.push_back(MakeResponse(request, validation));
+				++session.acceptedRequests;
+				return static_cast<std::int32_t>(Error::Ok);
+			}
+
+			auto webUi = m_impl->webUi;
+			if (!webUi)
+			{
+				session.responses.push_back(MakeResponse(request, Status::NotSupported));
+				++session.acceptedRequests;
+				return static_cast<std::int32_t>(Error::Ok);
+			}
+			if (!session.webUiContent)
+			{
+				const auto contentKey = std::pair{owner.AddressSpaceId(), owner.Generation()};
+				const auto cached = m_impl->webUiContents.find(contentKey);
+				if (cached != m_impl->webUiContents.end())
+					session.webUiContent = cached->second;
+				else
+				{
+					auto content = std::make_shared<CemodWebUiContent>();
+					content->principal = owner.Principal();
+					content->titleId = owner.TitleId();
+					content->manifest = webUiManifest;
+					content->assets = package->uiAssets;
+					session.webUiContent = content;
+					m_impl->webUiContents.emplace(contentKey, std::move(content));
+				}
+			}
+			const auto addressSpaceId = owner.AddressSpaceId();
+			const auto generation = owner.Generation();
+			++session.reservedResponses;
+			session.pending.emplace(correlationId, Impl::Session::Pending{
+				definition->permission, request,
+				std::chrono::steady_clock::now() + std::chrono::seconds(10)});
+			++session.acceptedRequests;
+			session.bytesCopied += requestBytes.size();
+			CemodWebUiHostRequest hostRequest{addressSpaceId, generation, sessionId,
+				correlationId, operation, {payload.begin(), payload.end()}, session.webUiContent};
+			lock.unlock();
+			const bool accepted = webUi->Submit(std::move(hostRequest),
+				[impl = m_impl, sessionId, addressSpaceId, generation, correlationId](
+					Status status, std::vector<std::byte> response) {
+					impl->Complete(sessionId, addressSpaceId, generation, correlationId,
+						status, response);
+				});
+			if (!accepted)
+				m_impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::Busy);
+			return static_cast<std::int32_t>(Error::Ok);
+		}
 		if (asynchronous)
 		{
 			if (!Impl::HasPermission(session, definition->permission,
@@ -1291,9 +1617,14 @@ namespace cemuextend_hle
 			const auto maximumResponse = definition->maximumResponse;
 			const auto service = static_cast<ServiceId>(request.serviceId.get());
 			const auto operation = request.operation.get();
+#ifdef CEMU_CEX2_TESTING
+			constexpr auto asynchronousDeadline = std::chrono::seconds(30);
+#else
+			constexpr auto asynchronousDeadline = std::chrono::seconds(5);
+#endif
 			++session.reservedResponses;
 			session.pending.emplace(correlationId, Impl::Session::Pending{permission, copiedHeader,
-																		  std::chrono::steady_clock::now() + std::chrono::seconds(5)});
+														  std::chrono::steady_clock::now() + asynchronousDeadline});
 			++session.acceptedRequests;
 			session.bytesCopied += requestBytes.size();
 			m_impl->Enqueue([impl = m_impl, sessionId, addressSpaceId, generation,
@@ -1361,11 +1692,12 @@ namespace cemuextend_hle
 								std::span<std::byte> output, std::uint32_t& outputSize)
 	{
 		outputSize = 0;
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
 		const auto found = m_impl->sessions.find(sessionId);
 		if (found == m_impl->sessions.end() || !Impl::Owns(found->second, owner))
 			return static_cast<std::int32_t>(Error::PermissionDenied);
 		auto& session = found->second;
+		std::vector<std::uint32_t> timedOutUi;
 		for (auto pending = session.pending.begin(); pending != session.pending.end();)
 		{
 			if (std::chrono::steady_clock::now() < pending->second.deadline)
@@ -1374,6 +1706,8 @@ namespace cemuextend_hle
 				continue;
 			}
 			const auto service = pending->second.header.serviceId.get();
+			if (service == static_cast<std::uint16_t>(ServiceId::Ui))
+				timedOutUi.push_back(pending->first);
 			if (service == static_cast<std::uint16_t>(ServiceId::Clipboard))
 				session.clipboardPending = false;
 			if (service == static_cast<std::uint16_t>(ServiceId::Capture))
@@ -1382,14 +1716,30 @@ namespace cemuextend_hle
 			pending = session.pending.erase(pending);
 			--session.reservedResponses;
 		}
+		auto webUi = m_impl->webUi;
+		const auto addressSpaceId = session.addressSpaceId;
+		const auto generation = session.generation;
+		auto cancelTimedOut = [&] {
+			lock.unlock();
+			if (webUi)
+				for (const auto correlationId : timedOutUi)
+					webUi->Cancel(addressSpaceId, generation, sessionId, correlationId);
+		};
 		if (session.responses.empty())
+		{
+			cancelTimedOut();
 			return static_cast<std::int32_t>(Error::NotFound);
+		}
 		if (output.size() < session.responses.front().size())
+		{
+			cancelTimedOut();
 			return static_cast<std::int32_t>(Error::TooLarge);
+		}
 		outputSize = static_cast<std::uint32_t>(session.responses.front().size());
 		std::memcpy(output.data(), session.responses.front().data(), outputSize);
 		session.responses.pop_front();
 		++session.completedResponses;
+		cancelTimedOut();
 		return static_cast<std::int32_t>(Error::Ok);
 	}
 
@@ -1398,7 +1748,7 @@ namespace cemuextend_hle
 	{
 		if (!correlationId)
 			return static_cast<std::int32_t>(Error::InvalidArgument);
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
 		const auto found = m_impl->sessions.find(sessionId);
 		if (found == m_impl->sessions.end() || !Impl::Owns(found->second, owner))
 			return static_cast<std::int32_t>(Error::PermissionDenied);
@@ -1406,6 +1756,10 @@ namespace cemuextend_hle
 			pending != found->second.pending.end())
 		{
 			const auto service = pending->second.header.serviceId.get();
+			const bool ui = service == static_cast<std::uint16_t>(ServiceId::Ui);
+			const auto addressSpaceId = found->second.addressSpaceId;
+			const auto generation = found->second.generation;
+			auto webUi = m_impl->webUi;
 			if (service == static_cast<std::uint16_t>(ServiceId::Clipboard))
 				found->second.clipboardPending = false;
 			if (service == static_cast<std::uint16_t>(ServiceId::Capture))
@@ -1413,6 +1767,9 @@ namespace cemuextend_hle
 			found->second.responses.push_back(MakeResponse(pending->second.header, Status::Cancelled));
 			found->second.pending.erase(pending);
 			--found->second.reservedResponses;
+			lock.unlock();
+			if (ui && webUi)
+				webUi->Cancel(addressSpaceId, generation, sessionId, correlationId);
 			return static_cast<std::int32_t>(Error::Ok);
 		}
 		for (auto& response : found->second.responses)
@@ -1432,22 +1789,28 @@ namespace cemuextend_hle
 
 	std::int32_t Cex2Host::Close(Cex2Owner& owner, std::uint32_t sessionId)
 	{
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
 		const auto found = m_impl->sessions.find(sessionId);
 		if (found == m_impl->sessions.end())
 			return static_cast<std::int32_t>(Error::NotFound);
 		if (!Impl::Owns(found->second, owner))
 			return static_cast<std::int32_t>(Error::PermissionDenied);
 		const bool hadTextInput = found->second.textInput.active;
+		const auto addressSpaceId = found->second.addressSpaceId;
+		const auto generation = found->second.generation;
+		auto webUi = m_impl->webUi;
 		m_impl->sessions.erase(found);
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
+		lock.unlock();
+		if (webUi)
+			webUi->CloseSession(addressSpaceId, generation, sessionId);
 		return static_cast<std::int32_t>(Error::Ok);
 	}
 
 	void Cex2Host::CloseOwner(Cex2Owner& owner)
 	{
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
 		bool hadTextInput{};
 		std::erase_if(m_impl->sessions, [&owner, &hadTextInput](const auto& entry) {
 			const auto& session = entry.second;
@@ -1460,20 +1823,32 @@ namespace cemuextend_hle
 		// Transfers are scoped to the address space, so they outlive one session of
 		// it but never the owner that started them.
 		Cex2Http::ReleaseSession(owner.AddressSpaceId());
+		auto webUi = m_impl->webUi;
+		const auto addressSpaceId = owner.AddressSpaceId();
+		const auto generation = owner.Generation();
+		m_impl->webUiContents.erase({addressSpaceId, generation});
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
+		lock.unlock();
+		if (webUi)
+			webUi->CloseOwner(addressSpaceId, generation);
 	}
 
 	void Cex2Host::CloseAll()
 	{
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
 		const bool hadTextInput = std::ranges::any_of(m_impl->sessions,
 													  [](const auto& entry) { return entry.second.textInput.active; });
 		for (const auto& entry : m_impl->sessions)
 			Cex2Http::ReleaseSession(entry.second.addressSpaceId);
 		m_impl->sessions.clear();
+		m_impl->webUiContents.clear();
+		auto webUi = m_impl->webUi;
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
+		lock.unlock();
+		if (webUi)
+			webUi->CloseAll();
 	}
 
 #ifdef CEMU_CEX2_TESTING
@@ -1825,7 +2200,9 @@ namespace cemuextend_hle
 
 	void Cex2Host::PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions)
 	{
-		std::lock_guard lock(m_impl->mutex);
+		std::unique_lock lock(m_impl->mutex);
+		const bool closeUi = (owner.GrantedPermissions() & kCemodUiPermission) != 0 &&
+			(permissions & kCemodUiPermission) == 0;
 		bool hadTextInput{};
 		for (const auto& [id, session] : m_impl->sessions)
 			hadTextInput |= session.owner == &owner && session.textInput.active;
@@ -1836,7 +2213,7 @@ namespace cemuextend_hle
 				continue;
 			std::erase_if(session.subscriptions, [&session](std::uint16_t service) {
 				return service != static_cast<std::uint16_t>(ServiceId::Core) &&
-					   !Impl::HasPermission(session, 1, service);
+					   !Impl::HasPermission(session, Impl::EventPermission(service), service);
 			});
 			for (auto response = session.responses.begin(); response != session.responses.end();)
 			{
@@ -1845,8 +2222,8 @@ namespace cemuextend_hle
 				const bool event = header.flags.get() == static_cast<std::uint16_t>(
 															 cemuextend::transport::ResponseFlag::Event);
 				const auto* definition = FindOperation(header.serviceId.get(), header.operation.get());
-				const auto required = event ? 1U : definition ? definition->permission
-															  : 0U;
+				const auto required = event ? Impl::EventPermission(header.serviceId.get())
+					: definition ? definition->permission : 0U;
 				if (Impl::HasPermission(session, required, header.serviceId.get(), header.operation.get()))
 				{
 					++response;
@@ -1897,6 +2274,14 @@ namespace cemuextend_hle
 		}
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
+		auto webUi = m_impl->webUi;
+		const auto addressSpaceId = owner.AddressSpaceId();
+		const auto generation = owner.Generation();
+		if (closeUi)
+			m_impl->webUiContents.erase({addressSpaceId, generation});
+		lock.unlock();
+		if (closeUi && webUi)
+			webUi->CloseOwner(addressSpaceId, generation);
 	}
 
 } // namespace cemuextend_hle

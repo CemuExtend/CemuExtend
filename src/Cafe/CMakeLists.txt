@@ -272,7 +272,8 @@ add_library(CemuCafe
   OS/libs/avm/avm.h
   OS/libs/camera/camera.cpp
   OS/libs/camera/camera.h
-  OS/libs/cemuextend/Cex2Host.cpp
+	OS/libs/cemuextend/Cex2Host.cpp
+	OS/libs/cemuextend/CemodWebUiHost.h
   OS/libs/cemuextend/Cex2Http.cpp
   OS/libs/cemuextend/Cex2Http.h
   OS/libs/cemuextend/Cex2Owner.h

@@ -534,6 +534,10 @@ struct AromaCompatibilityRuntime::Impl
 		{
 			return stopped.load(std::memory_order_acquire);
 		}
+		const CemodPackage* Package() const override
+		{
+			return &package;
+		}
 		std::uint32_t GrantedPermissions() const override
 		{
 			return grantedPermissions.load(std::memory_order_acquire);

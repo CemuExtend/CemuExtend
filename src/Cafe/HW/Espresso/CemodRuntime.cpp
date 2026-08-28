@@ -470,9 +470,17 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	auto cpu = std::make_unique<PPCInterpreter_t>();
 	cpu->modExecutionContext = context.get();
 	cpu->global = global.get();
-	cpu->gpr[1] = stackBase + package.manifest.stackBytes - 16;
-	m_impl->mods.emplace(handle, Impl::Instance{std::move(package), std::move(context),
-												std::move(global), std::move(cpu), entrypoints, stackBase + package.manifest.stackBytes - 16});
+	const auto stackTop = stackBase + package.manifest.stackBytes - 16;
+	cpu->gpr[1] = stackTop;
+	auto [inserted, added] = m_impl->mods.emplace(
+		handle, Impl::Instance{std::move(package), std::move(context), std::move(global),
+								   std::move(cpu), entrypoints, stackTop});
+	if (!added)
+	{
+		error = "failed to register Mod runtime instance";
+		return std::nullopt;
+	}
+	inserted->second.context->SetPackage(&inserted->second.package);
 	lock.unlock();
 	if (!Invoke(handle, CemodLifecycle::Init))
 	{

@@ -86,6 +86,41 @@ namespace
 		assert(zip_close(archive) == 0);
 		return path;
 	}
+
+	std::filesystem::path WriteWebUiPackage()
+	{
+		const auto path = std::filesystem::temp_directory_path() /
+			"cemuextend-inspection-service-web-ui-test.cemod";
+		std::filesystem::remove(path);
+		int error{};
+		auto* archive = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_EXCL, &error);
+		assert(archive);
+		constexpr std::string_view manifest = R"({
+ "package_version":4,
+ "api_version":2,
+ "execution_mode":"isolated",
+ "payload":{"format":"cemod_elf","path":"mod.elf"},
+ "scope":{"type":"title"},
+ "mod_id":"org.example.web-ui",
+ "title_ids":["0005000012345678"],
+ "requested_permissions":["ui"],
+ "memory":{"code_bytes":4096,"private_bytes":4096,"stack_bytes":4096},
+ "cpu":{"instructions_per_frame":100000,"time_us_per_frame":500},
+ "entrypoint":"cemod_init",
+ "web_ui":{
+   "bridge_version":1,
+   "views":{"main":{"entry":"ui/index.html","single_instance":true,"modes":["window"],"window":{}}},
+   "network":{"connect":[],"resources":[],"credentials":false,"persistent_storage":false,"allow_private_network":false}
+ }
+})";
+		constexpr std::string_view html = "<!doctype html><title>Web UI</title>";
+		const auto elf = MinimalElf();
+		Add(archive, "manifest.json", manifest.data(), manifest.size());
+		Add(archive, "mod.elf", elf.data(), elf.size());
+		Add(archive, "ui/index.html", html.data(), html.size());
+		assert(zip_close(archive) == 0);
+		return path;
+	}
 } // namespace
 
 int main()
@@ -95,6 +130,9 @@ int main()
 		CemodPermission::FunctionPatching);
 	const auto notifications = CemodInspectionService::PermissionBit(
 		CemodPermission::Notifications);
+	const auto webUi = CemodInspectionService::PermissionBit(CemodPermission::WebUi);
+	assert(webUi == (1ULL << 11U));
+	assert(CemodInspectionService::IsDangerous(CemodPermission::WebUi));
 	assert(CemodInspectionService::DefaultGrantedPermissions(patching | notifications) ==
 		   notifications);
 	assert(CemodInspectionService::EvaluateApproval(patching, std::nullopt, false).result ==
@@ -127,6 +165,17 @@ int main()
 	descriptor.signedPackage = true;
 	inspected = CemodInspectionService::Inspect(descriptor, std::nullopt);
 	assert(inspected.signedPackage);
+
+	const auto webUiPath = WriteWebUiPackage();
+	CemodPackageDescriptor webUiDescriptor{webUiPath, "org.example.web-ui",
+		"unsigned-web-ui", 1U << 6U, CemodExecutionMode::Isolated, false,
+		{0x0005000012345678ULL}, {}};
+	const auto webUiInspection = CemodInspectionService::Inspect(webUiDescriptor, std::nullopt);
+	assert(webUiInspection.Valid());
+	assert(webUiInspection.approval.requested == webUi);
+	const auto mappedMemory = CemodInspectionService::PermissionBit(CemodPermission::MappedMemory);
+	assert((webUiInspection.approval.requested & mappedMemory) == 0);
+	std::filesystem::remove(webUiPath);
 
 	descriptor.discoveryError = "malformed discovery entry";
 	inspected = CemodInspectionService::Inspect(descriptor, std::nullopt);

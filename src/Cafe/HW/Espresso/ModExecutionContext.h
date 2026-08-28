@@ -128,6 +128,14 @@ class ModExecutionContext final : public cemuextend_hle::Cex2Owner
 	{
 		return m_titleId;
 	}
+	void SetPackage(const CemodPackage* package)
+	{
+		m_package = package;
+	}
+	[[nodiscard]] const CemodPackage* Package() const override
+	{
+		return m_package;
+	}
 	void SetServicePermissions(ModServicePermissions permissions);
 	[[nodiscard]] bool IsServiceAllowed(std::uint16_t service, std::uint32_t permission,
 										std::uint16_t operation = 0) const override;
@@ -144,6 +152,7 @@ class ModExecutionContext final : public cemuextend_hle::Cex2Owner
 	std::string m_principal;
 	std::atomic<std::uint32_t> m_grantedPermissions{};
 	std::uint64_t m_titleId{};
+	const CemodPackage* m_package{};
 	std::atomic<std::uint32_t> m_serviceReadMask{0x1ffU};
 	std::atomic<std::uint32_t> m_serviceWriteMask{0x1ffU};
 	std::atomic<std::uint32_t> m_serviceInjectMask{0x1ffU};

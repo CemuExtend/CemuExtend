@@ -29,6 +29,7 @@ namespace CemuExtend
 		ContentRedirection,
 		Modules,
 		PluginManagement,
+		WebUi,
 	};
 
 	inline constexpr std::array kCemodPermissions{
@@ -43,6 +44,7 @@ namespace CemuExtend
 		CemodPermission::ContentRedirection,
 		CemodPermission::Modules,
 		CemodPermission::PluginManagement,
+		CemodPermission::WebUi,
 	};
 
 	struct CemodPackageDescriptor

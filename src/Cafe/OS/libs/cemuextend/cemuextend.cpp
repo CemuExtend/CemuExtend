@@ -301,6 +301,8 @@ namespace cemuextend_hle
 				return "Aroma/WUMS modules";
 			case CemuExtend::CemodPermission::PluginManagement:
 				return "WUPS plugin management";
+			case CemuExtend::CemodPermission::WebUi:
+				return "Web UI";
 			}
 			return "Unknown permission";
 		};

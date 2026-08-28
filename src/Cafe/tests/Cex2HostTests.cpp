@@ -2,6 +2,7 @@
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
+#include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
@@ -49,6 +50,69 @@ namespace
 	using cemuextend::transport::ResponseHeader;
 	using cemuextend::wire::Error;
 	using cemuextend::wire::Status;
+
+	class TestWebUiHost final : public cemuextend_hle::ICemodWebUiHost
+	{
+	  public:
+		void SetEventSink(EventSink value) override
+		{
+			eventSink = std::move(value);
+		}
+
+		bool Submit(cemuextend_hle::CemodWebUiHostRequest request,
+			Completion completion) override
+		{
+			contents.push_back(request.content);
+			requests.push_back(std::move(request));
+			completions.push_back(std::move(completion));
+			return accept;
+		}
+
+		void Cancel(std::uint64_t, std::uint32_t, std::uint32_t,
+			std::uint32_t correlationId) override
+		{
+			cancelled.push_back(correlationId);
+		}
+
+		void CloseSession(std::uint64_t, std::uint32_t,
+			std::uint32_t sessionId) override
+		{
+			closedSessions.push_back(sessionId);
+		}
+
+		void CloseOwner(std::uint64_t, std::uint32_t) override
+		{
+			++closedOwners;
+		}
+
+		void CloseAll() override
+		{
+			++closedAll;
+		}
+
+		void Complete(std::size_t index, Status status,
+			std::span<const std::byte> payload = {})
+		{
+			auto completion = std::move(completions.at(index));
+			completion(status, {payload.begin(), payload.end()});
+		}
+
+		void Emit(cemuextend_hle::CemodWebUiHostEvent event)
+		{
+			CHECK(eventSink);
+			eventSink(std::move(event));
+		}
+
+		bool accept{true};
+		EventSink eventSink;
+		std::vector<cemuextend_hle::CemodWebUiHostRequest> requests;
+		std::vector<Completion> completions;
+		std::vector<std::shared_ptr<const cemuextend_hle::CemodWebUiContent>> contents;
+		std::vector<std::uint32_t> cancelled;
+		std::vector<std::uint32_t> closedSessions;
+		std::uint32_t closedOwners{};
+		std::uint32_t closedAll{};
+	};
 
 	std::vector<std::byte> Request(std::uint32_t correlation, std::uint16_t operation,
 								   std::span<const std::byte> payload = {},
@@ -976,6 +1040,110 @@ namespace
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
 
+	void TestWebUiServiceLifecycle()
+	{
+		using namespace cemuextend::wire;
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		auto webUiHost = std::make_shared<TestWebUiHost>();
+		host.ConfigureHost({}, {}, webUiHost);
+
+		CemodPackage package;
+		CemodWebUiView view;
+		view.entry = "ui/index.html";
+		view.windowMode = true;
+		view.window.emplace();
+		CemodWebUi webUi;
+		webUi.bridgeVersion = 1;
+		webUi.views.emplace("main", std::move(view));
+		package.manifest.webUi = std::move(webUi);
+		package.uiAssets.emplace("ui/index.html", std::vector<std::byte>{std::byte{'x'}});
+
+		ModExecutionContext context(92, 1, "ui-service-principal");
+		context.SetPackage(&package);
+		context.SetGrantedPermissions(cemuextend_hle::kCemodUiPermission);
+		const auto firstSession = Open(host, context);
+		auto pollUi = [&](std::uint32_t session, std::string_view step) {
+			std::vector<std::byte> response(cemuextend::transport::kMaximumMessageSize);
+			std::uint32_t size{};
+			const auto result = host.Poll(context, session, response, size);
+			if (result != static_cast<std::int32_t>(Error::Ok))
+				std::cerr << "Web UI poll failed at " << step << ": " << result << '\n';
+			CHECK(result == static_cast<std::int32_t>(Error::Ok));
+			response.resize(size);
+			return response;
+		};
+
+		auto makeCreate = [](std::uint32_t correlation) {
+			constexpr std::string_view viewId = "main";
+			constexpr std::string_view json = "{}";
+			UiCreateRequestHeader header{};
+			header.viewBytes = static_cast<std::uint32_t>(viewId.size());
+			header.contextBytes = static_cast<std::uint32_t>(json.size());
+			header.mode = static_cast<std::uint8_t>(UiMode::Window);
+			header.visible = 1;
+			std::vector<std::byte> payload(sizeof(header) + viewId.size() + json.size());
+			std::memcpy(payload.data(), &header, sizeof(header));
+			std::memcpy(payload.data() + sizeof(header), viewId.data(), viewId.size());
+			std::memcpy(payload.data() + sizeof(header) + viewId.size(), json.data(), json.size());
+			return Request(correlation, static_cast<std::uint16_t>(UiOperation::Create),
+				payload, ServiceId::Ui);
+		};
+
+		auto request = makeCreate(1);
+		CHECK(host.Submit(context, firstSession, request) == static_cast<std::int32_t>(Error::Ok));
+
+		UiCreateResponse created{};
+		created.handle = 41;
+		const auto createdBytes = std::span<const std::byte>(
+			reinterpret_cast<const std::byte*>(&created), sizeof(created));
+		webUiHost->Complete(0, Status::Ok, createdBytes);
+		auto response = pollUi(firstSession, "first create");
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			static_cast<std::uint16_t>(Status::Ok));
+		CHECK(host.Close(context, firstSession) == static_cast<std::int32_t>(Error::Ok));
+		const auto secondSession = Open(host, context);
+		request = makeCreate(2);
+		CHECK(host.Submit(context, secondSession, request) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(webUiHost->requests.size() == 2);
+		CHECK(webUiHost->contents[0] == webUiHost->contents[1]);
+		webUiHost->Complete(1, Status::Ok, createdBytes);
+		(void)pollUi(secondSession, "second create");
+
+		Encoder subscription;
+		subscription.U16(static_cast<std::uint16_t>(ServiceId::Ui));
+		request = Request(3, static_cast<std::uint16_t>(CoreOperation::Subscribe),
+			subscription.data());
+		CHECK(host.Submit(context, secondSession, request) == static_cast<std::int32_t>(Error::Ok));
+		response = pollUi(secondSession, "subscribe");
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			static_cast<std::uint16_t>(Status::Ok));
+		UiHandleRequest ready{};
+		ready.handle = 41;
+		const auto* readyBegin = reinterpret_cast<const std::byte*>(&ready);
+		std::vector<std::byte> readyPayload(readyBegin, readyBegin + sizeof(ready));
+		webUiHost->Emit({context.AddressSpaceId(), context.Generation(), secondSession,
+			UiEvent::Ready, std::move(readyPayload)});
+		response = pollUi(secondSession, "ready event");
+		const auto* event = reinterpret_cast<const ResponseHeader*>(response.data());
+		CHECK(event->serviceId.get() == static_cast<std::uint16_t>(ServiceId::Ui));
+		CHECK(event->operation.get() == static_cast<std::uint16_t>(UiEvent::Ready));
+
+		request = makeCreate(4);
+		CHECK(host.Submit(context, secondSession, request) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(host.Cancel(context, secondSession, 4) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(webUiHost->cancelled == std::vector<std::uint32_t>{4});
+		response = pollUi(secondSession, "cancel");
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			static_cast<std::uint16_t>(Status::Cancelled));
+
+		CHECK(webUiHost->closedSessions == std::vector<std::uint32_t>{firstSession});
+		host.PermissionsChanged(context, 0);
+		CHECK(webUiHost->closedOwners == 1);
+		CHECK(host.Close(context, secondSession) == static_cast<std::int32_t>(Error::Ok));
+		host.ConfigureHost({}, {}, {});
+	}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1005,6 +1173,7 @@ int main(int argc, char** argv)
 		TestMouseAndPointerPolicy();
 		TestHttpValidationAndOwnership();
 		TestHttpPermissionGate();
+		TestWebUiServiceLifecycle();
 		TestDiagnosticsGraphicsApi();
 	}
 	cemuextend_hle::Cex2Host::Instance().ShutdownForTesting();

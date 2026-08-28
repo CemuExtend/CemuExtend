@@ -19,6 +19,7 @@ namespace Host
 namespace cemuextend_hle
 {
 	class Cex2Owner;
+	class ICemodWebUiHost;
 }
 struct VPADStatus;
 
@@ -42,7 +43,8 @@ namespace cemuextend_hle
 	  public:
 		static Cex2Host& Instance();
 		void ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
-						   std::shared_ptr<Host::IWindowMetrics> windowMetrics);
+						   std::shared_ptr<Host::IWindowMetrics> windowMetrics,
+						   std::shared_ptr<ICemodWebUiHost> webUi = {});
 
 		std::int32_t Query(Cex2Owner& owner, std::uint32_t query,
 						   std::span<std::byte> output);
