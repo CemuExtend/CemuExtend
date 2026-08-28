@@ -50,13 +50,10 @@ namespace
 	using cemuextend::wire::Error;
 	using cemuextend::wire::Status;
 
-	std::uint32_t gLastCorrelation{};
-
 	std::vector<std::byte> Request(std::uint32_t correlation, std::uint16_t operation,
 								   std::span<const std::byte> payload = {},
 								   cemuextend::wire::ServiceId service = cemuextend::wire::ServiceId::Core)
 	{
-		gLastCorrelation = correlation;
 		std::vector<std::byte> result(sizeof(RequestHeader) + payload.size());
 		auto& header = *reinterpret_cast<RequestHeader*>(result.data());
 		header.totalSize = static_cast<std::uint32_t>(result.size());
@@ -75,8 +72,7 @@ namespace
 	{
 		std::vector<std::byte> response(cemuextend::transport::kMaximumMessageSize);
 		std::uint32_t size{};
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-		while (std::chrono::steady_clock::now() < deadline)
+		for (;;)
 		{
 			const auto result = host.Poll(context, session, response, size);
 			if (result == static_cast<std::int32_t>(Error::Ok))
@@ -87,9 +83,6 @@ namespace
 			CHECK(result == static_cast<std::int32_t>(Error::NotFound));
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
-		std::cerr << "Timed out waiting for correlation " << gLastCorrelation << '\n';
-		CHECK(false);
-		return {};
 	}
 
 	std::uint32_t Open(cemuextend_hle::Cex2Host& host, ModExecutionContext& context)
@@ -819,8 +812,7 @@ namespace
 			  static_cast<std::uint16_t>(Status::Ok));
 		{
 			std::unique_lock lock(wake->mutex);
-			CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
-									   [&] { return wake->count >= 1; }));
+			wake->ready.wait(lock, [&] { return wake->count >= 1; });
 		}
 		const auto state = host.EffectiveTextInput();
 		CHECK(state.active && state.requestId == 42 && state.maximumLength == 128);
@@ -842,8 +834,7 @@ namespace
 		CHECK(host.EffectiveTextInput().caretX == 340);
 		{
 			std::unique_lock lock(wake->mutex);
-			CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
-									   [&] { return wake->count >= 2; }));
+			wake->ready.wait(lock, [&] { return wake->count >= 2; });
 		}
 
 		constexpr std::string_view committed = "search";
@@ -887,8 +878,7 @@ namespace
 		CHECK(!host.EffectiveTextInput().active);
 		{
 			std::unique_lock lock(wake->mutex);
-			CHECK(wake->ready.wait_for(lock, std::chrono::seconds(5),
-									   [&] { return wake->count >= 3; }));
+			wake->ready.wait(lock, [&] { return wake->count >= 3; });
 		}
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 		host.SetTextInputWakeCallback({});

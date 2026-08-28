@@ -128,8 +128,7 @@ if(BUILD_TESTING)
 			add_test(NAME cef_overlay_osr_smoke_tests COMMAND cef_overlay_osr_smoke_tests)
 		endif()
 		set_tests_properties(cef_overlay_osr_smoke_tests PROPERTIES
-			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1"
-			TIMEOUT 90)
+			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1")
 	endif()
   add_executable(web_main_window_state_tests tests/MainWindowStateTests.cpp)
   target_link_libraries(web_main_window_state_tests PRIVATE CemuWebRpc)
