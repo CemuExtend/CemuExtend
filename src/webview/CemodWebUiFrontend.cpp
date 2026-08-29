@@ -229,6 +229,8 @@ namespace WebFrontend
 		void HandleQuery(std::uint32_t handle, std::int64_t queryId, std::string request,
 			std::function<void(bool, std::string)> completion);
 		void CancelQuery(std::uint32_t handle, std::int64_t queryId);
+		void WindowBoundsChanged(std::uint32_t handle, Host::RenderRegionBounds bounds);
+		void WindowFocusChanged(std::uint32_t handle, bool focused);
 		void CloseInstance(std::uint32_t handle, UiCloseReason reason);
 		void BrowserClosed(std::uint32_t handle);
 		void CloseMatching(std::function<bool(const Instance&)> predicate,
@@ -300,11 +302,24 @@ namespace WebFrontend
 		if (!view->second.window)
 			return Status::InvalidArgument;
 		const auto& windowConfig = *view->second.window;
-		const auto width = header.width.get() > 0 ? header.width.get()
-			: static_cast<std::int32_t>(windowConfig.width.value_or(960));
-		const auto height = header.height.get() > 0 ? header.height.get()
-			: static_cast<std::int32_t>(windowConfig.height.value_or(540));
+		const auto minimumWidth = static_cast<std::int32_t>(windowConfig.minimumWidth.value_or(1));
+		const auto minimumHeight = static_cast<std::int32_t>(windowConfig.minimumHeight.value_or(1));
+		const auto width = std::max(minimumWidth, header.width.get() > 0 ? header.width.get()
+			: static_cast<std::int32_t>(windowConfig.width.value_or(960)));
+		const auto height = std::max(minimumHeight, header.height.get() > 0 ? header.height.get()
+			: static_cast<std::int32_t>(windowConfig.height.value_or(540)));
 		instance->window->SetTitle(windowConfig.title.value_or(request.content->modId));
+		instance->window->SetMinimumSize(minimumWidth, minimumHeight);
+		instance->window->SetResizable(windowConfig.resizable.value_or(true));
+		instance->window->SetStateCallbacks(
+			[weakOwner, handle](Host::RenderRegionBounds bounds) {
+				if (const auto active = weakOwner.lock())
+					active->m_impl->WindowBoundsChanged(handle, bounds);
+			},
+			[weakOwner, handle](bool focused) {
+				if (const auto active = weakOwner.lock())
+					active->m_impl->WindowFocusChanged(handle, focused);
+			});
 		instance->window->SetSize(width, height);
 		auto* support = instance->window.get();
 		const auto bounds = support->GetBrowserBounds();
@@ -382,16 +397,28 @@ namespace WebFrontend
 				{
 					UiVisibleRequest value{};
 					ReadStruct(std::span{request.payload}, value);
-					if (value.visible && instance->window) instance->window->Show();
-					else if (!value.visible) status = Status::NotSupported;
+					if (instance->window)
+					{
+						if (value.visible) instance->window->Show();
+						else instance->window->Hide();
+					}
 					break;
 				}
 				case UiOperation::SetBounds:
 				{
 					UiBoundsRequest value{};
 					ReadStruct(std::span{request.payload}, value);
-					if (instance->window) instance->window->SetSize(value.width.get(), value.height.get());
-					browsers->ResizeWindow(instance->windowId, value.width.get(), value.height.get(),
+					const auto& view = instance->content->manifest.views.at(instance->viewId);
+					const auto minimumWidth = static_cast<std::int32_t>(
+						view.window->minimumWidth.value_or(1));
+					const auto minimumHeight = static_cast<std::int32_t>(
+						view.window->minimumHeight.value_or(1));
+					const auto width = std::max(value.width.get(), minimumWidth);
+					const auto height = std::max(value.height.get(), minimumHeight);
+					if (instance->window)
+						instance->window->SetBounds(value.x.get(), value.y.get(),
+							width, height);
+					browsers->ResizeWindow(instance->windowId, width, height,
 						instance->window ? instance->window->GetBrowserDpiScale() : 1.0);
 					break;
 				}
@@ -544,6 +571,37 @@ namespace WebFrontend
 		Append(payload, cancelled);
 		instance.calls.erase(call);
 		Publish(instance, UiEvent::Cancel, std::move(payload));
+	}
+
+	void CemodWebUiFrontend::Impl::WindowBoundsChanged(std::uint32_t handle,
+		Host::RenderRegionBounds bounds)
+	{
+		const auto found = instances.find(handle);
+		if (found == instances.end() || found->second->closing)
+			return;
+		UiBoundsEvent event{};
+		event.handle = handle;
+		event.x = bounds.x;
+		event.y = bounds.y;
+		event.width = bounds.width;
+		event.height = bounds.height;
+		std::vector<std::byte> payload;
+		Append(payload, event);
+		Publish(*found->second, UiEvent::BoundsChanged, std::move(payload));
+	}
+
+	void CemodWebUiFrontend::Impl::WindowFocusChanged(std::uint32_t handle, bool focused)
+	{
+		const auto found = instances.find(handle);
+		if (found == instances.end() || found->second->closing)
+			return;
+		browsers->SetWindowFocus(found->second->windowId, focused);
+		UiFocusEvent event{};
+		event.handle = handle;
+		event.focused = focused ? 1 : 0;
+		std::vector<std::byte> payload;
+		Append(payload, event);
+		Publish(*found->second, UiEvent::FocusChanged, std::move(payload));
 	}
 
 	void CemodWebUiFrontend::Impl::CloseInstance(std::uint32_t handle, UiCloseReason reason)

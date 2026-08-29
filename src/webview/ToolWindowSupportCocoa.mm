@@ -13,7 +13,33 @@ namespace WebFrontend
 	struct CocoaToolCloseContext
 	{
 		std::function<void()> closeHandler;
+		std::function<void(Host::RenderRegionBounds)> boundsChanged;
+		std::function<void(bool)> focusChanged;
 	};
+
+	double CocoaDesktopTop()
+	{
+		double top{};
+		bool found{};
+		for (NSScreen* screen in [NSScreen screens])
+		{
+			top = found ? std::max(top, NSMaxY([screen frame])) : NSMaxY([screen frame]);
+			found = true;
+		}
+		return found ? top : 0.0;
+	}
+
+	void PublishCocoaBounds(CocoaToolCloseContext* context, NSWindow* window)
+	{
+		if (!context || !context->boundsChanged || !window)
+			return;
+		const auto frame = [window frame];
+		const auto content = [[window contentView] bounds];
+		context->boundsChanged({static_cast<std::int32_t>(frame.origin.x),
+			static_cast<std::int32_t>(CocoaDesktopTop() - NSMaxY(frame)),
+			static_cast<std::int32_t>(content.size.width),
+			static_cast<std::int32_t>(content.size.height)});
+	}
 }
 
 @interface CemuToolWindowDelegate : NSObject <NSWindowDelegate>
@@ -29,6 +55,24 @@ namespace WebFrontend
 	(void)sender;
 	if (closeContext && closeContext->closeHandler) closeContext->closeHandler();
 	return NO;
+}
+- (void)windowDidMove:(NSNotification*)notification
+{
+	WebFrontend::PublishCocoaBounds(closeContext, [notification object]);
+}
+- (void)windowDidResize:(NSNotification*)notification
+{
+	WebFrontend::PublishCocoaBounds(closeContext, [notification object]);
+}
+- (void)windowDidBecomeKey:(NSNotification*)notification
+{
+	(void)notification;
+	if (closeContext && closeContext->focusChanged) closeContext->focusChanged(true);
+}
+- (void)windowDidResignKey:(NSNotification*)notification
+{
+	(void)notification;
+	if (closeContext && closeContext->focusChanged) closeContext->focusChanged(false);
 }
 @end
 
@@ -121,9 +165,39 @@ namespace WebFrontend
 			}
 			void SetSize(std::int32_t width, std::int32_t height) override
 			{
-				[m_window setContentSize:NSMakeSize(std::max<std::int32_t>(1, width),
-					std::max<std::int32_t>(1, height))];
+				[m_window setContentSize:NSMakeSize(std::max(width, m_minimumWidth),
+					std::max(height, m_minimumHeight))];
 				ResizeBrowser();
+			}
+			void SetBounds(std::int32_t x, std::int32_t y,
+				std::int32_t width, std::int32_t height) override
+			{
+				SetSize(width, height);
+				const auto frame = [m_window frame];
+				[m_window setFrameOrigin:NSMakePoint(x,
+					CocoaDesktopTop() - y - frame.size.height)];
+			}
+			void SetMinimumSize(std::int32_t width, std::int32_t height) override
+			{
+				m_minimumWidth = std::max(1, width);
+				m_minimumHeight = std::max(1, height);
+				[m_window setContentMinSize:NSMakeSize(m_minimumWidth, m_minimumHeight)];
+			}
+			void SetResizable(bool resizable) override
+			{
+				auto style = [m_window styleMask];
+				if (resizable)
+					style |= NSWindowStyleMaskResizable;
+				else
+					style &= ~NSWindowStyleMaskResizable;
+				[m_window setStyleMask:style];
+			}
+			void SetStateCallbacks(
+				std::function<void(Host::RenderRegionBounds)> boundsChanged,
+				std::function<void(bool)> focusChanged) override
+			{
+				m_context.boundsChanged = std::move(boundsChanged);
+				m_context.focusChanged = std::move(focusChanged);
 			}
 			void SetTitle(std::string_view title) override
 			{
@@ -140,6 +214,15 @@ namespace WebFrontend
 				else
 					[m_parent addChildWindow:m_window ordered:NSWindowAbove];
 				Focus();
+			}
+
+			void Hide() override
+			{
+				if (m_modal && [m_parent attachedSheet] == m_window)
+					[m_parent endSheet:m_window];
+				else if (!m_modal)
+					[m_parent removeChildWindow:m_window];
+				[m_window orderOut:nil];
 			}
 
 			void Focus() override
@@ -172,6 +255,8 @@ namespace WebFrontend
 			NSView* m_browserContainer{};
 			NSView* m_browserView{};
 			bool m_modal{};
+			std::int32_t m_minimumWidth{1};
+			std::int32_t m_minimumHeight{1};
 			CocoaToolCloseContext m_context;
 			CemuToolWindowDelegate* m_delegate{};
 		};

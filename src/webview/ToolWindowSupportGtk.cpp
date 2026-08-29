@@ -56,11 +56,49 @@ namespace WebFrontend
 			{
 				if (!m_window)
 					return;
+				width = std::max(width, m_minimumWidth);
+				height = std::max(height, m_minimumHeight);
 				gtk_window_set_default_size(GTK_WINDOW(m_window), std::max(1, width),
 									std::max(1, height));
 				if (gtk_widget_get_visible(m_window))
 					gtk_window_resize(GTK_WINDOW(m_window), std::max(1, width),
 								  std::max(1, height));
+			}
+
+			void SetBounds(std::int32_t x, std::int32_t y,
+				std::int32_t width, std::int32_t height) override
+			{
+				if (!m_window)
+					return;
+				gtk_window_move(GTK_WINDOW(m_window), x, y);
+				SetSize(width, height);
+			}
+
+			void SetMinimumSize(std::int32_t width, std::int32_t height) override
+			{
+				if (!m_window)
+					return;
+				m_minimumWidth = std::max(1, width);
+				m_minimumHeight = std::max(1, height);
+				GdkGeometry geometry{};
+				geometry.min_width = m_minimumWidth;
+				geometry.min_height = m_minimumHeight;
+				gtk_window_set_geometry_hints(GTK_WINDOW(m_window), nullptr, &geometry,
+					GDK_HINT_MIN_SIZE);
+			}
+
+			void SetResizable(bool resizable) override
+			{
+				if (m_window)
+					gtk_window_set_resizable(GTK_WINDOW(m_window), resizable ? TRUE : FALSE);
+			}
+
+			void SetStateCallbacks(
+				std::function<void(Host::RenderRegionBounds)> boundsChanged,
+				std::function<void(bool)> focusChanged) override
+			{
+				m_boundsChanged = std::move(boundsChanged);
+				m_focusChanged = std::move(focusChanged);
 			}
 
 			void SetTitle(std::string_view title) override
@@ -201,6 +239,12 @@ namespace WebFrontend
 				Focus();
 			}
 
+			void Hide() override
+			{
+				if (m_window)
+					gtk_widget_hide(m_window);
+			}
+
 			void Focus() override
 			{
 				if (m_window && GTK_IS_WINDOW(m_window))
@@ -257,6 +301,26 @@ namespace WebFrontend
 						static_cast<GtkToolWindowSupport*>(data)->FocusBrowser();
 						return FALSE;
 					}), this);
+				g_signal_connect(m_window, "configure-event",
+					G_CALLBACK(+[](GtkWidget*, GdkEventConfigure* event, gpointer data) -> gboolean {
+						auto& self = *static_cast<GtkToolWindowSupport*>(data);
+						if (self.m_boundsChanged)
+							self.m_boundsChanged({event->x, event->y,
+								std::max(1, event->width), std::max(1, event->height)});
+						return FALSE;
+					}), this);
+				g_signal_connect(m_window, "focus-in-event",
+					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+						auto& self = *static_cast<GtkToolWindowSupport*>(data);
+						if (self.m_focusChanged) self.m_focusChanged(true);
+						return FALSE;
+					}), this);
+				g_signal_connect(m_window, "focus-out-event",
+					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+						auto& self = *static_cast<GtkToolWindowSupport*>(data);
+						if (self.m_focusChanged) self.m_focusChanged(false);
+						return FALSE;
+					}), this);
 				gtk_widget_realize(m_window);
 				gtk_widget_realize(m_browserContainer);
 			}
@@ -285,6 +349,10 @@ namespace WebFrontend
 			GtkWidget* m_browserContainer{};
 			::Window m_browserChild{None};
 			std::function<void()> m_closeHandler;
+			std::function<void(Host::RenderRegionBounds)> m_boundsChanged;
+			std::function<void(bool)> m_focusChanged;
+			std::int32_t m_minimumWidth{1};
+			std::int32_t m_minimumHeight{1};
 			gulong m_deleteHandler{};
 		};
 	} // namespace

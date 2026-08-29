@@ -116,19 +116,53 @@ namespace WebFrontend
 			{
 				if (!m_window || !IsWindow(m_window))
 					return;
-				RECT frame{0, 0,
-						   static_cast<LONG>(std::max<std::int32_t>(1, width)),
-						   static_cast<LONG>(std::max<std::int32_t>(1, height))};
-				const auto style = static_cast<DWORD>(GetWindowLongPtrW(m_window, GWL_STYLE));
-				const auto extendedStyle = static_cast<DWORD>(
-					GetWindowLongPtrW(m_window, GWL_EXSTYLE));
-				if (!AdjustWindowRectExForDpi(&frame, style, GetMenu(m_window) != nullptr,
-						extendedStyle, GetDpiForWindow(m_window)))
-					AdjustWindowRectEx(&frame, style, GetMenu(m_window) != nullptr, extendedStyle);
+				const auto frame = FrameForClient(std::max(width, m_minimumWidth),
+					std::max(height, m_minimumHeight));
 				SetWindowPos(m_window, nullptr, 0, 0, frame.right - frame.left,
 						 frame.bottom - frame.top,
 						 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 				ResizeBrowser();
+			}
+
+			void SetBounds(std::int32_t x, std::int32_t y,
+				std::int32_t width, std::int32_t height) override
+			{
+				if (!m_window || !IsWindow(m_window))
+					return;
+				const auto frame = FrameForClient(std::max(width, m_minimumWidth),
+					std::max(height, m_minimumHeight));
+				SetWindowPos(m_window, nullptr, x, y, frame.right - frame.left,
+					frame.bottom - frame.top, SWP_NOZORDER | SWP_NOACTIVATE);
+				ResizeBrowser();
+			}
+
+			void SetMinimumSize(std::int32_t width, std::int32_t height) override
+			{
+				m_minimumWidth = std::max(1, width);
+				m_minimumHeight = std::max(1, height);
+			}
+
+			void SetResizable(bool resizable) override
+			{
+				if (!m_window || !IsWindow(m_window))
+					return;
+				auto style = static_cast<DWORD>(GetWindowLongPtrW(m_window, GWL_STYLE));
+				if (resizable)
+					style |= WS_THICKFRAME | WS_MAXIMIZEBOX;
+				else
+					style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+				SetWindowLongPtrW(m_window, GWL_STYLE, static_cast<LONG_PTR>(style));
+				SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
+					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+					SWP_FRAMECHANGED);
+			}
+
+			void SetStateCallbacks(
+				std::function<void(Host::RenderRegionBounds)> boundsChanged,
+				std::function<void(bool)> focusChanged) override
+			{
+				m_boundsChanged = std::move(boundsChanged);
+				m_focusChanged = std::move(focusChanged);
 			}
 			void SetTitle(std::string_view title) override
 			{
@@ -150,6 +184,13 @@ namespace WebFrontend
 				UpdateWindow(m_window);
 				ResizeBrowser();
 				Focus();
+			}
+
+			void Hide() override
+			{
+				if (m_window && IsWindow(m_window))
+					ShowWindow(m_window, SW_HIDE);
+				RestoreParent();
 			}
 
 			void Focus() override
@@ -198,6 +239,20 @@ namespace WebFrontend
 			}
 
 		  private:
+			RECT FrameForClient(std::int32_t width, std::int32_t height) const
+			{
+				RECT frame{0, 0,
+					static_cast<LONG>(std::max<std::int32_t>(1, width)),
+					static_cast<LONG>(std::max<std::int32_t>(1, height))};
+				const auto style = static_cast<DWORD>(GetWindowLongPtrW(m_window, GWL_STYLE));
+				const auto extendedStyle = static_cast<DWORD>(
+					GetWindowLongPtrW(m_window, GWL_EXSTYLE));
+				if (!AdjustWindowRectExForDpi(&frame, style, GetMenu(m_window) != nullptr,
+						extendedStyle, GetDpiForWindow(m_window)))
+					AdjustWindowRectEx(&frame, style, GetMenu(m_window) != nullptr, extendedStyle);
+				return frame;
+			}
+
 			static void RegisterWindowClass()
 			{
 				static std::once_flag flag;
@@ -240,7 +295,24 @@ namespace WebFrontend
 					if (!self->m_browserWindow)
 						self->m_browserWindow = GetWindow(window, GW_CHILD);
 					self->ResizeBrowser();
+					self->NotifyBounds();
 					return 0;
+				case WM_MOVE:
+					self->NotifyBounds();
+					return 0;
+				case WM_ACTIVATE:
+					if (self->m_focusChanged)
+						self->m_focusChanged(LOWORD(wparam) != WA_INACTIVE);
+					break;
+				case WM_GETMINMAXINFO:
+				{
+					auto* limits = reinterpret_cast<MINMAXINFO*>(lparam);
+					const auto frame = self->FrameForClient(
+						self->m_minimumWidth, self->m_minimumHeight);
+					limits->ptMinTrackSize.x = frame.right - frame.left;
+					limits->ptMinTrackSize.y = frame.bottom - frame.top;
+					return 0;
+				}
 				case WM_DPICHANGED:
 				{
 					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
@@ -272,12 +344,28 @@ namespace WebFrontend
 				}
 			}
 
+			void NotifyBounds()
+			{
+				if (!m_boundsChanged || !m_window || !IsWindow(m_window) || IsIconic(m_window))
+					return;
+				RECT frame{};
+				RECT client{};
+				if (GetWindowRect(m_window, &frame) && GetClientRect(m_window, &client))
+					m_boundsChanged({frame.left, frame.top,
+						std::max<LONG>(1, client.right - client.left),
+						std::max<LONG>(1, client.bottom - client.top)});
+			}
+
 			HWND m_window{};
 			HWND m_parent{};
 			HWND m_browserWindow{};
 			bool m_modal{};
 			bool m_parentDisabled{};
+			std::int32_t m_minimumWidth{1};
+			std::int32_t m_minimumHeight{1};
 			std::function<void()> m_closeHandler;
+			std::function<void(Host::RenderRegionBounds)> m_boundsChanged;
+			std::function<void(bool)> m_focusChanged;
 		};
 	} // namespace
 
