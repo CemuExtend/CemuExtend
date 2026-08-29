@@ -76,11 +76,16 @@ namespace WebFrontend
 			std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
 			SHA256(reinterpret_cast<const unsigned char*>(principal.data()), principal.size(),
 				digest.data());
+			// A URL host label is limited to 63 characters. Keep 224 bits of the
+			// principal digest so the "mod-" prefix and lowercase hex fit in one label.
+			constexpr std::size_t kOriginDigestBytes = 28;
+			static_assert(4 + kOriginDigestBytes * 2 <= 63);
 			constexpr char hex[] = "0123456789abcdef";
 			std::string result{"mod-"};
-			result.reserve(4 + digest.size() * 2);
-			for (const auto value : digest)
+			result.reserve(4 + kOriginDigestBytes * 2);
+			for (std::size_t index = 0; index < kOriginDigestBytes; ++index)
 			{
+				const auto value = digest[index];
 				result += hex[value >> 4U];
 				result += hex[value & 0xfU];
 			}
