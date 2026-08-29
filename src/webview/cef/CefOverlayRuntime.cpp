@@ -10,7 +10,10 @@
 #include "include/cef_app.h"
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
+#include "include/cef_dialog_handler.h"
+#include "include/cef_download_handler.h"
 #include "include/cef_parser.h"
+#include "include/cef_permission_handler.h"
 #include "include/cef_request.h"
 #include "include/cef_request_context.h"
 #include "include/cef_resource_handler.h"
@@ -698,6 +701,9 @@ namespace WebFrontend::CefOverlay
 					 public CefLoadHandler,
 					 public CefRequestHandler,
 					 public CefResourceRequestHandler,
+					 public CefDialogHandler,
+					 public CefDownloadHandler,
+					 public CefPermissionHandler,
 					 public CefMessageRouterBrowserSide::Handler
 		{
 		  public:
@@ -709,6 +715,18 @@ namespace WebFrontend::CefOverlay
 			}
 			CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
 			CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
+			CefRefPtr<CefDialogHandler> GetDialogHandler() override
+			{
+				return m_descriptor.cemodAssets ? this : nullptr;
+			}
+			CefRefPtr<CefDownloadHandler> GetDownloadHandler() override
+			{
+				return m_descriptor.cemodAssets ? this : nullptr;
+			}
+			CefRefPtr<CefPermissionHandler> GetPermissionHandler() override
+			{
+				return m_descriptor.cemodAssets ? this : nullptr;
+			}
 
 			void GetViewRect(CefRefPtr<CefBrowser>, CefRect& rect) override;
 			bool GetScreenInfo(CefRefPtr<CefBrowser>, CefScreenInfo& screenInfo) override;
@@ -739,6 +757,21 @@ namespace WebFrontend::CefOverlay
 				CefRefPtr<CefRequest>, CefRefPtr<CefResponse>, CefString& newUrl) override;
 			void OnProtocolExecution(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
 				CefRefPtr<CefRequest>, bool& allowOsExecution) override;
+			bool GetAuthCredentials(CefRefPtr<CefBrowser>, const CefString&, bool,
+				const CefString&, int, const CefString&, const CefString&,
+				CefRefPtr<CefAuthCallback>) override;
+			bool OnSelectClientCertificate(CefRefPtr<CefBrowser>, bool, const CefString&, int,
+				const X509CertificateList&, CefRefPtr<CefSelectClientCertificateCallback>) override;
+			bool OnFileDialog(CefRefPtr<CefBrowser>, FileDialogMode, const CefString&,
+				const CefString&, const std::vector<CefString>&, const std::vector<CefString>&,
+				const std::vector<CefString>&, CefRefPtr<CefFileDialogCallback>) override;
+			bool CanDownload(CefRefPtr<CefBrowser>, const CefString&, const CefString&) override;
+			void OnDownloadUpdated(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloadItem>,
+				CefRefPtr<CefDownloadItemCallback>) override;
+			bool OnRequestMediaAccessPermission(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				const CefString&, std::uint32_t, CefRefPtr<CefMediaAccessCallback>) override;
+			bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>, std::uint64_t, const CefString&,
+				std::uint32_t, CefRefPtr<CefPermissionPromptCallback>) override;
 			void OnRenderProcessTerminated(CefRefPtr<CefBrowser>, TerminationStatus,
 				int, const CefString&) override;
 			bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
@@ -1144,6 +1177,59 @@ namespace WebFrontend::CefOverlay
 		{
 			if (m_descriptor.cemodAssets)
 				allowOsExecution = false;
+		}
+
+		bool Client::GetAuthCredentials(CefRefPtr<CefBrowser>, const CefString&, bool,
+			const CefString&, int, const CefString&, const CefString&, CefRefPtr<CefAuthCallback>)
+		{
+			return false;
+		}
+
+		bool Client::OnSelectClientCertificate(CefRefPtr<CefBrowser>, bool, const CefString&, int,
+			const X509CertificateList&, CefRefPtr<CefSelectClientCertificateCallback> callback)
+		{
+			if (!m_descriptor.cemodAssets)
+				return false;
+			if (callback)
+				callback->Select(nullptr);
+			return true;
+		}
+
+		bool Client::OnFileDialog(CefRefPtr<CefBrowser>, FileDialogMode, const CefString&,
+			const CefString&, const std::vector<CefString>&, const std::vector<CefString>&,
+			const std::vector<CefString>&, CefRefPtr<CefFileDialogCallback> callback)
+		{
+			if (callback)
+				callback->Cancel();
+			return true;
+		}
+
+		bool Client::CanDownload(CefRefPtr<CefBrowser>, const CefString&, const CefString&)
+		{
+			return false;
+		}
+
+		void Client::OnDownloadUpdated(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloadItem>,
+			CefRefPtr<CefDownloadItemCallback> callback)
+		{
+			if (callback)
+				callback->Cancel();
+		}
+
+		bool Client::OnRequestMediaAccessPermission(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+			const CefString&, std::uint32_t, CefRefPtr<CefMediaAccessCallback> callback)
+		{
+			if (callback)
+				callback->Cancel();
+			return true;
+		}
+
+		bool Client::OnShowPermissionPrompt(CefRefPtr<CefBrowser>, std::uint64_t,
+			const CefString&, std::uint32_t, CefRefPtr<CefPermissionPromptCallback> callback)
+		{
+			if (callback)
+				callback->Continue(CEF_PERMISSION_RESULT_DENY);
+			return true;
 		}
 
 		void Client::OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
