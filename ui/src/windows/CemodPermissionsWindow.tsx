@@ -10,6 +10,12 @@ import { cemodEventJobId, parseCemodSnapshot } from "./cemodEvents";
 
 type Context = NonNullable<Bootstrap["context"]>;
 
+// The host serialises one entry per kCemodPermissions member
+// (src/Cemu/CemuExtend/CemodInspectionService.h). Approval is blocked unless the
+// package model carries the whole set, so this has to track that list: a short
+// model means the dialog cannot show everything the package is asking for.
+const CEMOD_PERMISSION_MODEL_SIZE = 12;
+
 export function CemodPermissionsWindow({
   context,
 }: {
@@ -103,7 +109,8 @@ export function CemodPermissionsWindow({
     () => [...grants].reduce((mask, bit) => mask | BigInt(bit), 0n).toString(),
     [grants],
   );
-  const permissionCountValid = item?.permissions.length === 11;
+  const permissionCountValid =
+    item?.permissions.length === CEMOD_PERMISSION_MODEL_SIZE;
 
   async function save() {
     if (
@@ -170,8 +177,9 @@ export function CemodPermissionsWindow({
           )}
           {!permissionCountValid && (
             <div className="error">
-              The host did not provide the complete 11-permission model.
-              Approval is blocked.
+              The host did not provide the complete{" "}
+              {CEMOD_PERMISSION_MODEL_SIZE}-permission model. Approval is
+              blocked.
             </div>
           )}
           <h2>{item.pluginName || item.modId}</h2>

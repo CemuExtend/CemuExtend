@@ -217,8 +217,11 @@ namespace WebFrontend
 					{
 						auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
 						gdk_x11_display_error_trap_push(gdkDisplay);
-						XRaiseWindow(display, m_browserChild);
-						XSetInputFocus(display, m_browserChild, RevertToParent, CurrentTime);
+						if (!BrowserOwnsInputFocus(display))
+						{
+							XRaiseWindow(display, m_browserChild);
+							XSetInputFocus(display, m_browserChild, RevertToParent, CurrentTime);
+						}
 						XSync(display, False);
 						if (gdk_x11_display_error_trap_pop(gdkDisplay))
 							m_browserChild = None;
@@ -323,6 +326,38 @@ namespace WebFrontend
 					}), this);
 				gtk_widget_realize(m_window);
 				gtk_widget_realize(m_browserContainer);
+			}
+
+			// Chromium answers XSetInputFocus by activating its own X11 window, which
+			// hands focus back to this container and re-enters the focus-in handler.
+			// Re-asserting focus every time turns that exchange into a loop that pins
+			// the UI thread at full speed, so focus is only taken when the browser
+			// does not already hold it. Chromium focuses a descendant of the window it
+			// handed us, so the whole chain up to the child counts as focused.
+			bool BrowserOwnsInputFocus(Display* display) const
+			{
+				if (!display || !m_browserChild)
+					return false;
+				::Window focused{};
+				int revert{};
+				if (!XGetInputFocus(display, &focused, &revert) || focused == None ||
+					focused == PointerRoot)
+					return false;
+				for (auto window = focused; window != None;)
+				{
+					if (window == m_browserChild)
+						return true;
+					::Window root{}, parent{}, *children{};
+					unsigned count{};
+					if (!XQueryTree(display, window, &root, &parent, &children, &count))
+						return false;
+					if (children)
+						XFree(children);
+					if (parent == None || parent == root)
+						return false;
+					window = parent;
+				}
+				return false;
 			}
 
 			Display* BrowserXDisplay() const

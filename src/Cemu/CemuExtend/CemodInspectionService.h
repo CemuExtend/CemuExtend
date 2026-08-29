@@ -47,6 +47,14 @@ namespace CemuExtend
 		CemodPermission::WebUi,
 	};
 
+	// The exact-approval dialog refuses to approve anything unless it receives
+	// this entire set, so it mirrors the size in CEMOD_PERMISSION_MODEL_SIZE
+	// (ui/src/windows/CemodPermissionsWindow.tsx). Growing this list without
+	// updating that constant leaves the dialog's save button permanently
+	// disabled, which is why the two are pinned together here.
+	static_assert(kCemodPermissions.size() == 12,
+				  "update CEMOD_PERMISSION_MODEL_SIZE in the permissions dialog to match");
+
 	struct CemodPackageDescriptor
 	{
 		std::filesystem::path path;
