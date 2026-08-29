@@ -20,6 +20,13 @@ namespace
 		bool throwOnStart{};
 		bool throwOnStop{};
 		bool failStop{};
+		std::optional<std::uint64_t> resolvedLaunchTitleId{0x1234};
+
+		std::optional<std::uint64_t> ResolveLaunchTitleId(
+			const std::filesystem::path&) const override
+		{
+			return resolvedLaunchTitleId;
+		}
 
 		Application::LaunchResult Prepare(const Application::LaunchRequest& request) override
 		{
@@ -715,6 +722,10 @@ int main()
 	FakeBackend backend;
 	Application::EmulationController controller(backend);
 	assert(controller.State() == Application::EmulationState::Idle);
+	assert(controller.ResolveLaunchTitleId("test.rpx") == 0x1234);
+	backend.resolvedLaunchTitleId.reset();
+	assert(!controller.ResolveLaunchTitleId("invalid.bin"));
+	backend.resolvedLaunchTitleId = 0x1234;
 	backend.cemodManagerSnapshot = {
 		.generation = 77,
 		.packages = {

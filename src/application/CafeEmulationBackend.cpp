@@ -3394,6 +3394,23 @@ namespace Application
 				m_events.Publish(TranslateCafeEvent(event));
 			}
 
+			std::optional<std::uint64_t> ResolveLaunchTitleId(
+				const std::filesystem::path& path) const override
+			{
+				TitleInfo title{path};
+				if (title.IsValid())
+				{
+					TitleId baseTitleId;
+					if (CafeTitleList::FindBaseTitleId(title.GetAppTitleId(), baseTitleId))
+						return baseTitleId;
+					return std::nullopt;
+				}
+				const auto fileType = DetermineCafeSystemFileType(path);
+				if (fileType != CafeTitleFileType::RPX && fileType != CafeTitleFileType::ELF)
+					return std::nullopt;
+				return CafeSystem::GetStandaloneTitleId(path);
+			}
+
 			LaunchResult Prepare(const LaunchRequest& request) override
 			{
 				LaunchResult result;

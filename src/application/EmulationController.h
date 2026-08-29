@@ -179,6 +179,8 @@ namespace Application
 	{
 	  public:
 		virtual ~IEmulationBackend() = default;
+		[[nodiscard]] virtual std::optional<std::uint64_t> ResolveLaunchTitleId(
+			const std::filesystem::path& path) const = 0;
 		[[nodiscard]] virtual LaunchResult Prepare(const LaunchRequest& request) = 0;
 		virtual void Start() = 0;
 		[[nodiscard]] virtual bool AbortPrepared() = 0;
@@ -244,6 +246,8 @@ namespace Application
 
 		[[nodiscard]] LaunchResult Launch(const LaunchRequest& request,
 										  BeforeStart beforeStart = {}, StartFailure startFailure = {});
+		[[nodiscard]] std::optional<std::uint64_t> ResolveLaunchTitleId(
+			const std::filesystem::path& path) const;
 		[[nodiscard]] StopResult Stop();
 		[[nodiscard]] StopResult ShutdownApplication();
 		[[nodiscard]] EmulationState State() const;

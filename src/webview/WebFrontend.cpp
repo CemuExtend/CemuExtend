@@ -14,6 +14,7 @@
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
+#include "config/LaunchSettings.h"
 #include "frontend/CemuExtendFrontendBridge.h"
 #include "frontend/FrontendRuntime.h"
 #include "input/InputManager.h"
@@ -2015,9 +2016,23 @@ namespace
 		{
 			m_nativeWindow->Show();
 			m_nativeWindow->FocusBrowser();
+			if (LaunchSettings::GetLoadFile() || LaunchSettings::GetLoadTitleID())
+			{
+				m_commandLineLaunch = true;
+				if (!PostToUi([this] { LaunchFromCommandLine(); }))
+				{
+					m_exitCode = EXIT_FAILURE;
+					return;
+				}
+			}
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 			WebFrontend::CefNative::RunNativeUiLoop();
 #endif
+		}
+
+		[[nodiscard]] int ExitCode() const noexcept
+		{
+			return m_exitCode;
 		}
 
 	  private:
@@ -3362,7 +3377,7 @@ namespace
 
 		void FinishGameWindowLifetime()
 		{
-			if (m_launcherClosed)
+			if (m_commandLineLaunch || m_launcherClosed)
 				(void)RequestShutdown();
 			else
 				ShowLibraryContent();
@@ -4049,7 +4064,13 @@ namespace
 					if (!DestroyMainRenderRegion())
 						return;
 					(void)m_windowState->FinishEmulation();
-					FinishGameWindowLifetime();
+					if (m_commandLineLaunch)
+					{
+						m_exitCode = m_controller.ForegroundProcessExitStatus().value_or(EXIT_SUCCESS);
+						(void)RequestShutdown();
+					}
+					else
+						FinishGameWindowLifetime();
 				});
 				break;
 			}
@@ -6455,6 +6476,49 @@ namespace
 				   JsonString(TitleIdString(result.titleId)) + "}";
 		}
 
+		void LaunchFromCommandLine() noexcept
+		{
+			try
+			{
+				std::optional<fs::path> path;
+				std::optional<std::uint64_t> titleId;
+				if (const auto requestedPath = LaunchSettings::GetLoadFile())
+				{
+					path = *requestedPath;
+					titleId = m_controller.ResolveLaunchTitleId(*requestedPath);
+				}
+				else if (const auto requestedTitleId = LaunchSettings::GetLoadTitleID())
+				{
+					if (const auto title = m_controller.ResolveBaseTitle(*requestedTitleId))
+					{
+						path = title->path;
+						titleId = title->titleId;
+					}
+				}
+
+				if (!path || !titleId)
+					throw std::runtime_error("command-line title could not be resolved");
+				const auto preflight = m_controller.GetCemodLaunchPreflight(*titleId);
+				if (!preflight.pendingApprovals.empty())
+					throw std::runtime_error(
+						"command-line title requires CemuMod permission approval in the GUI first");
+				(void)Launch(*path, *titleId);
+			}
+			catch (const std::exception& error)
+			{
+				m_exitCode = EXIT_FAILURE;
+				cemuLog_log(LogType::Force, "Command-line title launch failed: {}", error.what());
+				(void)RequestShutdown();
+			}
+			catch (...)
+			{
+				m_exitCode = EXIT_FAILURE;
+				cemuLog_log(LogType::Force,
+							"Command-line title launch failed with an unknown error");
+				(void)RequestShutdown();
+			}
+		}
+
 		void CancelPendingLaunch(std::string_view status,
 								 std::string_view diagnostic) noexcept
 		{
@@ -6585,6 +6649,8 @@ namespace
 		bool m_hostConnected{};
 		bool m_terminateWhenToolsClosed{};
 		bool m_mainReplyPending{};
+		bool m_commandLineLaunch{};
+		int m_exitCode{EXIT_SUCCESS};
 		Host::NativeSurfacePublication m_mainWindowPublication{};
 	};
 } // namespace
@@ -6606,7 +6672,8 @@ void Frontend::Run()
 	CemuCommonInit();
 #if BOOST_OS_WINDOWS
 	std::exception_ptr uiFailure;
-	std::thread uiThread([&uiFailure] {
+	int exitCode{EXIT_SUCCESS};
+	std::thread uiThread([&uiFailure, &exitCode] {
 		SetThreadName("cemu-web-ui");
 		const auto initialized = CoInitializeEx(nullptr,
 												COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -6620,6 +6687,7 @@ void Frontend::Run()
 		{
 			Runtime runtime;
 			runtime.Run();
+			exitCode = runtime.ExitCode();
 		} catch (...)
 		{
 			uiFailure = std::current_exception();
@@ -6629,15 +6697,19 @@ void Frontend::Run()
 	uiThread.join();
 	if (uiFailure)
 		std::rethrow_exception(uiFailure);
+	if (LaunchSettings::GetLoadFile() || LaunchSettings::GetLoadTitleID())
+		ExitProcess(static_cast<UINT>(exitCode));
 #else
 	SetThreadName("cemu-web-ui");
+	int exitCode{EXIT_SUCCESS};
 	{
 		Runtime runtime;
 		runtime.Run();
+		exitCode = runtime.ExitCode();
 	}
 	// Cemu owns process-lifetime worker objects whose static destruction is not
 	// safe after the frontend has shut the application down. Runtime cleanup has
 	// already released emulation and native UI resources at this point.
-	std::_Exit(EXIT_SUCCESS);
+	std::_Exit(exitCode);
 #endif
 }

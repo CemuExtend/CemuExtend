@@ -25,6 +25,12 @@ namespace Application
 			(void)Stop();
 	}
 
+	std::optional<std::uint64_t> EmulationController::ResolveLaunchTitleId(
+		const std::filesystem::path& path) const
+	{
+		return m_backend->ResolveLaunchTitleId(path);
+	}
+
 	LaunchResult EmulationController::Launch(const LaunchRequest& request,
 											 BeforeStart beforeStart, StartFailure startFailure)
 	{
