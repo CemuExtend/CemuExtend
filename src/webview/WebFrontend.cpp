@@ -3834,8 +3834,7 @@ namespace
 			if (m_stopping.load(std::memory_order_acquire) || !m_hostServices)
 				return;
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
-			if (m_cefOverlay && m_overlayInteraction.load(std::memory_order_acquire) !=
-				RuntimeOverlay::Interaction::Passive && m_cefOverlay->SendInput(event))
+			if (m_cefOverlay && m_cefOverlay->SendInput(event))
 				return;
 #endif
 			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];

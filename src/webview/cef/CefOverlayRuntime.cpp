@@ -37,6 +37,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <mutex>
 #include <unordered_set>
 #include <unordered_map>
@@ -798,6 +799,8 @@ namespace WebFrontend::CefOverlay
 			bool CloseWindow(std::uint64_t windowId) override;
 			void ResizeWindow(std::uint64_t windowId, int width, int height, double scale) override;
 			void SetWindowFocus(std::uint64_t windowId, bool focused) override;
+			void SetOverlayVisible(std::uint64_t windowId, bool visible) override;
+			void SetOverlayInteractive(std::uint64_t windowId, bool interactive) override;
 			void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 				std::string_view payload, std::uint64_t sequence) override;
 			void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
@@ -824,12 +827,55 @@ namespace WebFrontend::CefOverlay
 			void LaunchBrowser(std::uint64_t windowId);
 			CefRefPtr<CefRequestContext> RequestContext(
 				const std::shared_ptr<const BrowserAssetBundle>& bundle);
-			FrameMailbox& Mailbox() { return m_mailbox; }
+			void PaintView(std::uint64_t windowId, int width, int height, const void* bgra,
+				int sourceStride, std::span<const Host::OverlayDirtyRect> dirtyRects);
+			void PaintPopup(std::uint64_t windowId, int width, int height, const void* bgra,
+				int sourceStride, std::span<const Host::OverlayDirtyRect> dirtyRects);
+			void SetPopupVisible(std::uint64_t windowId, bool visible);
+			void SetPopupRect(std::uint64_t windowId, Host::OverlayDirtyRect rect);
 
 		  private:
+			struct LayerBitmap
+			{
+				std::uint64_t windowId{};
+				Host::PointerSurface surface{Host::PointerSurface::Main};
+				bool visible{true};
+				bool interactive{};
+				int width{};
+				int height{};
+				std::vector<std::uint8_t> view;
+				bool popupVisible{};
+				Host::OverlayDirtyRect popupRect{};
+				int popupWidth{};
+				int popupHeight{};
+				std::vector<std::uint8_t> popup;
+			};
+
+			struct SurfaceLayers
+			{
+				int width{};
+				int height{};
+				double scale{1.0};
+				std::optional<std::uint64_t> builtin;
+				std::optional<std::uint64_t> cemod;
+			};
+
+			struct ComposedFrame
+			{
+				Host::PointerSurface surface{Host::PointerSurface::Main};
+				int width{};
+				int height{};
+				std::vector<std::uint8_t> bgra;
+			};
+
 			static std::size_t Index(Host::PointerSurface surface) { return surface == Host::PointerSurface::Main ? 0 : 1; }
 			CefRefPtr<Client> Get(Host::PointerSurface surface) const;
 			CefRefPtr<Client> Get(std::uint64_t windowId) const;
+			LayerBitmap* FindLayerLocked(std::uint64_t windowId);
+			const LayerBitmap* FindLayerLocked(std::uint64_t windowId) const;
+			std::optional<ComposedFrame> ComposeLocked(Host::PointerSurface surface) const;
+			void PublishComposite(Host::PointerSurface surface);
+			void UpdateLayerFocus(Host::PointerSurface surface);
 			RpcHandler m_rpc;
 			FrameMailbox m_mailbox;
 			ClosedHandler m_closed;
@@ -839,8 +885,8 @@ namespace WebFrontend::CefOverlay
 			std::unordered_map<std::string, CefRefPtr<CefRequestContext>> m_requestContexts;
 			std::unordered_map<std::string, std::string> m_networkPolicyKeys;
 			std::unordered_map<std::string, std::shared_ptr<CemodNetworkProxy>> m_networkProxies;
-			std::array<std::optional<std::uint64_t>, 2> m_surfaceWindows;
-			std::array<bool, 2> m_interactive{};
+			std::unordered_map<std::uint64_t, LayerBitmap> m_overlayLayers;
+			std::array<SurfaceLayers, 2> m_surfaces;
 			std::condition_variable m_closeCondition;
 		};
 
@@ -875,16 +921,16 @@ namespace WebFrontend::CefOverlay
 			for (const auto& rect : dirty)
 				rects.push_back({rect.x, rect.y, rect.width, rect.height});
 			if (type == PET_VIEW)
-				m_owner.Mailbox().PublishView(*m_descriptor.overlaySurface, width, height, buffer, width * 4, rects);
+				m_owner.PaintView(m_descriptor.windowId, width, height, buffer, width * 4, rects);
 			else if (type == PET_POPUP)
-				m_owner.Mailbox().PublishPopup(*m_descriptor.overlaySurface, width, height, buffer, width * 4, rects);
+				m_owner.PaintPopup(m_descriptor.windowId, width, height, buffer, width * 4, rects);
 		}
 
 		void Client::OnPopupShow(CefRefPtr<CefBrowser> browser, bool show)
 		{
 			if (!m_descriptor.overlaySurface)
 				return;
-			m_owner.Mailbox().SetPopupVisible(*m_descriptor.overlaySurface, show);
+			m_owner.SetPopupVisible(m_descriptor.windowId, show);
 			if (!show)
 				browser->GetHost()->Invalidate(PET_VIEW);
 		}
@@ -894,7 +940,7 @@ namespace WebFrontend::CefOverlay
 			if (!m_descriptor.overlaySurface)
 				return;
 			const double scale = Scale();
-			m_owner.Mailbox().SetPopupRect(*m_descriptor.overlaySurface, {
+			m_owner.SetPopupRect(m_descriptor.windowId, {
 				static_cast<int>(std::lround(rect.x * scale)),
 				static_cast<int>(std::lround(rect.y * scale)),
 				static_cast<int>(std::lround(rect.width * scale)),
@@ -1231,10 +1277,181 @@ namespace WebFrontend::CefOverlay
 				m_browser->GetHost()->CloseBrowser(true);
 		}
 
+		RuntimeImpl::LayerBitmap* RuntimeImpl::FindLayerLocked(std::uint64_t windowId)
+		{
+			const auto found = m_overlayLayers.find(windowId);
+			return found == m_overlayLayers.end() ? nullptr : &found->second;
+		}
+
+		const RuntimeImpl::LayerBitmap* RuntimeImpl::FindLayerLocked(std::uint64_t windowId) const
+		{
+			const auto found = m_overlayLayers.find(windowId);
+			return found == m_overlayLayers.end() ? nullptr : &found->second;
+		}
+
+		std::optional<RuntimeImpl::ComposedFrame> RuntimeImpl::ComposeLocked(
+			Host::PointerSurface surface) const
+		{
+			const auto& layers = m_surfaces[Index(surface)];
+			if (layers.width <= 0 || layers.height <= 0 || layers.width > 16384 ||
+				layers.height > 16384)
+				return std::nullopt;
+			const auto pixels = static_cast<std::size_t>(layers.width) *
+				static_cast<std::size_t>(layers.height);
+			if (pixels > std::numeric_limits<std::size_t>::max() / 4U)
+				return std::nullopt;
+			ComposedFrame frame;
+			frame.surface = surface;
+			frame.width = layers.width;
+			frame.height = layers.height;
+			frame.bgra.assign(pixels * 4U, 0);
+
+			auto blendPixel = [](std::uint8_t* destination, const std::uint8_t* source) {
+				const unsigned inverseAlpha = 255U - source[3];
+				for (unsigned channel = 0; channel != 4; ++channel)
+					destination[channel] = static_cast<std::uint8_t>(std::min(255U,
+						static_cast<unsigned>(source[channel]) +
+							(static_cast<unsigned>(destination[channel]) * inverseAlpha + 127U) / 255U));
+			};
+			auto blendLayer = [&](const std::optional<std::uint64_t>& id) {
+				if (!id)
+					return;
+				const auto* layer = FindLayerLocked(*id);
+				if (!layer || !layer->visible || layer->width != layers.width ||
+					layer->height != layers.height || layer->view.size() != frame.bgra.size())
+					return;
+				for (std::size_t pixel = 0; pixel < pixels; ++pixel)
+					blendPixel(frame.bgra.data() + pixel * 4U, layer->view.data() + pixel * 4U);
+				if (!layer->popupVisible || layer->popup.empty() || layer->popupWidth <= 0 ||
+					layer->popupHeight <= 0)
+					return;
+				for (int popupY = 0; popupY < layer->popupHeight; ++popupY)
+					for (int popupX = 0; popupX < layer->popupWidth; ++popupX)
+					{
+						const int x = layer->popupRect.x + popupX;
+						const int y = layer->popupRect.y + popupY;
+						if (x < 0 || y < 0 || x >= layers.width || y >= layers.height)
+							continue;
+						const auto sourceOffset =
+							(static_cast<std::size_t>(popupY) * layer->popupWidth + popupX) * 4U;
+						if (sourceOffset + 4U > layer->popup.size())
+							continue;
+						const auto destinationOffset =
+							(static_cast<std::size_t>(y) * layers.width + x) * 4U;
+						blendPixel(frame.bgra.data() + destinationOffset,
+							layer->popup.data() + sourceOffset);
+					}
+			};
+			blendLayer(layers.builtin);
+			blendLayer(layers.cemod);
+			return frame;
+		}
+
+		void RuntimeImpl::PublishComposite(Host::PointerSurface surface)
+		{
+			std::optional<ComposedFrame> frame;
+			{
+				std::scoped_lock lock(m_mutex);
+				frame = ComposeLocked(surface);
+			}
+			if (!frame)
+				return;
+			m_mailbox.Reopen(surface);
+			const Host::OverlayDirtyRect damage{0, 0, frame->width, frame->height};
+			m_mailbox.PublishView(surface, frame->width, frame->height, frame->bgra.data(),
+				frame->width * 4, std::span{&damage, 1U});
+		}
+
+		void RuntimeImpl::PaintView(std::uint64_t windowId, int width, int height,
+			const void* bgra, int sourceStride,
+			std::span<const Host::OverlayDirtyRect>)
+		{
+			if (!bgra || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
+				sourceStride < width * 4)
+				return;
+			Host::PointerSurface surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto* layer = FindLayerLocked(windowId);
+				if (!layer)
+					return;
+				surface = layer->surface;
+				const auto& target = m_surfaces[Index(surface)];
+				if (width != target.width || height != target.height)
+					return;
+				layer->width = width;
+				layer->height = height;
+				layer->view.resize(static_cast<std::size_t>(width) * height * 4U);
+				for (int row = 0; row < height; ++row)
+					std::memcpy(layer->view.data() + static_cast<std::size_t>(row) * width * 4U,
+						static_cast<const std::uint8_t*>(bgra) + static_cast<std::size_t>(row) * sourceStride,
+						static_cast<std::size_t>(width) * 4U);
+			}
+			PublishComposite(surface);
+		}
+
+		void RuntimeImpl::PaintPopup(std::uint64_t windowId, int width, int height,
+			const void* bgra, int sourceStride,
+			std::span<const Host::OverlayDirtyRect>)
+		{
+			if (!bgra || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
+				sourceStride < width * 4)
+				return;
+			Host::PointerSurface surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto* layer = FindLayerLocked(windowId);
+				if (!layer || !layer->popupVisible)
+					return;
+				surface = layer->surface;
+				layer->popupWidth = width;
+				layer->popupHeight = height;
+				layer->popup.resize(static_cast<std::size_t>(width) * height * 4U);
+				for (int row = 0; row < height; ++row)
+					std::memcpy(layer->popup.data() + static_cast<std::size_t>(row) * width * 4U,
+						static_cast<const std::uint8_t*>(bgra) + static_cast<std::size_t>(row) * sourceStride,
+						static_cast<std::size_t>(width) * 4U);
+			}
+			PublishComposite(surface);
+		}
+
+		void RuntimeImpl::SetPopupVisible(std::uint64_t windowId, bool visible)
+		{
+			Host::PointerSurface surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto* layer = FindLayerLocked(windowId);
+				if (!layer)
+					return;
+				surface = layer->surface;
+				layer->popupVisible = visible;
+				if (!visible)
+				{
+					layer->popup.clear();
+					layer->popupWidth = layer->popupHeight = 0;
+				}
+			}
+			PublishComposite(surface);
+		}
+
+		void RuntimeImpl::SetPopupRect(std::uint64_t windowId, Host::OverlayDirtyRect rect)
+		{
+			Host::PointerSurface surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto* layer = FindLayerLocked(windowId);
+				if (!layer)
+					return;
+				surface = layer->surface;
+				layer->popupRect = rect;
+			}
+			PublishComposite(surface);
+		}
+
 		CefRefPtr<Client> RuntimeImpl::Get(Host::PointerSurface surface) const
 		{
 			std::scoped_lock lock(m_mutex);
-			const auto window = m_surfaceWindows[Index(surface)];
+			const auto window = m_surfaces[Index(surface)].builtin;
 			if (!window)
 				return nullptr;
 			const auto client = m_clients.find(*window);
@@ -1256,6 +1473,7 @@ namespace WebFrontend::CefOverlay
 			descriptor.role = "runtime-overlay";
 			descriptor.presentation = BrowserPresentation::OverlayOsr;
 			descriptor.overlaySurface = surface;
+			descriptor.overlayLayer = OverlayLayer::Builtin;
 			descriptor.bounds.width = width;
 			descriptor.bounds.height = height;
 			descriptor.dpiScale = scale;
@@ -1287,26 +1505,55 @@ namespace WebFrontend::CefOverlay
 				!LoopbackOrigin(descriptor.initialUrl))
 				return false;
 			if (descriptor.presentation == BrowserPresentation::OverlayOsr &&
-				!descriptor.overlaySurface)
+				(!descriptor.overlaySurface || !descriptor.overlayLayer))
 				return false;
 			if (descriptor.presentation == BrowserPresentation::NativeChild &&
 				!descriptor.nativeParent)
 				return false;
 
-			CefRefPtr<Client> client = new Client(*this, descriptor);
-			client->SetSize(descriptor.bounds.width, descriptor.bounds.height, descriptor.dpiScale);
+			BrowserDescriptor normalized = descriptor;
+			CefRefPtr<Client> client;
 			{
 				std::scoped_lock lock(m_mutex);
 				if (m_clients.contains(descriptor.windowId))
 					return true;
-				if (descriptor.overlaySurface && m_surfaceWindows[Index(*descriptor.overlaySurface)])
-					return false;
-				m_clients.emplace(descriptor.windowId, client);
 				if (descriptor.overlaySurface)
 				{
-					m_surfaceWindows[Index(*descriptor.overlaySurface)] = descriptor.windowId;
-					m_mailbox.Reopen(*descriptor.overlaySurface);
+					auto& surface = m_surfaces[Index(*descriptor.overlaySurface)];
+					auto& reservation = *descriptor.overlayLayer == OverlayLayer::Builtin
+						? surface.builtin : surface.cemod;
+					if (reservation)
+						return false;
+					if (*descriptor.overlayLayer == OverlayLayer::Builtin)
+					{
+						surface.width = descriptor.bounds.width;
+						surface.height = descriptor.bounds.height;
+						surface.scale = descriptor.dpiScale;
+					}
+					else
+					{
+						if (!surface.builtin || surface.width <= 0 || surface.height <= 0)
+							return false;
+						normalized.bounds.width = surface.width;
+						normalized.bounds.height = surface.height;
+						normalized.dpiScale = surface.scale;
+					}
+					reservation = descriptor.windowId;
+					LayerBitmap layer;
+					layer.windowId = descriptor.windowId;
+					layer.surface = *descriptor.overlaySurface;
+					layer.visible = descriptor.overlayVisible;
+					layer.interactive = descriptor.overlayInteractive;
+					m_overlayLayers.emplace(descriptor.windowId, std::move(layer));
 				}
+				client = new Client(*this, normalized);
+				client->SetSize(normalized.bounds.width, normalized.bounds.height, normalized.dpiScale);
+				m_clients.emplace(descriptor.windowId, client);
+			}
+			if (descriptor.overlaySurface)
+			{
+				m_mailbox.Reopen(*descriptor.overlaySurface);
+				PublishComposite(*descriptor.overlaySurface);
 			}
 
 			auto launch = [weak = weak_from_this(), windowId = descriptor.windowId] {
@@ -1436,7 +1683,9 @@ namespace WebFrontend::CefOverlay
 			}
 			CefBrowserSettings settings;
 			settings.background_color = descriptor.presentation == BrowserPresentation::OverlayOsr
-				? CefColorSetARGB(0, 0, 0, 0) : CefColorSetARGB(255, 32, 32, 32);
+				? (descriptor.overlayTransparent ? CefColorSetARGB(0, 0, 0, 0)
+					: CefColorSetARGB(255, 0, 0, 0))
+				: CefColorSetARGB(255, 32, 32, 32);
 			if (descriptor.presentation == BrowserPresentation::OverlayOsr)
 			{
 				int frameRate = 60;
@@ -1480,15 +1729,16 @@ namespace WebFrontend::CefOverlay
 				task();
 		}
 
-		void RuntimeImpl::Created(std::uint64_t windowId, CefRefPtr<CefBrowser> browser)
+		void RuntimeImpl::Created(std::uint64_t windowId, CefRefPtr<CefBrowser>)
 		{
 			if (auto client = Get(windowId); client && client->Descriptor().overlaySurface)
-				browser->GetHost()->SetFocus(m_interactive[Index(*client->Descriptor().overlaySurface)]);
+				UpdateLayerFocus(*client->Descriptor().overlaySurface);
 		}
 
 		void RuntimeImpl::Closed(std::uint64_t windowId)
 		{
 			std::optional<Host::PointerSurface> surface;
+			std::optional<OverlayLayer> overlayLayer;
 			std::string cemodOrigin;
 			bool releaseCemodOrigin{};
 			{
@@ -1497,11 +1747,19 @@ namespace WebFrontend::CefOverlay
 				if (client == m_clients.end())
 					return;
 				surface = client->second->Descriptor().overlaySurface;
+				overlayLayer = client->second->Descriptor().overlayLayer;
 				if (client->second->Descriptor().cemodAssets)
 					cemodOrigin = client->second->Descriptor().cemodAssets->originId;
 				m_clients.erase(client);
 				if (surface)
-					m_surfaceWindows[Index(*surface)].reset();
+				{
+					auto& layers = m_surfaces[Index(*surface)];
+					if (overlayLayer == OverlayLayer::Cemod)
+						layers.cemod.reset();
+					else
+						layers.builtin.reset();
+					m_overlayLayers.erase(windowId);
+				}
 				if (!cemodOrigin.empty())
 					releaseCemodOrigin = std::ranges::none_of(m_clients, [&](const auto& item) {
 						const auto& assets = item.second->Descriptor().cemodAssets;
@@ -1515,7 +1773,7 @@ namespace WebFrontend::CefOverlay
 				m_networkProxies.erase(cemodOrigin);
 			}
 			if (surface)
-				m_mailbox.BeginClose(*surface);
+				PublishComposite(*surface);
 			m_closeCondition.notify_all();
 			try
 			{
@@ -1539,9 +1797,15 @@ namespace WebFrontend::CefOverlay
 
 		void RuntimeImpl::Close(Host::PointerSurface surface)
 		{
-			m_mailbox.BeginClose(surface);
-			if (auto client = Get(surface))
-				CloseWindow(client->WindowId());
+			std::array<std::optional<std::uint64_t>, 2> windows;
+			{
+				std::scoped_lock lock(m_mutex);
+				const auto& layers = m_surfaces[Index(surface)];
+				windows = {layers.builtin, layers.cemod};
+			}
+			for (const auto window : windows)
+				if (window)
+					CloseWindow(*window);
 		}
 
 		bool RuntimeImpl::CloseWindow(std::uint64_t windowId)
@@ -1549,8 +1813,24 @@ namespace WebFrontend::CefOverlay
 			CEF_REQUIRE_UI_THREAD();
 			if (auto client = Get(windowId))
 			{
-				if (client->Descriptor().overlaySurface)
-					m_mailbox.BeginClose(*client->Descriptor().overlaySurface);
+				const auto surface = client->Descriptor().overlaySurface;
+				if (surface)
+				{
+					std::scoped_lock lock(m_mutex);
+					if (auto* layer = FindLayerLocked(windowId))
+					{
+						layer->visible = false;
+						layer->interactive = false;
+						layer->view.clear();
+						layer->popup.clear();
+						layer->popupVisible = false;
+					}
+				}
+				if (surface)
+				{
+					PublishComposite(*surface);
+					UpdateLayerFocus(*surface);
+				}
 				if (client->Browser())
 					client->RequestClose();
 				else
@@ -1590,8 +1870,30 @@ namespace WebFrontend::CefOverlay
 
 		void RuntimeImpl::Resize(Host::PointerSurface surface, int width, int height, double scale)
 		{
-			if (auto client = Get(surface))
-				ResizeWindow(client->WindowId(), width, height, scale);
+			if (width <= 0 || height <= 0 || scale <= 0.0)
+				return;
+			std::array<std::optional<std::uint64_t>, 2> windows;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto& layers = m_surfaces[Index(surface)];
+				layers.width = width;
+				layers.height = height;
+				layers.scale = scale;
+				windows = {layers.builtin, layers.cemod};
+				for (const auto window : windows)
+					if (window)
+						if (auto* layer = FindLayerLocked(*window))
+						{
+							layer->width = layer->height = 0;
+							layer->view.clear();
+							layer->popup.clear();
+							layer->popupVisible = false;
+						}
+			}
+			PublishComposite(surface);
+			for (const auto window : windows)
+				if (window)
+					ResizeWindow(*window, width, height, scale);
 		}
 
 		void RuntimeImpl::ResizeWindow(std::uint64_t windowId, int width, int height, double scale)
@@ -1616,9 +1918,72 @@ namespace WebFrontend::CefOverlay
 
 		void RuntimeImpl::SetInteractive(Host::PointerSurface surface, bool interactive)
 		{
-			m_interactive[Index(surface)] = interactive;
-			if (auto client = Get(surface); client && client->Browser())
-				client->Browser()->GetHost()->SetFocus(interactive);
+			{
+				std::scoped_lock lock(m_mutex);
+				const auto window = m_surfaces[Index(surface)].builtin;
+				if (window)
+					if (auto* layer = FindLayerLocked(*window))
+						layer->interactive = interactive;
+			}
+			UpdateLayerFocus(surface);
+		}
+
+		void RuntimeImpl::SetOverlayVisible(std::uint64_t windowId, bool visible)
+		{
+			std::optional<Host::PointerSurface> surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				if (auto* layer = FindLayerLocked(windowId))
+				{
+					layer->visible = visible;
+					surface = layer->surface;
+				}
+			}
+			if (surface)
+			{
+				PublishComposite(*surface);
+				UpdateLayerFocus(*surface);
+			}
+		}
+
+		void RuntimeImpl::SetOverlayInteractive(std::uint64_t windowId, bool interactive)
+		{
+			std::optional<Host::PointerSurface> surface;
+			{
+				std::scoped_lock lock(m_mutex);
+				if (auto* layer = FindLayerLocked(windowId))
+				{
+					layer->interactive = interactive;
+					surface = layer->surface;
+				}
+			}
+			if (surface)
+				UpdateLayerFocus(*surface);
+		}
+
+		void RuntimeImpl::UpdateLayerFocus(Host::PointerSurface surface)
+		{
+			std::vector<std::pair<CefRefPtr<Client>, bool>> updates;
+			{
+				std::scoped_lock lock(m_mutex);
+				const auto& layers = m_surfaces[Index(surface)];
+				std::optional<std::uint64_t> target;
+				if (layers.cemod)
+					if (const auto* layer = FindLayerLocked(*layers.cemod);
+						layer && layer->visible && layer->interactive)
+						target = layers.cemod;
+				if (!target && layers.builtin)
+					if (const auto* layer = FindLayerLocked(*layers.builtin);
+						layer && layer->visible && layer->interactive)
+						target = layers.builtin;
+				for (const auto window : {layers.builtin, layers.cemod})
+					if (window)
+						if (const auto found = m_clients.find(*window); found != m_clients.end())
+							updates.emplace_back(found->second, target && *target == *window);
+			}
+			for (const auto& [client, focused] : updates)
+				if (client->Browser())
+					client->Browser()->GetHost()->SetFocus(focused);
 		}
 
 		void RuntimeImpl::SetWindowFocus(std::uint64_t windowId, bool focused)
@@ -1629,9 +1994,23 @@ namespace WebFrontend::CefOverlay
 
 		bool RuntimeImpl::SendInput(const NativeInputEvent& event)
 		{
-			if (!m_interactive[Index(event.surface)])
-				return false;
-			auto client = Get(event.surface);
+			CefRefPtr<Client> client;
+			{
+				std::scoped_lock lock(m_mutex);
+				const auto& layers = m_surfaces[Index(event.surface)];
+				std::optional<std::uint64_t> target;
+				if (layers.cemod)
+					if (const auto* layer = FindLayerLocked(*layers.cemod);
+						layer && layer->visible && layer->interactive)
+						target = layers.cemod;
+				if (!target && layers.builtin)
+					if (const auto* layer = FindLayerLocked(*layers.builtin);
+						layer && layer->visible && layer->interactive)
+						target = layers.builtin;
+				if (target)
+					if (const auto found = m_clients.find(*target); found != m_clients.end())
+						client = found->second;
+			}
 			if (!client || !client->Browser())
 				return false;
 			auto host = client->Browser()->GetHost();

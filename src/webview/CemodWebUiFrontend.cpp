@@ -167,6 +167,8 @@ namespace WebFrontend
 			std::string contextJson;
 			UiMode mode{UiMode::Window};
 			UiSurface surface{UiSurface::Tv};
+			bool visible{true};
+			bool interactive{};
 			bool ready{};
 			std::uint64_t documentGeneration{1};
 			bool closing{};
@@ -288,15 +290,24 @@ namespace WebFrontend
 			return Status::NotFound;
 		const auto mode = static_cast<UiMode>(header.mode);
 		const auto surface = static_cast<UiSurface>(header.surface);
-		if (mode != UiMode::Window)
-			return Status::NotSupported;
+		if (mode != UiMode::Window && mode != UiMode::Overlay)
+			return Status::InvalidArgument;
+		if (mode == UiMode::Window && !view->second.window)
+			return Status::InvalidArgument;
+		if (mode == UiMode::Overlay && (!view->second.overlay ||
+			std::ranges::none_of(view->second.overlay->surfaces,
+				[&](CemodWebUiSurface allowed) {
+					return static_cast<std::uint8_t>(allowed) == static_cast<std::uint8_t>(surface);
+				})))
+			return Status::PermissionDenied;
 		if (view->second.singleInstance)
 		{
 			const auto existing = std::ranges::find_if(instances, [&](const auto& item) {
 				return item.second->addressSpaceId == request.addressSpaceId &&
 					item.second->generation == request.generation &&
 					item.second->sessionId == request.sessionId && item.second->viewId == viewId &&
-					item.second->mode == mode;
+					item.second->mode == mode &&
+					(mode == UiMode::Window || item.second->surface == surface);
 			});
 			if (existing != instances.end())
 			{
@@ -325,52 +336,68 @@ namespace WebFrontend
 		instance->contextJson = context;
 		instance->mode = mode;
 		instance->surface = surface;
-		const auto handle = instance->handle;
-		const auto windowId = instance->windowId;
-		const auto weakOwner = owner;
-		instance->window = CreateToolWindowSupport(parent, false, [weakOwner, handle] {
-			if (const auto active = weakOwner.lock())
-				active->m_impl->CloseInstance(handle, UiCloseReason::User);
-		});
-		if (!view->second.window)
-			return Status::InvalidArgument;
-		const auto& windowConfig = *view->second.window;
-		const auto minimumWidth = static_cast<std::int32_t>(windowConfig.minimumWidth.value_or(1));
-		const auto minimumHeight = static_cast<std::int32_t>(windowConfig.minimumHeight.value_or(1));
-		const auto width = std::max(minimumWidth, header.width.get() > 0 ? header.width.get()
-			: static_cast<std::int32_t>(windowConfig.width.value_or(960)));
-		const auto height = std::max(minimumHeight, header.height.get() > 0 ? header.height.get()
-			: static_cast<std::int32_t>(windowConfig.height.value_or(540)));
-		instance->window->SetTitle(windowConfig.title.value_or(request.content->modId));
-		instance->window->SetMinimumSize(minimumWidth, minimumHeight);
-		instance->window->SetResizable(windowConfig.resizable.value_or(true));
-		instance->window->SetStateCallbacks(
-			[weakOwner, handle](Host::RenderRegionBounds bounds) {
-				if (const auto active = weakOwner.lock())
-					active->m_impl->WindowBoundsChanged(handle, bounds);
-			},
-			[weakOwner, handle](bool focused) {
-				if (const auto active = weakOwner.lock())
-					active->m_impl->WindowFocusChanged(handle, focused);
-			});
-		instance->window->SetSize(width, height);
-		auto* support = instance->window.get();
-		const auto bounds = support->GetBrowserBounds();
-		auto assets = Assets(*request.content);
-		CefOverlay::BrowserDescriptor browser;
-		browser.windowId = windowId;
-		browser.role = "cemod-web-ui";
-		browser.bootstrapJson = Bootstrap(*instance);
-		browser.initialUrl = "cemod-ui://" + assets->originId + "/" + viewId + "/";
-		browser.presentation = CefOverlay::BrowserPresentation::NativeChild;
-		browser.nativeParent = support->GetBrowserParentWindow();
-		browser.bounds = bounds;
-		browser.bounds.width = std::max(browser.bounds.width, 1);
-		browser.bounds.height = std::max(browser.bounds.height, 1);
-		browser.dpiScale = support->GetBrowserDpiScale();
-		browser.cemodAssets = std::move(assets);
-		browser.nativeBrowserCreated = [support](void* child) { support->AttachBrowser(child); };
-		browser.nativeBrowserClosing = [support](void* child) { support->DetachBrowser(child); };
+		instance->visible = header.visible != 0;
+		instance->interactive = header.interactive != 0;
+			const auto handle = instance->handle;
+			const auto windowId = instance->windowId;
+			const auto weakOwner = owner;
+			auto assets = Assets(*request.content);
+			CefOverlay::BrowserDescriptor browser;
+			browser.windowId = windowId;
+			browser.role = "cemod-web-ui";
+			browser.bootstrapJson = Bootstrap(*instance);
+			browser.initialUrl = "cemod-ui://" + assets->originId + "/" + viewId + "/";
+			browser.cemodAssets = std::move(assets);
+			IToolWindowSupport* support{};
+			if (mode == UiMode::Window)
+			{
+				instance->window = CreateToolWindowSupport(parent, false, [weakOwner, handle] {
+					if (const auto active = weakOwner.lock())
+						active->m_impl->CloseInstance(handle, UiCloseReason::User);
+				});
+				const auto& windowConfig = *view->second.window;
+				const auto minimumWidth = static_cast<std::int32_t>(windowConfig.minimumWidth.value_or(1));
+				const auto minimumHeight = static_cast<std::int32_t>(windowConfig.minimumHeight.value_or(1));
+				const auto width = std::max(minimumWidth, header.width.get() > 0 ? header.width.get()
+					: static_cast<std::int32_t>(windowConfig.width.value_or(960)));
+				const auto height = std::max(minimumHeight, header.height.get() > 0 ? header.height.get()
+					: static_cast<std::int32_t>(windowConfig.height.value_or(540)));
+				instance->window->SetTitle(windowConfig.title.value_or(request.content->modId));
+				instance->window->SetMinimumSize(minimumWidth, minimumHeight);
+				instance->window->SetResizable(windowConfig.resizable.value_or(true));
+				instance->window->SetStateCallbacks(
+					[weakOwner, handle](Host::RenderRegionBounds bounds) {
+						if (const auto active = weakOwner.lock())
+							active->m_impl->WindowBoundsChanged(handle, bounds);
+					},
+					[weakOwner, handle](bool focused) {
+						if (const auto active = weakOwner.lock())
+							active->m_impl->WindowFocusChanged(handle, focused);
+					});
+				instance->window->SetSize(width, height);
+				support = instance->window.get();
+				browser.presentation = CefOverlay::BrowserPresentation::NativeChild;
+				browser.nativeParent = support->GetBrowserParentWindow();
+				browser.bounds = support->GetBrowserBounds();
+				browser.bounds.width = std::max(browser.bounds.width, 1);
+				browser.bounds.height = std::max(browser.bounds.height, 1);
+				browser.dpiScale = support->GetBrowserDpiScale();
+				browser.nativeBrowserCreated = [support](void* child) { support->AttachBrowser(child); };
+				browser.nativeBrowserClosing = [support](void* child) { support->DetachBrowser(child); };
+			}
+			else
+			{
+				const auto& overlayConfig = *view->second.overlay;
+				browser.presentation = CefOverlay::BrowserPresentation::OverlayOsr;
+				browser.overlaySurface = surface == UiSurface::Tv
+					? Host::PointerSurface::Main : Host::PointerSurface::Pad;
+				browser.overlayLayer = CefOverlay::OverlayLayer::Cemod;
+				browser.overlayVisible = instance->visible;
+				browser.overlayInteractive = instance->interactive;
+				browser.overlayTransparent = overlayConfig.transparent;
+				browser.bounds = {0, 0, 1, 1};
+				browser.dpiScale = 1.0;
+			}
 		browser.cemodQuery = [weakOwner, handle](std::int64_t queryId, std::string query,
 			std::function<void(bool, std::string)> callback) {
 			if (const auto active = weakOwner.lock())
@@ -400,10 +427,10 @@ namespace WebFrontend
 		{
 			auto failed = instances.extract(handle);
 			failed.mapped()->window.reset();
-			return Status::IoError;
-		}
-		if (header.visible)
-			support->Show();
+				return mode == UiMode::Overlay ? Status::Busy : Status::IoError;
+			}
+			if (header.visible && support)
+				support->Show();
 		UiCreateResponse created{};
 		created.handle = handle;
 		Append(response, created);
@@ -432,23 +459,34 @@ namespace WebFrontend
 					CloseInstance(instance->handle, UiCloseReason::Wps);
 					break;
 				case UiOperation::Focus:
-					if (instance->window) instance->window->Focus();
+					if (instance->window)
+						instance->window->Focus();
+					else if (instance->visible && instance->interactive)
+						browsers->SetOverlayInteractive(instance->windowId, true);
 					break;
 				case UiOperation::SetVisible:
 				{
 					UiVisibleRequest value{};
 					ReadStruct(std::span{request.payload}, value);
+					instance->visible = value.visible != 0;
 					if (instance->window)
 					{
 						if (value.visible) instance->window->Show();
 						else instance->window->Hide();
 					}
+					else
+						browsers->SetOverlayVisible(instance->windowId, instance->visible);
 					break;
 				}
 				case UiOperation::SetBounds:
 				{
 					UiBoundsRequest value{};
 					ReadStruct(std::span{request.payload}, value);
+					if (!instance->window)
+					{
+						status = Status::NotSupported;
+						break;
+					}
 					const auto& view = instance->content->manifest.views.at(instance->viewId);
 					const auto minimumWidth = static_cast<std::int32_t>(
 						view.window->minimumWidth.value_or(1));
@@ -470,10 +508,28 @@ namespace WebFrontend
 					const std::string_view title{reinterpret_cast<const char*>(request.payload.data() + sizeof(value)),
 						value.titleBytes.get()};
 					if (instance->window) instance->window->SetTitle(title);
+					else status = Status::NotSupported;
 					break;
 				}
 				case UiOperation::SetInteractive:
-					status = instance->mode == UiMode::Overlay ? Status::Ok : Status::NotSupported;
+				{
+					if (instance->mode != UiMode::Overlay)
+					{
+						status = Status::NotSupported;
+						break;
+					}
+					UiInteractiveRequest value{};
+					ReadStruct(std::span{request.payload}, value);
+					const auto& view = instance->content->manifest.views.at(instance->viewId);
+					if (value.interactive && (!view.overlay || !view.overlay->interactive))
+					{
+						status = Status::PermissionDenied;
+						break;
+					}
+					instance->interactive = value.interactive != 0;
+					browsers->SetOverlayInteractive(instance->windowId, instance->interactive);
+					break;
+				}
 					break;
 				case UiOperation::Emit:
 				{

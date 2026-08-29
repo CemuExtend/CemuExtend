@@ -27,6 +27,12 @@ namespace WebFrontend::CefOverlay
 		NativeChild,
 	};
 
+	enum class OverlayLayer : std::uint8_t
+	{
+		Builtin,
+		Cemod,
+	};
+
 	struct BrowserAssetBundle
 	{
 		std::string originId;
@@ -53,6 +59,10 @@ namespace WebFrontend::CefOverlay
 		std::string initialUrl{"cemu://ui/index.html"};
 		BrowserPresentation presentation{BrowserPresentation::NativeChild};
 		std::optional<Host::PointerSurface> overlaySurface;
+		std::optional<OverlayLayer> overlayLayer;
+		bool overlayVisible{true};
+		bool overlayInteractive{};
+		bool overlayTransparent{true};
 		void* nativeParent{};
 		Host::RenderRegionBounds bounds{0, 0, 1, 1};
 		double dpiScale{1.0};
@@ -97,6 +107,8 @@ namespace WebFrontend::CefOverlay
 		virtual void ResizeWindow(std::uint64_t windowId, int width, int height,
 			double dpiScale) = 0;
 		virtual void SetWindowFocus(std::uint64_t windowId, bool focused) = 0;
+		virtual void SetOverlayVisible(std::uint64_t windowId, bool visible) = 0;
+		virtual void SetOverlayInteractive(std::uint64_t windowId, bool interactive) = 0;
 		virtual void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 			std::string_view jsonPayload, std::uint64_t sequence) = 0;
 		virtual void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
