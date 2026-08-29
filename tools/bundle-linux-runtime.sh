@@ -64,6 +64,24 @@ if [[ -f "${executable_dir}/libcef.so" ]]; then
 		echo "CEF NSS runtime modules were not found beside libnss3.so" >&2
 		exit 1
 	}
+	# Chromium opens the Xlib/XCB bridge dynamically when using the X11 ozone
+	# backend, so it does not appear in ldd's dependency closure. The portable
+	# launcher deliberately selects X11 on NixOS; omitting this library makes
+	# CEF terminate with SIGTRAP before the first browser is created.
+	for cef_runtime_name in libX11-xcb.so.1; do
+		cef_runtime_library=$(ldconfig -p 2>/dev/null | awk -v name="${cef_runtime_name}" \
+			'$1 == name && $NF ~ /^\// { print $NF; exit }')
+		if [[ -z "${cef_runtime_library}" || ! -f "${cef_runtime_library}" ]]; then
+			cef_runtime_library=$(find /usr/lib /lib -name "${cef_runtime_name}" \
+				-type f -print -quit 2>/dev/null || true)
+		fi
+		[[ -f "${cef_runtime_library}" ]] || {
+			echo "CEF runtime library was not found: ${cef_runtime_name}" >&2
+			exit 1
+		}
+		cp -Lf "${cef_runtime_library}" "${lib_dir}/${cef_runtime_name}"
+		elf_inputs+=("${cef_runtime_library}")
+	done
 fi
 declare -A libraries=()
 for input in "${elf_inputs[@]}"; do
