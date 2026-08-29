@@ -11,6 +11,15 @@ fi
 
 library_path="$launcher_dir"
 force_x11=0
+# CEF hosts the launcher and the tool windows as windowed X11 children that the
+# GTK frontend reparents by XID, and Chromium aligns GTK's GDK backend with the
+# Ozone platform it selects. Prefer XWayland whenever an X display is reachable
+# so a Wayland desktop still gets an X11 GTK session; CEMU_USE_WAYLAND=1 keeps
+# the native Wayland stack for anyone testing it.
+if [ "${CEMU_USE_WAYLAND:-0}" != "1" ] && [ -n "${DISPLAY:-}" ]; then
+	force_x11=1
+	export GDK_BACKEND=x11
+fi
 append_library_dir()
 {
 	case ":$library_path:" in
@@ -58,11 +67,9 @@ if [ -d /run/opengl-driver/lib ]; then
 	fi
 	# The portable Ubuntu GTK/CEF stack cannot safely share its Wayland
 	# wl_surface with the NixOS Vulkan WSI. The result is a protocol error as soon
-	# as a game creates its swapchain. Use XWayland by default for this portable
-	# runtime; advanced users can explicitly opt back into native Wayland.
-	if [ "${CEMU_USE_WAYLAND:-0}" != "1" ] && [ -n "${DISPLAY:-}" ]; then
-		force_x11=1
-		export GDK_BACKEND=x11
+	# as a game creates its swapchain. XWayland is already selected above; also
+	# hide the Wayland socket so the bundled Vulkan loader cannot pick it up.
+	if [ "$force_x11" -eq 1 ]; then
 		unset WAYLAND_DISPLAY
 	fi
 	# Avoid probing every Mesa ICD from the mixed portable/Nix closure on an

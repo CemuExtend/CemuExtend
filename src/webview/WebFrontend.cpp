@@ -6657,15 +6657,14 @@ namespace
 void Frontend::Run()
 {
 #if BOOST_OS_LINUX
-	// steam-run exposes its host /etc at this path. Its FHS Wayland stack can
-	// conflict with bundled Chromium, while the forwarded X11 socket stays
-	// ABI-isolated and reliable. Keep native Wayland for ordinary launches.
-	std::error_code steamRuntimeError;
-	if (std::getenv("DISPLAY") &&
-		std::filesystem::exists("/.host-etc", steamRuntimeError))
-	{
+	// CEF hosts the launcher and the tool windows as windowed X11 children that
+	// the GTK host reparents by XID, so the frontend needs the X11 GDK backend
+	// even on a Wayland desktop, where XWayland provides it. This has to happen
+	// before CefInitialize: Chromium initializes GTK itself and would otherwise
+	// open a Wayland display. CefApp::OnBeforeCommandLineProcessing pins the
+	// matching Ozone platform.
+	if (std::getenv("DISPLAY"))
 		setenv("GDK_BACKEND", "x11", 1);
-	}
 #endif
 	Application::InitializePaths();
 	CemuCommonInit();
