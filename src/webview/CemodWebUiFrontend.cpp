@@ -168,6 +168,7 @@ namespace WebFrontend
 			UiMode mode{UiMode::Window};
 			UiSurface surface{UiSurface::Tv};
 			bool ready{};
+			std::uint64_t documentGeneration{1};
 			bool closing{};
 			UiCloseReason closeReason{UiCloseReason::InternalError};
 			std::unique_ptr<IToolWindowSupport> window;
@@ -260,6 +261,7 @@ namespace WebFrontend
 		void HandleQuery(std::uint32_t handle, std::int64_t queryId, std::string request,
 			std::function<void(bool, std::string)> completion);
 		void CancelQuery(std::uint32_t handle, std::int64_t queryId);
+		void MainFrameReloaded(std::uint32_t handle);
 		void WindowBoundsChanged(std::uint32_t handle, Host::RenderRegionBounds bounds);
 		void WindowFocusChanged(std::uint32_t handle, bool focused);
 		void CloseInstance(std::uint32_t handle, UiCloseReason reason);
@@ -380,6 +382,14 @@ namespace WebFrontend
 			if (const auto active = weakOwner.lock())
 				active->m_impl->CancelQuery(handle, queryId);
 		};
+		browser.cemodMainFrameReloaded = [weakOwner, handle] {
+			if (const auto active = weakOwner.lock())
+				active->m_impl->MainFrameReloaded(handle);
+		};
+		browser.cemodRendererTerminated = [weakOwner, handle] {
+			if (const auto active = weakOwner.lock())
+				active->m_impl->CloseInstance(handle, UiCloseReason::RendererCrashed);
+		};
 		browser.closed = [weakOwner, handle] {
 			if (const auto active = weakOwner.lock())
 				active->m_impl->BrowserClosed(handle);
@@ -474,7 +484,7 @@ namespace WebFrontend
 					std::string json{text + value.nameBytes.get(), value.jsonBytes.get()};
 					if (!instance->ready)
 					{
-						if (instance->queuedEvents.size() >= 256)
+						if (instance->queuedEvents.size() >= 128)
 							status = Status::Busy;
 						else
 							instance->queuedEvents.emplace_back(std::move(name), std::move(json));
@@ -578,6 +588,12 @@ namespace WebFrontend
 			completion(true, "null");
 			return;
 		}
+		if (instance.calls.size() >= 64)
+		{
+			completion(false,
+				R"({"code":"BUSY","message":"Too many pending Cemod UI calls","details":null})");
+			return;
+		}
 		do { ++nextCallId; } while (!nextCallId || instance.calls.contains(nextCallId));
 		const auto callId = nextCallId;
 		instance.calls.emplace(callId, PendingCall{queryId, std::move(completion)});
@@ -602,6 +618,25 @@ namespace WebFrontend
 		Append(payload, cancelled);
 		instance.calls.erase(call);
 		Publish(instance, UiEvent::Cancel, std::move(payload));
+	}
+
+	void CemodWebUiFrontend::Impl::MainFrameReloaded(std::uint32_t handle)
+	{
+		const auto found = instances.find(handle);
+		if (found == instances.end() || found->second->closing)
+			return;
+		auto& instance = *found->second;
+		++instance.documentGeneration;
+		instance.ready = false;
+		instance.queuedEvents.clear();
+		// CefMessageRouterBrowserSide cancels every old query before this callback.
+		// A non-empty map here would indicate a broken query ownership invariant.
+		if (!instance.calls.empty())
+		{
+			cemuLog_log(LogType::Force,
+				"Cemod Web UI reload left {} pending calls for handle {}",
+				instance.calls.size(), handle);
+		}
 	}
 
 	void CemodWebUiFrontend::Impl::WindowBoundsChanged(std::uint32_t handle,

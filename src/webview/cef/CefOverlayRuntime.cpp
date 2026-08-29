@@ -738,6 +738,8 @@ namespace WebFrontend::CefOverlay
 				CefRefPtr<CefRequest>, CefRefPtr<CefResponse>, CefString& newUrl) override;
 			void OnProtocolExecution(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
 				CefRefPtr<CefRequest>, bool& allowOsExecution) override;
+			void OnRenderProcessTerminated(CefRefPtr<CefBrowser>, TerminationStatus,
+				int, const CefString&) override;
 			bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 				CefProcessId sourceProcess, CefRefPtr<CefProcessMessage> message) override;
 			bool OnQuery(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t,
@@ -765,6 +767,8 @@ namespace WebFrontend::CefOverlay
 			CefRefPtr<CefMessageRouterBrowserSide> m_router;
 			std::mutex m_queryMutex;
 			std::unordered_map<std::int64_t, std::shared_ptr<std::atomic_bool>> m_queries;
+			bool m_seenCemodMainNavigation{};
+			bool m_reportedRendererTermination{};
 			bool m_closeRequested{};
 			IMPLEMENT_REFCOUNTING(Client);
 		};
@@ -1006,7 +1010,7 @@ namespace WebFrontend::CefOverlay
 		}
 
 		bool Client::OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
-			CefRefPtr<CefRequest> request, bool, bool)
+			CefRefPtr<CefRequest> request, bool, bool isRedirect)
 		{
 			if (m_descriptor.cemodAssets && !frame->IsMain())
 				return true;
@@ -1020,7 +1024,19 @@ namespace WebFrontend::CefOverlay
 			}
 			if (!IsAllowedUrl(url, m_descriptor.initialUrl))
 				return true;
+			const bool mainCemodNavigation = m_descriptor.cemodAssets && frame->IsMain();
+			const bool reloaded = mainCemodNavigation && !isRedirect &&
+				std::exchange(m_seenCemodMainNavigation, true);
 			m_router->OnBeforeBrowse(browser, frame);
+			if (reloaded && m_descriptor.cemodMainFrameReloaded)
+			{
+				try { m_descriptor.cemodMainFrameReloaded(); }
+				catch (...)
+				{
+					cemuLog_log(LogType::Force,
+						"Cemod Web UI reload callback failed for window {}", m_descriptor.windowId);
+				}
+			}
 			return false;
 		}
 
@@ -1082,6 +1098,22 @@ namespace WebFrontend::CefOverlay
 		{
 			if (m_descriptor.cemodAssets)
 				allowOsExecution = false;
+		}
+
+		void Client::OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
+			TerminationStatus, int, const CefString&)
+		{
+			m_router->OnRenderProcessTerminated(browser);
+			if (!m_descriptor.cemodAssets ||
+				std::exchange(m_reportedRendererTermination, true) ||
+				!m_descriptor.cemodRendererTerminated)
+				return;
+			try { m_descriptor.cemodRendererTerminated(); }
+			catch (...)
+			{
+				cemuLog_log(LogType::Force,
+					"Cemod Web UI renderer callback failed for window {}", m_descriptor.windowId);
+			}
 		}
 
 		bool Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,

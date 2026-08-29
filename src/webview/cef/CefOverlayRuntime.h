@@ -64,6 +64,8 @@ namespace WebFrontend::CefOverlay
 		std::function<void(std::int64_t, std::string,
 			std::function<void(bool, std::string)>)> cemodQuery;
 		std::function<void(std::int64_t)> cemodQueryCancelled;
+		std::function<void()> cemodMainFrameReloaded;
+		std::function<void()> cemodRendererTerminated;
 		std::function<void()> loadReady;
 		std::function<void()> closed;
 	};
