@@ -874,6 +874,7 @@ namespace WebFrontend::CefOverlay
 				Host::PointerSurface surface{Host::PointerSurface::Main};
 				bool visible{true};
 				bool interactive{};
+				std::optional<CemodOverlayOrder> cemodOrder;
 				int width{};
 				int height{};
 				std::vector<std::uint8_t> view;
@@ -906,6 +907,8 @@ namespace WebFrontend::CefOverlay
 			CefRefPtr<Client> Get(std::uint64_t windowId) const;
 			LayerBitmap* FindLayerLocked(std::uint64_t windowId);
 			const LayerBitmap* FindLayerLocked(std::uint64_t windowId) const;
+			std::array<std::optional<std::uint64_t>, 2> BottomToTopLocked(
+				const SurfaceLayers& layers) const;
 			std::optional<ComposedFrame> ComposeLocked(Host::PointerSurface surface) const;
 			void PublishComposite(Host::PointerSurface surface);
 			void UpdateLayerFocus(Host::PointerSurface surface);
@@ -1375,6 +1378,21 @@ namespace WebFrontend::CefOverlay
 			return found == m_overlayLayers.end() ? nullptr : &found->second;
 		}
 
+		std::array<std::optional<std::uint64_t>, 2> RuntimeImpl::BottomToTopLocked(
+			const SurfaceLayers& layers) const
+		{
+			CemodOverlayOrder order = CemodOverlayOrder::AboveBuiltin;
+			if (layers.cemod)
+				if (const auto* layer = FindLayerLocked(*layers.cemod);
+					layer && layer->cemodOrder == CemodOverlayOrder::BelowBuiltin)
+					order = CemodOverlayOrder::BelowBuiltin;
+			std::array<std::optional<std::uint64_t>, 2> result;
+			const auto layerOrder = OverlayLayersBottomToTop(order);
+			for (std::size_t index = 0; index < layerOrder.size(); ++index)
+				result[index] = layerOrder[index] == OverlayLayer::Builtin ? layers.builtin : layers.cemod;
+			return result;
+		}
+
 		std::optional<RuntimeImpl::ComposedFrame> RuntimeImpl::ComposeLocked(
 			Host::PointerSurface surface) const
 		{
@@ -1428,8 +1446,8 @@ namespace WebFrontend::CefOverlay
 							layer->popup.data() + sourceOffset);
 					}
 			};
-			blendLayer(layers.builtin);
-			blendLayer(layers.cemod);
+			for (const auto layer : BottomToTopLocked(layers))
+				blendLayer(layer);
 			return frame;
 		}
 
@@ -1591,7 +1609,9 @@ namespace WebFrontend::CefOverlay
 				!LoopbackOrigin(descriptor.initialUrl))
 				return false;
 			if (descriptor.presentation == BrowserPresentation::OverlayOsr &&
-				(!descriptor.overlaySurface || !descriptor.overlayLayer))
+				(!descriptor.overlaySurface || !descriptor.overlayLayer ||
+				 (*descriptor.overlayLayer == OverlayLayer::Cemod && !descriptor.cemodOverlayOrder) ||
+				 (*descriptor.overlayLayer == OverlayLayer::Builtin && descriptor.cemodOverlayOrder)))
 				return false;
 			if (descriptor.presentation == BrowserPresentation::NativeChild &&
 				!descriptor.nativeParent)
@@ -1630,6 +1650,7 @@ namespace WebFrontend::CefOverlay
 					layer.surface = *descriptor.overlaySurface;
 					layer.visible = descriptor.overlayVisible;
 					layer.interactive = descriptor.overlayInteractive;
+					layer.cemodOrder = descriptor.cemodOverlayOrder;
 					m_overlayLayers.emplace(descriptor.windowId, std::move(layer));
 				}
 				client = new Client(*this, normalized);
@@ -2054,14 +2075,12 @@ namespace WebFrontend::CefOverlay
 				std::scoped_lock lock(m_mutex);
 				const auto& layers = m_surfaces[Index(surface)];
 				std::optional<std::uint64_t> target;
-				if (layers.cemod)
-					if (const auto* layer = FindLayerLocked(*layers.cemod);
-						layer && layer->visible && layer->interactive)
-						target = layers.cemod;
-				if (!target && layers.builtin)
-					if (const auto* layer = FindLayerLocked(*layers.builtin);
-						layer && layer->visible && layer->interactive)
-						target = layers.builtin;
+				const auto order = BottomToTopLocked(layers);
+				for (auto layer = order.rbegin(); layer != order.rend() && !target; ++layer)
+					if (*layer)
+						if (const auto* candidate = FindLayerLocked(**layer);
+							candidate && candidate->visible && candidate->interactive)
+							target = *layer;
 				for (const auto window : {layers.builtin, layers.cemod})
 					if (window)
 						if (const auto found = m_clients.find(*window); found != m_clients.end())
@@ -2085,14 +2104,12 @@ namespace WebFrontend::CefOverlay
 				std::scoped_lock lock(m_mutex);
 				const auto& layers = m_surfaces[Index(event.surface)];
 				std::optional<std::uint64_t> target;
-				if (layers.cemod)
-					if (const auto* layer = FindLayerLocked(*layers.cemod);
-						layer && layer->visible && layer->interactive)
-						target = layers.cemod;
-				if (!target && layers.builtin)
-					if (const auto* layer = FindLayerLocked(*layers.builtin);
-						layer && layer->visible && layer->interactive)
-						target = layers.builtin;
+				const auto order = BottomToTopLocked(layers);
+				for (auto layer = order.rbegin(); layer != order.rend() && !target; ++layer)
+					if (*layer)
+						if (const auto* candidate = FindLayerLocked(**layer);
+							candidate && candidate->visible && candidate->interactive)
+							target = *layer;
 				if (target)
 					if (const auto found = m_clients.find(*target); found != m_clients.end())
 						client = found->second;

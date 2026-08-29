@@ -296,7 +296,7 @@ namespace
      "overlay":{
        "entry":"ui/overlay/index.html",
        "modes":["overlay"],
-       "overlay":{"surfaces":["tv","drc"],"transparent":true,"interactive":false}
+       "overlay":{"surfaces":["tv","drc"],"z_order":"above_builtin","transparent":true,"interactive":false}
      }
    },
    "network":{
@@ -599,11 +599,51 @@ namespace
 		CHECK(package->manifest.webUi->views.at("main").singleInstance);
 		CHECK(package->manifest.webUi->views.at("main").window->width == 960);
 		CHECK(package->manifest.webUi->views.at("overlay").overlay->surfaces.size() == 2);
+		CHECK(package->manifest.webUi->views.at("overlay").overlay->order ==
+			  CemodWebUiOverlayOrder::AboveBuiltin);
 		CHECK(package->manifest.webUi->network.connect ==
 			  std::vector<std::string>({"https://api.example.com:443", "wss://stream.example.com:443"}));
 		CHECK(package->uiAssets.size() == 3);
 		CHECK(package->uiAssets.contains("ui/main/index.html"));
 		CHECK(package->uiAssets.contains("ui/main/assets/app.js"));
+		std::filesystem::remove(path);
+
+		std::string belowBuiltin(kWebUiManifest);
+		belowBuiltin.replace(belowBuiltin.find("above_builtin"),
+			std::string_view("above_builtin").size(), "below_builtin");
+		path = PackagePath("web-ui-below-builtin");
+		WriteEntries(path, {{"manifest.json", Bytes(belowBuiltin)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		package = CemodPackage::Inspect(path, error);
+		CHECK(package && package->manifest.webUi->views.at("overlay").overlay->order ==
+			CemodWebUiOverlayOrder::BelowBuiltin);
+		std::filesystem::remove(path);
+
+		std::string missingOrder(kWebUiManifest);
+		const auto orderField = missingOrder.find(",\"z_order\":\"above_builtin\"");
+		CHECK(orderField != std::string::npos);
+		missingOrder.erase(orderField, std::string_view(",\"z_order\":\"above_builtin\"").size());
+		path = PackagePath("web-ui-missing-z-order");
+		WriteEntries(path, {{"manifest.json", Bytes(missingOrder)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("overlay descriptor") != std::string::npos);
+		std::filesystem::remove(path);
+
+		std::string invalidOrder(kWebUiManifest);
+		invalidOrder.replace(invalidOrder.find("above_builtin"),
+			std::string_view("above_builtin").size(), "middle");
+		path = PackagePath("web-ui-invalid-z-order");
+		WriteEntries(path, {{"manifest.json", Bytes(invalidOrder)},
+						{"plugin.wps", BuildWupsTestImage()},
+						{"ui/main/index.html", Bytes("html")},
+						{"ui/overlay/index.html", Bytes("html")}});
+		CHECK(!CemodPackage::Inspect(path, error));
+		CHECK(error.find("z_order is invalid") != std::string::npos);
 		std::filesystem::remove(path);
 
 		path = PackagePath("web-ui-missing-entry");

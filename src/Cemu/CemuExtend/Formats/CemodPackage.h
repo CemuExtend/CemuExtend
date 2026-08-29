@@ -69,6 +69,12 @@ enum class CemodWebUiSurface : std::uint8_t
 	Drc,
 };
 
+enum class CemodWebUiOverlayOrder : std::uint8_t
+{
+	BelowBuiltin,
+	AboveBuiltin,
+};
+
 struct CemodWebUiWindow
 {
 	std::optional<std::string> title;
@@ -82,6 +88,7 @@ struct CemodWebUiWindow
 struct CemodWebUiOverlay
 {
 	std::vector<CemodWebUiSurface> surfaces;
+	CemodWebUiOverlayOrder order{CemodWebUiOverlayOrder::AboveBuiltin};
 	bool transparent{};
 	bool interactive{};
 };

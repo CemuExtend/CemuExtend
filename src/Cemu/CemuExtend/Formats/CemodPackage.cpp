@@ -347,14 +347,26 @@ namespace
 			if (view.overlayMode)
 			{
 				const auto& overlayValue = viewValue["overlay"];
-				if (!HasOnlyMembers(overlayValue, {"surfaces", "transparent", "interactive"}) ||
+				if (!HasOnlyMembers(overlayValue, {"surfaces", "z_order", "transparent", "interactive"}) ||
 					!overlayValue.HasMember("surfaces") || !overlayValue["surfaces"].IsArray() ||
-					overlayValue["surfaces"].Empty())
+					overlayValue["surfaces"].Empty() || !overlayValue.HasMember("z_order") ||
+					!overlayValue["z_order"].IsString())
 				{
 					error = fmt::format("web_ui view '{}' overlay descriptor is invalid", viewId);
 					return false;
 				}
 				CemodWebUiOverlay overlay;
+				const std::string_view order(overlayValue["z_order"].GetString(),
+					overlayValue["z_order"].GetStringLength());
+				if (order == "below_builtin")
+					overlay.order = CemodWebUiOverlayOrder::BelowBuiltin;
+				else if (order == "above_builtin")
+					overlay.order = CemodWebUiOverlayOrder::AboveBuiltin;
+				else
+				{
+					error = fmt::format("web_ui view '{}' overlay z_order is invalid", viewId);
+					return false;
+				}
 				for (const auto& surface : overlayValue["surfaces"].GetArray())
 				{
 					if (!surface.IsString())

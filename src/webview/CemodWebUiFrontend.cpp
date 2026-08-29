@@ -392,6 +392,9 @@ namespace WebFrontend
 				browser.overlaySurface = surface == UiSurface::Tv
 					? Host::PointerSurface::Main : Host::PointerSurface::Pad;
 				browser.overlayLayer = CefOverlay::OverlayLayer::Cemod;
+				browser.cemodOverlayOrder = overlayConfig.order == CemodWebUiOverlayOrder::BelowBuiltin
+					? CefOverlay::CemodOverlayOrder::BelowBuiltin
+					: CefOverlay::CemodOverlayOrder::AboveBuiltin;
 				browser.overlayVisible = instance->visible;
 				browser.overlayInteractive = instance->interactive;
 				browser.overlayTransparent = overlayConfig.transparent;

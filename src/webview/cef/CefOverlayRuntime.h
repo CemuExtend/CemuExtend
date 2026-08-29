@@ -2,6 +2,7 @@
 
 #include "host/contracts/HostContracts.h"
 #include "webview/NativeWindowHost.h"
+#include "webview/cef/CefOverlayOrder.h"
 
 #include <functional>
 #include <map>
@@ -25,12 +26,6 @@ namespace WebFrontend::CefOverlay
 	{
 		OverlayOsr,
 		NativeChild,
-	};
-
-	enum class OverlayLayer : std::uint8_t
-	{
-		Builtin,
-		Cemod,
 	};
 
 	struct BrowserAssetBundle
@@ -60,6 +55,7 @@ namespace WebFrontend::CefOverlay
 		BrowserPresentation presentation{BrowserPresentation::NativeChild};
 		std::optional<Host::PointerSurface> overlaySurface;
 		std::optional<OverlayLayer> overlayLayer;
+		std::optional<CemodOverlayOrder> cemodOverlayOrder;
 		bool overlayVisible{true};
 		bool overlayInteractive{};
 		bool overlayTransparent{true};

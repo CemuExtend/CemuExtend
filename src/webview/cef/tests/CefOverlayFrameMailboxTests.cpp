@@ -1,4 +1,5 @@
 #include "webview/cef/CefOverlayFrameMailbox.h"
+#include "webview/cef/CefOverlayOrder.h"
 
 #include <array>
 #ifdef NDEBUG
@@ -20,6 +21,14 @@ namespace
 
 int main()
 {
+	using WebFrontend::CefOverlay::CemodOverlayOrder;
+	using WebFrontend::CefOverlay::OverlayLayer;
+	using WebFrontend::CefOverlay::OverlayLayersBottomToTop;
+	constexpr auto below = OverlayLayersBottomToTop(CemodOverlayOrder::BelowBuiltin);
+	constexpr auto above = OverlayLayersBottomToTop(CemodOverlayOrder::AboveBuiltin);
+	static_assert(below[0] == OverlayLayer::Cemod && below[1] == OverlayLayer::Builtin);
+	static_assert(above[0] == OverlayLayer::Builtin && above[1] == OverlayLayer::Cemod);
+
 	int redraws{};
 	FrameMailbox mailbox([&](PointerSurface) { ++redraws; });
 	auto firstPixels = Pixels(4, 3, 7);
