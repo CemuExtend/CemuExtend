@@ -15,6 +15,7 @@ namespace cemuextend_hle
 	struct CemodWebUiContent
 	{
 		std::string principal;
+		std::string modId;
 		std::uint64_t titleId{};
 		CemodWebUi manifest;
 		std::map<std::string, std::vector<std::byte>> assets;

@@ -30,6 +30,7 @@
 #include "webview/generated/RpcMethods.h"
 #include "webview/generated/WindowRoles.h"
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
+#include "webview/CemodWebUiFrontend.h"
 #include "webview/cef/CefNativeUiLoop.h"
 #include "webview/cef/CefOverlayRuntime.h"
 #endif
@@ -1899,6 +1900,11 @@ namespace
 					[this](std::uint64_t windowId) { HandleCefWindowClosed(windowId); });
 				if (!m_cefOverlay)
 					throw std::runtime_error("failed to create the shared CEF browser runtime");
+				m_cemodWebUi = WebFrontend::CemodWebUiFrontend::Create(
+					m_nativeWindow->GetNativeWindow(), m_cefOverlay,
+					[this](std::function<void()> action) { return PostToUi(std::move(action)); });
+				if (!m_cemodWebUi)
+					throw std::runtime_error("failed to create the Cemod Web UI frontend");
 				#endif
 				m_rendererHost = CreateRendererHost(
 					m_hostState, m_hostState, m_hostState, m_cefOverlay,
@@ -1919,6 +1925,7 @@ namespace
 					.externalLauncher = m_hostServices,
 					.inputFocus = m_hostServices,
 					.canvas = m_hostServices,
+					.cemodWebUi = m_cemodWebUi,
 				});
 				InputManager::instance().ConfigureHost(*m_hostServices, *m_hostServices,
 													   *m_hostServices, *m_hostServices);
@@ -3174,6 +3181,10 @@ namespace
 				return;
 			m_stopping.store(true, std::memory_order_release);
 			m_eventStopping->store(true, std::memory_order_release);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cemodWebUi)
+				m_cemodWebUi->BeginShutdown();
+#endif
 			m_memorySearch.BeginShutdown();
 			m_ppcDebugger.BeginShutdown();
 			CancelPendingLaunch("shutdown",
@@ -3208,12 +3219,23 @@ namespace
 							"Cemu could not safely detach native renderer surfaces during final shutdown");
 				std::_Exit(EXIT_FAILURE);
 			}
+			if (m_hostConnected)
+			{
+				InputManager::instance().Shutdown();
+				Application::DisconnectHost();
+				InputManager::instance().ClearHost();
+				IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
+				m_hostConnected = false;
+			}
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cemodWebUi)
+				m_cemodWebUi->Shutdown();
 			if (m_cefOverlay)
 			{
 				m_cefOverlay->CloseAll();
 				m_cefOverlay.reset();
 			}
+			m_cemodWebUi.reset();
 #endif
 			if (m_windowState)
 				(void)m_windowState->BeginShutdown();
@@ -3226,14 +3248,6 @@ namespace
 			m_nativeWindow->UpdateTextInput({});
 			if (m_hostServices)
 				m_hostServices->Deactivate();
-			if (m_hostConnected)
-			{
-				InputManager::instance().Shutdown();
-				Application::DisconnectHost();
-				InputManager::instance().ClearHost();
-				IAudioAPI::ConfigureNativeSurfaceProvider(nullptr);
-				m_hostConnected = false;
-			}
 			if (m_mainWindowPublication)
 			{
 				m_hostState->ClearMainWindow(m_mainWindowPublication);
@@ -6486,6 +6500,7 @@ namespace
 		std::unique_ptr<INativeWindowHost> m_nativeWindow;
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 		std::shared_ptr<WebFrontend::CefOverlay::BrowserRuntime> m_cefOverlay;
+		std::shared_ptr<WebFrontend::CemodWebUiFrontend> m_cemodWebUi;
 #else
 		std::shared_ptr<Host::IOverlayFrameSource> m_cefOverlay;
 #endif

@@ -1564,6 +1564,7 @@ namespace cemuextend_hle
 				{
 					auto content = std::make_shared<CemodWebUiContent>();
 					content->principal = owner.Principal();
+					content->modId = package->manifest.modId;
 					content->titleId = owner.TitleId();
 					content->manifest = webUiManifest;
 					content->assets = package->uiAssets;

@@ -66,6 +66,8 @@ add_library(CemuWebFrontend STATIC
 )
 if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
   target_sources(CemuWebFrontend PRIVATE
+	CemodWebUiFrontend.cpp
+	CemodWebUiFrontend.h
 	cef/CefNativeUiLoop.cpp
 	cef/CefNativeUiLoop.h
     cef/CefOverlayFrameMailbox.cpp
@@ -73,7 +75,7 @@ if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
     cef/CefOverlayRuntime.cpp
     cef/CefOverlayRuntime.h
   )
-  target_link_libraries(CemuWebFrontend PRIVATE CemuCefRuntime)
+  target_link_libraries(CemuWebFrontend PRIVATE CemuCefRuntime cemuextend::wire OpenSSL::Crypto)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_sources(CemuWebFrontend PRIVATE NativeWindowHostGtk.cpp NativeFileDialogGtk.cpp ToolWindowSupportGtk.cpp)

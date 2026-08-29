@@ -4,6 +4,7 @@
 #include "webview/NativeWindowHost.h"
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,6 +27,18 @@ namespace WebFrontend::CefOverlay
 		NativeChild,
 	};
 
+	struct BrowserAssetBundle
+	{
+		std::string originId;
+		std::map<std::string, std::string> viewEntries;
+		std::map<std::string, std::vector<std::byte>> assets;
+		std::vector<std::string> connectOrigins;
+		std::vector<std::string> resourceOrigins;
+		bool credentials{};
+		bool persistentStorage{};
+		bool allowPrivateNetwork{};
+	};
+
 	struct BrowserDescriptor
 	{
 		std::uint64_t windowId{};
@@ -46,6 +59,12 @@ namespace WebFrontend::CefOverlay
 		// handle and is valid only between these two callbacks.
 		std::function<void(void*)> nativeBrowserCreated;
 		std::function<void(void*)> nativeBrowserClosing;
+		std::shared_ptr<const BrowserAssetBundle> cemodAssets;
+		std::function<void(std::int64_t, std::string,
+			std::function<void(bool, std::string)>)> cemodQuery;
+		std::function<void(std::int64_t)> cemodQueryCancelled;
+		std::function<void()> loadReady;
+		std::function<void()> closed;
 	};
 
 	class BrowserRuntime : public Host::IOverlayFrameSource
@@ -77,6 +96,8 @@ namespace WebFrontend::CefOverlay
 		virtual void SetWindowFocus(std::uint64_t windowId, bool focused) = 0;
 		virtual void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 			std::string_view jsonPayload, std::uint64_t sequence) = 0;
+		virtual void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
+			std::string_view jsonPayload) = 0;
 		virtual void ExecuteWindowScript(std::uint64_t windowId, std::string_view script) = 0;
 		[[nodiscard]] virtual bool HasWindow(std::uint64_t windowId) const = 0;
 	};

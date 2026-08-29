@@ -10,6 +10,7 @@
 #include "include/cef_client.h"
 #include "include/cef_parser.h"
 #include "include/cef_request.h"
+#include "include/cef_request_context.h"
 #include "include/cef_resource_handler.h"
 #include "include/cef_scheme.h"
 #include "include/cef_stream.h"
@@ -31,9 +32,11 @@
 #endif
 
 #include <condition_variable>
+#include <atomic>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
+#include <unordered_set>
 #include <unordered_map>
 
 namespace WebFrontend::CefOverlay
@@ -42,6 +45,7 @@ namespace WebFrontend::CefOverlay
 	{
 		constexpr char kScheme[] = "cemu";
 		constexpr char kDomain[] = "ui";
+		constexpr char kCemodScheme[] = "cemod-ui";
 
 		std::string JsonString(std::string_view value)
 		{
@@ -96,6 +100,15 @@ namespace WebFrontend::CefOverlay
 		{
 			if (candidate.starts_with("cemu://ui/"))
 				return true;
+			CefURLParts initialParts;
+			CefURLParts candidateParts;
+			if (CefParseURL(std::string(initialUrl), initialParts) &&
+				CefParseURL(std::string(candidate), candidateParts) &&
+				CefString(&initialParts.scheme) == kCemodScheme &&
+				CefString(&candidateParts.scheme) == kCemodScheme)
+			{
+				return CefString(&initialParts.host) == CefString(&candidateParts.host);
+			}
 			const auto initialOrigin = LoopbackOrigin(initialUrl);
 			const auto candidateOrigin = LoopbackOrigin(candidate);
 			return initialOrigin && candidateOrigin && *initialOrigin == *candidateOrigin;
@@ -161,6 +174,9 @@ namespace WebFrontend::CefOverlay
 				registrar->AddCustomScheme(kScheme,
 					CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
 					CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_FETCH_ENABLED);
+				registrar->AddCustomScheme(kCemodScheme,
+					CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
+					CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_FETCH_ENABLED);
 			}
 
 			void OnBeforeCommandLineProcessing(const CefString& processType,
@@ -196,11 +212,15 @@ namespace WebFrontend::CefOverlay
 			{
 				if (extraInfo && extraInfo->HasKey("bootstrap"))
 					m_bootstrap.insert_or_assign(browser->GetIdentifier(), extraInfo->GetString("bootstrap"));
+				if (extraInfo && extraInfo->GetBool("cemodBridge"))
+					m_cemodOrigins.insert_or_assign(browser->GetIdentifier(),
+						extraInfo->GetString("cemodOrigin"));
 			}
 
 			void OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) override
 			{
 				m_bootstrap.erase(browser->GetIdentifier());
+				m_cemodOrigins.erase(browser->GetIdentifier());
 			}
 
 			void OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
@@ -212,15 +232,67 @@ namespace WebFrontend::CefOverlay
 				const auto entry = m_bootstrap.find(browser->GetIdentifier());
 				if (entry == m_bootstrap.end())
 					return;
-				const std::string script =
-					"window.__CEMU_BOOTSTRAP__=" + entry->second + ";"
-					"window.cemuInvoke=(request)=>new Promise((resolve,reject)=>"
-					"window.cemuCefQuery({request,onSuccess:resolve,onFailure:(code,message)=>"
-					"reject(new Error('CEF RPC '+code+': '+message))}));"
-					"(()=>{const mark=()=>{if(document.documentElement&&"
-					"window.__CEMU_BOOTSTRAP__.overlaySurface)"
-					"document.documentElement.dataset.runtimeOverlay='active'};mark();"
-					"document.addEventListener('DOMContentLoaded',mark,{once:true})})();";
+				std::string script;
+				const auto cemodOrigin = m_cemodOrigins.find(browser->GetIdentifier());
+				CefURLParts frameUrl;
+				const bool isCemodFrame = cemodOrigin != m_cemodOrigins.end() &&
+					CefParseURL(frame->GetURL(), frameUrl) &&
+					CefString(&frameUrl.scheme) == kCemodScheme &&
+					CefString(&frameUrl.host) == cemodOrigin->second;
+				if (cemodOrigin != m_cemodOrigins.end() && !isCemodFrame)
+					return;
+				if (isCemodFrame)
+				{
+					script = "(()=>{const bootstrap=" + entry->second + ";"
+						"const listeners=new Map();"
+						"const parseFailure=(code,message)=>{let value;try{value=JSON.parse(message)}catch{}"
+						"const error=new Error(value?.message??message);error.code=value?.code??String(code);"
+						"error.details=value?.details??null;return error};"
+						"const invoke=(kind,value,options={})=>new Promise((resolve,reject)=>{"
+						"let settled=false,timer=0,abort;const finish=(fn,value)=>{if(settled)return;"
+						"settled=true;if(timer)clearTimeout(timer);if(abort&&options.signal)"
+						"options.signal.removeEventListener('abort',abort);fn(value)};"
+						"let request;try{request=JSON.stringify({bridge:1,kind,value})}catch(error){reject(error);return}"
+						"const queryId=window.cemuCefQuery({request,onSuccess:(raw)=>{try{finish(resolve,JSON.parse(raw))}"
+						"catch(error){finish(reject,error)}},onFailure:(code,message)=>"
+						"finish(reject,parseFailure(code,message))});"
+						"const cancel=(code,message)=>{if(settled)return;window.cemuCefQueryCancel(queryId);"
+						"finish(reject,Object.assign(new Error(message),{code,details:null}))};"
+						"if(options.signal){abort=()=>cancel('ABORTED','Cemod call was aborted');"
+						"if(options.signal.aborted){abort();return}options.signal.addEventListener('abort',abort,{once:true})}"
+						"if(options.timeoutMs)timer=setTimeout(()=>cancel('TIMED_OUT','Cemod call timed out'),options.timeoutMs)"
+						"});"
+						"const data=(value)=>value===undefined?null:value;"
+						"const api=Object.freeze({"
+						"info:Object.freeze(bootstrap),"
+						"ready:(value)=>invoke('ready',data(value)),"
+						"call:(name,value,options={})=>{const timeoutMs=options.timeoutMs===undefined?10000:Number(options.timeoutMs);"
+						"if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>60000)"
+						"return Promise.reject(Object.assign(new RangeError('timeoutMs must be 1000..60000'),{code:'INVALID_ARGUMENT'}));"
+						"return invoke('call',{name,data:data(value)},{signal:options.signal,timeoutMs})},"
+						"send:(name,value)=>invoke('send',{name,data:data(value)}),"
+						"on:(name,handler)=>{if(typeof name!=='string'||typeof handler!=='function')"
+						"throw new TypeError('invalid Cemod event listener');"
+						"let set=listeners.get(name);if(!set)listeners.set(name,set=new Set());"
+						"set.add(handler);return()=>set.delete(handler)},"
+						"close:(reason)=>invoke('close',{reason:reason===undefined?null:String(reason)})});"
+						"Object.defineProperty(window,'cemod',{value:api,writable:false,configurable:false});"
+						"Object.defineProperty(window,'__cemodDispatchEvent',{value:(name,payload)=>{"
+						"const set=listeners.get(name);if(set)for(const handler of [...set])"
+						"try{handler(payload)}catch(error){console.error(error)}},writable:false,configurable:false});"
+						"})();";
+				}
+				else
+				{
+					script = "window.__CEMU_BOOTSTRAP__=" + entry->second + ";"
+						"window.cemuInvoke=(request)=>new Promise((resolve,reject)=>"
+						"window.cemuCefQuery({request,onSuccess:resolve,onFailure:(code,message)=>"
+						"reject(new Error('CEF RPC '+code+': '+message))}));"
+						"(()=>{const mark=()=>{if(document.documentElement&&"
+						"window.__CEMU_BOOTSTRAP__.overlaySurface)"
+						"document.documentElement.dataset.runtimeOverlay='active'};mark();"
+						"document.addEventListener('DOMContentLoaded',mark,{once:true})})();";
+				}
 				CefRefPtr<CefV8Value> result;
 				CefRefPtr<CefV8Exception> exception;
 				context->Eval(script, frame->GetURL(), 0, result, exception);
@@ -243,6 +315,7 @@ namespace WebFrontend::CefOverlay
 		  private:
 			CefRefPtr<CefMessageRouterRendererSide> m_rendererRouter;
 			std::unordered_map<int, std::string> m_bootstrap;
+			std::unordered_map<int, std::string> m_cemodOrigins;
 			IMPLEMENT_REFCOUNTING(App);
 		};
 
@@ -376,7 +449,7 @@ namespace WebFrontend::CefOverlay
 			IMPLEMENT_REFCOUNTING(MemoryReadHandler);
 		};
 
-		class AssetFactory final : public CefSchemeHandlerFactory
+		class BuiltinAssetFactory final : public CefSchemeHandlerFactory
 		{
 		  public:
 			CefRefPtr<CefResourceHandler> Create(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
@@ -411,7 +484,152 @@ namespace WebFrontend::CefOverlay
 				return new CefStreamResourceHandler(200, "OK", "text/html", {}, stream);
 			}
 
-			IMPLEMENT_REFCOUNTING(AssetFactory);
+			IMPLEMENT_REFCOUNTING(BuiltinAssetFactory);
+		};
+
+		std::optional<std::string> DecodeCemodPath(std::string_view encoded)
+		{
+			if (encoded.empty() || encoded.front() != '/')
+				return std::nullopt;
+			std::string result;
+			result.reserve(encoded.size());
+			auto hex = [](char value) -> int {
+				if (value >= '0' && value <= '9') return value - '0';
+				if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+				if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+				return -1;
+			};
+			for (std::size_t index = 0; index < encoded.size(); ++index)
+			{
+				unsigned char value = static_cast<unsigned char>(encoded[index]);
+				if (value == '%')
+				{
+					if (index + 2 >= encoded.size())
+						return std::nullopt;
+					const int high = hex(encoded[index + 1]);
+					const int low = hex(encoded[index + 2]);
+					if (high < 0 || low < 0)
+						return std::nullopt;
+					value = static_cast<unsigned char>((high << 4) | low);
+					index += 2;
+					if (value == '/' || value == '\\')
+						return std::nullopt;
+				}
+				if (value == '\\' || value == 0 || value < 0x20 || value > 0x7e)
+					return std::nullopt;
+				result += static_cast<char>(value);
+			}
+			return result;
+		}
+
+		std::string CemodMimeType(std::string_view path)
+		{
+			const auto extension = std::filesystem::path(path).extension().string();
+			if (extension == ".html" || extension == ".htm") return "text/html";
+			if (extension == ".css") return "text/css";
+			if (extension == ".js" || extension == ".mjs") return "text/javascript";
+			if (extension == ".json" || extension == ".map") return "application/json";
+			if (extension == ".svg") return "image/svg+xml";
+			if (extension == ".png") return "image/png";
+			if (extension == ".jpg" || extension == ".jpeg") return "image/jpeg";
+			if (extension == ".gif") return "image/gif";
+			if (extension == ".webp") return "image/webp";
+			if (extension == ".woff") return "font/woff";
+			if (extension == ".woff2") return "font/woff2";
+			if (extension == ".txt") return "text/plain";
+			return "application/octet-stream";
+		}
+
+		std::string CemodContentSecurityPolicy(const BrowserAssetBundle& bundle)
+		{
+			std::string connect = "'self'";
+			for (const auto& origin : bundle.connectOrigins)
+			{
+				connect += ' ';
+				connect += origin;
+			}
+			std::string resources = "'self' data:";
+			for (const auto& origin : bundle.resourceOrigins)
+			{
+				resources += ' ';
+				resources += origin;
+			}
+			return "default-src 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'; "
+				"form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+				"connect-src " + connect + "; img-src " + resources + "; font-src " +
+				resources + "; media-src " + resources;
+		}
+
+		class CemodAssetFactory final : public CefSchemeHandlerFactory
+		{
+		  public:
+			explicit CemodAssetFactory(std::shared_ptr<const BrowserAssetBundle> bundle)
+				: m_bundle(std::move(bundle)) {}
+
+			CefRefPtr<CefResourceHandler> Create(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				const CefString&, CefRefPtr<CefRequest> request) override
+			{
+				CEF_REQUIRE_IO_THREAD();
+				const std::string method = request->GetMethod();
+				if (method != "GET" && method != "HEAD")
+					return nullptr;
+				CefURLParts parts;
+				if (!CefParseURL(request->GetURL(), parts) ||
+					CefString(&parts.scheme) != kCemodScheme ||
+					CefString(&parts.host) != m_bundle->originId)
+					return nullptr;
+				const std::string encodedPath = CefString(&parts.path);
+				const auto decoded = DecodeCemodPath(encodedPath);
+				if (!decoded)
+					return nullptr;
+				std::string_view path = *decoded;
+				path.remove_prefix(1);
+				const auto separator = path.find('/');
+				const std::string viewId(path.substr(0, separator));
+				const auto view = m_bundle->viewEntries.find(viewId);
+				if (view == m_bundle->viewEntries.end())
+					return nullptr;
+				std::string assetPath;
+				if (separator == std::string_view::npos || separator + 1 == path.size())
+					assetPath = view->second;
+				else
+				{
+					const std::string_view relative = path.substr(separator + 1);
+					std::size_t cursor{};
+					while (cursor <= relative.size())
+					{
+						const auto end = relative.find('/', cursor);
+						const auto component = relative.substr(cursor,
+							end == std::string_view::npos ? relative.size() - cursor : end - cursor);
+						if (component.empty() || component == "." || component == "..")
+							return nullptr;
+						if (end == std::string_view::npos) break;
+						cursor = end + 1;
+					}
+					const auto root = view->second.rfind('/');
+					assetPath = root == std::string::npos ? std::string(relative)
+						: view->second.substr(0, root + 1) + std::string(relative);
+				}
+				const auto asset = m_bundle->assets.find(assetPath);
+				if (asset == m_bundle->assets.end())
+					return nullptr;
+				std::string data;
+				if (method == "GET")
+					data.assign(reinterpret_cast<const char*>(asset->second.data()), asset->second.size());
+				CefResponse::HeaderMap headers;
+				headers.emplace("X-Content-Type-Options", "nosniff");
+				headers.emplace("Cache-Control", "no-store");
+				headers.emplace("Content-Length", std::to_string(asset->second.size()));
+				const auto mime = CemodMimeType(assetPath);
+				if (mime == "text/html")
+					headers.emplace("Content-Security-Policy", CemodContentSecurityPolicy(*m_bundle));
+				auto stream = CefStreamReader::CreateForHandler(new MemoryReadHandler(std::move(data)));
+				return new CefStreamResourceHandler(200, "OK", mime, headers, stream);
+			}
+
+		  private:
+			std::shared_ptr<const BrowserAssetBundle> m_bundle;
+			IMPLEMENT_REFCOUNTING(CemodAssetFactory);
 		};
 
 		class RuntimeImpl;
@@ -443,17 +661,21 @@ namespace WebFrontend::CefOverlay
 			void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 			void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
 				ErrorCode errorCode, const CefString& errorText, const CefString&) override;
+			void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, int) override;
 			bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 				CefRefPtr<CefRequest> request, bool userGesture, bool isRedirect) override;
 			bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 				CefProcessId sourceProcess, CefRefPtr<CefProcessMessage> message) override;
 			bool OnQuery(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t,
 				const CefString& request, bool, CefRefPtr<Callback> callback) override;
+			void OnQueryCanceled(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t) override;
 
 			void SetSize(int width, int height, double scale);
 			std::pair<int, int> Size() const;
 			double Scale() const;
 			void RequestClose();
+			void CompleteQuery(std::int64_t queryId, std::shared_ptr<std::atomic_bool> cancelled,
+				CefRefPtr<Callback> callback, bool success, std::string response);
 			CefRefPtr<CefBrowser> Browser() const { return m_browser; }
 			std::uint64_t WindowId() const { return m_descriptor.windowId; }
 			const BrowserDescriptor& Descriptor() const { return m_descriptor; }
@@ -467,6 +689,8 @@ namespace WebFrontend::CefOverlay
 			double m_scale{1.0};
 			CefRefPtr<CefBrowser> m_browser;
 			CefRefPtr<CefMessageRouterBrowserSide> m_router;
+			std::mutex m_queryMutex;
+			std::unordered_map<std::int64_t, std::shared_ptr<std::atomic_bool>> m_queries;
 			bool m_closeRequested{};
 			IMPLEMENT_REFCOUNTING(Client);
 		};
@@ -498,6 +722,8 @@ namespace WebFrontend::CefOverlay
 			void SetWindowFocus(std::uint64_t windowId, bool focused) override;
 			void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 				std::string_view payload, std::uint64_t sequence) override;
+			void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
+				std::string_view payload) override;
 			void ExecuteWindowScript(std::uint64_t windowId, std::string_view script) override;
 			bool HasWindow(std::uint64_t windowId) const override;
 			std::optional<Host::OverlayFrameSnapshot> AcquireLatestOverlayFrame(
@@ -518,6 +744,8 @@ namespace WebFrontend::CefOverlay
 			void Created(std::uint64_t windowId, CefRefPtr<CefBrowser> browser);
 			void Closed(std::uint64_t windowId);
 			void LaunchBrowser(std::uint64_t windowId);
+			CefRefPtr<CefRequestContext> RequestContext(
+				const std::shared_ptr<const BrowserAssetBundle>& bundle);
 			FrameMailbox& Mailbox() { return m_mailbox; }
 
 		  private:
@@ -530,6 +758,7 @@ namespace WebFrontend::CefOverlay
 			WindowClosedHandler m_windowClosed;
 			mutable std::mutex m_mutex;
 			std::unordered_map<std::uint64_t, CefRefPtr<Client>> m_clients;
+			std::unordered_map<std::string, CefRefPtr<CefRequestContext>> m_requestContexts;
 			std::array<std::optional<std::uint64_t>, 2> m_surfaceWindows;
 			std::array<bool, 2> m_interactive{};
 			std::condition_variable m_closeCondition;
@@ -619,6 +848,30 @@ namespace WebFrontend::CefOverlay
 
 		void Client::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 		{
+			std::vector<std::int64_t> cancelledQueries;
+			{
+				std::scoped_lock lock(m_queryMutex);
+				cancelledQueries.reserve(m_queries.size());
+				for (const auto& [queryId, cancelled] : m_queries)
+				{
+					cancelled->store(true, std::memory_order_release);
+					cancelledQueries.push_back(queryId);
+				}
+				m_queries.clear();
+			}
+			if (m_descriptor.cemodQueryCancelled)
+			{
+				for (const auto queryId : cancelledQueries)
+				{
+					try { m_descriptor.cemodQueryCancelled(queryId); }
+					catch (...)
+					{
+						cemuLog_log(LogType::Force,
+							"Cemod Web UI cancel callback failed for window {}",
+							m_descriptor.windowId);
+					}
+				}
+			}
 			if (m_descriptor.presentation == BrowserPresentation::NativeChild &&
 				m_descriptor.nativeBrowserClosing)
 			{
@@ -636,6 +889,15 @@ namespace WebFrontend::CefOverlay
 			m_router->OnBeforeClose(browser);
 			m_router->RemoveHandler(this);
 			m_browser = nullptr;
+			if (m_descriptor.closed)
+			{
+				try { m_descriptor.closed(); }
+				catch (...)
+				{
+					cemuLog_log(LogType::Force,
+						"CEF browser close callback failed for window {}", m_descriptor.windowId);
+				}
+			}
 			m_owner.Closed(m_descriptor.windowId);
 		}
 
@@ -646,10 +908,32 @@ namespace WebFrontend::CefOverlay
 				cemuLog_log(LogType::Force, "CEF overlay load failed: {} ({})", text.ToString(), static_cast<int>(code));
 		}
 
+		void Client::OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, int)
+		{
+			if (frame->IsMain() && m_descriptor.loadReady)
+			{
+				try { m_descriptor.loadReady(); }
+				catch (...)
+				{
+					cemuLog_log(LogType::Force,
+						"Cemod Web UI load callback failed for window {}", m_descriptor.windowId);
+				}
+			}
+		}
+
 		bool Client::OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 			CefRefPtr<CefRequest> request, bool, bool)
 		{
+			if (m_descriptor.cemodAssets && !frame->IsMain())
+				return true;
 			const std::string url = request->GetURL();
+			if (m_descriptor.cemodAssets)
+			{
+				CefURLParts parts;
+				if (!CefParseURL(url, parts) || CefString(&parts.scheme) != kCemodScheme ||
+					CefString(&parts.host) != m_descriptor.cemodAssets->originId)
+					return true;
+			}
 			if (!IsAllowedUrl(url, m_descriptor.initialUrl))
 				return true;
 			m_router->OnBeforeBrowse(browser, frame);
@@ -662,11 +946,82 @@ namespace WebFrontend::CefOverlay
 			return m_router->OnProcessMessageReceived(browser, frame, source, message);
 		}
 
-		bool Client::OnQuery(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t,
+		bool Client::OnQuery(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, std::int64_t queryId,
 			const CefString& request, bool, CefRefPtr<Callback> callback)
 		{
+			if (m_descriptor.cemodQuery)
+			{
+				if (!frame->IsMain())
+				{
+					callback->Failure(-1, "Cemod bridge is only available to the main frame");
+					return true;
+				}
+				auto cancelled = std::make_shared<std::atomic_bool>(false);
+				{
+					std::scoped_lock lock(m_queryMutex);
+					m_queries.insert_or_assign(queryId, cancelled);
+				}
+				CefRefPtr<Client> self(this);
+				try
+				{
+					m_descriptor.cemodQuery(queryId, request.ToString(),
+						[self, queryId, cancelled, callback](bool success, std::string response) mutable {
+							CefPostTask(TID_UI, CefCreateClosureTask(base::BindOnce(
+								&Client::CompleteQuery, self, queryId, std::move(cancelled),
+								std::move(callback), success, std::move(response))));
+						});
+				}
+				catch (...)
+				{
+					CompleteQuery(queryId, std::move(cancelled), std::move(callback), false,
+						"Cemod bridge dispatch failed");
+				}
+				return true;
+			}
 			callback->Success(m_owner.Dispatch(m_descriptor.windowId, request.ToString()));
 			return true;
+		}
+
+		void Client::OnQueryCanceled(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t queryId)
+		{
+			std::shared_ptr<std::atomic_bool> cancelled;
+			{
+				std::scoped_lock lock(m_queryMutex);
+				const auto query = m_queries.find(queryId);
+				if (query == m_queries.end())
+					return;
+				cancelled = query->second;
+				m_queries.erase(query);
+			}
+			cancelled->store(true, std::memory_order_release);
+			if (m_descriptor.cemodQueryCancelled)
+			{
+				try { m_descriptor.cemodQueryCancelled(queryId); }
+				catch (...)
+				{
+					cemuLog_log(LogType::Force,
+						"Cemod Web UI cancel callback failed for window {}", m_descriptor.windowId);
+				}
+			}
+		}
+
+		void Client::CompleteQuery(std::int64_t queryId, std::shared_ptr<std::atomic_bool> cancelled,
+			CefRefPtr<Callback> callback, bool success, std::string response)
+		{
+			CEF_REQUIRE_UI_THREAD();
+			{
+				std::scoped_lock lock(m_queryMutex);
+				const auto query = m_queries.find(queryId);
+				if (query == m_queries.end() || query->second != cancelled)
+					return;
+				m_queries.erase(query);
+			}
+			if (cancelled->exchange(true, std::memory_order_acq_rel))
+				return;
+			if (success)
+				callback->Success(response);
+			else
+				callback->Failure(-1, response);
 		}
 
 		void Client::SetSize(int width, int height, double scale)
@@ -737,7 +1092,22 @@ namespace WebFrontend::CefOverlay
 			if (descriptor.bounds.width <= 0 || descriptor.bounds.height <= 0 ||
 				descriptor.dpiScale <= 0.0 || descriptor.initialUrl.empty())
 				return false;
-			if (!descriptor.initialUrl.starts_with("cemu://ui/") &&
+			if (descriptor.cemodAssets)
+			{
+				const auto& originId = descriptor.cemodAssets->originId;
+				if (originId.empty() || originId.size() > 63 ||
+					!std::all_of(originId.begin(), originId.end(), [](unsigned char value) {
+						return (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') ||
+							value == '-';
+					}))
+					return false;
+				CefURLParts parts;
+				if (!CefParseURL(descriptor.initialUrl, parts) ||
+					CefString(&parts.scheme) != kCemodScheme ||
+					CefString(&parts.host) != originId)
+					return false;
+			}
+			else if (!descriptor.initialUrl.starts_with("cemu://ui/") &&
 				!LoopbackOrigin(descriptor.initialUrl))
 				return false;
 			if (descriptor.presentation == BrowserPresentation::OverlayOsr &&
@@ -779,6 +1149,52 @@ namespace WebFrontend::CefOverlay
 			return true;
 		}
 
+		CefRefPtr<CefRequestContext> RuntimeImpl::RequestContext(
+			const std::shared_ptr<const BrowserAssetBundle>& bundle)
+		{
+			CEF_REQUIRE_UI_THREAD();
+			if (!bundle)
+				return nullptr;
+			if (const auto context = m_requestContexts.find(bundle->originId);
+				context != m_requestContexts.end())
+			{
+				if (!context->second->RegisterSchemeHandlerFactory(kCemodScheme, bundle->originId,
+					new CemodAssetFactory(bundle)))
+					return nullptr;
+				return context->second;
+			}
+
+			CefRequestContextSettings settings;
+			if (bundle->persistentStorage)
+			{
+				const auto cachePath = CefCacheRoot() / "cemod" / bundle->originId;
+				std::error_code error;
+				std::filesystem::create_directories(cachePath, error);
+				if (error)
+				{
+					cemuLog_log(LogType::Force, "Unable to create Cemod Web UI cache directory: {}",
+						error.message());
+					return nullptr;
+				}
+#if defined(OS_WIN)
+				CefString(&settings.cache_path) = cachePath.wstring();
+#else
+				CefString(&settings.cache_path) = cachePath.string();
+#endif
+			}
+			if (!bundle->credentials)
+				settings.cookieable_schemes_exclude_defaults = true;
+			auto context = CefRequestContext::CreateContext(settings, nullptr);
+			if (!context || !context->RegisterSchemeHandlerFactory(kCemodScheme, bundle->originId,
+				new CemodAssetFactory(bundle)))
+			{
+				cemuLog_log(LogType::Force, "Unable to register Cemod Web UI origin {}", bundle->originId);
+				return nullptr;
+			}
+			m_requestContexts.emplace(bundle->originId, context);
+			return context;
+		}
+
 		void RuntimeImpl::LaunchBrowser(std::uint64_t windowId)
 		{
 			CEF_REQUIRE_UI_THREAD();
@@ -818,8 +1234,20 @@ namespace WebFrontend::CefOverlay
 			}
 			auto extraInfo = CefDictionaryValue::Create();
 			extraInfo->SetString("bootstrap", MakeBootstrap(descriptor));
+			if (descriptor.cemodAssets)
+			{
+				extraInfo->SetBool("cemodBridge", true);
+				extraInfo->SetString("cemodOrigin", descriptor.cemodAssets->originId);
+			}
+			auto requestContext = descriptor.cemodAssets
+				? RequestContext(descriptor.cemodAssets) : nullptr;
+			if (descriptor.cemodAssets && !requestContext)
+			{
+				Closed(descriptor.windowId);
+				return;
+			}
 			if (!CefBrowserHost::CreateBrowser(windowInfo, client, descriptor.initialUrl,
-				settings, extraInfo, nullptr))
+				settings, extraInfo, requestContext))
 			{
 				cemuLog_log(LogType::Force, "CEF browser creation failed for role {} window {}",
 					descriptor.role, descriptor.windowId);
@@ -849,16 +1277,27 @@ namespace WebFrontend::CefOverlay
 		void RuntimeImpl::Closed(std::uint64_t windowId)
 		{
 			std::optional<Host::PointerSurface> surface;
+			std::string cemodOrigin;
+			bool releaseCemodOrigin{};
 			{
 				std::scoped_lock lock(m_mutex);
 				const auto client = m_clients.find(windowId);
 				if (client == m_clients.end())
 					return;
 				surface = client->second->Descriptor().overlaySurface;
+				if (client->second->Descriptor().cemodAssets)
+					cemodOrigin = client->second->Descriptor().cemodAssets->originId;
 				m_clients.erase(client);
 				if (surface)
 					m_surfaceWindows[Index(*surface)].reset();
+				if (!cemodOrigin.empty())
+					releaseCemodOrigin = std::ranges::none_of(m_clients, [&](const auto& item) {
+						const auto& assets = item.second->Descriptor().cemodAssets;
+						return assets && assets->originId == cemodOrigin;
+					});
 			}
+			if (releaseCemodOrigin)
+				m_requestContexts.erase(cemodOrigin);
 			if (surface)
 				m_mailbox.BeginClose(*surface);
 			m_closeCondition.notify_all();
@@ -1053,6 +1492,13 @@ namespace WebFrontend::CefOverlay
 				std::string(payload) + "})");
 		}
 
+		void RuntimeImpl::ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
+			std::string_view payload)
+		{
+			ExecuteWindowScript(windowId, "window.__cemodDispatchEvent?.(" + JsonString(name) +
+				"," + std::string(payload) + ")");
+		}
+
 		void RuntimeImpl::ExecuteWindowScript(std::uint64_t windowId, std::string_view script)
 		{
 			if (auto client = Get(windowId); client && client->Browser())
@@ -1204,7 +1650,7 @@ namespace WebFrontend::CefOverlay
 			CefNative::ShutdownNativeUiLoop();
 			return false;
 		}
-		if (!CefRegisterSchemeHandlerFactory(kScheme, kDomain, new AssetFactory))
+		if (!CefRegisterSchemeHandlerFactory(kScheme, kDomain, new BuiltinAssetFactory))
 		{
 			CefShutdown();
 			CefNative::ShutdownNativeUiLoop();
