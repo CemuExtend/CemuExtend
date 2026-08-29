@@ -177,12 +177,27 @@ namespace WebFrontend::CefOverlay
 					// OSR starts. CPU compositing is sufficient for the BGRA OnPaint path.
 					commandLine->AppendSwitch("disable-software-rasterizer");
 					commandLine->AppendSwitch("disable-features=CalculateNativeWinOcclusion");
-					if (const char* headless = std::getenv("CEMU_CEF_HEADLESS");
-						headless && std::string_view(headless) == "1")
+					const char* headless = std::getenv("CEMU_CEF_HEADLESS");
+					const bool runHeadless = headless && std::string_view(headless) == "1";
+					if (runHeadless)
 					{
 						commandLine->AppendSwitch("headless");
 						commandLine->AppendSwitchWithValue("ozone-platform", "headless");
 					}
+#if defined(OS_LINUX)
+					// The launcher and the tool windows host a windowed CEF child that
+					// Cemu reparents into its GTK container by XID, and Chromium picks
+					// GTK's GDK backend to match the Ozone platform it selected. In a
+					// Wayland session that pairing hands out wl_surfaces the reparenting
+					// path cannot use, so pin Ozone to X11 and let XWayland bridge the
+					// desktop. An explicit switch on the command line still wins.
+					else if (std::getenv("DISPLAY") &&
+							 !commandLine->HasSwitch("ozone-platform") &&
+							 !commandLine->HasSwitch("ozone-platform-hint"))
+					{
+						commandLine->AppendSwitchWithValue("ozone-platform", "x11");
+					}
+#endif
 				}
 			}
 
