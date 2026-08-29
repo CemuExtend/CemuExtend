@@ -53,6 +53,9 @@
 #include <rapidjson/writer.h>
 #include <boost/nowide/cstdio.hpp>
 #include <png.h>
+#if BOOST_OS_LINUX
+#include <sys/prctl.h>
+#endif
 
 namespace
 {
@@ -6665,6 +6668,14 @@ void Frontend::Run()
 	// matching Ozone platform.
 	if (std::getenv("DISPLAY"))
 		setenv("GDK_BACKEND", "x11", 1);
+	// Most distributions set yama/ptrace_scope=1, which only lets a debugger
+	// attach to its own descendants. A frontend hang has to be inspected while it
+	// is happening, so allow an explicit opt-in to be attached from outside.
+	if (const char* allowPtrace = std::getenv("CEMU_ALLOW_PTRACE");
+		allowPtrace && std::string_view(allowPtrace) == "1")
+	{
+		prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+	}
 #endif
 	Application::InitializePaths();
 	CemuCommonInit();

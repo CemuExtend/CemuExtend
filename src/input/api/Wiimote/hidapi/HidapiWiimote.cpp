@@ -30,7 +30,15 @@ std::optional<std::vector<uint8>> HidapiWiimote::read_data()
 std::vector<WiimoteDevicePtr> HidapiWiimote::get_devices()
 {
 	std::vector<WiimoteDevicePtr> wiimote_devices;
-	SDL_hid_init();
+	// A portable runtime can end up without a usable HID backend, in which case
+	// SDL leaves its platform entry points unset and enumerating jumps through a
+	// null pointer. Skip Wiimote discovery instead of taking the process down.
+	if (SDL_hid_init() != 0)
+	{
+		cemuLog_logDebug(LogType::Force, "SDL HIDAPI is unavailable; skipping Wiimote discovery: {}",
+						 SDL_GetError());
+		return wiimote_devices;
+	}
 	const auto device_enumeration = SDL_hid_enumerate(WIIMOTE_VENDOR_ID, 0x0);
 
 	for (auto it = device_enumeration; it != nullptr; it = it->next)

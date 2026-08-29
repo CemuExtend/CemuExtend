@@ -492,6 +492,22 @@ namespace WebFrontend::CefNative
 		if (!callback || !s_initialized.load(std::memory_order_acquire))
 			return;
 
+		// s_pumpActive is only ever touched on the UI thread, so establish the
+		// thread before reading it.
+		if (IsNativeUiThread() && s_pumpActive)
+		{
+			// CEF is asking for another cycle from inside CefDoMessageLoopWork.
+			// Posting a zero-delay source here is a trap: showing a window runs a
+			// nested GTK loop inside this very pump, that loop dispatches the new
+			// source immediately, the dispatch is refused as reentrant, and CEF -
+			// still unserviced - asks again. The result is a UI thread spinning at
+			// full speed while no CEF work runs at all, which is what a frozen
+			// launcher and a blank tool window look like. The pump on the stack
+			// re-arms itself once it unwinds, so record the request and return.
+			s_reentrantPumpDetected = true;
+			return;
+		}
+
 		const auto generation = s_pumpGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
 		QueuePumpRequest(delay, generation, std::move(callback));
 	}
