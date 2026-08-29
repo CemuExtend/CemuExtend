@@ -34,6 +34,7 @@ namespace WebFrontend::CefOverlay
 		std::map<std::string, std::vector<std::byte>> assets;
 		std::vector<std::string> connectOrigins;
 		std::vector<std::string> resourceOrigins;
+		std::string networkPolicyKey;
 		bool credentials{};
 		bool persistentStorage{};
 		bool allowPrivateNetwork{};

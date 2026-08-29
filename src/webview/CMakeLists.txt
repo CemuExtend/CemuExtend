@@ -65,9 +65,13 @@ add_library(CemuWebFrontend STATIC
   generated/WebAssets.h
 )
 if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
-  target_sources(CemuWebFrontend PRIVATE
+	target_sources(CemuWebFrontend PRIVATE
 	CemodWebUiFrontend.cpp
 	CemodWebUiFrontend.h
+	CemodNetworkPolicy.cpp
+	CemodNetworkPolicy.h
+	CemodNetworkProxy.cpp
+	CemodNetworkProxy.h
 	cef/CefNativeUiLoop.cpp
 	cef/CefNativeUiLoop.h
     cef/CefOverlayFrameMailbox.cpp
@@ -131,6 +135,21 @@ if(BUILD_TESTING)
 		endif()
 		set_tests_properties(cef_overlay_osr_smoke_tests PROPERTIES
 			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1")
+
+		add_executable(cemod_network_policy_tests
+			CemodNetworkPolicy.cpp
+			tests/CemodNetworkPolicyTests.cpp)
+		target_include_directories(cemod_network_policy_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+		target_link_libraries(cemod_network_policy_tests PRIVATE Boost::headers)
+		add_test(NAME cemod_network_policy_tests COMMAND cemod_network_policy_tests)
+
+		add_executable(cemod_network_proxy_tests
+			CemodNetworkPolicy.cpp
+			CemodNetworkProxy.cpp
+			tests/CemodNetworkProxyTests.cpp)
+		target_include_directories(cemod_network_proxy_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+		target_link_libraries(cemod_network_proxy_tests PRIVATE Boost::headers Threads::Threads)
+		add_test(NAME cemod_network_proxy_tests COMMAND cemod_network_proxy_tests)
 	endif()
   add_executable(web_main_window_state_tests tests/MainWindowStateTests.cpp)
   target_link_libraries(web_main_window_state_tests PRIVATE CemuWebRpc)

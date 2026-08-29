@@ -92,6 +92,36 @@ namespace WebFrontend
 			return result;
 		}
 
+		std::string NetworkPolicyKey(const CemodWebUiNetwork& network)
+		{
+			std::string material;
+			material += network.credentials ? '1' : '0';
+			material += network.persistentStorage ? '1' : '0';
+			material += network.allowPrivateNetwork ? '1' : '0';
+			for (const auto& origin : network.connect)
+			{
+				material += "\nconnect:";
+				material += origin;
+			}
+			for (const auto& origin : network.resources)
+			{
+				material += "\nresource:";
+				material += origin;
+			}
+			std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
+			SHA256(reinterpret_cast<const unsigned char*>(material.data()), material.size(),
+				digest.data());
+			constexpr char hex[] = "0123456789abcdef";
+			std::string result;
+			result.reserve(digest.size() * 2);
+			for (const auto value : digest)
+			{
+				result += hex[value >> 4U];
+				result += hex[value & 0xfU];
+			}
+			return result;
+		}
+
 		std::vector<std::byte> MessagePayload(std::uint32_t handle, std::uint32_t callId,
 			std::string_view name, std::string_view json)
 		{
@@ -202,6 +232,7 @@ namespace WebFrontend
 				result->viewEntries.emplace(id, view.entry);
 			result->connectOrigins = content.manifest.network.connect;
 			result->resourceOrigins = content.manifest.network.resources;
+			result->networkPolicyKey = NetworkPolicyKey(content.manifest.network);
 			result->credentials = content.manifest.network.credentials;
 			result->persistentStorage = content.manifest.network.persistentStorage;
 			result->allowPrivateNetwork = content.manifest.network.allowPrivateNetwork;

@@ -3,6 +3,8 @@
 #include "webview/cef/CefOverlayRuntime.h"
 #include "webview/cef/CefOverlayFrameMailbox.h"
 #include "webview/cef/CefNativeUiLoop.h"
+#include "webview/CemodNetworkPolicy.h"
+#include "webview/CemodNetworkProxy.h"
 #include "webview/generated/WebAssets.h"
 
 #include "include/cef_app.h"
@@ -555,9 +557,64 @@ namespace WebFrontend::CefOverlay
 				resources += origin;
 			}
 			return "default-src 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'; "
+				"worker-src 'none'; navigate-to 'none'; "
 				"form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
 				"connect-src " + connect + "; img-src " + resources + "; font-src " +
 				resources + "; media-src " + resources;
+		}
+
+		bool IsCemodAssetUrl(std::string_view url, const BrowserAssetBundle& bundle)
+		{
+			CefURLParts parts;
+			return CefParseURL(std::string(url), parts) &&
+				CefString(&parts.scheme) == kCemodScheme &&
+				CefString(&parts.host) == bundle.originId;
+		}
+
+		std::optional<CemodNetworkRequestKind> NetworkRequestKind(
+			std::string_view url, cef_resource_type_t resourceType)
+		{
+			if (url.starts_with("wss://"))
+				return CemodNetworkRequestKind::Connect;
+			switch (resourceType)
+			{
+			case RT_XHR:
+			case RT_PING:
+				return CemodNetworkRequestKind::Connect;
+			case RT_IMAGE:
+			case RT_FONT_RESOURCE:
+			case RT_MEDIA:
+			case RT_FAVICON:
+				return CemodNetworkRequestKind::Resource;
+			default:
+				return std::nullopt;
+			}
+		}
+
+		bool IsCemodInitiator(std::string_view initiator, const BrowserAssetBundle& bundle)
+		{
+			if (initiator.empty())
+				return false;
+			CefURLParts parts;
+			return CefParseURL(std::string(initiator), parts) &&
+				CefString(&parts.scheme) == kCemodScheme &&
+				CefString(&parts.host) == bundle.originId;
+		}
+
+		bool IsAllowedCemodNetworkRequest(std::string_view url, cef_resource_type_t resourceType,
+			const BrowserAssetBundle& bundle)
+		{
+			if (IsCemodAssetUrl(url, bundle))
+				return true;
+			const auto kind = NetworkRequestKind(url, resourceType);
+			if (!kind || !IsCemodNetworkUrlAllowed(url, *kind,
+				bundle.connectOrigins, bundle.resourceOrigins))
+				return false;
+			if (bundle.allowPrivateNetwork)
+				return true;
+			const auto origin = ParseCemodNetworkOrigin(url);
+			return origin && !IsLocalNetworkHostname(origin->host) &&
+				(!origin->addressLiteral || IsPublicNetworkAddress(origin->host));
 		}
 
 		class CemodAssetFactory final : public CefSchemeHandlerFactory
@@ -639,6 +696,7 @@ namespace WebFrontend::CefOverlay
 					 public CefRenderHandler,
 					 public CefLoadHandler,
 					 public CefRequestHandler,
+					 public CefResourceRequestHandler,
 					 public CefMessageRouterBrowserSide::Handler
 		{
 		  public:
@@ -658,12 +716,28 @@ namespace WebFrontend::CefOverlay
 			void OnPopupShow(CefRefPtr<CefBrowser>, bool show) override;
 			void OnPopupSize(CefRefPtr<CefBrowser>, const CefRect& rect) override;
 			void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
+			bool OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int,
+				const CefString&, const CefString&, cef_window_open_disposition_t, bool,
+				const CefPopupFeatures&, CefWindowInfo&, CefRefPtr<CefClient>&,
+				CefBrowserSettings&, CefRefPtr<CefDictionaryValue>&, bool*) override;
 			void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 			void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
 				ErrorCode errorCode, const CefString& errorText, const CefString&) override;
 			void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, int) override;
 			bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 				CefRefPtr<CefRequest> request, bool userGesture, bool isRedirect) override;
+			bool OnOpenURLFromTab(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				const CefString&, cef_window_open_disposition_t, bool) override;
+			CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
+				CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>, bool,
+				bool isDownload, const CefString& requestInitiator,
+				bool& disableDefaultHandling) override;
+			ReturnValue OnBeforeResourceLoad(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				CefRefPtr<CefRequest>, CefRefPtr<CefCallback>) override;
+			void OnResourceRedirect(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				CefRefPtr<CefRequest>, CefRefPtr<CefResponse>, CefString& newUrl) override;
+			void OnProtocolExecution(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				CefRefPtr<CefRequest>, bool& allowOsExecution) override;
 			bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
 				CefProcessId sourceProcess, CefRefPtr<CefProcessMessage> message) override;
 			bool OnQuery(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, std::int64_t,
@@ -759,6 +833,8 @@ namespace WebFrontend::CefOverlay
 			mutable std::mutex m_mutex;
 			std::unordered_map<std::uint64_t, CefRefPtr<Client>> m_clients;
 			std::unordered_map<std::string, CefRefPtr<CefRequestContext>> m_requestContexts;
+			std::unordered_map<std::string, std::string> m_networkPolicyKeys;
+			std::unordered_map<std::string, std::shared_ptr<CemodNetworkProxy>> m_networkProxies;
 			std::array<std::optional<std::uint64_t>, 2> m_surfaceWindows;
 			std::array<bool, 2> m_interactive{};
 			std::condition_variable m_closeCondition;
@@ -844,6 +920,14 @@ namespace WebFrontend::CefOverlay
 				browser->GetHost()->CloseBrowser(true);
 				return;
 			}
+		}
+
+		bool Client::OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int,
+			const CefString&, const CefString&, cef_window_open_disposition_t, bool,
+			const CefPopupFeatures&, CefWindowInfo&, CefRefPtr<CefClient>&,
+			CefBrowserSettings&, CefRefPtr<CefDictionaryValue>&, bool*)
+		{
+			return m_descriptor.cemodAssets != nullptr;
 		}
 
 		void Client::OnBeforeClose(CefRefPtr<CefBrowser> browser)
@@ -938,6 +1022,66 @@ namespace WebFrontend::CefOverlay
 				return true;
 			m_router->OnBeforeBrowse(browser, frame);
 			return false;
+		}
+
+		bool Client::OnOpenURLFromTab(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+			const CefString&, cef_window_open_disposition_t, bool)
+		{
+			return m_descriptor.cemodAssets != nullptr;
+		}
+
+		CefRefPtr<CefResourceRequestHandler> Client::GetResourceRequestHandler(
+			CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest> request,
+			bool, bool isDownload, const CefString& requestInitiator,
+			bool& disableDefaultHandling)
+		{
+			CEF_REQUIRE_IO_THREAD();
+			if (!m_descriptor.cemodAssets)
+				return nullptr;
+			const auto& bundle = *m_descriptor.cemodAssets;
+			if (isDownload)
+			{
+				disableDefaultHandling = true;
+				return nullptr;
+			}
+			if (!IsCemodAssetUrl(request->GetURL().ToString(), bundle) &&
+				!IsCemodInitiator(requestInitiator.ToString(), bundle))
+			{
+				disableDefaultHandling = true;
+				return nullptr;
+			}
+			return this;
+		}
+
+		CefResourceRequestHandler::ReturnValue Client::OnBeforeResourceLoad(
+			CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest> request,
+			CefRefPtr<CefCallback>)
+		{
+			CEF_REQUIRE_IO_THREAD();
+			if (!m_descriptor.cemodAssets)
+				return RV_CONTINUE;
+			const auto& bundle = *m_descriptor.cemodAssets;
+			const auto url = request->GetURL().ToString();
+			if (!IsAllowedCemodNetworkRequest(url, request->GetResourceType(), bundle))
+				return RV_CANCEL;
+			return RV_CONTINUE;
+		}
+
+		void Client::OnResourceRedirect(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+			CefRefPtr<CefRequest> request, CefRefPtr<CefResponse>, CefString& newUrl)
+		{
+			CEF_REQUIRE_IO_THREAD();
+			if (m_descriptor.cemodAssets &&
+				!IsAllowedCemodNetworkRequest(newUrl.ToString(), request->GetResourceType(),
+					*m_descriptor.cemodAssets))
+				newUrl = "cemod-blocked://invalid/";
+		}
+
+		void Client::OnProtocolExecution(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+			CefRefPtr<CefRequest>, bool& allowOsExecution)
+		{
+			if (m_descriptor.cemodAssets)
+				allowOsExecution = false;
 		}
 
 		bool Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
@@ -1158,6 +1302,14 @@ namespace WebFrontend::CefOverlay
 			if (const auto context = m_requestContexts.find(bundle->originId);
 				context != m_requestContexts.end())
 			{
+				const auto policy = m_networkPolicyKeys.find(bundle->originId);
+				if (policy == m_networkPolicyKeys.end() || policy->second != bundle->networkPolicyKey)
+				{
+					cemuLog_log(LogType::Force,
+						"Refusing concurrent Cemod Web UI network policy change for origin {}",
+						bundle->originId);
+					return nullptr;
+				}
 				if (!context->second->RegisterSchemeHandlerFactory(kCemodScheme, bundle->originId,
 					new CemodAssetFactory(bundle)))
 					return nullptr;
@@ -1191,7 +1343,35 @@ namespace WebFrontend::CefOverlay
 				cemuLog_log(LogType::Force, "Unable to register Cemod Web UI origin {}", bundle->originId);
 				return nullptr;
 			}
+			std::shared_ptr<CemodNetworkProxy> proxy;
+			if (!bundle->connectOrigins.empty() || !bundle->resourceOrigins.empty())
+			{
+				proxy = CemodNetworkProxy::Create(bundle->connectOrigins,
+					bundle->resourceOrigins, bundle->allowPrivateNetwork);
+				if (!proxy)
+				{
+					cemuLog_log(LogType::Force, "Unable to create Cemod Web UI network proxy");
+					return nullptr;
+				}
+				auto proxyDictionary = CefDictionaryValue::Create();
+				proxyDictionary->SetString("mode", "fixed_servers");
+				proxyDictionary->SetString("server",
+					"http://127.0.0.1:" + std::to_string(proxy->Port()));
+				proxyDictionary->SetString("bypass_list", "<-loopback>");
+				auto proxyValue = CefValue::Create();
+				proxyValue->SetDictionary(proxyDictionary);
+				CefString error;
+				if (!context->SetPreference("proxy", proxyValue, error))
+				{
+					cemuLog_log(LogType::Force,
+						"Unable to configure Cemod Web UI network proxy: {}", error.ToString());
+					return nullptr;
+				}
+			}
 			m_requestContexts.emplace(bundle->originId, context);
+			m_networkPolicyKeys.emplace(bundle->originId, bundle->networkPolicyKey);
+			if (proxy)
+				m_networkProxies.emplace(bundle->originId, std::move(proxy));
 			return context;
 		}
 
@@ -1297,7 +1477,11 @@ namespace WebFrontend::CefOverlay
 					});
 			}
 			if (releaseCemodOrigin)
+			{
 				m_requestContexts.erase(cemodOrigin);
+				m_networkPolicyKeys.erase(cemodOrigin);
+				m_networkProxies.erase(cemodOrigin);
+			}
 			if (surface)
 				m_mailbox.BeginClose(*surface);
 			m_closeCondition.notify_all();
