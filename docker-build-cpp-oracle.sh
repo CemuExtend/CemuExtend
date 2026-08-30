@@ -7,12 +7,20 @@ set -euo pipefail
 # passing the worktree itself to Docker therefore cannot work reliably.
 
 readonly oracle_commit="ab0b772029f0a5cd57c194cf338003fe8eae8ab8"
+readonly vcpkg_builtin_baseline="f0fb3ddba5135b80982668de39dbaa139c00d281"
+readonly vcpkg_baseline_bundle=".cemu-vcpkg-baseline.bundle"
+readonly vcpkg_pinned_ref="refs/tags/cemu-vcpkg-pinned"
+readonly vcpkg_bundle_max_bytes=$((512 * 1024 * 1024))
+readonly oracle_dockerfile=".cemu-oracle.Dockerfile"
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 oracle_dir="${CEMU_CPP_ORACLE_DIR:-${project_dir}/../CemuExtend-cpp-oracle}"
 build_kind="${1:-build}"
 keep_context="${CEMU_CPP_ORACLE_KEEP_CONTEXT:-0}"
 build_timeout_minutes="${CEMU_CPP_ORACLE_BUILD_TIMEOUT_MINUTES:-30}"
 context_dir=""
+bundle_repository=""
+vcpkg_pinned_commit=""
+vcpkg_sdl3_tree=""
 build_log=""
 export_log=""
 build_completed=0
@@ -54,8 +62,33 @@ case "${keep_context}" in
 		;;
 esac
 
+cleanup_bundle_repository() {
+	if [[ -z "${bundle_repository}" || ! -d "${bundle_repository}" ]]; then
+		bundle_repository=""
+		return 0
+	fi
+	if [[ ! -f "${bundle_repository}/.cemu-vcpkg-bundle-repository" \
+		|| "$(<"${bundle_repository}/.cemu-vcpkg-bundle-repository")" != "${oracle_commit}:${vcpkg_pinned_commit}" \
+		|| "${bundle_repository}" != /tmp/cemu-extend-vcpkg-bundle.* ]]; then
+		printf 'Refusing to remove an unexpected temporary vcpkg bundle repository\n' >&2
+		return 1
+	fi
+	if ! rm -rf -- "${bundle_repository}"; then
+		printf 'Could not remove the temporary vcpkg bundle repository\n' >&2
+		return 1
+	fi
+	bundle_repository=""
+}
+
 cleanup() {
 	local status=$?
+
+	# The temporary bare repository is only a bundle staging area. It never
+	# contains working files and is removed even when a failed Docker context is
+	# retained for recovery.
+	if ! cleanup_bundle_repository; then
+		status=1
+	fi
 
 	# Preserve a failed context for inspection.  A successful context is removed
 	# only when it is the marker-bearing directory made by mktemp below.  Set
@@ -152,6 +185,138 @@ export_repository() {
 	printf '%s status=ok\n' "${log_path}" >>"${export_log}"
 }
 
+# vcpkg manifest versioning resolves builtin-baseline through the vcpkg
+# repository's Git object database. git archive intentionally omits that
+# database, so supply the pinned vcpkg history and its version DB objects in
+# the otherwise metadata-free Docker context. A bundle carries Git objects,
+# not the host worktree's .git file, configuration, or credential helpers.
+export_vcpkg_baseline_bundle() {
+	local vcpkg_repository manifest_baseline bundle_bytes bundle_heads
+
+	vcpkg_repository="${oracle_dir}/dependencies/vcpkg"
+	manifest_baseline="$(
+		git -C "${oracle_dir}" show "${oracle_commit}:vcpkg.json" \
+			| sed -nE 's/^[[:space:]]*"builtin-baseline"[[:space:]]*:[[:space:]]*"([0-9a-f]{40})".*/\1/p'
+	)"
+	if [[ "${manifest_baseline}" != "${vcpkg_builtin_baseline}" ]]; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Fixed vcpkg baseline does not match the oracle manifest\n' >&2
+		return 1
+	fi
+	vcpkg_pinned_commit="$(
+		git -C "${oracle_dir}" ls-tree "${oracle_commit}" -- dependencies/vcpkg \
+			| awk '$1 == "160000" && $2 == "commit" { print $3 }'
+	)"
+	if [[ ! "${vcpkg_pinned_commit}" =~ ^[0-9a-f]{40}$ ]] \
+		|| [[ ! -d "${vcpkg_repository}" ]] \
+		|| [[ "$(git -C "${vcpkg_repository}" rev-parse HEAD 2>/dev/null)" != "${vcpkg_pinned_commit}" ]] \
+		|| ! git -C "${vcpkg_repository}" cat-file -e "${vcpkg_builtin_baseline}^{commit}" >/dev/null 2>&1 \
+		|| ! git -C "${vcpkg_repository}" merge-base --is-ancestor \
+			"${vcpkg_builtin_baseline}" "${vcpkg_pinned_commit}" >/dev/null 2>&1; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Pinned vcpkg history does not contain the required builtin-baseline\n' >&2
+		return 1
+	fi
+	if ! vcpkg_sdl3_tree="$(
+		git -C "${vcpkg_repository}" show "${vcpkg_pinned_commit}:versions/s-/sdl3.json" 2>/dev/null \
+			| awk 'BEGIN { RS = "}" }
+				/"git-tree"[[:space:]]*:/ \
+				&& /"version"[[:space:]]*:[[:space:]]*"3\.4\.10"/ \
+				&& /"port-version"[[:space:]]*:[[:space:]]*0/ {
+					if (match($0, /"git-tree"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/)) {
+						value = substr($0, RSTART, RLENGTH)
+						sub(/.*"git-tree"[[:space:]]*:[[:space:]]*"/, "", value)
+						sub(/"$/, "", value)
+						print value
+						exit
+					}
+				}'
+	)" || [[ ! "${vcpkg_sdl3_tree}" =~ ^[0-9a-f]{40}$ ]] \
+		|| ! git -C "${vcpkg_repository}" cat-file -e "${vcpkg_sdl3_tree}^{tree}" >/dev/null 2>&1; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Pinned vcpkg version database does not provide the required SDL3 port tree\n' >&2
+		return 1
+	fi
+
+	# git bundle creates a bundle from refs, not an arbitrary detached object.
+	# Stage the Oracle-pinned history in a context-external bare repository so
+	# neither the oracle worktree nor its refs are changed.
+	bundle_repository="$(mktemp -d /tmp/cemu-extend-vcpkg-bundle.XXXXXX)"
+	printf '%s:%s\n' "${oracle_commit}" "${vcpkg_pinned_commit}" > "${bundle_repository}/.cemu-vcpkg-bundle-repository"
+	if ! git -C "${bundle_repository}" init --bare --quiet >/dev/null 2>&1 \
+		|| ! git -C "${bundle_repository}" fetch --quiet --no-tags "${vcpkg_repository}" \
+			"${vcpkg_pinned_commit}:${vcpkg_pinned_ref}" >/dev/null 2>&1 \
+		|| [[ "$(git -C "${bundle_repository}" rev-parse "${vcpkg_pinned_ref}^{commit}" 2>/dev/null)" != "${vcpkg_pinned_commit}" ]]; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Could not stage the fixed vcpkg baseline bundle reference\n' >&2
+		return 1
+	fi
+	if ! git -C "${bundle_repository}" bundle create \
+		"${context_dir}/${vcpkg_baseline_bundle}" "${vcpkg_pinned_ref}" >/dev/null 2>&1; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Could not create the fixed vcpkg baseline bundle\n' >&2
+		return 1
+	fi
+	if ! git -C "${vcpkg_repository}" bundle verify \
+		"${context_dir}/${vcpkg_baseline_bundle}" >/dev/null 2>&1; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Fixed vcpkg baseline bundle verification failed\n' >&2
+		return 1
+	fi
+	if ! bundle_heads="$(git bundle list-heads "${context_dir}/${vcpkg_baseline_bundle}" 2>/dev/null)" \
+		|| [[ "${bundle_heads}" != "${vcpkg_pinned_commit} ${vcpkg_pinned_ref}" ]]; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Fixed vcpkg baseline bundle does not advertise exactly the requested reference\n' >&2
+		return 1
+	fi
+	bundle_bytes="$(wc -c < "${context_dir}/${vcpkg_baseline_bundle}")"
+	if (( bundle_bytes <= 0 || bundle_bytes > vcpkg_bundle_max_bytes )); then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Pinned vcpkg history bundle has an invalid size\n' >&2
+		return 1
+	fi
+	# The bundle no longer needs the bare repository. Remove all local-fetch
+	# metadata before Docker starts; a cleanup failure is a hard failure.
+	if ! cleanup_bundle_repository; then
+		printf '%s status=failed\n' "${vcpkg_baseline_bundle}" >>"${export_log}"
+		printf 'Could not discard the temporary vcpkg bundle repository\n' >&2
+		return 1
+	fi
+	printf '%s pinned=%s baseline=%s sdl3-tree=%s bytes=%s status=ok\n' \
+		"${vcpkg_baseline_bundle}" "${vcpkg_pinned_commit}" "${vcpkg_builtin_baseline}" \
+		"${vcpkg_sdl3_tree}" "${bundle_bytes}" >>"${export_log}"
+}
+
+# The frozen Dockerfile is exported verbatim and remains the source of truth.
+# Build only the context-local derivative so all targets initialize an empty
+# vcpkg Git database and fetch the fixed bundle before bootstrap/versioning.
+create_oracle_dockerfile() {
+	local source_dockerfile="${context_dir}/Dockerfile"
+	local generated_dockerfile="${context_dir}/${oracle_dockerfile}"
+
+	if ! awk -v pinned="${vcpkg_pinned_commit}" -v baseline="${vcpkg_builtin_baseline}" \
+		-v sdl3_tree="${vcpkg_sdl3_tree}" '
+		/&& bash \.\/dependencies\/vcpkg\/bootstrap-vcpkg\.sh -disableMetrics/ {
+			print "    && test ! -e dependencies/vcpkg/.git " sprintf("%c", 92)
+			print "    && git -C dependencies/vcpkg init --quiet " sprintf("%c", 92)
+			print "    && git -C dependencies/vcpkg fetch --quiet ../../.cemu-vcpkg-baseline.bundle refs/tags/cemu-vcpkg-pinned:refs/tags/cemu-vcpkg-pinned " sprintf("%c", 92)
+			print "    && git -C dependencies/vcpkg cat-file -e " pinned "^{commit} " sprintf("%c", 92)
+			print "    && git -C dependencies/vcpkg cat-file -e " baseline "^{commit} " sprintf("%c", 92)
+			print "    && git -C dependencies/vcpkg cat-file -e " sdl3_tree "^{tree} " sprintf("%c", 92)
+			replacements++
+		}
+		{ print }
+		END { exit replacements == 3 ? 0 : 1 }
+	' "${source_dockerfile}" >"${generated_dockerfile}"; then
+		rm -f -- "${generated_dockerfile}"
+		printf '%s status=failed\n' "${oracle_dockerfile}" >>"${export_log}"
+		printf 'Could not create the vcpkg-enabled oracle Dockerfile\n' >&2
+		return 1
+	fi
+	printf '%s vcpkg-baseline=%s status=ok\n' \
+		"${oracle_dockerfile}" "${vcpkg_builtin_baseline}" >>"${export_log}"
+}
+
 if [[ ! -d "${oracle_dir}" ]]; then
 	printf 'C++ oracle worktree does not exist: .\n' >&2
 	exit 1
@@ -170,6 +335,8 @@ fi
 context_dir="$(mktemp -d /tmp/cemu-extend-cpp-oracle.XXXXXX)"
 export_log="$(mktemp /tmp/cemu-extend-cpp-oracle-export.XXXXXX.log)"
 export_repository "${oracle_dir}" "${oracle_commit}" "${context_dir}"
+export_vcpkg_baseline_bundle
+create_oracle_dockerfile
 
 # The diagnostic log must never become part of the Docker context.  Inspect
 # paths only (not file contents), rejecting any accidental export.log entry.
@@ -202,7 +369,7 @@ source_fingerprint="$(
 
 build_log="$(mktemp /tmp/cemu-extend-cpp-oracle-build.XXXXXX.log)"
 docker_build_args=(build --progress=plain \
-	--file "${context_dir}/Dockerfile" \
+	--file "${context_dir}/${oracle_dockerfile}" \
 	--target "${docker_target}" \
 	--build-arg "GIT_HASH=${oracle_commit:0:7}" \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${oracle_commit}" \

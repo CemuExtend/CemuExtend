@@ -10,6 +10,7 @@ description = "Deterministic compatibility traces and fixture metadata for CemuE
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 
 [lints]

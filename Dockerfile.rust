@@ -58,7 +58,9 @@ FROM rust-unlocked-source AS rust-source
 # Every normal verification/release target uses the exact dependency versions
 # recorded in the repository's Cargo.lock.
 RUN test -f Cargo.lock \
-    && cargo metadata --locked --no-deps --format-version 1 >/dev/null
+    && cargo metadata --locked --no-deps --format-version 1 >/dev/null \
+    && bash -n docker-build-rust.sh \
+    && bash -n docker-build-cpp-oracle.sh
 
 FROM rust-source AS rust-format
 
@@ -121,8 +123,11 @@ RUN set -eu; \
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-release-target,target=/workspace/target,sharing=locked \
-    cargo build --release --locked --bin Cemu \
-    && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu
+    cargo build --release --locked --package cemuextend --bin Cemu \
+    && cargo build --release --locked --package cex-compat --bin cex-trace-compare \
+    && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu \
+    && install -D -m 0755 /workspace/target/release/cex-trace-compare \
+        /opt/cemuextend/bin/cex-trace-compare
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
@@ -147,6 +152,72 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && ! grep -Eq '(/workspace/|/usr/local/cargo/|/home/|(^|[^[:alnum:]_])[A-Za-z]:[\\/])' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
     && ! grep -Eiq '(^|[^[:alnum:]_])(access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|secret[_-]?key|client[_-]?secret|secret|credential|credentials|password|private[_-]?key|key)["]?[[:space:]]*[:=]' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
     && touch /opt/cemuextend/licenses/.license-bundle-verified
+
+# Exercise the public trace producer and comparator through their real release
+# binaries. This is a Rust self-consistency gate; it does not claim C++ oracle
+# parity until the frozen reference runner emits the same canonical schema.
+FROM rust-builder AS rust-oracle-smoke
+
+RUN set -eu; \
+    smoke_dir=/tmp/cemuextend-oracle-smoke; \
+    mkdir -p "${smoke_dir}"; \
+    /opt/cemuextend/bin/Cemu \
+        --headless-fixture synthetic-rpx-boot \
+        --trace-output "${smoke_dir}/expected.jsonl"; \
+    /opt/cemuextend/bin/Cemu \
+        --headless-fixture synthetic-rpx-boot \
+        --trace-output "${smoke_dir}/actual.jsonl"; \
+    /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${smoke_dir}/expected.jsonl" \
+        --actual "${smoke_dir}/actual.jsonl" \
+        --json-report "${smoke_dir}/match.json"; \
+    grep -Fq '"match":true' "${smoke_dir}/match.json"; \
+    /opt/cemuextend/bin/Cemu \
+        --headless-fixture synthetic-boot \
+        --trace-output "${smoke_dir}/different.jsonl"; \
+    if /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${smoke_dir}/expected.jsonl" \
+        --actual "${smoke_dir}/different.jsonl" \
+        --json-report "${smoke_dir}/mismatch.json"; then \
+        echo 'trace comparator accepted a divergent trace' >&2; \
+        exit 1; \
+    else \
+        status=$?; \
+        test "${status}" -eq 1; \
+    fi; \
+    grep -Fq '"match":false' "${smoke_dir}/mismatch.json"; \
+    ! grep -Fq '/tmp/' "${smoke_dir}/match.json"; \
+    ! grep -Fq '/tmp/' "${smoke_dir}/mismatch.json"; \
+    if /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${smoke_dir}/private-sentinel.trace" \
+        --actual "${smoke_dir}/actual.jsonl" \
+        >"${smoke_dir}/invalid.stdout" 2>"${smoke_dir}/invalid.stderr"; then \
+        echo 'trace comparator accepted a missing input' >&2; \
+        exit 1; \
+    else \
+        status=$?; \
+        test "${status}" -eq 2; \
+    fi; \
+    grep -Fxq 'unable to read or validate expected trace' "${smoke_dir}/invalid.stderr"; \
+    ! grep -Fq 'private-sentinel' "${smoke_dir}/invalid.stderr"; \
+    ! grep -Fq '/tmp/' "${smoke_dir}/invalid.stderr"; \
+    test ! -s "${smoke_dir}/invalid.stdout"; \
+    printf '%s\n' preserve >"${smoke_dir}/existing-report.json"; \
+    if /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${smoke_dir}/expected.jsonl" \
+        --actual "${smoke_dir}/actual.jsonl" \
+        --json-report "${smoke_dir}/existing-report.json" \
+        >"${smoke_dir}/existing.stdout" 2>"${smoke_dir}/existing.stderr"; then \
+        echo 'trace comparator replaced an existing report' >&2; \
+        exit 1; \
+    else \
+        status=$?; \
+        test "${status}" -eq 2; \
+    fi; \
+    grep -Fxq 'unable to write comparison report' "${smoke_dir}/existing.stderr"; \
+    test "$(cat "${smoke_dir}/existing-report.json")" = preserve; \
+    test ! -s "${smoke_dir}/existing.stdout"; \
+    touch /opt/cemuextend/oracle-smoke-verified
 
 # Runnable Linux headless image. No React/CEF or native desktop frontend is
 # pulled into this path.
@@ -227,4 +298,5 @@ FROM rust-ci AS ci
 COPY --from=rust-builder /opt/cemuextend/licenses/.license-bundle-verified /opt/cemuextend/license-gate/.license-bundle-verified
 COPY --from=rust-builder /opt/cemuextend/licenses/LICENSE.txt /opt/cemuextend/license-gate/LICENSE.txt
 COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /opt/cemuextend/license-gate/THIRD_PARTY_LICENSES.txt
+COPY --from=rust-oracle-smoke /opt/cemuextend/oracle-smoke-verified /opt/cemuextend/oracle-smoke-verified
 COPY --from=rust-ui /ui-verified /opt/cemuextend/ui-verified

@@ -48,6 +48,9 @@ case "${build_kind}" in
 	ci)
 		docker_target=ci
 		;;
+	oracle-smoke)
+		docker_target=rust-oracle-smoke
+		;;
 	headless)
 		docker_target=rust-headless
 		;;
@@ -58,7 +61,7 @@ case "${build_kind}" in
 		docker_target=rust-ui
 		;;
 	*)
-		printf 'Usage: %s [lock|format|format-fix|ui-format-fix|check|clippy|test|audit|ci|headless|release|ui]\n' "${0##*/}" >&2
+		printf 'Usage: %s [lock|format|format-fix|ui-format-fix|check|clippy|test|audit|ci|oracle-smoke|headless|release|ui]\n' "${0##*/}" >&2
 		exit 2
 		;;
 esac

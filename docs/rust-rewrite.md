@@ -15,8 +15,9 @@
   checkout している。
 - 固定 C++ baseline build: `./docker-build-cpp-oracle.sh build` が clean な oracle
   worktree と pinned submodule revision だけから Docker context を作る。helper は存在するが、
-  hardening 後の `base` / `dev` target は固定 `ab0b7720` で成功した。完全な `build` / CTest、
-  canonical trace、schema validation、Rust/C++ comparator の Docker target はまだ未検証・未完成である。
+  pinned Gitlink history hardening後の`dev`、compile/link 877/877、CTest 37/37は固定
+  `ab0b7720`で成功した。post-test runtime bundleとbuild image、canonical C++/Rust trace
+  parityは未完成である。
 - 対象環境: まず Linux x86_64。Windows x86_64、macOS ARM64、Linux ARM64 は
   まだ対象外である。
 - 現在の段階: baseline/oracle と headless interpreter の土台を並行して作成中。
@@ -26,14 +27,16 @@
   起動、IML JIT、renderer、desktop、Pretendo、
   CEMOD/WUPS parity、移行ツールは完成していない。
 - 最終統合状態: source payload fingerprint
-  `sha256:b13c435cb580b9de8fe993d6bed5c0b0c93acf05f481e661e5fda80cb8c7d29d` で
+  `sha256:c535f8aed349a34729f4010ec18ae3ce3d185cb89bbb74cbf4f5f58537500640` で
   aggregate `ci`、release export、headless image の Docker build が成功した。これは
   synthetic main RPX slice の品質証拠であり、retail RPX や emulator parity の
   完成証拠ではない。
 - RPX milestone 現在地: strict・非圧縮・import-free の synthetic main RPX parser、
   code-generated 5-section fixture、deterministic headless/CLI integration は source payload
-  fingerprint `b13c435c…7d29d` の Docker build で検証済み。retail RPX/RPL、import、
+  fingerprint `c535f8ae…00640` の Docker build で検証済み。retail RPX/RPL、import、
   relocation、compression、Cafe OS、Homebrew、C++ oracle比較は未実装・未完了である。
+- Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
+  match/mismatch/error/no-clobber自己整合性をDocker確認済み。ただしC++ trace parityではない。
 - 検証方針: build、format、lint、test、audit、release は Docker target だけで実行する。
   host 上での `cargo`、`cmake`、`ctest`、`bun` の結果を検証証拠にしない。
 
@@ -137,9 +140,24 @@ helper の診断 target は引数から Docker target へ明示的に次のよ�
 
 context export は固定 commit と clean/pinned submodule の recursive export が全て成功した
 後にだけ `.cemu-oracle-context` completion marker を作成する。途中の context は completed
-として扱わず、export の plain log（submodule path と `status=ok|failed` のみ）を保持する。
+として扱わず、export の root-relative plain log（submodule path、bundle、生成 Dockerfile の
+`status=ok|failed`）を保持する。
 export 完了時には context の file 数と `du -sh` 要約も表示する。context には `.git`、未追跡
-ファイル、credential/config は含まれない。
+ファイル、credential/config は含まれない。例外として vcpkg manifest の固定
+`builtin-baseline` を解決するため、helper は Oracle commit の gitlink から vcpkg の pinned commit
+を読み取り、worktree HEAD と一致すること、baseline がその ancestor であることを検証する。
+baseline だけを bundle 化する方法は `dev` bootstrap には足りても、full build の version DB が参照する
+SDL3 port tree（`read-tree ca8f0f2f…`）を持たず失敗した。このため pinned commit の履歴/object closure
+全体を bundle 化する。SDL3 3.4.10 port-version 0 の tree ID は固定 pinned commit の
+`versions/s-/sdl3.json` から導出し、source と Docker 内の両方で tree object として検証する。
+
+Oracle 側の ref は変更せず、context 外の一時 bare repository に pinned commit を
+`refs/tags/cemu-vcpkg-pinned` として local fetch し、その名前付き ref から bundle を作る。bundle は
+この pinned ref だけを広告すること、Git bundle として検証できること、非ゼロかつ 512 MiB 以下である
+ことを確認してから context に入る Git object bundle であり、host の `.git` file、Git config、credential
+helper、未追跡ファイルを含めない。context 専用の `.cemu-oracle.Dockerfile` はその bundle だけを
+root-relative path で vcpkg の新規ローカル Git DB に fetch し、pinned commit、baseline commit、SDL3
+tree を確認してから bootstrap/versioning を実行する。固定 Oracle の `Dockerfile` 自体は変更しない。
 
 Docker build の上限時間は `CEMU_CPP_ORACLE_BUILD_TIMEOUT_MINUTES`（既定 30 分）で設定する。
 値は非負の整数のみ受け付け、`0` は上限なし（無効）を明示的に意味する。上限到達時は
@@ -156,10 +174,15 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 - [x] C++ oracle を別の detached worktree に固定した。
 - [x] 固定 revision と pinned submodule だけを export する C++ Docker build helper を追加した。
 - [x] C++ Docker `base` / `dev` と vcpkg bootstrap の成功証拠をDocker検証ログへ記録した。
-- [ ] C++ Docker の完全な `build` / CTest 成功証拠を記録する。
+- [x] C++ 877 targetsのcompile/linkとCTest 37/37、0 failedを固定`ab0b7720`で確認した。
+- [ ] post-test runtime bundlingを完了し、C++ `build` target imageを生成する。
 - [ ] guest cycle を時刻とする canonical JSONL trace schema を確定する。
 - [ ] 同一入力の反復結果が byte-for-byte で一致することを Docker 内で検証する。
 - [ ] schema validator と C++/Rust comparator を Docker 内で通す。
+- [x] `cex-trace-compare` exit 0/1/2、match/mismatch/error/no-clobberのRust自己整合性を
+  Docker `rust-oracle-smoke`で検証した。
+- [x] oracle helperの`bash -n`をDocker内で確認し、trace artifactの`.dockerignore`除外は
+  patternを静的確認した。Docker build成功だけをartifact不在の証明には用いない。
 - [ ] 少なくとも一つの合成プログラムを固定 C++ oracle と比較する。
 - [ ] fixture manifest が許可済み metadata、digest、期待結果だけを含むことを検査する。
 
@@ -171,7 +194,7 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 - [x] license-clean な合成 CEXH fixture の headless 実行を Docker test で通す。
 - [x] strict・非圧縮・import-free synthetic main RPX parser、code-generated 5-section
   fixture、deterministic headless/CLI integration を source payload fingerprint
-  `b13c435c…7d29d` の aggregate Docker build で検証した。
+  `c535f8ae…00640` の aggregate Docker build で再検証した。
 - [ ] license-clean な最小 RPX/Homebrew を決定的に終了させる。
 - [ ] retail RPX/RPL、import、relocation、compression、Cafe OS を実装・検証する。
 - [ ] CPU state、memory digest、event trace を C++ oracle と一致させる。
@@ -232,6 +255,9 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 | 2026-08-30 | `cargo-deny` を 0.20.2 に固定する | 0.18.4 は現在の RustSec advisory に含まれる CVSS 4.0 を parse できなかった。失敗履歴を残した上で更新し、advisories/bans/licenses/sources の全 check を Docker 内で通した。 |
 | 2026-08-30 | release/headless artifact に root license と Rust dependency notices を同梱する | 初期 Rust artifact も MPL-2.0 と依存 crate の license/notice を配布単位に含める。`cargo-about` 0.9.2 を Docker 内 CLI tool として固定し、workspace 依存や Cargo.lock には追加しない。aggregate `ci` も `rust-builder` の生成済み license bundle を copy して notice gate へ依存させる。 |
 | 2026-08-30 | workspace 内 path dependency に `version = "0.1.0"` を明記する | `cargo-deny` の wildcard dependency 拒否を解消し、内部 crate の manifest version と整合させる。 |
+| 2026-08-30 | trace comparatorのreportを2 MiBで打ち切り、errorからfilesystem pathを除く | untrusted traceによるmemory/log増幅とhost path漏えいを防ぐ。`TraceReader`にも入力boundsを持たせる。 |
+| 2026-08-30 | comparator outputはcaller-owned directory内のrandom mode 0600 tempfileから`persist_noclobber`する | dangling symlinkと既存outputを上書きしないpublicationをLinux Dockerで確認する。atomicityはfilesystem/API実装依存で未証明とし、Windows directory fsync adapterはWindows milestone開始前のblockerとする。 |
+| 2026-08-30 | C++ oracle contextはpinned Gitlink historyをsingle advertised ref・512 MiB capでbundleする | baseline-only bundleではSDL3 tree `ca8f…`が欠落したため、必要なpinned object historyだけを318 MiB / 17276 filesのcontextへ含める。 |
 | 2026-08-30 | Linux x86_64 を最初の platform とする | interpreter、x86-64 JIT、headless gate を先に安定させる。 |
 | 2026-08-30 | 最初の RPX slice を strict・非圧縮・import-free main module に限定する | code-generated 5-section fixture と deterministic headless/CLI integration で loader の最小契約を固定する。retail RPX/RPL、import、relocation、compression、Cafe OS の対応を意味しない。 |
 | 2026-08-30 | 4 GiB guest address space の半開区間終端として `end = 2^32` を許可する | `[start, end)` が address space 末尾まで到達する正当な範囲を表現する。legacy external validator の `UINT32_MAX` 終端制約は互換要件として保持しない。 |
@@ -278,7 +304,7 @@ adapter-local resource guard であり、共有 `MAX_REQUEST_BYTES` を response
 
 現在の RPX 実装対象は strict・非圧縮・import-free の main module だけである。
 fixture は code から生成する5 section 構成で、deterministic headless/CLI integration へ
-接続した。最小sliceは最新 source payload fingerprint `b13c435c…7d29d` の Docker build で
+接続した。最小sliceは最新 source payload fingerprint `c535f8ae…00640` の Docker build で
 検証済みだが、retail RPX/RPL、import、relocation、compression、Cafe OS の互換性を
 示さない。
 
@@ -288,6 +314,26 @@ guest address range は `[start, end)` で表し、4 GiB address space の末尾
 `end = 2^32` を意図的に許可する。`end` を32 bit addressそのものとして扱って
 `UINT32_MAX` 以下に制限する legacy external validator の挙動は保持しない。個々の guest
 address は従来どおり32 bitだが、exclusive end は一段広い型で表現する。
+
+### 2026-08-30: trace comparatorの安全境界
+
+`cex-trace-compare`はmatchをexit 0、意味差分をexit 1、入力・出力errorをexit 2で返す。
+`TraceReader`は入力boundsを検査し、reportは最大2 MiB、errorはpath-freeとする。outputは
+caller-owned directory内でrandom name・mode 0600のtempfileへ書き、
+`persist_noclobber`で確定するため、dangling symlinkと既存outputを上書きしない。
+現在のLinux Dockerではno-replacement publicationを確認したが、普遍的なatomicityは
+filesystem/API実装依存で未証明である。Windows directory fsync adapterも未実装である。
+
+`rust-oracle-smoke`はmatch/mismatch/error/no-clobberをDocker内で確認するRust自己整合性
+gateである。C++ oracleとのtrace parityを確認するgateではない。
+
+### 2026-08-30: C++ oracle Git object completeness
+
+baseline-only Git bundleではpinned SDL3 tree `ca8f…`が欠落してfull buildに失敗した。
+pinned Gitlink historyをsingle advertised ref・512 MiB capでbundleする方式に変更し、
+318 MiB / 17276 filesのcontextで`dev`を成功させた。full CEF buildは877 targetsのlinkと
+CTest 37/37、0 failedまで成功したが、post-test runtime bundling中にDocker targetが
+exit 124となったため、build image/runtime bundleは未完成である。
 
 ## Privacy / fixture 規則
 
@@ -301,6 +347,8 @@ address は従来どおり32 bitだが、exclusive end は一段広い型で表�
 - trace は allow-list 方式とし、guest cycle、正規化した event kind、公開可能な数値、
   digest だけを記録する。host environment、認証 header、token 入り URL、account data、
   path、raw guest data は記録しない。
+- trace input/report/temp artifactは`.dockerignore`でDocker contextから除外する。
+  comparator errorにもhost pathを含めない。
 - CI の online test は mock のみを使う。実 Pretendo はユーザーが明示実行する手動試験
   とし、log を redact し、artifact upload を無効にする。
 
@@ -317,10 +365,10 @@ address は従来どおり32 bitだが、exclusive end は一段広い型で表�
 | 2026-08-30 | `rust-release` | 統合作業 tree | 成功 | Docker local output で `result/rust/Cemu` の export に成功した。 |
 | 2026-08-30 | `rust-headless` | 統合作業 tree | 成功 | headless runtime image の生成に成功した。 |
 | 2026-08-30 | aggregate `ci` | 統合作業 tree | 成功 | Rust format/check/Clippy/test/audit と UI contract/check/test/build を含む aggregate target が成功した。 |
-| 2026-08-30 | C++ oracle `build` | `ab0b7720` | 未完了 | clean な pinned context の生成までは成功したが、Docker/BuildKit が停止状態になり image は生成されなかった。C++ oracle build は未検証のまま。 |
-| 2026-08-30 | C++ oracle `base` | `ab0b7720` | 成功 | privacy hardening 後、context-external relative logsを使い、17274 files / 213 MiB のclean contextから固定baselineのbase targetをDocker buildできた。過去のhang行は履歴として残す。 |
-| 2026-08-30 | C++ oracle `dev` | `ab0b7720` | 成功 | privacy-hardened helperで固定baselineのdev targetとvcpkg bootstrapまでDocker buildに成功した。 |
-| 2026-08-30 | C++ oracle `build` / CTest | `ab0b7720` | 未実行 | `base` / `dev` の成功は完全な C++ build や CTest の成功を意味しない。 |
+| 2026-08-30 | C++ oracle `build`（初期履歴） | `ab0b7720` | 未完了 | clean な pinned context の生成までは成功したが、Docker/BuildKit が停止状態になりimageを生成できなかった時点の履歴。後続attemptでcompile/CTestは成功した。 |
+| 2026-08-30 | C++ oracle `base`（privacy hardening履歴） | `ab0b7720` | 成功 | context-external relative logsを使い、17274 files / 213 MiBのclean contextからbase targetをDocker buildした時点の履歴。後続のpinned Gitlink history方式で再検証した。 |
+| 2026-08-30 | C++ oracle `dev`（privacy hardening履歴） | `ab0b7720` | 成功 | privacy-hardened helperでdev targetとvcpkg bootstrapに成功した時点の履歴。後続の318 MiB / 17276 files contextで再検証した。 |
+| 2026-08-30 | C++ oracle `build` / CTest（実行前履歴） | `ab0b7720` | 未実行 | `base` / `dev`だけが成功していた時点の履歴。後続attemptでCTest 37/37は成功したがruntime bundle/imageは未完成。 |
 | 2026-08-30 | strict main RPX slice（検証前履歴） | RPX 実装中 tree | 未実行 | parser、5-section fixture、headless/CLI integration を実装した時点では未検証だった履歴。後続の `45e696b0…6acb18` 成功証拠により最小sliceはDocker確認済みとなった。 |
 
 ### RPX実装前の dirty-tree 証跡（履歴）
@@ -395,11 +443,13 @@ local output を export した後、整形済み source を作業 tree へ copy 
 再検証済みであり、最終判定には Docker build の結果だけを使用した。
 
 Rust 106 tests / UI 27 tests と、上表の Rust 139 tests / UI 30 tests はいずれも
-RPX実装前の履歴として残す。この履歴の次段階は次節の Rust 172 tests であり、現在の
-最新件数と判定はregion containment後の節にある `b13c435c…7d29d` / Rust 184 tests を
-参照する。
+RPX実装前の履歴として残す。後続の`45e696b0…6acb18` / 172 testsと
+`b13c435c…7d29d` / 184 testsもそれぞれ次節以降の履歴である。現在の最新件数と判定は
+trace comparator実装後の節にある`c535f8ae…00640` / 193 testsを参照する。
 C++ oracle はこの時点では clean context 生成後に BuildKit hang していた。その後
-`base` / `dev` は成功したが、完全な `build` / CTest は引き続き未実行である。
+`base` / `dev` が成功した。この履歴時点では完全な `build` / CTest は未実行だったが、
+さらに後続のattemptでcompile/link 877/877とCTest 37/37が成功した。post-test runtime
+bundleとbuild imageだけが未完成であり、最新結果は後段のc535証跡を参照する。
 
 ### Region containment前の RPX source payload 証跡（履歴）
 
@@ -449,16 +499,17 @@ docker build --file Dockerfile.rust --progress plain --target rust-headless \
 | 2026-08-30 | aggregate `ci` final | `45e696b0…6acb18` | 成功 | Rust fmt/check/Clippy、workspace 172 tests、cargo-deny advisories/bans/licenses/sources、RPC drift、Prettier/tsc/ESLint、UI 30 tests、Vite build、release build、license notice gate がすべて成功した。 |
 | 2026-08-30 | `rust-release` | `45e696b0…6acb18` | 成功 | `Cemu` 774696 bytes、mode 0755、SHA-256 `3dd0ed7e…`; `LICENSE.txt` 16725 bytes、mode 0644、SHA-256 `1f256e…`; `THIRD_PARTY_LICENSES.txt` 94701 bytes、mode 0644、SHA-256 `68c283…`。 |
 | 2026-08-30 | `rust-headless` | `45e696b0…6acb18` | 成功 | license noticesを含むnon-root headless imageの生成に成功した。 |
-| 2026-08-30 | C++ oracle `build` / CTest | `ab0b7720` | 未実行 | `base` / `dev` 成功後も完全 build と CTest は保留中。RPX oracle 比較の成功は主張しない。 |
+| 2026-08-30 | C++ oracle `build` / CTest（RPX初回履歴） | `ab0b7720` | 未実行 | `base` / `dev`成功後もfull buildを開始していなかった時点の履歴。後続でCTestは成功したがimageは未完成。 |
 
 この成功は strict・非圧縮・import-free synthetic main RPX の最初のDocker証拠である。
-後続のFILEINFO/loader region containmentを含む最新証拠は次節の`b13c435c…7d29d`を
-参照する。Milestone 2 は Homebrew/Cafe OS/oracle comparison とretail
+後続のFILEINFO/loader region containment証拠は次節の`b13c435c…7d29d`、現在の最新
+trace comparator証拠はさらに後の`c535f8ae…00640`を参照する。Milestone 2 は
+Homebrew/Cafe OS/oracle comparison とretail
 RPX/RPL/import/relocation/compression が未完成のため、引き続き進行中である。
 
-### Region containment後の最終 source payload 証跡
+### Trace comparator実装前の source payload 証跡（履歴）
 
-最新 source payload fingerprint は
+当時の source payload fingerprint は
 `sha256:b13c435cb580b9de8fe993d6bed5c0b0c93acf05f481e661e5fda80cb8c7d29d`
 である。本台帳を自己参照から除外し、`result/` など Git が ignore する成果物を含めず、
 次の定義で算出した。
@@ -471,7 +522,7 @@ RPX/RPL/import/relocation/compression が未完成のため、引き続き進行
 } | sha256sum
 ```
 
-最終成功証拠に使用した wrapper と、helper が展開した Docker build は次のとおりである。
+当時の成功証拠に使用した wrapper と、helper が展開した Docker build は次のとおりである。
 
 ```sh
 ./docker-build-rust.sh ci
@@ -503,13 +554,88 @@ docker build --file Dockerfile.rust --progress plain --target rust-headless \
 | 2026-08-30 | `rust-headless` | `b13c435c…7d29d` | 成功 | license noticesを含むnon-root headless imageの生成に成功した。 |
 | 2026-08-30 | privacy-hardened C++ oracle `base` | `ab0b7720` | 成功 | context-external relative logsを使用し、17274 files / 213 MiB のclean contextからDocker buildに成功した。 |
 | 2026-08-30 | privacy-hardened C++ oracle `dev` | `ab0b7720` | 成功 | hardened helperでdev targetとvcpkg bootstrapのDocker buildに成功した。 |
-| 2026-08-30 | C++ oracle `build` / CTest | `ab0b7720` | 未実行 | privacy hardening後も完全buildとCTestは保留中であり、oracle comparisonの成功は主張しない。 |
+| 2026-08-30 | C++ oracle `build` / CTest（containment時履歴） | `ab0b7720` | 未実行 | privacy hardening後もfull buildを開始していなかった時点の履歴。後続でCTest 37/37は成功したがoracle comparisonは未完了。 |
 
-この最終証拠はFILEINFO text/data/loader containment、public `RpxMappingRegion`、
+この当時の証拠はFILEINFO text/data/loader containment、public `RpxMappingRegion`、
 fallibleかつgeometrically boundedなCLI readerを含むsynthetic main RPX sliceを対象とする。
 Milestone 2全体はHomebrew/Cafe OS/oracle comparisonとretail
-RPX/RPL/import/relocation/compressionが未完成のため進行中である。architecture / safety
-final reviewは完了し、code P0/P1/P2なしでapprovedとなった。
+RPX/RPL/import/relocation/compressionが未完成のため進行中である。この時点のregion
+containment reviewはapprovedだった。最新comparator/oracle helper reviewは次節を参照する。
+
+### Trace comparator実装後の最新 source payload 証跡
+
+最新 source payload fingerprint は
+`sha256:c535f8aed349a34729f4010ec18ae3ce3d185cb89bbb74cbf4f5f58537500640`
+である。本台帳を自己参照から除外し、`result/`などGitがignoreする成果物を含めず、
+次の既存定義で算出した。
+
+```sh
+{
+  git diff --binary HEAD -- . ':(exclude)docs/rust-rewrite.md'
+  git ls-files --others --exclude-standard -z -- . \
+    ':(exclude)docs/rust-rewrite.md' | sort -z | xargs -0 -r sha256sum
+} | sha256sum
+```
+
+Rust最終証拠のwrapperと、helperが展開したDocker buildは次のとおりである。
+
+```sh
+./docker-build-rust.sh format-fix
+./docker-build-rust.sh oracle-smoke
+./docker-build-rust.sh ci
+./docker-build-rust.sh release
+./docker-build-rust.sh headless
+
+docker build --file Dockerfile.rust --progress plain --target rust-format-fix \
+  --build-arg RUST_VERSION=1.97.1 \
+  --build-arg CARGO_DENY_VERSION=0.20.2 \
+  --build-arg CARGO_ABOUT_VERSION=0.9.2 \
+  --output type=local,dest=<mktemp> .
+docker build --file Dockerfile.rust --progress plain --target rust-oracle-smoke \
+  --build-arg RUST_VERSION=1.97.1 \
+  --build-arg CARGO_DENY_VERSION=0.20.2 \
+  --build-arg CARGO_ABOUT_VERSION=0.9.2 \
+  --tag cemu-extend-rust:oracle-smoke .
+docker build --file Dockerfile.rust --progress plain --target ci \
+  --build-arg RUST_VERSION=1.97.1 \
+  --build-arg CARGO_DENY_VERSION=0.20.2 \
+  --build-arg CARGO_ABOUT_VERSION=0.9.2 \
+  --tag cemu-extend-rust:ci .
+docker build --file Dockerfile.rust --progress plain --target rust-release \
+  --build-arg RUST_VERSION=1.97.1 \
+  --build-arg CARGO_DENY_VERSION=0.20.2 \
+  --build-arg CARGO_ABOUT_VERSION=0.9.2 \
+  --output type=local,dest=result/rust .
+docker build --file Dockerfile.rust --progress plain --target rust-headless \
+  --build-arg RUST_VERSION=1.97.1 \
+  --build-arg CARGO_DENY_VERSION=0.20.2 \
+  --build-arg CARGO_ABOUT_VERSION=0.9.2 \
+  --tag cemu-extend-rust:headless .
+```
+
+`<mktemp>`はhelperが作る実行時一時directoryである。C++ oracleでは
+`./docker-build-cpp-oracle.sh dev`と`./docker-build-cpp-oracle.sh build`を使用した。
+
+| 日時（JST） | 対象 | fingerprint / baseline | 結果 | 証拠・備考 |
+| --- | --- | --- | --- | --- |
+| 2026-08-30 | `rust-oracle-smoke` attempt 1 | final前 tree | 失敗 | Clippyがbool assertionとpass-by-valueを検出。修正して再試行した。 |
+| 2026-08-30 | aggregate `ci` attempt 2 | final前 tree | 失敗 | 4件のborrow type mismatch `E0308`を検出。修正して再試行した。 |
+| 2026-08-30 | `rust-format-fix` | `c535f8ae…00640` | 成功 | Docker local output経由のformat fixに成功した。 |
+| 2026-08-30 | `rust-oracle-smoke` | `c535f8ae…00640` | 成功 | comparator binaryでmatch/mismatch/error/no-clobberとDocker内`bash -n`を確認。trace artifact exclusionは`.dockerignore` patternの静的確認であり、Docker build成功だけを不在証明にはしない。Rust自己整合性でありC++ parityではない。 |
+| 2026-08-30 | aggregate `ci` final | `c535f8ae…00640` | 成功 | Rust fmt/check/Clippy、workspace 193 tests、cargo-deny、RPC/UI cached-valid gate（UI 30 tests）、release build、license notice gateが成功した。release binaryによるcomparator smokeも成功した。 |
+| 2026-08-30 | `rust-release` | `c535f8ae…00640` | 成功 | `Cemu` 774640 bytes、mode 0755、SHA-256 `9256ccd6353c4aa54acdaba123f3e83e77ee12829041ef3e3c7e804e65901199`; `LICENSE.txt` 16725 bytes、mode 0644、SHA-256 `1f256e…`; `THIRD_PARTY_LICENSES.txt` 94701 bytes、mode 0644、SHA-256 `68c283…`。 |
+| 2026-08-30 | `rust-headless` | `c535f8ae…00640` | 成功 | license noticesを含むnon-root headless imageの生成に成功した。 |
+| 2026-08-30 | privacy-hardened C++ oracle `base` | `ab0b7720` | 成功 | context-external relative logsを使用し、17274 files / 213 MiBのclean contextからbase targetをDocker buildした。 |
+| 2026-08-30 | privacy-hardened C++ oracle `dev` | `ab0b7720` | 成功 | hardened helperのdev targetとvcpkg bootstrapをDocker buildした。 |
+| 2026-08-30 | baseline-only C++ history bundle `build` | `ab0b7720` | 失敗 | pinned SDL3 tree `ca8f…`がbundleに存在せず、full buildを開始できなかった。 |
+| 2026-08-30 | pinned Gitlink history C++ `dev` | `ab0b7720` | 成功 | single advertised ref、512 MiB cap、318 MiB / 17276 filesのcontextでdev targetとbootstrapに成功した。 |
+| 2026-08-30 | full CEF `build` attempt 1 | `ab0b7720` | timeout | 30分で868/877 targetsまで到達した。 |
+| 2026-08-30 | full CEF `build` resume 1 | `ab0b7720` | timeout | 15分で877/877をlinkし、CTest 9/37まで到達した。 |
+| 2026-08-30 | full CEF `build` resume 2 | `ab0b7720` | 一部成功 | CTest 37/37、0 failed。Docker targetはpost-test runtime bundling中にexit 124となり、image/runtime bundleは未完成。 |
+
+C++ oracleはcompile/linkとCTest 37/37の成功を確認済みだが、`build` target imageとruntime
+bundleは未完成である。Rust comparatorのDocker smokeは自己整合性だけであり、C++/Rust
+trace parity gateは引き続き未完了である。
 
 検証時は実行した完全な `docker build` command、対象 commit または dirty tree の識別、
 成否、失敗した target/test、必要な log の保存先をこの表へ追記する。秘密情報を含む log
@@ -521,23 +647,28 @@ final reviewは完了し、code P0/P1/P2なしでapprovedとなった。
 | --- | --- | --- | --- | --- |
 | 2026-08-30 | architecture review | `rust-ci` に dependency/advisory/license audit がなく「完全な gate」と呼べない。 | `rust-deny` を `rust-ci` の祖先へ追加し、aggregate `ci` を正式 gate に変更。0.18.4 の CVSS 4.0 parse failure 後、0.20.2 へ固定して全 audit を通した。 | 対応済み・Docker 確認済み |
 | 2026-08-30 | architecture review | RPC manifest 変更時に Rust/TS generated contract drift を検知する必要がある。 | Rust 側 golden test を `rust-test` に追加し、generator drift と UI checks を行う `rust-ui` を aggregate `ci` へ接続。 | 対応済み・Docker 確認済み |
-| 2026-08-30 | architecture review | oracle/comparator 用 Docker target と証拠場所がまだない。 | helper を harden し、固定 `ab0b7720` の `base` / `dev` と vcpkg bootstrap は Docker 確認済み。完全な `build` / CTest、canonical trace、schema validator、Rust/C++ comparator は未完了 gate のまま。 | 一部対応・full build 未検証 |
-| 2026-08-30 | architecture review | RPX slice の対応範囲が完成実装と誤認されないこと。 | strict・非圧縮・import-free synthetic main module、code-generated 5-section fixture、deterministic headless/CLI integration を fingerprint `b13c435c…7d29d` の Docker build で検証。retail/RPL/import/relocation/compression/Cafe OS は未実装と明記した。 | approved・code P0/P1/P2なし |
-| 2026-08-30 | architecture review | 4 GiB末尾までの半開区間を legacy validator が拒否する。 | exclusive end に `2^32` を許可し、legacy external validator の `UINT32_MAX` 制約を互換要件から外した。workspace 184 tests を含むaggregate Docker buildは成功した。 | approved・code P0/P1/P2なし |
+| 2026-08-30 | architecture review | oracle/comparator 用 Docker target と証拠場所がまだない。 | C++ compile/linkとCTest 37/37は成功。post-test runtime bundlingのexit 124によりbuild imageは未完成。Rust `rust-oracle-smoke`は自己整合性のみで、C++ parityは未完了gateとして維持。 | 一部対応・parity/image未完了 |
+| 2026-08-30 | architecture review | RPX slice の対応範囲が完成実装と誤認されないこと。 | strict・非圧縮・import-free synthetic main moduleをfingerprint `c535f8ae…00640`、workspace 193 testsのDocker buildで再検証。未実装範囲を維持した。 | approved・未解決code P0/P1/P2なし |
+| 2026-08-30 | architecture review | 4 GiB末尾までの半開区間を legacy validator が拒否する。 | exclusive endに`2^32`を許可し、workspace 193 testsを含むaggregate Docker buildで再検証した。 | approved・未解決code P0/P1/P2なし |
 | 2026-08-30 | RPX final review | parser、fixture、CLI/headless integration、4 GiB境界の最終レビューが必要。 | architecture / safety reviewerが最新Docker証跡と未実装範囲を確認した。 | approved・code P0/P1/P2なし |
-| 2026-08-30 | architecture final review | FILEINFO text/data/loader regionのcontainmentが曖昧。 | 各regionを明示的にcontainし、境界・重複・範囲外を184 testsとaggregate Docker buildで検証した。 | closed・approved |
+| 2026-08-30 | architecture final review | FILEINFO text/data/loader regionのcontainmentが曖昧。 | 各regionを明示的にcontainし、境界・重複・範囲外を最新193 testsとaggregate Docker buildで再検証した。 | closed・approved |
 | 2026-08-30 | architecture final review | mapping結果を内部tupleへ閉じ込めると境界契約が不明瞭。 | public `RpxMappingRegion` を導入してmapping regionを型で公開した。 | closed・approved |
 | 2026-08-30 | safety final review | CLI readerがpanicまたは無制限allocationへ進み得る。 | fallibleかつgeometrically boundedなreaderへ変更し、malformed input経路をDocker testで検証した。 | closed・approved |
 | 2026-08-30 | privacy final review | oracle helper logがexport context内へ入り得る。 | logをcontext-externalなrelative locationへ移し、privacy-hardened `base` / `dev`を固定`ab0b7720`で再実行した。 | closed・approved |
+| 2026-08-30 | architecture final review | comparatorのexit contractとresource boundsが曖昧。 | exit 0/1/2、bounded `TraceReader`、2 MiB report capを公開CLI契約として固定し、release binary smokeで検証した。 | closed・approved |
+| 2026-08-30 | safety final review | output race、symlink、既存file上書き、path漏えいの危険。 | caller-owned directory内のrandom mode 0600 tempfile、`persist_noclobber`、dangling symlink/existing output rejection、path-free errorsをLinux Docker testで確認した。 | closed・approved |
+| 2026-08-30 | privacy final review | trace artifactとoracle helper metadataがDocker contextへ混入し得る。 | `.dockerignore`除外はpatternを静的確認し、Docker内`bash -n`、single-ref Gitlink history bundle、context-external relative logsはsmoke/base/devで確認した。Docker build成功だけをtrace artifact不在の証明には用いない。 | closed・approved |
+| 2026-08-30 | portability review | directory fsyncのWindows adapterがない。 | Linux scopeを明記し、Windows milestone開始前のblockerとして次作業へ登録した。 | Windows着手前blocker |
+| 2026-08-30 | architecture / safety code review | trace comparatorとoracle helper hardeningの最終確認。 | 本台帳を`c535f8ae…00640` / 193 testsの証拠へ更新し、C++ CTest成功とimage未完成を分離した。 | approved・未解決code P0/P1/P2なし |
 | 2026-08-30 | architecture review | CI path filter が generator と generated files を含んでいない。 | contract、generator、generated Rust/TS、本台帳に加え、`.dockerignore`、`compat/**`、`ui/**`、root `LICENSE.txt`、`licenses/**` を trigger 対象へ追加。凍結した C++ oracle header は生成対象に含めない。 | 対応済み・静的確認済み |
 | 2026-08-30 | architecture review | action/base image の可変 tag に対して再現性の表現が広すぎる。 | 再現性の主張を locked Cargo graph と同一入力の再実行性に限定。digest pin は未対応事項として残す。 | 文書対応済み |
 | 2026-08-30 | safety review | 初期実装の指摘は未回収。 | review を回収し、以下の個別指摘へ展開した。 | 回収済み |
-| 2026-08-30 | safety review | headless trace output preservation と code-size validation が未完了。 | headless trace 出力保持と code-size 検査を追加し、最新 source payload fingerprint `b13c435c…7d29d` の workspace 184 tests と headless image build を通した。 | 対応済み・Docker 確認済み |
-| 2026-08-30 | safety review | Docker secret exclusions が未確認。 | Docker context/image の secret exclusion を反映し、最新 source payload fingerprint `b13c435c…7d29d` の aggregate `ci`、release export、non-root headless image build を通した。 | 対応済み・Docker 確認済み |
-| 2026-08-30 | safety review | trace semantics と integration compile drift の検証が未完了。 | canonical trace semantics と cross-crate integration checks を追加し、最新 source payload fingerprint `b13c435c…7d29d` の workspace 184 tests と aggregate `ci` を通した。 | 対応済み・Docker 確認済み |
-| 2026-08-30 | final integration review | Clippy が VFS documentation、GPU、CEMOD、migrate test の lint error を検出した。 | 各 error を修正し、最新 source payload fingerprint `b13c435c…7d29d` の Clippy と aggregate `ci` を通した。失敗行は Docker検証ログに保持した。 | 対応済み・Docker 確認済み |
+| 2026-08-30 | safety review | headless trace output preservation と code-size validation が未完了。 | headless trace出力保持とcode-size検査を追加し、最新fingerprint `c535f8ae…00640`のworkspace 193 testsとheadless image buildを通した。 | 対応済み・Docker確認済み |
+| 2026-08-30 | safety review | Docker secret exclusions が未確認。 | `.dockerignore`へtrace artifactを追加し、最新fingerprint `c535f8ae…00640`のaggregate `ci`、release、non-root headlessを通した。 | 対応済み・Docker確認済み |
+| 2026-08-30 | safety review | trace semantics と integration compile drift の検証が未完了。 | bounded `TraceReader`とcomparator smokeを追加し、最新fingerprint `c535f8ae…00640`のworkspace 193 testsとaggregate `ci`を通した。 | 対応済み・Docker確認済み |
+| 2026-08-30 | final integration review | Clippy が VFS documentation、GPU、CEMOD、migrate test の lint error を検出した。 | 各errorを修正し、最新fingerprint `c535f8ae…00640`のClippyとaggregate `ci`を通した。全失敗行はDocker検証ログに保持した。 | 対応済み・Docker確認済み |
 | 2026-08-30 | final integration review | `cargo-about` 0.9.2 を default feature で install すると CLI command が存在しない。 | install に `--features cli` を追加し、release notices と aggregate notice gate を通した。 | 対応済み・Docker 確認済み |
-| 2026-08-30 | safety review | release/headless に license bundle と non-root runtime の最終確認が必要。 | 最新 source payload fingerprint `b13c435c…7d29d` の aggregate `ci` notice gate、`rust-release` の `LICENSE.txt` / `THIRD_PARTY_LICENSES.txt` export、non-root `rust-headless` image をすべて Docker build で確認した。 | 対応済み・Docker 確認済み |
+| 2026-08-30 | safety review | release/headless に license bundle と non-root runtime の最終確認が必要。 | 最新fingerprint `c535f8ae…00640`のaggregate notice gate、release license bundle、non-root headlessをDocker buildで確認した。 | 対応済み・Docker確認済み |
 | 2026-08-30 | process review | 2 subagent が Docker-build-only 制約に反して `docker run` test を実行した。 | 当該結果を正式証拠から除外し、同じ対象を最終 aggregate `ci` の Docker build で再検証した。 | 証拠是正済み |
 | 2026-08-30 | safety review | `rust-builder`、`rust-headless`、`rust-release` が `Cemu` binary だけを出力し、root license と Rust dependency notice を同梱していない。 | `cargo-about` 0.9.2 を Docker 内 CLI tool として固定し、root `LICENSE.txt` と `THIRD_PARTY_LICENSES.txt` を `rust-builder` で生成・検査する。aggregate `ci` は生成済み bundle を copy して notice gate を必須化する。notice は filesystem path を出力せず、path/credential-like field 混入も Docker gate で拒否する。`rust-headless` は `/usr/share/licenses/cemuextend/`、`rust-release` は `result/rust/` へ同梱する。 | 対応済み・Docker 確認済み |
 
@@ -546,14 +677,18 @@ final reviewは完了し、code P0/P1/P2なしでapprovedとなった。
 
 ## 次の作業
 
-1. hardening 後に成功した C++ oracle `base` / `dev` に続き、固定 `ab0b7720` の完全な
-   `build` target と CTest を Docker build 内で実行し、証拠をDocker検証ログへ追加する。
+1. compile/link 877/877とCTest 37/37、0 failedの成功地点からpost-test runtime bundlingを
+   再開し、固定`ab0b7720`のC++ `build` target imageを完成させる。
 2. canonical JSONL schema、validator、Rust/C++ comparator 用 Docker target を完成させ、
    最小合成 program の oracle 比較を行う。
-3. approvedとなったFILEINFO/loader containment、public `RpxMappingRegion`、bounded CLI
-   reader、context-external oracle logsのinvariantを今後のDocker gateでも維持する。
+3. approvedとなったFILEINFO/loader containment、public `RpxMappingRegion`、bounded
+   `TraceReader` / CLI、2 MiB report cap、no-clobber output、context-external oracle logsの
+   invariantを今後のDocker gateでも維持する。
 4. 最小 RPX slice の final review は完了したため、Homebrew/Cafe OS/oracle comparison と、
    retail RPX/RPL、import、relocation、compression へ段階的に拡張する。
 5. Docker-only aggregate `ci`、release、headless の成功を今後の変更でも維持し、失敗と
    再試行をこの台帳へ逐次追記する。
 6. milestone 1 と 2 の全 gate が通るまでは IML JIT と renderer の完成を主張しない。
+7. Windows milestone開始前にdirectory fsync adapterを実装し、Linux限定で確認した
+   no-replacement/durability前提をportableな契約へ拡張する。filesystem依存のatomicityは
+   別途検証する。

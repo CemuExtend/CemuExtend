@@ -94,6 +94,13 @@ bin/gameProfiles/*
 **/id_rsa*
 **/id_ed25519*
 **/credentials*.json
+# Canonical traces and comparator reports are generated artifacts. Even when
+# redacted, they contain guest register/state observations and must never be
+# copied back into a later Docker build context.
+**/*.jsonl
+**/*.trace
+**/*.trace-report.json
+**/oracle-output/
 **/private-fixtures/
 **/fixtures/private/
 **/test-data/private/
