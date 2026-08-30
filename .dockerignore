@@ -5,6 +5,8 @@ cmake-build-*/
 out/
 .cache/
 result/
+.docker-rpx-contract.*/
+.docker-rust-release.*/
 *.profraw
 .git
 !.git/
@@ -100,6 +102,8 @@ bin/gameProfiles/*
 **/*.jsonl
 **/*.trace
 **/*.trace-report.json
+# This exact public synthetic trace is a tracked fixed-oracle CI input.
+!compat/golden/rpx-contract-positive-v1.jsonl
 **/oracle-output/
 **/private-fixtures/
 **/fixtures/private/

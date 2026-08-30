@@ -125,9 +125,15 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-release-target,target=/workspace/target,sharing=locked \
     cargo build --release --locked --package cemuextend --bin Cemu \
     && cargo build --release --locked --package cex-compat --bin cex-trace-compare \
+    && cargo build --release --locked --package cemuextend --bin cex-rpx-fixture \
+    && cargo build --release --locked --package cemuextend --bin cex-rpx-contract-trace \
     && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu \
     && install -D -m 0755 /workspace/target/release/cex-trace-compare \
-        /opt/cemuextend/bin/cex-trace-compare
+        /opt/cemuextend/bin/cex-trace-compare \
+    && install -D -m 0755 /workspace/target/release/cex-rpx-fixture \
+        /opt/cemuextend/bin/cex-rpx-fixture \
+    && install -D -m 0755 /workspace/target/release/cex-rpx-contract-trace \
+        /opt/cemuextend/bin/cex-rpx-contract-trace
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
@@ -219,6 +225,81 @@ RUN set -eu; \
     test ! -s "${smoke_dir}/existing.stdout"; \
     touch /opt/cemuextend/oracle-smoke-verified
 
+# BuildKit-exported RPX fixture and canonical three-record contract trace.
+FROM rust-builder AS rust-rpx-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpx-contract; \
+    /opt/cemuextend/bin/cex-rpx-fixture \
+        > /opt/cemuextend/rpx-contract/fixture.rpx; \
+    /opt/cemuextend/bin/cex-rpx-contract-trace \
+        --fixture /opt/cemuextend/rpx-contract/fixture.rpx \
+        --trace-output /opt/cemuextend/rpx-contract/rust-trace.jsonl; \
+    test -s /opt/cemuextend/rpx-contract/fixture.rpx; \
+    test -s /opt/cemuextend/rpx-contract/rust-trace.jsonl; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpx-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpx-contract; \
+    sha256sum fixture.rpx rust-trace.jsonl cex-trace-compare > SHA256SUMS
+
+FROM scratch AS rust-rpx-contract-artifacts
+
+COPY --from=rust-rpx-contract-artifacts-builder /opt/cemuextend/rpx-contract/ /
+
+# Rebuild the current synthetic fixture and Rust trace, then compare them with
+# the tracked trace attested by the fixed C++ oracle. The manifest also pins the
+# adapter sources, so changing the manual oracle path requires an explicit
+# golden/manifest review even though CI does not rebuild the historical tree.
+FROM rust-builder AS rust-rpx-golden-gate
+
+RUN set -eu; \
+    gate_dir=/tmp/cemuextend-rpx-golden-gate; \
+    manifest=compat/golden/rpx-contract-positive-v1.manifest.json; \
+    golden=compat/golden/rpx-contract-positive-v1.jsonl; \
+    mkdir -p "${gate_dir}"; \
+    /opt/cemuextend/bin/cex-rpx-fixture > "${gate_dir}/fixture.rpx"; \
+    /opt/cemuextend/bin/cex-rpx-contract-trace \
+        --fixture "${gate_dir}/fixture.rpx" \
+        --trace-output "${gate_dir}/rust-actual.jsonl"; \
+    manifest_value() { \
+        awk -v key="$1" ' \
+            $0 ~ "^[[:space:]]*\"" key "\"[[:space:]]*:" { \
+                value = $0; \
+                sub("^[[:space:]]*\"" key "\"[[:space:]]*:[[:space:]]*", "", value); \
+                sub(",[[:space:]]*$", "", value); \
+                sub("^[[:space:]]*\"", "", value); \
+                sub("\"[[:space:]]*$", "", value); \
+                print value; \
+            } \
+        ' "${manifest}"; \
+    }; \
+    assert_manifest_sha256() { \
+        expected="$(manifest_value "$2")"; \
+        test "$(printf '%s' "${expected}" | wc -c)" -eq 64; \
+        printf '%s\n' "${expected}" | grep -Eq '^[0-9a-f]{64}$'; \
+        actual="$(sha256sum "$1" | cut -d ' ' -f1)"; \
+        test "${actual}" = "${expected}"; \
+    }; \
+    test "$(manifest_value schema_version)" = 1; \
+    test "$(manifest_value oracle_commit)" = ab0b772029f0a5cd57c194cf338003fe8eae8ab8; \
+    test "$(manifest_value oracle_attestation)" = 'cex-trace-compare exit 0 against fixed C++ oracle output'; \
+    test "$(manifest_value scope)" = 'positive parse/map only'; \
+    test "$(manifest_value fixture_producer)" = cex-rpx-fixture; \
+    test "$(manifest_value golden_trace_path)" = "${golden}"; \
+    test "$(manifest_value adapter_cmake_path)" = compat/cpp-oracle/CMakeLists.txt; \
+    test "$(manifest_value adapter_source_path)" = compat/cpp-oracle/rpx_oracle_trace.cpp; \
+    test "$(manifest_value golden_trace_records)" -eq 3; \
+    test "$(wc -l < "${golden}")" -eq "$(manifest_value golden_trace_records)"; \
+    test "$(wc -l < "${gate_dir}/rust-actual.jsonl")" -eq "$(manifest_value golden_trace_records)"; \
+    assert_manifest_sha256 "${gate_dir}/fixture.rpx" fixture_sha256; \
+    assert_manifest_sha256 "${golden}" golden_trace_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/CMakeLists.txt adapter_cmake_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/rpx_oracle_trace.cpp adapter_source_sha256; \
+    /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${golden}" \
+        --actual "${gate_dir}/rust-actual.jsonl"; \
+    touch /opt/cemuextend/rpx-golden-gate-verified
+
 # Runnable Linux headless image. No React/CEF or native desktop frontend is
 # pulled into this path.
 FROM debian:bookworm-slim AS rust-headless
@@ -299,4 +380,5 @@ COPY --from=rust-builder /opt/cemuextend/licenses/.license-bundle-verified /opt/
 COPY --from=rust-builder /opt/cemuextend/licenses/LICENSE.txt /opt/cemuextend/license-gate/LICENSE.txt
 COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /opt/cemuextend/license-gate/THIRD_PARTY_LICENSES.txt
 COPY --from=rust-oracle-smoke /opt/cemuextend/oracle-smoke-verified /opt/cemuextend/oracle-smoke-verified
+COPY --from=rust-rpx-golden-gate /opt/cemuextend/rpx-golden-gate-verified /opt/cemuextend/rpx-golden-gate-verified
 COPY --from=rust-ui /ui-verified /opt/cemuextend/ui-verified

@@ -97,6 +97,7 @@ pub struct RpxSection {
     virtual_address: u32,
     file_offset: u32,
     alignment: u32,
+    mapping_region: Option<RpxMappingRegion>,
     data: Vec<u8>,
 }
 
@@ -110,6 +111,7 @@ impl fmt::Debug for RpxSection {
             .field("virtual_address", &self.virtual_address)
             .field("file_offset", &self.file_offset)
             .field("alignment", &self.alignment)
+            .field("mapping_region", &self.mapping_region)
             .field("data_len", &self.data.len())
             .finish_non_exhaustive()
     }
@@ -151,6 +153,14 @@ impl RpxSection {
     /// Return the validated section alignment, where zero means unspecified.
     pub const fn alignment(&self) -> u32 {
         self.alignment
+    }
+
+    /// Return the FILEINFO mapping region selected during validation.
+    ///
+    /// Empty and non-allocated sections do not participate in the guest map
+    /// and therefore return [`None`].
+    pub const fn mapping_region(&self) -> Option<RpxMappingRegion> {
+        self.mapping_region
     }
 
     /// Return owned raw section bytes through an immutable view.
@@ -1297,6 +1307,7 @@ fn own_sections(
             virtual_address: raw.virtual_address,
             file_offset: raw.file_offset,
             alignment: raw.alignment,
+            mapping_region: classify_mapping_region(raw),
             data,
         });
     }
@@ -1391,6 +1402,11 @@ mod tests {
         assert_eq!(parsed.entry_point(), 0x0200_0000);
         assert!(parsed.is_rpx());
         assert_eq!(parsed.sections().len(), 5);
+        assert_eq!(
+            parsed.sections()[1].mapping_region(),
+            Some(RpxMappingRegion::Text)
+        );
+        assert_eq!(parsed.sections()[2].mapping_region(), None);
         assert_eq!(image, snapshot);
     }
 

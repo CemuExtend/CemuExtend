@@ -23,10 +23,14 @@ vcpkg_pinned_commit=""
 vcpkg_sdl3_tree=""
 build_log=""
 export_log=""
+rust_artifact_build_log=""
 build_completed=0
+trace_artifacts_dir=""
+readonly trace_artifacts_marker='.cemu-rpx-oracle-artifacts-staging'
+readonly -a rpx_contract_artifacts=(fixture.rpx rust-trace.jsonl SHA256SUMS cex-trace-compare)
 
 usage() {
-	printf 'Usage: %s [base|dev|build|win]\n' "${0##*/}" >&2
+	printf 'Usage: %s [base|dev|build|win|trace]\n' "${0##*/}" >&2
 	printf 'Builds the fixed C++ oracle revision %s using Docker only.\n' "${oracle_commit}" >&2
 }
 
@@ -42,6 +46,9 @@ case "${build_kind}" in
 		;;
 	win)
 		docker_target="build-windows-artifact"
+		;;
+	trace)
+		docker_target="cpp-rpx-oracle-trace"
 		;;
 	*)
 		usage
@@ -81,13 +88,14 @@ cleanup_bundle_repository() {
 }
 
 cleanup() {
-	local status=$?
+	local status=${1:-$?}
+	local cleanup_status=0
 
 	# The temporary bare repository is only a bundle staging area. It never
 	# contains working files and is removed even when a failed Docker context is
 	# retained for recovery.
 	if ! cleanup_bundle_repository; then
-		status=1
+		cleanup_status=1
 	fi
 
 	# Preserve a failed context for inspection.  A successful context is removed
@@ -96,7 +104,12 @@ cleanup() {
 	if [[ -z "${context_dir}" || ! -d "${context_dir}" ]]; then
 		[[ -z "${export_log}" ]] || printf 'Oracle export log retained: %s\n' "${export_log}" >&2
 		[[ -z "${build_log}" || "${build_completed}" -eq 1 ]] || printf 'Docker build log retained: %s\n' "${build_log}" >&2
-		return "${status}"
+		[[ -z "${rust_artifact_build_log}" || "${build_completed}" -eq 1 ]] \
+			|| printf 'Rust RPX artifact Docker build log retained: %s\n' "${rust_artifact_build_log}" >&2
+		if (( status != 0 )); then
+			return "${status}"
+		fi
+		return "${cleanup_status}"
 	fi
 
 	if [[ "${status}" -ne 0 || "${build_completed}" -ne 1 || "${keep_context}" == 1 ]]; then
@@ -104,27 +117,176 @@ cleanup() {
 		if [[ "${status}" -ne 0 || "${build_completed}" -ne 1 ]]; then
 			[[ -z "${export_log}" ]] || printf 'Oracle export log retained: %s\n' "${export_log}" >&2
 			[[ -z "${build_log}" ]] || printf 'Docker build log retained: %s\n' "${build_log}" >&2
+			[[ -z "${rust_artifact_build_log}" ]] \
+				|| printf 'Rust RPX artifact Docker build log retained: %s\n' "${rust_artifact_build_log}" >&2
 		else
-			[[ -z "${export_log}" ]] || rm -f -- "${export_log}"
-			[[ -z "${build_log}" ]] || rm -f -- "${build_log}"
+			if [[ -n "${export_log}" ]] && ! rm -f -- "${export_log}"; then
+				printf 'Could not remove the temporary oracle export log\n' >&2
+				cleanup_status=1
+			fi
+			if [[ -n "${build_log}" ]] && ! rm -f -- "${build_log}"; then
+				printf 'Could not remove the temporary Docker build log\n' >&2
+				cleanup_status=1
+			fi
+			if [[ -n "${rust_artifact_build_log}" ]] && ! rm -f -- "${rust_artifact_build_log}"; then
+				printf 'Could not remove the temporary Rust RPX artifact Docker build log\n' >&2
+				cleanup_status=1
+			fi
 		fi
-		return "${status}"
+		if (( status != 0 )); then
+			return "${status}"
+		fi
+		return "${cleanup_status}"
 	fi
 
 	if [[ -f "${context_dir}/.cemu-oracle-context" \
 		&& "$(<"${context_dir}/.cemu-oracle-context")" == "${oracle_commit}" \
 		&& "${context_dir}" == /tmp/cemu-extend-cpp-oracle.* ]]; then
-		rm -rf -- "${context_dir}"
-		[[ -z "${export_log}" ]] || rm -f -- "${export_log}"
-		[[ -z "${build_log}" ]] || rm -f -- "${build_log}"
+		if ! rm -rf -- "${context_dir}"; then
+			printf 'Could not remove the temporary Docker context\n' >&2
+			cleanup_status=1
+		fi
+		if [[ -n "${export_log}" ]] && ! rm -f -- "${export_log}"; then
+			printf 'Could not remove the temporary oracle export log\n' >&2
+			cleanup_status=1
+		fi
+		if [[ -n "${build_log}" ]] && ! rm -f -- "${build_log}"; then
+			printf 'Could not remove the temporary Docker build log\n' >&2
+			cleanup_status=1
+		fi
+		if [[ -n "${rust_artifact_build_log}" ]] && ! rm -f -- "${rust_artifact_build_log}"; then
+			printf 'Could not remove the temporary Rust RPX artifact Docker build log\n' >&2
+			cleanup_status=1
+		fi
 	else
-		printf 'Refusing to remove unexpected Docker context: %s\n' "${context_dir}" >&2
-		return 1
+		printf 'Refusing to remove unexpected Docker context\n' >&2
+		cleanup_status=1
 	fi
-	return "${status}"
+	if (( status != 0 )); then
+		return "${status}"
+	fi
+	return "${cleanup_status}"
 }
 
-trap cleanup EXIT
+exit_after_general_cleanup() {
+	local status=$?
+	local cleanup_status=0
+
+	trap - EXIT
+	if ! cleanup "${status}"; then
+		cleanup_status=1
+	fi
+	if (( status != 0 )); then
+		exit "${status}"
+	fi
+	exit "${cleanup_status}"
+}
+
+trap exit_after_general_cleanup EXIT
+
+cleanup_trace_artifacts() {
+	local status=${1:-$?}
+	local cleanup_status=0
+
+	if [[ -z "${trace_artifacts_dir}" ]]; then
+		if (( status != 0 )); then
+			return "${status}"
+		fi
+		return 0
+	fi
+	if [[ "${trace_artifacts_dir}" == /tmp/cemu-extend-rpx-artifacts.* \
+		&& -d "${trace_artifacts_dir}" \
+		&& ! -L "${trace_artifacts_dir}" \
+		&& -f "${trace_artifacts_dir}/${trace_artifacts_marker}" \
+		&& ! -L "${trace_artifacts_dir}/${trace_artifacts_marker}" \
+		&& "$(<"${trace_artifacts_dir}/${trace_artifacts_marker}")" == 'cemu-extend-rpx-oracle-artifacts-v1' ]]; then
+		if ! rm -rf -- "${trace_artifacts_dir}"; then
+			printf 'Could not remove the temporary RPX oracle artifact directory\n' >&2
+			cleanup_status=1
+		fi
+	else
+		printf 'Refusing to remove an unexpected temporary RPX oracle artifact directory\n' >&2
+		cleanup_status=1
+	fi
+	# Do not retry an invalid or failed cleanup against a path that may have
+	# changed after this check.
+	trace_artifacts_dir=""
+	if (( status != 0 )); then
+		return "${status}"
+	fi
+	return "${cleanup_status}"
+}
+
+exit_after_trace_cleanup() {
+	local status=$?
+	local cleanup_status=0
+
+	# Preserve a failed Docker/CMake status exactly.  Conversely, a successful
+	# trace run must not report success after its generated artifacts or context
+	# could not be cleaned up.
+	trap - EXIT
+	if ! cleanup_trace_artifacts "${status}"; then
+		cleanup_status=1
+	fi
+	if ! cleanup "${status}"; then
+		cleanup_status=1
+	fi
+	if (( status != 0 )); then
+		exit "${status}"
+	fi
+	exit "${cleanup_status}"
+}
+
+validate_rpx_contract_artifacts() {
+	local directory=$1
+	local artifact entry
+
+	if [[ ! -d "${directory}" || -L "${directory}" ]]; then
+		printf 'RPX contract artifact staging is invalid\n' >&2
+		return 1
+	fi
+	for artifact in "${rpx_contract_artifacts[@]}"; do
+		if [[ ! -f "${directory}/${artifact}" || -L "${directory}/${artifact}" \
+			|| ! -s "${directory}/${artifact}" ]]; then
+			printf 'RPX contract artifact staging is incomplete\n' >&2
+			return 1
+		fi
+	done
+	if [[ ! -x "${directory}/cex-trace-compare" ]]; then
+		printf 'RPX contract comparator artifact is not executable\n' >&2
+		return 1
+	fi
+	while IFS= read -r -d '' entry; do
+		case "${entry}" in
+			fixture.rpx|rust-trace.jsonl|SHA256SUMS|cex-trace-compare) ;;
+			"${trace_artifacts_marker}")
+				if [[ "${directory}" != "${trace_artifacts_dir}" ]]; then
+					printf 'RPX contract artifact staging contains unexpected entries\n' >&2
+					return 1
+				fi
+				;;
+			*)
+				printf 'RPX contract artifact staging contains unexpected entries\n' >&2
+				return 1
+				;;
+		esac
+	done < <(find "${directory}" -mindepth 1 -maxdepth 1 -printf '%f\0')
+	if ! LC_ALL=C awk '
+		function hex64(value) { return length(value) == 64 && value ~ /^[0-9a-f]+$/ }
+		NF == 2 && hex64($1) && $2 == "fixture.rpx" { fixture++; next }
+		NF == 2 && hex64($1) && $2 == "rust-trace.jsonl" { trace++; next }
+		NF == 2 && hex64($1) && $2 == "cex-trace-compare" { comparator++; next }
+		{ invalid = 1 }
+		END { exit invalid || fixture != 1 || trace != 1 || comparator != 1 }
+	' "${directory}/SHA256SUMS"; then
+		printf 'RPX contract checksum manifest is invalid\n' >&2
+		return 1
+	fi
+	if ! (cd -- "${directory}" && sha256sum --check --status SHA256SUMS); then
+		printf 'RPX contract checksum verification failed\n' >&2
+		return 1
+	fi
+}
 
 ensure_clean_checkout() {
 	local repository=$1
@@ -338,6 +500,125 @@ export_repository "${oracle_dir}" "${oracle_commit}" "${context_dir}"
 export_vcpkg_baseline_bundle
 create_oracle_dockerfile
 
+if [[ "${build_kind}" == trace ]]; then
+	# Generate the Rust fixture through a BuildKit local export; docker run and
+	# host cargo are intentionally not part of this path.
+	trace_artifacts_dir="$(mktemp -d /tmp/cemu-extend-rpx-artifacts.XXXXXX)"
+	printf '%s\n' 'cemu-extend-rpx-oracle-artifacts-v1' \
+		> "${trace_artifacts_dir}/${trace_artifacts_marker}"
+	trap exit_after_trace_cleanup EXIT
+	rust_artifact_build_log="$(mktemp /tmp/cemu-extend-rpx-artifacts-build.XXXXXX.log)"
+	(docker build --progress=plain --file "${project_dir}/Dockerfile.rust" \
+		--target rust-rpx-contract-artifacts \
+		--build-arg "RUST_VERSION=${CEMU_RUST_VERSION:-1.97.1}" \
+		--build-arg "CARGO_DENY_VERSION=${CEMU_CARGO_DENY_VERSION:-0.20.2}" \
+		--build-arg "CARGO_ABOUT_VERSION=${CEMU_CARGO_ABOUT_VERSION:-0.9.2}" \
+		--output "type=local,dest=${trace_artifacts_dir}" "${project_dir}" \
+		>"${rust_artifact_build_log}" 2>&1) &
+	rust_artifact_docker_pid=$!
+	rust_artifact_status=0
+	rust_artifact_timed_out=0
+	rust_artifact_timeout_seconds=$((10#${build_timeout_minutes} * 60))
+	if (( rust_artifact_timeout_seconds == 0 )); then
+		wait "${rust_artifact_docker_pid}" || rust_artifact_status=$?
+	else
+		rust_artifact_started_at=$(date +%s)
+		while kill -0 "${rust_artifact_docker_pid}" 2>/dev/null; do
+			if (( $(date +%s) - rust_artifact_started_at >= rust_artifact_timeout_seconds )); then
+				rust_artifact_timed_out=1
+				kill -TERM "${rust_artifact_docker_pid}" 2>/dev/null || true
+				for ((i = 0; i < 10; i++)); do
+					kill -0 "${rust_artifact_docker_pid}" 2>/dev/null || break
+					sleep 1
+				done
+				kill -KILL "${rust_artifact_docker_pid}" 2>/dev/null || true
+				wait "${rust_artifact_docker_pid}" 2>/dev/null || true
+				rust_artifact_status=124
+				break
+			fi
+			sleep 1
+		done
+		if (( rust_artifact_timed_out == 0 )); then
+			wait "${rust_artifact_docker_pid}" || rust_artifact_status=$?
+		fi
+	fi
+	if (( rust_artifact_status != 0 )); then
+		if (( rust_artifact_timed_out != 0 )); then
+			printf 'Rust RPX artifact Docker build timed out after %s minute(s); log=%s\n' \
+				"${build_timeout_minutes}" "${rust_artifact_build_log}" >&2
+		else
+			printf 'Rust RPX artifact Docker build failed (exit %s); log=%s\n' \
+				"${rust_artifact_status}" "${rust_artifact_build_log}" >&2
+		fi
+		exit "${rust_artifact_status}"
+	fi
+	validate_rpx_contract_artifacts "${trace_artifacts_dir}"
+	mkdir -p "${context_dir}/oracle-rpx" "${context_dir}/oracle-adapter"
+	cp -a "${trace_artifacts_dir}/fixture.rpx" "${trace_artifacts_dir}/rust-trace.jsonl" \
+		"${trace_artifacts_dir}/SHA256SUMS" "${trace_artifacts_dir}/cex-trace-compare" \
+		"${context_dir}/oracle-rpx/"
+	adapter_source_dir="${project_dir}/compat/cpp-oracle"
+	if [[ ! -d "${adapter_source_dir}" || -L "${adapter_source_dir}" ]]; then
+		printf 'Missing tracked C++ RPX adapter sources\n' >&2
+		exit 1
+	fi
+	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp)
+	while IFS= read -r -d '' adapter_entry; do
+		adapter_name=${adapter_entry#"${adapter_source_dir}"/}
+		case " ${adapter_sources[*]} " in
+			*" ${adapter_name} "*) ;;
+			*)
+				printf 'C++ RPX adapter directory contains an unexpected entry\n' >&2
+				exit 1
+				;;
+		esac
+	done < <(find "${adapter_source_dir}" -mindepth 1 -maxdepth 1 -printf '%p\0')
+	for adapter_name in "${adapter_sources[@]}"; do
+		adapter_path="${adapter_source_dir}/${adapter_name}"
+		if [[ ! -f "${adapter_path}" || -L "${adapter_path}" ]]; then
+			printf 'C++ RPX adapter source must be a regular non-symlink file\n' >&2
+			exit 1
+		fi
+		cp -- "${adapter_path}" "${context_dir}/oracle-adapter/${adapter_name}"
+	done
+	if ! grep -q 'cpp_rpx_oracle_trace' "${context_dir}/oracle-adapter/CMakeLists.txt"; then
+		printf 'C++ RPX adapter CMake target is missing\n' >&2
+		exit 1
+	fi
+	cat >> "${context_dir}/CMakeLists.txt" <<'EOF'
+
+add_subdirectory(oracle-adapter EXCLUDE_FROM_ALL)
+EOF
+cat >> "${context_dir}/${oracle_dockerfile}" <<EOF
+
+FROM cemu-extend-base AS cpp-rpx-oracle-trace
+ARG SOURCE_FINGERPRINT
+WORKDIR /workspace/CemuExtend
+RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
+    --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
+    --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
+    --mount=type=cache,id=cemu-extend-cmake-rpx-oracle,target=/workspace/CemuExtend/build/docker-rpx-oracle,sharing=locked \
+    test -n "\${SOURCE_FINGERPRINT}" \
+    && test ! -e dependencies/vcpkg/.git \
+    && git -C dependencies/vcpkg init --quiet \
+    && git -C dependencies/vcpkg fetch --quiet ../../.cemu-vcpkg-baseline.bundle refs/tags/cemu-vcpkg-pinned:refs/tags/cemu-vcpkg-pinned \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_pinned_commit}^{commit} \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_builtin_baseline}^{commit} \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_sdl3_tree}^{tree} \
+    && bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
+    && cmake -S . -B build/docker-rpx-oracle -G Ninja -DCMAKE_BUILD_TYPE=Release \
+       -DENABLE_VCPKG=ON -DCEMU_FRONTEND=headless -DALLOW_PORTABLE=OFF \
+       -DBUILD_TESTING=ON \
+    && cmake --build build/docker-rpx-oracle --target cpp_rpx_oracle_trace --parallel \
+    && adapter_bin="\$(find build/docker-rpx-oracle -type f -name cpp_rpx_oracle_trace -perm -111 -print -quit)" \
+    && test -n "\${adapter_bin}" \
+    && "\${adapter_bin}" oracle-rpx/fixture.rpx > oracle-rpx/cpp-trace.jsonl \
+    && oracle-rpx/cex-trace-compare \
+       --expected oracle-rpx/rust-trace.jsonl \
+       --actual oracle-rpx/cpp-trace.jsonl
+EOF
+fi
+
 # The diagnostic log must never become part of the Docker context.  Inspect
 # paths only (not file contents), rejecting any accidental export.log entry.
 while IFS= read -r context_path; do
@@ -364,6 +645,16 @@ source_fingerprint="$(
 	{
 		printf '%s\n' "${oracle_commit}"
 		git -C "${oracle_dir}" submodule status --recursive
+		if [[ "${build_kind}" == trace ]]; then
+			for artifact in "${rpx_contract_artifacts[@]}"; do
+				printf 'rpx-artifact:%s ' "${artifact}"
+				sha256sum "${context_dir}/oracle-rpx/${artifact}" | awk '{print $1}'
+			done
+			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp; do
+				printf 'rpx-adapter:%s ' "${adapter_name}"
+				sha256sum "${context_dir}/oracle-adapter/${adapter_name}" | awk '{print $1}'
+			done
+		fi
 	} | sha256sum | cut -d' ' -f1
 )"
 

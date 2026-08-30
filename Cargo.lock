@@ -27,6 +27,7 @@ dependencies = [
  "cex-compat",
  "cex-cpu",
  "cex-system",
+ "sha2",
  "tempfile",
  "thiserror",
 ]

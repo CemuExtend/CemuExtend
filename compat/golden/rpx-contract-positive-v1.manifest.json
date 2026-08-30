@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "oracle_commit": "ab0b772029f0a5cd57c194cf338003fe8eae8ab8",
+  "oracle_attestation": "cex-trace-compare exit 0 against fixed C++ oracle output",
+  "scope": "positive parse/map only",
+  "fixture_producer": "cex-rpx-fixture",
+  "fixture_sha256": "ad36577b5dbdf8eb6584c46d09fe6db6b7f30c77ef6f74f2229a85b644034c7d",
+  "golden_trace_path": "compat/golden/rpx-contract-positive-v1.jsonl",
+  "golden_trace_records": 3,
+  "golden_trace_sha256": "7a10595cec39737bdb325db21118d91cca4a5fe75c8bb208caee0780d202d251",
+  "adapter_cmake_path": "compat/cpp-oracle/CMakeLists.txt",
+  "adapter_cmake_sha256": "75613a5d011ced39b75e13597ca213639b1c1886eb0e9e7f3871589c2e228df1",
+  "adapter_source_path": "compat/cpp-oracle/rpx_oracle_trace.cpp",
+  "adapter_source_sha256": "aa3e76985085694d8add61aa5a8cf6d37a3e04891a06a5014619f04c422d4818"
+}
