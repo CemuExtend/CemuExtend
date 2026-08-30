@@ -843,6 +843,7 @@ C++ positive parse/map attestationは前sliceのまま有効だが、新RPL link
 ### RPX/RPL link-state の現行 source payload 証跡
 
 現行 source payload fingerprint は `sha256:97c2a8cc03d6cc6a87adc813e42bd46fbb72814393da98fb7d10ab5fd3b4809b`、parent HEAD は `8dd149160ea64da0b893180bb99cc0d081efbc3a` である。
+この検証済みpayloadはcheckpoint commit `0d240acd` (`Add C++ RPL link-state oracle`)として保存した。
 固定 synthetic main RPX1 + provider RPL1 positive link-stateのみを対象とし、provider `e_entry=0`のためtest-only adapterがexternal-linkage production `ProcessHeaders/LoadSections/UpdateEntrypoint(mainのみ)/LinkSingleModule`を使用する。phase loopとpermission/hash projectionはharness-definedであり、public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parityではない。
 
 正式main-session Docker evidenceは `./docker-build-rust.sh rpl-link-contract-artifacts`、`./docker-build-cpp-oracle.sh rpl-link-trace`、`./docker-build-cpp-oracle.sh trace`、`./docker-build-rust.sh ci`、release scratch export、`./docker-build-rust.sh headless` がすべてexit 0。Rust 249 tests、old RPX golden + new RPL 5-record golden、oracle smoke、UI、audit/notice、C++ comparator exact 5 recordsを確認した。旧daf757/243および旧Cemu hashはC++ link-state oracle追加前の履歴である。
@@ -890,7 +891,7 @@ artifact hashes: main 772/0644 `13011586…374b`、provider 716/0644 `95295415�
 
 ## 次の作業
 
-1. この現行RPX1/RPL1 evidence sliceをcommitする。
+1. [完了] 現行RPX1/RPL1 evidence sliceを`0d240acd` としてcommitした。
 2. malformed corpusへ拡張し、RPLのimport、relocation、compressionを段階的に実装・
    C++ oracle比較する。positive parse/map以外のCafe/MMU/CPU execution parityは引き続き
    未証明として扱う。
