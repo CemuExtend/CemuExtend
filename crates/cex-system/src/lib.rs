@@ -2,6 +2,7 @@
 
 mod headless;
 mod loader;
+mod rpl_call_fixture;
 mod rpl_link;
 mod rpl_link_fixture;
 mod rpx;
@@ -17,7 +18,7 @@ pub use loader::{
 pub use rpl_link::{
     RplModuleName, RplModuleNameError, RpxRplCommitError, RpxRplLinkModule, RpxRplLinkPhase,
     RpxRplLinkPlan, RpxRplLinkProof, RpxRplLinkRecord, RpxRplLinkRegion, RpxRplPlanError,
-    commit_rpx_rpl_link, plan_rpx_rpl_link,
+    RpxRplRelocationProof, commit_rpx_rpl_link, plan_rpx_rpl_link,
 };
 pub use rpx::{
     CafeExport, CafeImport, CafeModuleKind, CafeRelocation, CafeRelocationKind, CafeSymbol,
@@ -57,6 +58,29 @@ pub fn synthetic_rpx_rpl_link_main_fixture() -> Result<Vec<u8>, RpxError> {
 pub fn synthetic_rpx_rpl_link_provider_fixture() -> Result<Vec<u8>, RpxError> {
     rpl_link_fixture::provider_rpl_link_fixture().map_err(|error| match error {
         rpl_link_fixture::RplLinkFixtureError::AllocationFailed { requested } => {
+            RpxError::AllocationFailed { requested }
+        }
+    })
+}
+
+/// Return a source-generated main RPX whose entry performs one imported call.
+///
+/// The call-site fixture is kept separate from the original `ADDR32` link
+/// fixture so both compatibility contracts remain independently reproducible.
+#[doc(hidden)]
+pub fn synthetic_rpx_rpl_call_main_fixture() -> Result<Vec<u8>, RpxError> {
+    rpl_call_fixture::main_rpx_call_fixture().map_err(|error| match error {
+        rpl_call_fixture::RplCallFixtureError::AllocationFailed { requested } => {
+            RpxError::AllocationFailed { requested }
+        }
+    })
+}
+
+/// Return the deterministic provider RPL for the imported-call fixture.
+#[doc(hidden)]
+pub fn synthetic_rpx_rpl_call_provider_fixture() -> Result<Vec<u8>, RpxError> {
+    rpl_call_fixture::provider_rpl_call_fixture().map_err(|error| match error {
+        rpl_call_fixture::RplCallFixtureError::AllocationFailed { requested } => {
             RpxError::AllocationFailed { requested }
         }
     })

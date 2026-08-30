@@ -71,6 +71,8 @@ pub enum CafeSymbolKind {
 pub enum CafeRelocationKind {
     /// Write the complete 32-bit symbol value plus addend.
     Addr32,
+    /// Apply a 24-bit relative branch relocation to one aligned instruction.
+    Rel24,
 }
 
 /// A validated RPL symbol-table entry.
@@ -296,7 +298,7 @@ impl ParsedRpl {
     pub fn exports(&self) -> &[CafeExport] {
         &self.exports
     }
-    /// Return all validated ADDR32 relocations.
+    /// Return all validated ADDR32 and REL24 relocations.
     pub fn relocations(&self) -> &[CafeRelocation] {
         &self.relocations
     }
@@ -374,7 +376,7 @@ impl ParsedRpx {
         &self.exports
     }
 
-    /// Return all validated ADDR32 relocations.
+    /// Return all validated ADDR32 and REL24 relocations.
     pub fn relocations(&self) -> &[CafeRelocation] {
         &self.relocations
     }
@@ -926,6 +928,8 @@ pub enum RplRecordError {
     RelocationType,
     /// A relocation target extends outside its target section.
     RelocationRange,
+    /// A REL24 relocation target is not aligned to a four-byte instruction.
+    RelocationAlignment,
     /// A structural section payload has an invalid size.
     PayloadSize,
     /// A string offset is invalid or references an empty name.
@@ -959,6 +963,7 @@ impl fmt::Display for RplRecordError {
             Self::SymbolRange => "symbol range",
             Self::RelocationType => "relocation type",
             Self::RelocationRange => "relocation range",
+            Self::RelocationAlignment => "relocation alignment",
             Self::PayloadSize => "payload size",
             Self::NameReference => "name reference",
             Self::NameTooLong => "name length",
@@ -1538,28 +1543,18 @@ fn validate_export_relocations(
             .entry((relocation.target_section_index, relocation.offset))
             .or_insert(0_usize) += 1;
     }
-    let mut direct_address_ranges: BTreeMap<(CafeSymbolKind, u64), u64> = BTreeMap::new();
-    for section in sections
-        .iter()
-        .filter(|section| section.section_type == SHT_PROGBITS && section.flags & SHF_ALLOC != 0)
-    {
-        let kind = if section.flags & SHF_EXECINSTR != 0 {
-            CafeSymbolKind::Function
-        } else {
-            CafeSymbolKind::Data
-        };
-        let start = u64::from(section.virtual_address);
-        let end = start + u64::from(section.size);
-        direct_address_ranges
-            .entry((kind, start))
-            .and_modify(|existing_end| *existing_end = (*existing_end).max(end))
-            .or_insert(end);
-    }
+    let direct_address_ranges = direct_export_address_ranges(sections);
 
     for relocation in relocations
         .iter()
         .filter(|record| sections[record.target_section_index].section_type == SHT_RPL_EXPORTS)
     {
+        if relocation.kind != CafeRelocationKind::Addr32 {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: relocation.section_index,
+                reason: RplRecordError::ExportRelocation,
+            });
+        }
         let Some(&export_index) =
             exports_by_location.get(&(relocation.target_section_index, relocation.offset))
         else {
@@ -1617,6 +1612,27 @@ fn validate_export_relocations(
         }
     }
     Ok(())
+}
+
+fn direct_export_address_ranges(sections: &[RawSection]) -> BTreeMap<(CafeSymbolKind, u64), u64> {
+    let mut ranges: BTreeMap<(CafeSymbolKind, u64), u64> = BTreeMap::new();
+    for section in sections
+        .iter()
+        .filter(|section| section.section_type == SHT_PROGBITS && section.flags & SHF_ALLOC != 0)
+    {
+        let kind = if section.flags & SHF_EXECINSTR != 0 {
+            CafeSymbolKind::Function
+        } else {
+            CafeSymbolKind::Data
+        };
+        let start = u64::from(section.virtual_address);
+        let end = start + u64::from(section.size);
+        ranges
+            .entry((kind, start))
+            .and_modify(|existing_end| *existing_end = (*existing_end).max(end))
+            .or_insert(end);
+    }
+    ranges
 }
 
 fn export_address_field(section: RawSection, descriptor_index: usize) -> Option<u32> {
@@ -1852,12 +1868,16 @@ fn parse_relocations(
         let offset = read_u32(data, record_offset);
         let symbol_and_type = read_u32(data, record_offset + 4);
         let relocation_type = symbol_and_type & 0xff;
-        if relocation_type != 1 {
-            return Err(RpxError::InvalidRplRecord {
-                section_index: index,
-                reason: RplRecordError::RelocationType,
-            });
-        }
+        let kind = match relocation_type {
+            1 => CafeRelocationKind::Addr32,
+            10 => CafeRelocationKind::Rel24,
+            _ => {
+                return Err(RpxError::InvalidRplRecord {
+                    section_index: index,
+                    reason: RplRecordError::RelocationType,
+                });
+            }
+        };
         let symbol_index =
             usize::try_from(symbol_and_type >> 8).expect("24-bit symbol index fits usize");
         if symbol_index == 0 || symbol_index >= symbol_count {
@@ -1872,6 +1892,12 @@ fn parse_relocations(
                 reason: RplRecordError::RelocationRange,
             });
         }
+        if kind == CafeRelocationKind::Rel24 && !offset.is_multiple_of(4) {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::RelocationAlignment,
+            });
+        }
         relocations.push(CafeRelocation {
             section_index: index,
             target_section_index: target,
@@ -1883,7 +1909,7 @@ fn parse_relocations(
                     .try_into()
                     .expect("four-byte addend"),
             ),
-            kind: CafeRelocationKind::Addr32,
+            kind,
         });
     }
     Ok(())
@@ -2833,6 +2859,39 @@ mod tests {
     }
 
     #[test]
+    fn extended_rel24_record_is_accepted_and_exposed() {
+        let mut image = extended_cafe_fixture(CafeModuleKind::Rpx);
+        write_fixture_u32(&mut image, EXT_RELOCATION_OFFSET + 4, (1 << 8) | 0x0a);
+        write_extended_checksums(&mut image);
+
+        let parsed = parse_rpx(&image).expect("type 10 REL24 record must parse");
+
+        assert_eq!(parsed.relocations().len(), 1);
+        assert_eq!(parsed.relocations()[0].kind(), CafeRelocationKind::Rel24);
+    }
+
+    #[test]
+    fn extended_unsupported_relocation_types_are_rejected() {
+        for relocation_type in [0, 4, 5, 6, 11, 251, 252, 253, 255] {
+            let mut image = extended_cafe_fixture(CafeModuleKind::Rpx);
+            write_fixture_u32(
+                &mut image,
+                EXT_RELOCATION_OFFSET + 4,
+                (1 << 8) | relocation_type,
+            );
+            write_extended_checksums(&mut image);
+
+            assert_eq!(
+                parse_rpx(&image),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 7,
+                    reason: RplRecordError::RelocationType,
+                })
+            );
+        }
+    }
+
+    #[test]
     fn cafe_module_kind_mismatch_is_rejected() {
         let rpx = extended_cafe_fixture(CafeModuleKind::Rpx);
         assert_eq!(
@@ -3401,6 +3460,21 @@ mod tests {
     }
 
     #[test]
+    fn export_descriptor_rejects_rel24_relocation() {
+        let (sections, exports, symbols, mut relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
+        relocations[0].kind = CafeRelocationKind::Rel24;
+
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation,
+            })
+        );
+    }
+
+    #[test]
     fn export_name_may_start_at_descriptor_end() {
         let mut bytes = [0_u8; 20];
         write_fixture_u32(&mut bytes, 0, 1);
@@ -3859,7 +3933,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_addr32_and_out_of_range_rpl_relocations() {
+    fn rejects_unsupported_symbol_and_out_of_range_rpl_relocations() {
         let mut bytes = [0_u8; 12];
         write_fixture_u32(&mut bytes, 0, 0x2000);
         write_fixture_u32(&mut bytes, 4, 2);
@@ -3910,5 +3984,70 @@ mod tests {
                 reason: RplRecordError::RelocationRange
             })
         );
+    }
+
+    fn relocation_fixture(
+        offset: u32,
+        relocation_type: u32,
+        target_size: u32,
+    ) -> ([u8; 12], [RawSection; 4]) {
+        let mut bytes = [0_u8; 12];
+        write_fixture_u32(&mut bytes, 0, offset);
+        write_fixture_u32(&mut bytes, 4, (1 << 8) | relocation_type);
+        let sections = [
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: SHF_ALLOC,
+                virtual_address: 0x1000,
+                size: target_size,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_SYMTAB,
+                size: 32,
+                entry_size: 16,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RELA,
+                size: 12,
+                link: 2,
+                info: 1,
+                entry_size: 12,
+                ..RawSection::default()
+            },
+        ];
+        (bytes, sections)
+    }
+
+    #[test]
+    fn rel24_requires_an_aligned_site_after_range_validation() {
+        let (bytes, sections) = relocation_fixture(0x1001, 10, 8);
+
+        assert_eq!(
+            parse_relocations(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 3,
+                reason: RplRecordError::RelocationAlignment,
+            })
+        );
+    }
+
+    #[test]
+    fn addr32_and_rel24_require_a_complete_four_byte_site() {
+        for relocation_type in [1, 10] {
+            for offset in [0x0ffc, 0x1001, 0x1004] {
+                let (bytes, sections) = relocation_fixture(offset, relocation_type, 4);
+
+                assert_eq!(
+                    parse_relocations(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+                    Err(RpxError::InvalidRplRecord {
+                        section_index: 3,
+                        reason: RplRecordError::RelocationRange,
+                    })
+                );
+            }
+        }
     }
 }

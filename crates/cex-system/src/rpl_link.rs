@@ -1,9 +1,11 @@
 //! Transactional planning and commit for the first bounded RPX-to-RPL link slice.
 //!
 //! The supported shape is deliberately small: one main RPX, one named provider
-//! RPL, one import, one export, and one `ADDR32` relocation in each module.  A
-//! plan owns every byte and computed patch value, so committing never consults
-//! caller-owned state and never publishes partially initialized memory.
+//! RPL, one import, one export, and one relocation in each module.  Provider
+//! export descriptors use `ADDR32`; main imports use either `ADDR32` data
+//! patches or near `REL24` function branches.  A plan owns every byte and
+//! computed patch value, so committing never consults caller-owned state and
+//! never publishes partially initialized memory.
 
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -175,7 +177,7 @@ pub enum RpxRplLinkRegion {
 pub enum RpxRplLinkPhase {
     /// Provider-local symbol resolution and export relocation.
     Local,
-    /// Main import resolution and data relocation.
+    /// Main import resolution and data or near-branch relocation.
     Import,
 }
 
@@ -282,12 +284,39 @@ pub enum RpxRplPlanError {
         /// Export section index.
         section_index: usize,
     },
-    /// A relocation target is not the supported Data or Loader class.
+    /// A relocation does not use its operation's supported target class.
     InvalidRelocationTarget {
         /// Relocation section index.
         section_index: usize,
         /// Target section index.
         target_section_index: usize,
+    },
+    /// A near branch relocation site is not instruction aligned.
+    Rel24SiteUnaligned {
+        /// Mapped guest patch address.
+        address: u32,
+    },
+    /// A near branch relocation does not target a relative branch instruction.
+    Rel24InvalidInstruction {
+        /// Mapped guest patch address.
+        address: u32,
+        /// Original instruction word.
+        instruction: u32,
+    },
+    /// The modular near branch displacement is not a multiple of four.
+    Rel24DisplacementUnaligned {
+        /// Mapped guest patch address.
+        address: u32,
+        /// Signed modular displacement.
+        displacement: i32,
+    },
+    /// The modular displacement cannot be represented by a near `REL24`
+    /// branch.  This bounded slice does not synthesize a trampoline.
+    Rel24OutOfRange {
+        /// Mapped guest patch address.
+        address: u32,
+        /// Signed modular displacement.
+        displacement: i32,
     },
     /// Two planned patches overlap.
     PatchConflict {
@@ -385,16 +414,12 @@ impl fmt::Display for RpxRplPlanError {
                 formatter,
                 "provider export descriptor in section {section_index} has no exact local symbol"
             ),
-            Self::InvalidRelocationTarget {
-                section_index,
-                target_section_index,
-            } => write!(
-                formatter,
-                "relocation section {section_index} has unsupported target {target_section_index}"
-            ),
-            Self::PatchConflict { address } => {
-                write!(formatter, "planned patches conflict at 0x{address:08x}")
-            }
+            error @ (Self::InvalidRelocationTarget { .. }
+            | Self::Rel24SiteUnaligned { .. }
+            | Self::Rel24InvalidInstruction { .. }
+            | Self::Rel24DisplacementUnaligned { .. }
+            | Self::Rel24OutOfRange { .. }
+            | Self::PatchConflict { .. }) => fmt_relocation_plan_error(error, formatter),
             Self::AllocationFailed { requested } => {
                 write!(
                     formatter,
@@ -402,6 +427,52 @@ impl fmt::Display for RpxRplPlanError {
                 )
             }
         }
+    }
+}
+
+fn fmt_relocation_plan_error(
+    error: &RpxRplPlanError,
+    formatter: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    match error {
+        RpxRplPlanError::InvalidRelocationTarget {
+            section_index,
+            target_section_index,
+        } => write!(
+            formatter,
+            "relocation section {section_index} has unsupported target {target_section_index}"
+        ),
+        RpxRplPlanError::Rel24SiteUnaligned { address } => {
+            write!(
+                formatter,
+                "REL24 site 0x{address:08x} is not 4-byte aligned"
+            )
+        }
+        RpxRplPlanError::Rel24InvalidInstruction {
+            address,
+            instruction,
+        } => write!(
+            formatter,
+            "REL24 site 0x{address:08x} has invalid instruction 0x{instruction:08x}"
+        ),
+        RpxRplPlanError::Rel24DisplacementUnaligned {
+            address,
+            displacement,
+        } => write!(
+            formatter,
+            "REL24 site 0x{address:08x} has unaligned displacement {displacement}"
+        ),
+        RpxRplPlanError::Rel24OutOfRange {
+            address,
+            displacement,
+        } => write!(
+            formatter,
+            "REL24 site 0x{address:08x} has out-of-range displacement {displacement}"
+        ),
+        RpxRplPlanError::PatchConflict { address } => {
+            write!(formatter, "planned patches conflict at 0x{address:08x}")
+        }
+        _ => unreachable!("only relocation errors are delegated"),
     }
 }
 
@@ -453,8 +524,26 @@ struct PlannedRange {
 #[derive(Clone, Copy)]
 struct PlannedPatch {
     phase: RpxRplLinkPhase,
+    kind: CafeRelocationKind,
     site: u32,
-    value: u32,
+    before: u32,
+    after: u32,
+    resolved_symbol: u32,
+    addend: i32,
+    displacement: Option<i32>,
+}
+
+#[derive(Clone, Copy)]
+struct PatchSite {
+    address: u32,
+    before: u32,
+}
+
+#[derive(Clone, Copy)]
+struct PatchSiteSpec {
+    kind: CafeRelocationKind,
+    region: RpxMappingRegion,
+    width: u64,
 }
 
 /// Fully validated and owned RPX/RPL placement and relocation work.
@@ -541,7 +630,7 @@ fn plan_rpx_rpl_link_borrowed(
         main_placement,
         provider,
         provider_name,
-        local_patch.value,
+        local_patch.after,
     )?;
     validate_patch_conflict(local_patch, import_patch)?;
 
@@ -943,8 +1032,8 @@ fn translate_patch_site(
     sections: &[RpxSection],
     placement: ModulePlacement,
     relocation: &CafeRelocation,
-    required_region: RpxMappingRegion,
-) -> Result<u32, RpxRplPlanError> {
+    spec: PatchSiteSpec,
+) -> Result<PatchSite, RpxRplPlanError> {
     let target = sections
         .get(relocation.target_section_index())
         .filter(|section| section.index() == relocation.target_section_index())
@@ -952,9 +1041,7 @@ fn translate_patch_site(
             section_index: relocation.section_index(),
             target_section_index: relocation.target_section_index(),
         })?;
-    if relocation.kind() != CafeRelocationKind::Addr32
-        || target.mapping_region() != Some(required_region)
-    {
+    if relocation.kind() != spec.kind || target.mapping_region() != Some(spec.region) {
         return Err(RpxRplPlanError::InvalidRelocationTarget {
             section_index: relocation.section_index(),
             target_section_index: relocation.target_section_index(),
@@ -967,7 +1054,7 @@ fn translate_patch_site(
             section_index: relocation.section_index(),
             target_section_index: relocation.target_section_index(),
         })?;
-    let end = u64::from(offset) + 4;
+    let end = u64::from(offset) + spec.width;
     let target_len = u64::try_from(target.data().len()).map_err(|_| {
         RpxRplPlanError::InvalidRelocationTarget {
             section_index: relocation.section_index(),
@@ -980,11 +1067,25 @@ fn translate_patch_site(
             target_section_index: relocation.target_section_index(),
         });
     }
-    translate_section(target, placement)?
+    let address = translate_section(target, placement)?
         .checked_add(offset)
         .ok_or(RpxRplPlanError::AddressOverflow {
-            region: public_region(required_region),
-        })
+            region: public_region(spec.region),
+        })?;
+    let offset = usize::try_from(offset).map_err(|_| RpxRplPlanError::InvalidRelocationTarget {
+        section_index: relocation.section_index(),
+        target_section_index: relocation.target_section_index(),
+    })?;
+    let before = target
+        .data()
+        .get(offset..offset + 4)
+        .and_then(|bytes| <[u8; 4]>::try_from(bytes).ok())
+        .map(u32::from_be_bytes)
+        .ok_or(RpxRplPlanError::InvalidRelocationTarget {
+            section_index: relocation.section_index(),
+            target_section_index: relocation.target_section_index(),
+        })?;
+    Ok(PatchSite { address, before })
 }
 
 fn unique_symbol<'a>(
@@ -1039,7 +1140,11 @@ fn plan_local_patch(
         provider.sections(),
         placement,
         relocation,
-        RpxMappingRegion::Loader,
+        PatchSiteSpec {
+            kind: CafeRelocationKind::Addr32,
+            region: RpxMappingRegion::Loader,
+            width: 4,
+        },
     )?;
     let symbol = unique_symbol(provider.symbols(), relocation)?;
     if symbol.section_index() == 0
@@ -1074,10 +1179,16 @@ fn plan_local_patch(
         .ok_or(RpxRplPlanError::AddressOverflow {
             region: public_region(symbol_region),
         })?;
+    let after = addr32_value(resolved, relocation.addend());
     Ok(PlannedPatch {
         phase: RpxRplLinkPhase::Local,
-        site,
-        value: addr32_value(resolved, relocation.addend()),
+        kind: CafeRelocationKind::Addr32,
+        site: site.address,
+        before: site.before,
+        after,
+        resolved_symbol: resolved,
+        addend: relocation.addend(),
+        displacement: None,
     })
 }
 
@@ -1122,16 +1233,46 @@ fn plan_import_patch(
             kind: import.kind(),
         });
     }
-    let site = translate_patch_site(
-        main.sections(),
-        placement,
-        relocation,
-        RpxMappingRegion::Data,
-    )?;
+    let spec = match relocation.kind() {
+        CafeRelocationKind::Addr32 => PatchSiteSpec {
+            kind: CafeRelocationKind::Addr32,
+            region: RpxMappingRegion::Data,
+            width: 4,
+        },
+        CafeRelocationKind::Rel24 if import.kind() == CafeSymbolKind::Function => PatchSiteSpec {
+            kind: CafeRelocationKind::Rel24,
+            region: RpxMappingRegion::Text,
+            width: 4,
+        },
+        CafeRelocationKind::Rel24 => {
+            return Err(RpxRplPlanError::InvalidRelocationTarget {
+                section_index: relocation.section_index(),
+                target_section_index: relocation.target_section_index(),
+            });
+        }
+    };
+    let site = translate_patch_site(main.sections(), placement, relocation, spec)?;
+    let (after, displacement) = match relocation.kind() {
+        CafeRelocationKind::Addr32 => (addr32_value(resolved_export, relocation.addend()), None),
+        CafeRelocationKind::Rel24 => {
+            let (after, displacement) = rel24_value(
+                site.before,
+                resolved_export,
+                relocation.addend(),
+                site.address,
+            )?;
+            (after, Some(displacement))
+        }
+    };
     Ok(PlannedPatch {
         phase: RpxRplLinkPhase::Import,
-        site,
-        value: addr32_value(resolved_export, relocation.addend()),
+        kind: relocation.kind(),
+        site: site.address,
+        before: site.before,
+        after,
+        resolved_symbol: resolved_export,
+        addend: relocation.addend(),
+        displacement,
     })
 }
 
@@ -1151,6 +1292,41 @@ fn validate_patch_conflict(
 
 const fn addr32_value(symbol: u32, addend: i32) -> u32 {
     symbol.wrapping_add(addend.cast_unsigned())
+}
+
+fn rel24_value(
+    before: u32,
+    symbol: u32,
+    addend: i32,
+    site: u32,
+) -> Result<(u32, i32), RpxRplPlanError> {
+    if site & 3 != 0 {
+        return Err(RpxRplPlanError::Rel24SiteUnaligned { address: site });
+    }
+    if before >> 26 != 18 || before & 2 != 0 {
+        return Err(RpxRplPlanError::Rel24InvalidInstruction {
+            address: site,
+            instruction: before,
+        });
+    }
+    let displacement = symbol
+        .wrapping_add(addend.cast_unsigned())
+        .wrapping_sub(site)
+        .cast_signed();
+    if displacement & 3 != 0 {
+        return Err(RpxRplPlanError::Rel24DisplacementUnaligned {
+            address: site,
+            displacement,
+        });
+    }
+    if !(-0x0200_0000..=0x01ff_fffc).contains(&displacement) {
+        return Err(RpxRplPlanError::Rel24OutOfRange {
+            address: site,
+            displacement,
+        });
+    }
+    let after = (before & 0xfc00_0003) | (displacement.cast_unsigned() & 0x03ff_fffc);
+    Ok((after, displacement))
 }
 
 const fn public_region(region: RpxMappingRegion) -> RpxRplLinkRegion {
@@ -1248,7 +1424,7 @@ where
         relocations,
     } = *parts;
     let mut hash = Sha256::new();
-    hash.update(b"CemuExtend parsed Cafe module v1\0");
+    hash.update(b"CemuExtend parsed Cafe module v2\0");
     hash.update(kind);
     hash.update(entry.to_be_bytes());
     hash.update(file_info.magic().to_be_bytes());
@@ -1304,7 +1480,7 @@ where
         hash.update(relocation.offset().to_be_bytes());
         hash_usize(&mut hash, relocation.symbol_index());
         hash.update(relocation.addend().to_be_bytes());
-        hash.update([0]);
+        hash.update([relocation_kind_byte(relocation.kind())]);
     }
     hash.finalize().into()
 }
@@ -1320,11 +1496,25 @@ const fn symbol_kind_byte(kind: CafeSymbolKind) -> u8 {
     }
 }
 
+const fn relocation_kind_byte(kind: CafeRelocationKind) -> u8 {
+    match kind {
+        CafeRelocationKind::Addr32 => 1,
+        CafeRelocationKind::Rel24 => 10,
+    }
+}
+
 /// Commit failure after a complete link plan has been accepted.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum RpxRplCommitError {
     /// Sparse guest-memory mapping, access, or protection failed.
     Memory(MemoryFault),
+    /// Guest memory no longer contains the planned patch preimage.
+    PreimageMismatch {
+        /// Patch phase.
+        phase: RpxRplLinkPhase,
+        /// Guest patch address.
+        address: u32,
+    },
     /// A staged patch did not read back as planned.
     ProofMismatch {
         /// Patch phase.
@@ -1338,6 +1528,12 @@ impl fmt::Display for RpxRplCommitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Memory(fault) => write!(formatter, "guest memory commit failed: {fault}"),
+            Self::PreimageMismatch { phase, address } => {
+                write!(
+                    formatter,
+                    "{phase:?} patch preimage mismatched at 0x{address:08x}"
+                )
+            }
             Self::ProofMismatch { phase, address } => {
                 write!(
                     formatter,
@@ -1399,10 +1595,10 @@ pub fn commit_rpx_rpl_link(plan: RpxRplLinkPlan) -> Result<RpxRplLinkProof, RpxR
     let memory_hash = memory.deterministic_hash();
     Ok(RpxRplLinkProof {
         main_entry,
-        local_patch_site: local_patch.site,
-        local_patch_value: local_patch.value,
-        import_patch_site: import_patch.site,
-        import_patch_value: import_patch.value,
+        relocations: [
+            RpxRplRelocationProof::from_patch(local_patch),
+            RpxRplRelocationProof::from_patch(import_patch),
+        ],
         mapped_page_count,
         mapped_byte_count,
         memory_hash,
@@ -1424,8 +1620,14 @@ fn apply_and_verify(
     patch: PlannedPatch,
 ) -> Result<(), RpxRplCommitError> {
     let address = GuestAddress::new(patch.site);
-    memory.write_u32(address, patch.value)?;
-    if memory.read_u32(address)? != patch.value {
+    if memory.read_u32(address)? != patch.before {
+        return Err(RpxRplCommitError::PreimageMismatch {
+            phase: patch.phase,
+            address: patch.site,
+        });
+    }
+    memory.write_u32(address, patch.after)?;
+    if memory.read_u32(address)? != patch.after {
         return Err(RpxRplCommitError::ProofMismatch {
             phase: patch.phase,
             address: patch.site,
@@ -1434,14 +1636,80 @@ fn apply_and_verify(
     Ok(())
 }
 
+/// Immutable numeric evidence for one committed relocation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RpxRplRelocationProof {
+    phase: RpxRplLinkPhase,
+    kind: CafeRelocationKind,
+    site: u32,
+    before: u32,
+    after: u32,
+    resolved_symbol: u32,
+    addend: i32,
+    displacement: Option<i32>,
+}
+
+impl RpxRplRelocationProof {
+    const fn from_patch(patch: PlannedPatch) -> Self {
+        Self {
+            phase: patch.phase,
+            kind: patch.kind,
+            site: patch.site,
+            before: patch.before,
+            after: patch.after,
+            resolved_symbol: patch.resolved_symbol,
+            addend: patch.addend,
+            displacement: patch.displacement,
+        }
+    }
+
+    /// Return the phase in which this relocation was committed.
+    pub const fn phase(&self) -> RpxRplLinkPhase {
+        self.phase
+    }
+
+    /// Return the relocation operation.
+    pub const fn kind(&self) -> CafeRelocationKind {
+        self.kind
+    }
+
+    /// Return the guest patch address.
+    pub const fn site(&self) -> u32 {
+        self.site
+    }
+
+    /// Return the instruction or word observed before the patch.
+    pub const fn before(&self) -> u32 {
+        self.before
+    }
+
+    /// Return the instruction or word observed after the patch.
+    pub const fn after(&self) -> u32 {
+        self.after
+    }
+
+    /// Return the mapped symbol address used by the relocation formula.
+    pub const fn resolved_symbol(&self) -> u32 {
+        self.resolved_symbol
+    }
+
+    /// Return the signed relocation addend.
+    pub const fn addend(&self) -> i32 {
+        self.addend
+    }
+
+    /// Return the signed modular branch displacement for `REL24`, or `None`
+    /// for `ADDR32`.
+    pub const fn displacement(&self) -> Option<i32> {
+        self.displacement
+    }
+}
+
 /// Immutable numeric and hash evidence from a successful transactional commit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RpxRplLinkProof {
     main_entry: u32,
-    local_patch_site: u32,
-    local_patch_value: u32,
-    import_patch_site: u32,
-    import_patch_value: u32,
+    relocations: [RpxRplRelocationProof; 2],
     mapped_page_count: u64,
     mapped_byte_count: u64,
     memory_hash: [u8; 32],
@@ -1455,24 +1723,29 @@ impl RpxRplLinkProof {
         self.main_entry
     }
 
+    /// Return the complete bounded relocation proof in commit order.
+    pub const fn relocations(&self) -> &[RpxRplRelocationProof; 2] {
+        &self.relocations
+    }
+
     /// Return the provider-local export descriptor patch site.
     pub const fn local_patch_site(&self) -> u32 {
-        self.local_patch_site
+        self.relocations[0].site
     }
 
     /// Return the provider-local export descriptor patch value.
     pub const fn local_patch_value(&self) -> u32 {
-        self.local_patch_value
+        self.relocations[0].after
     }
 
     /// Return the main import relocation patch site.
     pub const fn import_patch_site(&self) -> u32 {
-        self.import_patch_site
+        self.relocations[1].site
     }
 
     /// Return the main import relocation patch value.
     pub const fn import_patch_value(&self) -> u32 {
-        self.import_patch_value
+        self.relocations[1].after
     }
 
     /// Return the number of mapped logical pages.
@@ -1571,6 +1844,19 @@ mod tests {
         commit_rpx_rpl_link(link_plan()).expect("transactional commit")
     }
 
+    fn test_patch(phase: RpxRplLinkPhase, site: u32, before: u32, after: u32) -> PlannedPatch {
+        PlannedPatch {
+            phase,
+            kind: CafeRelocationKind::Addr32,
+            site,
+            before,
+            after,
+            resolved_symbol: after,
+            addend: 0,
+            displacement: None,
+        }
+    }
+
     #[test]
     fn links_main_before_provider_at_exact_addresses() {
         let proof = linked_proof();
@@ -1594,6 +1880,135 @@ mod tests {
         assert_eq!(addr32_value(0, -1), u32::MAX);
         assert_eq!(addr32_value(0x9000_0000, i32::MAX), 0x0fff_ffff);
         assert_eq!(addr32_value(0x1000_0000, i32::MIN), 0x9000_0000);
+    }
+
+    #[test]
+    fn rel24_accepts_exact_positive_and_negative_range_edges() {
+        let before = 0x4800_0001;
+        assert_eq!(
+            rel24_value(before, 0x11ff_fffc, 0, 0x1000_0000),
+            Ok((0x49ff_fffd, 0x01ff_fffc))
+        );
+        assert_eq!(
+            rel24_value(before, 0x0e00_0000, 0, 0x1000_0000),
+            Ok((0x4a00_0001, -0x0200_0000))
+        );
+    }
+
+    #[test]
+    fn rel24_encodes_negative_displacement_and_preserves_opcode_and_lk() {
+        assert_eq!(
+            rel24_value(0x4800_0001, 0x0fff_fffc, 0, 0x1000_0000),
+            Ok((0x4bff_fffd, -4))
+        );
+    }
+
+    #[test]
+    fn rel24_rejects_site_and_displacement_misalignment() {
+        assert_eq!(
+            rel24_value(0x4800_0000, 0x1000_0000, 0, 0x1000_0002),
+            Err(RpxRplPlanError::Rel24SiteUnaligned {
+                address: 0x1000_0002
+            })
+        );
+        assert_eq!(
+            rel24_value(0x4800_0000, 0x1000_0001, 0, 0x1000_0000),
+            Err(RpxRplPlanError::Rel24DisplacementUnaligned {
+                address: 0x1000_0000,
+                displacement: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn rel24_rejects_non_branch_opcode_and_absolute_addressing() {
+        assert!(matches!(
+            rel24_value(0x6000_0000, 0, 0, 0),
+            Err(RpxRplPlanError::Rel24InvalidInstruction { .. })
+        ));
+        assert!(matches!(
+            rel24_value(0x4800_0002, 0, 0, 0),
+            Err(RpxRplPlanError::Rel24InvalidInstruction { .. })
+        ));
+    }
+
+    #[test]
+    fn rel24_uses_modular_addends_and_rejects_far_branches() {
+        assert_eq!(
+            rel24_value(0x4800_0001, u32::MAX, 1, 0),
+            Ok((0x4800_0001, 0))
+        );
+        assert_eq!(
+            rel24_value(0x4800_0000, 0x8000_0000, i32::MIN, 0),
+            Ok((0x4800_0000, 0))
+        );
+        assert_eq!(
+            rel24_value(0x4800_0000, 0x1200_0000, 0, 0x1000_0000),
+            Err(RpxRplPlanError::Rel24OutOfRange {
+                address: 0x1000_0000,
+                displacement: 0x0200_0000,
+            })
+        );
+        assert_eq!(
+            rel24_value(0x4800_0000, 0x0dff_fffc, 0, 0x1000_0000),
+            Err(RpxRplPlanError::Rel24OutOfRange {
+                address: 0x1000_0000,
+                displacement: -0x0200_0004,
+            })
+        );
+    }
+
+    #[test]
+    fn commit_rejects_a_patch_preimage_mismatch_before_writing() {
+        let mut memory = GuestMemory::new();
+        memory
+            .map(
+                GuestAddress::new(0x1000),
+                PAGE_SIZE,
+                Permissions::READ | Permissions::WRITE,
+            )
+            .expect("test page maps");
+        memory
+            .write_u32(GuestAddress::new(0x1000), 0x6000_0000)
+            .expect("test preimage writes");
+        let patch = test_patch(RpxRplLinkPhase::Import, 0x1000, 0x4800_0000, 0x4800_0001);
+        assert_eq!(
+            apply_and_verify(&mut memory, patch),
+            Err(RpxRplCommitError::PreimageMismatch {
+                phase: RpxRplLinkPhase::Import,
+                address: 0x1000,
+            })
+        );
+        assert_eq!(memory.read_u32(GuestAddress::new(0x1000)), Ok(0x6000_0000));
+    }
+
+    #[test]
+    fn addr32_proof_remains_compatible_and_exposes_bounded_records() {
+        let proof = linked_proof();
+        let relocations = proof.relocations();
+        assert_eq!(relocations.len(), 2);
+        assert_eq!(relocations[0].phase(), RpxRplLinkPhase::Local);
+        assert_eq!(relocations[0].kind(), CafeRelocationKind::Addr32);
+        assert_eq!(relocations[0].before(), 0);
+        assert_eq!(relocations[0].after(), proof.local_patch_value());
+        assert_eq!(relocations[0].site(), proof.local_patch_site());
+        assert_eq!(relocations[0].resolved_symbol(), 0x0200_2000);
+        assert_eq!(relocations[0].addend(), 0);
+        assert_eq!(relocations[0].displacement(), None);
+        assert_eq!(relocations[1].phase(), RpxRplLinkPhase::Import);
+        assert_eq!(relocations[1].kind(), CafeRelocationKind::Addr32);
+        assert_eq!(relocations[1].before(), 0);
+        assert_eq!(relocations[1].after(), proof.import_patch_value());
+        assert_eq!(relocations[1].site(), proof.import_patch_site());
+        assert_eq!(relocations[1].resolved_symbol(), 0x0200_2000);
+        assert_eq!(relocations[1].addend(), 0);
+        assert_eq!(relocations[1].displacement(), None);
+    }
+
+    #[test]
+    fn relocation_hash_discriminators_are_stable() {
+        assert_eq!(relocation_kind_byte(CafeRelocationKind::Addr32), 1);
+        assert_eq!(relocation_kind_byte(CafeRelocationKind::Rel24), 10);
     }
 
     #[test]
@@ -1775,16 +2190,8 @@ mod tests {
 
     #[test]
     fn helper_guards_conflicts_and_pool_overflow() {
-        let patch = PlannedPatch {
-            phase: RpxRplLinkPhase::Local,
-            site: 0x1000,
-            value: 0,
-        };
-        let overlap = PlannedPatch {
-            phase: RpxRplLinkPhase::Import,
-            site: 0x1002,
-            value: 0,
-        };
+        let patch = test_patch(RpxRplLinkPhase::Local, 0x1000, 0, 0);
+        let overlap = test_patch(RpxRplLinkPhase::Import, 0x1002, 0, 0);
         assert!(matches!(
             validate_patch_conflict(patch, overlap),
             Err(RpxRplPlanError::PatchConflict { .. })

@@ -35,6 +35,11 @@
 - RPX/RPL milestone 現在地: fixed synthetic main RPX1 + provider RPL1 positive link-state、old RPX golden + new RPL
   5-record golden、C++ oracle smoke/comparator exact equalityを source payload fingerprint `97c2a8cc…4809b` の Docker buildで検証済み。
   public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parity は未実装・未完了である。
+- 次の互換 slice として、near `R_PPC_REL24` の parse/link、専用 synthetic call fixture、
+  relocation proof を実装し、main session の Docker build だけで format/check/Clippy と
+  Rust workspace 267 tests を通した。現時点で検証済みなのは relocation word
+  `0x48000001 -> 0x48002001` の生成までであり、linked memory 上の CPU 実行、
+  C++ link oracle、canonical trace/golden、aggregate `ci` は未完了である。
 - Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
   match/mismatch/error/no-clobber自己整合性をDocker確認済み。さらに
   `rust-rpx-contract-artifacts`、固定 C++ adapter、`trace` target の比較で positive-fixture
@@ -892,13 +897,17 @@ artifact hashes: main 772/0644 `13011586…374b`、provider 716/0644 `95295415�
 ## 次の作業
 
 1. [完了] 現行RPX1/RPL1 evidence sliceを`0d240acd` としてcommitした。
-2. malformed corpusへ拡張し、RPLのimport、relocation、compressionを段階的に実装・
-   C++ oracle比較する。positive parse/map以外のCafe/MMU/CPU execution parityは引き続き
-   未証明として扱う。
-3. adapter、helper、oracle policyを変更する場合は、manifest pinを更新する前にmain sessionで
+2. [進行中] near `R_PPC_REL24` の parse/link と専用 fixture は Docker build で
+   267 testsまで確認済み。次に transactional commit 後のfinal permissionを保ったまま
+   headless CPUで`bl -> addi r3,42 -> blr -> stop`を実行し、4 instructions、`r3=42`、
+   LR/PC、memory proofを固定する。
+3. REL24 link-prefixは固定C++ production linkerとのoracle比較へ接続し、Rust CPU実行は
+   C++ execution parityと誤記せず別record/gateとして扱う。その後、ADDR16_HA/LO、
+   malformed corpus、compressionへ段階的に広げる。
+4. adapter、helper、oracle policyを変更する場合は、manifest pinを更新する前にmain sessionで
    手動C++再認証を行う。Docker-only aggregate `ci`、release、headless、contract artifact
    gateの成功を維持する。
-4. post-test runtime bundlingを再開して固定`ab0b7720`のC++ `build` target imageを完成させる。
-5. Windows milestone開始前にdirectory fsync adapterを実装し、Linux限定で確認した
+5. post-test runtime bundlingを再開して固定`ab0b7720`のC++ `build` target imageを完成させる。
+6. Windows milestone開始前にdirectory fsync adapterを実装し、Linux限定で確認した
    no-replacement/durability前提をportableな契約へ拡張する。filesystem依存のatomicityは
    別途検証する。
