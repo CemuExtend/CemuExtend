@@ -82,7 +82,7 @@ source_fingerprint="$({
 # contents are not part of Docker's layer cache key, so include an explicit
 # content fingerprint. An unchanged tree reuses the complete build layer;
 # source edits rerun compilation while preserving the vcpkg/CMake cache mounts.
-docker build --progress=plain --target "${docker_target}" \
+docker build --quiet --target "${docker_target}" \
 	--build-arg "GIT_HASH=${git_hash}" \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${commit_hash}" \
 	--build-arg "SOURCE_FINGERPRINT=${source_fingerprint}" \
@@ -90,7 +90,7 @@ docker build --progress=plain --target "${docker_target}" \
 	--build-arg "CEMU_OVERLAY_BACKEND=${overlay_backend}" \
 	--build-arg "CLEAN_BUILD=${clean_build}" \
 	--build-arg "ENABLE_WXWIDGETS=${CEMU_ENABLE_WXWIDGETS:-ON}" \
-	-t "${image_name}" "${project_dir}"
+	-t "${image_name}" "${project_dir}" >/dev/null
 
 mkdir -p "${artifact_dir}"
 if [[ "${build_platform}" == "win" ]]; then
