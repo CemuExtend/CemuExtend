@@ -71,6 +71,10 @@ pub enum CafeSymbolKind {
 pub enum CafeRelocationKind {
     /// Write the complete 32-bit symbol value plus addend.
     Addr32,
+    /// Write the low 16 bits of the symbol value plus addend.
+    Addr16Lo,
+    /// Write the adjusted high 16 bits of the symbol value plus addend.
+    Addr16Ha,
     /// Apply a 24-bit relative branch relocation to one aligned instruction.
     Rel24,
 }
@@ -298,7 +302,7 @@ impl ParsedRpl {
     pub fn exports(&self) -> &[CafeExport] {
         &self.exports
     }
-    /// Return all validated ADDR32 and REL24 relocations.
+    /// Return all validated ADDR32, ADDR16_LO, ADDR16_HA, and REL24 relocations.
     pub fn relocations(&self) -> &[CafeRelocation] {
         &self.relocations
     }
@@ -376,7 +380,7 @@ impl ParsedRpx {
         &self.exports
     }
 
-    /// Return all validated ADDR32 and REL24 relocations.
+    /// Return all validated ADDR32, ADDR16_LO, ADDR16_HA, and REL24 relocations.
     pub fn relocations(&self) -> &[CafeRelocation] {
         &self.relocations
     }
@@ -1870,6 +1874,8 @@ fn parse_relocations(
         let relocation_type = symbol_and_type & 0xff;
         let kind = match relocation_type {
             1 => CafeRelocationKind::Addr32,
+            4 => CafeRelocationKind::Addr16Lo,
+            6 => CafeRelocationKind::Addr16Ha,
             10 => CafeRelocationKind::Rel24,
             _ => {
                 return Err(RpxError::InvalidRplRecord {
@@ -2871,8 +2877,11 @@ mod tests {
     }
 
     #[test]
-    fn extended_unsupported_relocation_types_are_rejected() {
-        for relocation_type in [0, 4, 5, 6, 11, 251, 252, 253, 255] {
+    fn extended_addr16_records_are_accepted_and_exposed_without_mutation() {
+        for (relocation_type, expected_kind) in [
+            (4, CafeRelocationKind::Addr16Lo),
+            (6, CafeRelocationKind::Addr16Ha),
+        ] {
             let mut image = extended_cafe_fixture(CafeModuleKind::Rpx);
             write_fixture_u32(
                 &mut image,
@@ -2880,6 +2889,27 @@ mod tests {
                 (1 << 8) | relocation_type,
             );
             write_extended_checksums(&mut image);
+            let snapshot = image.clone();
+
+            let parsed = parse_rpx(&image).expect("ADDR16 relocation record must parse");
+
+            assert_eq!(parsed.relocations().len(), 1);
+            assert_eq!(parsed.relocations()[0].kind(), expected_kind);
+            assert_eq!(image, snapshot);
+        }
+    }
+
+    #[test]
+    fn extended_unsupported_relocation_types_are_rejected() {
+        for relocation_type in [0, 5, 11, 251, 252, 253, 255] {
+            let mut image = extended_cafe_fixture(CafeModuleKind::Rpx);
+            write_fixture_u32(
+                &mut image,
+                EXT_RELOCATION_OFFSET + 4,
+                (1 << 8) | relocation_type,
+            );
+            write_extended_checksums(&mut image);
+            let snapshot = image.clone();
 
             assert_eq!(
                 parse_rpx(&image),
@@ -2888,6 +2918,7 @@ mod tests {
                     reason: RplRecordError::RelocationType,
                 })
             );
+            assert_eq!(image, snapshot);
         }
     }
 
@@ -3460,18 +3491,24 @@ mod tests {
     }
 
     #[test]
-    fn export_descriptor_rejects_rel24_relocation() {
-        let (sections, exports, symbols, mut relocations) =
-            export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
-        relocations[0].kind = CafeRelocationKind::Rel24;
+    fn export_descriptor_rejects_non_addr32_relocations() {
+        for kind in [
+            CafeRelocationKind::Addr16Lo,
+            CafeRelocationKind::Addr16Ha,
+            CafeRelocationKind::Rel24,
+        ] {
+            let (sections, exports, symbols, mut relocations) =
+                export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
+            relocations[0].kind = kind;
 
-        assert_eq!(
-            validate_export_relocations(&sections, &exports, &symbols, &relocations),
-            Err(RpxError::InvalidRplRecord {
-                section_index: 4,
-                reason: RplRecordError::ExportRelocation,
-            })
-        );
+            assert_eq!(
+                validate_export_relocations(&sections, &exports, &symbols, &relocations),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 4,
+                    reason: RplRecordError::ExportRelocation,
+                })
+            );
+        }
     }
 
     #[test]
@@ -4035,8 +4072,8 @@ mod tests {
     }
 
     #[test]
-    fn addr32_and_rel24_require_a_complete_four_byte_site() {
-        for relocation_type in [1, 10] {
+    fn all_supported_relocations_require_a_complete_four_byte_site() {
+        for relocation_type in [1, 4, 6, 10] {
             for offset in [0x0ffc, 0x1001, 0x1004] {
                 let (bytes, sections) = relocation_fixture(offset, relocation_type, 4);
 
@@ -4048,6 +4085,23 @@ mod tests {
                     })
                 );
             }
+        }
+    }
+
+    #[test]
+    fn addr16_relocations_do_not_require_alignment() {
+        for (relocation_type, expected_kind) in [
+            (4, CafeRelocationKind::Addr16Lo),
+            (6, CafeRelocationKind::Addr16Ha),
+        ] {
+            let (bytes, sections) = relocation_fixture(0x1001, relocation_type, 5);
+            let mut relocations = Vec::new();
+
+            parse_relocations(&bytes, &sections, 3, sections[3], &mut relocations)
+                .expect("ADDR16 relocation sites may be unaligned");
+
+            assert_eq!(relocations.len(), 1);
+            assert_eq!(relocations[0].kind(), expected_kind);
         }
     }
 }

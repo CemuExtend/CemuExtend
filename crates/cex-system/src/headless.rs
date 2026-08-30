@@ -460,8 +460,11 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(first.link_proof.main_entry(), 0x0200_0000);
-        assert_eq!(first.link_proof.import_patch_site(), 0x0200_0000);
-        assert_eq!(first.link_proof.import_patch_value(), 0x4800_2001);
+        assert_eq!(first.link_proof.import_relocations()[0].site(), 0x0200_0000);
+        assert_eq!(
+            first.link_proof.import_relocations()[0].after(),
+            0x4800_2001
+        );
         assert_eq!(first.link_proof.mapped_page_count(), 5);
         assert_eq!(first.execution.mapped_page_count, 21);
         assert_eq!(first.execution.final_state.gpr(1), Some(0x4000_0000));

@@ -16,7 +16,8 @@ use cex_compat::{
 use cex_cpu::{FaultKind as CpuFaultKind, StopReason};
 use cex_system::{
     CafeRelocationKind, HeadlessRun, HeadlessSystem, MAX_RPX_IMAGE_SIZE, ParsedRpl, ParsedRpx,
-    RplModuleName, RpxRplHeadlessRun, RpxRplLinkPhase, RpxRplLinkProof, parse_rpl, parse_rpx,
+    RplModuleName, RpxRplHeadlessRun, RpxRplLinkPhase, RpxRplLinkProof, RpxRplRelocationProof,
+    parse_rpl, parse_rpx,
 };
 use sha2::{Digest, Sha256};
 
@@ -257,7 +258,12 @@ fn validate_execution_contract(run: &RpxRplHeadlessRun) -> Result<(), ExecutionT
     let proof = &run.link_proof;
     let execution = &run.execution;
     let state = &execution.final_state;
-    let [local, imported] = proof.relocations();
+    let local = proof.local_relocation();
+    let imports = proof.import_relocations();
+    if imports.len() != 1 {
+        return Err(ExecutionTraceError::Contract);
+    }
+    let imported = &imports[0];
     let mut expected_gprs = [0_u32; 32];
     expected_gprs[1] = 0x4000_0000;
     expected_gprs[3] = 42;
@@ -303,8 +309,8 @@ fn build_trace(
     let mut trace = TraceWriter::new(Vec::new());
     for entry in [
         validation_entry(counts, hashes),
-        local_relocation_entry(proof),
-        import_relocation_entry(proof)?,
+        local_relocation_entry(proof.local_relocation()),
+        import_relocation_entry(single_import_relocation(proof)?)?,
         linked_memory_entry(proof)?,
         cpu_state_entry(execution),
         executed_memory_entry(execution)?,
@@ -350,8 +356,17 @@ fn validation_entry(counts: ContractCounts, hashes: ImageHashes) -> TraceEntry {
     system_event(0, "rpx-rpl-rel24-call-validated", fields)
 }
 
-fn local_relocation_entry(proof: &RpxRplLinkProof) -> TraceEntry {
-    let relocation = &proof.relocations()[0];
+fn single_import_relocation(
+    proof: &RpxRplLinkProof,
+) -> Result<&RpxRplRelocationProof, ExecutionTraceError> {
+    let imports = proof.import_relocations();
+    if imports.len() != 1 {
+        return Err(ExecutionTraceError::Contract);
+    }
+    Ok(&imports[0])
+}
+
+fn local_relocation_entry(relocation: &RpxRplRelocationProof) -> TraceEntry {
     let mut fields = BTreeMap::new();
     fields.insert(
         "addend".to_owned(),
@@ -377,8 +392,9 @@ fn local_relocation_entry(proof: &RpxRplLinkProof) -> TraceEntry {
     system_event(1, "rpx-rpl-rel24-local-relocation", fields)
 }
 
-fn import_relocation_entry(proof: &RpxRplLinkProof) -> Result<TraceEntry, ExecutionTraceError> {
-    let relocation = &proof.relocations()[1];
+fn import_relocation_entry(
+    relocation: &RpxRplRelocationProof,
+) -> Result<TraceEntry, ExecutionTraceError> {
     let displacement = relocation
         .displacement()
         .ok_or(ExecutionTraceError::Contract)?;
@@ -864,21 +880,23 @@ mod tests {
         import_entry: &TraceEntry,
         proof: &RpxRplLinkProof,
     ) {
-        let local = proof.relocations()[0];
+        let local = proof.local_relocation();
         let TraceEvent::Event(local_event) = &local_entry.event else {
             panic!("record one must describe the local relocation");
         };
         assert_eq!(local_event.name, "rpx-rpl-rel24-local-relocation");
         assert_eq!(local_event.fields.len(), 6);
-        assert_relocation_fields(local_event, &local, "addr32", None);
+        assert_relocation_fields(local_event, local, "addr32", None);
 
-        let imported = proof.relocations()[1];
+        let imports = proof.import_relocations();
+        assert_eq!(imports.len(), 1);
+        let imported = &imports[0];
         let TraceEvent::Event(import_event) = &import_entry.event else {
             panic!("record two must describe the import relocation");
         };
         assert_eq!(import_event.name, "rpx-rpl-rel24-import-relocation");
         assert_eq!(import_event.fields.len(), 7);
-        assert_relocation_fields(import_event, &imported, "rel24", imported.displacement());
+        assert_relocation_fields(import_event, imported, "rel24", imported.displacement());
     }
 
     fn assert_linked_memory_record(entry: &TraceEntry, proof: &RpxRplLinkProof) {
@@ -948,7 +966,7 @@ mod tests {
 
     fn assert_relocation_fields(
         event: &GenericEvent,
-        relocation: &cex_system::RpxRplRelocationProof,
+        relocation: &RpxRplRelocationProof,
         kind: &str,
         displacement: Option<i32>,
     ) {

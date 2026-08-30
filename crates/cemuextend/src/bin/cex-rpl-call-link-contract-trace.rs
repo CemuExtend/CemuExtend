@@ -240,7 +240,12 @@ fn build_trace_from_proof(
     image_hashes: ImageHashes,
     proof: &RpxRplLinkProof,
 ) -> Result<Vec<u8>, ContractTraceError> {
-    let [local, import] = proof.relocations();
+    let local = proof.local_relocation();
+    let imports = proof.import_relocations();
+    if imports.len() != 1 {
+        return Err(ContractTraceError::Contract);
+    }
+    let import = &imports[0];
     validate_relocation_proof(local, import)?;
 
     let mut trace = TraceWriter::new(Vec::new());
@@ -702,24 +707,27 @@ mod tests {
             ])
         );
 
-        let relocations = proof.relocations();
+        let local_relocation = proof.local_relocation();
+        let import_relocations = proof.import_relocations();
+        assert_eq!(import_relocations.len(), 1);
+        let import_relocation = &import_relocations[0];
         let TraceEvent::Event(local) = &entries[1].event else {
             panic!("second record must describe the local relocation");
         };
         assert_eq!(local.name, "rpx-rpl-rel24-local-relocation");
-        assert_eq!(local.fields, expected_local_fields(&relocations[0]));
-        assert_eq!(relocations[0].phase(), RpxRplLinkPhase::Local);
-        assert_eq!(relocations[0].kind(), CafeRelocationKind::Addr32);
-        assert_eq!(relocations[0].displacement(), None);
+        assert_eq!(local.fields, expected_local_fields(local_relocation));
+        assert_eq!(local_relocation.phase(), RpxRplLinkPhase::Local);
+        assert_eq!(local_relocation.kind(), CafeRelocationKind::Addr32);
+        assert_eq!(local_relocation.displacement(), None);
 
         let TraceEvent::Event(import) = &entries[2].event else {
             panic!("third record must describe the imported call relocation");
         };
         assert_eq!(import.name, "rpx-rpl-rel24-import-relocation");
-        assert_eq!(import.fields, expected_import_fields(&relocations[1]));
-        assert_eq!(relocations[1].phase(), RpxRplLinkPhase::Import);
-        assert_eq!(relocations[1].kind(), CafeRelocationKind::Rel24);
-        assert!(relocations[1].displacement().is_some());
+        assert_eq!(import.fields, expected_import_fields(import_relocation));
+        assert_eq!(import_relocation.phase(), RpxRplLinkPhase::Import);
+        assert_eq!(import_relocation.kind(), CafeRelocationKind::Rel24);
+        assert!(import_relocation.displacement().is_some());
 
         let TraceEvent::MemoryHash(memory) = &entries[3].event else {
             panic!("fourth record must hash linked memory");

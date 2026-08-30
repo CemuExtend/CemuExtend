@@ -54,27 +54,25 @@ fn public_rpx_rpl_call_link_proof_is_deterministic_and_complete() {
     assert_eq!(first.mapped_page_count(), 5);
     assert_eq!(first.mapped_byte_count(), 0x5000);
 
-    let relocations = first.relocations();
-    assert_eq!(relocations[0].phase(), RpxRplLinkPhase::Local);
-    assert_eq!(relocations[0].kind(), CafeRelocationKind::Addr32);
-    assert_eq!(relocations[0].site(), 0x1000_2008);
-    assert_eq!(relocations[0].before(), 0);
-    assert_eq!(relocations[0].after(), 0x0200_2000);
-    assert_eq!(relocations[0].resolved_symbol(), 0x0200_2000);
-    assert_eq!(relocations[0].addend(), 0);
-    assert_eq!(relocations[0].displacement(), None);
+    let local = first.local_relocation();
+    let imports = first.import_relocations();
+    assert_eq!(imports.len(), 1);
+    let import = &imports[0];
+    assert_eq!(local.phase(), RpxRplLinkPhase::Local);
+    assert_eq!(local.kind(), CafeRelocationKind::Addr32);
+    assert_eq!(local.site(), 0x1000_2008);
+    assert_eq!(local.before(), 0);
+    assert_eq!(local.after(), 0x0200_2000);
+    assert_eq!(local.resolved_symbol(), 0x0200_2000);
+    assert_eq!(local.addend(), 0);
+    assert_eq!(local.displacement(), None);
 
-    assert_eq!(relocations[1].phase(), RpxRplLinkPhase::Import);
-    assert_eq!(relocations[1].kind(), CafeRelocationKind::Rel24);
-    assert_eq!(relocations[1].site(), 0x0200_0000);
-    assert_eq!(relocations[1].before(), 0x4800_0001);
-    assert_eq!(relocations[1].after(), 0x4800_2001);
-    assert_eq!(relocations[1].resolved_symbol(), 0x0200_2000);
-    assert_eq!(relocations[1].addend(), 0);
-    assert_eq!(relocations[1].displacement(), Some(0x2000));
-
-    assert_eq!(first.local_patch_site(), relocations[0].site());
-    assert_eq!(first.local_patch_value(), relocations[0].after());
-    assert_eq!(first.import_patch_site(), relocations[1].site());
-    assert_eq!(first.import_patch_value(), relocations[1].after());
+    assert_eq!(import.phase(), RpxRplLinkPhase::Import);
+    assert_eq!(import.kind(), CafeRelocationKind::Rel24);
+    assert_eq!(import.site(), 0x0200_0000);
+    assert_eq!(import.before(), 0x4800_0001);
+    assert_eq!(import.after(), 0x4800_2001);
+    assert_eq!(import.resolved_symbol(), 0x0200_2000);
+    assert_eq!(import.addend(), 0);
+    assert_eq!(import.displacement(), Some(0x2000));
 }

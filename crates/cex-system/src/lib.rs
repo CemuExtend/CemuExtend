@@ -3,6 +3,7 @@
 mod headless;
 mod loader;
 mod rpl_call_fixture;
+mod rpl_data_fixture;
 mod rpl_link;
 mod rpl_link_fixture;
 mod rpx;
@@ -81,6 +82,30 @@ pub fn synthetic_rpx_rpl_call_main_fixture() -> Result<Vec<u8>, RpxError> {
 pub fn synthetic_rpx_rpl_call_provider_fixture() -> Result<Vec<u8>, RpxError> {
     rpl_call_fixture::provider_rpl_call_fixture().map_err(|error| match error {
         rpl_call_fixture::RplCallFixtureError::AllocationFailed { requested } => {
+            RpxError::AllocationFailed { requested }
+        }
+    })
+}
+
+/// Return a source-generated main RPX that addresses imported data with `ADDR16`.
+///
+/// Every call returns fresh owned bytes and consults no mutable global state.
+#[doc(hidden)]
+pub fn synthetic_rpx_rpl_data_main_fixture() -> Result<Vec<u8>, RpxError> {
+    rpl_data_fixture::main_rpx_data_fixture().map_err(|error| match error {
+        rpl_data_fixture::RplDataFixtureError::AllocationFailed { requested } => {
+            RpxError::AllocationFailed { requested }
+        }
+    })
+}
+
+/// Return the deterministic data-exporting RPL for the `ADDR16` fixture.
+///
+/// Every call returns fresh owned bytes and consults no mutable global state.
+#[doc(hidden)]
+pub fn synthetic_rpx_rpl_data_provider_fixture() -> Result<Vec<u8>, RpxError> {
+    rpl_data_fixture::provider_rpl_data_fixture().map_err(|error| match error {
+        rpl_data_fixture::RplDataFixtureError::AllocationFailed { requested } => {
             RpxError::AllocationFailed { requested }
         }
     })

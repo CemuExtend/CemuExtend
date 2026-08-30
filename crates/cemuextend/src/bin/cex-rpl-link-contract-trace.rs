@@ -13,8 +13,8 @@ use cex_compat::{
     TraceWriter,
 };
 use cex_system::{
-    MAX_RPX_IMAGE_SIZE, ParsedRpl, ParsedRpx, RplModuleName, RpxRplLinkProof, commit_rpx_rpl_link,
-    parse_rpl, parse_rpx, plan_rpx_rpl_link,
+    MAX_RPX_IMAGE_SIZE, ParsedRpl, ParsedRpx, RplModuleName, RpxRplLinkProof,
+    RpxRplRelocationProof, commit_rpx_rpl_link, parse_rpl, parse_rpx, plan_rpx_rpl_link,
 };
 use sha2::{Digest, Sha256};
 
@@ -239,11 +239,18 @@ fn build_trace_from_proof(
     image_hashes: ImageHashes,
     proof: &RpxRplLinkProof,
 ) -> Result<Vec<u8>, ContractTraceError> {
+    let local = proof.local_relocation();
+    let imports = proof.import_relocations();
+    if imports.len() != 1 {
+        return Err(ContractTraceError::Contract);
+    }
+    let import = &imports[0];
+
     let mut trace = TraceWriter::new(Vec::new());
     for entry in [
         validation_entry(counts, image_hashes),
-        local_relocation_entry(proof),
-        import_relocation_entry(proof),
+        local_relocation_entry(local),
+        import_relocation_entry(import),
         memory_hash_entry(proof)?,
         completed_entry(),
     ] {
@@ -283,20 +290,20 @@ fn validation_entry(counts: ContractCounts, image_hashes: ImageHashes) -> TraceE
     system_event(0, "rpx-rpl-link-validated", fields)
 }
 
-fn local_relocation_entry(proof: &RpxRplLinkProof) -> TraceEntry {
+fn local_relocation_entry(relocation: &RpxRplRelocationProof) -> TraceEntry {
     let mut fields = BTreeMap::new();
     fields.insert(
         "patch_site".to_owned(),
-        TraceValue::Hex32(HexU32::from(proof.local_patch_site())),
+        TraceValue::Hex32(HexU32::from(relocation.site())),
     );
     fields.insert(
         "patch_value".to_owned(),
-        TraceValue::Hex32(HexU32::from(proof.local_patch_value())),
+        TraceValue::Hex32(HexU32::from(relocation.after())),
     );
     system_event(1, "rpx-rpl-local-relocation", fields)
 }
 
-fn import_relocation_entry(proof: &RpxRplLinkProof) -> TraceEntry {
+fn import_relocation_entry(relocation: &RpxRplRelocationProof) -> TraceEntry {
     let mut fields = BTreeMap::new();
     fields.insert(
         "patch_before".to_owned(),
@@ -304,15 +311,15 @@ fn import_relocation_entry(proof: &RpxRplLinkProof) -> TraceEntry {
     );
     fields.insert(
         "patch_site".to_owned(),
-        TraceValue::Hex32(HexU32::from(proof.import_patch_site())),
+        TraceValue::Hex32(HexU32::from(relocation.site())),
     );
     fields.insert(
         "patch_value".to_owned(),
-        TraceValue::Hex32(HexU32::from(proof.import_patch_value())),
+        TraceValue::Hex32(HexU32::from(relocation.after())),
     );
     fields.insert(
         "resolved_export".to_owned(),
-        TraceValue::Hex32(HexU32::from(proof.local_patch_value())),
+        TraceValue::Hex32(HexU32::from(relocation.resolved_symbol())),
     );
     system_event(2, "rpx-rpl-import-relocation", fields)
 }
@@ -646,10 +653,14 @@ mod tests {
             assert_eq!(entry.key().sequence, u32::try_from(sequence).unwrap());
         }
         assert_eq!(proof.main_entry(), 0x0200_0000);
-        assert_eq!(proof.local_patch_site(), 0x1000_2008);
-        assert_eq!(proof.local_patch_value(), 0x0200_2000);
-        assert_eq!(proof.import_patch_site(), 0x1000_0000);
-        assert_eq!(proof.import_patch_value(), 0x0200_2000);
+        let local_relocation = proof.local_relocation();
+        let import_relocations = proof.import_relocations();
+        assert_eq!(import_relocations.len(), 1);
+        let import_relocation = &import_relocations[0];
+        assert_eq!(local_relocation.site(), 0x1000_2008);
+        assert_eq!(local_relocation.after(), 0x0200_2000);
+        assert_eq!(import_relocation.site(), 0x1000_0000);
+        assert_eq!(import_relocation.after(), 0x0200_2000);
         assert_eq!(proof.mapped_page_count(), 5);
         assert_eq!(proof.mapped_byte_count(), 0x5000);
 

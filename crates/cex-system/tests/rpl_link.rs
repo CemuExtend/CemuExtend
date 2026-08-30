@@ -48,10 +48,14 @@ fn public_rpx_rpl_link_slice_is_deterministic_and_complete() {
     let first = linked_proof();
     let second = linked_proof();
     assert_eq!(first, second);
-    assert_eq!(first.local_patch_site(), 0x1000_2008);
-    assert_eq!(first.import_patch_site(), 0x1000_0000);
-    assert_eq!(first.local_patch_value(), 0x0200_2000);
-    assert_eq!(first.import_patch_value(), 0x0200_2000);
+    let local = first.local_relocation();
+    let imports = first.import_relocations();
+    assert_eq!(imports.len(), 1);
+    let import = &imports[0];
+    assert_eq!(local.site(), 0x1000_2008);
+    assert_eq!(import.site(), 0x1000_0000);
+    assert_eq!(local.after(), 0x0200_2000);
+    assert_eq!(import.after(), 0x0200_2000);
     assert_eq!(first.mapped_page_count(), 5);
     assert_eq!(first.mapped_byte_count(), 5 * 4096);
     assert_eq!(first.main_sha256(), second.main_sha256());
