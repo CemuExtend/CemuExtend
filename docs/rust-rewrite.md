@@ -9,7 +9,7 @@
 ## 現在地
 
 - 開発ブランチ: `rewrite/rust`
-- 固定基準: `ab0b772029f0a5cd57c194cf338003fe8eae8ab8`
+- 固定基準: `8dd149160ea64da0b893180bb99cc0d081efbc3a`
 - 固定タグ: `rust-rewrite-baseline-ab0b7720`
 - C++ oracle worktree: `../CemuExtend-cpp-oracle`。固定基準を detached HEAD で
   checkout している。
@@ -28,14 +28,13 @@
   起動、IML JIT、renderer、desktop、Pretendo、
   CEMOD/WUPS parity、移行ツールは完成していない。
 - 最終統合状態: source payload fingerprint
-  `sha256:daf75747d62620c63e805a6af07fa0b12f3576eda450992ec08446d7e4a7faed`
+  `sha256:97c2a8cc03d6cc6a87adc813e42bd46fbb72814393da98fb7d10ab5fd3b4809b`
   （本台帳自身を除外）で、main session が aggregate `ci`、release scratch export、headless
-  imageを成功させた。これは single synthetic main RPX1 +
-  provider RPL1 link slice の品質証拠であり、retail RPL や emulator parity の完成証拠ではない。
-- RPX/RPL milestone 現在地: synthetic main RPX1 + provider RPL1、function import/export 各1、
-  ADDR32 local→import 2 phase、fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、
-  5 pages/0x5000 を source payload fingerprint `daf75747…7faed` の Docker build で検証済み。
-  retail RPL/multiple dependencies/cycles/other reloc/import data/compression/TLS/CPU execution/C++ parity は未実装・未完了である。
+  imageを成功させた。これは fixed synthetic main RPX1 + provider RPL1 positive link-state の品質証拠であり、
+  public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parity の完成証拠ではない。
+- RPX/RPL milestone 現在地: fixed synthetic main RPX1 + provider RPL1 positive link-state、old RPX golden + new RPL
+  5-record golden、C++ oracle smoke/comparator exact equalityを source payload fingerprint `97c2a8cc…4809b` の Docker buildで検証済み。
+  public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parity は未実装・未完了である。
 - Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
   match/mismatch/error/no-clobber自己整合性をDocker確認済み。さらに
   `rust-rpx-contract-artifacts`、固定 C++ adapter、`trace` target の比較で positive-fixture
@@ -210,7 +209,7 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 - [x] license-clean な合成 CEXH fixture の headless 実行を Docker test で通す。
 - [x] synthetic main RPX1 + provider RPL1、function import/export 各1、ADDR32 local→import 2 phase、
   fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、5 pages/0x5000 を source payload
-  fingerprint `daf75747…7faed` の aggregate Docker buildで再検証した。
+  fingerprint `daf75747…7faed` の aggregate Docker buildで再検証した（C++ link-state oracle追加前の履歴）。
 - [ ] license-clean な最小 RPX/Homebrew を決定的に終了させる。
 - [ ] retail RPL/multiple dependencies/cycles/other reloc/import data/compression/TLS/CPU execution/C++ parity を実装・検証する。
 - [ ] CPU state、memory digest、event trace を C++ oracle と一致させる。
@@ -387,6 +386,11 @@ dependencyには含めない。
 
 | 日時（JST） | 対象 | commit/tree | 結果 | 証拠・備考 |
 | --- | --- | --- | --- | --- |
+| 2026-08-31 | current RPX/RPL link-state gates | parent `8dd149160ea64da0b893180bb99cc0d081efbc3a` / `97c2a8cc…4809b` | 成功 | Rust 249 tests、old RPX + new RPL 5-record golden、oracle smoke、UI、audit/notice。Docker buildはmain sessionのみ。 |
+| 2026-08-31 | `./docker-build-cpp-oracle.sh rpl-link-trace` | fixed C++ oracle `ab0b7720` | 成功 | production phase0/phase2、Rust comparator exit 0、exact 5 records。 |
+| 2026-08-31 | `./docker-build-cpp-oracle.sh trace` | fixed C++ oracle `ab0b7720` | 成功 | CMake target追加後に再実行。 |
+| 2026-08-31 | release scratch / headless | parent `8dd149160ea64da0b893180bb99cc0d081efbc3a` / `97c2a8cc…4809b` | 成功 | release export exit 0、Cemu 816688 bytes/0755 SHA `6e89bc…aecb`、headless nonroot UID/GID 10001。 |
+| 2026-08-31 | intermediate failures | parent `8dd14916` | 失敗（履歴） | wrong FILEINFO +0x08、constexpr string_view、too_many_lines、C++ brace欠落 exit2、old manifest CMake SHA drift、new golden dockerignore除外。修正後final exit 0。 |
 | 2026-08-31 | `./docker-build-rust.sh test` | parent `477c0eae` / `daf75747…7faed` | 成功 | fmt/check/Clippy、Rust workspace 243 tests（cex-system lib 76 + public rpl integration 2を含む）。 |
 | 2026-08-31 | `./docker-build-rust.sh ci` | parent `477c0eae` / `daf75747…7faed` | 成功 | UI source unchanged、cached rust-ui stage、既存30 UI testsを含む aggregate gate。 |
 | 2026-08-31 | raw `rust-release` / `rust-headless` build | parent `477c0eae` / `daf75747…7faed` | 成功 | 各Docker target exit 0。 |
@@ -795,9 +799,9 @@ malformed corpus、retail RPX/RPL、import、relocation、compressionのparity�
 universal atomicityは主張せず、`.dockerignore`は静的policyであって全Docker context内容の
 不在証明ではない。Windows directory fsync adapterはWindows milestone開始前のblockerである。
 
-### RPX1/RPL1 link slice の現行 source payload 証跡
+### RPX1/RPL1 link slice の旧 source payload 証跡
 
-現行 source payload fingerprint は
+当時の source payload fingerprint は
 `sha256:daf75747d62620c63e805a6af07fa0b12f3576eda450992ec08446d7e4a7faed`
 である。本台帳自身を除外し、本slice差分の親commitは
 `477c0eaea0b33ed80f91e7acf4827a54812663c9`である。固定C++互換基準は引き続き
@@ -829,18 +833,30 @@ needless_pass_by_value、意図的zero hash discovery failureと1-byte transcrip
 （二次走査/RPL entry/one-past symbol/nonzero adjustment）対応、E0282 BTreeMap type、semicolon lint、
 provider nonzero entry fixture failuresを経て最終exit 0に到達した。architecture Sol-high + safety
 Sol-medium final read-only reviewはP0/P1/P2なしで承認し、P3はlegacy cfg(test) validator driftとbounded
-BTree node OOM変換不可として残す。既存e40db/205は明示的履歴へ降格し、現行/最新表現はdaf757/243に一本化する。
+BTree node OOM変換不可として残す。既存e40db/205とdaf757/243は明示的履歴へ降格し、現行/最新表現は97c2/249に一本化する。
 C++ positive parse/map attestationは前sliceのまま有効だが、新RPL linkのC++ parity証拠ではない。
 
 検証時は実行した完全な `docker build` command、対象 commit または dirty tree の識別、
 成否、失敗した target/test、必要な log の保存先をこの表へ追記する。秘密情報を含む log
 は保存せず、redact した要約だけを記録する。
 
+### RPX/RPL link-state の現行 source payload 証跡
+
+現行 source payload fingerprint は `sha256:97c2a8cc03d6cc6a87adc813e42bd46fbb72814393da98fb7d10ab5fd3b4809b`、parent HEAD は `8dd149160ea64da0b893180bb99cc0d081efbc3a` である。
+固定 synthetic main RPX1 + provider RPL1 positive link-stateのみを対象とし、provider `e_entry=0`のためtest-only adapterがexternal-linkage production `ProcessHeaders/LoadSections/UpdateEntrypoint(mainのみ)/LinkSingleModule`を使用する。phase loopとpermission/hash projectionはharness-definedであり、public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parityではない。
+
+正式main-session Docker evidenceは `./docker-build-rust.sh rpl-link-contract-artifacts`、`./docker-build-cpp-oracle.sh rpl-link-trace`、`./docker-build-cpp-oracle.sh trace`、`./docker-build-rust.sh ci`、release scratch export、`./docker-build-rust.sh headless` がすべてexit 0。Rust 249 tests、old RPX golden + new RPL 5-record golden、oracle smoke、UI、audit/notice、C++ comparator exact 5 recordsを確認した。旧daf757/243および旧Cemu hashはC++ link-state oracle追加前の履歴である。
+
+artifact hashes: main 772/0644 `13011586…374b`、provider 716/0644 `95295415…8cec`、trace 1796/0600 `e5da8b…9907e`、comparator 1036888/0755 `605853…254f`、SHA256SUMS 321/0644 `7c9e75…7aee`、manifest `059cb0…4fc2`、CMake `bd87…06b7`、adapter `07af…70e9`、memory hash `6f0b03…46ae`。release Cemu 816688/0755 `6e89bc…aecb`、LICENSE 16725/0644 `1f256e…`、notices 94701/0644 `68c283…`、headless nonroot UID/GID 10001。
+
+失敗履歴は保持する（wrong FILEINFO +0x08、C++ constexpr string_view、Clippy too_many_lines、C++ memory/terminal root brace欠落、old RPX manifest CMake SHA drift、new golden dockerignore除外）。修正後final exit 0。no-clobber atomicityはfilesystem依存、dockerignoreは静的policy、Windows dir fsync blockerは継続。
+
 ## レビュー指摘と対応
 
 | 日時（JST） | レビュー | 指摘 | 対応 | 状態 |
 | --- | --- | --- | --- | --- |
-| 2026-08-31 | architecture Sol-high + safety Sol-medium final read-only review | RPX1/RPL1 link sliceの境界、transactional memory、RPL metadata、import/reloc安全性を確認。 | fingerprint `daf75747…7faed`の差分と243 testsのDocker evidenceを確認。P0/P1/P2なし。P3はlegacy cfg(test) validator driftとbounded BTree node OOM変換不可。 | 最終承認済み |
+| 2026-08-31 | architecture Sol-high + safety Sol-medium code review | RPX1/RPL1 link sliceの境界、transactional memory、RPL metadata、import/reloc安全性を確認。 | 現行`97c2a8cc…4809b` / 249 testsの実装とmain-session Docker証拠を確認し、P0/P1/P2なし。P3はlegacy cfg(test) validator driftとbounded BTree node OOM変換不可。 | 最終承認済み |
+| 2026-08-31 | final golden/Dockerignore review | 新RPL 5-record golden、manifest、CMake/adapter hash、Dockerignore差分。 | architecture / safety reviewerが現物SHA、aggregate gate、exact 2-file re-include、台帳を再確認し、fingerprint `97c2a8cc…4809b`を独立再計算して一致。P0/P1/P2なし。 | 最終承認済み |
 | 2026-08-30 | architecture / safety final read-only review | fingerprint `e40db320…97e78` の正式Docker証拠、golden pin、P2 hardening後のC++ trace attestationを対象にdoc+codeを読む最終確認。 | architecture・safetyの両reviewerがfingerprintを再計算し、code・script・台帳を確認した。未解決P0/P1/P2なし。 | 最終承認済み |
 | 2026-08-30 | architecture review | `rust-ci` に dependency/advisory/license audit がなく「完全な gate」と呼べない。 | `rust-deny` を `rust-ci` の祖先へ追加し、aggregate `ci` を正式 gate に変更。0.18.4 の CVSS 4.0 parse failure 後、0.20.2 へ固定して全 audit を通した。 | 対応済み・Docker 確認済み |
 | 2026-08-30 | architecture review | RPC manifest 変更時に Rust/TS generated contract drift を検知する必要がある。 | Rust 側 golden test を `rust-test` に追加し、generator drift と UI checks を行う `rust-ui` を aggregate `ci` へ接続。 | 対応済み・Docker 確認済み |

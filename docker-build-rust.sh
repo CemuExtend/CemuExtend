@@ -10,10 +10,13 @@ cargo_about_version="${CEMU_CARGO_ABOUT_VERSION:-0.9.2}"
 format_fix_output_dir=""
 ui_format_fix_output_dir=""
 rpx_contract_staging_dir=""
+rpl_link_contract_staging_dir=""
 release_staging_dir=""
 readonly rpx_contract_staging_marker='.cemu-rpx-contract-staging'
+readonly rpl_link_contract_staging_marker='.cemu-rpl-link-contract-staging'
 readonly release_staging_marker='.cemu-rust-release-staging'
 readonly -a rpx_contract_artifacts=(fixture.rpx rust-trace.jsonl SHA256SUMS cex-trace-compare)
+readonly -a rpl_link_contract_artifacts=(main.rpx provider.rpl rust-trace.jsonl SHA256SUMS cex-trace-compare)
 
 cleanup_format_fix_output_dirs() {
 	for output_dir in "${format_fix_output_dir}" "${ui_format_fix_output_dir}"; do
@@ -83,6 +86,34 @@ cleanup_rust_release_staging() {
 	return "${cleanup_status}"
 }
 
+cleanup_rpl_link_contract_staging() {
+	local status=$?
+	local cleanup_status=0
+
+	if [[ -n "${rpl_link_contract_staging_dir}" ]]; then
+		if [[ "${rpl_link_contract_staging_dir}" == "${project_dir}"/.docker-rpl-link-contract.* \
+			&& -d "${rpl_link_contract_staging_dir}" \
+			&& ! -L "${rpl_link_contract_staging_dir}" \
+			&& -f "${rpl_link_contract_staging_dir}/${rpl_link_contract_staging_marker}" \
+			&& ! -L "${rpl_link_contract_staging_dir}/${rpl_link_contract_staging_marker}" \
+			&& "$(<"${rpl_link_contract_staging_dir}/${rpl_link_contract_staging_marker}")" == 'cemu-extend-rpl-link-contract-staging-v1' ]]; then
+			if ! rm -rf -- "${rpl_link_contract_staging_dir}"; then
+				printf 'Could not remove the temporary RPL link contract staging directory\n' >&2
+				cleanup_status=1
+			fi
+		else
+			printf 'Refusing to remove an unexpected temporary RPL link contract staging directory\n' >&2
+			cleanup_status=1
+		fi
+		rpl_link_contract_staging_dir=""
+	fi
+
+	if (( status != 0 )); then
+		return "${status}"
+	fi
+	return "${cleanup_status}"
+}
+
 cleanup_output_dirs() {
 	local status=${1:-$?}
 	local cleanup_status=0
@@ -91,6 +122,9 @@ cleanup_output_dirs() {
 		cleanup_status=1
 	fi
 	if ! cleanup_rpx_contract_staging; then
+		cleanup_status=1
+	fi
+	if ! cleanup_rpl_link_contract_staging; then
 		cleanup_status=1
 	fi
 	if ! cleanup_rust_release_staging; then
@@ -153,6 +187,58 @@ validate_rpx_contract_artifacts() {
 	fi
 }
 
+validate_rpl_link_contract_artifacts() {
+	local directory=$1
+	local artifact entry
+
+	if [[ ! -d "${directory}" || -L "${directory}" ]]; then
+		printf 'RPL link contract artifact staging is invalid\n' >&2
+		return 1
+	fi
+	for artifact in "${rpl_link_contract_artifacts[@]}"; do
+		if [[ ! -f "${directory}/${artifact}" || -L "${directory}/${artifact}" \
+			|| ! -s "${directory}/${artifact}" ]]; then
+			printf 'RPL link contract artifact staging is incomplete\n' >&2
+			return 1
+		fi
+	done
+	if [[ ! -x "${directory}/cex-trace-compare" ]]; then
+		printf 'RPL link contract comparator artifact is not executable\n' >&2
+		return 1
+	fi
+	while IFS= read -r -d '' entry; do
+		case "${entry}" in
+			main.rpx|provider.rpl|rust-trace.jsonl|SHA256SUMS|cex-trace-compare) ;;
+			"${rpl_link_contract_staging_marker}")
+				if [[ "${directory}" != "${rpl_link_contract_staging_dir}" ]]; then
+					printf 'RPL link contract artifact staging contains unexpected entries\n' >&2
+					return 1
+				fi
+				;;
+			*)
+				printf 'RPL link contract artifact staging contains unexpected entries\n' >&2
+				return 1
+				;;
+		esac
+	done < <(find "${directory}" -mindepth 1 -maxdepth 1 -printf '%f\0')
+	if ! LC_ALL=C awk '
+		function hex64(value) { return length(value) == 64 && value ~ /^[0-9a-f]+$/ }
+		NF == 2 && hex64($1) && $2 == "main.rpx" { main++; next }
+		NF == 2 && hex64($1) && $2 == "provider.rpl" { provider++; next }
+		NF == 2 && hex64($1) && $2 == "rust-trace.jsonl" { trace++; next }
+		NF == 2 && hex64($1) && $2 == "cex-trace-compare" { comparator++; next }
+		{ invalid = 1 }
+		END { exit invalid || main != 1 || provider != 1 || trace != 1 || comparator != 1 }
+	' "${directory}/SHA256SUMS"; then
+		printf 'RPL link contract checksum manifest is invalid\n' >&2
+		return 1
+	fi
+	if ! (cd -- "${directory}" && sha256sum --check --status SHA256SUMS); then
+		printf 'RPL link contract checksum verification failed\n' >&2
+		return 1
+	fi
+}
+
 exit_after_cleanup() {
 	local status=$?
 	local cleanup_status=0
@@ -206,6 +292,9 @@ case "${build_kind}" in
 	rpx-contract-artifacts|rpx-artifacts)
 		docker_target=rust-rpx-contract-artifacts
 		;;
+	rpl-link-contract-artifacts)
+		docker_target=rust-rpl-link-contract-artifacts
+		;;
 	headless)
 		docker_target=rust-headless
 		;;
@@ -216,7 +305,7 @@ case "${build_kind}" in
 		docker_target=rust-ui
 		;;
 	*)
-		printf 'Usage: %s [lock|format|format-fix|ui-format-fix|check|clippy|test|audit|ci|oracle-smoke|rpx-contract-artifacts|headless|release|ui]\n' "${0##*/}" >&2
+		printf 'Usage: %s [lock|format|format-fix|ui-format-fix|check|clippy|test|audit|ci|oracle-smoke|rpx-contract-artifacts|rpl-link-contract-artifacts|headless|release|ui]\n' "${0##*/}" >&2
 		exit 2
 		;;
 esac
@@ -309,6 +398,42 @@ elif [[ "${build_kind}" == rpx-contract-artifacts || "${build_kind}" == rpx-arti
 	rm -f -- "${artifact_dir}/${rpx_contract_staging_marker}"
 	validate_rpx_contract_artifacts "${artifact_dir}"
 	printf 'Docker Rust RPX contract artifacts: %s\n' "${artifact_dir}"
+elif [[ "${build_kind}" == rpl-link-contract-artifacts ]]; then
+	artifact_dir="${project_dir}/result/rpl-link-contract"
+	result_dir="${project_dir}/result"
+	if [[ -e "${artifact_dir}" || -L "${artifact_dir}" ]]; then
+		printf 'Refusing to replace an existing RPL link contract artifact destination\n' >&2
+		exit 1
+	fi
+	if [[ -L "${result_dir}" || ( -e "${result_dir}" && ! -d "${result_dir}" ) ]]; then
+		printf 'RPL link contract artifact parent is not a directory\n' >&2
+		exit 1
+	fi
+	mkdir -p -- "${result_dir}"
+	rpl_link_contract_staging_dir="$(mktemp -d "${project_dir}/.docker-rpl-link-contract.XXXXXX")"
+	printf '%s\n' 'cemu-extend-rpl-link-contract-staging-v1' \
+		> "${rpl_link_contract_staging_dir}/${rpl_link_contract_staging_marker}"
+	docker "${docker_args[@]}" --output "type=local,dest=${rpl_link_contract_staging_dir}" "${project_dir}"
+	validate_rpl_link_contract_artifacts "${rpl_link_contract_staging_dir}"
+	if ! mv -T -n -- "${rpl_link_contract_staging_dir}" "${artifact_dir}"; then
+		printf 'Could not publish RPL link contract artifacts\n' >&2
+		exit 1
+	fi
+	if [[ -e "${rpl_link_contract_staging_dir}" || -L "${rpl_link_contract_staging_dir}" ]]; then
+		printf 'Refusing to replace an existing RPL link contract artifact destination\n' >&2
+		exit 1
+	fi
+	rpl_link_contract_staging_dir=""
+	if [[ ! -d "${artifact_dir}" || -L "${artifact_dir}" \
+		|| ! -f "${artifact_dir}/${rpl_link_contract_staging_marker}" \
+		|| -L "${artifact_dir}/${rpl_link_contract_staging_marker}" \
+		|| "$(<"${artifact_dir}/${rpl_link_contract_staging_marker}")" != 'cemu-extend-rpl-link-contract-staging-v1' ]]; then
+		printf 'Published RPL link contract artifact destination failed validation\n' >&2
+		exit 1
+	fi
+	rm -f -- "${artifact_dir}/${rpl_link_contract_staging_marker}"
+	validate_rpl_link_contract_artifacts "${artifact_dir}"
+	printf 'Docker Rust RPL link contract artifacts: %s\n' "${artifact_dir}"
 elif [[ "${build_kind}" == format-fix ]]; then
 	format_fix_output_dir="$(mktemp -d "${project_dir}/.docker-format-fix.XXXXXX")"
 	docker "${docker_args[@]}" --output "type=local,dest=${format_fix_output_dir}" "${project_dir}"

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "oracle_commit": "ab0b772029f0a5cd57c194cf338003fe8eae8ab8",
+  "oracle_attestation": "cex-trace-compare exit 0 against fixed C++ oracle output",
+  "scope": "positive synthetic RPX/RPL link-state only; not execution or full compatibility",
+  "main_fixture_producer": "cex-rpl-link-fixture --module main",
+  "provider_fixture_producer": "cex-rpl-link-fixture --module provider",
+  "trace_producer": "cex-rpl-link-contract-trace",
+  "main_fixture_sha256": "13011586d955f3d3a0ce6668b1893f1a68a20f0435678e7ccd2fd85f0ea8374b",
+  "provider_fixture_sha256": "9529541572c1eb5d83b2cf89f02f6b6daace501a9a8ac15e2f715a5229b68cec",
+  "golden_trace_path": "compat/golden/rpl-link-contract-positive-v1.jsonl",
+  "golden_trace_records": 5,
+  "golden_trace_sha256": "e5da8bbac2a99be23e96b376454a71a08cfec8a16ca4ab125882b40e7c89907e",
+  "adapter_cmake_path": "compat/cpp-oracle/CMakeLists.txt",
+  "adapter_cmake_sha256": "bd87fc41c7a8b014fdec2c8782b2e66246252a8aead057f3ee5801c1e7da06b7",
+  "adapter_source_path": "compat/cpp-oracle/rpl_link_oracle_trace.cpp",
+  "adapter_source_sha256": "07af4afa2baa655fcdb0fc19dac8ca9785d1087618874c4f524d62e4c3fc70e9"
+}

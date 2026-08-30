@@ -119,6 +119,7 @@ fn build_main_image() -> Result<Vec<u8>, RplLinkFixtureError> {
     write_file_info(
         &mut image[file_info_offset..file_info_offset + FILE_INFO_SIZE],
         2,
+        0x1000,
     );
     write_crc_table(&mut image, &sections, crc_offset);
     Ok(image)
@@ -176,6 +177,7 @@ fn build_provider_image() -> Result<Vec<u8>, RplLinkFixtureError> {
         .copy_from_slice(PROVIDER_SECTION_NAMES);
     write_file_info(
         &mut image[file_info_offset..file_info_offset + FILE_INFO_SIZE],
+        0,
         0,
     );
     write_crc_table(&mut image, &sections, crc_offset);
@@ -576,11 +578,11 @@ fn write_rela(
     write_u32(bytes, offset + 8, addend);
 }
 
-fn write_file_info(bytes: &mut [u8], flags: u32) {
+fn write_file_info(bytes: &mut [u8], flags: u32, data_region_size: u32) {
     write_u32(bytes, 0x00, 0xcafe_0402);
     write_u32(bytes, 0x04, 0x1000);
     write_u32(bytes, 0x08, 0x1000);
-    write_u32(bytes, 0x0c, 0x1000);
+    write_u32(bytes, 0x0c, data_region_size);
     write_u32(bytes, 0x10, 0x1000);
     write_u32(bytes, 0x14, 0x1000);
     write_u32(bytes, 0x34, flags);
@@ -645,7 +647,7 @@ mod tests {
     fn main_fixture_has_the_approved_link_layout() {
         let image = main_rpx_link_fixture().unwrap();
         assert_eq!(image.len(), MAIN_IMAGE_SIZE);
-        assert_layout(&image, MAIN_SECTION_COUNT, 7);
+        assert_layout(&image, MAIN_SECTION_COUNT, 7, 0x1000);
         assert_eq!(read_u32(&image, 24), MAIN_TEXT_ADDRESS);
         assert_eq!(section(&image, 1).address, MAIN_TEXT_ADDRESS);
         assert_eq!(section(&image, 2).address, MAIN_DATA_ADDRESS);
@@ -666,6 +668,7 @@ mod tests {
             MAIN_DATA_ADDRESS
         );
         assert_eq!(read_u32(&image, section(&image, 6).offset + 4), 0x101);
+        assert_eq!(read_u32(&image, section(&image, 9).offset + 0x0c), 0x1000);
         assert_eq!(read_u32(&image, section(&image, 9).offset + 0x34), 2);
     }
 
@@ -673,7 +676,7 @@ mod tests {
     fn provider_fixture_has_the_approved_link_layout() {
         let image = provider_rpl_link_fixture().unwrap();
         assert_eq!(image.len(), PROVIDER_IMAGE_SIZE);
-        assert_layout(&image, PROVIDER_SECTION_COUNT, 6);
+        assert_layout(&image, PROVIDER_SECTION_COUNT, 6, 0);
         assert_eq!(read_u32(&image, 24), 0);
         assert_eq!(section(&image, 1).address, PROVIDER_TEXT_ADDRESS);
         assert_eq!(section(&image, 2).address, PROVIDER_EXPORT_ADDRESS);
@@ -700,6 +703,7 @@ mod tests {
             PROVIDER_EXPORT_ADDRESS + 8
         );
         assert_eq!(read_u32(&image, section(&image, 5).offset + 4), 0x101);
+        assert_eq!(read_u32(&image, section(&image, 8).offset + 0x0c), 0);
         assert_eq!(read_u32(&image, section(&image, 8).offset + 0x34), 0);
     }
 
@@ -735,7 +739,12 @@ mod tests {
         entry_size: u32,
     }
 
-    fn assert_layout(image: &[u8], expected_count: usize, name_index: u16) {
+    fn assert_layout(
+        image: &[u8],
+        expected_count: usize,
+        name_index: u16,
+        expected_data_region_size: u32,
+    ) {
         assert_eq!(&image[..9], &[0x7f, b'E', b'L', b'F', 1, 2, 1, 0xca, 0xfe]);
         assert_eq!(read_u16(image, 16), 0xfe01);
         assert_eq!(read_u16(image, 18), 20);
@@ -757,9 +766,14 @@ mod tests {
             payloads.push((current.offset, current.offset + current.size));
         }
         let file_info = section(image, expected_count - 1);
-        for offset in [4, 8, 12, 16, 20] {
-            assert_eq!(read_u32(image, file_info.offset + offset), 0x1000);
-        }
+        assert_eq!(read_u32(image, file_info.offset + 4), 0x1000);
+        assert_eq!(read_u32(image, file_info.offset + 8), 0x1000);
+        assert_eq!(
+            read_u32(image, file_info.offset + 12),
+            expected_data_region_size
+        );
+        assert_eq!(read_u32(image, file_info.offset + 16), 0x1000);
+        assert_eq!(read_u32(image, file_info.offset + 20), 0x1000);
     }
 
     fn section(image: &[u8], index: usize) -> ReadSection {

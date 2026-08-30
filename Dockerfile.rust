@@ -127,13 +127,19 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && cargo build --release --locked --package cex-compat --bin cex-trace-compare \
     && cargo build --release --locked --package cemuextend --bin cex-rpx-fixture \
     && cargo build --release --locked --package cemuextend --bin cex-rpx-contract-trace \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-link-fixture \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-link-contract-trace \
     && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu \
     && install -D -m 0755 /workspace/target/release/cex-trace-compare \
         /opt/cemuextend/bin/cex-trace-compare \
     && install -D -m 0755 /workspace/target/release/cex-rpx-fixture \
         /opt/cemuextend/bin/cex-rpx-fixture \
     && install -D -m 0755 /workspace/target/release/cex-rpx-contract-trace \
-        /opt/cemuextend/bin/cex-rpx-contract-trace
+        /opt/cemuextend/bin/cex-rpx-contract-trace \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-link-fixture \
+        /opt/cemuextend/bin/cex-rpl-link-fixture \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-link-contract-trace \
+        /opt/cemuextend/bin/cex-rpl-link-contract-trace
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
@@ -246,6 +252,31 @@ FROM scratch AS rust-rpx-contract-artifacts
 
 COPY --from=rust-rpx-contract-artifacts-builder /opt/cemuextend/rpx-contract/ /
 
+# BuildKit-exported paired RPX/RPL fixtures and their canonical link trace.
+FROM rust-builder AS rust-rpl-link-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpl-link-contract; \
+    /opt/cemuextend/bin/cex-rpl-link-fixture --module main \
+        > /opt/cemuextend/rpl-link-contract/main.rpx; \
+    /opt/cemuextend/bin/cex-rpl-link-fixture --module provider \
+        > /opt/cemuextend/rpl-link-contract/provider.rpl; \
+    /opt/cemuextend/bin/cex-rpl-link-contract-trace \
+        --main /opt/cemuextend/rpl-link-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-link-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-link-contract/rust-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-link-contract/main.rpx; \
+    test -s /opt/cemuextend/rpl-link-contract/provider.rpl; \
+    test -s /opt/cemuextend/rpl-link-contract/rust-trace.jsonl; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpl-link-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpl-link-contract; \
+    sha256sum main.rpx provider.rpl rust-trace.jsonl cex-trace-compare > SHA256SUMS
+
+FROM scratch AS rust-rpl-link-contract-artifacts
+
+COPY --from=rust-rpl-link-contract-artifacts-builder /opt/cemuextend/rpl-link-contract/ /
+
 # Rebuild the current synthetic fixture and Rust trace, then compare them with
 # the tracked trace attested by the fixed C++ oracle. The manifest also pins the
 # adapter sources, so changing the manual oracle path requires an explicit
@@ -299,6 +330,65 @@ RUN set -eu; \
         --expected "${golden}" \
         --actual "${gate_dir}/rust-actual.jsonl"; \
     touch /opt/cemuextend/rpx-golden-gate-verified
+
+# Rebuild the paired synthetic RPX/RPL fixtures and attest their five-record
+# link-state trace against the fixed C++ oracle golden. This deliberately
+# covers only the positive synthetic link-state contract, not execution or
+# broad compatibility.
+FROM rust-builder AS rust-rpl-link-golden-gate
+
+RUN set -eu; \
+    gate_dir=/tmp/cemuextend-rpl-link-golden-gate; \
+    manifest=compat/golden/rpl-link-contract-positive-v1.manifest.json; \
+    golden=compat/golden/rpl-link-contract-positive-v1.jsonl; \
+    mkdir -p "${gate_dir}"; \
+    /opt/cemuextend/bin/cex-rpl-link-fixture --module main > "${gate_dir}/main.rpx"; \
+    /opt/cemuextend/bin/cex-rpl-link-fixture --module provider > "${gate_dir}/provider.rpl"; \
+    /opt/cemuextend/bin/cex-rpl-link-contract-trace \
+        --main "${gate_dir}/main.rpx" \
+        --provider "${gate_dir}/provider.rpl" \
+        --trace-output "${gate_dir}/rust-actual.jsonl"; \
+    manifest_value() { \
+        awk -v key="$1" ' \
+            $0 ~ "^[[:space:]]*\"" key "\"[[:space:]]*:" { \
+                value = $0; \
+                sub("^[[:space:]]*\"" key "\"[[:space:]]*:[[:space:]]*", "", value); \
+                sub(",[[:space:]]*$", "", value); \
+                sub("^[[:space:]]*\"", "", value); \
+                sub("\"[[:space:]]*$", "", value); \
+                print value; \
+            } \
+        ' "${manifest}"; \
+    }; \
+    assert_manifest_sha256() { \
+        expected="$(manifest_value "$2")"; \
+        test "$(printf '%s' "${expected}" | wc -c)" -eq 64; \
+        printf '%s\n' "${expected}" | grep -Eq '^[0-9a-f]{64}$'; \
+        actual="$(sha256sum "$1" | cut -d ' ' -f1)"; \
+        test "${actual}" = "${expected}"; \
+    }; \
+    test "$(manifest_value schema_version)" = 1; \
+    test "$(manifest_value oracle_commit)" = ab0b772029f0a5cd57c194cf338003fe8eae8ab8; \
+    test "$(manifest_value oracle_attestation)" = 'cex-trace-compare exit 0 against fixed C++ oracle output'; \
+    test "$(manifest_value scope)" = 'positive synthetic RPX/RPL link-state only; not execution or full compatibility'; \
+    test "$(manifest_value main_fixture_producer)" = 'cex-rpl-link-fixture --module main'; \
+    test "$(manifest_value provider_fixture_producer)" = 'cex-rpl-link-fixture --module provider'; \
+    test "$(manifest_value trace_producer)" = cex-rpl-link-contract-trace; \
+    test "$(manifest_value golden_trace_path)" = "${golden}"; \
+    test "$(manifest_value adapter_cmake_path)" = compat/cpp-oracle/CMakeLists.txt; \
+    test "$(manifest_value adapter_source_path)" = compat/cpp-oracle/rpl_link_oracle_trace.cpp; \
+    test "$(manifest_value golden_trace_records)" -eq 5; \
+    test "$(wc -l < "${golden}")" -eq "$(manifest_value golden_trace_records)"; \
+    test "$(wc -l < "${gate_dir}/rust-actual.jsonl")" -eq "$(manifest_value golden_trace_records)"; \
+    assert_manifest_sha256 "${gate_dir}/main.rpx" main_fixture_sha256; \
+    assert_manifest_sha256 "${gate_dir}/provider.rpl" provider_fixture_sha256; \
+    assert_manifest_sha256 "${golden}" golden_trace_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/CMakeLists.txt adapter_cmake_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/rpl_link_oracle_trace.cpp adapter_source_sha256; \
+    /opt/cemuextend/bin/cex-trace-compare \
+        --expected "${golden}" \
+        --actual "${gate_dir}/rust-actual.jsonl"; \
+    touch /opt/cemuextend/rpl-link-golden-gate-verified
 
 # Runnable Linux headless image. No React/CEF or native desktop frontend is
 # pulled into this path.
@@ -381,4 +471,5 @@ COPY --from=rust-builder /opt/cemuextend/licenses/LICENSE.txt /opt/cemuextend/li
 COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /opt/cemuextend/license-gate/THIRD_PARTY_LICENSES.txt
 COPY --from=rust-oracle-smoke /opt/cemuextend/oracle-smoke-verified /opt/cemuextend/oracle-smoke-verified
 COPY --from=rust-rpx-golden-gate /opt/cemuextend/rpx-golden-gate-verified /opt/cemuextend/rpx-golden-gate-verified
+COPY --from=rust-rpl-link-golden-gate /opt/cemuextend/rpl-link-golden-gate-verified /opt/cemuextend/rpl-link-golden-gate-verified
 COPY --from=rust-ui /ui-verified /opt/cemuextend/ui-verified

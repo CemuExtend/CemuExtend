@@ -6,6 +6,7 @@ out/
 .cache/
 result/
 .docker-rpx-contract.*/
+.docker-rpl-link-contract.*/
 .docker-rust-release.*/
 *.profraw
 .git
@@ -102,8 +103,9 @@ bin/gameProfiles/*
 **/*.jsonl
 **/*.trace
 **/*.trace-report.json
-# This exact public synthetic trace is a tracked fixed-oracle CI input.
+# These exact public synthetic traces are tracked fixed-oracle CI inputs.
 !compat/golden/rpx-contract-positive-v1.jsonl
+!compat/golden/rpl-link-contract-positive-v1.jsonl
 **/oracle-output/
 **/private-fixtures/
 **/fixtures/private/
