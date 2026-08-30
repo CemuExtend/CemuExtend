@@ -1,6 +1,6 @@
 # CemuExtend Rust rewrite 進行台帳
 
-最終更新: 2026-08-30（JST）
+最終更新: 2026-08-31（JST）
 
 この文書は Rust rewrite の現在地、検証証拠、設計判断、レビュー対応を
 逐次追記する進行台帳である。crate や Docker target が存在するだけでは機能完成と
@@ -28,15 +28,14 @@
   起動、IML JIT、renderer、desktop、Pretendo、
   CEMOD/WUPS parity、移行ツールは完成していない。
 - 最終統合状態: source payload fingerprint
-  `sha256:e40db320e18f27ca3ad8d0dfe02c0c56a47d25bb4ff51cde87ea1e8da6c97e78`
-  （本台帳自身を除外）で、main session が aggregate `ci`、release export、headless
-  image、RPX contract artifact を成功させた。これは strict・非圧縮・
-  import-free synthetic main RPX と positive parse/map contract の品質証拠であり、
-  retail RPX/RPL や emulator parity の完成証拠ではない。
-- RPX milestone 現在地: strict・非圧縮・import-free の synthetic main RPX parser、
-  code-generated 5-section fixture、deterministic headless/CLI integration は source payload
-  fingerprint `e40db320…97e78` の Docker build で検証済み。retail RPX/RPL、import、
-  relocation、compression、Cafe OS、Homebrew は未実装・未完了である。
+  `sha256:daf75747d62620c63e805a6af07fa0b12f3576eda450992ec08446d7e4a7faed`
+  （本台帳自身を除外）で、main session が aggregate `ci`、release scratch export、headless
+  imageを成功させた。これは single synthetic main RPX1 +
+  provider RPL1 link slice の品質証拠であり、retail RPL や emulator parity の完成証拠ではない。
+- RPX/RPL milestone 現在地: synthetic main RPX1 + provider RPL1、function import/export 各1、
+  ADDR32 local→import 2 phase、fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、
+  5 pages/0x5000 を source payload fingerprint `daf75747…7faed` の Docker build で検証済み。
+  retail RPL/multiple dependencies/cycles/other reloc/import data/compression/TLS/CPU execution/C++ parity は未実装・未完了である。
 - Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
   match/mismatch/error/no-clobber自己整合性をDocker確認済み。さらに
   `rust-rpx-contract-artifacts`、固定 C++ adapter、`trace` target の比較で positive-fixture
@@ -209,11 +208,11 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 - [ ] PPC interpreter の必要命令と例外経路を完成させる。
 - [ ] RPX/RPL loader、scheduler、VFS、最小 Cafe/IOSU を接続する。
 - [x] license-clean な合成 CEXH fixture の headless 実行を Docker test で通す。
-- [x] strict・非圧縮・import-free synthetic main RPX parser、code-generated 5-section
-  fixture、deterministic headless/CLI integration を source payload fingerprint
-  `e40db320…97e78` の aggregate Docker buildで再検証した。
+- [x] synthetic main RPX1 + provider RPL1、function import/export 各1、ADDR32 local→import 2 phase、
+  fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、5 pages/0x5000 を source payload
+  fingerprint `daf75747…7faed` の aggregate Docker buildで再検証した。
 - [ ] license-clean な最小 RPX/Homebrew を決定的に終了させる。
-- [ ] retail RPX/RPL、import、relocation、compression、Cafe OS を実装・検証する。
+- [ ] retail RPL/multiple dependencies/cycles/other reloc/import data/compression/TLS/CPU execution/C++ parity を実装・検証する。
 - [ ] CPU state、memory digest、event trace を C++ oracle と一致させる。
 - [ ] 不正形式、範囲外 memory、権限違反、未対応命令の negative test を通す。
 
@@ -282,6 +281,7 @@ TERM を送り、10 秒後に残存プロセスを kill して exit 124 とす�
 | 2026-08-30 | 4 GiB guest address space の半開区間終端として `end = 2^32` を許可する | `[start, end)` が address space 末尾まで到達する正当な範囲を表現する。legacy external validator の `UINT32_MAX` 終端制約は互換要件として保持しない。 |
 | 2026-08-30 | C++ の旧 JIT にある RWX memory 運用を移植しない | Rust JIT は W^X を必須とし、unsafe を code cache と ABI trampoline に局所化する。 |
 | 2026-08-30 | `main` の同期は milestone 間だけにする | 検証中の基準変動を避ける。milestone gate 通過後に同期し、次へ進む前に aggregate `ci` を再実行する。 |
+| 2026-08-30 | single synthetic RPX1 + provider RPL1 link slice を固定する | function import/export各1、ADDR32 local→import 2 phase、fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、5 pages/0x5000を対象とする。RPL e_entry=0、nonzero FILEINFO adjustments unsupported fail-closed、module nameはlowercase ASCII basename+exact one `.rpl`、最大recordはindexed O(n log n)とする。retail RPL、複数依存/cycle、他reloc/import data、compression/TLS/CPU execution/C++ parityは未実装。 |
 
 固定 C++ oracle は最初の互換 campaign 中は更新しない。milestone gate の通過証拠を
 記録した後、次の milestone の開始前に `main` を `rewrite/rust` へ merge する。
@@ -387,6 +387,12 @@ dependencyには含めない。
 
 | 日時（JST） | 対象 | commit/tree | 結果 | 証拠・備考 |
 | --- | --- | --- | --- | --- |
+| 2026-08-31 | `./docker-build-rust.sh test` | parent `477c0eae` / `daf75747…7faed` | 成功 | fmt/check/Clippy、Rust workspace 243 tests（cex-system lib 76 + public rpl integration 2を含む）。 |
+| 2026-08-31 | `./docker-build-rust.sh ci` | parent `477c0eae` / `daf75747…7faed` | 成功 | UI source unchanged、cached rust-ui stage、既存30 UI testsを含む aggregate gate。 |
+| 2026-08-31 | raw `rust-release` / `rust-headless` build | parent `477c0eae` / `daf75747…7faed` | 成功 | 各Docker target exit 0。 |
+| 2026-08-31 | release scratch export | parent `477c0eae` / `daf75747…7faed` | 成功 | `Cemu` 816688/0755/SHA-256 `13a2300859076fb0617bbaf95a1d1c6d9edde9ca53669e085ba89747aaa9e111`、license noticesのbytes/mode/hashを検証。 |
+| 2026-08-31 | initial Docker test/clippy | parent `477c0eae` | 失敗 | 85 diagnostics、E0425 stale helper refs、残3 needless_pass_by_value、E0282 BTreeMap type、semicolon lint、provider nonzero entry fixture failures。修正後に再実行。 |
+| 2026-08-31 | intentional discovery/transcription checks | parent `477c0eae` | 失敗（履歴） | 意図的zero hash discovery failureと1-byte transcription failureを確認し、再計算・修正した。 |
 | 2026-08-30 | `rust-deny` (`cargo-deny` 0.18.4) | 統合作業 tree | 失敗 | RustSec advisory の CVSS 4.0 を parse できなかった。tool version を 0.20.2 へ更新して再試行した。 |
 | 2026-08-30 | `rust-deny` (`cargo-deny` 0.20.2) | 統合作業 tree | 失敗 | workspace 内 path dependency の wildcard version を拒否した。root manifest の各内部 dependency に `version = "0.1.0"` を追加して再試行した。 |
 | 2026-08-30 | `rust-clippy` | 統合作業 tree | 成功 | workspace/all-targets の Clippy が成功した。 |
@@ -476,7 +482,7 @@ local output を export した後、整形済み source を作業 tree へ copy 
 Rust 106 tests / UI 27 tests と、上表の Rust 139 tests / UI 30 tests はいずれも
 RPX実装前の履歴として残す。後続の`45e696b0…6acb18` / 172 testsと
 `b13c435c…7d29d` / 184 testsもそれぞれ次節以降の履歴である。その履歴後の中間証跡は
-`8fec55ee…c4a81` / 205 testsであり、現行判定は後段の`e40db320…97e78` / 205 testsを参照する。
+`8fec55ee…c4a81` / 205 tests、`e40db320…97e78` / 205 testsはいずれも明示的な履歴であり、現行判定には用いない。
 C++ oracle はこの時点では clean context 生成後に BuildKit hang していた。その後
 `base` / `dev` が成功した。この履歴時点では完全な `build` / CTest は未実行だったが、
 さらに後続のattemptでcompile/link 877/877とCTest 37/37が成功した。post-test runtime
@@ -740,12 +746,12 @@ universal atomicityは主張しない。`.dockerignore`は静的なcontext除外
 Docker context内容が常に不在であることの証明ではない。Windows directory fsync adapterは
 Windows milestone開始前のblockerのままである。
 
-### release-staging P2後の最終 source payload 証跡
+### release-staging P2後の最終 source payload 証跡（旧履歴）
 
-現行 source payload fingerprint は
+当時の source payload fingerprint は
 `sha256:e40db320e18f27ca3ad8d0dfe02c0c56a47d25bb4ff51cde87ea1e8da6c97e78`
 である。本台帳を除外する同じ算出定義を用いる。直前の`8fec55ee…c4a81`を含む全ての旧
-fingerprint/resultは中間または過去の履歴であり、現行判定には用いない。
+fingerprint/resultは履歴であり、現行判定には用いない。
 
 release-staging P2修正後、main sessionが次をすべてexit 0で実行した。C++ trace attestationは
 main sessionの既存exit 0結果を維持する。P2修正は`docker-build-rust.sh`と`.dockerignore`だけで、
@@ -789,6 +795,43 @@ malformed corpus、retail RPX/RPL、import、relocation、compressionのparity�
 universal atomicityは主張せず、`.dockerignore`は静的policyであって全Docker context内容の
 不在証明ではない。Windows directory fsync adapterはWindows milestone開始前のblockerである。
 
+### RPX1/RPL1 link slice の現行 source payload 証跡
+
+現行 source payload fingerprint は
+`sha256:daf75747d62620c63e805a6af07fa0b12f3576eda450992ec08446d7e4a7faed`
+である。本台帳自身を除外し、本slice差分の親commitは
+`477c0eaea0b33ed80f91e7acf4827a54812663c9`である。固定C++互換基準は引き続き
+`ab0b772029f0a5cd57c194cf338003fe8eae8ab8`とする。
+今回のsingle synthetic pairは、main RPX1 + provider RPL1、function import/export各1、
+ADDR32 local→import 2 phase、fresh GuestMemory transactional commit、Text RX/Data RW/Loader R、
+5 pages/0x5000、local site `0x10002008`、import site `0x10000000`、value `0x02002000`を含む。
+RPL `e_entry=0`、nonzero FILEINFO adjustments unsupported fail-closed、module nameはlowercase ASCII
+basename + exact one `.rpl`、最大recordはindexed O(n log n)である。
+
+正式main-session Docker evidence:
+
+```text
+./docker-build-rust.sh test                         exit 0
+./docker-build-rust.sh ci                           exit 0
+docker build --target rust-release ...              exit 0
+docker build --target rust-headless ...             exit 0
+docker build --target rust-release --output ...     exit 0
+```
+
+`test`はfmt/check/ClippyとRust workspace 243 tests（cex-system lib 76 + public rpl integration 2を含む）を通過。
+`ci`はUI source unchanged、cached rust-ui stage、既存30 UI testsを検証した。release artifactは
+`Cemu` 816688 bytes/mode0755/SHA-256 `13a2300859076fb0617bbaf95a1d1c6d9edde9ca53669e085ba89747aaa9e111`、
+`LICENSE.txt` 16725/0644/SHA-256 `1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5`、
+`THIRD_PARTY_LICENSES.txt` 94701/0644/SHA-256 `68c283806c8fc31007234f594ba8dea3a970a791bb9ba98017239900eb9a9e51`である。
+
+失敗履歴は保持する。初回Docker test/clippyの85 diagnostics、E0425 stale helper refs、残3件の
+needless_pass_by_value、意図的zero hash discovery failureと1-byte transcription failure、review P2 4件
+（二次走査/RPL entry/one-past symbol/nonzero adjustment）対応、E0282 BTreeMap type、semicolon lint、
+provider nonzero entry fixture failuresを経て最終exit 0に到達した。architecture Sol-high + safety
+Sol-medium final read-only reviewはP0/P1/P2なしで承認し、P3はlegacy cfg(test) validator driftとbounded
+BTree node OOM変換不可として残す。既存e40db/205は明示的履歴へ降格し、現行/最新表現はdaf757/243に一本化する。
+C++ positive parse/map attestationは前sliceのまま有効だが、新RPL linkのC++ parity証拠ではない。
+
 検証時は実行した完全な `docker build` command、対象 commit または dirty tree の識別、
 成否、失敗した target/test、必要な log の保存先をこの表へ追記する。秘密情報を含む log
 は保存せず、redact した要約だけを記録する。
@@ -797,6 +840,7 @@ universal atomicityは主張せず、`.dockerignore`は静的policyであって�
 
 | 日時（JST） | レビュー | 指摘 | 対応 | 状態 |
 | --- | --- | --- | --- | --- |
+| 2026-08-31 | architecture Sol-high + safety Sol-medium final read-only review | RPX1/RPL1 link sliceの境界、transactional memory、RPL metadata、import/reloc安全性を確認。 | fingerprint `daf75747…7faed`の差分と243 testsのDocker evidenceを確認。P0/P1/P2なし。P3はlegacy cfg(test) validator driftとbounded BTree node OOM変換不可。 | 最終承認済み |
 | 2026-08-30 | architecture / safety final read-only review | fingerprint `e40db320…97e78` の正式Docker証拠、golden pin、P2 hardening後のC++ trace attestationを対象にdoc+codeを読む最終確認。 | architecture・safetyの両reviewerがfingerprintを再計算し、code・script・台帳を確認した。未解決P0/P1/P2なし。 | 最終承認済み |
 | 2026-08-30 | architecture review | `rust-ci` に dependency/advisory/license audit がなく「完全な gate」と呼べない。 | `rust-deny` を `rust-ci` の祖先へ追加し、aggregate `ci` を正式 gate に変更。0.18.4 の CVSS 4.0 parse failure 後、0.20.2 へ固定して全 audit を通した。 | 対応済み・Docker 確認済み |
 | 2026-08-30 | architecture review | RPC manifest 変更時に Rust/TS generated contract drift を検知する必要がある。 | Rust 側 golden test を `rust-test` に追加し、generator drift と UI checks を行う `rust-ui` を aggregate `ci` へ接続。 | 対応済み・Docker 確認済み |
@@ -830,7 +874,7 @@ universal atomicityは主張せず、`.dockerignore`は静的policyであって�
 
 ## 次の作業
 
-1. この最終evidence/golden sliceをcommitする。
+1. この現行RPX1/RPL1 evidence sliceをcommitする。
 2. malformed corpusへ拡張し、RPLのimport、relocation、compressionを段階的に実装・
    C++ oracle比較する。positive parse/map以外のCafe/MMU/CPU execution parityは引き続き
    未証明として扱う。

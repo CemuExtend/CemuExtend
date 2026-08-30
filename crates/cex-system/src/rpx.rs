@@ -4,7 +4,11 @@
 //! whose section kinds are needed by the initial Rust loader. Unsupported RPX
 //! features fail closed instead of being partially interpreted.
 
-use std::{fmt, mem::size_of};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    mem::size_of,
+};
 
 use thiserror::Error;
 
@@ -38,9 +42,265 @@ const SHF_RPL_COMPRESSED: u32 = 0x0800_0000;
 const FILEINFO_SIZE: u32 = 0x60;
 const FILEINFO_MAGIC: u32 = 0xcafe_0402;
 const FILEINFO_RPX_FLAG: u32 = 1 << 1;
+const MAX_RPL_RECORDS: usize = 4096;
+const MAX_RPL_NAME_SIZE: usize = 1024;
 
 /// Maximum complete RPX image accepted by [`parse_rpx`].
 pub const MAX_RPX_IMAGE_SIZE: usize = 64 * 1024 * 1024;
+
+/// The module kind asserted by the Cafe FILEINFO record.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CafeModuleKind {
+    /// A main executable module.
+    Rpx,
+    /// A relocatable library module.
+    Rpl,
+}
+
+/// The only symbol classes exposed by the minimal RPL linker slice.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum CafeSymbolKind {
+    /// An executable function symbol.
+    Function,
+    /// A data object symbol.
+    Data,
+}
+
+/// Relocation operations accepted by the minimal RPL linker slice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CafeRelocationKind {
+    /// Write the complete 32-bit symbol value plus addend.
+    Addr32,
+}
+
+/// A validated RPL symbol-table entry.
+#[derive(Clone, Eq, PartialEq)]
+pub struct CafeSymbol {
+    table_section_index: usize,
+    symbol_index: usize,
+    name: String,
+    value: u32,
+    size: u32,
+    section_index: usize,
+    kind: CafeSymbolKind,
+}
+
+impl fmt::Debug for CafeSymbol {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CafeSymbol")
+            .field("table_section_index", &self.table_section_index)
+            .field("symbol_index", &self.symbol_index)
+            .field("value", &self.value)
+            .field("size", &self.size)
+            .field("section_index", &self.section_index)
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
+    }
+}
+
+impl CafeSymbol {
+    /// Return the ELF section-table index of the containing symbol table.
+    pub const fn table_section_index(&self) -> usize {
+        self.table_section_index
+    }
+    /// Return the zero-based index within the containing symbol table.
+    pub const fn symbol_index(&self) -> usize {
+        self.symbol_index
+    }
+    /// Return the validated UTF-8 symbol name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Return the symbol value interpreted as a guest virtual address.
+    pub const fn value(&self) -> u32 {
+        self.value
+    }
+    /// Return the declared symbol size in bytes.
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+    /// Return the ELF section-table index referenced by the symbol.
+    pub const fn section_index(&self) -> usize {
+        self.section_index
+    }
+    /// Return the validated symbol class.
+    pub const fn kind(&self) -> CafeSymbolKind {
+        self.kind
+    }
+}
+
+/// One validated imported module record.
+#[derive(Clone, Eq, PartialEq)]
+pub struct CafeImport {
+    section_index: usize,
+    module_name: String,
+    kind: CafeSymbolKind,
+}
+
+impl fmt::Debug for CafeImport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CafeImport")
+            .field("section_index", &self.section_index)
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
+    }
+}
+impl CafeImport {
+    /// Return the ELF section-table index containing the import record.
+    pub const fn section_index(&self) -> usize {
+        self.section_index
+    }
+    /// Return the validated imported module name.
+    pub fn module_name(&self) -> &str {
+        &self.module_name
+    }
+    /// Return the symbol class imported from the module.
+    pub const fn kind(&self) -> CafeSymbolKind {
+        self.kind
+    }
+}
+
+/// One validated exported address/name descriptor.
+#[derive(Clone, Eq, PartialEq)]
+pub struct CafeExport {
+    section_index: usize,
+    descriptor_index: usize,
+    name: String,
+    address: u32,
+    kind: CafeSymbolKind,
+}
+impl fmt::Debug for CafeExport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CafeExport")
+            .field("section_index", &self.section_index)
+            .field("address", &self.address)
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
+    }
+}
+impl CafeExport {
+    /// Return the ELF section-table index containing the export descriptor.
+    pub const fn section_index(&self) -> usize {
+        self.section_index
+    }
+    /// Return the validated exported symbol name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Return the exported guest virtual address.
+    pub const fn address(&self) -> u32 {
+        self.address
+    }
+    /// Return the exported symbol class.
+    pub const fn kind(&self) -> CafeSymbolKind {
+        self.kind
+    }
+}
+
+/// One validated `SHT_RELA` record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CafeRelocation {
+    section_index: usize,
+    target_section_index: usize,
+    symbol_table_section_index: usize,
+    offset: u32,
+    symbol_index: usize,
+    addend: i32,
+    kind: CafeRelocationKind,
+}
+impl CafeRelocation {
+    /// Return the ELF section-table index containing the relocation.
+    pub const fn section_index(&self) -> usize {
+        self.section_index
+    }
+    /// Return the ELF section-table index modified by the relocation.
+    pub const fn target_section_index(&self) -> usize {
+        self.target_section_index
+    }
+    /// Return the ELF section-table index of the referenced symbol table.
+    pub const fn symbol_table_section_index(&self) -> usize {
+        self.symbol_table_section_index
+    }
+    /// Return the guest virtual address modified by the relocation.
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
+    /// Return the referenced symbol-table index.
+    pub const fn symbol_index(&self) -> usize {
+        self.symbol_index
+    }
+    /// Return the signed relocation addend.
+    pub const fn addend(&self) -> i32 {
+        self.addend
+    }
+    /// Return the validated relocation operation.
+    pub const fn kind(&self) -> CafeRelocationKind {
+        self.kind
+    }
+}
+
+/// A validated, owned Cafe RPL image description.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ParsedRpl {
+    entry_point: u32,
+    sections: Vec<RpxSection>,
+    file_info: RpxFileInfo,
+    symbols: Vec<CafeSymbol>,
+    imports: Vec<CafeImport>,
+    exports: Vec<CafeExport>,
+    relocations: Vec<CafeRelocation>,
+}
+impl fmt::Debug for ParsedRpl {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ParsedRpl")
+            .field("entry_point", &self.entry_point)
+            .field("section_count", &self.sections.len())
+            .field("symbol_count", &self.symbols.len())
+            .field("import_count", &self.imports.len())
+            .field("export_count", &self.exports.len())
+            .field("relocation_count", &self.relocations.len())
+            .field("file_info", &self.file_info)
+            .finish()
+    }
+}
+impl ParsedRpl {
+    /// Return the validated entry point, which is always zero for this RPL slice.
+    pub const fn entry_point(&self) -> u32 {
+        self.entry_point
+    }
+    /// Return all sections in ELF section-table order.
+    pub fn sections(&self) -> &[RpxSection] {
+        &self.sections
+    }
+    /// Return the validated terminal FILEINFO record.
+    pub const fn file_info(&self) -> &RpxFileInfo {
+        &self.file_info
+    }
+    /// Return the FILEINFO module kind.
+    pub const fn module_kind(&self) -> CafeModuleKind {
+        CafeModuleKind::Rpl
+    }
+    /// Return all validated symbol-table entries except the null symbol.
+    pub fn symbols(&self) -> &[CafeSymbol] {
+        &self.symbols
+    }
+    /// Return all validated imported-module records.
+    pub fn imports(&self) -> &[CafeImport] {
+        &self.imports
+    }
+    /// Return all validated export descriptors.
+    pub fn exports(&self) -> &[CafeExport] {
+        &self.exports
+    }
+    /// Return all validated ADDR32 relocations.
+    pub fn relocations(&self) -> &[CafeRelocation] {
+        &self.relocations
+    }
+}
 
 /// A validated, owned Cafe RPX image description.
 ///
@@ -51,6 +311,10 @@ pub struct ParsedRpx {
     entry_point: u32,
     sections: Vec<RpxSection>,
     file_info: RpxFileInfo,
+    symbols: Vec<CafeSymbol>,
+    imports: Vec<CafeImport>,
+    exports: Vec<CafeExport>,
+    relocations: Vec<CafeRelocation>,
 }
 
 impl fmt::Debug for ParsedRpx {
@@ -59,6 +323,10 @@ impl fmt::Debug for ParsedRpx {
             .debug_struct("ParsedRpx")
             .field("entry_point", &self.entry_point)
             .field("section_count", &self.sections.len())
+            .field("symbol_count", &self.symbols.len())
+            .field("import_count", &self.imports.len())
+            .field("export_count", &self.exports.len())
+            .field("relocation_count", &self.relocations.len())
             .field("file_info", &self.file_info)
             .finish()
     }
@@ -84,6 +352,31 @@ impl ParsedRpx {
     /// Return whether FILEINFO marks this module as the main RPX rather than an RPL.
     pub const fn is_rpx(&self) -> bool {
         self.file_info.is_rpx()
+    }
+
+    /// Return the FILEINFO module kind.
+    pub const fn module_kind(&self) -> CafeModuleKind {
+        CafeModuleKind::Rpx
+    }
+
+    /// Return all validated symbol-table entries except the mandatory null symbol.
+    pub fn symbols(&self) -> &[CafeSymbol] {
+        &self.symbols
+    }
+
+    /// Return all validated imported-module records.
+    pub fn imports(&self) -> &[CafeImport] {
+        &self.imports
+    }
+
+    /// Return all validated export descriptors.
+    pub fn exports(&self) -> &[CafeExport] {
+        &self.exports
+    }
+
+    /// Return all validated ADDR32 relocations.
+    pub fn relocations(&self) -> &[CafeRelocation] {
+        &self.relocations
     }
 }
 
@@ -247,6 +540,15 @@ impl RpxFileInfo {
     /// Return whether the FILEINFO flags identify a main RPX image.
     pub const fn is_rpx(&self) -> bool {
         self.flags & FILEINFO_RPX_FLAG != 0
+    }
+
+    /// Return the module kind asserted by the FILEINFO flags.
+    pub const fn module_kind(&self) -> CafeModuleKind {
+        if self.is_rpx() {
+            CafeModuleKind::Rpx
+        } else {
+            CafeModuleKind::Rpl
+        }
     }
 }
 
@@ -593,6 +895,82 @@ pub enum RpxError {
         /// Bounded requested allocation length.
         requested: usize,
     },
+    /// An RPL structural record has an invalid bounded field or layout.
+    #[error("RPL section {section_index} has invalid {reason}")]
+    InvalidRplRecord {
+        /// Section-table index containing the record.
+        section_index: usize,
+        /// Bounded reason for the rejection.
+        reason: RplRecordError,
+    },
+}
+
+/// Bounded reasons for rejecting an RPL structural record.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RplRecordError {
+    /// A record uses an unsupported fixed entry size.
+    EntrySize,
+    /// A record count is outside the parser's resource bounds.
+    RecordCount,
+    /// A linked section is missing or has the wrong type.
+    SectionLink,
+    /// A section information field is outside its valid range.
+    SectionInfo,
+    /// A referenced symbol-table index is invalid.
+    SymbolIndex,
+    /// A symbol has an unsupported type or mismatches its section.
+    SymbolKind,
+    /// A symbol value and size extend outside their target section.
+    SymbolRange,
+    /// A relocation uses an unsupported operation.
+    RelocationType,
+    /// A relocation target extends outside its target section.
+    RelocationRange,
+    /// A structural section payload has an invalid size.
+    PayloadSize,
+    /// A string offset is invalid or references an empty name.
+    NameReference,
+    /// A structural record name exceeds the supported bound.
+    NameTooLong,
+    /// A structural record name is not valid UTF-8.
+    NameEncoding,
+    /// A structural record duplicates a name of the same class.
+    DuplicateName,
+    /// An export address is targeted by a relocation.
+    ExportRelocation,
+    /// A structural section has unsupported section-header fields.
+    SectionHeaderFields,
+    /// The mandatory first symbol-table entry is not all zeroes.
+    NullSymbol,
+    /// A symbol has an unsupported binding.
+    SymbolBinding,
+    /// A symbol has unsupported visibility or reserved attributes.
+    SymbolOther,
+}
+impl fmt::Display for RplRecordError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::EntrySize => "entry size",
+            Self::RecordCount => "record count",
+            Self::SectionLink => "section link",
+            Self::SectionInfo => "section info",
+            Self::SymbolIndex => "symbol index",
+            Self::SymbolKind => "symbol kind",
+            Self::SymbolRange => "symbol range",
+            Self::RelocationType => "relocation type",
+            Self::RelocationRange => "relocation range",
+            Self::PayloadSize => "payload size",
+            Self::NameReference => "name reference",
+            Self::NameTooLong => "name length",
+            Self::NameEncoding => "name encoding",
+            Self::DuplicateName => "duplicate name",
+            Self::ExportRelocation => "export relocation",
+            Self::SectionHeaderFields => "section header fields",
+            Self::NullSymbol => "null symbol",
+            Self::SymbolBinding => "symbol binding",
+            Self::SymbolOther => "symbol visibility",
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -658,6 +1036,45 @@ impl ByteRange {
 
 /// Parse and fully validate the initial, uncompressed Cafe ELF32 RPX slice.
 pub fn parse_rpx(bytes: &[u8]) -> Result<ParsedRpx, RpxError> {
+    let module = parse_cafe_module(bytes, CafeModuleKind::Rpx)?;
+    Ok(ParsedRpx {
+        entry_point: module.entry_point,
+        sections: module.sections,
+        file_info: module.file_info,
+        symbols: module.symbols,
+        imports: module.imports,
+        exports: module.exports,
+        relocations: module.relocations,
+    })
+}
+
+/// Parse and fully validate the minimal, uncompressed Cafe ELF32 RPL slice.
+///
+/// This first slice requires the ELF entry point to be zero.
+pub fn parse_rpl(bytes: &[u8]) -> Result<ParsedRpl, RpxError> {
+    let module = parse_cafe_module(bytes, CafeModuleKind::Rpl)?;
+    Ok(ParsedRpl {
+        entry_point: module.entry_point,
+        sections: module.sections,
+        file_info: module.file_info,
+        symbols: module.symbols,
+        imports: module.imports,
+        exports: module.exports,
+        relocations: module.relocations,
+    })
+}
+
+struct ParsedCafeModule {
+    entry_point: u32,
+    sections: Vec<RpxSection>,
+    file_info: RpxFileInfo,
+    symbols: Vec<CafeSymbol>,
+    imports: Vec<CafeImport>,
+    exports: Vec<CafeExport>,
+    relocations: Vec<CafeRelocation>,
+}
+
+fn parse_cafe_module(bytes: &[u8], kind: CafeModuleKind) -> Result<ParsedCafeModule, RpxError> {
     if bytes.len() < usize::try_from(ELF_HEADER_SIZE).expect("ELF header size fits usize") {
         return Err(RpxError::TruncatedHeader {
             actual: bytes.len(),
@@ -670,7 +1087,6 @@ pub fn parse_rpx(bytes: &[u8]) -> Result<ParsedRpx, RpxError> {
         });
     }
     validate_header(bytes)?;
-
     let image_size = u64::try_from(bytes.len()).map_err(|_| RpxError::ImageTooLarge {
         actual: bytes.len(),
         maximum: MAX_RPX_IMAGE_SIZE,
@@ -678,7 +1094,7 @@ pub fn parse_rpx(bytes: &[u8]) -> Result<ParsedRpx, RpxError> {
     let entry_point = read_u32(bytes, 24);
     let section_table_offset = u64::from(read_u32(bytes, 32));
     let section_count = read_u16(bytes, 48);
-    let name_section_index = read_u16(bytes, 50);
+    let name_section_index = usize::from(read_u16(bytes, 50));
     let section_table_size = SECTION_HEADER_SIZE
         .checked_mul(u64::from(section_count))
         .ok_or(RpxError::InvalidSectionTable)?;
@@ -692,31 +1108,28 @@ pub fn parse_rpx(bytes: &[u8]) -> Result<ParsedRpx, RpxError> {
         return Err(RpxError::InvalidSectionTable);
     }
 
+    let count = usize::from(section_count);
     let mut raw_sections = Vec::new();
-    let section_count_usize = usize::from(section_count);
     raw_sections
-        .try_reserve_exact(section_count_usize)
+        .try_reserve_exact(count)
         .map_err(|_| RpxError::AllocationFailed {
-            requested: section_count_usize
+            requested: count
                 .checked_mul(size_of::<RawSection>())
                 .unwrap_or(MAX_RPX_IMAGE_SIZE),
         })?;
     let table_start =
         usize::try_from(section_table.start).map_err(|_| RpxError::InvalidSectionTable)?;
-    for index in 0..section_count_usize {
-        let entry_offset = index
-            .checked_mul(usize::try_from(SECTION_HEADER_SIZE).expect("section size fits usize"))
-            .and_then(|relative| table_start.checked_add(relative))
+    for index in 0..count {
+        let offset = table_start
+            .checked_add(index.checked_mul(40).ok_or(RpxError::InvalidSectionTable)?)
             .ok_or(RpxError::InvalidSectionTable)?;
-        raw_sections.push(RawSection::from_bytes(bytes, entry_offset));
+        raw_sections.push(RawSection::from_bytes(bytes, offset));
     }
-
-    validate_sections(bytes, &raw_sections, elf_header, section_table)?;
-    let name_table = validate_section_names(bytes, &raw_sections, usize::from(name_section_index))?;
+    validate_rpl_sections(bytes, &raw_sections, elf_header, section_table)?;
+    let name_table = validate_section_names(bytes, &raw_sections, name_section_index)?;
+    validate_rpl_name_lengths(name_table, &raw_sections)?;
     validate_terminal_sections(&raw_sections)?;
-
     let crc_index = raw_sections.len() - 2;
-    let file_info_index = raw_sections.len() - 1;
     let crc_section = raw_sections[crc_index];
     let expected_crc_size =
         u32::from(section_count)
@@ -731,12 +1144,749 @@ pub fn parse_rpx(bytes: &[u8]) -> Result<ParsedRpx, RpxError> {
             expected: expected_crc_size,
         });
     }
-
-    let file_info = parse_file_info(bytes, raw_sections[file_info_index])?;
+    let file_info = parse_file_info_for_kind(bytes, raw_sections[raw_sections.len() - 1], kind)?;
     validate_mapping_regions(&raw_sections, &file_info)?;
     validate_crcs(bytes, &raw_sections, crc_index)?;
-    validate_entry_point(entry_point, &raw_sections)?;
-    own_sections(bytes, raw_sections, name_table, entry_point, file_info)
+    match kind {
+        CafeModuleKind::Rpx => validate_entry_point(entry_point, &raw_sections)?,
+        CafeModuleKind::Rpl if entry_point != 0 => return Err(RpxError::InvalidEntryPoint),
+        CafeModuleKind::Rpl => {}
+    }
+    let (symbols, imports, exports, relocations) = parse_rpl_records(bytes, &raw_sections)?;
+    let sections = own_section_vec(bytes, raw_sections, name_table)?;
+    Ok(ParsedCafeModule {
+        entry_point,
+        sections,
+        file_info,
+        symbols,
+        imports,
+        exports,
+        relocations,
+    })
+}
+
+fn validate_rpl_sections(
+    bytes: &[u8],
+    sections: &[RawSection],
+    elf_header: ByteRange,
+    section_table: ByteRange,
+) -> Result<(), RpxError> {
+    if !sections[0].is_all_zero() {
+        return Err(RpxError::InvalidNullSection { section_index: 0 });
+    }
+    let image_size = u64::try_from(bytes.len()).map_err(|_| RpxError::ImageTooLarge {
+        actual: bytes.len(),
+        maximum: MAX_RPX_IMAGE_SIZE,
+    })?;
+    let mut payload_ranges = Vec::new();
+    payload_ranges
+        .try_reserve_exact(sections.len())
+        .map_err(|_| RpxError::AllocationFailed {
+            requested: sections
+                .len()
+                .checked_mul(size_of::<(usize, ByteRange)>())
+                .unwrap_or(MAX_RPX_IMAGE_SIZE),
+        })?;
+    let mut virtual_ranges = Vec::new();
+    virtual_ranges
+        .try_reserve_exact(sections.len())
+        .map_err(|_| RpxError::AllocationFailed {
+            requested: sections
+                .len()
+                .checked_mul(size_of::<(usize, ByteRange)>())
+                .unwrap_or(MAX_RPX_IMAGE_SIZE),
+        })?;
+    for (index, section) in sections.iter().copied().enumerate() {
+        validate_supported_rpl_section(index, section)?;
+        validate_section_flags_and_address(index, section, &mut virtual_ranges)?;
+        let payload = ByteRange::bounded(
+            u64::from(section.file_offset),
+            u64::from(section.size),
+            image_size,
+        )
+        .ok_or(RpxError::InvalidSectionRange {
+            section_index: index,
+        })?;
+        if section.size == 0 {
+            continue;
+        }
+        if payload.overlaps(elf_header) {
+            return Err(RpxError::SectionOverlapsHeader {
+                section_index: index,
+            });
+        }
+        if payload.overlaps(section_table) {
+            return Err(RpxError::SectionOverlapsTable {
+                section_index: index,
+            });
+        }
+        if let Some((other, _)) = payload_ranges
+            .iter()
+            .find(|(_, range)| payload.overlaps(*range))
+        {
+            return Err(RpxError::SectionPayloadOverlap {
+                first_index: *other,
+                second_index: index,
+            });
+        }
+        payload_ranges.push((index, payload));
+    }
+    Ok(())
+}
+
+fn validate_supported_rpl_section(index: usize, section: RawSection) -> Result<(), RpxError> {
+    match section.section_type {
+        SHT_NULL if index != 0 => {
+            return Err(RpxError::InvalidNullSection {
+                section_index: index,
+            });
+        }
+        SHT_NULL | SHT_PROGBITS | SHT_STRTAB | SHT_SYMTAB | SHT_RELA | SHT_RPL_EXPORTS
+        | SHT_RPL_IMPORTS | SHT_RPL_CRCS | SHT_RPL_FILEINFO => {}
+        SHT_NOBITS => {
+            return Err(RpxError::Unsupported {
+                section_index: index,
+                feature: RpxUnsupportedFeature::NoBits,
+            });
+        }
+        SHT_DYNSYM => {
+            return Err(RpxError::Unsupported {
+                section_index: index,
+                feature: RpxUnsupportedFeature::SymbolTable,
+            });
+        }
+        other => {
+            return Err(RpxError::Unsupported {
+                section_index: index,
+                feature: RpxUnsupportedFeature::SectionType(other),
+            });
+        }
+    }
+    if section.flags & SHF_RPL_COMPRESSED != 0 {
+        return Err(RpxError::Unsupported {
+            section_index: index,
+            feature: RpxUnsupportedFeature::Compression,
+        });
+    }
+    let unsupported = section.flags & !SHF_SUPPORTED;
+    if unsupported != 0 {
+        return Err(RpxError::Unsupported {
+            section_index: index,
+            feature: RpxUnsupportedFeature::SectionFlags(unsupported),
+        });
+    }
+    let invalid_metadata_flags = if matches!(
+        section.section_type,
+        SHT_STRTAB | SHT_RPL_CRCS | SHT_RPL_FILEINFO
+    ) {
+        section.flags != 0
+    } else if matches!(section.section_type, SHT_SYMTAB | SHT_RELA) {
+        section.flags & (SHF_WRITE | SHF_EXECINSTR) != 0
+    } else {
+        false
+    };
+    if invalid_metadata_flags {
+        return Err(RpxError::InvalidMetadataFlags {
+            section_index: index,
+            section_type: section.section_type,
+            flags: section.flags,
+        });
+    }
+    if matches!(section.section_type, SHT_RPL_IMPORTS | SHT_RPL_EXPORTS)
+        && (section.link != 0 || section.info != 0 || section.entry_size != 0)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionHeaderFields,
+        });
+    }
+    Ok(())
+}
+
+fn validate_rpl_name_lengths(table: &[u8], sections: &[RawSection]) -> Result<(), RpxError> {
+    for (index, section) in sections.iter().enumerate() {
+        let name =
+            section_name_bytes(table, section.name_offset).ok_or(RpxError::InvalidSectionName {
+                section_index: index,
+            })?;
+        if name.len() > MAX_RPL_NAME_SIZE {
+            return Err(RpxError::InvalidSectionName {
+                section_index: index,
+            });
+        }
+    }
+    Ok(())
+}
+
+type RplRecords = (
+    Vec<CafeSymbol>,
+    Vec<CafeImport>,
+    Vec<CafeExport>,
+    Vec<CafeRelocation>,
+);
+
+fn parse_rpl_records(bytes: &[u8], sections: &[RawSection]) -> Result<RplRecords, RpxError> {
+    let mut symbols = Vec::new();
+    let mut imports = Vec::new();
+    let mut exports = Vec::new();
+    let mut export_names = BTreeSet::new();
+    let mut relocations = Vec::new();
+    for (index, section) in sections.iter().copied().enumerate() {
+        match section.section_type {
+            SHT_RPL_IMPORTS => parse_import(bytes, index, section, &mut imports)?,
+            SHT_RPL_EXPORTS => {
+                parse_exports(bytes, index, section, &mut exports, &mut export_names)?;
+            }
+            SHT_SYMTAB => parse_symbols(bytes, sections, index, section, &mut symbols)?,
+            SHT_RELA => parse_relocations(bytes, sections, index, section, &mut relocations)?,
+            _ => {}
+        }
+    }
+    validate_export_relocations(sections, &exports, &symbols, &relocations)?;
+    Ok((symbols, imports, exports, relocations))
+}
+
+fn reserve_record<T>(records: &mut Vec<T>, additional: usize) -> Result<(), RpxError> {
+    records
+        .try_reserve_exact(additional)
+        .map_err(|_| RpxError::AllocationFailed {
+            requested: additional
+                .checked_mul(size_of::<T>())
+                .unwrap_or(MAX_RPX_IMAGE_SIZE),
+        })
+}
+
+fn owned_rpl_name(data: &[u8], offset: u32, section_index: usize) -> Result<String, RpxError> {
+    let raw = section_name_bytes(data, offset).ok_or(RpxError::InvalidRplRecord {
+        section_index,
+        reason: RplRecordError::NameReference,
+    })?;
+    if raw.len() > MAX_RPL_NAME_SIZE {
+        return Err(RpxError::InvalidRplRecord {
+            section_index,
+            reason: RplRecordError::NameTooLong,
+        });
+    }
+    let value = std::str::from_utf8(raw).map_err(|_| RpxError::InvalidRplRecord {
+        section_index,
+        reason: RplRecordError::NameEncoding,
+    })?;
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(value.len())
+        .map_err(|_| RpxError::AllocationFailed {
+            requested: value.len(),
+        })?;
+    owned.push_str(value);
+    Ok(owned)
+}
+
+fn parse_import(
+    bytes: &[u8],
+    index: usize,
+    section: RawSection,
+    imports: &mut Vec<CafeImport>,
+) -> Result<(), RpxError> {
+    if imports.len() >= MAX_RPL_RECORDS {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::RecordCount,
+        });
+    }
+    let data = section_payload(bytes, section);
+    if data.len() < 9 {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::PayloadSize,
+        });
+    }
+    let module_name = owned_rpl_name(data, 8, index)?;
+    if module_name.is_empty() {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::NameReference,
+        });
+    }
+    let kind = if section.flags & SHF_EXECINSTR != 0 {
+        CafeSymbolKind::Function
+    } else {
+        CafeSymbolKind::Data
+    };
+    if imports
+        .iter()
+        .any(|record| record.module_name == module_name && record.kind == kind)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::DuplicateName,
+        });
+    }
+    reserve_record(imports, 1)?;
+    imports.push(CafeImport {
+        section_index: index,
+        module_name,
+        kind,
+    });
+    Ok(())
+}
+
+fn parse_exports(
+    bytes: &[u8],
+    index: usize,
+    section: RawSection,
+    exports: &mut Vec<CafeExport>,
+    export_names: &mut BTreeSet<(CafeSymbolKind, String)>,
+) -> Result<(), RpxError> {
+    let data = section_payload(bytes, section);
+    if data.len() < 8 {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::PayloadSize,
+        });
+    }
+    let count = usize::try_from(read_u32(data, 0)).map_err(|_| RpxError::InvalidRplRecord {
+        section_index: index,
+        reason: RplRecordError::RecordCount,
+    })?;
+    if count > MAX_RPL_RECORDS
+        || exports
+            .len()
+            .checked_add(count)
+            .is_none_or(|value| value > MAX_RPL_RECORDS)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::RecordCount,
+        });
+    }
+    let descriptors_end = count
+        .checked_mul(8)
+        .and_then(|v| v.checked_add(8))
+        .filter(|end| *end <= data.len())
+        .ok_or(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::PayloadSize,
+        })?;
+    reserve_record(exports, count)?;
+    let kind = if section.flags & SHF_EXECINSTR != 0 {
+        CafeSymbolKind::Function
+    } else {
+        CafeSymbolKind::Data
+    };
+    for record in 0..count {
+        let offset = 8 + record * 8;
+        let address = read_u32(data, offset);
+        let name_offset = read_u32(data, offset + 4);
+        if usize::try_from(name_offset)
+            .ok()
+            .is_none_or(|value| value < descriptors_end)
+        {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::NameReference,
+            });
+        }
+        let name = owned_rpl_name(data, name_offset, index)?;
+        if name.is_empty() {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::NameReference,
+            });
+        }
+        if !export_names.insert((kind, name.clone())) {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::DuplicateName,
+            });
+        }
+        exports.push(CafeExport {
+            section_index: index,
+            descriptor_index: record,
+            name,
+            address,
+            kind,
+        });
+    }
+    Ok(())
+}
+
+fn validate_export_relocations(
+    sections: &[RawSection],
+    exports: &[CafeExport],
+    symbols: &[CafeSymbol],
+    relocations: &[CafeRelocation],
+) -> Result<(), RpxError> {
+    let mut exports_by_location = BTreeMap::new();
+    for (index, export) in exports.iter().enumerate() {
+        if let Some(offset) =
+            export_address_field(sections[export.section_index], export.descriptor_index)
+        {
+            exports_by_location
+                .entry((export.section_index, offset))
+                .or_insert(index);
+        }
+    }
+    let mut symbols_by_index = BTreeMap::new();
+    for (index, symbol) in symbols.iter().enumerate() {
+        symbols_by_index
+            .entry((symbol.table_section_index, symbol.symbol_index))
+            .or_insert(index);
+    }
+    let mut relocation_counts = BTreeMap::new();
+    for relocation in relocations {
+        *relocation_counts
+            .entry((relocation.target_section_index, relocation.offset))
+            .or_insert(0_usize) += 1;
+    }
+    let mut direct_address_ranges: BTreeMap<(CafeSymbolKind, u64), u64> = BTreeMap::new();
+    for section in sections
+        .iter()
+        .filter(|section| section.section_type == SHT_PROGBITS && section.flags & SHF_ALLOC != 0)
+    {
+        let kind = if section.flags & SHF_EXECINSTR != 0 {
+            CafeSymbolKind::Function
+        } else {
+            CafeSymbolKind::Data
+        };
+        let start = u64::from(section.virtual_address);
+        let end = start + u64::from(section.size);
+        direct_address_ranges
+            .entry((kind, start))
+            .and_modify(|existing_end| *existing_end = (*existing_end).max(end))
+            .or_insert(end);
+    }
+
+    for relocation in relocations
+        .iter()
+        .filter(|record| sections[record.target_section_index].section_type == SHT_RPL_EXPORTS)
+    {
+        let Some(&export_index) =
+            exports_by_location.get(&(relocation.target_section_index, relocation.offset))
+        else {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: relocation.section_index,
+                reason: RplRecordError::ExportRelocation,
+            });
+        };
+        let export = &exports[export_index];
+        let Some(&symbol_index) = symbols_by_index.get(&(
+            relocation.symbol_table_section_index,
+            relocation.symbol_index,
+        )) else {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: relocation.section_index,
+                reason: RplRecordError::ExportRelocation,
+            });
+        };
+        let symbol = &symbols[symbol_index];
+        if symbol.section_index == 0
+            || sections[symbol.section_index].section_type != SHT_PROGBITS
+            || symbol.kind != export.kind
+            || symbol.name != export.name
+            || !range_inside_section(symbol.value, symbol.size, sections[symbol.section_index])
+        {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: relocation.section_index,
+                reason: RplRecordError::ExportRelocation,
+            });
+        }
+    }
+
+    for export in exports {
+        let expected_offset =
+            export_address_field(sections[export.section_index], export.descriptor_index).ok_or(
+                RpxError::InvalidRplRecord {
+                    section_index: export.section_index,
+                    reason: RplRecordError::ExportRelocation,
+                },
+            )?;
+        let relocation_count = relocation_counts
+            .get(&(export.section_index, expected_offset))
+            .copied()
+            .unwrap_or(0);
+        let valid = match relocation_count {
+            0 => address_has_kind(&direct_address_ranges, export.address, export.kind),
+            1 => export.address == 0,
+            _ => false,
+        };
+        if !valid {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: export.section_index,
+                reason: RplRecordError::ExportRelocation,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn export_address_field(section: RawSection, descriptor_index: usize) -> Option<u32> {
+    let relative = descriptor_index.checked_mul(8)?.checked_add(8)?;
+    u32::try_from(u64::from(section.virtual_address).checked_add(u64::try_from(relative).ok()?)?)
+        .ok()
+}
+
+fn address_has_kind(
+    ranges: &BTreeMap<(CafeSymbolKind, u64), u64>,
+    address: u32,
+    kind: CafeSymbolKind,
+) -> bool {
+    let address = u64::from(address);
+    ranges
+        .range(..=(kind, address))
+        .next_back()
+        .is_some_and(|(&(candidate_kind, start), &end)| {
+            candidate_kind == kind && address >= start && address < end
+        })
+}
+
+fn parse_symbols(
+    bytes: &[u8],
+    sections: &[RawSection],
+    index: usize,
+    section: RawSection,
+    symbols: &mut Vec<CafeSymbol>,
+) -> Result<(), RpxError> {
+    if section.entry_size != 16 || !section.size.is_multiple_of(16) {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::EntrySize,
+        });
+    }
+    let count = usize::try_from(section.size / 16).expect("bounded symbol count fits usize");
+    if !(2..=MAX_RPL_RECORDS).contains(&count)
+        || symbols
+            .len()
+            .checked_add(count)
+            .is_none_or(|value| value > MAX_RPL_RECORDS)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::RecordCount,
+        });
+    }
+    let linked = usize::try_from(section.link)
+        .ok()
+        .filter(|v| *v < sections.len())
+        .ok_or(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionLink,
+        })?;
+    if sections[linked].section_type != SHT_STRTAB
+        || usize::try_from(section.info)
+            .ok()
+            .is_none_or(|value| value > count)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: if sections[linked].section_type == SHT_STRTAB {
+                RplRecordError::SectionInfo
+            } else {
+                RplRecordError::SectionLink
+            },
+        });
+    }
+    let names = section_payload(bytes, sections[linked]);
+    if names.is_empty() || names[0] != 0 || names.last() != Some(&0) {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionLink,
+        });
+    }
+    reserve_record(symbols, count)?;
+    let data = section_payload(bytes, section);
+    if data[..16].iter().any(|byte| *byte != 0) {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::NullSymbol,
+        });
+    }
+    for symbol_index in 1..count {
+        symbols.push(parse_symbol(data, names, sections, index, symbol_index)?);
+    }
+    Ok(())
+}
+
+fn parse_symbol(
+    data: &[u8],
+    names: &[u8],
+    sections: &[RawSection],
+    table_section_index: usize,
+    symbol_index: usize,
+) -> Result<CafeSymbol, RpxError> {
+    let invalid = |reason| RpxError::InvalidRplRecord {
+        section_index: table_section_index,
+        reason,
+    };
+    let offset = symbol_index * 16;
+    let value = read_u32(data, offset + 4);
+    let size = read_u32(data, offset + 8);
+    let info = data[offset + 12];
+    let target = usize::from(read_u16(data, offset + 14));
+    let name = owned_rpl_name(names, read_u32(data, offset), table_section_index)?;
+    if name.is_empty() {
+        return Err(invalid(RplRecordError::NameReference));
+    }
+    if info >> 4 != 1 {
+        return Err(invalid(RplRecordError::SymbolBinding));
+    }
+    let kind = match info & 0x0f {
+        1 => CafeSymbolKind::Data,
+        2 => CafeSymbolKind::Function,
+        _ => return Err(invalid(RplRecordError::SymbolKind)),
+    };
+    if data[offset + 13] != 0 {
+        return Err(invalid(RplRecordError::SymbolOther));
+    }
+    if target == 0 || target >= sections.len() {
+        return Err(invalid(RplRecordError::SymbolIndex));
+    }
+    let target_section = sections[target];
+    let target_kind = if target_section.flags & SHF_EXECINSTR != 0 {
+        CafeSymbolKind::Function
+    } else {
+        CafeSymbolKind::Data
+    };
+    if kind != target_kind {
+        return Err(invalid(RplRecordError::SymbolKind));
+    }
+    let range_is_valid = if target_section.section_type == SHT_RPL_IMPORTS {
+        range_inside_import_payload(value, size, target_section)
+    } else {
+        range_inside_section(value, size, target_section)
+    };
+    if !range_is_valid {
+        return Err(invalid(RplRecordError::SymbolRange));
+    }
+    Ok(CafeSymbol {
+        table_section_index,
+        symbol_index,
+        name,
+        value,
+        size,
+        section_index: target,
+        kind,
+    })
+}
+
+fn range_inside_import_payload(value: u32, size: u32, section: RawSection) -> bool {
+    let section_start = u64::from(section.virtual_address);
+    let Some(payload_start) = section_start.checked_add(8) else {
+        return false;
+    };
+    let Some(section_end) = section_start.checked_add(u64::from(section.size)) else {
+        return false;
+    };
+    let value_start = u64::from(value);
+    value_start >= payload_start
+        && value_start < section_end
+        && value_start
+            .checked_add(u64::from(size))
+            .is_some_and(|end| end <= section_end)
+}
+
+fn range_inside_section(value: u32, size: u32, section: RawSection) -> bool {
+    if section.flags & SHF_ALLOC == 0 {
+        return false;
+    }
+    let start = u64::from(section.virtual_address);
+    let end = start + u64::from(section.size);
+    let value_start = u64::from(value);
+    value_start >= start
+        && value_start < end
+        && value_start
+            .checked_add(u64::from(size))
+            .is_some_and(|v| v <= end)
+}
+
+fn parse_relocations(
+    bytes: &[u8],
+    sections: &[RawSection],
+    index: usize,
+    section: RawSection,
+    relocations: &mut Vec<CafeRelocation>,
+) -> Result<(), RpxError> {
+    if section.entry_size != 12 || !section.size.is_multiple_of(12) {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::EntrySize,
+        });
+    }
+    let count = usize::try_from(section.size / 12).expect("bounded relocation count fits usize");
+    if count > MAX_RPL_RECORDS
+        || relocations
+            .len()
+            .checked_add(count)
+            .is_none_or(|value| value > MAX_RPL_RECORDS)
+    {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::RecordCount,
+        });
+    }
+    let symtab = usize::try_from(section.link)
+        .ok()
+        .filter(|v| *v < sections.len())
+        .ok_or(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionLink,
+        })?;
+    let target = usize::try_from(section.info)
+        .ok()
+        .filter(|v| *v < sections.len() && *v != 0)
+        .ok_or(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionInfo,
+        })?;
+    if sections[symtab].section_type != SHT_SYMTAB {
+        return Err(RpxError::InvalidRplRecord {
+            section_index: index,
+            reason: RplRecordError::SectionLink,
+        });
+    }
+    let symbol_count =
+        usize::try_from(sections[symtab].size / 16).expect("bounded symbol count fits usize");
+    reserve_record(relocations, count)?;
+    let data = section_payload(bytes, section);
+    for record in 0..count {
+        let record_offset = record * 12;
+        let offset = read_u32(data, record_offset);
+        let symbol_and_type = read_u32(data, record_offset + 4);
+        let relocation_type = symbol_and_type & 0xff;
+        if relocation_type != 1 {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::RelocationType,
+            });
+        }
+        let symbol_index =
+            usize::try_from(symbol_and_type >> 8).expect("24-bit symbol index fits usize");
+        if symbol_index == 0 || symbol_index >= symbol_count {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::SymbolIndex,
+            });
+        }
+        if !range_inside_section(offset, 4, sections[target]) {
+            return Err(RpxError::InvalidRplRecord {
+                section_index: index,
+                reason: RplRecordError::RelocationRange,
+            });
+        }
+        relocations.push(CafeRelocation {
+            section_index: index,
+            target_section_index: target,
+            symbol_table_section_index: symtab,
+            offset,
+            symbol_index,
+            addend: i32::from_be_bytes(
+                data[record_offset + 8..record_offset + 12]
+                    .try_into()
+                    .expect("four-byte addend"),
+            ),
+            kind: CafeRelocationKind::Addr32,
+        });
+    }
+    Ok(())
 }
 
 fn validate_header(bytes: &[u8]) -> Result<(), RpxError> {
@@ -790,6 +1940,8 @@ fn validate_header(bytes: &[u8]) -> Result<(), RpxError> {
     Ok(())
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
 fn validate_sections(
     bytes: &[u8],
     sections: &[RawSection],
@@ -861,6 +2013,7 @@ fn validate_sections(
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_supported_section(index: usize, section: RawSection) -> Result<(), RpxError> {
     match section.section_type {
         SHT_NULL if index != 0 => {
@@ -1047,7 +2200,11 @@ fn validate_terminal_sections(sections: &[RawSection]) -> Result<(), RpxError> {
     Ok(())
 }
 
-fn parse_file_info(bytes: &[u8], section: RawSection) -> Result<RpxFileInfo, RpxError> {
+fn parse_file_info_for_kind(
+    bytes: &[u8],
+    section: RawSection,
+    kind: CafeModuleKind,
+) -> Result<RpxFileInfo, RpxError> {
     if section.size < FILEINFO_SIZE {
         return Err(RpxError::FileInfoTooSmall {
             actual: section.size,
@@ -1092,7 +2249,7 @@ fn parse_file_info(bytes: &[u8], section: RawSection) -> Result<RpxFileInfo, Rpx
             value: file_info.loader_adjustment,
         });
     }
-    validate_file_info_flags(file_info.flags)?;
+    validate_file_info_flags_for_kind(file_info.flags, kind)?;
     Ok(file_info)
 }
 
@@ -1120,9 +2277,29 @@ fn validate_file_info_flags(flags: u32) -> Result<(), RpxError> {
     Ok(())
 }
 
+fn validate_file_info_flags_for_kind(flags: u32, kind: CafeModuleKind) -> Result<(), RpxError> {
+    if matches!(kind, CafeModuleKind::Rpx) {
+        return validate_file_info_flags(flags);
+    }
+    if flags & FILEINFO_RPX_FLAG == 0 {
+        Ok(())
+    } else {
+        Err(RpxError::InvalidFileInfo {
+            field: RpxFileInfoField::Flags,
+            value: flags,
+        })
+    }
+}
+
 const fn classify_mapping_region(section: RawSection) -> Option<RpxMappingRegion> {
     if section.size == 0 || section.flags & SHF_ALLOC == 0 {
         return None;
+    }
+    if matches!(
+        section.section_type,
+        SHT_SYMTAB | SHT_RELA | SHT_RPL_EXPORTS | SHT_RPL_IMPORTS
+    ) {
+        return Some(RpxMappingRegion::Loader);
     }
     if section.flags & SHF_EXECINSTR != 0 {
         return Some(RpxMappingRegion::Text);
@@ -1244,7 +2421,9 @@ fn validate_entry_point(entry_point: u32, sections: &[RawSection]) -> Result<(),
         .filter(|end| *end <= GUEST_ADDRESS_SPACE_SIZE)
         .ok_or(RpxError::InvalidEntryPoint)?;
     let is_mapped = sections.iter().any(|section| {
-        if section.flags & (SHF_ALLOC | SHF_EXECINSTR) != (SHF_ALLOC | SHF_EXECINSTR) {
+        if section.section_type != SHT_PROGBITS
+            || section.flags & (SHF_ALLOC | SHF_EXECINSTR) != (SHF_ALLOC | SHF_EXECINSTR)
+        {
             return false;
         }
         let start = u64::from(section.virtual_address);
@@ -1259,13 +2438,11 @@ fn validate_entry_point(entry_point: u32, sections: &[RawSection]) -> Result<(),
     Ok(())
 }
 
-fn own_sections(
+fn own_section_vec(
     bytes: &[u8],
     raw_sections: Vec<RawSection>,
     name_table: &[u8],
-    entry_point: u32,
-    file_info: RpxFileInfo,
-) -> Result<ParsedRpx, RpxError> {
+) -> Result<Vec<RpxSection>, RpxError> {
     let mut sections = Vec::new();
     sections
         .try_reserve_exact(raw_sections.len())
@@ -1311,11 +2488,7 @@ fn own_sections(
             data,
         });
     }
-    Ok(ParsedRpx {
-        entry_point,
-        sections,
-        file_info,
-    })
+    Ok(sections)
 }
 
 fn section_payload(bytes: &[u8], section: RawSection) -> &[u8] {
@@ -1392,6 +2565,227 @@ mod tests {
         write_fixture_u32(bytes, FIXTURE_CRC_OFFSET + 16, checksum);
     }
 
+    const EXT_SECTION_COUNT: usize = 10;
+    const EXT_TABLE_OFFSET: usize = 0x40;
+    const EXT_TEXT_OFFSET: usize = 0x1d0;
+    const EXT_STRINGS_OFFSET: usize = 0x1d5;
+    const EXT_IMPORT_OFFSET: usize = 0x1da;
+    const EXT_EXPORT_OFFSET: usize = 0x1e6;
+    const EXT_SYMBOL_OFFSET: usize = 0x1fa;
+    const EXT_RELOCATION_OFFSET: usize = 0x21a;
+    const EXT_CRC_OFFSET: usize = 0x226;
+    const EXT_FILE_INFO_OFFSET: usize = 0x24e;
+    const EXT_IMAGE_SIZE: usize = 0x2ae;
+
+    #[derive(Clone, Copy)]
+    struct ExtendedSection {
+        section_type: u32,
+        flags: u32,
+        address: u32,
+        offset: usize,
+        size: usize,
+        link: u32,
+        info: u32,
+        alignment: u32,
+        entry_size: u32,
+    }
+
+    const EXT_SECTIONS: [ExtendedSection; 9] = [
+        ExtendedSection {
+            section_type: SHT_PROGBITS,
+            flags: SHF_ALLOC | SHF_EXECINSTR,
+            address: 0x1000,
+            offset: EXT_TEXT_OFFSET,
+            size: 4,
+            link: 0,
+            info: 0,
+            alignment: 4,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_STRTAB,
+            flags: 0,
+            address: 0,
+            offset: 0x1d4,
+            size: 1,
+            link: 0,
+            info: 0,
+            alignment: 1,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_STRTAB,
+            flags: 0,
+            address: 0,
+            offset: EXT_STRINGS_OFFSET,
+            size: 5,
+            link: 0,
+            info: 0,
+            alignment: 1,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_RPL_IMPORTS,
+            flags: SHF_ALLOC | SHF_EXECINSTR,
+            address: 0x2000,
+            offset: EXT_IMPORT_OFFSET,
+            size: 12,
+            link: 0,
+            info: 0,
+            alignment: 4,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_RPL_EXPORTS,
+            flags: SHF_ALLOC | SHF_EXECINSTR,
+            address: 0x2010,
+            offset: EXT_EXPORT_OFFSET,
+            size: 20,
+            link: 0,
+            info: 0,
+            alignment: 4,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_SYMTAB,
+            flags: 0,
+            address: 0,
+            offset: EXT_SYMBOL_OFFSET,
+            size: 32,
+            link: 3,
+            info: 1,
+            alignment: 4,
+            entry_size: 16,
+        },
+        ExtendedSection {
+            section_type: SHT_RELA,
+            flags: 0,
+            address: 0,
+            offset: EXT_RELOCATION_OFFSET,
+            size: 12,
+            link: 6,
+            info: 1,
+            alignment: 4,
+            entry_size: 12,
+        },
+        ExtendedSection {
+            section_type: SHT_RPL_CRCS,
+            flags: 0,
+            address: 0,
+            offset: EXT_CRC_OFFSET,
+            size: 40,
+            link: 0,
+            info: 0,
+            alignment: 4,
+            entry_size: 0,
+        },
+        ExtendedSection {
+            section_type: SHT_RPL_FILEINFO,
+            flags: 0,
+            address: 0,
+            offset: EXT_FILE_INFO_OFFSET,
+            size: 96,
+            link: 0,
+            info: 0,
+            alignment: 4,
+            entry_size: 0,
+        },
+    ];
+
+    fn write_extended_sections(bytes: &mut [u8]) {
+        for (index, section) in EXT_SECTIONS.iter().enumerate() {
+            let header = EXT_TABLE_OFFSET + (index + 1) * 40;
+            let offset = u32::try_from(section.offset).expect("fixture offset");
+            let size = u32::try_from(section.size).expect("fixture size");
+            for (field, value) in [
+                (4, section.section_type),
+                (8, section.flags),
+                (12, section.address),
+                (16, offset),
+                (20, size),
+                (24, section.link),
+                (28, section.info),
+                (32, section.alignment),
+                (36, section.entry_size),
+            ] {
+                write_fixture_u32(bytes, header + field, value);
+            }
+        }
+    }
+
+    fn write_extended_payload(bytes: &mut [u8], kind: CafeModuleKind) {
+        bytes[EXT_TEXT_OFFSET..EXT_TEXT_OFFSET + 4].copy_from_slice(&[0x60, 0, 0, 0]);
+        bytes[EXT_STRINGS_OFFSET..EXT_STRINGS_OFFSET + 5].copy_from_slice(b"\0foo\0");
+        bytes[EXT_IMPORT_OFFSET + 8..EXT_IMPORT_OFFSET + 12].copy_from_slice(b"mod\0");
+        write_fixture_u32(bytes, EXT_EXPORT_OFFSET, 1);
+        write_fixture_u32(bytes, EXT_EXPORT_OFFSET + 8, 0x1000);
+        write_fixture_u32(bytes, EXT_EXPORT_OFFSET + 12, 16);
+        bytes[EXT_EXPORT_OFFSET + 16..EXT_EXPORT_OFFSET + 20].copy_from_slice(b"exp\0");
+        write_fixture_u32(bytes, EXT_SYMBOL_OFFSET + 16, 1);
+        write_fixture_u32(bytes, EXT_SYMBOL_OFFSET + 20, 0x1000);
+        write_fixture_u32(bytes, EXT_SYMBOL_OFFSET + 24, 4);
+        bytes[EXT_SYMBOL_OFFSET + 28] = 0x12;
+        bytes[EXT_SYMBOL_OFFSET + 30..EXT_SYMBOL_OFFSET + 32].copy_from_slice(&1_u16.to_be_bytes());
+        write_fixture_u32(bytes, EXT_RELOCATION_OFFSET, 0x1000);
+        write_fixture_u32(bytes, EXT_RELOCATION_OFFSET + 4, (1 << 8) | 1);
+        write_fixture_u32(bytes, EXT_FILE_INFO_OFFSET, FILEINFO_MAGIC);
+        write_fixture_u32(bytes, EXT_FILE_INFO_OFFSET + 4, 4);
+        write_fixture_u32(bytes, EXT_FILE_INFO_OFFSET + 8, 4);
+        write_fixture_u32(bytes, EXT_FILE_INFO_OFFSET + 20, 0x40);
+        let flags = if matches!(kind, CafeModuleKind::Rpx) {
+            FILEINFO_RPX_FLAG
+        } else {
+            0
+        };
+        write_fixture_u32(bytes, EXT_FILE_INFO_OFFSET + 52, flags);
+    }
+
+    fn write_extended_checksums(bytes: &mut [u8]) {
+        for index in 0..EXT_SECTION_COUNT {
+            let header = EXT_TABLE_OFFSET + index * 40;
+            let section_type = read_u32(bytes, header + 4);
+            let offset = usize::try_from(read_u32(bytes, header + 16)).expect("fixture offset");
+            let size = usize::try_from(read_u32(bytes, header + 20)).expect("fixture size");
+            let checksum = if matches!(section_type, SHT_NULL | SHT_RPL_CRCS) {
+                0
+            } else {
+                crc32(&bytes[offset..offset + size])
+            };
+            write_fixture_u32(bytes, EXT_CRC_OFFSET + index * 4, checksum);
+        }
+    }
+
+    fn extended_cafe_fixture(kind: CafeModuleKind) -> Vec<u8> {
+        let mut bytes = vec![0_u8; EXT_IMAGE_SIZE];
+        bytes[0..9].copy_from_slice(&[0x7f, b'E', b'L', b'F', 1, 2, 1, 0xca, 0xfe]);
+        bytes[16..18].copy_from_slice(&0xfe01_u16.to_be_bytes());
+        bytes[18..20].copy_from_slice(&20_u16.to_be_bytes());
+        write_fixture_u32(&mut bytes, 20, 1);
+        let entry_point = if matches!(kind, CafeModuleKind::Rpx) {
+            0x1000
+        } else {
+            0
+        };
+        write_fixture_u32(&mut bytes, 24, entry_point);
+        write_fixture_u32(
+            &mut bytes,
+            32,
+            u32::try_from(EXT_TABLE_OFFSET).expect("fixture table offset"),
+        );
+        bytes[40..42].copy_from_slice(&52_u16.to_be_bytes());
+        bytes[46..48].copy_from_slice(&40_u16.to_be_bytes());
+        bytes[48..50].copy_from_slice(
+            &u16::try_from(EXT_SECTION_COUNT)
+                .expect("fixture section count")
+                .to_be_bytes(),
+        );
+        bytes[50..52].copy_from_slice(&2_u16.to_be_bytes());
+        write_extended_sections(&mut bytes);
+        write_extended_payload(&mut bytes, kind);
+        write_extended_checksums(&mut bytes);
+        bytes
+    }
+
     #[test]
     fn builtin_fixture_parses_without_mutating_input() {
         let image = builtin_rpx_fixture();
@@ -1402,12 +2796,84 @@ mod tests {
         assert_eq!(parsed.entry_point(), 0x0200_0000);
         assert!(parsed.is_rpx());
         assert_eq!(parsed.sections().len(), 5);
+        assert!(parsed.symbols().is_empty());
+        assert!(parsed.imports().is_empty());
+        assert!(parsed.exports().is_empty());
+        assert!(parsed.relocations().is_empty());
         assert_eq!(
             parsed.sections()[1].mapping_region(),
             Some(RpxMappingRegion::Text)
         );
         assert_eq!(parsed.sections()[2].mapping_region(), None);
         assert_eq!(image, snapshot);
+    }
+
+    #[test]
+    fn extended_rpx_records_are_accepted_and_exposed() {
+        let image = extended_cafe_fixture(CafeModuleKind::Rpx);
+        let parsed = parse_rpx(&image).expect("extended RPX records must parse");
+
+        assert_eq!(parsed.module_kind(), CafeModuleKind::Rpx);
+        assert_eq!(parsed.symbols().len(), 1);
+        assert_eq!(parsed.symbols()[0].name(), "foo");
+        assert_eq!(parsed.imports().len(), 1);
+        assert_eq!(parsed.imports()[0].module_name(), "mod");
+        assert_eq!(parsed.exports().len(), 1);
+        assert_eq!(parsed.exports()[0].name(), "exp");
+        assert_eq!(parsed.relocations().len(), 1);
+        assert_eq!(parsed.relocations()[0].kind(), CafeRelocationKind::Addr32);
+        assert_eq!(
+            parsed.sections()[4].mapping_region(),
+            Some(RpxMappingRegion::Loader)
+        );
+        assert_eq!(
+            parsed.sections()[5].mapping_region(),
+            Some(RpxMappingRegion::Loader)
+        );
+    }
+
+    #[test]
+    fn cafe_module_kind_mismatch_is_rejected() {
+        let rpx = extended_cafe_fixture(CafeModuleKind::Rpx);
+        assert_eq!(
+            parse_rpl(&rpx),
+            Err(RpxError::InvalidFileInfo {
+                field: RpxFileInfoField::Flags,
+                value: FILEINFO_RPX_FLAG,
+            })
+        );
+
+        let rpl = extended_cafe_fixture(CafeModuleKind::Rpl);
+        assert_eq!(
+            parse_rpx(&rpl),
+            Err(RpxError::InvalidFileInfo {
+                field: RpxFileInfoField::Flags,
+                value: 0,
+            })
+        );
+        assert_eq!(parse_rpl(&rpl).expect("matching RPL kind").entry_point(), 0);
+    }
+
+    #[test]
+    fn rpl_entry_point_must_be_zero_even_when_executable() {
+        for entry_point in [1, 0x1000] {
+            let mut rpl = extended_cafe_fixture(CafeModuleKind::Rpl);
+            write_fixture_u32(&mut rpl, 24, entry_point);
+
+            assert_eq!(parse_rpl(&rpl), Err(RpxError::InvalidEntryPoint));
+        }
+
+        let mut bad_crc = extended_cafe_fixture(CafeModuleKind::Rpl);
+        write_fixture_u32(&mut bad_crc, 24, 1);
+        bad_crc[EXT_TEXT_OFFSET] ^= 1;
+        assert_eq!(
+            parse_rpl(&bad_crc),
+            Err(RpxError::CrcMismatch {
+                section_index: 1,
+                expected: read_u32(&bad_crc, EXT_CRC_OFFSET + 4),
+                actual: crc32(&bad_crc[EXT_TEXT_OFFSET..EXT_TEXT_OFFSET + 4]),
+            })
+        );
     }
 
     #[test]
@@ -1772,5 +3238,677 @@ mod tests {
     fn ieee_crc32_matches_standard_check_value() {
         assert_eq!(crc32(b""), 0);
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+    }
+
+    #[test]
+    fn parses_minimal_rpl_structural_records() {
+        let mut bytes = vec![0; 96];
+        bytes[0..5].copy_from_slice(b"\0foo\0");
+        bytes[8..20].copy_from_slice(b"\0\0\0\0\0\0\0\0mod\0");
+        bytes[40..56].copy_from_slice(&[0, 0, 0, 1, 0, 0, 0x10, 0, 0, 0, 0, 4, 0x12, 0, 0, 1]);
+        write_fixture_u32(&mut bytes, 56, 0x1000);
+        write_fixture_u32(&mut bytes, 60, (1 << 8) | 1);
+        write_fixture_u32(&mut bytes, 64, u32::MAX);
+        write_fixture_u32(&mut bytes, 68, 1);
+        write_fixture_u32(&mut bytes, 76, 0x1000);
+        write_fixture_u32(&mut bytes, 80, 16);
+        bytes[84..88].copy_from_slice(b"exp\0");
+        let sections = vec![
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: SHF_ALLOC | SHF_EXECINSTR,
+                virtual_address: 0x1000,
+                size: 4,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_STRTAB,
+                file_offset: 0,
+                size: 5,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RPL_IMPORTS,
+                flags: SHF_EXECINSTR,
+                file_offset: 8,
+                size: 12,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RPL_EXPORTS,
+                flags: SHF_EXECINSTR,
+                file_offset: 68,
+                size: 20,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_SYMTAB,
+                file_offset: 24,
+                size: 32,
+                link: 2,
+                info: 1,
+                entry_size: 16,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RELA,
+                file_offset: 56,
+                size: 12,
+                link: 5,
+                info: 1,
+                entry_size: 12,
+                ..RawSection::default()
+            },
+        ];
+
+        let mut imports = Vec::new();
+        parse_import(&bytes, 3, sections[3], &mut imports).expect("minimal import");
+        assert_eq!(imports[0].module_name(), "mod");
+        let mut exports = Vec::new();
+        parse_exports(&bytes, 4, sections[4], &mut exports, &mut BTreeSet::new())
+            .expect("minimal export");
+        assert_eq!(exports[0].name(), "exp");
+        let mut symbols = Vec::new();
+        parse_symbols(&bytes, &sections, 5, sections[5], &mut symbols).expect("minimal symbol");
+        assert_eq!(symbols[0].name(), "foo");
+        let mut relocations = Vec::new();
+        parse_relocations(&bytes, &sections, 6, sections[6], &mut relocations)
+            .expect("minimal ADDR32 relocation");
+        assert_eq!(relocations[0].kind(), CafeRelocationKind::Addr32);
+        assert_eq!(relocations[0].addend(), -1);
+    }
+
+    fn export_semantics(
+        address: u32,
+        symbol_kind: CafeSymbolKind,
+        relocation_offsets: &[u32],
+    ) -> (
+        Vec<RawSection>,
+        Vec<CafeExport>,
+        Vec<CafeSymbol>,
+        Vec<CafeRelocation>,
+    ) {
+        let sections = vec![
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: SHF_ALLOC | SHF_EXECINSTR,
+                virtual_address: 0x1000,
+                size: 4,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RPL_EXPORTS,
+                flags: SHF_ALLOC | SHF_EXECINSTR,
+                virtual_address: 0x2000,
+                size: 20,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_SYMTAB,
+                size: 32,
+                entry_size: 16,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RELA,
+                link: 3,
+                info: 2,
+                entry_size: 12,
+                ..RawSection::default()
+            },
+        ];
+        let exports = vec![CafeExport {
+            section_index: 2,
+            descriptor_index: 0,
+            name: "redacted".to_owned(),
+            address,
+            kind: CafeSymbolKind::Function,
+        }];
+        let symbols = vec![CafeSymbol {
+            table_section_index: 3,
+            symbol_index: 1,
+            name: "redacted".to_owned(),
+            value: 0x1000,
+            size: 4,
+            section_index: 1,
+            kind: symbol_kind,
+        }];
+        let relocations = relocation_offsets
+            .iter()
+            .map(|offset| CafeRelocation {
+                section_index: 4,
+                target_section_index: 2,
+                symbol_table_section_index: 3,
+                offset: *offset,
+                symbol_index: 1,
+                addend: 0,
+                kind: CafeRelocationKind::Addr32,
+            })
+            .collect();
+        (sections, exports, symbols, relocations)
+    }
+
+    #[test]
+    fn zero_export_accepts_one_exact_local_addr32_relocation() {
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn export_name_may_start_at_descriptor_end() {
+        let mut bytes = [0_u8; 20];
+        write_fixture_u32(&mut bytes, 0, 1);
+        write_fixture_u32(&mut bytes, 8, 0x1000);
+        write_fixture_u32(&mut bytes, 12, 16);
+        bytes[16..20].copy_from_slice(b"exp\0");
+        let section = RawSection {
+            section_type: SHT_RPL_EXPORTS,
+            flags: SHF_EXECINSTR,
+            size: 20,
+            ..RawSection::default()
+        };
+        let mut exports = Vec::new();
+        parse_exports(&bytes, 2, section, &mut exports, &mut BTreeSet::new())
+            .expect("name begins at descriptor end");
+        assert_eq!(exports[0].name(), "exp");
+    }
+
+    #[test]
+    fn maximum_exports_and_relocations_use_bounded_indexes() {
+        const NAME_WIDTH: usize = 9;
+
+        let descriptors_end = 8 + MAX_RPL_RECORDS * 8;
+        let mut bytes = vec![0_u8; descriptors_end + MAX_RPL_RECORDS * NAME_WIDTH];
+        write_fixture_u32(
+            &mut bytes,
+            0,
+            u32::try_from(MAX_RPL_RECORDS).expect("record limit fits u32"),
+        );
+        for record in 0..MAX_RPL_RECORDS {
+            let descriptor = 8 + record * 8;
+            let name_offset = descriptors_end + record * NAME_WIDTH;
+            let address = if record + 1 == MAX_RPL_RECORDS {
+                0x1000
+            } else {
+                0
+            };
+            write_fixture_u32(&mut bytes, descriptor, address);
+            write_fixture_u32(
+                &mut bytes,
+                descriptor + 4,
+                u32::try_from(name_offset).expect("bounded name offset fits u32"),
+            );
+            let name = format!("{record:08x}");
+            bytes[name_offset..name_offset + name.len()].copy_from_slice(name.as_bytes());
+        }
+        let export_section = RawSection {
+            section_type: SHT_RPL_EXPORTS,
+            flags: SHF_ALLOC | SHF_EXECINSTR,
+            virtual_address: 0x1_0000,
+            size: u32::try_from(bytes.len()).expect("bounded export payload fits u32"),
+            ..RawSection::default()
+        };
+        let mut exports = Vec::new();
+        let mut export_names = BTreeSet::new();
+        parse_exports(&bytes, 2, export_section, &mut exports, &mut export_names)
+            .expect("the exact export record limit is accepted");
+        assert_eq!(exports.len(), MAX_RPL_RECORDS);
+
+        let sections = vec![
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: SHF_ALLOC | SHF_EXECINSTR,
+                virtual_address: 0x1000,
+                size: u32::try_from((MAX_RPL_RECORDS - 1) * 4).expect("bounded text size fits u32"),
+                ..RawSection::default()
+            },
+            export_section,
+            RawSection {
+                section_type: SHT_SYMTAB,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RELA,
+                ..RawSection::default()
+            },
+        ];
+        let symbols: Vec<_> = exports[..MAX_RPL_RECORDS - 1]
+            .iter()
+            .enumerate()
+            .map(|(record, export)| CafeSymbol {
+                table_section_index: 3,
+                symbol_index: record + 1,
+                name: export.name.clone(),
+                value: 0x1000 + u32::try_from(record * 4).expect("bounded symbol offset"),
+                size: 4,
+                section_index: 1,
+                kind: CafeSymbolKind::Function,
+            })
+            .collect();
+        let relocations: Vec<_> = (0..MAX_RPL_RECORDS - 1)
+            .map(|record| CafeRelocation {
+                section_index: 4,
+                target_section_index: 2,
+                symbol_table_section_index: 3,
+                offset: 0x1_0008 + u32::try_from(record * 8).expect("bounded relocation offset"),
+                symbol_index: record + 1,
+                addend: 0,
+                kind: CafeRelocationKind::Addr32,
+            })
+            .collect();
+
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn zero_export_without_relocation_is_rejected() {
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 2,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+    }
+
+    #[test]
+    fn export_relocation_rejects_name_field_wrong_kind_and_duplicate() {
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x200c]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Data, &[0x2008]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x2008, 0x2008]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 2,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+    }
+
+    #[test]
+    fn export_relocation_rejects_wrong_symbol_table_or_index() {
+        let (sections, exports, symbols, mut relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
+        relocations[0].symbol_table_section_index = 1;
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+        relocations[0].symbol_table_section_index = 3;
+        relocations[0].symbol_index = 0;
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+    }
+
+    #[test]
+    fn export_relocation_rejects_garbage_direct_and_name_mismatch() {
+        for address in [1, 0x1000] {
+            let (sections, exports, symbols, relocations) =
+                export_semantics(address, CafeSymbolKind::Function, &[0x2008]);
+            assert_eq!(
+                validate_export_relocations(&sections, &exports, &symbols, &relocations),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 2,
+                    reason: RplRecordError::ExportRelocation
+                })
+            );
+        }
+
+        let (sections, exports, mut symbols, relocations) =
+            export_semantics(0, CafeSymbolKind::Function, &[0x2008]);
+        symbols[0].name = "different".to_owned();
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 4,
+                reason: RplRecordError::ExportRelocation
+            })
+        );
+    }
+
+    #[test]
+    fn directly_valid_export_address_remains_accepted() {
+        let (sections, exports, symbols, relocations) =
+            export_semantics(0x1000, CafeSymbolKind::Function, &[]);
+        assert_eq!(
+            validate_export_relocations(&sections, &exports, &symbols, &relocations),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn import_symbol_range_excludes_header_and_end() {
+        let import = RawSection {
+            section_type: SHT_RPL_IMPORTS,
+            virtual_address: 0x2000,
+            size: 12,
+            ..RawSection::default()
+        };
+        assert!(!range_inside_import_payload(0x2007, 1, import));
+        assert!(range_inside_import_payload(0x2008, 4, import));
+        assert!(!range_inside_import_payload(0x200c, 0, import));
+        assert!(!range_inside_import_payload(0x2008, 5, import));
+    }
+
+    #[test]
+    fn import_and_export_unused_header_fields_must_be_zero() {
+        for (index, section) in [
+            RawSection {
+                section_type: SHT_RPL_IMPORTS,
+                link: 1,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RPL_EXPORTS,
+                info: 1,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RPL_IMPORTS,
+                entry_size: 1,
+                ..RawSection::default()
+            },
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(
+                validate_supported_rpl_section(index + 1, section),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: index + 1,
+                    reason: RplRecordError::SectionHeaderFields
+                })
+            );
+        }
+    }
+
+    fn canonical_symbol_fixture(info: u8, other: u8) -> (Vec<u8>, Vec<RawSection>) {
+        let mut bytes = vec![0_u8; 37];
+        write_fixture_u32(&mut bytes, 16, 1);
+        write_fixture_u32(&mut bytes, 20, 0x1000);
+        write_fixture_u32(&mut bytes, 24, 4);
+        bytes[28] = info;
+        bytes[29] = other;
+        bytes[30..32].copy_from_slice(&1_u16.to_be_bytes());
+        bytes[32..37].copy_from_slice(b"\0sym\0");
+        let target_flags = SHF_ALLOC | if info & 0x0f == 2 { SHF_EXECINSTR } else { 0 };
+        let sections = vec![
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: target_flags,
+                virtual_address: 0x1000,
+                size: 4,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_STRTAB,
+                file_offset: 32,
+                size: 5,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_SYMTAB,
+                file_offset: 0,
+                size: 32,
+                link: 2,
+                info: 1,
+                entry_size: 16,
+                ..RawSection::default()
+            },
+        ];
+        (bytes, sections)
+    }
+
+    #[test]
+    fn symtab_null_symbol_must_be_completely_zero() {
+        for byte_offset in [0, 4, 8, 12, 13, 15] {
+            let (mut bytes, sections) = canonical_symbol_fixture(0x12, 0);
+            bytes[byte_offset] = 1;
+            assert_eq!(
+                parse_symbols(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 3,
+                    reason: RplRecordError::NullSymbol
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn symtab_requires_global_binding_and_zero_other() {
+        for info in [0x02, 0x22, 0x32] {
+            let (bytes, sections) = canonical_symbol_fixture(info, 0);
+            assert_eq!(
+                parse_symbols(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 3,
+                    reason: RplRecordError::SymbolBinding
+                })
+            );
+        }
+        let (bytes, sections) = canonical_symbol_fixture(0x12, 1);
+        assert_eq!(
+            parse_symbols(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 3,
+                reason: RplRecordError::SymbolOther
+            })
+        );
+    }
+
+    #[test]
+    fn global_function_and_object_symbols_are_accepted() {
+        for (info, expected) in [
+            (0x12, CafeSymbolKind::Function),
+            (0x11, CafeSymbolKind::Data),
+        ] {
+            let (bytes, sections) = canonical_symbol_fixture(info, 0);
+            let mut symbols = Vec::new();
+            parse_symbols(&bytes, &sections, 3, sections[3], &mut symbols)
+                .expect("canonical global symbol");
+            assert_eq!(symbols.len(), 1);
+            assert_eq!(symbols[0].kind(), expected);
+        }
+    }
+
+    #[test]
+    fn zero_sized_function_and_object_symbols_at_section_end_are_rejected() {
+        for info in [0x12, 0x11] {
+            let (mut bytes, sections) = canonical_symbol_fixture(info, 0);
+            write_fixture_u32(&mut bytes, 20, 0x1004);
+            write_fixture_u32(&mut bytes, 24, 0);
+
+            assert_eq!(
+                parse_symbols(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+                Err(RpxError::InvalidRplRecord {
+                    section_index: 3,
+                    reason: RplRecordError::SymbolRange,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_rpl_record_count_name_and_layout_bounds() {
+        let mut oversized_count = [0_u8; 8];
+        write_fixture_u32(&mut oversized_count, 0, 4097);
+        let export = RawSection {
+            section_type: SHT_RPL_EXPORTS,
+            size: 8,
+            ..RawSection::default()
+        };
+        assert_eq!(
+            parse_exports(
+                &oversized_count,
+                1,
+                export,
+                &mut Vec::new(),
+                &mut BTreeSet::new()
+            ),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 1,
+                reason: RplRecordError::RecordCount,
+            })
+        );
+
+        let mut long_name = vec![b'x'; MAX_RPL_NAME_SIZE + 1];
+        long_name.push(0);
+        assert_eq!(
+            owned_rpl_name(&long_name, 0, 2),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 2,
+                reason: RplRecordError::NameTooLong,
+            })
+        );
+
+        let invalid_symtab = RawSection {
+            section_type: SHT_SYMTAB,
+            entry_size: 15,
+            ..RawSection::default()
+        };
+        assert_eq!(
+            parse_symbols(
+                &[],
+                &[RawSection::default(), invalid_symtab],
+                1,
+                invalid_symtab,
+                &mut Vec::new()
+            ),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 1,
+                reason: RplRecordError::EntrySize,
+            })
+        );
+        let one_symbol = RawSection {
+            section_type: SHT_SYMTAB,
+            size: 16,
+            entry_size: 16,
+            ..RawSection::default()
+        };
+        assert_eq!(
+            parse_symbols(
+                &[0; 16],
+                &[RawSection::default(), one_symbol],
+                1,
+                one_symbol,
+                &mut Vec::new()
+            ),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 1,
+                reason: RplRecordError::RecordCount,
+            })
+        );
+        let invalid_rela = RawSection {
+            section_type: SHT_RELA,
+            entry_size: 8,
+            ..RawSection::default()
+        };
+        assert_eq!(
+            parse_relocations(
+                &[],
+                &[RawSection::default(), invalid_rela],
+                1,
+                invalid_rela,
+                &mut Vec::new()
+            ),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 1,
+                reason: RplRecordError::EntrySize,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_non_addr32_and_out_of_range_rpl_relocations() {
+        let mut bytes = [0_u8; 12];
+        write_fixture_u32(&mut bytes, 0, 0x2000);
+        write_fixture_u32(&mut bytes, 4, 2);
+        let sections = [
+            RawSection::default(),
+            RawSection {
+                section_type: SHT_PROGBITS,
+                flags: SHF_ALLOC,
+                virtual_address: 0x1000,
+                size: 4,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_SYMTAB,
+                size: 32,
+                entry_size: 16,
+                ..RawSection::default()
+            },
+            RawSection {
+                section_type: SHT_RELA,
+                size: 12,
+                link: 2,
+                info: 1,
+                entry_size: 12,
+                ..RawSection::default()
+            },
+        ];
+        assert_eq!(
+            parse_relocations(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 3,
+                reason: RplRecordError::RelocationType
+            })
+        );
+        write_fixture_u32(&mut bytes, 4, 1);
+        assert_eq!(
+            parse_relocations(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 3,
+                reason: RplRecordError::SymbolIndex
+            })
+        );
+        write_fixture_u32(&mut bytes, 4, (1 << 8) | 1);
+        assert_eq!(
+            parse_relocations(&bytes, &sections, 3, sections[3], &mut Vec::new()),
+            Err(RpxError::InvalidRplRecord {
+                section_index: 3,
+                reason: RplRecordError::RelocationRange
+            })
+        );
     }
 }
