@@ -9,7 +9,7 @@
   "golden_trace_records": 3,
   "golden_trace_sha256": "7a10595cec39737bdb325db21118d91cca4a5fe75c8bb208caee0780d202d251",
   "adapter_cmake_path": "compat/cpp-oracle/CMakeLists.txt",
-  "adapter_cmake_sha256": "bd87fc41c7a8b014fdec2c8782b2e66246252a8aead057f3ee5801c1e7da06b7",
+  "adapter_cmake_sha256": "4315c68fd20006237d300ac7de2f4c621b73cc10e06688f38d51834cf5f7fac3",
   "adapter_source_path": "compat/cpp-oracle/rpx_oracle_trace.cpp",
   "adapter_source_sha256": "aa3e76985085694d8add61aa5a8cf6d37a3e04891a06a5014619f04c422d4818"
 }

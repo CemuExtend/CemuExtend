@@ -129,6 +129,9 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && cargo build --release --locked --package cemuextend --bin cex-rpx-contract-trace \
     && cargo build --release --locked --package cemuextend --bin cex-rpl-link-fixture \
     && cargo build --release --locked --package cemuextend --bin cex-rpl-link-contract-trace \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-call-fixture \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-call-link-contract-trace \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-call-execution-trace \
     && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu \
     && install -D -m 0755 /workspace/target/release/cex-trace-compare \
         /opt/cemuextend/bin/cex-trace-compare \
@@ -139,7 +142,13 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && install -D -m 0755 /workspace/target/release/cex-rpl-link-fixture \
         /opt/cemuextend/bin/cex-rpl-link-fixture \
     && install -D -m 0755 /workspace/target/release/cex-rpl-link-contract-trace \
-        /opt/cemuextend/bin/cex-rpl-link-contract-trace
+        /opt/cemuextend/bin/cex-rpl-link-contract-trace \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-call-fixture \
+        /opt/cemuextend/bin/cex-rpl-call-fixture \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-call-link-contract-trace \
+        /opt/cemuextend/bin/cex-rpl-call-link-contract-trace \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-call-execution-trace \
+        /opt/cemuextend/bin/cex-rpl-call-execution-trace
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
@@ -277,6 +286,73 @@ FROM scratch AS rust-rpl-link-contract-artifacts
 
 COPY --from=rust-rpl-link-contract-artifacts-builder /opt/cemuextend/rpl-link-contract/ /
 
+# BuildKit-exported REL24 call fixtures and canonical link/execution traces.
+FROM rust-builder AS rust-rpl-call-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpl-call-contract; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module main \
+        --output /opt/cemuextend/rpl-call-contract/main.rpx; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module provider \
+        --output /opt/cemuextend/rpl-call-contract/provider.rpl; \
+    /opt/cemuextend/bin/cex-rpl-call-link-contract-trace \
+        --main /opt/cemuextend/rpl-call-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-call-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-call-contract/rust-link-trace.jsonl; \
+    /opt/cemuextend/bin/cex-rpl-call-execution-trace \
+        --main /opt/cemuextend/rpl-call-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-call-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-call-contract/rust-execution-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-call-contract/main.rpx; \
+    test -s /opt/cemuextend/rpl-call-contract/provider.rpl; \
+    test -s /opt/cemuextend/rpl-call-contract/rust-link-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-call-contract/rust-execution-trace.jsonl; \
+    test "$(wc -l < /opt/cemuextend/rpl-call-contract/rust-link-trace.jsonl)" -eq 5; \
+    test "$(wc -l < /opt/cemuextend/rpl-call-contract/rust-execution-trace.jsonl)" -eq 7; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpl-call-contract/cex-trace-compare; \
+    test -s /opt/cemuextend/rpl-call-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpl-call-contract; \
+    sha256sum main.rpx provider.rpl rust-link-trace.jsonl rust-execution-trace.jsonl \
+        cex-trace-compare > SHA256SUMS; \
+    chmod 0644 SHA256SUMS; \
+    test "$(wc -l < SHA256SUMS)" -eq 5
+
+FROM scratch AS rust-rpl-call-contract-artifacts
+
+COPY --from=rust-rpl-call-contract-artifacts-builder /opt/cemuextend/rpl-call-contract/ /
+
+# Link-only REL24 call export for the frozen C++ oracle. Keep this independent
+# of the combined execution artifact builder so link parity has no execution
+# trace input or artifact dependency.
+FROM rust-builder AS rust-rpl-call-link-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpl-call-link-contract; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module main \
+        --output /opt/cemuextend/rpl-call-link-contract/main.rpx; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module provider \
+        --output /opt/cemuextend/rpl-call-link-contract/provider.rpl; \
+    /opt/cemuextend/bin/cex-rpl-call-link-contract-trace \
+        --main /opt/cemuextend/rpl-call-link-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-call-link-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-call-link-contract/rust-link-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-call-link-contract/main.rpx; \
+    test -s /opt/cemuextend/rpl-call-link-contract/provider.rpl; \
+    test -s /opt/cemuextend/rpl-call-link-contract/rust-link-trace.jsonl; \
+    test "$(wc -l < /opt/cemuextend/rpl-call-link-contract/rust-link-trace.jsonl)" -eq 5; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpl-call-link-contract/cex-trace-compare; \
+    test -s /opt/cemuextend/rpl-call-link-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpl-call-link-contract; \
+    sha256sum main.rpx provider.rpl rust-link-trace.jsonl cex-trace-compare > SHA256SUMS; \
+    chmod 0644 SHA256SUMS; \
+    test "$(wc -l < SHA256SUMS)" -eq 4
+
+FROM scratch AS rust-rpl-call-link-contract-artifacts
+
+COPY --from=rust-rpl-call-link-contract-artifacts-builder /opt/cemuextend/rpl-call-link-contract/ /
+
 # Rebuild the current synthetic fixture and Rust trace, then compare them with
 # the tracked trace attested by the fixed C++ oracle. The manifest also pins the
 # adapter sources, so changing the manual oracle path requires an explicit
@@ -390,6 +466,111 @@ RUN set -eu; \
         --actual "${gate_dir}/rust-actual.jsonl"; \
     touch /opt/cemuextend/rpl-link-golden-gate-verified
 
+# Attest the five-record near-REL24 link-state trace against the fixed C++
+# production-link oracle. This gate makes no C++ CPU execution claim.
+FROM rust-builder AS rust-rpl-call-link-golden-gate
+
+RUN set -eu; \
+    gate_dir=/tmp/cemuextend-rpl-call-link-golden-gate; \
+    manifest=compat/golden/rpl-call-link-positive-v1.manifest.json; \
+    golden=compat/golden/rpl-call-link-positive-v1.jsonl; \
+    mkdir -p "${gate_dir}"; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module main --output "${gate_dir}/main.rpx"; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module provider --output "${gate_dir}/provider.rpl"; \
+    /opt/cemuextend/bin/cex-rpl-call-link-contract-trace \
+        --main "${gate_dir}/main.rpx" --provider "${gate_dir}/provider.rpl" \
+        --trace-output "${gate_dir}/rust-actual.jsonl"; \
+    manifest_value() { \
+        awk -v key="$1" ' \
+            $0 ~ "^[[:space:]]*\"" key "\"[[:space:]]*:" { \
+                value = $0; \
+                sub("^[[:space:]]*\"" key "\"[[:space:]]*:[[:space:]]*", "", value); \
+                sub(",[[:space:]]*$", "", value); \
+                sub("^[[:space:]]*\"", "", value); \
+                sub("\"[[:space:]]*$", "", value); \
+                print value; \
+            } \
+        ' "${manifest}"; \
+    }; \
+    assert_manifest_sha256() { \
+        expected="$(manifest_value "$2")"; \
+        test "$(printf '%s' "${expected}" | wc -c)" -eq 64; \
+        printf '%s\n' "${expected}" | grep -Eq '^[0-9a-f]{64}$'; \
+        actual="$(sha256sum "$1" | cut -d ' ' -f1)"; \
+        test "${actual}" = "${expected}"; \
+    }; \
+    test "$(manifest_value schema_version)" = 1; \
+    test "$(manifest_value oracle_commit)" = ab0b772029f0a5cd57c194cf338003fe8eae8ab8; \
+    test "$(manifest_value oracle_attestation)" = 'cex-trace-compare exit 0 against fixed C++ production-link oracle output'; \
+    test "$(manifest_value scope)" = 'positive synthetic near-REL24 RPX/RPL link-state only; not C++ CPU execution or full compatibility'; \
+    test "$(manifest_value main_fixture_producer)" = 'cex-rpl-call-fixture --module main'; \
+    test "$(manifest_value provider_fixture_producer)" = 'cex-rpl-call-fixture --module provider'; \
+    test "$(manifest_value trace_producer)" = cex-rpl-call-link-contract-trace; \
+    test "$(manifest_value golden_trace_path)" = "${golden}"; \
+    test "$(manifest_value adapter_cmake_path)" = compat/cpp-oracle/CMakeLists.txt; \
+    test "$(manifest_value adapter_source_path)" = compat/cpp-oracle/rpl_call_oracle_trace.cpp; \
+    test "$(manifest_value golden_trace_records)" -eq 5; \
+    test "$(wc -l < "${golden}")" -eq 5; \
+    test "$(wc -l < "${gate_dir}/rust-actual.jsonl")" -eq 5; \
+    assert_manifest_sha256 "${gate_dir}/main.rpx" main_fixture_sha256; \
+    assert_manifest_sha256 "${gate_dir}/provider.rpl" provider_fixture_sha256; \
+    assert_manifest_sha256 "${golden}" golden_trace_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/CMakeLists.txt adapter_cmake_sha256; \
+    assert_manifest_sha256 compat/cpp-oracle/rpl_call_oracle_trace.cpp adapter_source_sha256; \
+    /opt/cemuextend/bin/cex-trace-compare --expected "${golden}" \
+        --actual "${gate_dir}/rust-actual.jsonl"; \
+    touch /opt/cemuextend/rpl-call-link-golden-gate-verified
+
+# Independently pin the deterministic seven-record Rust execution contract.
+# This gate has no C++ oracle, adapter, commit, or CPU-parity dependency.
+FROM rust-builder AS rust-rpl-call-execution-golden-gate
+
+RUN set -eu; \
+    gate_dir=/tmp/cemuextend-rpl-call-execution-golden-gate; \
+    manifest=compat/golden/rpl-call-execution-positive-v1.manifest.json; \
+    golden=compat/golden/rpl-call-execution-positive-v1.jsonl; \
+    mkdir -p "${gate_dir}"; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module main --output "${gate_dir}/main.rpx"; \
+    /opt/cemuextend/bin/cex-rpl-call-fixture --module provider --output "${gate_dir}/provider.rpl"; \
+    /opt/cemuextend/bin/cex-rpl-call-execution-trace \
+        --main "${gate_dir}/main.rpx" --provider "${gate_dir}/provider.rpl" \
+        --trace-output "${gate_dir}/rust-actual.jsonl"; \
+    manifest_value() { \
+        awk -v key="$1" ' \
+            $0 ~ "^[[:space:]]*\"" key "\"[[:space:]]*:" { \
+                value = $0; \
+                sub("^[[:space:]]*\"" key "\"[[:space:]]*:[[:space:]]*", "", value); \
+                sub(",[[:space:]]*$", "", value); \
+                sub("^[[:space:]]*\"", "", value); \
+                sub("\"[[:space:]]*$", "", value); \
+                print value; \
+            } \
+        ' "${manifest}"; \
+    }; \
+    assert_manifest_sha256() { \
+        expected="$(manifest_value "$2")"; \
+        test "$(printf '%s' "${expected}" | wc -c)" -eq 64; \
+        printf '%s\n' "${expected}" | grep -Eq '^[0-9a-f]{64}$'; \
+        actual="$(sha256sum "$1" | cut -d ' ' -f1)"; \
+        test "${actual}" = "${expected}"; \
+    }; \
+    test "$(manifest_value schema_version)" = 1; \
+    test "$(manifest_value attestation)" = 'deterministic Rust headless execution golden; not a C++ CPU oracle'; \
+    test "$(manifest_value scope)" = 'positive synthetic near-REL24 call execution only; one main RPX, one provider RPL, four interpreted instructions'; \
+    test "$(manifest_value main_fixture_producer)" = 'cex-rpl-call-fixture --module main'; \
+    test "$(manifest_value provider_fixture_producer)" = 'cex-rpl-call-fixture --module provider'; \
+    test "$(manifest_value trace_producer)" = cex-rpl-call-execution-trace; \
+    test "$(manifest_value golden_trace_path)" = "${golden}"; \
+    test "$(manifest_value golden_trace_records)" -eq 7; \
+    test "$(wc -l < "${golden}")" -eq 7; \
+    test "$(wc -l < "${gate_dir}/rust-actual.jsonl")" -eq 7; \
+    assert_manifest_sha256 "${gate_dir}/main.rpx" main_fixture_sha256; \
+    assert_manifest_sha256 "${gate_dir}/provider.rpl" provider_fixture_sha256; \
+    assert_manifest_sha256 "${golden}" golden_trace_sha256; \
+    /opt/cemuextend/bin/cex-trace-compare --expected "${golden}" \
+        --actual "${gate_dir}/rust-actual.jsonl"; \
+    touch /opt/cemuextend/rpl-call-execution-golden-gate-verified
+
 # Runnable Linux headless image. No React/CEF or native desktop frontend is
 # pulled into this path.
 FROM debian:bookworm-slim AS rust-headless
@@ -472,4 +653,6 @@ COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /opt/
 COPY --from=rust-oracle-smoke /opt/cemuextend/oracle-smoke-verified /opt/cemuextend/oracle-smoke-verified
 COPY --from=rust-rpx-golden-gate /opt/cemuextend/rpx-golden-gate-verified /opt/cemuextend/rpx-golden-gate-verified
 COPY --from=rust-rpl-link-golden-gate /opt/cemuextend/rpl-link-golden-gate-verified /opt/cemuextend/rpl-link-golden-gate-verified
+COPY --from=rust-rpl-call-link-golden-gate /opt/cemuextend/rpl-call-link-golden-gate-verified /opt/cemuextend/rpl-call-link-golden-gate-verified
+COPY --from=rust-rpl-call-execution-golden-gate /opt/cemuextend/rpl-call-execution-golden-gate-verified /opt/cemuextend/rpl-call-execution-golden-gate-verified
 COPY --from=rust-ui /ui-verified /opt/cemuextend/ui-verified

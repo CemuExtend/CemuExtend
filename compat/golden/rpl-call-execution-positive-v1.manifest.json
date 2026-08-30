@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "attestation": "deterministic Rust headless execution golden; not a C++ CPU oracle",
+  "scope": "positive synthetic near-REL24 call execution only; one main RPX, one provider RPL, four interpreted instructions",
+  "main_fixture_producer": "cex-rpl-call-fixture --module main",
+  "provider_fixture_producer": "cex-rpl-call-fixture --module provider",
+  "trace_producer": "cex-rpl-call-execution-trace",
+  "main_fixture_sha256": "e5e0069938c0a575a9d14c1ab4a79f8c91c4c58e85c10a1251a4a9522d204223",
+  "provider_fixture_sha256": "9529541572c1eb5d83b2cf89f02f6b6daace501a9a8ac15e2f715a5229b68cec",
+  "golden_trace_path": "compat/golden/rpl-call-execution-positive-v1.jsonl",
+  "golden_trace_records": 7,
+  "golden_trace_sha256": "1ca5a6b1c93485366b556bda289569f6157b949717d2523ede9f09a5150dedf7"
+}

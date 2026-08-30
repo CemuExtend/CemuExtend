@@ -18,6 +18,18 @@ path = "src/bin/cex-rpl-link-fixture.rs"
 name = "cex-rpl-link-contract-trace"
 path = "src/bin/cex-rpl-link-contract-trace.rs"
 
+[[bin]]
+name = "cex-rpl-call-fixture"
+path = "src/bin/cex-rpl-call-fixture.rs"
+
+[[bin]]
+name = "cex-rpl-call-link-contract-trace"
+path = "src/bin/cex-rpl-call-link-contract-trace.rs"
+
+[[bin]]
+name = "cex-rpl-call-execution-trace"
+path = "src/bin/cex-rpl-call-execution-trace.rs"
+
 [dependencies]
 cex-compat.workspace = true
 cex-cpu.workspace = true
