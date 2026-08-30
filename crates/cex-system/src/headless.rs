@@ -1,14 +1,17 @@
 //! Deterministic composition of loader, memory, and the PPC interpreter.
 
+use std::collections::BTreeMap;
+
 use cex_cpu::{Cpu, CpuFault, CpuState, ExecutionBudget, ExecutionOutcome};
 use cex_memory::{GuestMemory, MemoryFault, PAGE_SIZE, Permissions};
 use cex_types::GuestAddress;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::{ProgramDecodeError, SyntheticProgram};
+use crate::{ParsedRpx, ProgramDecodeError, RpxError, SyntheticProgram, parse_rpx};
 
 const STACK_RESERVE: u64 = 64 * 1024;
+const RPX_STACK_POINTER: GuestAddress = GuestAddress::new(0x4000_0000);
 const DEFAULT_BUDGET: u64 = 10_000;
 
 /// Stateless deterministic headless runtime.
@@ -41,10 +44,65 @@ impl HeadlessSystem {
         let program = SyntheticProgram::decode(&canonical_image)?;
         let mut memory = GuestMemory::new();
         map_code(&mut memory, &program)?;
-        map_stack(&mut memory, program.stack_pointer)?;
+        self.execute(
+            memory,
+            program.entry_point,
+            program.stack_pointer,
+            &canonical_image,
+        )
+    }
 
-        let mut state = CpuState::new(program.entry_point);
-        state.gprs[1] = program.stack_pointer.get();
+    /// Parse, map, and execute one complete uncompressed main RPX image.
+    ///
+    /// Imports, relocations, compressed sections, and RPL modules are outside
+    /// this deliberately strict first slice. The image is parsed before a fresh
+    /// sparse address space is created, and a page-aware mapping plan is fully
+    /// validated before any mapping is installed.
+    pub fn run_rpx(&self, image: &[u8]) -> Result<HeadlessRun, HeadlessError> {
+        let rpx = parse_rpx(image)?;
+        let mapping_plan = plan_rpx_mappings(&rpx)?;
+        validate_rpx_stack(&mapping_plan)?;
+        let mut memory = GuestMemory::new();
+
+        // Loading never exposes an executable writable page: all ranges are
+        // staged as data, populated, and only then changed to final permissions.
+        for mapping in &mapping_plan {
+            memory.map(
+                mapping.start,
+                mapping.len,
+                Permissions::READ | Permissions::WRITE,
+            )?;
+        }
+        for section in rpx
+            .sections()
+            .iter()
+            .filter(|section| section.is_allocated() && !section.data().is_empty())
+        {
+            memory.write(GuestAddress::new(section.virtual_address()), section.data())?;
+        }
+        for mapping in &mapping_plan {
+            memory.protect(mapping.start, mapping.len, mapping.permissions)?;
+        }
+
+        self.execute(
+            memory,
+            GuestAddress::new(rpx.entry_point()),
+            RPX_STACK_POINTER,
+            image,
+        )
+    }
+
+    fn execute(
+        &self,
+        mut memory: GuestMemory,
+        entry_point: GuestAddress,
+        stack_pointer: GuestAddress,
+        artifact: &[u8],
+    ) -> Result<HeadlessRun, HeadlessError> {
+        map_stack(&mut memory, stack_pointer)?;
+
+        let mut state = CpuState::new(entry_point);
+        state.gprs[1] = stack_pointer.get();
         let mut cpu = Cpu::with_state(state);
         let outcome = cpu.run_with_budget(&mut memory, self.budget)?;
         let final_state = cpu.into_state();
@@ -54,7 +112,7 @@ impl HeadlessSystem {
             outcome,
             memory_hash: memory.deterministic_hash(),
             mapped_page_count: memory.mapped_page_count(),
-            program_hash: Sha256::digest(&canonical_image).into(),
+            program_hash: Sha256::digest(artifact).into(),
         })
     }
 }
@@ -78,8 +136,114 @@ pub struct HeadlessRun {
     pub memory_hash: [u8; 32],
     /// Number of logical pages represented by the memory digest.
     pub mapped_page_count: u64,
-    /// SHA-256 of the complete canonical CEXH artifact.
+    /// SHA-256 of the complete input CEXH or RPX artifact.
     pub program_hash: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PlannedMapping {
+    start: GuestAddress,
+    len: u64,
+    permissions: Permissions,
+}
+
+fn plan_rpx_mappings(rpx: &ParsedRpx) -> Result<Vec<PlannedMapping>, HeadlessError> {
+    let page_mask = PAGE_SIZE - 1;
+    let mut pages = BTreeMap::<u32, Permissions>::new();
+
+    for section in rpx
+        .sections()
+        .iter()
+        .filter(|section| section.is_allocated())
+    {
+        if section.data().is_empty() {
+            continue;
+        }
+        let start = u64::from(section.virtual_address());
+        let len =
+            u64::try_from(section.data().len()).map_err(|_| HeadlessError::AddressOverflow)?;
+        let end = start
+            .checked_add(len)
+            .ok_or(HeadlessError::AddressOverflow)?;
+        let first_page = u32::try_from((start & !page_mask) / PAGE_SIZE)
+            .map_err(|_| HeadlessError::AddressOverflow)?;
+        let end_page = u32::try_from(
+            end.checked_add(page_mask)
+                .ok_or(HeadlessError::AddressOverflow)?
+                / PAGE_SIZE,
+        )
+        .map_err(|_| HeadlessError::AddressOverflow)?;
+        let mut permissions = Permissions::READ;
+        if section.is_writable() {
+            permissions |= Permissions::WRITE;
+        }
+        if section.is_executable() {
+            permissions |= Permissions::EXECUTE;
+        }
+
+        for page in first_page..end_page {
+            *pages.entry(page).or_insert(Permissions::empty()) |= permissions;
+        }
+    }
+
+    if let Some((&page, _)) = pages
+        .iter()
+        .find(|(_, permissions)| permissions.contains(Permissions::WRITE | Permissions::EXECUTE))
+    {
+        let address = GuestAddress::try_from(u64::from(page) * PAGE_SIZE)
+            .map_err(|_| HeadlessError::AddressOverflow)?;
+        return Err(HeadlessError::RpxPageWriteExecute(address));
+    }
+
+    let mut mappings = Vec::new();
+    let mut current: Option<(u32, u32, Permissions)> = None;
+    for (page, permissions) in pages {
+        match current {
+            Some((start, end, current_permissions))
+                if page == end && permissions == current_permissions =>
+            {
+                current = Some((start, end + 1, current_permissions));
+            }
+            Some(mapping) => {
+                mappings.push(finish_mapping(mapping)?);
+                current = Some((page, page + 1, permissions));
+            }
+            None => current = Some((page, page + 1, permissions)),
+        }
+    }
+    if let Some(mapping) = current {
+        mappings.push(finish_mapping(mapping)?);
+    }
+    Ok(mappings)
+}
+
+fn finish_mapping(
+    (start_page, end_page, permissions): (u32, u32, Permissions),
+) -> Result<PlannedMapping, HeadlessError> {
+    let start = u64::from(start_page) * PAGE_SIZE;
+    Ok(PlannedMapping {
+        start: GuestAddress::try_from(start).map_err(|_| HeadlessError::AddressOverflow)?,
+        len: u64::from(end_page - start_page) * PAGE_SIZE,
+        permissions,
+    })
+}
+
+fn validate_rpx_stack(mapping_plan: &[PlannedMapping]) -> Result<(), HeadlessError> {
+    let stack_end = u64::from(RPX_STACK_POINTER.get());
+    let stack_start = stack_end - STACK_RESERVE;
+    for mapping in mapping_plan {
+        let mapping_start = u64::from(mapping.start.get());
+        let mapping_end = mapping_start
+            .checked_add(mapping.len)
+            .ok_or(HeadlessError::AddressOverflow)?;
+        if mapping_start < stack_end && stack_start < mapping_end {
+            let overlap = mapping_start.max(stack_start);
+            let address =
+                GuestAddress::try_from(overlap).map_err(|_| HeadlessError::AddressOverflow)?;
+            return Err(HeadlessError::RpxStackOverlap(address));
+        }
+    }
+    Ok(())
 }
 
 fn map_code(memory: &mut GuestMemory, program: &SyntheticProgram) -> Result<(), HeadlessError> {
@@ -135,14 +299,23 @@ pub enum HeadlessError {
     #[error("synthetic program has invalid code length {0}")]
     InvalidCodeLength(usize),
     /// The stack pointer must be a page-aligned exclusive stack end.
-    #[error("invalid synthetic stack pointer {0}")]
+    #[error("invalid headless stack pointer {0}")]
     InvalidStackPointer(GuestAddress),
     /// Host arithmetic could not represent a guest mapping.
-    #[error("synthetic program mapping overflows guest address space")]
+    #[error("headless program mapping overflows guest address space")]
     AddressOverflow,
     /// Synthetic program wire validation failed at the execution boundary.
     #[error(transparent)]
     Program(#[from] ProgramDecodeError),
+    /// Strict RPX parsing failed before mapping began.
+    #[error(transparent)]
+    Rpx(#[from] RpxError),
+    /// Page-granular permissions cannot safely represent the section layout.
+    #[error("RPX sections require writable executable guest page {0}")]
+    RpxPageWriteExecute(GuestAddress),
+    /// An RPX section collides with the deterministic headless stack reserve.
+    #[error("RPX section overlaps the headless stack at guest address {0}")]
+    RpxStackOverlap(GuestAddress),
     /// Guest memory mapping or access failed.
     #[error("failed to initialize guest memory: {0}")]
     Memory(#[from] MemoryFault),

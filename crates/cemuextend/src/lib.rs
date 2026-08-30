@@ -14,18 +14,20 @@ use cex_compat::{
 };
 use cex_cpu::{BudgetKind, FaultKind as CpuFaultKind, StopReason};
 use cex_system::{
-    BUILTIN_FIXTURE_NAME, HeadlessRun, HeadlessSystem, MAX_SYNTHETIC_IMAGE_SIZE,
-    ProgramDecodeError, SyntheticProgram, builtin_fixture,
+    BUILTIN_FIXTURE_NAME, BUILTIN_RPX_FIXTURE_NAME, HeadlessRun, HeadlessSystem,
+    MAX_RPX_IMAGE_SIZE, MAX_SYNTHETIC_IMAGE_SIZE, ProgramDecodeError, SyntheticProgram,
+    builtin_fixture, builtin_rpx_fixture,
 };
 use thiserror::Error;
 
 const DEFAULT_BUDGET: u64 = 10_000;
+const FIXTURE_READ_CHUNK: usize = 8 * 1024;
 
 /// Stable CLI help for the synthetic headless milestone.
 pub const HELP: &str = "Cemu Rust headless compatibility runner\n\
 \n\
 Usage:\n\
-  Cemu --headless-fixture <synthetic-boot|CEXH_FILE> [OPTIONS]\n\
+  Cemu --headless-fixture <synthetic-boot|synthetic-rpx-boot|CEXH_FILE|RPX_FILE> [OPTIONS]\n\
 \n\
 Options:\n\
   --trace-output <FILE|->       Canonical JSONL destination (default: -)\n\
@@ -34,7 +36,8 @@ Options:\n\
   -h, --help                    Print this help\n\
   -V, --version                 Print the version\n\
 \n\
-Only the public synthetic CEXH v1 format is supported; RPX/RPL is not yet implemented.\n";
+The RPX slice accepts only self-contained, uncompressed main RPX images;\n\
+imports, relocations, compression, and RPL modules are unsupported.\n";
 
 /// Parse and run the Cemu command, returning its process exit code.
 pub fn run_cli<I, T>(args: I) -> Result<u8, CliError>
@@ -58,8 +61,8 @@ where
 fn run_headless(options: &Options) -> Result<u8, CliError> {
     validate_trace_destination(options)?;
 
-    let program = match load_program(&options.fixture) {
-        Ok(program) => program,
+    let artifact = match load_artifact(&options.fixture) {
+        Ok(artifact) => artifact,
         Err(error) => {
             let trace = failure_trace("fixture-load-failed")?;
             publish_trace(&options.trace_output, &trace)?;
@@ -67,7 +70,9 @@ fn run_headless(options: &Options) -> Result<u8, CliError> {
         }
     };
     let system = HeadlessSystem::with_budget(options.instruction_budget, options.cycle_budget)?;
-    let run = match system.run(&program) {
+    let source_label = artifact.source_label();
+    let event_name = artifact.event_name();
+    let run = match artifact.run(&system) {
         Ok(run) => run,
         Err(error) => {
             let trace = failure_trace("headless-execution-failed")?;
@@ -77,7 +82,7 @@ fn run_headless(options: &Options) -> Result<u8, CliError> {
     };
 
     let mut trace = TraceWriter::new(Vec::new());
-    write_success_trace(&mut trace, &run)?;
+    write_success_trace(&mut trace, &run, source_label, event_name)?;
     let trace = trace.finish()?;
     publish_trace(&options.trace_output, &trace)?;
     Ok(exit_code(&run))
@@ -88,8 +93,7 @@ fn validate_trace_destination(options: &Options) -> Result<(), CliError> {
         return Ok(());
     }
     let output = Path::new(&options.trace_output);
-    if options.fixture != OsStr::new(BUILTIN_FIXTURE_NAME) && output == Path::new(&options.fixture)
-    {
+    if !is_builtin_fixture(&options.fixture) && output == Path::new(&options.fixture) {
         return Err(CliError::TraceEqualsFixture);
     }
     match fs::symlink_metadata(output) {
@@ -138,27 +142,151 @@ fn publish_trace(destination: &OsStr, bytes: &[u8]) -> Result<(), CliError> {
     Ok(())
 }
 
-fn load_program(source: &OsStr) -> Result<SyntheticProgram, CliError> {
-    let bytes = if source == OsStr::new(BUILTIN_FIXTURE_NAME) {
-        builtin_fixture().encode()?
-    } else {
-        read_bounded(Path::new(source))?
-    };
-    Ok(SyntheticProgram::decode(&bytes)?)
+fn is_builtin_fixture(source: &OsStr) -> bool {
+    source == OsStr::new(BUILTIN_FIXTURE_NAME) || source == OsStr::new(BUILTIN_RPX_FIXTURE_NAME)
 }
 
-fn read_bounded(path: &Path) -> Result<Vec<u8>, CliError> {
-    let file = File::open(path).map_err(CliError::FixtureIo)?;
-    let limit =
-        u64::try_from(MAX_SYNTHETIC_IMAGE_SIZE).expect("synthetic image size limit fits u64") + 1;
-    let mut bytes = Vec::new();
-    file.take(limit)
-        .read_to_end(&mut bytes)
-        .map_err(CliError::FixtureIo)?;
+enum LoadedArtifact {
+    BuiltinCexh(SyntheticProgram),
+    ExternalCexh(SyntheticProgram),
+    BuiltinRpx(Vec<u8>),
+    ExternalRpx(Vec<u8>),
+}
+
+impl LoadedArtifact {
+    const fn source_label(&self) -> &'static str {
+        match self {
+            Self::BuiltinCexh(_) => "synthetic-cexh-v1",
+            Self::ExternalCexh(_) => "external-cexh-v1",
+            Self::BuiltinRpx(_) => "synthetic-rpx-v1",
+            Self::ExternalRpx(_) => "external-rpx-v1",
+        }
+    }
+
+    const fn event_name(&self) -> &'static str {
+        match self {
+            Self::BuiltinCexh(_) | Self::ExternalCexh(_) => "synthetic-fixture-loaded",
+            Self::BuiltinRpx(_) | Self::ExternalRpx(_) => "rpx-fixture-loaded",
+        }
+    }
+
+    fn run(self, system: &HeadlessSystem) -> Result<HeadlessRun, cex_system::HeadlessError> {
+        match self {
+            Self::BuiltinCexh(program) | Self::ExternalCexh(program) => system.run(&program),
+            Self::BuiltinRpx(image) | Self::ExternalRpx(image) => system.run_rpx(&image),
+        }
+    }
+}
+
+fn load_artifact(source: &OsStr) -> Result<LoadedArtifact, CliError> {
+    if source == OsStr::new(BUILTIN_FIXTURE_NAME) {
+        let bytes = builtin_fixture().encode()?;
+        return Ok(LoadedArtifact::BuiltinCexh(SyntheticProgram::decode(
+            &bytes,
+        )?));
+    }
+    if source == OsStr::new(BUILTIN_RPX_FIXTURE_NAME) {
+        return Ok(LoadedArtifact::BuiltinRpx(builtin_rpx_fixture()));
+    }
+
+    let bytes = read_bounded(Path::new(source), MAX_RPX_IMAGE_SIZE)?;
+    if bytes.starts_with(b"\x7fELF") {
+        return Ok(LoadedArtifact::ExternalRpx(bytes));
+    }
     if bytes.len() > MAX_SYNTHETIC_IMAGE_SIZE {
+        return Err(CliError::SyntheticFixtureTooLarge);
+    }
+    Ok(LoadedArtifact::ExternalCexh(SyntheticProgram::decode(
+        &bytes,
+    )?))
+}
+
+fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>, CliError> {
+    let mut file = File::open(path).map_err(CliError::FixtureIo)?;
+    read_bounded_from_reader(&mut file, maximum)
+}
+
+fn read_bounded_from_reader(reader: &mut impl Read, maximum: usize) -> Result<Vec<u8>, CliError> {
+    let limit = bounded_limit(maximum)?;
+    let mut bytes = Vec::new();
+    let mut chunk = [0u8; FIXTURE_READ_CHUNK];
+
+    loop {
+        if bytes.len() == limit {
+            return Err(CliError::FixtureTooLarge);
+        }
+
+        let read_limit = (limit - bytes.len()).min(chunk.len());
+        let read = match reader.read(&mut chunk[..read_limit]) {
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(CliError::FixtureIo(error)),
+        };
+
+        if read == 0 {
+            break;
+        }
+
+        reserve_for_append(&mut bytes, read, limit)?;
+        bytes.extend_from_slice(&chunk[..read]);
+    }
+
+    if bytes.len() > maximum {
         return Err(CliError::FixtureTooLarge);
     }
     Ok(bytes)
+}
+
+fn bounded_limit(maximum: usize) -> Result<usize, CliError> {
+    maximum
+        .checked_add(1)
+        .ok_or(CliError::FixtureAllocationFailed { requested: maximum })
+}
+
+fn reserve_for_append(
+    bytes: &mut Vec<u8>,
+    additional: usize,
+    limit: usize,
+) -> Result<(), CliError> {
+    if let Some(target_capacity) = planned_capacity(
+        bytes.len(),
+        bytes.capacity(),
+        additional,
+        FIXTURE_READ_CHUNK,
+        limit,
+    )? {
+        bytes
+            .try_reserve_exact(target_capacity - bytes.len())
+            .map_err(|_| CliError::FixtureAllocationFailed {
+                requested: target_capacity,
+            })?;
+    }
+    Ok(())
+}
+
+fn planned_capacity(
+    len: usize,
+    capacity: usize,
+    additional: usize,
+    chunk_size: usize,
+    limit: usize,
+) -> Result<Option<usize>, CliError> {
+    let required = len
+        .checked_add(additional)
+        .ok_or(CliError::FixtureAllocationFailed {
+            requested: usize::MAX,
+        })?;
+
+    if required <= capacity {
+        return Ok(None);
+    }
+    if required > limit {
+        return Err(CliError::FixtureTooLarge);
+    }
+
+    let doubled_capacity = capacity.saturating_mul(2);
+    let target = required.max(chunk_size.max(doubled_capacity)).min(limit);
+    Ok(Some(target))
 }
 
 fn failure_trace(detail_code: &str) -> Result<Vec<u8>, CliError> {
@@ -181,12 +309,14 @@ fn failure_trace(detail_code: &str) -> Result<Vec<u8>, CliError> {
 fn write_success_trace<W: Write>(
     trace: &mut TraceWriter<W>,
     run: &HeadlessRun,
+    source_label: &str,
+    event_name: &str,
 ) -> Result<(), CliError> {
     let cycle = run.final_state.cycles.get();
     let mut fields = BTreeMap::new();
     fields.insert(
         "fixture".to_owned(),
-        TraceValue::Text("synthetic-cexh-v1".to_owned()),
+        TraceValue::Text(source_label.to_owned()),
     );
     fields.insert(
         "program_sha256".to_owned(),
@@ -199,7 +329,7 @@ fn write_success_trace<W: Write>(
         None,
         TraceCategory::System,
         TraceEvent::Event(GenericEvent {
-            name: "synthetic-fixture-loaded".to_owned(),
+            name: event_name.to_owned(),
             fields,
         }),
     ))?;
@@ -421,8 +551,17 @@ pub enum CliError {
     #[error("failed to read the selected synthetic fixture: {0}")]
     FixtureIo(io::Error),
     /// A selected fixture exceeded the bounded CEXH input size.
-    #[error("synthetic fixture exceeds the CEXH size limit")]
+    #[error("selected fixture exceeds the RPX input size limit")]
     FixtureTooLarge,
+    /// A bounded fixture read could not obtain enough host memory.
+    #[error("failed to allocate {requested} bytes while reading the selected fixture")]
+    FixtureAllocationFailed {
+        /// Requested output allocation in bytes.
+        requested: usize,
+    },
+    /// A non-RPX file exceeded the smaller CEXH format bound.
+    #[error("synthetic fixture exceeds the CEXH size limit")]
+    SyntheticFixtureTooLarge,
     /// Creating or writing the selected trace destination failed.
     #[error("failed to create the trace destination: {0}")]
     TraceOutput(io::Error),
@@ -507,5 +646,86 @@ mod tests {
         assert!(!debug.contains(path_text.as_ref()));
         assert!(!display.contains("sentinel"));
         assert!(!debug.contains("sentinel"));
+    }
+
+    #[test]
+    fn external_fixture_reader_enforces_its_explicit_bound() {
+        let mut file = tempfile::NamedTempFile::new().expect("temporary fixture must be created");
+        file.write_all(b"123456789")
+            .expect("temporary fixture must be written");
+
+        assert!(matches!(
+            read_bounded(file.path(), 8),
+            Err(CliError::FixtureTooLarge)
+        ));
+    }
+
+    #[test]
+    fn bounded_reader_enforces_its_explicit_bound_without_allocating_unboundedly() {
+        let mut reader = io::Cursor::new(b"123456789".as_slice());
+
+        assert!(matches!(
+            read_bounded_from_reader(&mut reader, 8),
+            Err(CliError::FixtureTooLarge)
+        ));
+    }
+
+    #[test]
+    fn planned_capacity_grows_geometrically_and_caps_at_limit() {
+        assert_eq!(planned_capacity(0, 0, 1, 8, 100).unwrap(), Some(8));
+        assert_eq!(planned_capacity(8, 8, 1, 8, 100).unwrap(), Some(16));
+        assert_eq!(planned_capacity(16, 16, 1, 8, 20).unwrap(), Some(20));
+        assert_eq!(planned_capacity(16, 32, 1, 8, 100).unwrap(), None);
+    }
+
+    #[test]
+    fn planned_capacity_rejects_over_limit_and_overflow() {
+        assert!(matches!(
+            planned_capacity(9, 8, 12, 8, 20),
+            Err(CliError::FixtureTooLarge)
+        ));
+        assert!(matches!(
+            planned_capacity(usize::MAX, usize::MAX, 1, 8, usize::MAX),
+            Err(CliError::FixtureAllocationFailed { requested })
+                if requested == usize::MAX
+        ));
+    }
+
+    #[test]
+    fn bounded_reader_handles_multiple_chunks_and_exact_cap() {
+        let maximum = FIXTURE_READ_CHUNK * 2 + 37;
+        let payload = vec![0x5a; maximum];
+        let mut reader = io::Cursor::new(payload.clone());
+
+        let bytes = read_bounded_from_reader(&mut reader, maximum).unwrap();
+
+        assert_eq!(bytes, payload);
+    }
+
+    #[test]
+    fn bounded_reader_rejects_payloads_one_byte_over_the_cap_after_multiple_chunks() {
+        let maximum = FIXTURE_READ_CHUNK * 2 + 37;
+        let payload = vec![0x5a; maximum + 1];
+        let mut reader = io::Cursor::new(payload);
+
+        assert!(matches!(
+            read_bounded_from_reader(&mut reader, maximum),
+            Err(CliError::FixtureTooLarge)
+        ));
+    }
+
+    #[test]
+    fn bounded_limit_rejects_an_unrepresentable_maximum() {
+        assert!(matches!(
+            bounded_limit(usize::MAX),
+            Err(CliError::FixtureAllocationFailed { requested })
+                if requested == usize::MAX
+        ));
+    }
+
+    #[test]
+    fn both_builtin_selectors_are_not_treated_as_host_paths() {
+        assert!(is_builtin_fixture(OsStr::new(BUILTIN_FIXTURE_NAME)));
+        assert!(is_builtin_fixture(OsStr::new(BUILTIN_RPX_FIXTURE_NAME)));
     }
 }
