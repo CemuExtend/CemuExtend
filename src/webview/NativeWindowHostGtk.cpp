@@ -3,6 +3,7 @@
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -592,6 +593,52 @@ namespace WebFrontend
 					m_browserChild = None;
 			}
 
+			// Chromium activates its own X11 window whenever its web contents take
+			// focus, and GTK answers that by emitting focus-in on this container even
+			// while the user is working in a different one of our windows. Taking X
+			// input focus from there starts a tug of war: the main window and a tool
+			// window trade focus several times a second, the UI thread spins on the
+			// exchange, and the frontend stops responding. Only the active toplevel may
+			// direct input focus. Deliberate calls to FocusBrowser() - showing the
+			// library, presenting a tool window - stay unconditional.
+			// A focus-follows-mouse compositor re-focuses whatever sits under the
+			// pointer, so an assertion made here can be reversed before it settles and
+			// answered by another focus-in. Neither side is wrong, so neither yields:
+			// the window under the pointer and the window that wants focus trade it
+			// several times a second while the UI thread spins on the exchange. Bound
+			// how often this window may take input focus - a burst means something else
+			// is competing for it, and the compositor is allowed to win.
+			bool FocusAssertionAllowed()
+			{
+				constexpr int kMaximumAssertions = 3;
+				constexpr auto kWindow = std::chrono::seconds(1);
+				constexpr auto kCooldown = std::chrono::seconds(2);
+				const auto now = std::chrono::steady_clock::now();
+				if (now < m_focusAssertionBlockedUntil)
+					return false;
+				if (now - m_focusAssertionWindowStart > kWindow)
+				{
+					m_focusAssertionWindowStart = now;
+					m_focusAssertionCount = 0;
+				}
+				if (++m_focusAssertionCount > kMaximumAssertions)
+				{
+					m_focusAssertionBlockedUntil = now + kCooldown;
+					m_focusAssertionWindowStart = now;
+					m_focusAssertionCount = 0;
+					return false;
+				}
+				return true;
+			}
+
+			void FocusBrowserFromFocusEvent()
+			{
+				if (!m_window || !GTK_IS_WINDOW(m_window) ||
+					!gtk_window_is_active(GTK_WINDOW(m_window)))
+					return;
+				FocusBrowser();
+			}
+
 			void FocusBrowser() override
 			{
 				if (m_browserContainer)
@@ -602,7 +649,7 @@ namespace WebFrontend
 					{
 						auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
 						gdk_x11_display_error_trap_push(gdkDisplay);
-						if (!BrowserOwnsInputFocus(display))
+						if (!BrowserOwnsInputFocus(display) && FocusAssertionAllowed())
 						{
 							XRaiseWindow(display, m_browserChild);
 							XSetInputFocus(display, m_browserChild, RevertToParent, CurrentTime);
@@ -1007,7 +1054,7 @@ namespace WebFrontend
 					}), this);
 				g_signal_connect(m_browserContainer, "focus-in-event",
 					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-						static_cast<GtkWindowHost*>(data)->FocusBrowser();
+						static_cast<GtkWindowHost*>(data)->FocusBrowserFromFocusEvent();
 						return FALSE;
 					}), this);
 
@@ -1145,6 +1192,10 @@ namespace WebFrontend
 			GtkWidget* m_stack{};
 			GtkWidget* m_browserContainer{};
 			::Window m_browserChild{None};
+			std::chrono::steady_clock::time_point m_focusAssertionWindowStart{};
+			std::chrono::steady_clock::time_point m_focusAssertionBlockedUntil{};
+			int m_focusAssertionCount{};
+
 			GtkWidget* m_textInput{};
 			std::unique_ptr<GtkPadRenderRegion> m_renderRegion;
 			std::unique_ptr<GtkPadRenderRegion> m_padRenderRegion;
