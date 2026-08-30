@@ -1560,6 +1560,28 @@ impl From<MemoryFault> for RpxRplCommitError {
 
 /// Commit a validated plan into fresh memory and return only numeric/hash proof.
 pub fn commit_rpx_rpl_link(plan: RpxRplLinkPlan) -> Result<RpxRplLinkProof, RpxRplCommitError> {
+    let (_, proof) = commit_rpx_rpl_link_owned(plan)?.into_parts();
+    Ok(proof)
+}
+
+/// Owned linked memory and its successful commit proof for crate-internal
+/// headless execution.
+pub(crate) struct CommittedRpxRplLink {
+    memory: GuestMemory,
+    proof: RpxRplLinkProof,
+}
+
+impl CommittedRpxRplLink {
+    /// Consume the commit result into executable memory and matching proof.
+    pub(crate) fn into_parts(self) -> (GuestMemory, RpxRplLinkProof) {
+        (self.memory, self.proof)
+    }
+}
+
+/// Commit a validated plan into fresh owned memory for crate-internal use.
+pub(crate) fn commit_rpx_rpl_link_owned(
+    plan: RpxRplLinkPlan,
+) -> Result<CommittedRpxRplLink, RpxRplCommitError> {
     let RpxRplLinkPlan {
         sections,
         ranges,
@@ -1593,7 +1615,7 @@ pub fn commit_rpx_rpl_link(plan: RpxRplLinkPlan) -> Result<RpxRplLinkProof, RpxR
         )?;
     }
     let memory_hash = memory.deterministic_hash();
-    Ok(RpxRplLinkProof {
+    let proof = RpxRplLinkProof {
         main_entry,
         relocations: [
             RpxRplRelocationProof::from_patch(local_patch),
@@ -1604,7 +1626,8 @@ pub fn commit_rpx_rpl_link(plan: RpxRplLinkPlan) -> Result<RpxRplLinkProof, RpxR
         memory_hash,
         main_hash,
         provider_hash,
-    })
+    };
+    Ok(CommittedRpxRplLink { memory, proof })
 }
 
 /// Keep the C++ phase contract explicit: provider-local relocations become
@@ -1872,6 +1895,16 @@ mod tests {
     #[test]
     fn repeated_links_have_identical_numeric_and_hash_proof() {
         assert_eq!(linked_proof(), linked_proof());
+    }
+
+    #[test]
+    fn public_commit_delegate_matches_owned_commit_proof() {
+        let public_proof = commit_rpx_rpl_link(link_plan()).expect("public commit succeeds");
+        let owned = commit_rpx_rpl_link_owned(link_plan()).expect("owned commit succeeds");
+        let (memory, owned_proof) = owned.into_parts();
+
+        assert_eq!(public_proof, owned_proof);
+        assert_eq!(memory.deterministic_hash(), owned_proof.memory_hash());
     }
 
     #[test]

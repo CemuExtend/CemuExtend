@@ -36,10 +36,11 @@
   5-record golden、C++ oracle smoke/comparator exact equalityを source payload fingerprint `97c2a8cc…4809b` の Docker buildで検証済み。
   public loader/full lifecycle、CPU execution、retail/general relocation、MMU permission parity は未実装・未完了である。
 - 次の互換 slice として、near `R_PPC_REL24` の parse/link、専用 synthetic call fixture、
-  relocation proof を実装し、main session の Docker build だけで format/check/Clippy と
-  Rust workspace 267 tests を通した。現時点で検証済みなのは relocation word
-  `0x48000001 -> 0x48002001` の生成までであり、linked memory 上の CPU 実行、
-  C++ link oracle、canonical trace/golden、aggregate `ci` は未完了である。
+  relocation proof、final-protected linked memory 上の headless CPU 実行を実装し、main
+  session の Docker build だけで format/check/Clippy と Rust workspace 272 tests を通した。
+  relocation word `0x48000001 -> 0x48002001`、`bl -> addi r3,42 -> blr -> stop`、
+  4 instructions、21 mapped pages、W^Xなしを確認済み。C++ link oracle、canonical
+  trace/golden、aggregate `ci` は未完了であり、C++ CPU parityは主張しない。
 - Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
   match/mismatch/error/no-clobber自己整合性をDocker確認済み。さらに
   `rust-rpx-contract-artifacts`、固定 C++ adapter、`trace` target の比較で positive-fixture
@@ -897,11 +898,10 @@ artifact hashes: main 772/0644 `13011586…374b`、provider 716/0644 `95295415�
 ## 次の作業
 
 1. [完了] 現行RPX1/RPL1 evidence sliceを`0d240acd` としてcommitした。
-2. [進行中] near `R_PPC_REL24` の parse/link と専用 fixture は Docker build で
-   267 testsまで確認済み。次に transactional commit 後のfinal permissionを保ったまま
-   headless CPUで`bl -> addi r3,42 -> blr -> stop`を実行し、4 instructions、`r3=42`、
-   LR/PC、memory proofを固定する。
-3. REL24 link-prefixは固定C++ production linkerとのoracle比較へ接続し、Rust CPU実行は
+2. [完了] near `R_PPC_REL24` の parse/link と専用 fixture、transactional commit後の
+   final permissionを保ったheadless実行をDocker buildの272 testsで確認した。
+   `bl -> addi r3,42 -> blr -> stop`、4 instructions、`r3=42`、LR/PC、memory proofを固定済み。
+3. [進行中] REL24 link-prefixは固定C++ production linkerとのoracle比較へ接続し、Rust CPU実行は
    C++ execution parityと誤記せず別record/gateとして扱う。その後、ADDR16_HA/LO、
    malformed corpus、compressionへ段階的に広げる。
 4. adapter、helper、oracle policyを変更する場合は、manifest pinを更新する前にmain sessionで

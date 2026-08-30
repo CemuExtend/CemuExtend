@@ -10,7 +10,7 @@ mod rpx_fixture;
 mod scheduler;
 mod vfs;
 
-pub use headless::{HeadlessError, HeadlessRun, HeadlessSystem};
+pub use headless::{HeadlessError, HeadlessRun, HeadlessSystem, RpxRplHeadlessRun};
 pub use loader::{
     BUILTIN_FIXTURE_NAME, MAX_SYNTHETIC_CODE_SIZE, MAX_SYNTHETIC_IMAGE_SIZE, ProgramDecodeError,
     SyntheticProgram, builtin_fixture,

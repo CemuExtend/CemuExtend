@@ -8,7 +8,11 @@ use cex_types::GuestAddress;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::{ParsedRpx, ProgramDecodeError, RpxError, SyntheticProgram, parse_rpx};
+use crate::rpl_link::commit_rpx_rpl_link_owned;
+use crate::{
+    ParsedRpx, ProgramDecodeError, RplModuleName, RpxError, RpxRplCommitError, RpxRplLinkProof,
+    RpxRplPlanError, SyntheticProgram, parse_rpl, parse_rpx, plan_rpx_rpl_link,
+};
 
 const STACK_RESERVE: u64 = 64 * 1024;
 const RPX_STACK_POINTER: GuestAddress = GuestAddress::new(0x4000_0000);
@@ -92,12 +96,58 @@ impl HeadlessSystem {
         )
     }
 
+    /// Parse, link, and execute one main RPX with one named RPL provider.
+    ///
+    /// The complete link is planned before fresh guest memory is committed.
+    /// Committed text, data, and loader ranges already have their final
+    /// permissions before the stack is mapped and the CPU can fetch from them.
+    /// Any stack mapping or execution failure drops that private address space
+    /// and returns neither a run nor a link proof.
+    pub fn run_rpx_rpl(
+        &self,
+        main_image: &[u8],
+        provider_name: RplModuleName,
+        provider_image: &[u8],
+    ) -> Result<RpxRplHeadlessRun, HeadlessError> {
+        let main = parse_rpx(main_image)?;
+        let provider = parse_rpl(provider_image)?;
+        let plan = plan_rpx_rpl_link(main, provider_name, provider)?;
+        let committed = commit_rpx_rpl_link_owned(plan)?;
+        let (memory, link_proof) = committed.into_parts();
+        let execution = self.execute_with_program_hash(
+            memory,
+            GuestAddress::new(link_proof.main_entry()),
+            RPX_STACK_POINTER,
+            linked_program_hash(&link_proof),
+        )?;
+
+        Ok(RpxRplHeadlessRun {
+            execution,
+            link_proof,
+        })
+    }
+
     fn execute(
+        &self,
+        memory: GuestMemory,
+        entry_point: GuestAddress,
+        stack_pointer: GuestAddress,
+        artifact: &[u8],
+    ) -> Result<HeadlessRun, HeadlessError> {
+        self.execute_with_program_hash(
+            memory,
+            entry_point,
+            stack_pointer,
+            Sha256::digest(artifact).into(),
+        )
+    }
+
+    fn execute_with_program_hash(
         &self,
         mut memory: GuestMemory,
         entry_point: GuestAddress,
         stack_pointer: GuestAddress,
-        artifact: &[u8],
+        program_hash: [u8; 32],
     ) -> Result<HeadlessRun, HeadlessError> {
         map_stack(&mut memory, stack_pointer)?;
 
@@ -112,7 +162,7 @@ impl HeadlessSystem {
             outcome,
             memory_hash: memory.deterministic_hash(),
             mapped_page_count: memory.mapped_page_count(),
-            program_hash: Sha256::digest(artifact).into(),
+            program_hash,
         })
     }
 }
@@ -136,8 +186,29 @@ pub struct HeadlessRun {
     pub memory_hash: [u8; 32],
     /// Number of logical pages represented by the memory digest.
     pub mapped_page_count: u64,
-    /// SHA-256 of the complete input CEXH or RPX artifact.
+    /// SHA-256 artifact identity: the direct input for one image, or a
+    /// domain-separated composition of canonical module hashes for a link.
     pub program_hash: [u8; 32],
+}
+
+/// Successful bounded execution of one transactionally linked RPX/RPL pair.
+///
+/// This retains only architectural execution state plus numeric and hash
+/// evidence. It contains no input payloads, paths, or module-name strings.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RpxRplHeadlessRun {
+    /// Canonical CPU outcome and post-execution memory evidence.
+    pub execution: HeadlessRun,
+    /// Immutable evidence captured after relocation and final protection.
+    pub link_proof: RpxRplLinkProof,
+}
+
+fn linked_program_hash(proof: &RpxRplLinkProof) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"CemuExtend linked RPX/RPL headless program v1\0");
+    hash.update(proof.main_sha256());
+    hash.update(proof.provider_sha256());
+    hash.finalize().into()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -310,6 +381,12 @@ pub enum HeadlessError {
     /// Strict RPX parsing failed before mapping began.
     #[error(transparent)]
     Rpx(#[from] RpxError),
+    /// Transactional RPX/RPL link planning failed before mapping began.
+    #[error(transparent)]
+    RpxRplPlan(#[from] RpxRplPlanError),
+    /// Transactional RPX/RPL commit failed without publishing guest memory.
+    #[error(transparent)]
+    RpxRplCommit(#[from] RpxRplCommitError),
     /// Page-granular permissions cannot safely represent the section layout.
     #[error("RPX sections require writable executable guest page {0}")]
     RpxPageWriteExecute(GuestAddress),
@@ -327,8 +404,19 @@ pub enum HeadlessError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::builtin_fixture;
+    use crate::{
+        builtin_fixture, synthetic_rpx_rpl_call_main_fixture,
+        synthetic_rpx_rpl_call_provider_fixture,
+    };
     use cex_cpu::{BudgetKind, StopReason};
+
+    fn call_fixture() -> (Vec<u8>, RplModuleName, Vec<u8>) {
+        (
+            synthetic_rpx_rpl_call_main_fixture().expect("main fixture must build"),
+            RplModuleName::new("linkmod.rpl").expect("fixture module name is canonical"),
+            synthetic_rpx_rpl_call_provider_fixture().expect("provider fixture must build"),
+        )
+    }
 
     #[test]
     fn bundled_fixture_returns_42_and_stops() {
@@ -358,5 +446,122 @@ mod tests {
             }
         );
         assert_eq!(run.outcome.instructions_executed, 4);
+    }
+
+    #[test]
+    fn linked_rel24_call_returns_42_with_exact_state_and_repeatable_proof() {
+        let (main, provider_name, provider) = call_fixture();
+        let first = HeadlessSystem::default()
+            .run_rpx_rpl(&main, provider_name.clone(), &provider)
+            .expect("linked call fixture must execute");
+        let second = HeadlessSystem::default()
+            .run_rpx_rpl(&main, provider_name, &provider)
+            .expect("repeated linked call fixture must execute");
+
+        assert_eq!(first, second);
+        assert_eq!(first.link_proof.main_entry(), 0x0200_0000);
+        assert_eq!(first.link_proof.import_patch_site(), 0x0200_0000);
+        assert_eq!(first.link_proof.import_patch_value(), 0x4800_2001);
+        assert_eq!(first.link_proof.mapped_page_count(), 5);
+        assert_eq!(first.execution.mapped_page_count, 21);
+        assert_eq!(first.execution.final_state.gpr(1), Some(0x4000_0000));
+        assert_eq!(first.execution.final_state.gpr(3), Some(42));
+        assert_eq!(first.execution.final_state.link_register, 0x0200_0004);
+        assert_eq!(
+            first.execution.final_state.instruction_pointer,
+            GuestAddress::new(0x0200_0008)
+        );
+        assert_eq!(first.execution.final_state.instructions_retired, 4);
+        assert_eq!(first.execution.final_state.cycles.get(), 4);
+        assert_eq!(first.execution.outcome.reason, StopReason::StopSentinel);
+        assert_eq!(first.execution.outcome.instructions_executed, 4);
+        assert_eq!(first.execution.outcome.cycles_elapsed, 4);
+    }
+
+    #[test]
+    fn linked_rel24_call_reports_cycle_budget_before_stop() {
+        let (main, provider_name, provider) = call_fixture();
+        let run = HeadlessSystem::with_budget(10, 3)
+            .expect("non-zero budgets are valid")
+            .run_rpx_rpl(&main, provider_name, &provider)
+            .expect("budget exhaustion is a normal outcome");
+
+        assert_eq!(
+            run.execution.outcome.reason,
+            StopReason::BudgetExhausted {
+                kind: BudgetKind::Cycles
+            }
+        );
+        assert_ne!(run.execution.outcome.reason, StopReason::StopSentinel);
+        assert_eq!(run.execution.final_state.instructions_retired, 3);
+        assert_eq!(run.execution.final_state.cycles.get(), 3);
+    }
+
+    #[test]
+    fn linked_image_is_final_protected_without_writable_executable_pages() {
+        let (main, provider_name, provider) = call_fixture();
+        let plan = plan_rpx_rpl_link(
+            parse_rpx(&main).expect("main fixture must parse"),
+            provider_name,
+            parse_rpl(&provider).expect("provider fixture must parse"),
+        )
+        .expect("call fixture must plan");
+        let (memory, proof) = commit_rpx_rpl_link_owned(plan)
+            .expect("call fixture must commit")
+            .into_parts();
+        let mappings: Vec<_> = memory.mappings().collect();
+
+        assert_eq!(memory.mapped_page_count(), 5);
+        assert_eq!(proof.mapped_page_count(), 5);
+        assert!(mappings.iter().all(|mapping| {
+            !mapping
+                .permissions
+                .contains(Permissions::WRITE | Permissions::EXECUTE)
+        }));
+        assert!(
+            mappings
+                .iter()
+                .any(|mapping| { mapping.permissions == Permissions::READ | Permissions::EXECUTE })
+        );
+        assert!(
+            mappings
+                .iter()
+                .any(|mapping| mapping.permissions == Permissions::READ | Permissions::WRITE)
+        );
+        assert!(
+            mappings
+                .iter()
+                .any(|mapping| mapping.permissions == Permissions::READ)
+        );
+    }
+
+    #[test]
+    fn linked_parse_and_plan_failures_publish_no_run_or_proof() {
+        let (main, _, provider) = call_fixture();
+        let malformed_main = HeadlessSystem::default().run_rpx_rpl(
+            &[0],
+            RplModuleName::new("linkmod.rpl").expect("fixture name is canonical"),
+            &provider,
+        );
+        assert!(matches!(malformed_main, Err(HeadlessError::Rpx(_))));
+
+        let malformed_provider = HeadlessSystem::default().run_rpx_rpl(
+            &main,
+            RplModuleName::new("linkmod.rpl").expect("fixture name is canonical"),
+            &[0],
+        );
+        assert!(matches!(malformed_provider, Err(HeadlessError::Rpx(_))));
+
+        let unresolved = HeadlessSystem::default().run_rpx_rpl(
+            &main,
+            RplModuleName::new("other.rpl").expect("alternate name is canonical"),
+            &provider,
+        );
+        assert!(matches!(
+            unresolved,
+            Err(HeadlessError::RpxRplPlan(
+                RpxRplPlanError::UnresolvedImport { .. }
+            ))
+        ));
     }
 }
