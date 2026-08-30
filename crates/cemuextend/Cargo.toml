@@ -1,0 +1,21 @@
+[package]
+name = "cemuextend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "Cemu"
+path = "src/main.rs"
+
+[dependencies]
+cex-compat.workspace = true
+cex-cpu.workspace = true
+cex-system.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

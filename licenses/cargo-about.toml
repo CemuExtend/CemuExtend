@@ -1,0 +1,21 @@
+# License policy for the Docker-generated Rust release notice bundle.
+#
+# Keep this allow list aligned with deny.toml. The release bundle generation is
+# not a substitute for `cargo deny check`; it renders the locked dependency
+# graph after cargo-deny has already enforced advisories, bans, licenses, and
+# source policy.
+accepted = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+targets = ["x86_64-unknown-linux-gnu"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+ignore-transitive-dependencies = false

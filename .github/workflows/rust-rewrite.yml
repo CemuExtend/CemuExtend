@@ -1,0 +1,69 @@
+name: Rust rewrite
+
+on:
+  push:
+    branches:
+      - main
+      - rewrite/rust
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "LICENSE.txt"
+      - "crates/**"
+      - "deny.toml"
+      - "Dockerfile.rust"
+      - "docker-build-cpp-oracle.sh"
+      - "docker-build-rust.sh"
+      - ".dockerignore"
+      - "docs/rust-rewrite.md"
+      - "compat/**"
+      - "licenses/**"
+      - "rust-toolchain.toml"
+      - "rustfmt.toml"
+      - "ui/**"
+      - ".github/workflows/rust-rewrite.yml"
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "LICENSE.txt"
+      - "crates/**"
+      - "deny.toml"
+      - "Dockerfile.rust"
+      - "docker-build-cpp-oracle.sh"
+      - "docker-build-rust.sh"
+      - ".dockerignore"
+      - "docs/rust-rewrite.md"
+      - "compat/**"
+      - "licenses/**"
+      - "rust-toolchain.toml"
+      - "rustfmt.toml"
+      - "ui/**"
+      - ".github/workflows/rust-rewrite.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-rewrite-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-ci:
+    name: Docker-only Rust gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Build complete Rust and UI gate
+        run: >-
+          docker build
+          --file Dockerfile.rust
+          --target ci
+          --build-arg RUST_VERSION=1.97.1
+          --build-arg CARGO_DENY_VERSION=0.20.2
+          --build-arg CARGO_ABOUT_VERSION=0.9.2
+          --tag cemuextend-rust-ci:${{ github.sha }}
+          .

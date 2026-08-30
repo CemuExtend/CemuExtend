@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "repository": "CemuExtend",
+    "revision": "ab0b772029f0a5cd57c194cf338003fe8eae8ab8"
+  },
+  "fixtures": [
+    {
+      "id": "synthetic_boot_cexh",
+      "kind": "synthetic_program",
+      "status": "metadata_only",
+      "version": "1",
+      "artifact": {
+        "logical_name": "synthetic_boot_cexh_v1",
+        "byte_length": "36",
+        "sha256": "b77766e3e0e034d9cf7ed67eb6e26119f52b40d458603d74aa78eab2c7404785"
+      }
+    }
+  ]
+}

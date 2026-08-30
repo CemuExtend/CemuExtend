@@ -1,4 +1,118 @@
 {
+  "schemaVersion": 1,
+  "wireProtocol": {
+    "encoding": "json",
+    "request": {
+      "requiredFields": ["id", "method", "params"],
+      "unknownFields": "ignored",
+      "fields": {
+        "id": { "kind": "string" },
+        "method": { "kind": "string" },
+        "params": { "kind": "object", "undefinedNormalization": "emptyObject" }
+      }
+    },
+    "successResponse": {
+      "requiredFields": ["id", "ok", "result"],
+      "unknownFields": "ignored",
+      "fields": {
+        "id": { "kind": "string" },
+        "ok": { "kind": "literal", "value": true },
+        "result": { "kind": "jsonValue" }
+      }
+    },
+    "errorResponse": {
+      "requiredFields": ["id", "ok", "error"],
+      "unknownFields": "ignored",
+      "fields": {
+        "id": { "kind": "string" },
+        "ok": { "kind": "literal", "value": false },
+        "error": {
+          "kind": "object",
+          "requiredFields": ["code", "message"],
+          "optionalFields": ["details"]
+        }
+      }
+    },
+    "eventEnvelope": {
+      "requiredFields": ["type", "sequence", "payload"],
+      "unknownFields": "ignored",
+      "fields": {
+        "type": { "kind": "string" },
+        "sequence": { "kind": "decimalString" },
+        "payload": { "kind": "jsonValue" }
+      }
+    },
+    "limits": {
+      "maxRequestBytes": 1048576,
+      "maxIdentifierBytes": 128,
+      "rememberedRequestIds": 4096
+    }
+  },
+  "typeBindings": {
+    "status": "legacy-typescript-expressions",
+    "jsonSchemaMigration": "deferred",
+    "references": {
+      "CemodChangedPayload": "{ reason: \"approval\" | \"legacyImport\" }",
+      "CemodSnapshotPayload": "{ jobId: string; windowId: string; ok: boolean; error: string; diagnostic: string; snapshot: CemodManagerSnapshot }",
+      "EmptyPayload": "EmptyResult",
+      "EmulationPerformancePayload": "{ fps: number }",
+      "EmulationProcessExitedPayload": "{ status: number }",
+      "EmulatedUsbPayload": "UsbDevicesChangedPayload",
+      "JsonObjectPayload": "Record<string, unknown>",
+      "LanguageChangedPayload": "{ language: string; revision: string }",
+      "LoggingClearedPayload": "{ clearedThroughSequence: string }",
+      "LoggingEntriesPayload": "LoggingSnapshot",
+      "RuntimeOverlayPayload": "RuntimeOverlaySnapshot",
+      "SystemDiagnosticPayload": "{ message: string }",
+      "ThemeChangedPayload": "{ theme: \"light\" | \"dark\"; revision: string }",
+      "TitleLaunchStatePayload": "TitleLaunchState",
+      "WindowContextChangedPayload": "{ windowId: string; titleId: string | null }",
+      "WindowOpenFailedPayload": "{ requestId: string; windowId: string; role: ImplementedToolWindowRole; message: string }",
+      "WindowOpenedPayload": "{ requestId: string; windowId: string; role: ImplementedToolWindowRole }"
+    }
+  },
+  "events": [
+    { "name": "cemod.changed", "payloadTypeRef": "CemodChangedPayload" },
+    { "name": "cemod.snapshot", "payloadTypeRef": "CemodSnapshotPayload" },
+    { "name": "emulation.exited", "payloadTypeRef": "EmptyPayload" },
+    { "name": "emulation.loaded", "payloadTypeRef": "EmptyPayload" },
+    { "name": "emulation.loading", "payloadTypeRef": "EmptyPayload" },
+    {
+      "name": "emulation.performance",
+      "payloadTypeRef": "EmulationPerformancePayload"
+    },
+    {
+      "name": "emulation.processExited",
+      "payloadTypeRef": "EmulationProcessExitedPayload"
+    },
+    { "name": "input.textWakeRequested", "payloadTypeRef": "EmptyPayload" },
+    { "name": "jobs.completed", "payloadTypeRef": "JsonObjectPayload" },
+    { "name": "jobs.progress", "payloadTypeRef": "JsonObjectPayload" },
+    { "name": "language.changed", "payloadTypeRef": "LanguageChangedPayload" },
+    { "name": "logging.cleared", "payloadTypeRef": "LoggingClearedPayload" },
+    { "name": "logging.entries", "payloadTypeRef": "LoggingEntriesPayload" },
+    { "name": "overlay.changed", "payloadTypeRef": "RuntimeOverlayPayload" },
+    {
+      "name": "system.diagnostic",
+      "payloadTypeRef": "SystemDiagnosticPayload"
+    },
+    { "name": "theme.changed", "payloadTypeRef": "ThemeChangedPayload" },
+    { "name": "titles.changed", "payloadTypeRef": "EmptyPayload" },
+    {
+      "name": "titles.launchState",
+      "payloadTypeRef": "TitleLaunchStatePayload"
+    },
+    { "name": "usb.devicesChanged", "payloadTypeRef": "EmulatedUsbPayload" },
+    {
+      "name": "window.contextChanged",
+      "payloadTypeRef": "WindowContextChangedPayload"
+    },
+    {
+      "name": "window.openFailed",
+      "payloadTypeRef": "WindowOpenFailedPayload"
+    },
+    { "name": "window.opened", "payloadTypeRef": "WindowOpenedPayload" }
+  ],
   "windowRoles": [
     "main-library",
     "runtime-overlay",

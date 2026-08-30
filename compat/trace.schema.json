@@ -1,0 +1,529 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cemuextend.invalid/schemas/compat-trace-v1.json",
+  "title": "CemuExtend canonical compatibility trace entry",
+  "description": "One JSON object per LF-terminated JSONL line. Canonical member order and cross-line ordering are enforced by cex-compat.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "guest_cycle",
+    "sequence",
+    "source",
+    "core",
+    "category",
+    "event"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "guest_cycle": {
+      "$ref": "#/$defs/decimal_u64"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "source": {
+      "enum": [
+        "cpu",
+        "memory",
+        "cafe",
+        "iosu",
+        "gx2",
+        "audio",
+        "online",
+        "frontend",
+        "host",
+        "test_harness"
+      ]
+    },
+    "core": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      ]
+    },
+    "category": {
+      "enum": [
+        "cpu",
+        "memory",
+        "checkpoint",
+        "ipc",
+        "gx2",
+        "audio",
+        "system",
+        "online",
+        "frontend",
+        "terminal"
+      ]
+    },
+    "event": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/cpu_state"
+        },
+        {
+          "$ref": "#/$defs/memory_hash"
+        },
+        {
+          "$ref": "#/$defs/checkpoint"
+        },
+        {
+          "$ref": "#/$defs/generic_event"
+        },
+        {
+          "$ref": "#/$defs/terminal"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "cpu"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "const": "cpu"
+          },
+          "core": {
+            "type": "integer"
+          },
+          "event": {
+            "$ref": "#/$defs/cpu_state"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "memory"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "event": {
+            "$ref": "#/$defs/memory_hash"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "checkpoint"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "event": {
+            "$ref": "#/$defs/checkpoint"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "enum": ["ipc", "gx2", "audio", "system", "online", "frontend"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "event": {
+            "$ref": "#/$defs/generic_event"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "terminal"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "event": {
+            "$ref": "#/$defs/terminal"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "decimal_u64": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "decimal_i64": {
+      "type": "string",
+      "pattern": "^(0|-?[1-9][0-9]*)$"
+    },
+    "hex32": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{8}$"
+    },
+    "hex64": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{16}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "logical_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "cpu_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "pc",
+        "gpr",
+        "cr",
+        "lr",
+        "ctr",
+        "xer",
+        "fpr_bits",
+        "fpscr",
+        "ugqr",
+        "reservation",
+        "pending_fault",
+        "instructions_retired"
+      ],
+      "properties": {
+        "kind": {
+          "const": "cpu_state"
+        },
+        "pc": {
+          "$ref": "#/$defs/hex32"
+        },
+        "gpr": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/hex32"
+          }
+        },
+        "cr": {
+          "$ref": "#/$defs/hex32"
+        },
+        "lr": {
+          "$ref": "#/$defs/hex32"
+        },
+        "ctr": {
+          "$ref": "#/$defs/hex32"
+        },
+        "xer": {
+          "$ref": "#/$defs/hex32"
+        },
+        "fpr_bits": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/$defs/hex64"
+            }
+          }
+        },
+        "fpscr": {
+          "$ref": "#/$defs/hex32"
+        },
+        "ugqr": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/hex32"
+          }
+        },
+        "reservation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/reservation"
+            }
+          ]
+        },
+        "pending_fault": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/architectural_fault"
+            }
+          ]
+        },
+        "instructions_retired": {
+          "$ref": "#/$defs/decimal_u64"
+        }
+      }
+    },
+    "reservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "value"],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/hex32"
+        },
+        "value": {
+          "$ref": "#/$defs/hex32"
+        }
+      }
+    },
+    "architectural_fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instruction_pointer", "address", "kind"],
+      "properties": {
+        "instruction_pointer": {
+          "$ref": "#/$defs/hex32"
+        },
+        "address": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/hex32"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "instruction_fetch",
+            "data_read",
+            "data_write",
+            "alignment",
+            "unsupported_instruction",
+            "counter_overflow"
+          ]
+        }
+      }
+    },
+    "memory_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "range", "guest_address", "byte_length", "algorithm", "digest"],
+      "properties": {
+        "kind": {
+          "const": "memory_hash"
+        },
+        "range": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "guest_address": {
+          "$ref": "#/$defs/hex32"
+        },
+        "byte_length": {
+          "$ref": "#/$defs/decimal_u64"
+        },
+        "algorithm": {
+          "const": "sha256-v1"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "algorithm", "state_digest"],
+      "properties": {
+        "kind": {
+          "const": "checkpoint"
+        },
+        "name": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "algorithm": {
+          "const": "sha256-v1"
+        },
+        "state_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "generic_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "fields"],
+      "properties": {
+        "kind": {
+          "const": "event"
+        },
+        "name": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "fields": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/logical_label"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/trace_value"
+          }
+        }
+      }
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reason"],
+      "properties": {
+        "kind": {
+          "const": "terminal"
+        },
+        "reason": {
+          "enum": [
+            "guest_exit",
+            "test_completed",
+            "instruction_limit",
+            "cycle_limit",
+            "unhandled_exception",
+            "invalid_instruction",
+            "host_error"
+          ]
+        },
+        "guest_exit_code": {
+          "$ref": "#/$defs/hex32"
+        },
+        "detail_code": {
+          "$ref": "#/$defs/logical_label"
+        }
+      }
+    },
+    "trace_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "signed"
+            },
+            "value": {
+              "$ref": "#/$defs/decimal_i64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "unsigned"
+            },
+            "value": {
+              "$ref": "#/$defs/decimal_u64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "enum": ["hex32", "hex64"]
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^0x([0-9a-f]{8}|[0-9a-f]{16})$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "sha256"
+            },
+            "value": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "const": "redacted"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

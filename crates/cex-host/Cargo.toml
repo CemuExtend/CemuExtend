@@ -1,0 +1,11 @@
+[package]
+name = "cex-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Host platform boundaries for the CemuExtend Rust rewrite"
+
+[lints]
+workspace = true

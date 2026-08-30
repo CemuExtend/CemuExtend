@@ -1,0 +1,33 @@
+# CemuExtend Rust dependency license notices
+
+This file is generated during the Docker release build with `cargo about` from
+the locked Cargo dependency graph for `crates/cemuextend` on
+`x86_64-unknown-linux-gnu`.
+
+CemuExtend's own source license is distributed separately as `LICENSE.txt`.
+Do not remove either file from preview or release artifacts.
+
+## Rust packages
+
+| Package | Version | License expression | Upstream |
+| --- | --- | --- | --- |
+{{#each crates}}
+| `{{package.name}}` | {{package.version}} | {{license}} | {{#if package.repository}}{{package.repository}}{{else}}https://crates.io/crates/{{package.name}}{{/if}} |
+{{/each}}
+
+## License texts
+
+{{#each licenses}}
+### {{name}} ({{id}})
+
+Used by:
+
+{{#each used_by}}
+- `{{crate.name}}` {{crate.version}} - {{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}
+{{/each}}
+
+----- BEGIN LICENSE TEXT -----
+{{{text}}}
+----- END LICENSE TEXT -----
+
+{{/each}}

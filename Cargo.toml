@@ -1,0 +1,67 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cex-types",
+    "crates/cex-memory",
+    "crates/cex-cpu",
+    "crates/cex-system",
+    "crates/cex-gpu",
+    "crates/cex-host",
+    "crates/cex-online",
+    "crates/cex-cemod",
+    "crates/cex-contracts",
+    "crates/cex-frontend",
+    "crates/cex-migrate",
+    "crates/cex-compat",
+    "crates/cemuextend",
+]
+default-members = ["crates/cemuextend"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MPL-2.0"
+repository = "https://github.com/CemuExtend/CemuExtend"
+
+[workspace.dependencies]
+anyhow = "1.0.95"
+bitflags = { version = "2.8.0", features = ["serde"] }
+proptest = "1.6.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.138"
+sha2 = "0.10.8"
+tempfile = "3.16.0"
+thiserror = "2.0.11"
+tokio = { version = "1.43.0", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+
+cex-types = { path = "crates/cex-types", version = "0.1.0" }
+cex-memory = { path = "crates/cex-memory", version = "0.1.0" }
+cex-cpu = { path = "crates/cex-cpu", version = "0.1.0" }
+cex-system = { path = "crates/cex-system", version = "0.1.0" }
+cex-gpu = { path = "crates/cex-gpu", version = "0.1.0" }
+cex-host = { path = "crates/cex-host", version = "0.1.0" }
+cex-online = { path = "crates/cex-online", version = "0.1.0" }
+cex-cemod = { path = "crates/cex-cemod", version = "0.1.0" }
+cex-contracts = { path = "crates/cex-contracts", version = "0.1.0" }
+cex-frontend = { path = "crates/cex-frontend", version = "0.1.0" }
+cex-migrate = { path = "crates/cex-migrate", version = "0.1.0" }
+cex-compat = { path = "crates/cex-compat", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

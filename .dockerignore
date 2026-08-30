@@ -1,8 +1,11 @@
 build/
+target/
+**/target/
 cmake-build-*/
 out/
 .cache/
 result/
+*.profraw
 .git
 !.git/
 .git/*
@@ -32,6 +35,68 @@ bin/resources.pak
 bin/snapshot_blob.bin
 bin/v8_context_snapshot.bin
 bin/vk_swiftshader_icd.json
+
+# Never send console credentials, account configuration, saves, logs, dumps,
+# or other user-owned emulator state to the Docker daemon. These mirror the
+# private runtime paths in .gitignore and protect every `COPY . .` stage.
+bin/otp.bin
+bin/seeprom.bin
+bin/keys.txt
+bin/settings.xml
+bin/network_services.xml
+bin/title_list_cache.xml
+bin/log.txt
+bin/mlc01/
+bin/debugger/
+bin/sdcard/
+bin/screenshots/
+bin/dump/
+bin/cafeLibs/
+bin/portable/
+bin/shaderCache/
+bin/controllerProfiles/
+bin/graphicPacks/
+bin/gameProfiles/*
+!bin/gameProfiles/default/
+!bin/gameProfiles/default/**
+
+# Commercial title/container material and private compatibility fixtures are
+# never Docker build inputs. Synthetic test programs are generated from source.
+**/*.rpx
+**/*.rpl
+**/*.wua
+**/*.wud
+**/*.wux
+**/*.tik
+**/*.tmd
+**/*.cemod
+**/*.wps
+**/*.wms
+**/.env*
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.key
+**/*.app
+**/*.h3
+**/*.cert
+**/*.wuhb
+**/*.elf
+**/otp.bin
+**/seeprom.bin
+**/keys.txt
+**/settings.xml
+**/network_services.xml
+**/.npmrc
+**/.netrc
+**/.cargo/credentials*
+**/.ssh/
+**/id_rsa*
+**/id_ed25519*
+**/credentials*.json
+**/private-fixtures/
+**/fixtures/private/
+**/test-data/private/
 dependencies/vcpkg/buildtrees/
 dependencies/vcpkg/packages/
 dependencies/vcpkg/downloads/
@@ -40,3 +105,12 @@ dependencies/.cef-downloads/
 dependencies/cef/Debug/
 ui/node_modules/
 ui/dist/
+
+# The Rust rewrite build does not consume the legacy C++ tree or vendored
+# submodules.  Keep them out even though the historical C++ Docker rules above
+# re-include parts of .git/modules and bin/gameProfiles.
+.git/
+dependencies/
+src/
+bin/
+cmake/

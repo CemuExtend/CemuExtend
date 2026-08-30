@@ -1,0 +1,230 @@
+# syntax=docker/dockerfile:1.7
+
+# Keep this in lockstep with rust-toolchain.toml. The explicit image tag makes
+# the compiler available before rustup evaluates the workspace override.
+ARG RUST_VERSION=1.97.1
+ARG CARGO_DENY_VERSION=0.20.2
+ARG CARGO_ABOUT_VERSION=0.9.2
+FROM rust:${RUST_VERSION}-bookworm AS rust-toolchain
+
+ARG RUST_VERSION
+ENV CARGO_INCREMENTAL=0 \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_TERM_COLOR=always \
+    CARGO_TARGET_DIR=/workspace/target
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        ca-certificates \
+        clang \
+        cmake \
+        git \
+        libasound2-dev \
+        libudev-dev \
+        libwayland-dev \
+        libx11-dev \
+        libx11-xcb-dev \
+        libxkbcommon-dev \
+        libxrandr-dev \
+        ninja-build \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup component add --toolchain "${RUST_VERSION}" clippy rustfmt
+
+WORKDIR /workspace/CemuExtend
+
+FROM rust-toolchain AS rust-unlocked-source
+
+COPY . .
+
+# Fail early if the Docker base and the repository pin drift apart.
+RUN test "$(rustc --version | awk '{ print $2 }')" = "${RUST_VERSION}"
+
+# Bootstrap target for a newly created workspace. Exporting this stage through
+# BuildKit is the only supported way to create/update the host Cargo.lock.
+FROM rust-unlocked-source AS rust-lockfile-builder
+
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    cargo generate-lockfile \
+    && install -D -m 0644 Cargo.lock /opt/cemuextend/Cargo.lock
+
+FROM scratch AS lockfile
+
+COPY --from=rust-lockfile-builder /opt/cemuextend/Cargo.lock /Cargo.lock
+
+FROM rust-unlocked-source AS rust-source
+
+# Every normal verification/release target uses the exact dependency versions
+# recorded in the repository's Cargo.lock.
+RUN test -f Cargo.lock \
+    && cargo metadata --locked --no-deps --format-version 1 >/dev/null
+
+FROM rust-source AS rust-format
+
+RUN cargo fmt --all -- --check
+
+FROM rust-source AS rust-format-fix-builder
+
+RUN cargo fmt --all \
+    && mkdir -p /opt/cemuextend/formatted \
+    && cp -a Cargo.toml Cargo.lock rust-toolchain.toml crates /opt/cemuextend/formatted/
+
+FROM scratch AS rust-format-fix
+
+COPY --from=rust-format-fix-builder /opt/cemuextend/formatted/ /
+
+FROM rust-format AS rust-check
+
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-check-target,target=/workspace/target,sharing=locked \
+    cargo check --workspace --all-targets --locked
+
+FROM rust-check AS rust-clippy
+
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-check-target,target=/workspace/target,sharing=locked \
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+
+FROM rust-clippy AS rust-test
+
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-test-target,target=/workspace/target,sharing=locked \
+    cargo test --workspace --all-targets --locked
+
+FROM rust-test AS rust-deny
+
+ARG CARGO_DENY_VERSION
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-deny-target,target=/workspace/target,sharing=locked \
+    cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked \
+    && cargo deny check
+
+# Rust verification target, including dependency advisories, license policy,
+# bans, and source policy. The aggregate `ci` target also verifies the UI.
+FROM rust-deny AS rust-ci
+
+FROM rust-ci AS rust-builder
+
+ARG CARGO_ABOUT_VERSION
+RUN set -eu; \
+    printf '%s\n' 'https://example.test/cemuextend/repository' > /tmp/cemuextend-notice-url.txt; \
+    ! grep -Eq '(/workspace/|/usr/local/cargo/|/home/|(^|[^[:alnum:]_])[A-Za-z]:[\\/])' /tmp/cemuextend-notice-url.txt; \
+    printf '%s\n' 'C:\secret' > /tmp/cemuextend-notice-drive-backslash.txt; \
+    grep -Eq '(^|[^[:alnum:]_])[A-Za-z]:[\\/]' /tmp/cemuextend-notice-drive-backslash.txt; \
+    printf '%s\n' 'C:/secret' > /tmp/cemuextend-notice-drive-slash.txt; \
+    grep -Eq '(^|[^[:alnum:]_])[A-Za-z]:[\\/]' /tmp/cemuextend-notice-drive-slash.txt
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-x86_64-unknown-linux-gnu-release-target,target=/workspace/target,sharing=locked \
+    cargo build --release --locked --bin Cemu \
+    && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu
+RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
+    cargo install cargo-about --version "${CARGO_ABOUT_VERSION}" --locked --features cli \
+    && install -D -m 0644 LICENSE.txt /opt/cemuextend/licenses/LICENSE.txt \
+    && cargo about generate \
+        --config licenses/cargo-about.toml \
+        --locked \
+        --fail \
+        --manifest-path crates/cemuextend/Cargo.toml \
+        --target x86_64-unknown-linux-gnu \
+        --output-file /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+        licenses/cargo-about.hbs \
+    && test -s /opt/cemuextend/licenses/LICENSE.txt \
+    && test -s /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && grep -Fq '# CemuExtend Rust dependency license notices' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && grep -Fq '## Rust packages' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && grep -Fq '## License texts' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && grep -Eq '^- `[^`]+` [0-9][^ ]* - https?://' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && grep -Fq -- '----- BEGIN LICENSE TEXT -----' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && awk 'BEGIN { in_text = 0; found = 0 } /----- BEGIN LICENSE TEXT -----/ { in_text = 1; next } /----- END LICENSE TEXT -----/ { in_text = 0 } in_text && /(Copyright|Permission is hereby granted|Apache License|Mozilla Public License|ISC License|ZLIB|Unicode)/ { found = 1 } END { exit found ? 0 : 1 }' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && ! grep -Eq '(/workspace/|/usr/local/cargo/|/home/|(^|[^[:alnum:]_])[A-Za-z]:[\\/])' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && ! grep -Eiq '(^|[^[:alnum:]_])(access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|secret[_-]?key|client[_-]?secret|secret|credential|credentials|password|private[_-]?key|key)["]?[[:space:]]*[:=]' /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt \
+    && touch /opt/cemuextend/licenses/.license-bundle-verified
+
+# Runnable Linux headless image. No React/CEF or native desktop frontend is
+# pulled into this path.
+FROM debian:bookworm-slim AS rust-headless
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# `groupadd` and `useradd` are supplied by Debian's required `passwd` package;
+# keep this numeric identity fixed so the final image cannot default to root.
+RUN groupadd --gid 10001 cemu \
+    && useradd --uid 10001 --gid 10001 --no-create-home \
+        --shell /usr/sbin/nologin cemu
+
+COPY --from=rust-builder /opt/cemuextend/bin/Cemu /usr/local/bin/Cemu
+COPY --from=rust-builder /opt/cemuextend/licenses/ /usr/share/licenses/cemuextend/
+
+# Bind-mounted fixtures and trace-output directories must be readable/writable
+# by UID/GID 10001; configuring those mount permissions is the caller's job.
+USER 10001:10001
+
+ENTRYPOINT ["/usr/local/bin/Cemu"]
+CMD ["--headless-fixture", "synthetic-boot"]
+
+# Local-output target used by docker-build-rust.sh. It exports one executable
+# without requiring docker create, docker run, or cargo on the host.
+FROM scratch AS rust-release
+
+COPY --from=rust-builder /opt/cemuextend/bin/Cemu /Cemu
+COPY --from=rust-builder /opt/cemuextend/licenses/LICENSE.txt /LICENSE.txt
+COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /THIRD_PARTY_LICENSES.txt
+
+# The existing React application remains opt-in until the desktop milestone.
+# This shared source stage feeds both the read-only UI checks and the formatter
+# export target without pulling Bun into the Rust images.
+FROM oven/bun:1.2.21-debian AS rust-ui-source
+
+WORKDIR /workspace/CemuExtend
+COPY ui/package.json ui/bun.lock ./ui/
+RUN --mount=type=cache,id=cemu-extend-rust-ui-bun,target=/root/.bun/install/cache,sharing=locked \
+    cd ui && bun install --frozen-lockfile
+COPY ui/ ./ui/
+COPY crates/cex-contracts/src/generated.rs ./crates/cex-contracts/src/generated.rs
+
+FROM rust-ui-source AS rust-ui-format-fix-builder
+
+RUN cd ui \
+    && bun run format \
+    && rm -rf node_modules .bun \
+    && mkdir -p /opt/cemuextend/formatted \
+    && cp -a /workspace/CemuExtend/ui /opt/cemuextend/formatted/
+
+FROM scratch AS rust-ui-format-fix
+
+COPY --from=rust-ui-format-fix-builder /opt/cemuextend/formatted/ui/ /ui/
+
+FROM rust-ui-source AS rust-ui
+
+RUN cp -a ui/src/generated /tmp/ui-generated \
+    && cp crates/cex-contracts/src/generated.rs /tmp/contracts-generated.rs \
+    && cd ui \
+    && bun run scripts/generate-contracts.ts \
+    && diff -ru /tmp/ui-generated src/generated \
+    && diff -u /tmp/contracts-generated.rs ../crates/cex-contracts/src/generated.rs \
+    && bun run format:check \
+    && bun run typecheck \
+    && bun run lint \
+    && bun test \
+    && bun run build \
+    && touch /ui-verified
+
+# Aggregate CI target. Copying the markers gives BuildKit an explicit dependency
+# on the Rust verification graph, release notice generation, and UI verification
+# without adding Bun to the Rust image.
+FROM rust-ci AS ci
+
+COPY --from=rust-builder /opt/cemuextend/licenses/.license-bundle-verified /opt/cemuextend/license-gate/.license-bundle-verified
+COPY --from=rust-builder /opt/cemuextend/licenses/LICENSE.txt /opt/cemuextend/license-gate/LICENSE.txt
+COPY --from=rust-builder /opt/cemuextend/licenses/THIRD_PARTY_LICENSES.txt /opt/cemuextend/license-gate/THIRD_PARTY_LICENSES.txt
+COPY --from=rust-ui /ui-verified /opt/cemuextend/ui-verified

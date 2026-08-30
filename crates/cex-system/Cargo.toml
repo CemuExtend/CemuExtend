@@ -1,0 +1,17 @@
+[package]
+name = "cex-system"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cex-cpu.workspace = true
+cex-memory.workspace = true
+cex-types.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

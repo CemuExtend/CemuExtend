@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cemuextend.invalid/schemas/compat-fixture-manifest-v1.json",
+  "title": "CemuExtend compatibility fixture manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "baseline", "fixtures"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "baseline": {
+      "$ref": "#/$defs/baseline"
+    },
+    "fixtures": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "$ref": "#/$defs/fixture"
+      }
+    }
+  },
+  "$defs": {
+    "logical_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "decimal_u64": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision"],
+      "properties": {
+        "repository": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8,40}$"
+        }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "status", "artifact"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "kind": {
+          "enum": ["synthetic_program", "synthetic_rpx", "homebrew", "title", "system_application"]
+        },
+        "status": {
+          "enum": ["metadata_only", "validated"]
+        },
+        "title_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "version": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "expected": {
+          "$ref": "#/$defs/expected"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "validated"
+              }
+            }
+          },
+          "then": {
+            "required": ["expected"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "metadata_only"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": ["expected"]
+            }
+          }
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_name", "byte_length", "sha256"],
+      "properties": {
+        "logical_name": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "byte_length": {
+          "$ref": "#/$defs/decimal_u64"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_reason",
+        "final_guest_cycle",
+        "trace_sha256",
+        "checkpoints"
+      ],
+      "properties": {
+        "terminal_reason": {
+          "enum": [
+            "guest_exit",
+            "test_completed",
+            "instruction_limit",
+            "cycle_limit",
+            "unhandled_exception",
+            "invalid_instruction",
+            "host_error"
+          ]
+        },
+        "final_guest_cycle": {
+          "$ref": "#/$defs/decimal_u64"
+        },
+        "trace_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "checkpoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          }
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "guest_cycle", "algorithm", "state_digest"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/logical_label"
+        },
+        "guest_cycle": {
+          "$ref": "#/$defs/decimal_u64"
+        },
+        "algorithm": {
+          "const": "sha256-v1"
+        },
+        "state_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

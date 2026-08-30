@@ -1,5 +1,6 @@
 import type { RpcRequest, RpcResponse } from "./contracts";
 import type { RpcContract, RpcMethod } from "../generated/contracts";
+import { rpcWireLimits } from "../generated/protocol";
 
 let nextId = 0;
 
@@ -30,9 +31,16 @@ export async function invoke<M extends RpcMethod>(
     method,
     params: args[0] ?? {},
   };
-  const raw: unknown = JSON.parse(
-    await window.cemuInvoke(JSON.stringify(request)),
-  );
+  const requestJson = JSON.stringify(request);
+  if (
+    new TextEncoder().encode(requestJson).byteLength >
+    rpcWireLimits.maxRequestBytes
+  )
+    throw new NativeRpcError(
+      "request_too_large",
+      "RPC request exceeds the maximum size",
+    );
+  const raw: unknown = JSON.parse(await window.cemuInvoke(requestJson));
   if (
     !raw ||
     typeof raw !== "object" ||

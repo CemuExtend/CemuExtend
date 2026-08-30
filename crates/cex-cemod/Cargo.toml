@@ -1,0 +1,14 @@
+[package]
+name = "cex-cemod"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CEMOD and WUPS compatibility boundaries for the CemuExtend Rust rewrite"
+
+[dependencies]
+cex-types.workspace = true
+
+[lints]
+workspace = true

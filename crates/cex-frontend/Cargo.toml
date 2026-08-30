@@ -1,0 +1,15 @@
+[package]
+name = "cex-frontend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "React and CEF frontend boundaries for the CemuExtend Rust rewrite"
+
+[dependencies]
+cex-contracts.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

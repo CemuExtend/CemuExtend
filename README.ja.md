@@ -67,4 +67,6 @@ CemuExtendは独立したコミュニティプロジェクトであり、Cemuの
 
 CemuExtendは、本家Cemuと同じ[Mozilla Public License 2.0](LICENSE.txt)でライセンスされています。同梱されている一部のコンポーネントには、それぞれ個別のライセンスが適用されます。詳しくは各ファイルに付属する表記をご確認ください。
 
+Rust rewrite の preview/release artifact を配布する場合は、Docker build が出力する `Cemu` 実行ファイルだけでなく、同じ `result/rust/` に生成される `LICENSE.txt` と `THIRD_PARTY_LICENSES.txt` も必ず同梱してください。`rust-headless` image では同じファイルを `/usr/share/licenses/cemuextend/` に配置します。
+
 CemuExtendは、[Cemuプロジェクト](https://github.com/cemu-project/Cemu)とコントリビューターの成果をもとにしています。
