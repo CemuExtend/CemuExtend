@@ -40,6 +40,9 @@ namespace WebFrontend
 			if (!binding || !binding->handler || !*binding->handler)
 				return;
 			event.surface = binding->surface;
+			auto* toplevel = gtk_widget_get_toplevel(source);
+			event.windowActive = toplevel && GTK_IS_WINDOW(toplevel) &&
+								 gtk_window_is_active(GTK_WINDOW(toplevel)) != FALSE;
 			GtkAllocation allocation{};
 			gtk_widget_get_allocation(source, &allocation);
 			const auto scale = gtk_widget_get_scale_factor(source);
@@ -325,6 +328,22 @@ namespace WebFrontend
 											 self.m_metricsHandler();
 									 }),
 									 this);
+					// The window metrics carry whether the application is active, and
+					// every mouse event a CEMod receives is tagged with it. Without a
+					// refresh when this window gains or loses focus the flag stays at
+					// whatever it was when the window was last resized, so a mod that
+					// ignores unfocused input - as any sane one does - sees no mouse at
+					// all while a title is running.
+					gtk_widget_add_events(m_window, GDK_FOCUS_CHANGE_MASK);
+					for (const auto* signal : {"focus-in-event", "focus-out-event"})
+						g_signal_connect(m_window, signal, G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+											 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+											 self.ClaimInputFocus();
+											 if (self.m_metricsHandler)
+												 self.m_metricsHandler();
+											 return FALSE;
+										 }),
+										 this);
 					gtk_widget_show_all(m_window);
 					gtk_widget_realize(m_widget);
 					gtk_widget_hide(m_window);
@@ -385,6 +404,7 @@ namespace WebFrontend
 			{
 				gtk_window_present(GTK_WINDOW(m_window));
 				gtk_widget_grab_focus(m_widget);
+				ClaimInputFocus();
 			}
 			void SetFullscreen(bool fullscreen)
 			{
@@ -396,6 +416,33 @@ namespace WebFrontend
 			bool IsActive() const
 			{
 				return m_window && gtk_window_is_active(GTK_WINDOW(m_window)) != FALSE;
+			}
+
+			// The launcher hands X input focus to CEF's child window so the browser can
+			// receive keys, and an X child keeps that focus until something takes it.
+			// The compositor making this window active does not: keystrokes would still
+			// be delivered to the launcher's browser while the user looks at the game.
+			// Claiming focus here only ever agrees with the window the compositor just
+			// activated, so it cannot fight the user's own focus choice.
+			void ClaimInputFocus()
+			{
+				if (!m_window || !gtk_window_is_active(GTK_WINDOW(m_window)))
+					return;
+				auto* gdkWindow = gtk_widget_get_window(m_window);
+				if (!gdkWindow || !GDK_IS_X11_WINDOW(gdkWindow))
+					return;
+				auto* gdkDisplay = gtk_widget_get_display(m_window);
+				auto* display = gdk_x11_display_get_xdisplay(gdk_window_get_display(gdkWindow));
+				const auto self = gdk_x11_window_get_xid(gdkWindow);
+				gdk_x11_display_error_trap_push(gdkDisplay);
+				::Window focused{};
+				int revert{};
+				if (XGetInputFocus(display, &focused, &revert) && focused != self)
+				{
+					XSetInputFocus(display, self, RevertToParent, CurrentTime);
+					XSync(display, False);
+				}
+				(void)gdk_x11_display_error_trap_pop(gdkDisplay);
 			}
 			void RequestRedraw()
 			{

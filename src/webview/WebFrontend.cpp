@@ -3621,7 +3621,7 @@ namespace
 				.contentWidth = state.width,
 				.contentHeight = state.height,
 				.insideContent = state.inside,
-				.focused = metrics.appActive,
+				.focused = metrics.appActive || event.windowActive,
 				.flags = raw
 							 ? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
 							 : static_cast<std::uint8_t>(0),
