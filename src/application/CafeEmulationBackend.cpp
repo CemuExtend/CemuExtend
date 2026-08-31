@@ -3753,6 +3753,7 @@ namespace Application
 					model.headless = inspection.headless;
 					model.runtimeAvailable = true;
 					model.valid = inspection.valid;
+					model.enabled = GetConfig().IsCemuExtendModEnabled(model.modIdentity);
 					model.status = !model.valid ? "rejected" : model.approved ? "ready"
 																			  : "disabled";
 					model.warnings = inspection.warnings;
@@ -3771,6 +3772,11 @@ namespace Application
 				}
 				std::ranges::sort(snapshot.packages, {}, &CemodManagerPackage::packageKey);
 				snapshot.generation = CemodCatalogFingerprint(snapshot.packages);
+				if (titleId)
+				{
+					std::scoped_lock cacheLock(m_cemodSnapshotCacheMutex);
+					m_cemodSnapshotCache[*titleId] = snapshot;
+				}
 				return snapshot;
 			}
 
@@ -3822,6 +3828,63 @@ namespace Application
 				if (!cemuextend_hle::ImportLegacyData(titleId, found->principal, error))
 					return {CemodManagerError::ImportFailed, std::move(error), std::move(snapshot)};
 				return {CemodManagerError::None, {}, GetCemodManagerSnapshot(titleId)};
+			}
+
+			CemodManagerResult SetCemodEnabled(const CemodEnableUpdate& update) override
+			{
+				// Resolve the package from whatever discovery already ran. The manager
+				// window always discovers before a checkbox can be clicked, so this is
+				// warm in practice and a toggle costs no package inspection at all.
+				CemodManagerSnapshot snapshot;
+				const CemodManagerPackage* found{};
+				{
+					std::scoped_lock cacheLock(m_cemodSnapshotCacheMutex);
+					for (const auto& [cachedTitle, cached] : m_cemodSnapshotCache)
+					{
+						const auto match = std::ranges::find(cached.packages, update.packageKey,
+															 &CemodManagerPackage::packageKey);
+						if (match != cached.packages.end())
+						{
+							snapshot = cached;
+							break;
+						}
+					}
+				}
+				if (snapshot.packages.empty())
+					snapshot = GetCemodManagerSnapshot(std::nullopt);
+				const auto match = std::ranges::find(snapshot.packages, update.packageKey,
+													 &CemodManagerPackage::packageKey);
+				found = match == snapshot.packages.end() ? nullptr : &*match;
+				// No generation check: unlike an approval this decision is not bound to
+				// an exact package, and a broken package is exactly one a user may want
+				// to switch off, so invalid packages stay toggleable.
+				if (!found || found->modIdentity.empty())
+					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
+				const auto identity = found->modIdentity;
+				auto configLock = GetConfigHandle().Lock();
+				const auto previous = GetConfig().IsCemuExtendModEnabled(identity);
+				if (previous == update.enabled)
+					return {CemodManagerError::None, {}, std::move(snapshot)};
+				GetConfig().SetCemuExtendModEnabled(identity, update.enabled);
+				if (!GetConfigHandle().Save())
+				{
+					GetConfig().SetCemuExtendModEnabled(identity, previous);
+					return {CemodManagerError::SaveFailed, "The change could not be persisted", std::move(snapshot)};
+				}
+				configLock.unlock();
+				// Apply to every package sharing this identity rather than rescanning:
+				// enablement is keyed by identity, so they all move together.
+				for (auto& package : snapshot.packages)
+					if (package.modIdentity == identity)
+						package.enabled = update.enabled;
+				{
+					std::scoped_lock cacheLock(m_cemodSnapshotCacheMutex);
+					for (auto& [cachedTitle, cached] : m_cemodSnapshotCache)
+						for (auto& package : cached.packages)
+							if (package.modIdentity == identity)
+								package.enabled = update.enabled;
+				}
+				return {CemodManagerError::None, {}, std::move(snapshot)};
 			}
 
 			std::vector<TitleSummary> ListTitles() const override
@@ -5921,6 +5984,11 @@ namespace Application
 
 			ApplicationEvents& m_events;
 			std::shared_ptr<ApplicationEventForwarder> m_eventForwarder;
+			// Building a snapshot unpacks and digests every installed package, which is
+			// far too slow to sit behind a checkbox. Discovery already runs on a worker
+			// thread, so keep its result to resolve a package key without rescanning.
+			mutable std::mutex m_cemodSnapshotCacheMutex;
+			mutable std::unordered_map<std::uint64_t, CemodManagerSnapshot> m_cemodSnapshotCache;
 			mutable std::shared_mutex m_inputLifecycleMutex;
 			mutable std::mutex m_frontendSettingsStateMutex;
 			mutable std::recursive_mutex m_frontendSettingsTransactionMutex;

@@ -46,6 +46,9 @@ namespace Application
 		bool headless{};
 		bool runtimeAvailable{};
 		bool valid{};
+		// Whether this package participates at all. A disabled package is neither
+		// loaded nor asked about at launch, for every title it covers.
+		bool enabled{true};
 	};
 
 	struct CemodManagerSnapshot
@@ -74,6 +77,12 @@ namespace Application
 		std::string packageKey;
 		std::uint64_t grantedPermissions{};
 		bool approved{};
+	};
+
+	struct CemodEnableUpdate
+	{
+		std::string packageKey;
+		bool enabled{};
 	};
 
 	struct CemodManagerResult
@@ -115,5 +124,7 @@ namespace Application
 		[[nodiscard]] virtual CemodManagerResult ImportLegacyCemodPackageData(
 			std::uint64_t generation, std::uint64_t titleId,
 			std::string_view packageKey) = 0;
+		[[nodiscard]] virtual CemodManagerResult SetCemodEnabled(
+			const CemodEnableUpdate& update) = 0;
 	};
 } // namespace Application

@@ -146,8 +146,10 @@ namespace Application
 		CemodLaunchPreflight result{snapshot.generation, titleId, {}};
 		for (const auto& package : snapshot.packages)
 		{
-			if (!package.valid || package.approved || package.packageDigest.empty() ||
-				package.modIdentity.empty() ||
+			// A disabled package never loads, so launching must not stop to ask about
+			// one: that prompt is the whole reason a user switches a mod off.
+			if (!package.valid || !package.enabled || package.approved ||
+				package.packageDigest.empty() || package.modIdentity.empty() ||
 				std::ranges::find(package.titleIds, titleId) == package.titleIds.end())
 				continue;
 			result.pendingApprovals.push_back({snapshot.generation, titleId,
@@ -420,6 +422,11 @@ namespace Application
 	{
 		std::scoped_lock lock(m_operationMutex);
 		return m_backend->ImportLegacyCemodPackageData(generation, titleId, packageKey);
+	}
+
+	CemodManagerResult EmulationController::SetCemodEnabled(const CemodEnableUpdate& update)
+	{
+		return m_backend->SetCemodEnabled(update);
 	}
 
 	FrontendSettingsSnapshot EmulationController::GetFrontendSettings() const

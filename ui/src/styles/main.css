@@ -506,6 +506,52 @@ tr.selected td {
 .selection-list > button[aria-selected="true"] {
   background: var(--color-selection);
 }
+/* A row pairs the enable checkbox with the button that selects the package, so
+   the button keeps the row's full height and the divider stays on the row. */
+.selection-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 10px;
+  border-bottom: var(--rule-hair) solid var(--color-rule);
+}
+.selection-row.selected {
+  background: var(--color-selection);
+}
+.selection-row > button {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 10px;
+  padding-inline-start: 0;
+  text-align: start;
+}
+.selection-row > button > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The checkbox carries its own padding so the pointer target covers the full
+   height of the row rather than just the 13px box the browser draws. */
+.selection-row > .enable-toggle {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  box-sizing: content-box;
+  padding-block: 17px;
+  padding-inline: 6px;
+  cursor: pointer;
+}
+.selection-row > .enable-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .split-view {
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);

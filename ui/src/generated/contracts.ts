@@ -83,6 +83,7 @@ export type RpcContract = {
   "cemod.discover": { params: { titleId?: string }; result: { jobId: string } };
   "cemod.openPermissions": { params: { requestId: string; titleId: string; packageKey: string; generation: string }; result: { windowId: string } };
   "cemod.saveApproval": { params: CemodApprovalUpdate; result: CemodManagerResult };
+  "cemod.setEnabled": { params: { packageKey: string; enabled: boolean }; result: CemodManagerResult };
   "cemod.importLegacy": { params: { generation: string; titleId: string; packageKey: string; confirmed: boolean }; result: CemodManagerResult };
   "diagnostics.ppcThreadsSnapshot": { params: undefined; result: PpcThreadsModel };
   "diagnostics.ppcThreadCommand": { params: { generation: string; threadAddress: string; threadIdentity: string; command: PpcThreadCommand; priorityDelta?: number }; result: PpcThreadCommandResult };

@@ -440,6 +440,11 @@
       "result": "CemodManagerResult"
     },
     {
+      "name": "cemod.setEnabled",
+      "params": "{ packageKey: string; enabled: boolean }",
+      "result": "CemodManagerResult"
+    },
+    {
       "name": "cemod.importLegacy",
       "params": "{ generation: string; titleId: string; packageKey: string; confirmed: boolean }",
       "result": "CemodManagerResult"

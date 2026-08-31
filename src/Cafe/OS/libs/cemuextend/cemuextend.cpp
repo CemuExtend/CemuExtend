@@ -630,6 +630,13 @@ namespace cemuextend_hle
 			// accepted only when both observations and the loaded manifest agree, so
 			// a package replacement cannot authorize different loaded bytes.
 			const auto before = InspectConfiguredCemodPackage(titleId, info);
+			if (before && !before->modIdentity.empty() &&
+				!GetConfig().IsCemuExtendModEnabled(before->modIdentity))
+			{
+				cemuLog_log(LogType::Force, "CemuExtend skipped cemod '{}' switched off in the manager",
+							_pathToUtf8(info.path));
+				continue;
+			}
 			if (!before || !before->approved)
 			{
 				cemuLog_log(LogType::Force,

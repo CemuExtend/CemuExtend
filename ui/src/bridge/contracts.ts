@@ -59,6 +59,7 @@ export type CemodPackage = {
   headless: boolean;
   runtimeAvailable: boolean;
   valid: boolean;
+  enabled: boolean;
 };
 export type CemodManagerSnapshot = {
   generation: string;

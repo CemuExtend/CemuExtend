@@ -300,6 +300,25 @@ void CemuConfig::RemoveCemuExtendPermissionApproval(uint64 titleId, std::string_
 		cemuextend_permission_approvals.erase(title);
 }
 
+bool CemuConfig::IsCemuExtendModEnabled(std::string_view modIdentity) const
+{
+	if (modIdentity.empty())
+		return true;
+	std::shared_lock lock(cemuextend_grants_mutex);
+	return !cemuextend_disabled_mods.contains(std::string(modIdentity));
+}
+
+void CemuConfig::SetCemuExtendModEnabled(std::string modIdentity, bool enabled)
+{
+	if (modIdentity.empty() || modIdentity.size() > 256)
+		return;
+	std::unique_lock lock(cemuextend_grants_mutex);
+	if (enabled)
+		cemuextend_disabled_mods.erase(modIdentity);
+	else
+		cemuextend_disabled_mods.insert(std::move(modIdentity));
+}
+
 void CemuConfig::SetMLCPath(fs::path path, bool save)
 {
 	mlc_path.SetValue(_pathToUtf8(path));
@@ -485,6 +504,19 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 				approval.get_attribute<uint64>("granted", 0),
 				approval.get_attribute<bool>("approved", false),
 				approval.get_attribute<bool>("headless_denial", false)};
+		}
+		for (auto disabled = bridge.get("DisabledMod"); disabled.valid();
+			 disabled = bridge.get("DisabledMod", disabled))
+		{
+			const std::string identity = disabled.get_attribute("mod_identity", "");
+			// Entries carrying a title come from the first, per-title version of this
+			// switch. That scope could disable a mod for a title the user never plays
+			// while leaving it loaded in the one they do, so those are dropped rather
+			// than reinterpreted as switching the mod off everywhere.
+			if (identity.empty() || identity.size() > 256 ||
+				disabled.get_attribute<uint64>("title", 0) != 0)
+				continue;
+			cemuextend_disabled_mods.insert(identity);
 		}
 	}
 
@@ -819,6 +851,11 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 				node.set_attribute("approved", approval.approved);
 				node.set_attribute("headless_denial", approval.explicitHeadlessDenial);
 			}
+		for (const auto& identity : cemuextend_disabled_mods)
+		{
+			auto node = bridge.set("DisabledMod");
+			node.set_attribute("mod_identity", identity.c_str());
+		}
 	}
 
 	// game list cache

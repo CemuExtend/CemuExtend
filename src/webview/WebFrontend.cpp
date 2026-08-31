@@ -386,6 +386,8 @@ namespace
 			writer.Bool(package.runtimeAvailable);
 			writer.Key("valid");
 			writer.Bool(package.valid);
+			writer.Key("enabled");
+			writer.Bool(package.enabled);
 			writer.EndObject();
 		}
 		writer.EndArray();
@@ -6030,6 +6032,18 @@ namespace
 				const auto generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
 				const auto id = QueueToolWindow("cemod-permissions", std::string(requestId), titleId, std::string(packageKey), generation);
 				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
+			});
+			m_rpc.Register("cemod.setEnabled", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-manager"});
+				Application::CemodEnableUpdate update;
+				update.packageKey = std::string(RequiredString(params, "packageKey"));
+				if (update.packageKey.empty() || update.packageKey.size() > 4096)
+					throw std::invalid_argument("packageKey is invalid");
+				update.enabled = RequiredBool(params, "enabled");
+				const auto result = m_controller.SetCemodEnabled(update);
+				if (result)
+					Emit("cemod.changed", R"({"reason":"enablement"})");
+				return CemodResultJson(result);
 			});
 			m_rpc.Register("cemod.saveApproval", [this](const rapidjson::Value& params) {
 				RequireRole({"cemod-permissions"});
