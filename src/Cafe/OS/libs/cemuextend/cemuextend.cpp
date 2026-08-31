@@ -206,6 +206,13 @@ namespace cemuextend_hle
 		}
 	} // namespace
 
+	// PermissionBit() is not constexpr, so mirror its shift here.
+	static_assert((1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceRead)) ==
+					  kCemodServiceReadApproval &&
+				  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceCapture)) ==
+					  kCemodServiceCaptureApproval,
+				  "CemodPermission::Service* must match the kCemodService*Approval bits");
+
 	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,
 											const std::optional<CemodInspectionApproval>& approval)
 	{
@@ -297,6 +304,16 @@ namespace cemuextend_hle
 				return "Notifications";
 			case CemuExtend::CemodPermission::ContentRedirection:
 				return "Content redirection";
+			case CemuExtend::CemodPermission::ServiceRead:
+				return "Service: read";
+			case CemuExtend::CemodPermission::ServiceWrite:
+				return "Service: write";
+			case CemuExtend::CemodPermission::ServiceInject:
+				return "Service: inject";
+			case CemuExtend::CemodPermission::ServiceClipboard:
+				return "Service: clipboard";
+			case CemuExtend::CemodPermission::ServiceCapture:
+				return "Service: screen capture";
 			case CemuExtend::CemodPermission::Modules:
 				return "Aroma/WUMS modules";
 			case CemuExtend::CemodPermission::PluginManagement:
@@ -620,8 +637,12 @@ namespace cemuextend_hle
 							_pathToUtf8(info.path));
 				continue;
 			}
+			// Service permissions are the user's to pick individually, so a declined
+			// one denies that service rather than refusing to load the package. The
+			// native permissions still have to be granted in full.
 			if ((info.executionMode == CemodExecutionMode::TrustedNative || before->wups) &&
-				(before->requestedPermissions & ~before->grantedPermissions) != 0)
+				(before->requestedPermissions & ~before->grantedPermissions &
+				 ~kCemodServiceApprovalMask) != 0)
 			{
 				cemuLog_log(LogType::Force,
 							"CemuExtend skipped native cemod '{}' with denied native permissions",

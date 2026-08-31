@@ -68,6 +68,18 @@ std::string CemodGuiAdapter::PermissionName(CemodGuiPermission permission)
 		return "Aroma/WUMS modules";
 	case CemodGuiPermission::PluginManagement:
 		return "WUPS plugin management";
+	case CemodGuiPermission::WebUi:
+		return "Web UI";
+	case CemodGuiPermission::ServiceRead:
+		return "Service: read";
+	case CemodGuiPermission::ServiceWrite:
+		return "Service: write";
+	case CemodGuiPermission::ServiceInject:
+		return "Service: inject";
+	case CemodGuiPermission::ServiceClipboard:
+		return "Service: clipboard";
+	case CemodGuiPermission::ServiceCapture:
+		return "Service: screen capture";
 	}
 	return "Unknown permission";
 }

@@ -14,7 +14,7 @@ type Context = NonNullable<Bootstrap["context"]>;
 // (src/Cemu/CemuExtend/CemodInspectionService.h). Approval is blocked unless the
 // package model carries the whole set, so this has to track that list: a short
 // model means the dialog cannot show everything the package is asking for.
-const CEMOD_PERMISSION_MODEL_SIZE = 12;
+const CEMOD_PERMISSION_MODEL_SIZE = 17;
 
 export function CemodPermissionsWindow({
   context,
