@@ -1,4 +1,5 @@
 #include "HidapiWiimote.h"
+#include "input/api/SDL/SDLSubsystemLock.h"
 #include <SDL3/SDL.h>
 #include <cwchar>
 
@@ -30,6 +31,7 @@ std::optional<std::vector<uint8>> HidapiWiimote::read_data()
 std::vector<WiimoteDevicePtr> HidapiWiimote::get_devices()
 {
 	std::vector<WiimoteDevicePtr> wiimote_devices;
+	std::scoped_lock lock(InputSdl::SubsystemMutex());
 	// A portable runtime can end up without a usable HID backend, in which case
 	// SDL leaves its platform entry points unset and enumerating jumps through a
 	// null pointer. Skip Wiimote discovery instead of taking the process down.
@@ -72,5 +74,6 @@ bool HidapiWiimote::operator==(const WiimoteDevice& rhs) const
 
 HidapiWiimote::~HidapiWiimote()
 {
+	std::scoped_lock lock(InputSdl::SubsystemMutex());
 	SDL_hid_close(m_handle);
 }

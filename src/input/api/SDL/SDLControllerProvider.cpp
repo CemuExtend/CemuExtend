@@ -1,4 +1,5 @@
 #include "input/api/SDL/SDLControllerProvider.h"
+#include "input/api/SDL/SDLSubsystemLock.h"
 
 #include "input/api/SDL/SDLController.h"
 #include "util/helpers/TempState.h"
@@ -115,6 +116,7 @@ MotionSample SDLControllerProvider::motion_sample(SDL_JoystickID diid)
 
 void SDLControllerProvider::InitSDL()
 {
+	std::scoped_lock lock(InputSdl::SubsystemMutex());
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
@@ -141,6 +143,7 @@ void SDLControllerProvider::InitSDL()
 
 void SDLControllerProvider::ShutdownSDL()
 {
+	std::scoped_lock lock(InputSdl::SubsystemMutex());
 	SDL_QuitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC);
 }
 
