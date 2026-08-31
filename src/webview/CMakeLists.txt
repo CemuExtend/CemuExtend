@@ -76,6 +76,7 @@ if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
 	cef/CefNativeUiLoop.h
     cef/CefOverlayFrameMailbox.cpp
     cef/CefOverlayFrameMailbox.h
+	cef/CefOverlayInput.h
     cef/CefOverlayRuntime.cpp
     cef/CefOverlayRuntime.h
   )

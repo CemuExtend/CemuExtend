@@ -2,6 +2,7 @@
 
 #include "webview/cef/CefOverlayRuntime.h"
 #include "webview/cef/CefOverlayFrameMailbox.h"
+#include "webview/cef/CefOverlayInput.h"
 #include "webview/cef/CefNativeUiLoop.h"
 #include "webview/CemodNetworkPolicy.h"
 #include "webview/CemodNetworkProxy.h"
@@ -2055,6 +2056,20 @@ namespace WebFrontend::CefOverlay
 			UpdateLayerFocus(surface);
 		}
 
+		bool RuntimeImpl::CapturesInput(Host::PointerSurface surface) const
+		{
+			std::scoped_lock lock(m_mutex);
+			const auto& layers = m_surfaces[Index(surface)];
+			const auto order = BottomToTopLocked(layers);
+			return std::ranges::any_of(order | std::views::reverse,
+									   [this](const std::optional<std::uint64_t>& window) {
+										   if (!window)
+											   return false;
+										   const auto* candidate = FindLayerLocked(*window);
+										   return candidate && candidate->visible && candidate->interactive;
+									   });
+		}
+
 		void RuntimeImpl::SetOverlayVisible(std::uint64_t windowId, bool visible)
 		{
 			std::optional<Host::PointerSurface> surface;
@@ -2149,28 +2164,39 @@ namespace WebFrontend::CefOverlay
 			switch (event.kind)
 			{
 			case NativeInputKind::PointerMove:
-				host->SendMouseMoveEvent(mouse, !event.insideContent); return true;
+				host->SendMouseMoveEvent(mouse, !event.insideContent);
+				return true;
 			case NativeInputKind::PointerButton:
 				host->SendMouseClickEvent(mouse,
-					event.button == 3 ? MBT_RIGHT : event.button == 2 ? MBT_MIDDLE : MBT_LEFT,
-					!event.pressed, 1); return true;
+										  event.button == 3 ? MBT_RIGHT : event.button == 2 ? MBT_MIDDLE
+																							: MBT_LEFT,
+										  !event.pressed, 1);
+				return true;
 			case NativeInputKind::PointerWheel:
-				host->SendMouseWheelEvent(mouse, event.wheelX, event.wheelY); return true;
+				host->SendMouseWheelEvent(mouse, event.wheelX, event.wheelY);
+				return true;
 			case NativeInputKind::Key:
 			{
 				CefKeyEvent key;
 				key.type = event.pressed ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP;
 				key.native_key_code = static_cast<int>(event.key);
-				key.windows_key_code = static_cast<int>(event.key);
+				const auto normalized = WindowsKeyCodeFromUsbHid(event.usage);
+				key.windows_key_code = static_cast<int>(normalized ? normalized : event.key);
 				key.modifiers = mouse.modifiers;
-				host->SendKeyEvent(key); return true;
+				key.is_system_key = (event.modifiers & 4U) != 0;
+				host->SendKeyEvent(key);
+				return true;
 			}
 			case NativeInputKind::Character:
 				for (const auto value : CefString(event.text).ToString16())
 				{
-					CefKeyEvent key; key.type = KEYEVENT_CHAR; key.character = value;
-					key.unmodified_character = value; host->SendKeyEvent(key);
-				} return true;
+					CefKeyEvent key;
+					key.type = KEYEVENT_CHAR;
+					key.character = value;
+					key.unmodified_character = value;
+					host->SendKeyEvent(key);
+				}
+				return true;
 			case NativeInputKind::Touch:
 			{
 				CefTouchEvent touch;

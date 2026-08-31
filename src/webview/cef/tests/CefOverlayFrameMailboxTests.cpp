@@ -1,4 +1,5 @@
 #include "webview/cef/CefOverlayFrameMailbox.h"
+#include "webview/cef/CefOverlayInput.h"
 #include "webview/cef/CefOverlayOrder.h"
 
 #include <array>
@@ -17,10 +18,45 @@ namespace
 	{
 		return std::vector<std::uint8_t>(static_cast<std::size_t>(width) * height * 4, value);
 	}
-}
+} // namespace
 
 int main()
 {
+	using WebFrontend::CefOverlay::IsPointerInput;
+	using WebFrontend::CefOverlay::ResolveNativeInputRoute;
+	using WebFrontend::CefOverlay::WindowsKeyCodeFromUsbHid;
+	static_assert(IsPointerInput(WebFrontend::NativeInputKind::PointerMove));
+	static_assert(IsPointerInput(WebFrontend::NativeInputKind::RawMouse));
+	static_assert(!IsPointerInput(WebFrontend::NativeInputKind::Key));
+	static_assert(WindowsKeyCodeFromUsbHid(0x04) == 'A');
+	static_assert(WindowsKeyCodeFromUsbHid(0x1d) == 'Z');
+	static_assert(WindowsKeyCodeFromUsbHid(0x29) == 0x1b);
+	static_assert(WindowsKeyCodeFromUsbHid(0xe5) == 0xa1);
+	constexpr auto overlayKey =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Key, true);
+	static_assert(overlayKey.publishGuestPhysicalInput && !overlayKey.processFrontendInput);
+	constexpr auto overlayButton =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::PointerButton, true);
+	static_assert(overlayButton.publishGuestPhysicalInput && !overlayButton.processFrontendInput);
+	constexpr auto overlayWheel =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::PointerWheel, true);
+	static_assert(overlayWheel.publishGuestPhysicalInput && !overlayWheel.processFrontendInput);
+	constexpr auto overlayCharacter =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Character, true);
+	static_assert(!overlayCharacter.publishGuestPhysicalInput &&
+				  !overlayCharacter.processFrontendInput);
+	constexpr auto overlayFocusLost =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::FocusLost, true);
+	static_assert(overlayFocusLost.publishGuestPhysicalInput &&
+				  !overlayFocusLost.processFrontendInput);
+	constexpr auto overlayDeviceChanged =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::DeviceChanged, true);
+	static_assert(!overlayDeviceChanged.publishGuestPhysicalInput &&
+				  overlayDeviceChanged.processFrontendInput);
+	constexpr auto ordinaryKey =
+		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Key, false);
+	static_assert(ordinaryKey.publishGuestPhysicalInput && ordinaryKey.processFrontendInput);
+
 	using WebFrontend::CefOverlay::CemodOverlayOrder;
 	using WebFrontend::CefOverlay::OverlayLayer;
 	using WebFrontend::CefOverlay::OverlayLayersBottomToTop;
@@ -61,7 +97,7 @@ int main()
 	assert(paddedFrame->bgra->at((1 * 4 + 3) * 4) == 7);
 
 	const std::array clamped{OverlayDirtyRect{-2, -1, 4, 3},
-		OverlayDirtyRect{100, 100, 2, 2}, OverlayDirtyRect{0, 0, -1, 2}};
+							 OverlayDirtyRect{100, 100, 2, 2}, OverlayDirtyRect{0, 0, -1, 2}};
 	assert(mailbox.PublishView(PointerSurface::Main, 4, 3, secondPixels.data(), 16, clamped));
 	auto clampedFrame = mailbox.AcquireLatestOverlayFrame(PointerSurface::Main, paddedFrame->sequence);
 	assert(clampedFrame && clampedFrame->dirtyRects.size() == 1);

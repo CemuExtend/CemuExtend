@@ -68,7 +68,8 @@ namespace WebFrontend::CefOverlay
 		std::function<void(void*)> nativeBrowserClosing;
 		std::shared_ptr<const BrowserAssetBundle> cemodAssets;
 		std::function<void(std::int64_t, std::string,
-			std::function<void(bool, std::string)>)> cemodQuery;
+						   std::function<void(bool, std::string)>)>
+			cemodQuery;
 		std::function<void(std::int64_t)> cemodQueryCancelled;
 		std::function<void()> cemodMainFrameReloaded;
 		std::function<void()> cemodRendererTerminated;
@@ -85,15 +86,16 @@ namespace WebFrontend::CefOverlay
 
 		virtual ~BrowserRuntime() = default;
 		virtual bool Create(Host::PointerSurface surface, std::uint64_t windowId,
-			int physicalWidth, int physicalHeight, double dpiScale) = 0;
+							int physicalWidth, int physicalHeight, double dpiScale) = 0;
 		virtual void Close(Host::PointerSurface surface) = 0;
 		virtual void CloseAll() = 0;
 		virtual void Resize(Host::PointerSurface surface, int physicalWidth,
-			int physicalHeight, double dpiScale) = 0;
+							int physicalHeight, double dpiScale) = 0;
 		virtual void SetInteractive(Host::PointerSurface surface, bool interactive) = 0;
+		[[nodiscard]] virtual bool CapturesInput(Host::PointerSurface surface) const = 0;
 		virtual bool SendInput(const NativeInputEvent& event) = 0;
 		virtual void ExecuteEvent(Host::PointerSurface surface, std::string_view name,
-			std::string_view jsonPayload, std::uint64_t sequence) = 0;
+								  std::string_view jsonPayload, std::uint64_t sequence) = 0;
 		virtual void ExecuteScript(Host::PointerSurface surface, std::string_view script) = 0;
 
 		// Registry API used by launcher/tool windows. The legacy surface API above
@@ -101,14 +103,14 @@ namespace WebFrontend::CefOverlay
 		virtual bool CreateBrowser(const BrowserDescriptor& descriptor) = 0;
 		virtual bool CloseWindow(std::uint64_t windowId) = 0;
 		virtual void ResizeWindow(std::uint64_t windowId, int width, int height,
-			double dpiScale) = 0;
+								  double dpiScale) = 0;
 		virtual void SetWindowFocus(std::uint64_t windowId, bool focused) = 0;
 		virtual void SetOverlayVisible(std::uint64_t windowId, bool visible) = 0;
 		virtual void SetOverlayInteractive(std::uint64_t windowId, bool interactive) = 0;
 		virtual void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
-			std::string_view jsonPayload, std::uint64_t sequence) = 0;
+										std::string_view jsonPayload, std::uint64_t sequence) = 0;
 		virtual void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
-			std::string_view jsonPayload) = 0;
+									   std::string_view jsonPayload) = 0;
 		virtual void ExecuteWindowScript(std::uint64_t windowId, std::string_view script) = 0;
 		[[nodiscard]] virtual bool HasWindow(std::uint64_t windowId) const = 0;
 	};
