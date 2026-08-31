@@ -26,19 +26,23 @@ export_log=""
 rust_artifact_build_log=""
 rpl_link_artifact_build_log=""
 rpl_call_artifact_build_log=""
+rpl_data_artifact_build_log=""
 build_completed=0
 trace_artifacts_dir=""
 rpl_link_artifacts_dir=""
 rpl_call_artifacts_dir=""
+rpl_data_artifacts_dir=""
 readonly trace_artifacts_marker='.cemu-rpx-oracle-artifacts-staging'
 readonly rpl_link_artifacts_marker='.cemu-rpl-link-artifacts-staging'
 readonly rpl_call_artifacts_marker='.cemu-rpl-call-artifacts-staging'
+readonly rpl_data_artifacts_marker='.cemu-rpl-data-artifacts-staging'
 readonly -a rpx_contract_artifacts=(fixture.rpx rust-trace.jsonl SHA256SUMS cex-trace-compare)
 readonly -a rpl_link_contract_artifacts=(main.rpx provider.rpl rust-trace.jsonl SHA256SUMS cex-trace-compare)
 readonly -a rpl_call_link_contract_artifacts=(main.rpx provider.rpl rust-link-trace.jsonl SHA256SUMS cex-trace-compare)
+readonly -a rpl_data_link_contract_artifacts=(main.rpx provider.rpl rust-link-trace.jsonl SHA256SUMS cex-trace-compare)
 
 usage() {
-	printf 'Usage: %s [base|dev|build|win|trace|rpl-link-trace|rpl-call-trace]\n' "${0##*/}" >&2
+	printf 'Usage: %s [base|dev|build|win|trace|rpl-link-trace|rpl-call-trace|rpl-data-trace]\n' "${0##*/}" >&2
 	printf 'Builds the fixed C++ oracle revision %s using Docker only.\n' "${oracle_commit}" >&2
 }
 
@@ -63,6 +67,9 @@ case "${build_kind}" in
 		;;
 	rpl-call-trace)
 		docker_target="cpp-rpl-call-oracle-trace"
+		;;
+	rpl-data-trace)
+		docker_target="cpp-rpl-data-oracle-trace"
 		;;
 	*)
 		usage
@@ -124,6 +131,8 @@ cleanup() {
 			|| printf 'Rust RPL link artifact Docker build log retained: %s\n' "${rpl_link_artifact_build_log}" >&2
 		[[ -z "${rpl_call_artifact_build_log}" || "${build_completed}" -eq 1 ]] \
 			|| printf 'Rust RPL call artifact Docker build log retained: %s\n' "${rpl_call_artifact_build_log}" >&2
+		[[ -z "${rpl_data_artifact_build_log}" || "${build_completed}" -eq 1 ]] \
+			|| printf 'Rust RPL data artifact Docker build log retained: %s\n' "${rpl_data_artifact_build_log}" >&2
 		if (( status != 0 )); then
 			return "${status}"
 		fi
@@ -141,6 +150,8 @@ cleanup() {
 				|| printf 'Rust RPL link artifact Docker build log retained: %s\n' "${rpl_link_artifact_build_log}" >&2
 			[[ -z "${rpl_call_artifact_build_log}" ]] \
 				|| printf 'Rust RPL call artifact Docker build log retained: %s\n' "${rpl_call_artifact_build_log}" >&2
+			[[ -z "${rpl_data_artifact_build_log}" ]] \
+				|| printf 'Rust RPL data artifact Docker build log retained: %s\n' "${rpl_data_artifact_build_log}" >&2
 		else
 			if [[ -n "${export_log}" ]] && ! rm -f -- "${export_log}"; then
 				printf 'Could not remove the temporary oracle export log\n' >&2
@@ -160,6 +171,10 @@ cleanup() {
 			fi
 			if [[ -n "${rpl_call_artifact_build_log}" ]] && ! rm -f -- "${rpl_call_artifact_build_log}"; then
 				printf 'Could not remove the temporary Rust RPL call artifact Docker build log\n' >&2
+				cleanup_status=1
+			fi
+			if [[ -n "${rpl_data_artifact_build_log}" ]] && ! rm -f -- "${rpl_data_artifact_build_log}"; then
+				printf 'Could not remove the temporary Rust RPL data artifact Docker build log\n' >&2
 				cleanup_status=1
 			fi
 		fi
@@ -194,6 +209,10 @@ cleanup() {
 		fi
 		if [[ -n "${rpl_call_artifact_build_log}" ]] && ! rm -f -- "${rpl_call_artifact_build_log}"; then
 			printf 'Could not remove the temporary Rust RPL call artifact Docker build log\n' >&2
+			cleanup_status=1
+		fi
+		if [[ -n "${rpl_data_artifact_build_log}" ]] && ! rm -f -- "${rpl_data_artifact_build_log}"; then
+			printf 'Could not remove the temporary Rust RPL data artifact Docker build log\n' >&2
 			cleanup_status=1
 		fi
 	else
@@ -303,6 +322,28 @@ cleanup_rpl_call_artifacts() {
 	return "${cleanup_status}"
 }
 
+cleanup_rpl_data_artifacts() {
+	local status=${1:-$?}
+	local cleanup_status=0
+	if [[ -z "${rpl_data_artifacts_dir}" ]]; then
+		if (( status != 0 )); then return "${status}"; fi; return 0
+	fi
+	if [[ "${rpl_data_artifacts_dir}" == /tmp/cemu-extend-rpl-data-artifacts.* \
+		&& -d "${rpl_data_artifacts_dir}" && ! -L "${rpl_data_artifacts_dir}" \
+		&& -f "${rpl_data_artifacts_dir}/${rpl_data_artifacts_marker}" \
+		&& ! -L "${rpl_data_artifacts_dir}/${rpl_data_artifacts_marker}" \
+		&& "$(<"${rpl_data_artifacts_dir}/${rpl_data_artifacts_marker}")" == 'cemu-extend-rpl-data-artifacts-v1' ]]; then
+		if ! rm -rf -- "${rpl_data_artifacts_dir}"; then
+			printf 'Could not remove the temporary RPL data oracle artifact directory\n' >&2; cleanup_status=1
+		fi
+	else
+		printf 'Refusing to remove an unexpected temporary RPL data oracle artifact directory\n' >&2; cleanup_status=1
+	fi
+	rpl_data_artifacts_dir=""
+	if (( status != 0 )); then return "${status}"; fi
+	return "${cleanup_status}"
+}
+
 exit_after_trace_cleanup() {
 	local status=$?
 	local cleanup_status=0
@@ -318,6 +359,9 @@ exit_after_trace_cleanup() {
 		cleanup_status=1
 	fi
 	if ! cleanup_rpl_call_artifacts "${status}"; then
+		cleanup_status=1
+	fi
+	if ! cleanup_rpl_data_artifacts "${status}"; then
 		cleanup_status=1
 	fi
 	if ! cleanup "${status}"; then
@@ -472,6 +516,47 @@ validate_rpl_call_link_contract_artifacts() {
 		printf 'RPL call contract checksum manifest is invalid\n' >&2; return 1
 	fi
 	(cd -- "${directory}" && sha256sum --check --status SHA256SUMS) || { printf 'RPL call contract checksum verification failed\n' >&2; return 1; }
+}
+
+validate_rpl_data_link_contract_artifacts() {
+	local directory=$1
+	local artifact entry mode
+	if [[ ! -d "${directory}" || -L "${directory}" ]]; then
+		printf 'RPL data contract artifact staging is invalid\n' >&2; return 1
+	fi
+	for artifact in "${rpl_data_link_contract_artifacts[@]}"; do
+		if [[ ! -f "${directory}/${artifact}" || -L "${directory}/${artifact}" || ! -s "${directory}/${artifact}" ]]; then
+			printf 'RPL data contract artifact staging is incomplete\n' >&2; return 1
+		fi
+		mode=$(stat -c '%a' -- "${directory}/${artifact}")
+		case "${artifact}:${mode}" in
+			cex-trace-compare:755|rust-link-trace.jsonl:600|main.rpx:600|provider.rpl:600|SHA256SUMS:644) ;;
+			*) printf 'RPL data contract artifact mode is invalid\n' >&2; return 1 ;;
+		esac
+	done
+	[[ -x "${directory}/cex-trace-compare" ]] || { printf 'RPL data contract comparator artifact is not executable\n' >&2; return 1; }
+	while IFS= read -r -d '' entry; do
+		case "${entry}" in
+			main.rpx|provider.rpl|rust-link-trace.jsonl|SHA256SUMS|cex-trace-compare) ;;
+			"${rpl_data_artifacts_marker}") [[ "${directory}" == "${rpl_data_artifacts_dir}" ]] || { printf 'RPL data contract artifact staging contains unexpected entries\n' >&2; return 1; } ;;
+			*) printf 'RPL data contract artifact staging contains unexpected entries\n' >&2; return 1 ;;
+		esac
+	done < <(find "${directory}" -mindepth 1 -maxdepth 1 -printf '%f\0')
+	if [[ "$(wc -l < "${directory}/rust-link-trace.jsonl")" -ne 6 ]]; then
+		printf 'RPL data link contract trace record count is invalid\n' >&2; return 1
+	fi
+	if ! LC_ALL=C awk '
+		function hex64(value) { return length(value) == 64 && value ~ /^[0-9a-f]+$/ }
+		NF == 2 && hex64($1) && $2 == "main.rpx" { main++; next }
+		NF == 2 && hex64($1) && $2 == "provider.rpl" { provider++; next }
+		NF == 2 && hex64($1) && $2 == "rust-link-trace.jsonl" { link++; next }
+		NF == 2 && hex64($1) && $2 == "cex-trace-compare" { comparator++; next }
+		{ invalid = 1 }
+		END { exit invalid || main != 1 || provider != 1 || link != 1 || comparator != 1 }
+	' "${directory}/SHA256SUMS"; then
+		printf 'RPL data contract checksum manifest is invalid\n' >&2; return 1
+	fi
+	(cd -- "${directory}" && sha256sum --check --status SHA256SUMS) || { printf 'RPL data contract checksum verification failed\n' >&2; return 1; }
 }
 
 ensure_clean_checkout() {
@@ -748,11 +833,11 @@ if [[ "${build_kind}" == trace ]]; then
 		printf 'Missing tracked C++ RPX adapter sources\n' >&2
 		exit 1
 	fi
-	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp)
+	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp)
 	while IFS= read -r -d '' adapter_entry; do
 		adapter_name=${adapter_entry#"${adapter_source_dir}"/}
 		case "${adapter_name}" in
-			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp) ;;
+			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp|rpl_data_oracle_trace.cpp) ;;
 			*)
 				printf 'C++ RPX adapter directory contains an unexpected entry\n' >&2
 				exit 1
@@ -865,11 +950,11 @@ elif [[ "${build_kind}" == rpl-link-trace ]]; then
 		printf 'Missing tracked C++ RPL link adapter sources\n' >&2
 		exit 1
 	fi
-	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp)
+	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp)
 	while IFS= read -r -d '' adapter_entry; do
 		adapter_name=${adapter_entry#"${adapter_source_dir}"/}
 		case "${adapter_name}" in
-			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp) ;;
+			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp|rpl_data_oracle_trace.cpp) ;;
 			*) printf 'C++ RPL link adapter directory contains an unexpected entry\n' >&2; exit 1 ;;
 		esac
 	done < <(find "${adapter_source_dir}" -mindepth 1 -maxdepth 1 -printf '%p\0')
@@ -971,11 +1056,11 @@ elif [[ "${build_kind}" == rpl-call-trace ]]; then
 	if [[ ! -d "${adapter_source_dir}" || -L "${adapter_source_dir}" ]]; then
 		printf 'Missing tracked C++ RPL call adapter sources\n' >&2; exit 1
 	fi
-	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp)
+	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp)
 	while IFS= read -r -d '' adapter_entry; do
 		adapter_name=${adapter_entry#"${adapter_source_dir}"/}
 		case "${adapter_name}" in
-			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp) ;;
+			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp|rpl_data_oracle_trace.cpp) ;;
 			*) printf 'C++ RPL call adapter directory contains an unexpected entry\n' >&2; exit 1 ;;
 		esac
 	done < <(find "${adapter_source_dir}" -mindepth 1 -maxdepth 1 -printf '%p\0')
@@ -1020,6 +1105,113 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
        --expected oracle-rpx/rust-link-trace.jsonl \
        --actual oracle-rpx/cpp-link-trace.jsonl
 EOF
+elif [[ "${build_kind}" == rpl-data-trace ]]; then
+	# The ADDR16 C++ oracle receives only the independently exported link-state
+	# contract. Execution traces are intentionally neither copied nor compiled.
+	rpl_data_artifacts_dir="$(mktemp -d /tmp/cemu-extend-rpl-data-artifacts.XXXXXX)"
+	printf '%s\n' 'cemu-extend-rpl-data-artifacts-v1' > "${rpl_data_artifacts_dir}/${rpl_data_artifacts_marker}"
+	trap exit_after_trace_cleanup EXIT
+	rpl_data_artifact_build_log="$(mktemp /tmp/cemu-extend-rpl-data-artifacts-build.XXXXXX.log)"
+	(docker build --progress=plain --file "${project_dir}/Dockerfile.rust" \
+		--target rust-rpl-data-link-contract-artifacts \
+		--build-arg "RUST_VERSION=${CEMU_RUST_VERSION:-1.97.1}" \
+		--build-arg "CARGO_DENY_VERSION=${CEMU_CARGO_DENY_VERSION:-0.20.2}" \
+		--build-arg "CARGO_ABOUT_VERSION=${CEMU_CARGO_ABOUT_VERSION:-0.9.2}" \
+		--output "type=local,dest=${rpl_data_artifacts_dir}" "${project_dir}" \
+		>"${rpl_data_artifact_build_log}" 2>&1) &
+	rust_artifact_docker_pid=$!
+	rust_artifact_status=0
+	rust_artifact_timed_out=0
+	rust_artifact_timeout_seconds=$((10#${build_timeout_minutes} * 60))
+	if (( rust_artifact_timeout_seconds == 0 )); then
+		wait "${rust_artifact_docker_pid}" || rust_artifact_status=$?
+	else
+		rust_artifact_started_at=$(date +%s)
+		while kill -0 "${rust_artifact_docker_pid}" 2>/dev/null; do
+			if (( $(date +%s) - rust_artifact_started_at >= rust_artifact_timeout_seconds )); then
+				rust_artifact_timed_out=1
+				kill -TERM "${rust_artifact_docker_pid}" 2>/dev/null || true
+				for ((i = 0; i < 10; i++)); do
+					kill -0 "${rust_artifact_docker_pid}" 2>/dev/null || break
+					sleep 1
+				done
+				kill -KILL "${rust_artifact_docker_pid}" 2>/dev/null || true
+				wait "${rust_artifact_docker_pid}" 2>/dev/null || true
+				rust_artifact_status=124
+				break
+			fi
+			sleep 1
+		done
+		if (( rust_artifact_timed_out == 0 )); then
+			wait "${rust_artifact_docker_pid}" || rust_artifact_status=$?
+		fi
+	fi
+	if (( rust_artifact_status != 0 )); then
+		if (( rust_artifact_timed_out != 0 )); then
+			printf 'Rust RPL data artifact Docker build timed out after %s minute(s); log=%s\n' "${build_timeout_minutes}" "${rpl_data_artifact_build_log}" >&2
+		else
+			printf 'Rust RPL data artifact Docker build failed (exit %s); log=%s\n' "${rust_artifact_status}" "${rpl_data_artifact_build_log}" >&2
+		fi
+		exit "${rust_artifact_status}"
+	fi
+	validate_rpl_data_link_contract_artifacts "${rpl_data_artifacts_dir}"
+	mkdir -p "${context_dir}/oracle-rpx" "${context_dir}/oracle-adapter"
+	cp -a "${rpl_data_artifacts_dir}/main.rpx" "${rpl_data_artifacts_dir}/provider.rpl" \
+		"${rpl_data_artifacts_dir}/rust-link-trace.jsonl" \
+		"${rpl_data_artifacts_dir}/SHA256SUMS" "${rpl_data_artifacts_dir}/cex-trace-compare" "${context_dir}/oracle-rpx/"
+	adapter_source_dir="${project_dir}/compat/cpp-oracle"
+	if [[ ! -d "${adapter_source_dir}" || -L "${adapter_source_dir}" ]]; then
+		printf 'Missing tracked C++ RPL data adapter sources\n' >&2; exit 1
+	fi
+	readonly -a adapter_sources=(CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp)
+	while IFS= read -r -d '' adapter_entry; do
+		adapter_name=${adapter_entry#"${adapter_source_dir}"/}
+		case "${adapter_name}" in
+			CMakeLists.txt|rpx_oracle_trace.cpp|rpl_link_oracle_trace.cpp|rpl_call_oracle_trace.cpp|rpl_data_oracle_trace.cpp) ;;
+			*) printf 'C++ RPL data adapter directory contains an unexpected entry\n' >&2; exit 1 ;;
+		esac
+	done < <(find "${adapter_source_dir}" -mindepth 1 -maxdepth 1 -printf '%p\0')
+	for adapter_name in "${adapter_sources[@]}"; do
+		adapter_path="${adapter_source_dir}/${adapter_name}"
+		if [[ ! -f "${adapter_path}" || -L "${adapter_path}" ]]; then
+			printf 'C++ RPL data adapter source must be a regular non-symlink file\n' >&2; exit 1
+		fi
+		cp -- "${adapter_path}" "${context_dir}/oracle-adapter/${adapter_name}"
+	done
+	if ! grep -q 'cpp_rpl_data_oracle_trace' "${context_dir}/oracle-adapter/CMakeLists.txt"; then
+		printf 'C++ RPL data adapter CMake target is missing\n' >&2; exit 1
+	fi
+	cat >> "${context_dir}/CMakeLists.txt" <<'EOF'
+
+add_subdirectory(oracle-adapter EXCLUDE_FROM_ALL)
+EOF
+	cat >> "${context_dir}/${oracle_dockerfile}" <<EOF
+
+FROM cemu-extend-base AS cpp-rpl-data-oracle-trace
+ARG SOURCE_FINGERPRINT
+WORKDIR /workspace/CemuExtend
+RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
+    --mount=type=cache,id=cemu-extend-vcpkg,target=/root/.cache/vcpkg/archives,sharing=locked \
+    --mount=type=cache,id=cemu-extend-vcpkg-downloads,target=/root/.cache/vcpkg/downloads,sharing=locked \
+    --mount=type=cache,id=cemu-extend-cmake-rpl-data-oracle,target=/workspace/CemuExtend/build/docker-rpl-data-oracle,sharing=locked \
+    test -n "\${SOURCE_FINGERPRINT}" \
+    && test ! -e dependencies/vcpkg/.git \
+    && git -C dependencies/vcpkg init --quiet \
+    && git -C dependencies/vcpkg fetch --quiet ../../.cemu-vcpkg-baseline.bundle refs/tags/cemu-vcpkg-pinned:refs/tags/cemu-vcpkg-pinned \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_pinned_commit}^{commit} \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_builtin_baseline}^{commit} \
+    && git -C dependencies/vcpkg cat-file -e ${vcpkg_sdl3_tree}^{tree} \
+    && bash ./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
+    && cmake -S . -B build/docker-rpl-data-oracle -G Ninja -DCMAKE_BUILD_TYPE=Release \
+       -DENABLE_VCPKG=ON -DCEMU_FRONTEND=headless -DALLOW_PORTABLE=OFF -DBUILD_TESTING=ON \
+    && cmake --build build/docker-rpl-data-oracle --target cpp_rpl_data_oracle_trace --parallel \
+    && adapter_bin="\$(find build/docker-rpl-data-oracle -type f -name cpp_rpl_data_oracle_trace -perm -111 -print -quit)" \
+    && test -n "\${adapter_bin}" \
+    && "\${adapter_bin}" oracle-rpx/main.rpx oracle-rpx/provider.rpl > oracle-rpx/cpp-link-trace.jsonl \
+    && oracle-rpx/cex-trace-compare \
+       --expected oracle-rpx/rust-link-trace.jsonl \
+       --actual oracle-rpx/cpp-link-trace.jsonl
+EOF
 fi
 
 # The diagnostic log must never become part of the Docker context.  Inspect
@@ -1053,7 +1245,7 @@ source_fingerprint="$(
 				printf 'rpx-artifact:%s ' "${artifact}"
 				sha256sum "${context_dir}/oracle-rpx/${artifact}" | awk '{print $1}'
 			done
-			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp; do
+			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp; do
 				printf 'rpx-adapter:%s ' "${adapter_name}"
 				sha256sum "${context_dir}/oracle-adapter/${adapter_name}" | awk '{print $1}'
 			done
@@ -1062,7 +1254,7 @@ source_fingerprint="$(
 				printf 'rpl-link-artifact:%s ' "${artifact}"
 				sha256sum "${context_dir}/oracle-rpx/${artifact}" | awk '{print $1}'
 			done
-			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp; do
+			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp; do
 				printf 'rpl-link-adapter:%s ' "${adapter_name}"
 				sha256sum "${context_dir}/oracle-adapter/${adapter_name}" | awk '{print $1}'
 			done
@@ -1072,9 +1264,20 @@ source_fingerprint="$(
 				sha256sum "${context_dir}/oracle-rpx/${artifact}" | awk '{print $1}'
 				printf 'mode:%s:%s\n' "${artifact}" "$(stat -c '%a' -- "${context_dir}/oracle-rpx/${artifact}")"
 			done
-			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp; do
+			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp; do
 				printf 'rpl-call-adapter:%s ' "${adapter_name}"
 				sha256sum "${context_dir}/oracle-adapter/${adapter_name}" | awk '{print $1}'
+			done
+		elif [[ "${build_kind}" == rpl-data-trace ]]; then
+			for artifact in "${rpl_data_link_contract_artifacts[@]}"; do
+				printf 'rpl-data-artifact:%s ' "${artifact}"
+				sha256sum "${context_dir}/oracle-rpx/${artifact}" | awk '{print $1}'
+				printf 'mode:%s:%s\n' "${artifact}" "$(stat -c '%a' -- "${context_dir}/oracle-rpx/${artifact}")"
+			done
+			for adapter_name in CMakeLists.txt rpx_oracle_trace.cpp rpl_link_oracle_trace.cpp rpl_call_oracle_trace.cpp rpl_data_oracle_trace.cpp; do
+				printf 'rpl-data-adapter:%s ' "${adapter_name}"
+				sha256sum "${context_dir}/oracle-adapter/${adapter_name}" | awk '{print $1}'
+				printf 'mode:%s:%s\n' "${adapter_name}" "$(stat -c '%a' -- "${context_dir}/oracle-adapter/${adapter_name}")"
 			done
 		fi
 	} | sha256sum | cut -d' ' -f1

@@ -8,6 +8,7 @@ result/
 .docker-rpx-contract.*/
 .docker-rpl-link-contract.*/
 .docker-rpl-call-contract.*/
+.docker-rpl-data-contract.*/
 .docker-rust-release.*/
 *.profraw
 .git

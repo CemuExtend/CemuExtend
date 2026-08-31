@@ -132,6 +132,9 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && cargo build --release --locked --package cemuextend --bin cex-rpl-call-fixture \
     && cargo build --release --locked --package cemuextend --bin cex-rpl-call-link-contract-trace \
     && cargo build --release --locked --package cemuextend --bin cex-rpl-call-execution-trace \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-data-fixture \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-data-link-contract-trace \
+    && cargo build --release --locked --package cemuextend --bin cex-rpl-data-execution-trace \
     && install -D -m 0755 /workspace/target/release/Cemu /opt/cemuextend/bin/Cemu \
     && install -D -m 0755 /workspace/target/release/cex-trace-compare \
         /opt/cemuextend/bin/cex-trace-compare \
@@ -148,7 +151,13 @@ RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/regi
     && install -D -m 0755 /workspace/target/release/cex-rpl-call-link-contract-trace \
         /opt/cemuextend/bin/cex-rpl-call-link-contract-trace \
     && install -D -m 0755 /workspace/target/release/cex-rpl-call-execution-trace \
-        /opt/cemuextend/bin/cex-rpl-call-execution-trace
+        /opt/cemuextend/bin/cex-rpl-call-execution-trace \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-data-fixture \
+        /opt/cemuextend/bin/cex-rpl-data-fixture \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-data-link-contract-trace \
+        /opt/cemuextend/bin/cex-rpl-data-link-contract-trace \
+    && install -D -m 0755 /workspace/target/release/cex-rpl-data-execution-trace \
+        /opt/cemuextend/bin/cex-rpl-data-execution-trace
 RUN --mount=type=cache,id=cemu-extend-rust-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cemu-extend-rust-${RUST_VERSION}-cargo-about-target,target=/workspace/target,sharing=locked \
@@ -352,6 +361,77 @@ RUN set -eu; \
 FROM scratch AS rust-rpl-call-link-contract-artifacts
 
 COPY --from=rust-rpl-call-link-contract-artifacts-builder /opt/cemuextend/rpl-call-link-contract/ /
+
+# BuildKit-exported ADDR16 fixtures and deterministic link/execution traces.
+FROM rust-builder AS rust-rpl-data-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpl-data-contract; \
+    /opt/cemuextend/bin/cex-rpl-data-fixture --module main \
+        --output /opt/cemuextend/rpl-data-contract/main.rpx; \
+    /opt/cemuextend/bin/cex-rpl-data-fixture --module provider \
+        --output /opt/cemuextend/rpl-data-contract/provider.rpl; \
+    /opt/cemuextend/bin/cex-rpl-data-link-contract-trace \
+        --main /opt/cemuextend/rpl-data-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-data-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-data-contract/rust-link-trace.jsonl; \
+    /opt/cemuextend/bin/cex-rpl-data-execution-trace \
+        --main /opt/cemuextend/rpl-data-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-data-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-data-contract/rust-execution-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-data-contract/main.rpx; \
+    test -s /opt/cemuextend/rpl-data-contract/provider.rpl; \
+    test -s /opt/cemuextend/rpl-data-contract/rust-link-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-data-contract/rust-execution-trace.jsonl; \
+    test "$(wc -l < /opt/cemuextend/rpl-data-contract/rust-link-trace.jsonl)" -eq 6; \
+    test "$(wc -l < /opt/cemuextend/rpl-data-contract/rust-execution-trace.jsonl)" -eq 8; \
+    chmod 0600 /opt/cemuextend/rpl-data-contract/main.rpx \
+        /opt/cemuextend/rpl-data-contract/provider.rpl \
+        /opt/cemuextend/rpl-data-contract/rust-link-trace.jsonl \
+        /opt/cemuextend/rpl-data-contract/rust-execution-trace.jsonl; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpl-data-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpl-data-contract; \
+    sha256sum main.rpx provider.rpl rust-link-trace.jsonl rust-execution-trace.jsonl \
+        cex-trace-compare > SHA256SUMS; \
+    chmod 0644 SHA256SUMS; \
+    test "$(wc -l < SHA256SUMS)" -eq 5
+
+FROM scratch AS rust-rpl-data-contract-artifacts
+
+COPY --from=rust-rpl-data-contract-artifacts-builder /opt/cemuextend/rpl-data-contract/ /
+
+# Link-only ADDR16 export for the frozen C++ oracle. It remains independent of
+# the execution artifact builder so the C++ path has no execution trace input.
+FROM rust-builder AS rust-rpl-data-link-contract-artifacts-builder
+
+RUN set -eu; \
+    mkdir -p /opt/cemuextend/rpl-data-link-contract; \
+    /opt/cemuextend/bin/cex-rpl-data-fixture --module main \
+        --output /opt/cemuextend/rpl-data-link-contract/main.rpx; \
+    /opt/cemuextend/bin/cex-rpl-data-fixture --module provider \
+        --output /opt/cemuextend/rpl-data-link-contract/provider.rpl; \
+    /opt/cemuextend/bin/cex-rpl-data-link-contract-trace \
+        --main /opt/cemuextend/rpl-data-link-contract/main.rpx \
+        --provider /opt/cemuextend/rpl-data-link-contract/provider.rpl \
+        --trace-output /opt/cemuextend/rpl-data-link-contract/rust-link-trace.jsonl; \
+    test -s /opt/cemuextend/rpl-data-link-contract/main.rpx; \
+    test -s /opt/cemuextend/rpl-data-link-contract/provider.rpl; \
+    test -s /opt/cemuextend/rpl-data-link-contract/rust-link-trace.jsonl; \
+    test "$(wc -l < /opt/cemuextend/rpl-data-link-contract/rust-link-trace.jsonl)" -eq 6; \
+    chmod 0600 /opt/cemuextend/rpl-data-link-contract/main.rpx \
+        /opt/cemuextend/rpl-data-link-contract/provider.rpl \
+        /opt/cemuextend/rpl-data-link-contract/rust-link-trace.jsonl; \
+    install -D -m 0755 /opt/cemuextend/bin/cex-trace-compare \
+        /opt/cemuextend/rpl-data-link-contract/cex-trace-compare; \
+    cd /opt/cemuextend/rpl-data-link-contract; \
+    sha256sum main.rpx provider.rpl rust-link-trace.jsonl cex-trace-compare > SHA256SUMS; \
+    chmod 0644 SHA256SUMS; \
+    test "$(wc -l < SHA256SUMS)" -eq 4
+
+FROM scratch AS rust-rpl-data-link-contract-artifacts
+
+COPY --from=rust-rpl-data-link-contract-artifacts-builder /opt/cemuextend/rpl-data-link-contract/ /
 
 # Rebuild the current synthetic fixture and Rust trace, then compare them with
 # the tracked trace attested by the fixed C++ oracle. The manifest also pins the
