@@ -2444,6 +2444,48 @@ namespace Application
 				return {true, {}};
 			}
 
+			// The crash dump setting is an enum whose members differ per platform, so
+			// it crosses to the frontend as a name out of the list the host offers.
+			static std::string CrashDumpName(CrashDump value)
+			{
+				switch (value)
+				{
+#if BOOST_OS_WINDOWS
+				case CrashDump::Lite: return "lite";
+				case CrashDump::Full: return "full";
+#else
+				case CrashDump::Enabled: return "enabled";
+#endif
+				case CrashDump::Disabled: break;
+				}
+				return "disabled";
+			}
+
+			static std::vector<std::string> CrashDumpChoices()
+			{
+#if BOOST_OS_WINDOWS
+				return {"disabled", "lite", "full"};
+#else
+				return {"disabled", "enabled"};
+#endif
+			}
+
+			static std::optional<CrashDump> ParseCrashDump(std::string_view name)
+			{
+				if (name == "disabled")
+					return CrashDump::Disabled;
+#if BOOST_OS_WINDOWS
+				if (name == "lite")
+					return CrashDump::Lite;
+				if (name == "full")
+					return CrashDump::Full;
+#else
+				if (name == "enabled")
+					return CrashDump::Enabled;
+#endif
+				return std::nullopt;
+			}
+
 			FrontendSettingsSnapshot GetFrontendSettings() const override
 			{
 				std::scoped_lock transactionLock(m_frontendSettingsTransactionMutex);
@@ -2477,11 +2519,14 @@ namespace Application
 				snapshot.titleRunning = IsTitleRunning();
 				snapshot.setupCompleted = GetConfig().frontend.setup_completed.GetValue();
 				snapshot.fullscreenOverride = LaunchSettings::FullscreenEnabled();
+				snapshot.crashDump = CrashDumpName(GetConfig().crash_dump.GetValue());
+				snapshot.crashDumpChoices = CrashDumpChoices();
 				fingerprint.append(snapshot.startFullscreen ? "1" : "0");
 				fingerprint.append(snapshot.openPad ? "1" : "0");
 				fingerprint.append(snapshot.checkUpdates ? "1" : "0");
 				fingerprint.append(snapshot.saveScreenshots ? "1" : "0");
 				fingerprint.append(snapshot.setupCompleted ? "1" : "0");
+				fingerprint.append(snapshot.crashDump);
 				{
 					std::scoped_lock stateLock(m_frontendSettingsStateMutex);
 					if (m_frontendSettingsFingerprint.empty())
@@ -2576,6 +2621,7 @@ namespace Application
 				const bool oldUpdates = config.frontend.check_updates.GetValue();
 				const bool oldSaveScreenshots = config.frontend.save_screenshots.GetValue();
 				const bool oldSetup = config.frontend.setup_completed.GetValue();
+				const auto oldCrashDump = config.crash_dump.GetValue();
 				auto restore = [&] {
 					config.game_paths = oldPaths;
 					config.frontend.start_fullscreen = oldFullscreen;
@@ -2583,6 +2629,7 @@ namespace Application
 					config.frontend.check_updates = oldUpdates;
 					config.frontend.save_screenshots = oldSaveScreenshots;
 					config.frontend.setup_completed = oldSetup;
+					config.crash_dump = oldCrashDump;
 					CafeTitleList::ClearScanPaths();
 					for (const auto& path : oldPaths)
 						CafeTitleList::AddScanPath(_utf8ToPath(path));
@@ -2600,6 +2647,8 @@ namespace Application
 					config.frontend.save_screenshots = update.saveScreenshots;
 					if (update.completeSetup)
 						config.frontend.setup_completed = true;
+					if (const auto dump = ParseCrashDump(update.crashDump))
+						config.crash_dump = *dump;
 					CafeTitleList::ClearScanPaths();
 					for (const auto& path : normalizedPaths)
 						CafeTitleList::AddScanPath(path);

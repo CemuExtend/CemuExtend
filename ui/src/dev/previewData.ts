@@ -32,6 +32,8 @@ export const previewFrontendSettings: FrontendSettings = {
   titleRunning: false,
   setupCompleted: true,
   fullscreenOverride: null,
+  crashDump: "disabled",
+  crashDumpChoices: ["disabled", "enabled"],
 };
 
 export const previewOverlay: RuntimeOverlaySnapshot = {

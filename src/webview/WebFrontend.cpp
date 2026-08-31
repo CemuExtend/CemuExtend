@@ -674,6 +674,13 @@ namespace
 			writer.Bool(*snapshot.fullscreenOverride);
 		else
 			writer.Null();
+		writer.Key("crashDump");
+		writer.String(snapshot.crashDump.c_str());
+		writer.Key("crashDumpChoices");
+		writer.StartArray();
+		for (const auto& choice : snapshot.crashDumpChoices)
+			writer.String(choice.c_str());
+		writer.EndArray();
 		writer.EndObject();
 		return {buffer.GetString(), buffer.GetSize()};
 	}
@@ -5057,6 +5064,7 @@ namespace
 				update.checkUpdates = RequiredBool(params, "checkUpdates");
 				update.saveScreenshots = RequiredBool(params, "saveScreenshots");
 				update.completeSetup = RequiredBool(params, "completeSetup");
+				update.crashDump = std::string(RequiredString(params, "crashDump"));
 				const auto& paths = RequiredMember(params, "gamePaths");
 				if (!paths.IsArray())
 					throw std::invalid_argument("gamePaths must be an array");

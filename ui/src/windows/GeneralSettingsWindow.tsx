@@ -13,6 +13,7 @@ export function GeneralSettingsWindow() {
   const [openPad, setOpenPad] = useState(false);
   const [checkUpdates, setCheckUpdates] = useState(false);
   const [saveScreenshots, setSaveScreenshots] = useState(true);
+  const [crashDump, setCrashDump] = useState("disabled");
   const [language, setLanguage] = useState(getUiLanguage());
   const [savedLanguage, setSavedLanguage] = useState(getUiLanguage());
   const [busy, setBusy] = useState(false);
@@ -25,6 +26,7 @@ export function GeneralSettingsWindow() {
     setOpenPad(snapshot.openPad);
     setCheckUpdates(snapshot.checkUpdates);
     setSaveScreenshots(snapshot.saveScreenshots);
+    setCrashDump(snapshot.crashDump);
   }, []);
   const load = useCallback(async () => {
     const [settings, languageState] = await Promise.all([
@@ -50,7 +52,8 @@ export function GeneralSettingsWindow() {
       startFullscreen !== model.startFullscreen ||
       openPad !== model.openPad ||
       checkUpdates !== model.checkUpdates ||
-      saveScreenshots !== model.saveScreenshots
+      saveScreenshots !== model.saveScreenshots ||
+      crashDump !== model.crashDump
     : false;
   const languageDirty = language !== savedLanguage;
   const dirty = frontendDirty || languageDirty;
@@ -68,6 +71,7 @@ export function GeneralSettingsWindow() {
           openPad,
           checkUpdates,
           saveScreenshots,
+          crashDump,
           completeSetup: false,
         });
         if (!result.ok) {
@@ -230,6 +234,11 @@ export function GeneralSettingsWindow() {
             />
             Start games in fullscreen
           </label>
+          {model.fullscreenOverride !== null && (
+            <p className="muted">
+              Fullscreen startup is controlled by the command line.
+            </p>
+          )}
           <label className="check-row">
             <input
               type="checkbox"
@@ -250,6 +259,9 @@ export function GeneralSettingsWindow() {
             />
             Automatically check for updates
           </label>
+          {!model.updateChecksSupported && (
+            <p className="muted">Update checks are managed by this package.</p>
+          )}
           <label className="check-row">
             <input
               type="checkbox"
@@ -259,15 +271,28 @@ export function GeneralSettingsWindow() {
             />
             Save screenshots to disk instead of copying them to the clipboard
           </label>
+          <label className="field-row">
+            <span>Crash dump</span>
+            <select
+              value={crashDump}
+              disabled={busy || model.titleRunning}
+              onChange={(event) => setCrashDump(event.target.value)}
+            >
+              {model.crashDumpChoices.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice === "disabled"
+                    ? "Off"
+                    : choice === "enabled"
+                      ? "On"
+                      : choice === "lite"
+                        ? "Small"
+                        : "Full"}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        {model.fullscreenOverride !== null && (
-          <p className="muted">
-            Fullscreen startup is controlled by the command line.
-          </p>
-        )}
-        {!model.updateChecksSupported && (
-          <p className="muted">Update checks are managed by this package.</p>
-        )}
+
       </section>
       <section className="editor-panel">
         <h2>Related settings</h2>
