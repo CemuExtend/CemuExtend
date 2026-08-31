@@ -588,6 +588,8 @@ export type FrontendSettings = {
   titleRunning: boolean;
   setupCompleted: boolean;
   fullscreenOverride: boolean | null;
+  crashDump: string;
+  crashDumpChoices: string[];
 };
 
 export type FrontendSettingsUpdate = Pick<
@@ -598,6 +600,7 @@ export type FrontendSettingsUpdate = Pick<
   | "openPad"
   | "checkUpdates"
   | "saveScreenshots"
+  | "crashDump"
 > & {
   completeSetup: boolean;
 };

@@ -79,6 +79,7 @@ export function GettingStartedWindow() {
         openPad,
         checkUpdates,
         saveScreenshots: model.saveScreenshots,
+        crashDump: model.crashDump,
         completeSetup: true,
       });
       setModel(result.snapshot);

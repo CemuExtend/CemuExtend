@@ -220,12 +220,33 @@ textarea {
 }
 .check-row,
 .checkbox-label,
-.switch-row {
+.switch-row,
+.field-row {
   min-height: 32px;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 6px 3px;
+}
+/* A labelled control rather than a checkbox: the label leads, the control sits
+   at the end of the row so a column of them lines up. */
+.field-row {
+  gap: 12px;
+}
+.field-row > select {
+  min-width: 160px;
+}
+/* A form grid stacks a label's control above its text, which is right for an
+   input with a caption but wrong for a row that pairs a control with its own
+   label: those read as one line. Notes belong to the row above them, so they
+   span the grid instead of taking a cell beside an unrelated setting. */
+.form-grid > .check-row,
+.form-grid > .field-row {
+  display: flex;
+}
+.form-grid > .muted {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 /* Page headers and groups */
