@@ -154,10 +154,17 @@ namespace WebFrontend
 				return TRUE;
 			case WM_MOUSEWHEEL:
 			case WM_MOUSEHWHEEL:
+			{
+				POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+				ScreenToClient(window, &point);
 				emit({.kind = NativeInputKind::PointerWheel,
+					  .x = point.x,
+					  .y = point.y,
 					  .wheelX = message == WM_MOUSEHWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0,
-					  .wheelY = message == WM_MOUSEWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0});
+					  .wheelY = message == WM_MOUSEWHEEL ? GET_WHEEL_DELTA_WPARAM(wparam) : 0,
+					  .insideContent = true});
 				return 0;
+			}
 			case WM_KEYDOWN:
 			case WM_SYSKEYDOWN:
 			case WM_KEYUP:

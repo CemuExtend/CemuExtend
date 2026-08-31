@@ -854,8 +854,10 @@ static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInte
 	if (kind == 3)
 	{
 		emit({.kind = WebFrontend::NativeInputKind::PointerWheel,
+			.x = x, .y = y,
 			.wheelX = static_cast<std::int32_t>([event scrollingDeltaX] * 120.0),
-			.wheelY = static_cast<std::int32_t>([event scrollingDeltaY] * 120.0)});
+			.wheelY = static_cast<std::int32_t>([event scrollingDeltaY] * 120.0),
+			.insideContent = inside});
 		return;
 	}
 	if (kind == 4 || kind == 5)

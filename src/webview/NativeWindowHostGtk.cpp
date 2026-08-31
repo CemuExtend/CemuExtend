@@ -126,6 +126,7 @@ namespace WebFrontend
 							 })),
 							 binding);
 			g_signal_connect(widget, "scroll-event", G_CALLBACK((+[](GtkWidget* source, GdkEventScroll* event, gpointer data) -> gboolean {
+								 const auto scale = gtk_widget_get_scale_factor(source);
 								 double dx{}, dy{};
 								 if (!gdk_event_get_scroll_deltas(reinterpret_cast<GdkEvent*>(event), &dx, &dy))
 								 {
@@ -134,7 +135,7 @@ namespace WebFrontend
 									 dy = event->direction == GDK_SCROLL_UP ? -1 : event->direction == GDK_SCROLL_DOWN ? 1
 																													   : 0;
 								 }
-								 DispatchGtkInput(source, static_cast<GtkInputBinding*>(data), {.kind = NativeInputKind::PointerWheel, .wheelX = static_cast<std::int32_t>(-dx * 120.0), .wheelY = static_cast<std::int32_t>(-dy * 120.0)});
+								 DispatchGtkInput(source, static_cast<GtkInputBinding*>(data), {.kind = NativeInputKind::PointerWheel, .x = static_cast<std::int32_t>(event->x * scale), .y = static_cast<std::int32_t>(event->y * scale), .wheelX = static_cast<std::int32_t>(-dx * 120.0), .wheelY = static_cast<std::int32_t>(-dy * 120.0), .insideContent = true});
 								 return TRUE;
 							 })),
 							 binding);

@@ -6,14 +6,13 @@ build_platform="${1:-linux}"
 
 case "${build_platform}" in
 	linux)
-		image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build}"
-		docker_target="build"
+		docker_target="build-linux-artifact"
+		container_artifact="Cemu_release.bundle"
 		artifact_suffix=""
 		;;
 	win)
-		image_name="${CEMU_DOCKER_IMAGE:-cemu-extend:build-win}"
 		docker_target="build-windows-artifact"
-		container_artifact="/Cemu_release.exe"
+		container_artifact="Cemu_release.exe"
 		artifact_suffix=".exe"
 		;;
 	*)
@@ -72,24 +71,48 @@ git_hash="$(git -C "${project_dir}" log --format=%h -1 2>/dev/null || printf unk
 commit_hash="$(git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown)"
 source_fingerprint="$({
 	git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown
-	# This host-only wrapper is not read by the Docker build stage. Excluding it
-	# lets logging-only edits reuse the already-verified Cemu image.
+	# These host-only files do not affect the compiled Cemu artifact. Excluding
+	# them lets wrapper and cache-policy edits reuse the verified build layer.
 	git -C "${project_dir}" diff --binary --no-ext-diff HEAD -- . \
-		':(exclude)docker-build.sh' 2>/dev/null || true
-	git -C "${project_dir}" ls-files --others --exclude-standard -z 2>/dev/null \
+		':(exclude)docker-build.sh' \
+		':(exclude)buildkitd.toml' 2>/dev/null || true
+	git -C "${project_dir}" ls-files --others --exclude-standard -z -- \
+		':(exclude)buildkitd.toml' 2>/dev/null \
 		| LC_ALL=C sort -z \
 		| xargs -0 -r sha256sum
 } | sha256sum | cut -d' ' -f1)"
 
 build_log="$(mktemp "${TMPDIR:-/tmp}/cemu-docker-build.XXXXXX.log")"
-container_id=""
+export_dir="$(mktemp -d "${TMPDIR:-/tmp}/cemu-docker-export.XXXXXX")"
+builder_name="${CEMU_DOCKER_BUILDER:-cemu-extend}"
+builder_ready=0
 cleanup() {
 	rm -f -- "${build_log}"
-	if [[ -n "${container_id}" ]]; then
-		docker rm -f "${container_id}" >/dev/null 2>&1 || true
+	rm -rf -- "${export_dir}"
+	if [[ "${builder_ready}" == "1" ]]; then
+		# Enforce the cap immediately after successful and failed builds instead
+		# of waiting for BuildKit's periodic garbage-collection pass.
+		docker buildx prune --builder "${builder_name}" --force \
+			--max-used-space "${CEMU_DOCKER_CACHE_MAX:-48gb}" \
+			--reserved-space "${CEMU_DOCKER_CACHE_RESERVED:-12gb}" \
+			--timeout 2m >/dev/null 2>&1 || true
 	fi
 }
 trap cleanup EXIT
+
+ensure_builder() {
+	if ! docker buildx inspect "${builder_name}" >/dev/null 2>&1; then
+		if ! docker buildx create \
+			--name "${builder_name}" \
+			--driver docker-container \
+			--buildkitd-config "${project_dir}/buildkitd.toml" >/dev/null; then
+			# A concurrent build may have created it after the inspect above.
+			docker buildx inspect "${builder_name}" >/dev/null
+		fi
+	fi
+	docker buildx inspect --builder "${builder_name}" --bootstrap >/dev/null
+	builder_ready=1
+}
 
 filter_build_log() {
 	local log_file="$1"
@@ -121,7 +144,9 @@ filter_build_log() {
 # contents are not part of Docker's layer cache key, so include an explicit
 # content fingerprint. An unchanged tree reuses the complete build layer;
 # source edits rerun compilation while preserving the vcpkg/CMake cache mounts.
-if ! docker build --progress=plain --target "${docker_target}" \
+ensure_builder
+if ! docker buildx build --builder "${builder_name}" \
+	--progress=plain --target "${docker_target}" \
 	--build-arg "GIT_HASH=${git_hash}" \
 	--build-arg "CEMU_EXTEND_COMMIT_HASH=${commit_hash}" \
 	--build-arg "SOURCE_FINGERPRINT=${source_fingerprint}" \
@@ -129,7 +154,8 @@ if ! docker build --progress=plain --target "${docker_target}" \
 	--build-arg "CEMU_OVERLAY_BACKEND=${overlay_backend}" \
 	--build-arg "CLEAN_BUILD=${clean_build}" \
 	--build-arg "ENABLE_WXWIDGETS=${CEMU_ENABLE_WXWIDGETS:-ON}" \
-	-t "${image_name}" "${project_dir}" >"${build_log}" 2>&1; then
+	--output "type=local,dest=${export_dir}" \
+	"${project_dir}" >"${build_log}" 2>&1; then
 	printf 'Docker %s release build failed.\n' "${build_platform}" >&2
 	filtered_log="$(filter_build_log "${build_log}")"
 	if [[ -n "${filtered_log}" ]]; then
@@ -145,16 +171,14 @@ filter_build_log "${build_log}"
 
 mkdir -p "${artifact_dir}"
 if [[ "${build_platform}" == "win" ]]; then
-	container_id="$(docker create "${image_name}")"
-	docker cp "${container_id}:${container_artifact}" "${artifact_dir}/${temporary_name}"
+	cp "${export_dir}/${container_artifact}" "${artifact_dir}/${temporary_name}"
 	mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/${artifact_name}"
 else
 	# Extraction is additive, so remove obsolete runtime copies that older
 	# bundles may have left behind.
 	rm -f "${artifact_dir}/.cemu-runtime/lib/libcef.so"
 	rm -f "${artifact_dir}/libvulkan.so.1"
-	container_id="$(docker create "${image_name}")"
-	docker cp "${container_id}:/Cemu_release.bundle/." "${artifact_dir}"
+	cp -a "${export_dir}/${container_artifact}/." "${artifact_dir}"
 	if [[ "${artifact_name}" != "Cemu_release" ]]; then
 		mv -f "${artifact_dir}/Cemu_release" "${artifact_dir}/${artifact_name}"
 	fi

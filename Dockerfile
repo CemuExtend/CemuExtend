@@ -153,6 +153,12 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
 
 CMD ["bash"]
 
+# Export the Linux bundle without loading the multi-gigabyte build image into
+# Docker's image store. docker-build.sh uses the local exporter for this stage.
+FROM scratch AS build-linux-artifact
+
+COPY --from=build /Cemu_release.bundle /Cemu_release.bundle
+
 # AppImage packaging. Reuses the compiled tree from the build stage (copied to
 # /cemu-bin above, outside the bind mount, so it survives into this stage) and
 # runs it through dist/linux/appimage.sh, which downloads linuxdeploy/mkappimage
