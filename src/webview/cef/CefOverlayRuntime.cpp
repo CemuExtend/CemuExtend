@@ -191,13 +191,18 @@ namespace WebFrontend::CefOverlay
 				if (processType.empty())
 				{
 					commandLine->AppendSwitch("no-first-run");
-					commandLine->AppendSwitch("disable-gpu");
 					commandLine->AppendSwitch("disable-gpu-compositing");
-					// Chromium 151 may still launch a software GPU process after
-					// --disable-gpu. On portable Linux runtimes that process can mix
-					// host GL drivers with bundled userspace libraries and abort before
-					// OSR starts. CPU compositing is sufficient for the BGRA OnPaint path.
-					commandLine->AppendSwitch("disable-software-rasterizer");
+					// Keep OSR compositing on the CPU while allowing Three.js-based Cemod
+					// views to create hardware WebGL contexts. On Linux, avoid SwANGLE's
+					// Vulkan backend: the portable launcher deliberately selects the host
+					// Vulkan ICD for Cemu, whereas Chromium's SwiftShader needs its private
+					// ICD. ANGLE's desktop-GL backend keeps those loader paths independent.
+					commandLine->AppendSwitchWithValue("use-gl", "angle");
+#if defined(OS_LINUX)
+					commandLine->AppendSwitchWithValue("use-angle", "gl");
+#else
+					commandLine->AppendSwitch("enable-unsafe-swiftshader");
+#endif
 					commandLine->AppendSwitch("disable-features=CalculateNativeWinOcclusion");
 					const char* headless = std::getenv("CEMU_CEF_HEADLESS");
 					const bool runHeadless = headless && std::string_view(headless) == "1";
