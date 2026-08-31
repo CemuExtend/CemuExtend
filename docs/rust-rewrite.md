@@ -21,8 +21,10 @@
 - 対象環境: まず Linux x86_64。Windows x86_64、macOS ARM64、Linux ARM64 は
   まだ対象外である。
 - 現在の段階: baseline/oracle と headless interpreter の土台を並行して作成中。
-  fixed synthetic main RPX1 + provider RPL1 の positive link-state と near REL24 call execution
-  を Docker 検証済みである。
+  fixed synthetic main RPX1 + provider RPL1 の positive link-state、near REL24 call execution、
+  ADDR16_HA+LO imported-data slice を実装した。ADDR16 slice は Docker の workspace test、
+  artifact export、固定 C++ production-link adapter との 6-record exact 比較まで成功したが、
+  golden/manifest と aggregate `ci` への最終統合前に一時停止している。
   retail RPX/RPL、import、relocation、compression、Cafe OS、Homebrew の完全な
   起動、IML JIT、renderer、desktop、Pretendo、
   CEMOD/WUPS parity、移行ツールは完成していない。
@@ -31,10 +33,13 @@
   （本台帳自身とresultを除外）で、main session が aggregate `ci`、combined artifact export、headless
   imageを成功させた。これは fixed synthetic main RPX1 + provider RPL1 のpositive link-stateとRust-only
   near REL24 call executionの品質証拠であり、public loader/full lifecycle、retail/general relocation、MMU permission parity、C++ CPU parityの完成証拠ではない。
-- RPX/RPL milestone 現在地: main raw `0x48000001`→linked `0x48002001`、provider ADDR32 site
+- RPX/RPL milestone 現在地: near REL24 slice は main raw `0x48000001`→linked `0x48002001`、provider ADDR32 site
   `0x10002008`→`0x02002000`、main REL24 site `0x02000000` displacement 8192、`bl → addi r3,42 → blr → stop`、
   final r3=42/LR `0x02000004`/PC `0x02000008`/cycles-retired 4を検証済み。linked 5 pages/20480、executed 21 pages/86016。
-  far trampoline、REL14、ADDR16、general parityは未実装・未完了である。
+  ADDR16 slice は provider ADDR32 site `0x10009008`→`0x10008000`、main HA/LO sites
+  `0x02000002`→`0x1001` / `0x02000006`→`0x8004`、linked memory hash
+  `532417f1cdb7b8203cdc65693f713aa824b35b9a50cd7e415bb1f1f81423ca13` を Rust と固定 C++
+  adapter で exact 比較した。far trampoline、REL14、ADDR16_HI、general parityは未実装・未完了である。
 - Oracle milestone 現在地: `cex-trace-compare` と `rust-oracle-smoke` はRust側の
   match/mismatch/error/no-clobber自己整合性をDocker確認済み。固定 C++ adapterの
   `rpl-call-trace`、`rpl-link-trace`、`trace` targetはproduction loader/link-stateの5-record
@@ -47,6 +52,25 @@
   exact equalityを確認した。Cafe/MMU/CPU executionやmalformed corpus parityではない。
 - 検証方針: build、format、lint、test、audit、release は Docker target だけで実行する。
   host 上での `cargo`、`cmake`、`ctest`、`bun` の結果を検証証拠にしない。
+
+## 一時停止チェックポイント（2026-08-31）
+
+別作業へ切り替えるため、Rust rewrite は commit `7f3a8539` で意図的に一時停止した。
+再開可能な境界は次のとおりである。
+
+- core commit `dafeecdd` は ADDR16_HA+LO parser/linker、width-aware transactional patch、
+  synthetic fixture、headless execution、6-record link trace と 8-record Rust-only execution traceを含む。
+- oracle commit `7f3a8539` は固定 `ab0b772029f0a5cd57c194cf338003fe8eae8ab8` の production
+  loader/linker adapter と、link-only/combined Docker artifact target/helper配線を含む。
+- main session の `./docker-build-rust.sh test`、`./docker-build-rust.sh rpl-data-contract-artifacts`、
+  `./docker-build-cpp-oracle.sh rpl-data-trace` は成功した。fixture SHA-256 は main
+  `e4581406785379d89c597b8a9e22ba76965ddc8dcc0fb0993e59af6c6b12a5a0`、provider
+  `be1a9a05b6f8f353a40397969d4c93e7c9b16369139e4a60e46c3e8a3cea57f3`、Rust link traceは
+  `f049519c5603e076114eb998090464bf670177c6c27cb446e4df515b19e4b4ae` である。
+- この停止点では ADDR16 golden/manifest、aggregate `ci` marker、release/headless再検証、最終
+  source payload fingerprint は未確定である。したがって ADDR16 slice の最終 milestone 完了は
+  主張しない。再開時は生成済み6/8-record traceのgolden固定、manifest/CMake hash更新、旧3本を含む
+  全 C++ oracle再実行、aggregate `ci`、release/headless、final reviewの順に進める。
 
 基準を新しい checkout に再現する場合は、タグが未作成であることを確認してから
 次を実行する。
