@@ -3754,6 +3754,8 @@ namespace Application
 					model.runtimeAvailable = true;
 					model.valid = inspection.valid;
 					model.enabled = GetConfig().IsCemuExtendModEnabled(model.modIdentity);
+					model.trustUpdates =
+						titleId && GetConfig().GetCemuExtendModUpdateTrust(*titleId, model.modIdentity).has_value();
 					model.status = !model.valid ? "rejected" : model.approved ? "ready"
 																			  : "disabled";
 					model.warnings = inspection.warnings;
@@ -3800,12 +3802,23 @@ namespace Application
 				GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey,
 															{found->packageDigest, found->modIdentity, found->requestedPermissions,
 															 update.approved ? update.grantedPermissions : 0, update.approved, false});
+				const auto previousTrust =
+					GetConfig().GetCemuExtendModUpdateTrust(update.titleId, found->modIdentity);
+				if (update.approved && update.trustUpdates)
+					GetConfig().SetCemuExtendModUpdateTrust(update.titleId, found->modIdentity,
+															update.grantedPermissions);
+				else
+					GetConfig().RemoveCemuExtendModUpdateTrust(update.titleId, found->modIdentity);
 				if (!GetConfigHandle().Save())
 				{
 					if (previous)
 						GetConfig().SetCemuExtendPermissionApproval(update.titleId, approvalKey, *previous);
 					else
 						GetConfig().RemoveCemuExtendPermissionApproval(update.titleId, approvalKey);
+					if (previousTrust)
+						GetConfig().SetCemuExtendModUpdateTrust(update.titleId, found->modIdentity, *previousTrust);
+					else
+						GetConfig().RemoveCemuExtendModUpdateTrust(update.titleId, found->modIdentity);
 					return {CemodManagerError::SaveFailed, "The approval could not be persisted", std::move(snapshot)};
 				}
 				configLock.unlock();

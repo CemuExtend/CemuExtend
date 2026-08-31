@@ -411,6 +411,7 @@ export const previewCemod: CemodManagerSnapshot = {
       headless: false,
       runtimeAvailable: true,
       valid: true,
+      trustUpdates: false,
       enabled: true,
     },
   ],

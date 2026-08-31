@@ -60,6 +60,7 @@ export type CemodPackage = {
   runtimeAvailable: boolean;
   valid: boolean;
   enabled: boolean;
+  trustUpdates: boolean;
 };
 export type CemodManagerSnapshot = {
   generation: string;
@@ -86,6 +87,7 @@ export type CemodApprovalUpdate = {
   packageKey: string;
   grantedPermissions: string;
   approved: boolean;
+  trustUpdates: boolean;
 };
 
 export type ChecksumContent = {

@@ -49,6 +49,9 @@ namespace Application
 		// Whether this package participates at all. A disabled package is neither
 		// loaded nor asked about at launch, for every title it covers.
 		bool enabled{true};
+		// Whether the user asked to trust this mod's future updates for the selected
+		// title, so a rebuilt package is not sent back to the approval dialog.
+		bool trustUpdates{};
 	};
 
 	struct CemodManagerSnapshot
@@ -77,6 +80,7 @@ namespace Application
 		std::string packageKey;
 		std::uint64_t grantedPermissions{};
 		bool approved{};
+		bool trustUpdates{};
 	};
 
 	struct CemodEnableUpdate

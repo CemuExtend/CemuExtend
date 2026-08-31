@@ -373,6 +373,31 @@ namespace cemuextend_hle
 			}
 		}
 		if (!configured)
+		{
+			// The user approved this mod and asked to trust its updates. A rebuilt
+			// package has a new digest and therefore no exact approval, so renew one
+			// against the new digest - but only while the new build asks for nothing
+			// beyond what was granted. A version that wants more is asked about again.
+			const auto trusted =
+				GetConfig().GetCemuExtendModUpdateTrust(titleId, inspection.modIdentity);
+			if (trusted && (inspection.requestedPermissions & ~*trusted) == 0)
+			{
+				CemuExtendPermissionApproval renewed{inspection.packageDigest,
+													 inspection.modIdentity, inspection.requestedPermissions,
+													 *trusted & inspection.requestedPermissions, true, false};
+				auto configLock = GetConfigHandle().Lock();
+				configured = GetConfig().GetCemuExtendPermissionApproval(titleId, key);
+				if (!configured)
+				{
+					GetConfig().SetCemuExtendPermissionApproval(titleId, key, renewed);
+					if (GetConfigHandle().Save())
+						configured = std::move(renewed);
+					else
+						GetConfig().RemoveCemuExtendPermissionApproval(titleId, key);
+				}
+			}
+		}
+		if (!configured)
 			return std::nullopt;
 		return InspectCemodPackage(package, CemodInspectionApproval{
 												configured->packageDigest, configured->modIdentity,

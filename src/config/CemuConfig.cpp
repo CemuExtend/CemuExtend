@@ -319,6 +319,38 @@ void CemuConfig::SetCemuExtendModEnabled(std::string modIdentity, bool enabled)
 		cemuextend_disabled_mods.insert(std::move(modIdentity));
 }
 
+std::optional<uint64> CemuConfig::GetCemuExtendModUpdateTrust(uint64 titleId,
+															  std::string_view modIdentity) const
+{
+	if (titleId == 0 || modIdentity.empty())
+		return std::nullopt;
+	std::shared_lock lock(cemuextend_grants_mutex);
+	const auto title = cemuextend_mod_update_trust.find(titleId);
+	if (title == cemuextend_mod_update_trust.end())
+		return std::nullopt;
+	const auto entry = title->second.find(std::string(modIdentity));
+	return entry == title->second.end() ? std::nullopt : std::optional{entry->second};
+}
+
+void CemuConfig::SetCemuExtendModUpdateTrust(uint64 titleId, std::string modIdentity, uint64 granted)
+{
+	if (titleId == 0 || modIdentity.empty() || modIdentity.size() > 256)
+		return;
+	std::unique_lock lock(cemuextend_grants_mutex);
+	cemuextend_mod_update_trust[titleId][std::move(modIdentity)] = granted;
+}
+
+void CemuConfig::RemoveCemuExtendModUpdateTrust(uint64 titleId, std::string_view modIdentity)
+{
+	std::unique_lock lock(cemuextend_grants_mutex);
+	const auto title = cemuextend_mod_update_trust.find(titleId);
+	if (title == cemuextend_mod_update_trust.end())
+		return;
+	title->second.erase(std::string(modIdentity));
+	if (title->second.empty())
+		cemuextend_mod_update_trust.erase(title);
+}
+
 void CemuConfig::SetMLCPath(fs::path path, bool save)
 {
 	mlc_path.SetValue(_pathToUtf8(path));
@@ -504,6 +536,16 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 				approval.get_attribute<uint64>("granted", 0),
 				approval.get_attribute<bool>("approved", false),
 				approval.get_attribute<bool>("headless_denial", false)};
+		}
+		for (auto trust = bridge.get("UpdateTrust"); trust.valid();
+			 trust = bridge.get("UpdateTrust", trust))
+		{
+			const auto titleId = trust.get_attribute<uint64>("title", 0);
+			const std::string identity = trust.get_attribute("mod_identity", "");
+			if (titleId == 0 || identity.empty() || identity.size() > 256)
+				continue;
+			cemuextend_mod_update_trust[titleId][identity] =
+				trust.get_attribute<uint64>("granted", 0);
 		}
 		for (auto disabled = bridge.get("DisabledMod"); disabled.valid();
 			 disabled = bridge.get("DisabledMod", disabled))
@@ -856,6 +898,14 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 			auto node = bridge.set("DisabledMod");
 			node.set_attribute("mod_identity", identity.c_str());
 		}
+		for (const auto& [titleId, identities] : cemuextend_mod_update_trust)
+			for (const auto& [identity, granted] : identities)
+			{
+				auto node = bridge.set("UpdateTrust");
+				node.set_attribute("title", static_cast<sint64>(titleId));
+				node.set_attribute("mod_identity", identity.c_str());
+				node.set_attribute("granted", static_cast<sint64>(granted));
+			}
 	}
 
 	// game list cache

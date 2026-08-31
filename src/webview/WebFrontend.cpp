@@ -388,6 +388,8 @@ namespace
 			writer.Bool(package.valid);
 			writer.Key("enabled");
 			writer.Bool(package.enabled);
+			writer.Key("trustUpdates");
+			writer.Bool(package.trustUpdates);
 			writer.EndObject();
 		}
 		writer.EndArray();
@@ -6056,6 +6058,7 @@ namespace
 				update.packageKey = std::string(RequiredString(params, "packageKey"));
 				update.grantedPermissions = ParseDecimalUint64(RequiredString(params, "grantedPermissions"), "grantedPermissions");
 				update.approved = RequiredBool(params, "approved");
+				update.trustUpdates = RequiredBool(params, "trustUpdates");
 				if (update.titleId != *found->second->titleContext || update.generation != *found->second->generationContext || update.packageKey != found->second->packageContext)
 					throw std::runtime_error("approval target does not match the exact modal context");
 				const auto result = m_controller.SaveCemodApproval(update);
