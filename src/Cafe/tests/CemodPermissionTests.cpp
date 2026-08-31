@@ -24,7 +24,12 @@ int main()
 {
 	using cemuextend_hle::CemodTrustAnchorCoversRequest;
 	using cemuextend_hle::ExactRuntimeServicePermissions;
+	using cemuextend_hle::kCemodExactApprovalPermissionMask;
+	using cemuextend_hle::kCemodWebUiApprovalPermission;
 	using cemuextend_hle::NeedsCemodPermissionPrompt;
+
+	CHECK((kCemodExactApprovalPermissionMask & kCemodWebUiApprovalPermission) != 0);
+	CHECK((kCemodExactApprovalPermissionMask & (kCemodWebUiApprovalPermission << 1U)) == 0);
 
 	CHECK(!NeedsCemodPermissionPrompt(0x1fU, 0, 0, false));
 	CHECK(!NeedsCemodPermissionPrompt(0, 0, 0, true));

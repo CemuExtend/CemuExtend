@@ -13,6 +13,8 @@ namespace cemuextend_hle
 	// Exact approval namespace. Native/WUPS permissions occupy bits 0..10;
 	// Web UI deliberately lives outside both that range and runtime bit 6.
 	constexpr std::uint64_t kCemodWebUiApprovalPermission = 1ULL << 11U;
+	constexpr std::uint64_t kCemodExactApprovalPermissionMask =
+		(kCemodWebUiApprovalPermission << 1U) - 1U;
 
 	[[nodiscard]] constexpr std::uint32_t ExactRuntimeServicePermissions(
 		std::uint64_t exactGranted, std::uint32_t serviceRequested, bool nativePackage)

@@ -3784,8 +3784,7 @@ namespace Application
 				if (found == snapshot.packages.end() || !found->valid ||
 					std::ranges::find(found->titleIds, update.titleId) == found->titleIds.end())
 					return {CemodManagerError::NotFound, "The selected package is no longer installed", std::move(snapshot)};
-				constexpr std::uint64_t kKnownPermissions = (1ULL << 11) - 1;
-				if ((found->requestedPermissions & ~kKnownPermissions) != 0 ||
+				if ((found->requestedPermissions & ~cemuextend_hle::kCemodExactApprovalPermissionMask) != 0 ||
 					(update.grantedPermissions & ~found->requestedPermissions) != 0)
 					return {CemodManagerError::InvalidPermissions, "The permission selection is invalid", std::move(snapshot)};
 				const auto approvalKey = cemuextend_hle::MakeCemodApprovalKey(
