@@ -29,7 +29,11 @@ int main()
 	using cemuextend_hle::NeedsCemodPermissionPrompt;
 
 	CHECK((kCemodExactApprovalPermissionMask & kCemodWebUiApprovalPermission) != 0);
-	CHECK((kCemodExactApprovalPermissionMask & (kCemodWebUiApprovalPermission << 1U)) == 0);
+	// The approval namespace now runs past Web UI to the CEX2 services, and stops
+	// there: anything above the last service bit is outside what a package may ask.
+	CHECK((kCemodExactApprovalPermissionMask & cemuextend_hle::kCemodServiceCaptureApproval) != 0);
+	CHECK((kCemodExactApprovalPermissionMask &
+		   (cemuextend_hle::kCemodServiceCaptureApproval << 1U)) == 0);
 
 	CHECK(!NeedsCemodPermissionPrompt(0x1fU, 0, 0, false));
 	CHECK(!NeedsCemodPermissionPrompt(0, 0, 0, true));
@@ -55,6 +59,15 @@ int main()
 	CHECK(ExactRuntimeServicePermissions(0x400, 0x3f, false) == 0);
 	CHECK(ExactRuntimeServicePermissions(0x3f, 0x3f, true) == 0x20);
 	CHECK(ExactRuntimeServicePermissions(0x7ff, 0x3f, true) == 0x20);
+	// A native package reaches a service only when its manifest asked for it and the
+	// user approved that service's own bit; native bits still grant nothing here.
+	CHECK(ExactRuntimeServicePermissions(cemuextend_hle::kCemodServiceReadApproval,
+										 0x01, true) == 0x01);
+	CHECK(ExactRuntimeServicePermissions(cemuextend_hle::kCemodServiceReadApproval,
+										 0x02, true) == 0);
+	CHECK(ExactRuntimeServicePermissions(cemuextend_hle::kCemodServiceApprovalMask,
+										 0x1f, true) == 0x1f);
+	CHECK(ExactRuntimeServicePermissions(0x7ff, 0x1f, true) == 0);
 	CHECK(ExactRuntimeServicePermissions(1ULL << 11U, 0x40, false) == 0x40);
 	CHECK(ExactRuntimeServicePermissions(1ULL << 11U, 0x40, true) == 0x40);
 	CHECK(ExactRuntimeServicePermissions(0x40, 0x40, false) == 0);

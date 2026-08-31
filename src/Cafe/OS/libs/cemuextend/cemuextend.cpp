@@ -206,6 +206,13 @@ namespace cemuextend_hle
 		}
 	} // namespace
 
+	// PermissionBit() is not constexpr, so mirror its shift here.
+	static_assert((1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceRead)) ==
+					  kCemodServiceReadApproval &&
+				  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceCapture)) ==
+					  kCemodServiceCaptureApproval,
+				  "CemodPermission::Service* must match the kCemodService*Approval bits");
+
 	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,
 											const std::optional<CemodInspectionApproval>& approval)
 	{
@@ -297,6 +304,16 @@ namespace cemuextend_hle
 				return "Notifications";
 			case CemuExtend::CemodPermission::ContentRedirection:
 				return "Content redirection";
+			case CemuExtend::CemodPermission::ServiceRead:
+				return "Service: read";
+			case CemuExtend::CemodPermission::ServiceWrite:
+				return "Service: write";
+			case CemuExtend::CemodPermission::ServiceInject:
+				return "Service: inject";
+			case CemuExtend::CemodPermission::ServiceClipboard:
+				return "Service: clipboard";
+			case CemuExtend::CemodPermission::ServiceCapture:
+				return "Service: screen capture";
 			case CemuExtend::CemodPermission::Modules:
 				return "Aroma/WUMS modules";
 			case CemuExtend::CemodPermission::PluginManagement:
@@ -350,6 +367,31 @@ namespace cemuextend_hle
 					GetConfig().SetCemuExtendPermissionApproval(titleId, key, migrated);
 					if (GetConfigHandle().Save())
 						configured = std::move(migrated);
+					else
+						GetConfig().RemoveCemuExtendPermissionApproval(titleId, key);
+				}
+			}
+		}
+		if (!configured)
+		{
+			// The user approved this mod and asked to trust its updates. A rebuilt
+			// package has a new digest and therefore no exact approval, so renew one
+			// against the new digest - but only while the new build asks for nothing
+			// beyond what was granted. A version that wants more is asked about again.
+			const auto trusted =
+				GetConfig().GetCemuExtendModUpdateTrust(titleId, inspection.modIdentity);
+			if (trusted && (inspection.requestedPermissions & ~*trusted) == 0)
+			{
+				CemuExtendPermissionApproval renewed{inspection.packageDigest,
+													 inspection.modIdentity, inspection.requestedPermissions,
+													 *trusted & inspection.requestedPermissions, true, false};
+				auto configLock = GetConfigHandle().Lock();
+				configured = GetConfig().GetCemuExtendPermissionApproval(titleId, key);
+				if (!configured)
+				{
+					GetConfig().SetCemuExtendPermissionApproval(titleId, key, renewed);
+					if (GetConfigHandle().Save())
+						configured = std::move(renewed);
 					else
 						GetConfig().RemoveCemuExtendPermissionApproval(titleId, key);
 				}
@@ -613,6 +655,13 @@ namespace cemuextend_hle
 			// accepted only when both observations and the loaded manifest agree, so
 			// a package replacement cannot authorize different loaded bytes.
 			const auto before = InspectConfiguredCemodPackage(titleId, info);
+			if (before && !before->modIdentity.empty() &&
+				!GetConfig().IsCemuExtendModEnabled(before->modIdentity))
+			{
+				cemuLog_log(LogType::Force, "CemuExtend skipped cemod '{}' switched off in the manager",
+							_pathToUtf8(info.path));
+				continue;
+			}
 			if (!before || !before->approved)
 			{
 				cemuLog_log(LogType::Force,
@@ -620,8 +669,12 @@ namespace cemuextend_hle
 							_pathToUtf8(info.path));
 				continue;
 			}
+			// Service permissions are the user's to pick individually, so a declined
+			// one denies that service rather than refusing to load the package. The
+			// native permissions still have to be granted in full.
 			if ((info.executionMode == CemodExecutionMode::TrustedNative || before->wups) &&
-				(before->requestedPermissions & ~before->grantedPermissions) != 0)
+				(before->requestedPermissions & ~before->grantedPermissions &
+				 ~kCemodServiceApprovalMask) != 0)
 			{
 				cemuLog_log(LogType::Force,
 							"CemuExtend skipped native cemod '{}' with denied native permissions",

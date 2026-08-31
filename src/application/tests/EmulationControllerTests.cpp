@@ -154,6 +154,13 @@ namespace
 		{
 			return {Application::CemodManagerError::None, {}, cemodManagerSnapshot};
 		}
+		Application::CemodEnableUpdate lastEnableUpdate;
+		Application::CemodManagerResult SetCemodEnabled(
+			const Application::CemodEnableUpdate& update) override
+		{
+			lastEnableUpdate = update;
+			return {Application::CemodManagerError::None, {}, cemodManagerSnapshot};
+		}
 		Application::PpcThreadsSnapshot diagnosticsSnapshot;
 		Application::PpcThreadCommandRequest lastDiagnosticCommand;
 		Application::PpcThreadCommandResult diagnosticCommandResult{true, {}};
@@ -729,11 +736,11 @@ int main()
 	backend.cemodManagerSnapshot = {
 		.generation = 77,
 		.packages = {
-			{.packageKey = "digest-a", .titleIds = {0x1234}, .modIdentity = "mod-a", .packageDigest = "digest-a", .requestedPermissions = 1ULL << 10, .trustedNative = true, .valid = true},
-			{.packageKey = "approved", .titleIds = {0x1234}, .modIdentity = "mod-b", .packageDigest = "digest-b", .approved = true, .valid = true},
-			{.packageKey = "partial-native", .titleIds = {0x1234}, .modIdentity = "mod-partial", .packageDigest = "digest-partial", .requestedPermissions = 3, .grantedPermissions = 1, .approved = true, .trustedNative = true, .valid = true},
-			{.packageKey = "wrong-title", .titleIds = {0x5678}, .modIdentity = "mod-c", .packageDigest = "digest-c", .valid = true},
-			{.packageKey = "invalid", .titleIds = {0x1234}, .modIdentity = "mod-d", .packageDigest = "digest-d", .valid = false},
+			{.packageKey = "digest-a", .titleIds = {0x1234}, .modIdentity = "mod-a", .packageDigest = "digest-a", .requestedPermissions = 1ULL << 10, .trustedNative = true, .valid = true, .enabled = true},
+			{.packageKey = "approved", .titleIds = {0x1234}, .modIdentity = "mod-b", .packageDigest = "digest-b", .approved = true, .valid = true, .enabled = true},
+			{.packageKey = "partial-native", .titleIds = {0x1234}, .modIdentity = "mod-partial", .packageDigest = "digest-partial", .requestedPermissions = 3, .grantedPermissions = 1, .approved = true, .trustedNative = true, .valid = true, .enabled = true},
+			{.packageKey = "wrong-title", .titleIds = {0x5678}, .modIdentity = "mod-c", .packageDigest = "digest-c", .valid = true, .enabled = true},
+			{.packageKey = "invalid", .titleIds = {0x1234}, .modIdentity = "mod-d", .packageDigest = "digest-d", .valid = false, .enabled = true},
 		},
 	};
 	const auto preflight = controller.GetCemodLaunchPreflight(0x1234);
@@ -743,6 +750,21 @@ int main()
 	assert(preflight.pendingApprovals.front().requestedPermissions == (1ULL << 10));
 	assert(preflight.pendingApprovals.back().packageKey == "partial-native");
 	assert(preflight.pendingApprovals.back().requestedPermissions == 3);
+
+	// A package switched off for this title must not stop the launch to ask about
+	// that package's permissions. The partially approved native package remains.
+	backend.cemodManagerSnapshot.packages[0].enabled = false;
+	assert(controller.GetCemodLaunchPreflight(0x1234).pendingApprovals.size() == 1);
+	assert(controller.GetCemodLaunchPreflight(0x1234).pendingApprovals.front().packageKey ==
+		   "partial-native");
+	backend.cemodManagerSnapshot.packages[0].enabled = true;
+	assert(controller.GetCemodLaunchPreflight(0x1234).pendingApprovals.size() == 2);
+
+	const auto enableResult = controller.SetCemodEnabled({"digest-a", false});
+	assert(enableResult);
+	assert(backend.lastEnableUpdate.packageKey == "digest-a" &&
+		   !backend.lastEnableUpdate.enabled);
+
 	backend.cemodManagerSnapshot = {};
 	bool preparedBeforeStart{};
 	const auto launch = controller.Launch({"test.rpx"}, [&](const auto&) {

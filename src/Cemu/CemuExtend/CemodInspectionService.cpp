@@ -205,6 +205,19 @@ namespace CemuExtend
 			requested |= PermissionBit(CemodPermission::Network);
 		if ((package->manifest.requestedPermissions & uiPermission) != 0)
 			requested |= PermissionBit(CemodPermission::WebUi);
+		// The remaining CEX2 services the manifest asks for. Without these a native
+		// package reached no service at all, because its approval could only express
+		// the native permissions and the service bits were dropped on the floor.
+		static constexpr std::pair<std::uint32_t, CemodPermission> kServiceRequests[]{
+			{1U << 0U, CemodPermission::ServiceRead},
+			{1U << 1U, CemodPermission::ServiceWrite},
+			{1U << 2U, CemodPermission::ServiceInject},
+			{1U << 3U, CemodPermission::ServiceClipboard},
+			{1U << 4U, CemodPermission::ServiceCapture},
+		};
+		for (const auto& [manifestBit, permission] : kServiceRequests)
+			if ((package->manifest.requestedPermissions & manifestBit) != 0)
+				requested |= PermissionBit(permission);
 		result.approval = EvaluateApproval(requested, approval, headless);
 		if (approval && (approval->packageDigest != result.packageDigest ||
 						 approval->modIdentity != result.modIdentity))

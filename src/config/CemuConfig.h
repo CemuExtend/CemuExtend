@@ -3,6 +3,8 @@
 #include "ConfigValue.h"
 #include "XMLConfig.h"
 
+#include <set>
+
 enum class NetworkService;
 
 struct GameEntry
@@ -737,12 +739,29 @@ struct CemuConfig
 	void SetCemuExtendPermissionApproval(uint64 titleId, std::string approvalKey,
 										 CemuExtendPermissionApproval approval);
 	void RemoveCemuExtendPermissionApproval(uint64 titleId, std::string_view approvalKey);
+	// A disabled CEMod is skipped everywhere: it is neither loaded nor asked about
+	// at launch, for any title it covers. Absence means enabled, so existing
+	// configurations keep loading everything they already approved. Keyed by mod
+	// identity rather than package digest, so updating a mod's files leaves it
+	// disabled, and not per title: a package usually covers several title ids and
+	// scoping the switch to one of them only made it look like it had no effect.
+	bool IsCemuExtendModEnabled(std::string_view modIdentity) const;
+	void SetCemuExtendModEnabled(std::string modIdentity, bool enabled);
+	// Permissions the user approved for a mod while asking to trust its future
+	// updates. A rebuilt package has a new digest and so no exact approval, but it
+	// is renewed silently as long as it asks for nothing beyond this mask.
+	std::optional<uint64> GetCemuExtendModUpdateTrust(uint64 titleId,
+													  std::string_view modIdentity) const;
+	void SetCemuExtendModUpdateTrust(uint64 titleId, std::string modIdentity, uint64 granted);
+	void RemoveCemuExtendModUpdateTrust(uint64 titleId, std::string_view modIdentity);
 
 	mutable std::shared_mutex cemuextend_grants_mutex;
 	std::unordered_map<uint64, CemuExtendTitleGrant> cemuextend_grants;
 	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendModGrant>> cemuextend_mod_grants;
 	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendModTrustAnchor>> cemuextend_mod_trust;
 	std::unordered_map<uint64, std::unordered_map<std::string, CemuExtendPermissionApproval>> cemuextend_permission_approvals;
+	std::set<std::string> cemuextend_disabled_mods;
+	std::unordered_map<uint64, std::unordered_map<std::string, uint64>> cemuextend_mod_update_trust;
 
 	// debug
 	ConfigValueBounds<CrashDump> crash_dump{CrashDump::Disabled};

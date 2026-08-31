@@ -1,4 +1,5 @@
 #include "Common/precompiled.h"
+#include "Common/ExceptionHandler/ExceptionHandler.h"
 #include "Common/version.h"
 
 #include "application/ApplicationRuntime.h"
@@ -387,6 +388,10 @@ namespace
 			writer.Bool(package.runtimeAvailable);
 			writer.Key("valid");
 			writer.Bool(package.valid);
+			writer.Key("enabled");
+			writer.Bool(package.enabled);
+			writer.Key("trustUpdates");
+			writer.Bool(package.trustUpdates);
 			writer.EndObject();
 		}
 		writer.EndArray();
@@ -1873,6 +1878,11 @@ namespace
 				m_nativeUiLoopInitialized = true;
 				if (!WebFrontend::CefOverlay::InitializeProcessRuntime())
 					throw std::runtime_error("failed to initialize the CEF process runtime");
+				// Chromium installs its own handlers for the signals that dump core,
+				// replacing the ones startup put in place. Losing those means a crash
+				// writes no stack trace to the log at all, so claim them back now that
+				// CEF has had its turn.
+				ExceptionHandler_Init();
 				// On Linux CEF must initialize before GTK. CefInitialize configures
 				// Chromium's GTK integration (including locale handling), while the
 				// native host constructor calls gtk_init_check and opens the display.
@@ -3623,7 +3633,7 @@ namespace
 				.contentWidth = state.width,
 				.contentHeight = state.height,
 				.insideContent = state.inside,
-				.focused = metrics.appActive,
+				.focused = metrics.appActive || event.windowActive,
 				.flags = raw
 							 ? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
 							 : static_cast<std::uint8_t>(0),
@@ -6098,6 +6108,18 @@ namespace
 				const auto id = QueueToolWindow("cemod-permissions", std::string(requestId), titleId, std::string(packageKey), generation);
 				return std::string(R"({"windowId":)") + JsonString(std::to_string(id)) + "}";
 			});
+			m_rpc.Register("cemod.setEnabled", [this](const rapidjson::Value& params) {
+				RequireRole({"cemod-manager"});
+				Application::CemodEnableUpdate update;
+				update.packageKey = std::string(RequiredString(params, "packageKey"));
+				if (update.packageKey.empty() || update.packageKey.size() > 4096)
+					throw std::invalid_argument("packageKey is invalid");
+				update.enabled = RequiredBool(params, "enabled");
+				const auto result = m_controller.SetCemodEnabled(update);
+				if (result)
+					Emit("cemod.changed", R"({"reason":"enablement"})");
+				return CemodResultJson(result);
+			});
 			m_rpc.Register("cemod.saveApproval", [this](const rapidjson::Value& params) {
 				RequireRole({"cemod-permissions"});
 				const auto found = m_toolWindows.find(m_invokingWindow);
@@ -6109,6 +6131,7 @@ namespace
 				update.packageKey = std::string(RequiredString(params, "packageKey"));
 				update.grantedPermissions = ParseDecimalUint64(RequiredString(params, "grantedPermissions"), "grantedPermissions");
 				update.approved = RequiredBool(params, "approved");
+				update.trustUpdates = RequiredBool(params, "trustUpdates");
 				if (update.titleId != *found->second->titleContext || update.generation != *found->second->generationContext || update.packageKey != found->second->packageContext)
 					throw std::runtime_error("approval target does not match the exact modal context");
 				const auto result = m_controller.SaveCemodApproval(update);

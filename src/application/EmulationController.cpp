@@ -149,7 +149,10 @@ namespace Application
 			const bool nativePermissionsDenied =
 				(package.trustedNative || package.wups) &&
 				(package.requestedPermissions & ~package.grantedPermissions) != 0;
-			if (!package.valid || (package.approved && !nativePermissionsDenied) ||
+			// Disabled packages never load, and native/WUPS packages only count as
+			// approved when every requested permission is granted.
+			if (!package.valid || !package.enabled ||
+				(package.approved && !nativePermissionsDenied) ||
 				package.packageDigest.empty() ||
 				package.modIdentity.empty() ||
 				std::ranges::find(package.titleIds, titleId) == package.titleIds.end())
@@ -424,6 +427,11 @@ namespace Application
 	{
 		std::scoped_lock lock(m_operationMutex);
 		return m_backend->ImportLegacyCemodPackageData(generation, titleId, packageKey);
+	}
+
+	CemodManagerResult EmulationController::SetCemodEnabled(const CemodEnableUpdate& update)
+	{
+		return m_backend->SetCemodEnabled(update);
 	}
 
 	FrontendSettingsSnapshot EmulationController::GetFrontendSettings() const

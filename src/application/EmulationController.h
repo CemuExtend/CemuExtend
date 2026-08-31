@@ -290,6 +290,8 @@ namespace Application
 		[[nodiscard]] CemodManagerResult ImportLegacyCemodPackageData(
 			std::uint64_t generation, std::uint64_t titleId,
 			std::string_view packageKey);
+		[[nodiscard]] CemodManagerResult SetCemodEnabled(
+			const CemodEnableUpdate& update);
 		[[nodiscard]] PpcThreadsSnapshot CapturePpcThreads();
 		[[nodiscard]] PpcThreadCommandResult ExecutePpcThreadCommand(
 			const PpcThreadCommandRequest& request);

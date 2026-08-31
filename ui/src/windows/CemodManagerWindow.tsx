@@ -126,6 +126,12 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
     () =>
       subscribe((event) => {
         if (event.type === "cemod.changed") {
+          // Switching a mod on or off is already reflected in the snapshot the
+          // host returned, and rediscovering would unpack and digest every
+          // installed package again just to learn what we already know - while
+          // wiping the confirmation the user is still reading.
+          const payload = event.payload as { reason?: unknown } | null;
+          if (payload?.reason === "enablement") return;
           if (!activeJob.current) void startDiscovery();
           return;
         }
@@ -161,6 +167,48 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
         : (selected?.titleIds[0] ?? ""),
     );
   }, [selected]);
+
+  // Switching a mod off applies to the mod itself, not to one of the title ids
+  // its package happens to cover: a package usually lists several, and scoping
+  // the switch to one of them made it look like it had no effect on the game
+  // actually being played.
+  function applyEnabledLocally(packageKey: string, enabled: boolean) {
+    setModel((current) =>
+      current
+        ? {
+            ...current,
+            packages: current.packages.map((entry) =>
+              entry.packageKey === packageKey ? { ...entry, enabled } : entry,
+            ),
+          }
+        : current,
+    );
+  }
+
+  async function toggleEnabled(item: CemodPackage, enabled: boolean) {
+    setError("");
+    applyEnabledLocally(item.packageKey, enabled);
+    setMessage(
+      `${item.pluginName || item.modId} is now ${enabled ? "enabled" : "disabled"}.`,
+    );
+    try {
+      const result = await invoke("cemod.setEnabled", {
+        packageKey: item.packageKey,
+        enabled,
+      });
+      if (!result.ok) {
+        applyEnabledLocally(item.packageKey, !enabled);
+        setMessage("");
+        setError(result.diagnostic || `Change failed (${result.error})`);
+        return;
+      }
+      setModel(result.snapshot);
+    } catch (reason) {
+      applyEnabledLocally(item.packageKey, !enabled);
+      setMessage("");
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
 
   function exactAction(kind: PendingAction["kind"], item: CemodPackage) {
     if (!selectedTitle || !item.titleIds.includes(selectedTitle)) {
@@ -238,15 +286,31 @@ export function CemodManagerWindow({ windowId }: { windowId: string }) {
       <div className="split-view">
         <div className="selection-list" aria-busy={busyJob !== undefined}>
           {packages.map((item) => (
-            <button
+            <div
               key={item.packageKey}
-              className={selectedKey === item.packageKey ? "selected" : ""}
-              aria-selected={selectedKey === item.packageKey}
-              title={item.pluginName || item.modId || "Unnamed mod"}
-              onClick={() => setSelectedKey(item.packageKey)}
+              className={`selection-row${selectedKey === item.packageKey ? " selected" : ""}`}
             >
-              <strong>{item.pluginName || item.modId || "Unnamed mod"}</strong>
-            </button>
+              <input
+                type="checkbox"
+                className="enable-toggle"
+                checked={item.enabled}
+                aria-label={`Enable ${item.pluginName || item.modId || "this mod"}`}
+                title="Load this mod when a title it covers starts"
+                onChange={(event) =>
+                  void toggleEnabled(item, event.target.checked)
+                }
+              />
+              <button
+                className={selectedKey === item.packageKey ? "selected" : ""}
+                aria-selected={selectedKey === item.packageKey}
+                title={item.pluginName || item.modId || "Unnamed mod"}
+                onClick={() => setSelectedKey(item.packageKey)}
+              >
+                <strong>
+                  {item.pluginName || item.modId || "Unnamed mod"}
+                </strong>
+              </button>
+            </div>
           ))}
           {model && packages.length === 0 && (
             <div className="empty">No CemuMod packages found.</div>

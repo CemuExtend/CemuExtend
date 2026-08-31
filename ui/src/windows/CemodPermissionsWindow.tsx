@@ -14,7 +14,7 @@ type Context = NonNullable<Bootstrap["context"]>;
 // (src/Cemu/CemuExtend/CemodInspectionService.h). Approval is blocked unless the
 // package model carries the whole set, so this has to track that list: a short
 // model means the dialog cannot show everything the package is asking for.
-const CEMOD_PERMISSION_MODEL_SIZE = 12;
+const CEMOD_PERMISSION_MODEL_SIZE = 17;
 
 export function CemodPermissionsWindow({
   context,
@@ -25,6 +25,7 @@ export function CemodPermissionsWindow({
   const [model, setModel] = useState<CemodManagerSnapshot>();
   const [grants, setGrants] = useState<Set<string>>(new Set());
   const [approved, setApproved] = useState(false);
+  const [trustUpdates, setTrustUpdates] = useState(false);
   const [digestConfirmed, setDigestConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -57,6 +58,7 @@ export function CemodPermissionsWindow({
       }
       setModel(completed.snapshot);
       setApproved(next.approved);
+      setTrustUpdates(next.trustUpdates);
       setGrants(
         new Set(
           next.permissions
@@ -135,6 +137,7 @@ export function CemodPermissionsWindow({
         packageKey: item.packageKey,
         grantedPermissions: selectedMask,
         approved,
+        trustUpdates,
       });
       if (!result.ok) {
         setModel(result.snapshot);
@@ -255,6 +258,22 @@ export function CemodPermissionsWindow({
               requested permissions. Grant every requested permission or leave
               this package unapproved.
             </div>
+          )}
+          <label className="check-row approval-toggle">
+            <input
+              type="checkbox"
+              checked={trustUpdates}
+              disabled={!item.valid || !approved}
+              onChange={(event) => setTrustUpdates(event.target.checked)}
+            />
+            Trust future updates of this mod
+          </label>
+          {trustUpdates && (
+            <p className="lead">
+              A rebuilt package is approved automatically as long as it asks for
+              nothing beyond the permissions granted here. A version that wants
+              more still comes back to this dialog.
+            </p>
           )}
         </section>
       )}

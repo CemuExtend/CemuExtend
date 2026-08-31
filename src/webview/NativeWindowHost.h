@@ -45,6 +45,11 @@ namespace WebFrontend
 		bool pressed{};
 		bool repeat{};
 		bool insideContent{};
+		// Whether the window this event came from was active when it happened. Mouse
+		// events handed to a CEMod are tagged with it, and a mod that ignores input
+		// while unfocused sees nothing at all when it is wrong. Reading it from the
+		// producing window beats a cached snapshot that only refreshes on some events.
+		bool windowActive{true};
 		std::string text;
 		std::string preedit;
 		std::uint32_t textCursor{};

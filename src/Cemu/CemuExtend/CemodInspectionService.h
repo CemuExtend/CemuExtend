@@ -30,6 +30,15 @@ namespace CemuExtend
 		Modules,
 		PluginManagement,
 		WebUi,
+		// The CEX2 services a package reaches through the host bridge. A package
+		// declares these in its manifest as read/write/inject/clipboard/capture, and
+		// they are approved here like every other permission so the user decides
+		// which ones a package actually gets.
+		ServiceRead,
+		ServiceWrite,
+		ServiceInject,
+		ServiceClipboard,
+		ServiceCapture,
 	};
 
 	inline constexpr std::array kCemodPermissions{
@@ -45,6 +54,11 @@ namespace CemuExtend
 		CemodPermission::Modules,
 		CemodPermission::PluginManagement,
 		CemodPermission::WebUi,
+		CemodPermission::ServiceRead,
+		CemodPermission::ServiceWrite,
+		CemodPermission::ServiceInject,
+		CemodPermission::ServiceClipboard,
+		CemodPermission::ServiceCapture,
 	};
 
 	// The exact-approval dialog refuses to approve anything unless it receives
@@ -52,7 +66,7 @@ namespace CemuExtend
 	// (ui/src/windows/CemodPermissionsWindow.tsx). Growing this list without
 	// updating that constant leaves the dialog's save button permanently
 	// disabled, which is why the two are pinned together here.
-	static_assert(kCemodPermissions.size() == 12,
+	static_assert(kCemodPermissions.size() == 17,
 				  "update CEMOD_PERMISSION_MODEL_SIZE in the permissions dialog to match");
 
 	struct CemodPackageDescriptor
