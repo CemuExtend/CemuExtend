@@ -585,10 +585,10 @@ namespace
 		std::string error;
 		auto path = PackagePath("web-ui-v4");
 		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("<!doctype html><title>AquaU</title>")},
-						{"ui/main/assets/app.js", Bytes("window.ready = true;")},
-						{"ui/overlay/index.html", Bytes("<!doctype html><canvas></canvas>")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("<!doctype html><title>AquaU</title>")},
+							{"ui/main/assets/app.js", Bytes("window.ready = true;")},
+							{"ui/overlay/index.html", Bytes("<!doctype html><canvas></canvas>")}});
 		auto package = CemodPackage::Inspect(path, error);
 		CHECK(package.has_value());
 		CHECK(package->manifest.packageVersion == 4);
@@ -610,15 +610,15 @@ namespace
 
 		std::string belowBuiltin(kWebUiManifest);
 		belowBuiltin.replace(belowBuiltin.find("above_builtin"),
-			std::string_view("above_builtin").size(), "below_builtin");
+							 std::string_view("above_builtin").size(), "below_builtin");
 		path = PackagePath("web-ui-below-builtin");
 		WriteEntries(path, {{"manifest.json", Bytes(belowBuiltin)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		package = CemodPackage::Inspect(path, error);
 		CHECK(package && package->manifest.webUi->views.at("overlay").overlay->order ==
-			CemodWebUiOverlayOrder::BelowBuiltin);
+							 CemodWebUiOverlayOrder::BelowBuiltin);
 		std::filesystem::remove(path);
 
 		std::string missingOrder(kWebUiManifest);
@@ -627,29 +627,29 @@ namespace
 		missingOrder.erase(orderField, std::string_view(",\"z_order\":\"above_builtin\"").size());
 		path = PackagePath("web-ui-missing-z-order");
 		WriteEntries(path, {{"manifest.json", Bytes(missingOrder)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("overlay descriptor") != std::string::npos);
 		std::filesystem::remove(path);
 
 		std::string invalidOrder(kWebUiManifest);
 		invalidOrder.replace(invalidOrder.find("above_builtin"),
-			std::string_view("above_builtin").size(), "middle");
+							 std::string_view("above_builtin").size(), "middle");
 		path = PackagePath("web-ui-invalid-z-order");
 		WriteEntries(path, {{"manifest.json", Bytes(invalidOrder)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("z_order is invalid") != std::string::npos);
 		std::filesystem::remove(path);
 
 		path = PackagePath("web-ui-missing-entry");
 		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("entry is missing") != std::string::npos);
 		std::filesystem::remove(path);
@@ -660,63 +660,63 @@ namespace
 		missingPermission.erase(permission, std::string_view("\"ui\",").size());
 		path = PackagePath("web-ui-missing-permission");
 		WriteEntries(path, {{"manifest.json", Bytes(missingPermission)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("requires ui permission") != std::string::npos);
 		std::filesystem::remove(path);
 
 		std::string oldVersion(kWebUiManifest);
 		oldVersion.replace(oldVersion.find("\"package_version\":4"),
-					   std::string_view("\"package_version\":4").size(), "\"package_version\":3");
+						   std::string_view("\"package_version\":4").size(), "\"package_version\":3");
 		path = PackagePath("web-ui-old-version");
 		WriteEntries(path, {{"manifest.json", Bytes(oldVersion)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("package_version 4") != std::string::npos);
 		std::filesystem::remove(path);
 
 		std::string invalidOrigin(kWebUiManifest);
 		invalidOrigin.replace(invalidOrigin.find("https://API.example.com"),
-						  std::string_view("https://API.example.com").size(), "http://api.example.com");
+							  std::string_view("https://API.example.com").size(), "http://api.example.com");
 		path = PackagePath("web-ui-invalid-origin");
 		WriteEntries(path, {{"manifest.json", Bytes(invalidOrigin)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("invalid origin") != std::string::npos);
 		std::filesystem::remove(path);
 
 		std::string emptyPort(kWebUiManifest);
 		emptyPort.replace(emptyPort.find("https://API.example.com"),
-					  std::string_view("https://API.example.com").size(), "https://api.example.com:");
+						  std::string_view("https://API.example.com").size(), "https://api.example.com:");
 		path = PackagePath("web-ui-empty-port");
 		WriteEntries(path, {{"manifest.json", Bytes(emptyPort)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("invalid origin") != std::string::npos);
 		std::filesystem::remove(path);
 
 		path = PackagePath("web-ui-noncanonical-entry");
 		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui//main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui//main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		std::filesystem::remove(path);
 
 		path = PackagePath("web-ui-unicode-entry");
 		WriteEntries(path, {{"manifest.json", Bytes(kWebUiManifest)},
-						{"plugin.wps", BuildWupsTestImage()},
-						{"ui/main/index.html", Bytes("html")},
-						{"ui/overlay/index.html", Bytes("html")},
-						{"ui/caf\xc3\xa9.css", Bytes("css")}});
+							{"plugin.wps", BuildWupsTestImage()},
+							{"ui/main/index.html", Bytes("html")},
+							{"ui/overlay/index.html", Bytes("html")},
+							{"ui/caf\xc3\xa9.css", Bytes("css")}});
 		CHECK(!CemodPackage::Inspect(path, error));
 		CHECK(error.find("unsafe entry name") != std::string::npos);
 		std::filesystem::remove(path);

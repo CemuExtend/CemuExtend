@@ -40,8 +40,7 @@ uint32 _quickStochasticHash(void* texData, uint32 memRange)
 }
 
 #if BOOST_OS_WINDOWS && defined(__GNUC__) && !defined(__clang__)
-__attribute__((target("avx2")))
-static uint32 CalculateTextureHashAVX2(const uint32* textureData, uint32 memoryRange)
+__attribute__((target("avx2"))) static uint32 CalculateTextureHashAVX2(const uint32* textureData, uint32 memoryRange)
 {
 	__m256i hash = _mm256_setzero_si256();
 	const auto* readPtr = reinterpret_cast<const __m256i*>(textureData);
@@ -54,7 +53,7 @@ static uint32 CalculateTextureHashAVX2(const uint32* textureData, uint32 memoryR
 	alignas(32) uint32 parts[8];
 	_mm256_store_si256(reinterpret_cast<__m256i*>(parts), hash);
 	return parts[0] + parts[1] + parts[2] + parts[3] +
-		parts[4] + parts[5] + parts[6] + parts[7];
+		   parts[4] + parts[5] + parts[6] + parts[7];
 }
 #endif
 

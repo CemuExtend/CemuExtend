@@ -111,6 +111,11 @@ export function CemodPermissionsWindow({
   );
   const permissionCountValid =
     item?.permissions.length === CEMOD_PERMISSION_MODEL_SIZE;
+  const completeNativeGrant =
+    !item ||
+    (!item.trustedNative && !item.wups) ||
+    (BigInt(selectedMask) & BigInt(item.requestedPermissions)) ===
+      BigInt(item.requestedPermissions);
 
   async function save() {
     if (
@@ -244,6 +249,13 @@ export function CemodPermissionsWindow({
             />
             Mark this exact package as approved
           </label>
+          {approved && !completeNativeGrant && (
+            <div className="error">
+              Native and WUPS packages cannot run with only part of their
+              requested permissions. Grant every requested permission or leave
+              this package unapproved.
+            </div>
+          )}
         </section>
       )}
       <footer className="actions">
@@ -255,6 +267,7 @@ export function CemodPermissionsWindow({
             !item.valid ||
             !digestConfirmed ||
             !permissionCountValid ||
+            (approved && !completeNativeGrant) ||
             saving
           }
           onClick={() => void save()}

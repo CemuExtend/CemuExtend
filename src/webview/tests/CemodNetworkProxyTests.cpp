@@ -20,21 +20,21 @@ namespace
 		boost::asio::streambuf response;
 		boost::asio::read_until(socket, response, "\r\n\r\n");
 		return {boost::asio::buffers_begin(response.data()),
-			boost::asio::buffers_end(response.data())};
+				boost::asio::buffers_end(response.data())};
 	}
 
 	tcp::socket ConnectProxy(boost::asio::io_context& io, std::uint16_t proxyPort,
-		std::string_view authority, std::string& response)
+							 std::string_view authority, std::string& response)
 	{
 		tcp::socket socket(io);
 		socket.connect({boost::asio::ip::address_v4::loopback(), proxyPort});
 		const auto request = "CONNECT " + std::string(authority) +
-			" HTTP/1.1\r\nHost: " + std::string(authority) + "\r\n\r\n";
+							 " HTTP/1.1\r\nHost: " + std::string(authority) + "\r\n\r\n";
 		boost::asio::write(socket, boost::asio::buffer(request));
 		response = ReadHeaders(socket);
 		return socket;
 	}
-}
+} // namespace
 
 int main()
 {
@@ -73,7 +73,7 @@ int main()
 		assert(proxy);
 		std::string response;
 		auto tunnel = ConnectProxy(io, proxy->Port(),
-			"127.0.0.1:" + std::to_string(upstreamPort), response);
+								   "127.0.0.1:" + std::to_string(upstreamPort), response);
 		assert(response.starts_with("HTTP/1.1 200"));
 		boost::asio::write(tunnel, boost::asio::buffer("PING", 4));
 		std::array<char, 4> reply{};

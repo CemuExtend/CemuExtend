@@ -90,7 +90,7 @@ namespace
 	std::filesystem::path WriteWebUiPackage()
 	{
 		const auto path = std::filesystem::temp_directory_path() /
-			"cemuextend-inspection-service-web-ui-test.cemod";
+						  "cemuextend-inspection-service-web-ui-test.cemod";
 		std::filesystem::remove(path);
 		int error{};
 		auto* archive = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_EXCL, &error);
@@ -167,9 +167,7 @@ int main()
 	assert(inspected.signedPackage);
 
 	const auto webUiPath = WriteWebUiPackage();
-	CemodPackageDescriptor webUiDescriptor{webUiPath, "org.example.web-ui",
-		"unsigned-web-ui", 1U << 6U, CemodExecutionMode::Isolated, false,
-		{0x0005000012345678ULL}, {}};
+	CemodPackageDescriptor webUiDescriptor{webUiPath, "org.example.web-ui", "unsigned-web-ui", 1U << 6U, CemodExecutionMode::Isolated, false, {0x0005000012345678ULL}, {}};
 	const auto webUiInspection = CemodInspectionService::Inspect(webUiDescriptor, std::nullopt);
 	assert(webUiInspection.Valid());
 	assert(webUiInspection.approval.requested == webUi);

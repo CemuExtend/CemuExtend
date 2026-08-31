@@ -124,7 +124,7 @@ namespace
 	}
 
 	std::optional<std::string> CanonicalOrigin(std::string_view value,
-											 std::initializer_list<std::string_view> allowedSchemes)
+											   std::initializer_list<std::string_view> allowedSchemes)
 	{
 		if (value.empty() || value.size() > 2048 || value.find('\\') != std::string_view::npos ||
 			!std::ranges::all_of(value, [](unsigned char character) {
@@ -357,7 +357,7 @@ namespace
 				}
 				CemodWebUiOverlay overlay;
 				const std::string_view order(overlayValue["z_order"].GetString(),
-					overlayValue["z_order"].GetStringLength());
+											 overlayValue["z_order"].GetStringLength());
 				if (order == "below_builtin")
 					overlay.order = CemodWebUiOverlayOrder::BelowBuiltin;
 				else if (order == "above_builtin")
@@ -375,8 +375,8 @@ namespace
 						return false;
 					}
 					const std::string_view name(surface.GetString(), surface.GetStringLength());
-					const auto parsed = name == "tv" ? std::optional{CemodWebUiSurface::Tv} :
-						name == "drc" ? std::optional{CemodWebUiSurface::Drc} : std::nullopt;
+					const auto parsed = name == "tv" ? std::optional{CemodWebUiSurface::Tv} : name == "drc" ? std::optional{CemodWebUiSurface::Drc}
+																											: std::nullopt;
 					if (!parsed || std::ranges::find(overlay.surfaces, *parsed) != overlay.surfaces.end())
 					{
 						error = fmt::format("web_ui view '{}' overlay surfaces are invalid", viewId);
@@ -449,7 +449,7 @@ namespace
 				output.network.allowPrivateNetwork = network["allow_private_network"].GetBool();
 		}
 		const bool usesNetwork = !output.network.connect.empty() || !output.network.resources.empty() ||
-			output.network.credentials || output.network.allowPrivateNetwork;
+								 output.network.credentials || output.network.allowPrivateNetwork;
 		if (usesNetwork && (requestedPermissions & 32U) == 0)
 		{
 			error = "web_ui network access requires the network permission";
@@ -1231,7 +1231,7 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 		zip_uint8_t operatingSystem{};
 		zip_uint32_t attributes{};
 		if (zip_file_get_external_attributes(archive.get(), index, ZIP_FL_UNCHANGED,
-										 &operatingSystem, &attributes) != 0)
+											 &operatingSystem, &attributes) != 0)
 		{
 			error = "package entry attributes cannot be read";
 			return std::nullopt;
@@ -1248,10 +1248,9 @@ std::optional<CemodPackage> CemodPackage::Inspect(const std::filesystem::path& p
 			return std::nullopt;
 		}
 		std::vector<std::byte> data;
-		const auto maximumEntry = uiEntry ?
-			std::min({kMaximumExpandedBytes - expandedBytes, kMaximumUiFileBytes,
-					  kMaximumUiBytes - uiBytes}) :
-			kMaximumExpandedBytes - expandedBytes;
+		const auto maximumEntry = uiEntry ? std::min({kMaximumExpandedBytes - expandedBytes, kMaximumUiFileBytes,
+													  kMaximumUiBytes - uiBytes})
+										  : kMaximumExpandedBytes - expandedBytes;
 		if (!ReadEntry(archive.get(), index, maximumEntry, data))
 		{
 			error = "package entry cannot be read or exceeds the expansion limit";

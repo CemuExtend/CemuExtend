@@ -2804,6 +2804,5 @@ namespace coreinit
 		cafeExportRegister("coreinit", FSAWriteFile, LogType::Placeholder);
 		cafeExportRegister("coreinit", FSAGetStat, LogType::Placeholder);
 		cafeExportRegister("coreinit", FSAGetStatusStr, LogType::Placeholder);
-
 	}
 } // namespace coreinit

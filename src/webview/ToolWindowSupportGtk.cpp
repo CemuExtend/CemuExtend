@@ -60,14 +60,14 @@ namespace WebFrontend
 				width = std::max(width, m_minimumWidth);
 				height = std::max(height, m_minimumHeight);
 				gtk_window_set_default_size(GTK_WINDOW(m_window), std::max(1, width),
-									std::max(1, height));
+											std::max(1, height));
 				if (gtk_widget_get_visible(m_window))
 					gtk_window_resize(GTK_WINDOW(m_window), std::max(1, width),
-								  std::max(1, height));
+									  std::max(1, height));
 			}
 
 			void SetBounds(std::int32_t x, std::int32_t y,
-				std::int32_t width, std::int32_t height) override
+						   std::int32_t width, std::int32_t height) override
 			{
 				if (!m_window)
 					return;
@@ -85,7 +85,7 @@ namespace WebFrontend
 				geometry.min_width = m_minimumWidth;
 				geometry.min_height = m_minimumHeight;
 				gtk_window_set_geometry_hints(GTK_WINDOW(m_window), nullptr, &geometry,
-					GDK_HINT_MIN_SIZE);
+											  GDK_HINT_MIN_SIZE);
 			}
 
 			void SetResizable(bool resizable) override
@@ -138,7 +138,7 @@ namespace WebFrontend
 					auto* display = gdk_x11_display_get_xdisplay(
 						gdk_window_get_display(window));
 					if (XGetWindowAttributes(display, gdk_x11_window_get_xid(window),
-									 &attributes))
+											 &attributes))
 						return {0, 0, std::max(1, attributes.width),
 								std::max(1, attributes.height)};
 				}
@@ -170,7 +170,7 @@ namespace WebFrontend
 				::Window root{}, currentParent{}, *children{};
 				unsigned childCount{};
 				const bool queried = XQueryTree(display, child, &root, &currentParent,
-										 &children, &childCount) != 0;
+												&children, &childCount) != 0;
 				if (children)
 					XFree(children);
 				if (queried)
@@ -179,8 +179,8 @@ namespace WebFrontend
 						XReparentWindow(display, child, parent, 0, 0);
 					const auto bounds = GetBrowserBounds();
 					XMoveResizeWindow(display, child, 0, 0,
-						static_cast<unsigned>(std::max(1, bounds.width)),
-						static_cast<unsigned>(std::max(1, bounds.height)));
+									  static_cast<unsigned>(std::max(1, bounds.width)),
+									  static_cast<unsigned>(std::max(1, bounds.height)));
 					XMapWindow(display, child);
 				}
 				XSync(display, False);
@@ -201,8 +201,8 @@ namespace WebFrontend
 				auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
 				gdk_x11_display_error_trap_push(gdkDisplay);
 				XMoveResizeWindow(display, m_browserChild, 0, 0,
-							  static_cast<unsigned>(std::max(1, bounds.width)),
-							  static_cast<unsigned>(std::max(1, bounds.height)));
+								  static_cast<unsigned>(std::max(1, bounds.width)),
+								  static_cast<unsigned>(std::max(1, bounds.height)));
 				XSync(display, False);
 				if (gdk_x11_display_error_trap_pop(gdkDisplay))
 					m_browserChild = None;
@@ -343,34 +343,41 @@ namespace WebFrontend
 				gtk_widget_add_events(m_browserContainer, GDK_FOCUS_CHANGE_MASK);
 				gtk_container_add(GTK_CONTAINER(m_window), m_browserContainer);
 				g_signal_connect(m_browserContainer, "size-allocate",
-					G_CALLBACK(+[](GtkWidget*, GtkAllocation*, gpointer data) {
-						static_cast<GtkToolWindowSupport*>(data)->ResizeBrowser();
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GtkAllocation*, gpointer data) {
+									 static_cast<GtkToolWindowSupport*>(data)->ResizeBrowser();
+								 }),
+								 this);
 				g_signal_connect(m_browserContainer, "focus-in-event",
-					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-						static_cast<GtkToolWindowSupport*>(data)->FocusBrowserFromFocusEvent();
-						return FALSE;
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 static_cast<GtkToolWindowSupport*>(data)->FocusBrowserFromFocusEvent();
+									 return FALSE;
+								 }),
+								 this);
 				g_signal_connect(m_window, "configure-event",
-					G_CALLBACK(+[](GtkWidget*, GdkEventConfigure* event, gpointer data) -> gboolean {
-						auto& self = *static_cast<GtkToolWindowSupport*>(data);
-						if (self.m_boundsChanged)
-							self.m_boundsChanged({event->x, event->y,
-								std::max(1, event->width), std::max(1, event->height)});
-						return FALSE;
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GdkEventConfigure* event, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkToolWindowSupport*>(data);
+									 if (self.m_boundsChanged)
+										 self.m_boundsChanged({event->x, event->y,
+															   std::max(1, event->width), std::max(1, event->height)});
+									 return FALSE;
+								 }),
+								 this);
 				g_signal_connect(m_window, "focus-in-event",
-					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-						auto& self = *static_cast<GtkToolWindowSupport*>(data);
-						if (self.m_focusChanged) self.m_focusChanged(true);
-						return FALSE;
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkToolWindowSupport*>(data);
+									 if (self.m_focusChanged)
+										 self.m_focusChanged(true);
+									 return FALSE;
+								 }),
+								 this);
 				g_signal_connect(m_window, "focus-out-event",
-					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-						auto& self = *static_cast<GtkToolWindowSupport*>(data);
-						if (self.m_focusChanged) self.m_focusChanged(false);
-						return FALSE;
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkToolWindowSupport*>(data);
+									 if (self.m_focusChanged)
+										 self.m_focusChanged(false);
+									 return FALSE;
+								 }),
+								 this);
 				gtk_widget_realize(m_window);
 				gtk_widget_realize(m_browserContainer);
 			}

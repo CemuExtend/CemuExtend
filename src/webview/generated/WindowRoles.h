@@ -24,6 +24,5 @@ namespace WebFrontend::Generated
 		"emulated-usb-devices",
 		"checksum-tool",
 		"getting-started",
-		"about"
-	};
+		"about"};
 }

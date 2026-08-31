@@ -94,7 +94,7 @@ namespace
 	std::string NormalizeUiLanguage(std::string_view language)
 	{
 		if (language == "zh" || std::ranges::find(kSupportedUiLanguages, language) !=
-														 kSupportedUiLanguages.end())
+									kSupportedUiLanguages.end())
 			return std::string(language);
 		return "system";
 	}
@@ -153,7 +153,7 @@ namespace
 			{
 				const auto sourceX = rightOrigin ? width - x - 1 : x;
 				const auto source = pixelOffset +
-					(sourceY * static_cast<std::size_t>(width) + sourceX) * channels;
+									(sourceY * static_cast<std::size_t>(width) + sourceX) * channels;
 				const auto destination =
 					(y * static_cast<std::size_t>(width) + x) * 4;
 				if (channels == 1)
@@ -1893,7 +1893,7 @@ namespace
 				});
 				m_mainWindowPublication = m_hostState->PublishMainWindow(
 					m_nativeWindow->GetMainWindowHandle());
-				#if defined(CEMU_OVERLAY_BACKEND_CEF)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
 				m_cefOverlay = WebFrontend::CefOverlay::CreateBrowserRuntime(
 					[this](std::uint64_t windowId, std::string_view request) {
 						return DispatchCefRpc(windowId, request);
@@ -1901,7 +1901,8 @@ namespace
 					[this](Host::PointerSurface surface) {
 						if (m_nativeWindow)
 							m_nativeWindow->RequestRenderRedraw(surface);
-					}, {},
+					},
+					{},
 					[this](std::uint64_t windowId) { HandleCefWindowClosed(windowId); });
 				if (!m_cefOverlay)
 					throw std::runtime_error("failed to create the shared CEF browser runtime");
@@ -1910,7 +1911,7 @@ namespace
 					[this](std::function<void()> action) { return PostToUi(std::move(action)); });
 				if (!m_cemodWebUi)
 					throw std::runtime_error("failed to create the Cemod Web UI frontend");
-				#endif
+#endif
 				m_rendererHost = CreateRendererHost(
 					m_hostState, m_hostState, m_hostState, m_cefOverlay,
 					[gate = m_callbackGate](bool mainWindow) {
@@ -2822,17 +2823,17 @@ namespace
 					? std::string{}
 					: boost::nowide::narrow(activeAccount->miiName);
 			return std::string(R"({"windowId":)") + JsonString(std::to_string(windowId)) +
-				R"(,"windowRole":)" + JsonString(role) +
-				R"(,"appVersion":)" + JsonString(BUILD_VERSION_STRING) +
-				R"(,"platform":)" + JsonString(PlatformName()) +
-				R"(,"activeAccountName":)" + JsonString(activeAccountName) +
-				R"(,"context":)" +
-				BrowserContextJson(titleContext, packageContext, generationContext) +
-				R"(,"theme":)" + JsonString(UiThemeName(m_theme)) +
-				R"(,"themeRevision":)" + JsonString(std::to_string(m_themeRevision)) +
-				R"(,"language":)" + JsonString(m_language) +
-				R"(,"languageRevision":)" + JsonString(std::to_string(m_languageRevision)) +
-				R"(,"shuttingDown":false})";
+				   R"(,"windowRole":)" + JsonString(role) +
+				   R"(,"appVersion":)" + JsonString(BUILD_VERSION_STRING) +
+				   R"(,"platform":)" + JsonString(PlatformName()) +
+				   R"(,"activeAccountName":)" + JsonString(activeAccountName) +
+				   R"(,"context":)" +
+				   BrowserContextJson(titleContext, packageContext, generationContext) +
+				   R"(,"theme":)" + JsonString(UiThemeName(m_theme)) +
+				   R"(,"themeRevision":)" + JsonString(std::to_string(m_themeRevision)) +
+				   R"(,"language":)" + JsonString(m_language) +
+				   R"(,"languageRevision":)" + JsonString(std::to_string(m_languageRevision)) +
+				   R"(,"shuttingDown":false})";
 		}
 
 		std::string_view RoleForWindow(std::uint64_t windowId) const
@@ -3143,9 +3144,9 @@ namespace
 		void RefreshInputConfigurationFocus()
 		{
 			const bool editing = m_mainWorkspaceRole == "input-settings" ||
-							 m_mainWorkspaceRole == "hotkey-settings" ||
-							 m_windowByRole.contains("input-settings") ||
-							 m_windowByRole.contains("hotkey-settings");
+								 m_mainWorkspaceRole == "hotkey-settings" ||
+								 m_windowByRole.contains("input-settings") ||
+								 m_windowByRole.contains("hotkey-settings");
 			m_hotkeyEditing.store(editing, std::memory_order_release);
 			if (m_hostServices)
 				m_hostServices->SetInputConfigurationFocused(editing);
@@ -3367,7 +3368,7 @@ namespace
 		void HandleLauncherClose()
 		{
 			const auto mode = m_windowState ? m_windowState->Snapshot().mode
-										  : WebFrontend::MainWindowContentMode::Library;
+											: WebFrontend::MainWindowContentMode::Library;
 			if (mode == WebFrontend::MainWindowContentMode::Playing ||
 				mode == WebFrontend::MainWindowContentMode::LaunchPending ||
 				m_controller.State() == Application::EmulationState::Running)
@@ -3406,9 +3407,9 @@ namespace
 			const auto metrics = m_hostState->GetWindowMetrics();
 			const auto bounds = region.GetBounds();
 			if (!m_cefOverlay->Create(Host::PointerSurface::Main, kMainOverlayWindowId,
-				metrics.physicalWidth > 0 ? metrics.physicalWidth : bounds.width,
-				metrics.physicalHeight > 0 ? metrics.physicalHeight : bounds.height,
-				metrics.dpiScale))
+									  metrics.physicalWidth > 0 ? metrics.physicalWidth : bounds.width,
+									  metrics.physicalHeight > 0 ? metrics.physicalHeight : bounds.height,
+									  metrics.dpiScale))
 				cemuLog_log(LogType::Force, "Main CEF Runtime Overlay browser could not be created; continuing without overlay");
 #endif
 		}
@@ -3429,9 +3430,9 @@ namespace
 			const auto metrics = m_hostState->GetWindowMetrics();
 			const auto bounds = region.GetBounds();
 			if (!m_cefOverlay->Create(Host::PointerSurface::Pad, kPadOverlayWindowId,
-				metrics.physicalPadWidth > 0 ? metrics.physicalPadWidth : bounds.width,
-				metrics.physicalPadHeight > 0 ? metrics.physicalPadHeight : bounds.height,
-				metrics.padDpiScale))
+									  metrics.physicalPadWidth > 0 ? metrics.physicalPadWidth : bounds.width,
+									  metrics.physicalPadHeight > 0 ? metrics.physicalPadHeight : bounds.height,
+									  metrics.padDpiScale))
 				cemuLog_log(LogType::Force, "GamePad CEF Runtime Overlay browser could not be created; continuing without overlay");
 #endif
 		}
@@ -3451,7 +3452,7 @@ namespace
 			ReleaseNativeInput(true);
 			if (m_rendererHost)
 				m_rendererHost->PrepareMainDestroy();
-					DestroyMainRuntimeOverlay();
+			DestroyMainRuntimeOverlay();
 			m_nativeWindow->DestroyMainRenderRegion();
 			return true;
 		}
@@ -3485,7 +3486,7 @@ namespace
 											  JsonString(std::string("Unable to safely close GamePad view: ") + error.what()) + "}");
 				return false;
 			}
-					DestroyPadRuntimeOverlay();
+			DestroyPadRuntimeOverlay();
 			m_nativeWindow->DestroyPadRenderRegion();
 			++m_padGeneration;
 			return true;
@@ -3507,7 +3508,7 @@ namespace
 			{
 				++m_padGeneration;
 				auto& region = m_nativeWindow->CreatePadRenderRegion();
-					CreatePadRuntimeOverlay(region);
+				CreatePadRuntimeOverlay(region);
 				m_nativeWindow->SetPadMetricsEnabled(true);
 				m_hostState->UpdateMetrics(m_nativeWindow->GetMetrics());
 				m_rendererHost->InitializePad(region);
@@ -3532,14 +3533,14 @@ namespace
 				{
 					const auto browserBounds = m_nativeWindow->GetBrowserBounds();
 					m_cefOverlay->ResizeWindow(0, std::max(browserBounds.width, 1),
-						std::max(browserBounds.height, 1), m_nativeWindow->GetBrowserDpiScale());
+											   std::max(browserBounds.height, 1), m_nativeWindow->GetBrowserDpiScale());
 					m_cefOverlay->SetWindowFocus(0, metrics.appActive);
 				}
 				m_cefOverlay->Resize(Host::PointerSurface::Main, metrics.physicalWidth,
-					metrics.physicalHeight, metrics.dpiScale);
+									 metrics.physicalHeight, metrics.dpiScale);
 				if (metrics.padOpen)
 					m_cefOverlay->Resize(Host::PointerSurface::Pad, metrics.physicalPadWidth,
-						metrics.physicalPadHeight, metrics.padDpiScale);
+										 metrics.physicalPadHeight, metrics.padDpiScale);
 			}
 #endif
 			if (previous.appActive != metrics.appActive)
@@ -4303,8 +4304,7 @@ namespace
 			try
 			{
 				response = m_rpc.Dispatch(request);
-			}
-			catch (...)
+			} catch (...)
 			{
 				m_invokingWindow = previousWindow;
 				throw;
@@ -4347,8 +4347,8 @@ namespace
 		void RequireRole(std::initializer_list<std::string_view> roles) const
 		{
 			const auto role = m_invokingWindow == 0
-				? std::string_view(m_mainWorkspaceRole)
-				: RoleForWindow(m_invokingWindow);
+								  ? std::string_view(m_mainWorkspaceRole)
+								  : RoleForWindow(m_invokingWindow);
 			if (std::ranges::find(roles, role) == roles.end())
 				throw std::runtime_error("this RPC method is not available to the current window role");
 		}
@@ -4942,7 +4942,7 @@ namespace
 			});
 			m_rpc.Register("theme.get", [this](const rapidjson::Value&) {
 				return std::string(R"({"theme":)") + JsonString(UiThemeName(m_theme)) +
-						R"(,"revision":)" + JsonString(std::to_string(m_themeRevision)) + "}";
+					   R"(,"revision":)" + JsonString(std::to_string(m_themeRevision)) + "}";
 			});
 			m_rpc.Register("theme.set", [this](const rapidjson::Value& params) {
 				const auto requested = RequiredString(params, "theme");
@@ -4959,14 +4959,14 @@ namespace
 					++m_themeRevision;
 				}
 				const auto result = std::string(R"({"theme":)") +
-								JsonString(UiThemeName(m_theme)) + R"(,"revision":)" +
-								JsonString(std::to_string(m_themeRevision)) + "}";
+									JsonString(UiThemeName(m_theme)) + R"(,"revision":)" +
+									JsonString(std::to_string(m_themeRevision)) + "}";
 				Emit("theme.changed", result);
 				return result;
 			});
 			m_rpc.Register("language.get", [this](const rapidjson::Value&) {
 				return std::string(R"({"language":)") + JsonString(m_language) +
-						R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
+					   R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
 			});
 			m_rpc.Register("language.set", [this](const rapidjson::Value& params) {
 				const auto requested = RequiredString(params, "language");
@@ -4987,7 +4987,7 @@ namespace
 					++m_languageRevision;
 				}
 				const auto result = std::string(R"({"language":)") + JsonString(m_language) +
-								R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
+									R"(,"revision":)" + JsonString(std::to_string(m_languageRevision)) + "}";
 				Emit("language.changed", result);
 				return result;
 			});
@@ -6572,14 +6572,12 @@ namespace
 					throw std::runtime_error(
 						"command-line title requires CemuMod permission approval in the GUI first");
 				(void)Launch(*path, *titleId);
-			}
-			catch (const std::exception& error)
+			} catch (const std::exception& error)
 			{
 				m_exitCode = EXIT_FAILURE;
 				cemuLog_log(LogType::Force, "Command-line title launch failed: {}", error.what());
 				(void)RequestShutdown();
-			}
-			catch (...)
+			} catch (...)
 			{
 				m_exitCode = EXIT_FAILURE;
 				cemuLog_log(LogType::Force,

@@ -20,7 +20,7 @@ namespace cemuextend_hle
 {
 	class Cex2Owner;
 	class ICemodWebUiHost;
-}
+} // namespace cemuextend_hle
 struct VPADStatus;
 
 namespace cemuextend_hle

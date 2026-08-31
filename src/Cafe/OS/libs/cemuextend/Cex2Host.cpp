@@ -72,13 +72,31 @@ namespace cemuextend_hle
 
 #ifdef CEMU_CEX2_TESTING
 		sint32 g_testGuestFrameRate{-1};
-		void SetGuestFrameRate(sint32 frequency) { g_testGuestFrameRate = frequency; }
-		void ClearGuestFrameRate() { g_testGuestFrameRate = -1; }
-		sint32 EffectiveFrameRate() { return g_testGuestFrameRate > 0 ? g_testGuestFrameRate : 60; }
+		void SetGuestFrameRate(sint32 frequency)
+		{
+			g_testGuestFrameRate = frequency;
+		}
+		void ClearGuestFrameRate()
+		{
+			g_testGuestFrameRate = -1;
+		}
+		sint32 EffectiveFrameRate()
+		{
+			return g_testGuestFrameRate > 0 ? g_testGuestFrameRate : 60;
+		}
 #else
-		void SetGuestFrameRate(sint32 frequency) { LatteTiming_setGuestCustomVsyncFrequency(frequency); }
-		void ClearGuestFrameRate() { LatteTiming_disableGuestCustomVsyncFrequency(); }
-		sint32 EffectiveFrameRate() { return LatteTiming_getEffectiveVsyncFrequency(); }
+		void SetGuestFrameRate(sint32 frequency)
+		{
+			LatteTiming_setGuestCustomVsyncFrequency(frequency);
+		}
+		void ClearGuestFrameRate()
+		{
+			LatteTiming_disableGuestCustomVsyncFrequency();
+		}
+		sint32 EffectiveFrameRate()
+		{
+			return LatteTiming_getEffectiveVsyncFrequency();
+		}
 #endif
 
 		void LogGuestRecord(std::string_view principal, std::uint8_t level, std::string_view message)
@@ -302,7 +320,8 @@ namespace cemuextend_hle
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics;
 		std::shared_ptr<ICemodWebUiHost> webUi;
 		std::map<std::pair<std::uint64_t, std::uint32_t>,
-			std::shared_ptr<const CemodWebUiContent>> webUiContents;
+				 std::shared_ptr<const CemodWebUiContent>>
+			webUiContents;
 		std::uint64_t nextTextInputSequence{1};
 		std::function<void()> textInputWakeCallback;
 		std::unordered_map<std::uint32_t, Session> sessions;
@@ -459,8 +478,8 @@ namespace cemuextend_hle
 		static std::uint32_t EventPermission(std::uint16_t service)
 		{
 			return service == static_cast<std::uint16_t>(ServiceId::Ui)
-				? kCemodUiPermission
-				: 1U;
+					   ? kCemodUiPermission
+					   : 1U;
 		}
 
 		static bool IsValidPointerPolicy(const cemuextend::wire::PointerPolicyPayload& policy)
@@ -570,7 +589,7 @@ namespace cemuextend_hle
 				   !value.starts_with("cemu.") &&
 				   std::ranges::all_of(value, [](unsigned char character) {
 					   return std::isalnum(character) || character == '_' || character == '.' ||
-						  character == '-';
+							  character == '-';
 				   });
 		}
 
@@ -948,7 +967,7 @@ namespace cemuextend_hle
 					TimingFrameRatePayload response{};
 					response.frequency = EffectiveFrameRate();
 					return MakeResponse(request, Status::Ok,
-						{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
+										{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
 				}
 				if (payload.size() != sizeof(TimingFrameRatePayload))
 					return MakeResponse(request, Status::InvalidArgument);
@@ -963,7 +982,7 @@ namespace cemuextend_hle
 				TimingFrameRatePayload response{};
 				response.frequency = frequency;
 				return MakeResponse(request, Status::Ok,
-					{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
+									{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
 			}
 			if (definition->handler == Handler::Http)
 			{
@@ -1478,9 +1497,9 @@ namespace cemuextend_hle
 						 (header.mode == static_cast<std::uint8_t>(UiMode::Overlay) &&
 						  (!view->second.overlayMode ||
 						   std::ranges::none_of(view->second.overlay->surfaces,
-							[&](CemodWebUiSurface surface) {
-								return static_cast<std::uint8_t>(surface) == header.surface;
-							}) ||
+												[&](CemodWebUiSurface surface) {
+													return static_cast<std::uint8_t>(surface) == header.surface;
+												}) ||
 						   (header.interactive != 0 && !view->second.overlay->interactive))))
 					validation = Status::PermissionDenied;
 				break;
@@ -1494,7 +1513,8 @@ namespace cemuextend_hle
 				else
 				{
 					std::memcpy(&value, payload.data(), sizeof(value));
-					if (!value.handle.get()) validation = Status::InvalidArgument;
+					if (!value.handle.get())
+						validation = Status::InvalidArgument;
 				}
 				break;
 			}
@@ -1538,7 +1558,8 @@ namespace cemuextend_hle
 					jsonBytes > kMaximumUiJsonBytes ||
 					jsonBytes != payload.size() - sizeof(header) ||
 					!Impl::IsValidJson({reinterpret_cast<const char*>(payload.data() + sizeof(header)),
-										   jsonBytes}, kMaximumUiJsonBytes))
+										jsonBytes},
+									   kMaximumUiJsonBytes))
 					validation = Status::InvalidArgument;
 				break;
 			}
@@ -1583,7 +1604,7 @@ namespace cemuextend_hle
 				if (!header.handle.get() || titleBytes == 0 || titleBytes > 256 ||
 					titleBytes != payload.size() - sizeof(header) ||
 					!Impl::IsValidUtf8({reinterpret_cast<const char*>(payload.data() + sizeof(header)),
-										   titleBytes}))
+										titleBytes}))
 					validation = Status::InvalidArgument;
 				break;
 			}
@@ -1640,19 +1661,18 @@ namespace cemuextend_hle
 			const auto generation = owner.Generation();
 			++session.reservedResponses;
 			session.pending.emplace(correlationId, Impl::Session::Pending{
-				definition->permission, request,
-				std::chrono::steady_clock::now() + std::chrono::seconds(10)});
+													   definition->permission, request,
+													   std::chrono::steady_clock::now() + std::chrono::seconds(10)});
 			++session.acceptedRequests;
 			session.bytesCopied += requestBytes.size();
-			CemodWebUiHostRequest hostRequest{addressSpaceId, generation, sessionId,
-				correlationId, operation, {payload.begin(), payload.end()}, session.webUiContent};
+			CemodWebUiHostRequest hostRequest{addressSpaceId, generation, sessionId, correlationId, operation, {payload.begin(), payload.end()}, session.webUiContent};
 			lock.unlock();
 			const bool accepted = webUi->Submit(std::move(hostRequest),
-				[impl = m_impl, sessionId, addressSpaceId, generation, correlationId](
-					Status status, std::vector<std::byte> response) {
-					impl->Complete(sessionId, addressSpaceId, generation, correlationId,
-						status, response);
-				});
+												[impl = m_impl, sessionId, addressSpaceId, generation, correlationId](
+													Status status, std::vector<std::byte> response) {
+													impl->Complete(sessionId, addressSpaceId, generation, correlationId,
+																   status, response);
+												});
 			if (!accepted)
 				m_impl->Complete(sessionId, addressSpaceId, generation, correlationId, Status::Busy);
 			return static_cast<std::int32_t>(Error::Ok);
@@ -1689,7 +1709,7 @@ namespace cemuextend_hle
 #endif
 			++session.reservedResponses;
 			session.pending.emplace(correlationId, Impl::Session::Pending{permission, copiedHeader,
-														  std::chrono::steady_clock::now() + asynchronousDeadline});
+																		  std::chrono::steady_clock::now() + asynchronousDeadline});
 			++session.acceptedRequests;
 			session.bytesCopied += requestBytes.size();
 			m_impl->Enqueue([impl = m_impl, sessionId, addressSpaceId, generation,
@@ -2045,22 +2065,22 @@ namespace cemuextend_hle
 			return;
 		std::lock_guard lock(m_impl->mutex);
 #ifndef CEMU_CEX2_TESTING
-		if (usage == 62)
+		if (usage == 62 || usage == 0xe5)
 			cemuLog_log(LogType::Force,
-						"CEX2-PERSPECTIVE raw pressed={} modifiers={} sessions={}",
-						pressed, modifiers, m_impl->sessions.size());
+						"CEX2-KEY raw usage={} pressed={} modifiers={} sessions={}",
+						usage, pressed, modifiers, m_impl->sessions.size());
 #endif
 		for (auto& [id, session] : m_impl->sessions)
 		{
 			if (!Impl::HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input)))
 				continue;
 			const bool wasPressed = session.pressedKeyboardUsages.contains(usage);
-			if (usage == 62)
+			if (usage == 62 || usage == 0xe5)
 			{
 #ifndef CEMU_CEX2_TESTING
 				cemuLog_log(LogType::Force,
-							"CEX2-PERSPECTIVE session={} pressed={} duplicate={} queued={} reserved={} dropped={}",
-							id, pressed, wasPressed == pressed, session.responses.size(),
+							"CEX2-KEY session={} usage={} pressed={} duplicate={} queued={} reserved={} dropped={}",
+							id, usage, pressed, wasPressed == pressed, session.responses.size(),
 							session.reservedResponses, session.droppedEvents);
 #endif
 			}
@@ -2083,12 +2103,12 @@ namespace cemuextend_hle
 			m_impl->EmitEvent(session, ServiceId::Input,
 							  static_cast<std::uint16_t>(cemuextend::wire::InputEvent::Keyboard),
 							  {reinterpret_cast<const std::byte*>(&event), sizeof(event)});
-			if (usage == 62)
+			if (usage == 62 || usage == 0xe5)
 			{
 #ifndef CEMU_CEX2_TESTING
 				cemuLog_log(LogType::Force,
-							"CEX2-PERSPECTIVE emit session={} event={} pressed={} enqueued={} queued={}->{} dropped={}->{}",
-							id, event.identity.eventId.get(), pressed,
+							"CEX2-KEY emit session={} usage={} event={} pressed={} enqueued={} queued={}->{} dropped={}->{}",
+							id, usage, event.identity.eventId.get(), pressed,
 							session.responses.size() != queuedBefore, queuedBefore, session.responses.size(),
 							droppedBefore, session.droppedEvents);
 #endif
@@ -2270,7 +2290,7 @@ namespace cemuextend_hle
 	{
 		std::unique_lock lock(m_impl->mutex);
 		const bool closeUi = (owner.GrantedPermissions() & kCemodUiPermission) != 0 &&
-			(permissions & kCemodUiPermission) == 0;
+							 (permissions & kCemodUiPermission) == 0;
 		bool hadTextInput{};
 		bool frameRateChanged{};
 		for (const auto& [id, session] : m_impl->sessions)
@@ -2291,8 +2311,9 @@ namespace cemuextend_hle
 				const bool event = header.flags.get() == static_cast<std::uint16_t>(
 															 cemuextend::transport::ResponseFlag::Event);
 				const auto* definition = FindOperation(header.serviceId.get(), header.operation.get());
-				const auto required = event ? Impl::EventPermission(header.serviceId.get())
-					: definition ? definition->permission : 0U;
+				const auto required = event		   ? Impl::EventPermission(header.serviceId.get())
+									  : definition ? definition->permission
+												   : 0U;
 				if (Impl::HasPermission(session, required, header.serviceId.get(), header.operation.get()))
 				{
 					++response;
@@ -2325,7 +2346,7 @@ namespace cemuextend_hle
 				session.capture = {};
 			if (session.frameRate > 0 &&
 				!Impl::HasPermission(session, 2, static_cast<std::uint16_t>(ServiceId::Timing),
-					static_cast<std::uint16_t>(cemuextend::wire::TimingOperation::SetFrameRate)))
+									 static_cast<std::uint16_t>(cemuextend::wire::TimingOperation::SetFrameRate)))
 			{
 				session.frameRate = -1;
 				session.frameRateSequence = 0;

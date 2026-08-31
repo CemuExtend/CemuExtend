@@ -34,10 +34,10 @@ namespace
 		if (request.find(R"("method":"system.bootstrap")") != std::string_view::npos)
 		{
 			result = "{\"windowId\":\"" + std::to_string(windowId) +
-				"\",\"windowRole\":\"runtime-overlay\",\"appVersion\":\"smoke\","
-				"\"platform\":\"linux\",\"activeAccountName\":\"\",\"theme\":\"dark\","
-				"\"themeRevision\":\"0\",\"language\":\"en\",\"languageRevision\":\"0\","
-				"\"shuttingDown\":false}";
+					 "\",\"windowRole\":\"runtime-overlay\",\"appVersion\":\"smoke\","
+					 "\"platform\":\"linux\",\"activeAccountName\":\"\",\"theme\":\"dark\","
+					 "\"themeRevision\":\"0\",\"language\":\"en\",\"languageRevision\":\"0\","
+					 "\"shuttingDown\":false}";
 		}
 		else if (request.find(R"("method":"theme.get")") != std::string_view::npos)
 			result = R"({"theme":"dark","revision":"0"})";
@@ -45,7 +45,7 @@ namespace
 			result = std::string(snapshot);
 		else
 			return "{\"id\":\"" + id +
-				"\",\"ok\":false,\"error\":{\"code\":\"unknown_method\",\"message\":\"unsupported smoke RPC\"}}";
+				   "\",\"ok\":false,\"error\":{\"code\":\"unknown_method\",\"message\":\"unsupported smoke RPC\"}}";
 		return "{\"id\":\"" + id + "\",\"ok\":true,\"result\":" + result + "}";
 	}
 
@@ -55,7 +55,10 @@ namespace
 		bool transparent{};
 		bool painted{};
 
-		bool Complete() const { return frameSeen && transparent && painted; }
+		bool Complete() const
+		{
+			return frameSeen && transparent && painted;
+		}
 	};
 
 	void AccumulatePixels(const Host::OverlayFrameSnapshot& frame, PixelState& state)
@@ -68,11 +71,11 @@ namespace
 			const auto alpha = (*frame.bgra)[offset + 3];
 			state.transparent |= alpha == 0;
 			state.painted |= alpha != 0 && ((*frame.bgra)[offset] != 0 ||
-				(*frame.bgra)[offset + 1] != 0 || (*frame.bgra)[offset + 2] != 0);
+											(*frame.bgra)[offset + 1] != 0 || (*frame.bgra)[offset + 2] != 0);
 		}
 	}
 
-}
+} // namespace
 
 int main(int argc, char* argv[])
 {

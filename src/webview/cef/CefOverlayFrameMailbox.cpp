@@ -15,11 +15,11 @@ namespace WebFrontend::CefOverlay
 			for (unsigned channel = 0; channel != 4; ++channel)
 				destination[channel] = static_cast<std::uint8_t>(std::min(
 					255U, static_cast<unsigned>(source[channel]) +
-						(static_cast<unsigned>(destination[channel]) * inverseAlpha + 127U) / 255U));
+							  (static_cast<unsigned>(destination[channel]) * inverseAlpha + 127U) / 255U));
 		}
 
 		void MergeDamage(std::vector<Host::OverlayDirtyRect>& damage,
-			const Host::OverlayDirtyRect& rect)
+						 const Host::OverlayDirtyRect& rect)
 		{
 			if (damage.empty())
 			{
@@ -51,9 +51,9 @@ namespace WebFrontend::CefOverlay
 		if (rect.width <= 0 || rect.height <= 0 || width <= 0 || height <= 0)
 			return std::nullopt;
 		const std::int64_t right = std::min<std::int64_t>(width,
-			static_cast<std::int64_t>(rect.x) + rect.width);
+														  static_cast<std::int64_t>(rect.x) + rect.width);
 		const std::int64_t bottom = std::min<std::int64_t>(height,
-			static_cast<std::int64_t>(rect.y) + rect.height);
+														   static_cast<std::int64_t>(rect.y) + rect.height);
 		rect.x = std::max(rect.x, 0);
 		rect.y = std::max(rect.y, 0);
 		rect.width = static_cast<int>(right - rect.x);
@@ -64,9 +64,9 @@ namespace WebFrontend::CefOverlay
 	}
 
 	void FrameMailbox::CopyDirty(std::vector<std::uint8_t>& destination,
-		int destinationWidth, int destinationHeight, const std::uint8_t* source,
-		int sourceWidth, int sourceStride,
-		std::span<const Host::OverlayDirtyRect> dirtyRects)
+								 int destinationWidth, int destinationHeight, const std::uint8_t* source,
+								 int sourceWidth, int sourceStride,
+								 std::span<const Host::OverlayDirtyRect> dirtyRects)
 	{
 		for (const auto candidate : dirtyRects)
 		{
@@ -77,16 +77,16 @@ namespace WebFrontend::CefOverlay
 			{
 				const auto offset = (static_cast<std::size_t>(rect->y + row) * destinationWidth + rect->x) * kBytesPerPixel;
 				const auto sourceOffset = static_cast<std::size_t>(rect->y + row) * sourceStride +
-					static_cast<std::size_t>(rect->x) * kBytesPerPixel;
+										  static_cast<std::size_t>(rect->x) * kBytesPerPixel;
 				std::memcpy(destination.data() + offset, source + sourceOffset,
-					static_cast<std::size_t>(rect->width) * kBytesPerPixel);
+							static_cast<std::size_t>(rect->width) * kBytesPerPixel);
 			}
 		}
 	}
 
 	bool FrameMailbox::PublishView(Host::PointerSurface surface, int width, int height,
-		const void* pixels, int sourceStride,
-		std::span<const Host::OverlayDirtyRect> dirtyRects)
+								   const void* pixels, int sourceStride,
+								   std::span<const Host::OverlayDirtyRect> dirtyRects)
 	{
 		if (!pixels || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
 			sourceStride < width * static_cast<int>(kBytesPerPixel))
@@ -124,7 +124,7 @@ namespace WebFrontend::CefOverlay
 			// copy-on-write preserves its immutable view.
 			state.latest.reset();
 			CopyDirty(*state.view, width, height, static_cast<const std::uint8_t*>(pixels), width,
-				sourceStride, valid);
+					  sourceStride, valid);
 			for (const auto& rect : valid)
 				MergeDamage(state.pendingDamage, rect);
 			PublishLocked(surface, state);
@@ -171,8 +171,8 @@ namespace WebFrontend::CefOverlay
 	}
 
 	bool FrameMailbox::PublishPopup(Host::PointerSurface surface, int width, int height,
-		const void* pixels, int sourceStride,
-		std::span<const Host::OverlayDirtyRect> dirtyRects)
+									const void* pixels, int sourceStride,
+									std::span<const Host::OverlayDirtyRect> dirtyRects)
 	{
 		if (!pixels || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
 			sourceStride < width * static_cast<int>(kBytesPerPixel))
@@ -199,7 +199,7 @@ namespace WebFrontend::CefOverlay
 			if (valid.empty())
 				return false;
 			CopyDirty(state.popup, width, height, static_cast<const std::uint8_t*>(pixels), width,
-				sourceStride, valid);
+					  sourceStride, valid);
 			state.forceFullDamage = true;
 			PublishLocked(surface, state);
 		}
@@ -225,9 +225,9 @@ namespace WebFrontend::CefOverlay
 					if (x < 0 || y < 0 || x >= state.width || y >= state.height)
 						continue;
 					auto* destination = composed->data() +
-						(static_cast<std::size_t>(y) * state.width + x) * kBytesPerPixel;
+										(static_cast<std::size_t>(y) * state.width + x) * kBytesPerPixel;
 					const auto* source = state.popup.data() +
-						(static_cast<std::size_t>(popupY) * state.popupWidth + popupX) * kBytesPerPixel;
+										 (static_cast<std::size_t>(popupY) * state.popupWidth + popupX) * kBytesPerPixel;
 					BlendPremultiplied(destination, source);
 				}
 		}
@@ -241,8 +241,8 @@ namespace WebFrontend::CefOverlay
 		snapshot.fullDamage = state.forceFullDamage;
 		snapshot.bgra = std::move(composed);
 		snapshot.dirtyRects = snapshot.fullDamage
-			? std::vector<Host::OverlayDirtyRect>{{0, 0, state.width, state.height}}
-			: state.pendingDamage;
+								  ? std::vector<Host::OverlayDirtyRect>{{0, 0, state.width, state.height}}
+								  : state.pendingDamage;
 		state.latest = std::move(snapshot);
 	}
 

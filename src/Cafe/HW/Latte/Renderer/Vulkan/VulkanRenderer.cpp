@@ -579,7 +579,7 @@ VulkanRenderer::VulkanRenderer(std::shared_ptr<Host::IWindowMetrics> windowMetri
 	else if (window.mainSurface.backend == Host::NativeWindowBackend::Wayland)
 		surfaceBackend = "wayland";
 	cemuLog_log(LogType::Force, "Vulkan main surface: backend={}, display={}, surface={}",
-		surfaceBackend, window.mainSurface.display, window.mainSurface.surface);
+				surfaceBackend, window.mainSurface.display, window.mainSurface.surface);
 	auto surface = CreateFramebufferSurface(m_instance, window.mainSurface);
 
 	auto& config = GetConfig();
@@ -1563,7 +1563,7 @@ bool VulkanRenderer::IsDeviceSuitable(VkSurfaceKHR surface, const VkPhysicalDevi
 	if (!FindQueueFamilies(surface, device).IsComplete())
 	{
 		cemuLog_log(LogType::Force, "Vulkan device '{}' rejected: no graphics/present queue for the native surface",
-			properties.deviceName);
+					properties.deviceName);
 		return false;
 	}
 
@@ -1573,7 +1573,7 @@ bool VulkanRenderer::IsDeviceSuitable(VkSurfaceKHR surface, const VkPhysicalDevi
 	if (vkVersionMajor < 1 || (vkVersionMajor == 1 && vkVersionMinor < 1))
 	{
 		cemuLog_log(LogType::Force, "Vulkan device '{}' rejected: API version {}.{} is below 1.1",
-			properties.deviceName, vkVersionMajor, vkVersionMinor);
+					properties.deviceName, vkVersionMajor, vkVersionMinor);
 		return false; // minimum required version is Vulkan 1.1
 	}
 
@@ -1581,7 +1581,7 @@ bool VulkanRenderer::IsDeviceSuitable(VkSurfaceKHR surface, const VkPhysicalDevi
 	if (!CheckDeviceExtensionSupport(device, info))
 	{
 		cemuLog_log(LogType::Force, "Vulkan device '{}' rejected: required device extension missing",
-			properties.deviceName);
+					properties.deviceName);
 		return false;
 	}
 
@@ -1589,8 +1589,8 @@ bool VulkanRenderer::IsDeviceSuitable(VkSurfaceKHR surface, const VkPhysicalDevi
 	if (swapchainSupport.formats.empty() || swapchainSupport.presentModes.empty())
 	{
 		cemuLog_log(LogType::Force,
-			"Vulkan device '{}' rejected: swapchain formats={}, present modes={}",
-			properties.deviceName, swapchainSupport.formats.size(), swapchainSupport.presentModes.size());
+					"Vulkan device '{}' rejected: swapchain formats={}, present modes={}",
+					properties.deviceName, swapchainSupport.formats.size(), swapchainSupport.presentModes.size());
 		return false;
 	}
 	return true;
@@ -3350,50 +3350,49 @@ void VulkanRenderer::overlayInitialize()
 	if ((properties.optimalTilingFeatures & required) != required)
 	{
 		cemuLog_log(LogType::Force,
-			"CEF Runtime Overlay disabled: VK_FORMAT_B8G8R8A8_UNORM lacks transfer-dst or sampled-image support");
+					"CEF Runtime Overlay disabled: VK_FORMAT_B8G8R8A8_UNORM lacks transfer-dst or sampled-image support");
 		m_overlayFrames.reset();
 		return;
 	}
 
 	try
 	{
-	VkDescriptorSetLayoutBinding binding{};
-	binding.binding = 0;
-	binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	binding.descriptorCount = 1;
-	binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	VkDescriptorSetLayoutCreateInfo descriptorInfo{};
-	descriptorInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	descriptorInfo.bindingCount = 1;
-	descriptorInfo.pBindings = &binding;
-	if (vkCreateDescriptorSetLayout(m_logicalDevice, &descriptorInfo, nullptr,
-		&m_overlayDescriptorSetLayout) != VK_SUCCESS)
-		throw std::runtime_error("failed to create the CEF overlay descriptor layout");
+		VkDescriptorSetLayoutBinding binding{};
+		binding.binding = 0;
+		binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		binding.descriptorCount = 1;
+		binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		VkDescriptorSetLayoutCreateInfo descriptorInfo{};
+		descriptorInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		descriptorInfo.bindingCount = 1;
+		descriptorInfo.pBindings = &binding;
+		if (vkCreateDescriptorSetLayout(m_logicalDevice, &descriptorInfo, nullptr,
+										&m_overlayDescriptorSetLayout) != VK_SUCCESS)
+			throw std::runtime_error("failed to create the CEF overlay descriptor layout");
 
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &m_overlayDescriptorSetLayout;
-	if (vkCreatePipelineLayout(m_logicalDevice, &pipelineLayoutInfo, nullptr,
-		&m_overlayPipelineLayout) != VK_SUCCESS)
-		throw std::runtime_error("failed to create the CEF overlay pipeline layout");
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &m_overlayDescriptorSetLayout;
+		if (vkCreatePipelineLayout(m_logicalDevice, &pipelineLayoutInfo, nullptr,
+								   &m_overlayPipelineLayout) != VK_SUCCESS)
+			throw std::runtime_error("failed to create the CEF overlay pipeline layout");
 
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.maxLod = 0.0f;
-	if (vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &m_overlaySampler) != VK_SUCCESS)
-		throw std::runtime_error("failed to create the CEF overlay sampler");
-	}
-	catch (const std::exception& error)
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.maxLod = 0.0f;
+		if (vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &m_overlaySampler) != VK_SUCCESS)
+			throw std::runtime_error("failed to create the CEF overlay sampler");
+	} catch (const std::exception& error)
 	{
 		cemuLog_log(LogType::Force, "CEF Runtime Overlay disabled during Vulkan initialization: {}",
-			error.what());
+					error.what());
 		overlayCleanup();
 		m_overlayFrames.reset();
 	}
@@ -3461,7 +3460,7 @@ void VulkanRenderer::overlayCreateSurface(OverlaySurfaceResources& surface, int 
 	vkGetImageMemoryRequirements(m_logicalDevice, surface.image, &imageRequirements);
 	std::uint32_t memoryIndex{};
 	if (!memoryManager->FindMemoryType(imageRequirements.memoryTypeBits,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memoryIndex))
+									   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memoryIndex))
 		throw std::runtime_error("failed to find device-local memory for the CEF overlay image");
 	VkMemoryAllocateInfo allocation{};
 	allocation.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -3486,12 +3485,12 @@ void VulkanRenderer::overlayCreateSurface(OverlaySurfaceResources& surface, int 
 	for (auto& staging : surface.staging)
 	{
 		staging.coherent = memoryManager->CreateBuffer(surface.stagingCapacity,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			staging.buffer, staging.memory);
+													   VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+													   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+													   staging.buffer, staging.memory);
 		if (!staging.coherent && !memoryManager->CreateBuffer(surface.stagingCapacity,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			staging.buffer, staging.memory))
+															  VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+															  staging.buffer, staging.memory))
 			throw std::runtime_error("failed to create a persistently mapped CEF overlay staging buffer");
 		void* mapped{};
 		if (vkMapMemory(m_logicalDevice, staging.memory, 0, VK_WHOLE_SIZE, 0, &mapped) != VK_SUCCESS)
@@ -3505,7 +3504,7 @@ void VulkanRenderer::overlayCreateSurface(OverlaySurfaceResources& surface, int 
 	descriptorAllocation.descriptorSetCount = 1;
 	descriptorAllocation.pSetLayouts = &m_overlayDescriptorSetLayout;
 	if (vkAllocateDescriptorSets(m_logicalDevice, &descriptorAllocation,
-		&surface.descriptorSet) != VK_SUCCESS)
+								 &surface.descriptorSet) != VK_SUCCESS)
 		throw std::runtime_error("failed to allocate the CEF overlay descriptor set");
 	VkDescriptorImageInfo descriptorImage{};
 	descriptorImage.sampler = m_overlaySampler;
@@ -3540,8 +3539,7 @@ VkPipeline VulkanRenderer::overlayCreatePipeline(VkRenderPass renderPass)
 	try
 	{
 		fragment = createShader(CefOverlayShaders::fragment, sizeof(CefOverlayShaders::fragment));
-	}
-	catch (...)
+	} catch (...)
 	{
 		vkDestroyShaderModule(m_logicalDevice, vertex, nullptr);
 		throw;
@@ -3580,7 +3578,7 @@ VkPipeline VulkanRenderer::overlayCreatePipeline(VkRenderPass renderPass)
 	blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blend.alphaBlendOp = VK_BLEND_OP_ADD;
 	blend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+						   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	VkPipelineColorBlendStateCreateInfo blendState{};
 	blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	blendState.attachmentCount = 1;
@@ -3611,7 +3609,7 @@ VkPipeline VulkanRenderer::overlayCreatePipeline(VkRenderPass renderPass)
 		// VkPipelineCache, including the first lazily-created overlay pipeline.
 		std::shared_lock lock(m_pipeline_cache_save_mutex);
 		result = vkCreateGraphicsPipelines(m_logicalDevice, m_pipeline_cache, 1,
-			&pipelineInfo, nullptr, &pipeline);
+										   &pipelineInfo, nullptr, &pipeline);
 	}
 	vkDestroyShaderModule(m_logicalDevice, fragment, nullptr);
 	vkDestroyShaderModule(m_logicalDevice, vertex, nullptr);
@@ -3640,8 +3638,7 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 		try
 		{
 			overlayCreateSurface(surface, frame->width, frame->height);
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			cemuLog_log(LogType::Force, "CEF Runtime Overlay disabled during resize: {}", error.what());
 			overlayDestroySurface(surface);
@@ -3656,8 +3653,8 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 	staging.inUse = false;
 	std::vector<VkBufferImageCopy> copies;
 	const auto& damage = frame->fullDamage
-		? std::vector<Host::OverlayDirtyRect>{{0, 0, frame->width, frame->height}}
-		: frame->dirtyRects;
+							 ? std::vector<Host::OverlayDirtyRect>{{0, 0, frame->width, frame->height}}
+							 : frame->dirtyRects;
 	for (const auto& rect : damage)
 	{
 		if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0 ||
@@ -3666,20 +3663,20 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 		for (int row = 0; row < rect.height; ++row)
 		{
 			const auto offset = static_cast<std::size_t>(rect.y + row) * frame->stride +
-				static_cast<std::size_t>(rect.x) * 4;
+								static_cast<std::size_t>(rect.x) * 4;
 			std::memcpy(staging.mapped + offset, frame->bgra->data() + offset,
-				static_cast<std::size_t>(rect.width) * 4);
+						static_cast<std::size_t>(rect.width) * 4);
 		}
 		VkBufferImageCopy copy{};
 		copy.bufferOffset = static_cast<VkDeviceSize>(rect.y) * frame->stride +
-			static_cast<VkDeviceSize>(rect.x) * 4;
+							static_cast<VkDeviceSize>(rect.x) * 4;
 		copy.bufferRowLength = frame->width;
 		copy.bufferImageHeight = frame->height;
 		copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		copy.imageSubresource.layerCount = 1;
 		copy.imageOffset = {rect.x, rect.y, 0};
 		copy.imageExtent = {static_cast<std::uint32_t>(rect.width),
-			static_cast<std::uint32_t>(rect.height), 1};
+							static_cast<std::uint32_t>(rect.height), 1};
 		copies.push_back(copy);
 	}
 	if (copies.empty())
@@ -3697,7 +3694,8 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 	toTransfer.srcAccessMask = surface.imageInitialized ? VK_ACCESS_SHADER_READ_BIT : 0;
 	toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	toTransfer.oldLayout = surface.imageInitialized
-		? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+							   ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+							   : VK_IMAGE_LAYOUT_UNDEFINED;
 	toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -3706,10 +3704,10 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 	toTransfer.subresourceRange.levelCount = 1;
 	toTransfer.subresourceRange.layerCount = 1;
 	vkCmdPipelineBarrier(m_state.currentCommandBuffer,
-		surface.imageInitialized ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
+						 surface.imageInitialized ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+						 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
 	vkCmdCopyBufferToImage(m_state.currentCommandBuffer, staging.buffer, surface.image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copies.size(), copies.data());
+						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copies.size(), copies.data());
 	staging.commandBufferId = GetCurrentCommandBufferId();
 	staging.inUse = true;
 	VkImageMemoryBarrier toSample = toTransfer;
@@ -3718,7 +3716,7 @@ void VulkanRenderer::overlayUpload(bool mainWindow)
 	toSample.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	toSample.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	vkCmdPipelineBarrier(m_state.currentCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
+						 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
 	surface.imageInitialized = true;
 	surface.drawable = true;
 	surface.uploadedSequence = frame->sequence;
@@ -3739,11 +3737,10 @@ void VulkanRenderer::overlayDraw(bool mainWindow)
 		try
 		{
 			surface.pipeline = overlayCreatePipeline(chainInfo.m_swapchainRenderPass);
-		}
-		catch (const std::exception& error)
+		} catch (const std::exception& error)
 		{
 			cemuLog_log(LogType::Force, "CEF Runtime Overlay disabled during pipeline creation: {}",
-				error.what());
+						error.what());
 			m_overlayFrames.reset();
 			return;
 		}
@@ -3757,9 +3754,9 @@ void VulkanRenderer::overlayDraw(bool mainWindow)
 	vkCmdSetViewport(m_state.currentCommandBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(m_state.currentCommandBuffer, 0, 1, &scissor);
 	vkCmdBindPipeline(m_state.currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		surface.pipeline);
+					  surface.pipeline);
 	vkCmdBindDescriptorSets(m_state.currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		m_overlayPipelineLayout, 0, 1, &surface.descriptorSet, 0, nullptr);
+							m_overlayPipelineLayout, 0, 1, &surface.descriptorSet, 0, nullptr);
 	vkCmdDraw(m_state.currentCommandBuffer, 3, 1, 0, 0);
 }
 #endif

@@ -25,6 +25,7 @@ namespace WebFrontend
 		{
 			Host::PointerSurface surface{Host::PointerSurface::Main};
 			INativeWindowHost::InputHandler* handler{};
+			GtkWidget* contentWidget{};
 			std::unordered_set<std::uint32_t> pressedKeys;
 			bool captured{};
 			bool rawMouseEnabled{};
@@ -40,22 +41,27 @@ namespace WebFrontend
 			if (!binding || !binding->handler || !*binding->handler)
 				return;
 			event.surface = binding->surface;
+			auto* content = binding->contentWidget ? binding->contentWidget : source;
 			GtkAllocation allocation{};
-			gtk_widget_get_allocation(source, &allocation);
-			const auto scale = gtk_widget_get_scale_factor(source);
+			gtk_widget_get_allocation(content, &allocation);
+			const auto scale = gtk_widget_get_scale_factor(content);
 			event.contentWidth = allocation.width * scale;
 			event.contentHeight = allocation.height * scale;
 			(*binding->handler)(event);
 		}
 
 		void ConnectInput(GtkWidget* widget, Host::PointerSurface surface,
-						  INativeWindowHost::InputHandler* handler)
+						  INativeWindowHost::InputHandler* handler,
+						  GtkWidget* keySource = nullptr)
 		{
+			if (!keySource)
+				keySource = widget;
 			gtk_widget_add_events(widget, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK |
-											  GDK_BUTTON_RELEASE_MASK | GDK_SCROLL_MASK | GDK_TOUCH_MASK |
-											  GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK);
-			auto* binding = new GtkInputBinding{surface, handler};
-			g_object_set_data_full(G_OBJECT(widget), "cemu-input-binding", binding, +[](gpointer data) { delete static_cast<GtkInputBinding*>(data); });
+											  GDK_BUTTON_RELEASE_MASK | GDK_SCROLL_MASK | GDK_TOUCH_MASK);
+			gtk_widget_add_events(keySource,
+							  GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK);
+			auto* binding = new GtkInputBinding{surface, handler, widget};
+			g_object_set_data_full(G_OBJECT(keySource), "cemu-input-binding", binding, +[](gpointer data) { delete static_cast<GtkInputBinding*>(data); });
 			g_signal_connect(widget, "motion-notify-event", G_CALLBACK((+[](GtkWidget* source, GdkEventMotion* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 const auto scale = gtk_widget_get_scale_factor(source);
@@ -129,7 +135,7 @@ namespace WebFrontend
 								 return TRUE;
 							 })),
 							 binding);
-			g_signal_connect(widget, "key-press-event", G_CALLBACK((+[](GtkWidget* source, GdkEventKey* event, gpointer data) -> gboolean {
+			g_signal_connect(keySource, "key-press-event", G_CALLBACK((+[](GtkWidget* source, GdkEventKey* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 const auto modifiers = static_cast<std::uint8_t>(
 									 ((event->state & GDK_CONTROL_MASK) ? 1U : 0U) |
@@ -143,7 +149,7 @@ namespace WebFrontend
 								 return TRUE;
 							 })),
 							 binding);
-			g_signal_connect(widget, "key-release-event", G_CALLBACK((+[](GtkWidget* source, GdkEventKey* event, gpointer data) -> gboolean {
+			g_signal_connect(keySource, "key-release-event", G_CALLBACK((+[](GtkWidget* source, GdkEventKey* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 bool autoRepeatRelease = false;
 								 if (auto* next = gdk_event_peek())
@@ -165,7 +171,7 @@ namespace WebFrontend
 								 return TRUE;
 							 })),
 							 binding);
-			g_signal_connect(widget, "focus-out-event", G_CALLBACK((+[](GtkWidget* source, GdkEventFocus*, gpointer data) -> gboolean {
+			g_signal_connect(keySource, "focus-out-event", G_CALLBACK((+[](GtkWidget* source, GdkEventFocus*, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 binding->pressedKeys.clear();
 								 DispatchGtkInput(source, binding,
@@ -226,8 +232,9 @@ namespace WebFrontend
 				gtk_widget_set_vexpand(m_widget, TRUE);
 				gtk_widget_set_can_focus(m_widget, TRUE);
 				gtk_stack_add_named(GTK_STACK(m_stack), m_widget, "render");
-				gtk_widget_realize(m_widget);
+				// Install native input masks before GTK realizes the drawing area.
 				ConnectInput(m_widget, Host::PointerSurface::Main, inputHandler);
+				gtk_widget_realize(m_widget);
 			}
 
 			~GtkRenderRegion() override
@@ -325,10 +332,14 @@ namespace WebFrontend
 											 self.m_metricsHandler();
 									 }),
 									 this);
+					// Key focus can move between GTK-owned children while the game window
+					// remains active. Listen at the toplevel so the physical keyboard
+					// stream does not disappear when an overlay changes browser focus.
+					// Event masks must be present before show_all realizes both widgets.
+					ConnectInput(m_widget, surface, inputHandler, m_window);
 					gtk_widget_show_all(m_window);
 					gtk_widget_realize(m_widget);
 					gtk_widget_hide(m_window);
-					ConnectInput(m_widget, surface, inputHandler);
 				} catch (...)
 				{
 					if (m_window)
@@ -384,6 +395,7 @@ namespace WebFrontend
 			void RequestFocus() override
 			{
 				gtk_window_present(GTK_WINDOW(m_window));
+				gtk_window_set_focus(GTK_WINDOW(m_window), m_widget);
 				gtk_widget_grab_focus(m_widget);
 			}
 			void SetFullscreen(bool fullscreen)
@@ -412,6 +424,7 @@ namespace WebFrontend
 				m_window = nullptr;
 				m_widget = nullptr;
 			}
+
 		  private:
 			GtkWidget* m_window{};
 			GtkWidget* m_widget{};
@@ -523,7 +536,7 @@ namespace WebFrontend
 					auto* display = gdk_x11_display_get_xdisplay(
 						gdk_window_get_display(window));
 					if (XGetWindowAttributes(display, gdk_x11_window_get_xid(window),
-									 &attributes))
+											 &attributes))
 						return {0, 0, std::max(1, attributes.width),
 								std::max(1, attributes.height)};
 				}
@@ -555,7 +568,7 @@ namespace WebFrontend
 				::Window root{}, currentParent{}, *children{};
 				unsigned childCount{};
 				const bool queried = XQueryTree(display, child, &root, &currentParent,
-										 &children, &childCount) != 0;
+												&children, &childCount) != 0;
 				if (children)
 					XFree(children);
 				if (queried)
@@ -564,8 +577,8 @@ namespace WebFrontend
 						XReparentWindow(display, child, parent, 0, 0);
 					const auto bounds = GetBrowserBounds();
 					XMoveResizeWindow(display, child, 0, 0,
-						static_cast<unsigned>(std::max(1, bounds.width)),
-						static_cast<unsigned>(std::max(1, bounds.height)));
+									  static_cast<unsigned>(std::max(1, bounds.width)),
+									  static_cast<unsigned>(std::max(1, bounds.height)));
 					XMapWindow(display, child);
 				}
 				XSync(display, False);
@@ -586,8 +599,8 @@ namespace WebFrontend
 				auto* gdkDisplay = gtk_widget_get_display(m_browserContainer);
 				gdk_x11_display_error_trap_push(gdkDisplay);
 				XMoveResizeWindow(display, m_browserChild, 0, 0,
-							  static_cast<unsigned>(std::max(1, bounds.width)),
-							  static_cast<unsigned>(std::max(1, bounds.height)));
+								  static_cast<unsigned>(std::max(1, bounds.width)),
+								  static_cast<unsigned>(std::max(1, bounds.height)));
 				XSync(display, False);
 				if (gdk_x11_display_error_trap_pop(gdkDisplay))
 					m_browserChild = None;
@@ -763,7 +776,8 @@ namespace WebFrontend
 			void RequestRenderRedraw(Host::PointerSurface surface) override
 			{
 				auto* region = surface == Host::PointerSurface::Main
-								 ? m_renderRegion.get() : m_padRenderRegion.get();
+								   ? m_renderRegion.get()
+								   : m_padRenderRegion.get();
 				if (region)
 					region->RequestRedraw();
 			}
@@ -839,6 +853,13 @@ namespace WebFrontend
 					return;
 				auto* binding = static_cast<GtkInputBinding*>(
 					g_object_get_data(G_OBJECT(widget), "cemu-input-binding"));
+				if (!binding)
+				{
+					auto* toplevel = gtk_widget_get_toplevel(widget);
+					if (toplevel)
+						binding = static_cast<GtkInputBinding*>(
+							g_object_get_data(G_OBJECT(toplevel), "cemu-input-binding"));
+				}
 				const bool wantsCapture = presentation.ownsPointer && !presentation.showCursor;
 				if (binding && binding->captured != wantsCapture)
 					binding->positionValid = false;
@@ -1049,14 +1070,16 @@ namespace WebFrontend
 				gtk_widget_set_can_focus(m_browserContainer, TRUE);
 				gtk_widget_add_events(m_browserContainer, GDK_FOCUS_CHANGE_MASK);
 				g_signal_connect(m_browserContainer, "size-allocate",
-					G_CALLBACK(+[](GtkWidget*, GtkAllocation*, gpointer data) {
-						static_cast<GtkWindowHost*>(data)->ResizeBrowser();
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GtkAllocation*, gpointer data) {
+									 static_cast<GtkWindowHost*>(data)->ResizeBrowser();
+								 }),
+								 this);
 				g_signal_connect(m_browserContainer, "focus-in-event",
-					G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-						static_cast<GtkWindowHost*>(data)->FocusBrowserFromFocusEvent();
-						return FALSE;
-					}), this);
+								 G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 static_cast<GtkWindowHost*>(data)->FocusBrowserFromFocusEvent();
+									 return FALSE;
+								 }),
+								 this);
 
 				m_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 				m_stack = gtk_stack_new();
@@ -1085,12 +1108,13 @@ namespace WebFrontend
 									 const auto characterOffset = gtk_editable_get_position(editable);
 									 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
 									 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
-															  .text = text ? text : "",
-															  .preedit = self.m_textPreedit,
-															  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
-															  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
-															  .textSequence = self.m_textInputSequence});
-								 }), this);
+														  .text = text ? text : "",
+														  .preedit = self.m_textPreedit,
+														  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
+														  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
+														  .textSequence = self.m_textInputSequence});
+								 }),
+								 this);
 				g_signal_connect(m_textInput, "preedit-changed", G_CALLBACK(+[](GtkEntry*, gchar* preedit, gpointer data) {
 									 auto& self = *static_cast<GtkWindowHost*>(data);
 									 self.m_textPreedit = preedit ? preedit : "";
@@ -1100,13 +1124,14 @@ namespace WebFrontend
 										 const auto characterOffset = gtk_editable_get_position(GTK_EDITABLE(self.m_textInput));
 										 const char* cursor = text ? g_utf8_offset_to_pointer(text, characterOffset) : nullptr;
 										 self.m_inputHandler({.kind = NativeInputKind::TextComposition,
-																  .text = text ? text : "",
-																  .preedit = self.m_textPreedit,
-																  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
-																  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
-																  .textSequence = self.m_textInputSequence});
+															  .text = text ? text : "",
+															  .preedit = self.m_textPreedit,
+															  .textCursor = text && cursor ? static_cast<std::uint32_t>(cursor - text) : 0,
+															  .selectionLength = static_cast<std::uint32_t>(self.m_textPreedit.size()),
+															  .textSequence = self.m_textInputSequence});
 									 }
-								 }), this);
+								 }),
+								 this);
 				gtk_box_pack_start(GTK_BOX(m_root), m_overlay, TRUE, TRUE, 0);
 				gtk_container_add(GTK_CONTAINER(m_window), m_root);
 				gtk_widget_realize(m_window);

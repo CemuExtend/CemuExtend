@@ -23,8 +23,8 @@ namespace WebFrontend::CefOverlay
 	[[nodiscard]] std::optional<CemodNetworkOrigin> ParseCemodNetworkOrigin(
 		std::string_view url);
 	[[nodiscard]] bool IsCemodNetworkUrlAllowed(std::string_view url,
-		CemodNetworkRequestKind kind, const std::vector<std::string>& connectOrigins,
-		const std::vector<std::string>& resourceOrigins);
+												CemodNetworkRequestKind kind, const std::vector<std::string>& connectOrigins,
+												const std::vector<std::string>& resourceOrigins);
 	[[nodiscard]] bool IsLocalNetworkHostname(std::string_view host);
 	[[nodiscard]] bool IsPublicNetworkAddress(std::string_view address);
 } // namespace WebFrontend::CefOverlay

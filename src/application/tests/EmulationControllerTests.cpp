@@ -731,15 +731,18 @@ int main()
 		.packages = {
 			{.packageKey = "digest-a", .titleIds = {0x1234}, .modIdentity = "mod-a", .packageDigest = "digest-a", .requestedPermissions = 1ULL << 10, .trustedNative = true, .valid = true},
 			{.packageKey = "approved", .titleIds = {0x1234}, .modIdentity = "mod-b", .packageDigest = "digest-b", .approved = true, .valid = true},
+			{.packageKey = "partial-native", .titleIds = {0x1234}, .modIdentity = "mod-partial", .packageDigest = "digest-partial", .requestedPermissions = 3, .grantedPermissions = 1, .approved = true, .trustedNative = true, .valid = true},
 			{.packageKey = "wrong-title", .titleIds = {0x5678}, .modIdentity = "mod-c", .packageDigest = "digest-c", .valid = true},
 			{.packageKey = "invalid", .titleIds = {0x1234}, .modIdentity = "mod-d", .packageDigest = "digest-d", .valid = false},
 		},
 	};
 	const auto preflight = controller.GetCemodLaunchPreflight(0x1234);
 	assert(preflight.generation == 77 && preflight.titleId == 0x1234);
-	assert(preflight.pendingApprovals.size() == 1);
+	assert(preflight.pendingApprovals.size() == 2);
 	assert(preflight.pendingApprovals.front().packageKey == "digest-a");
 	assert(preflight.pendingApprovals.front().requestedPermissions == (1ULL << 10));
+	assert(preflight.pendingApprovals.back().packageKey == "partial-native");
+	assert(preflight.pendingApprovals.back().requestedPermissions == 3);
 	backend.cemodManagerSnapshot = {};
 	bool preparedBeforeStart{};
 	const auto launch = controller.Launch({"test.rpx"}, [&](const auto&) {

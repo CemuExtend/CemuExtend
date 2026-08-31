@@ -57,14 +57,14 @@ namespace
 		for (int index = 0; index < argc; ++index)
 		{
 			const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-				wideArguments[index], -1, nullptr, 0, nullptr, nullptr);
+												   wideArguments[index], -1, nullptr, 0, nullptr, nullptr);
 			if (length <= 0)
 				arguments.emplace_back();
 			else
 			{
 				std::string value(static_cast<std::size_t>(length), '\0');
 				WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArguments[index], -1,
-					value.data(), length, nullptr, nullptr);
+									value.data(), length, nullptr, nullptr);
 				value.pop_back();
 				arguments.emplace_back(std::move(value));
 			}
@@ -74,7 +74,7 @@ namespace
 			pointers.push_back(argument.data());
 		return WebFrontend::CefOverlay::ExecuteSubprocess(argc, pointers.data());
 	}
-}
+} // namespace
 #endif
 #endif
 

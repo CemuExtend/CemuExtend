@@ -418,7 +418,7 @@ namespace WebFrontend
 					SetWindowPlacement(m_window, &m_windowPlacement);
 					SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
 								 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
-								 SWP_NOZORDER | SWP_NOOWNERZORDER);
+									 SWP_NOZORDER | SWP_NOOWNERZORDER);
 				}
 			}
 			void PrepareForDestroy() override

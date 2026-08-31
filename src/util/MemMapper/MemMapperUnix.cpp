@@ -70,7 +70,7 @@ namespace MemMapper
 			// the address-space reservation remains intact and the next commit is
 			// zero-initialized.
 			void* result = mmap(baseAddr, size, PROT_NONE,
-							MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+								MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 			return result == baseAddr;
 		}
 		return munmap(baseAddr, size) == 0;

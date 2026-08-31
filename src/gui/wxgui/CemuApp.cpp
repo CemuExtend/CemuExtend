@@ -512,9 +512,12 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	// wxGTK stores GDK's keyval in GetRawKeyCode().
 	switch (rawKey)
 	{
-	case GDK_KEY_Shift_L: return 0xe1;
-	case GDK_KEY_Shift_R: return 0xe5;
-	default: break;
+	case GDK_KEY_Shift_L:
+		return 0xe1;
+	case GDK_KEY_Shift_R:
+		return 0xe5;
+	default:
+		break;
 	}
 #else
 	(void)rawKey;

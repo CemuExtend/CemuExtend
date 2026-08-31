@@ -146,7 +146,11 @@ namespace Application
 		CemodLaunchPreflight result{snapshot.generation, titleId, {}};
 		for (const auto& package : snapshot.packages)
 		{
-			if (!package.valid || package.approved || package.packageDigest.empty() ||
+			const bool nativePermissionsDenied =
+				(package.trustedNative || package.wups) &&
+				(package.requestedPermissions & ~package.grantedPermissions) != 0;
+			if (!package.valid || (package.approved && !nativePermissionsDenied) ||
+				package.packageDigest.empty() ||
 				package.modIdentity.empty() ||
 				std::ranges::find(package.titleIds, titleId) == package.titleIds.end())
 				continue;

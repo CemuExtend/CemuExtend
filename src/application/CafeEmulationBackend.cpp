@@ -3787,6 +3787,11 @@ namespace Application
 				if ((found->requestedPermissions & ~cemuextend_hle::kCemodExactApprovalPermissionMask) != 0 ||
 					(update.grantedPermissions & ~found->requestedPermissions) != 0)
 					return {CemodManagerError::InvalidPermissions, "The permission selection is invalid", std::move(snapshot)};
+				if (update.approved && (found->trustedNative || found->wups) &&
+					(found->requestedPermissions & ~update.grantedPermissions) != 0)
+					return {CemodManagerError::InvalidPermissions,
+							"Native and WUPS packages require every requested permission to run",
+							std::move(snapshot)};
 				const auto approvalKey = cemuextend_hle::MakeCemodApprovalKey(
 					found->modIdentity, found->packageDigest);
 				auto configLock = GetConfigHandle().Lock();

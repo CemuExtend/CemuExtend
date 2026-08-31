@@ -28,12 +28,12 @@ namespace WebFrontend
 			if (text.empty())
 				return {};
 			const auto length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-				text.data(), static_cast<int>(text.size()), nullptr, 0);
+													text.data(), static_cast<int>(text.size()), nullptr, 0);
 			if (length <= 0)
 				throw std::invalid_argument("tool window title must be valid UTF-8");
 			std::wstring result(static_cast<std::size_t>(length), L'\0');
 			if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
-					static_cast<int>(text.size()), result.data(), length) != length)
+									static_cast<int>(text.size()), result.data(), length) != length)
 				throw std::runtime_error("failed to convert the tool window title");
 			return result;
 		}
@@ -117,22 +117,22 @@ namespace WebFrontend
 				if (!m_window || !IsWindow(m_window))
 					return;
 				const auto frame = FrameForClient(std::max(width, m_minimumWidth),
-					std::max(height, m_minimumHeight));
+												  std::max(height, m_minimumHeight));
 				SetWindowPos(m_window, nullptr, 0, 0, frame.right - frame.left,
-						 frame.bottom - frame.top,
-						 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+							 frame.bottom - frame.top,
+							 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 				ResizeBrowser();
 			}
 
 			void SetBounds(std::int32_t x, std::int32_t y,
-				std::int32_t width, std::int32_t height) override
+						   std::int32_t width, std::int32_t height) override
 			{
 				if (!m_window || !IsWindow(m_window))
 					return;
 				const auto frame = FrameForClient(std::max(width, m_minimumWidth),
-					std::max(height, m_minimumHeight));
+												  std::max(height, m_minimumHeight));
 				SetWindowPos(m_window, nullptr, x, y, frame.right - frame.left,
-					frame.bottom - frame.top, SWP_NOZORDER | SWP_NOACTIVATE);
+							 frame.bottom - frame.top, SWP_NOZORDER | SWP_NOACTIVATE);
 				ResizeBrowser();
 			}
 
@@ -153,8 +153,8 @@ namespace WebFrontend
 					style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
 				SetWindowLongPtrW(m_window, GWL_STYLE, static_cast<LONG_PTR>(style));
 				SetWindowPos(m_window, nullptr, 0, 0, 0, 0,
-					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
-					SWP_FRAMECHANGED);
+							 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+								 SWP_FRAMECHANGED);
 			}
 
 			void SetStateCallbacks(
@@ -242,13 +242,13 @@ namespace WebFrontend
 			RECT FrameForClient(std::int32_t width, std::int32_t height) const
 			{
 				RECT frame{0, 0,
-					static_cast<LONG>(std::max<std::int32_t>(1, width)),
-					static_cast<LONG>(std::max<std::int32_t>(1, height))};
+						   static_cast<LONG>(std::max<std::int32_t>(1, width)),
+						   static_cast<LONG>(std::max<std::int32_t>(1, height))};
 				const auto style = static_cast<DWORD>(GetWindowLongPtrW(m_window, GWL_STYLE));
 				const auto extendedStyle = static_cast<DWORD>(
 					GetWindowLongPtrW(m_window, GWL_EXSTYLE));
 				if (!AdjustWindowRectExForDpi(&frame, style, GetMenu(m_window) != nullptr,
-						extendedStyle, GetDpiForWindow(m_window)))
+											  extendedStyle, GetDpiForWindow(m_window)))
 					AdjustWindowRectEx(&frame, style, GetMenu(m_window) != nullptr, extendedStyle);
 				return frame;
 			}
@@ -317,9 +317,9 @@ namespace WebFrontend
 				{
 					const auto* suggested = reinterpret_cast<const RECT*>(lparam);
 					SetWindowPos(window, nullptr, suggested->left, suggested->top,
-							 suggested->right - suggested->left,
-							 suggested->bottom - suggested->top,
-							 SWP_NOACTIVATE | SWP_NOZORDER);
+								 suggested->right - suggested->left,
+								 suggested->bottom - suggested->top,
+								 SWP_NOACTIVATE | SWP_NOZORDER);
 					self->ResizeBrowser();
 					return 0;
 				}
@@ -352,8 +352,8 @@ namespace WebFrontend
 				RECT client{};
 				if (GetWindowRect(m_window, &frame) && GetClientRect(m_window, &client))
 					m_boundsChanged({frame.left, frame.top,
-						std::max<LONG>(1, client.right - client.left),
-						std::max<LONG>(1, client.bottom - client.top)});
+									 std::max<LONG>(1, client.right - client.left),
+									 std::max<LONG>(1, client.bottom - client.top)});
 			}
 
 			HWND m_window{};

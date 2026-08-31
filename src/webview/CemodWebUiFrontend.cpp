@@ -65,9 +65,9 @@ namespace WebFrontend
 				return false;
 			return std::ranges::all_of(value, [](unsigned char character) {
 				return (character >= 'a' && character <= 'z') ||
-					(character >= 'A' && character <= 'Z') ||
-					(character >= '0' && character <= '9') || character == '.' ||
-					character == '_' || character == '-' || character == ':';
+					   (character >= 'A' && character <= 'Z') ||
+					   (character >= '0' && character <= '9') || character == '.' ||
+					   character == '_' || character == '-' || character == ':';
 			});
 		}
 
@@ -75,7 +75,7 @@ namespace WebFrontend
 		{
 			std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
 			SHA256(reinterpret_cast<const unsigned char*>(principal.data()), principal.size(),
-				digest.data());
+				   digest.data());
 			// A URL host label is limited to 63 characters. Keep 224 bits of the
 			// principal digest so the "mod-" prefix and lowercase hex fit in one label.
 			constexpr std::size_t kOriginDigestBytes = 28;
@@ -110,7 +110,7 @@ namespace WebFrontend
 			}
 			std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
 			SHA256(reinterpret_cast<const unsigned char*>(material.data()), material.size(),
-				digest.data());
+				   digest.data());
 			constexpr char hex[] = "0123456789abcdef";
 			std::string result;
 			result.reserve(digest.size() * 2);
@@ -123,7 +123,7 @@ namespace WebFrontend
 		}
 
 		std::vector<std::byte> MessagePayload(std::uint32_t handle, std::uint32_t callId,
-			std::string_view name, std::string_view json)
+											  std::string_view name, std::string_view json)
 		{
 			UiMessageHeader header{};
 			header.handle = handle;
@@ -191,7 +191,7 @@ namespace WebFrontend
 		std::atomic_bool stopping{};
 
 		Impl(void* parentValue, std::shared_ptr<CefOverlay::BrowserRuntime> browserValue,
-			PostTask postValue)
+			 PostTask postValue)
 			: parent(parentValue), browsers(std::move(browserValue)), postTask(std::move(postValue)) {}
 
 		void Publish(const Instance& instance, UiEvent event, std::vector<std::byte> payload)
@@ -206,9 +206,8 @@ namespace WebFrontend
 				try
 				{
 					sink(CemodWebUiHostEvent{instance.addressSpaceId, instance.generation,
-						instance.sessionId, event, std::move(payload)});
-				}
-				catch (...)
+											 instance.sessionId, event, std::move(payload)});
+				} catch (...)
 				{
 					cemuLog_log(LogType::Force, "Cemod Web UI event sink failed");
 				}
@@ -246,22 +245,22 @@ namespace WebFrontend
 		{
 			const char* mode = instance.mode == UiMode::Window ? "window" : "overlay";
 			const char* surface = instance.mode == UiMode::Window ? nullptr
-				: (instance.surface == UiSurface::Tv ? "tv" : "drc");
+																  : (instance.surface == UiSurface::Tv ? "tv" : "drc");
 			return std::string{"{"} +
-				"\"bridgeVersion\":" + std::to_string(instance.content->manifest.bridgeVersion) +
-				",\"modId\":" + JsonString(instance.content->modId) +
-				",\"viewId\":" + JsonString(instance.viewId) +
-				",\"instanceId\":" + JsonString(std::to_string(instance.handle)) +
-				",\"mode\":" + JsonString(mode) +
-				",\"surface\":" + (surface ? JsonString(surface) : "null") +
-				",\"context\":" + instance.contextJson + "}";
+				   "\"bridgeVersion\":" + std::to_string(instance.content->manifest.bridgeVersion) +
+				   ",\"modId\":" + JsonString(instance.content->modId) +
+				   ",\"viewId\":" + JsonString(instance.viewId) +
+				   ",\"instanceId\":" + JsonString(std::to_string(instance.handle)) +
+				   ",\"mode\":" + JsonString(mode) +
+				   ",\"surface\":" + (surface ? JsonString(surface) : "null") +
+				   ",\"context\":" + instance.contextJson + "}";
 		}
 
 		void Process(CemodWebUiHostRequest request, Completion completion);
 		Status CreateInstance(const CemodWebUiHostRequest& request,
-			std::vector<std::byte>& response);
+							  std::vector<std::byte>& response);
 		void HandleQuery(std::uint32_t handle, std::int64_t queryId, std::string request,
-			std::function<void(bool, std::string)> completion);
+						 std::function<void(bool, std::string)> completion);
 		void CancelQuery(std::uint32_t handle, std::int64_t queryId);
 		void MainFrameReloaded(std::uint32_t handle);
 		void WindowBoundsChanged(std::uint32_t handle, Host::RenderRegionBounds bounds);
@@ -269,11 +268,11 @@ namespace WebFrontend
 		void CloseInstance(std::uint32_t handle, UiCloseReason reason);
 		void BrowserClosed(std::uint32_t handle);
 		void CloseMatching(std::function<bool(const Instance&)> predicate,
-			UiCloseReason reason);
+						   UiCloseReason reason);
 	};
 
 	Status CemodWebUiFrontend::Impl::CreateInstance(const CemodWebUiHostRequest& request,
-		std::vector<std::byte>& response)
+													std::vector<std::byte>& response)
 	{
 		UiCreateRequestHeader header{};
 		if (!ReadStruct(std::span{request.payload}, header))
@@ -295,23 +294,24 @@ namespace WebFrontend
 		if (mode == UiMode::Window && !view->second.window)
 			return Status::InvalidArgument;
 		if (mode == UiMode::Overlay && (!view->second.overlay ||
-			std::ranges::none_of(view->second.overlay->surfaces,
-				[&](CemodWebUiSurface allowed) {
-					return static_cast<std::uint8_t>(allowed) == static_cast<std::uint8_t>(surface);
-				})))
+										std::ranges::none_of(view->second.overlay->surfaces,
+															 [&](CemodWebUiSurface allowed) {
+																 return static_cast<std::uint8_t>(allowed) == static_cast<std::uint8_t>(surface);
+															 })))
 			return Status::PermissionDenied;
 		if (view->second.singleInstance)
 		{
 			const auto existing = std::ranges::find_if(instances, [&](const auto& item) {
 				return item.second->addressSpaceId == request.addressSpaceId &&
-					item.second->generation == request.generation &&
-					item.second->sessionId == request.sessionId && item.second->viewId == viewId &&
-					item.second->mode == mode &&
-					(mode == UiMode::Window || item.second->surface == surface);
+					   item.second->generation == request.generation &&
+					   item.second->sessionId == request.sessionId && item.second->viewId == viewId &&
+					   item.second->mode == mode &&
+					   (mode == UiMode::Window || item.second->surface == surface);
 			});
 			if (existing != instances.end())
 			{
-				if (existing->second->window) existing->second->window->Focus();
+				if (existing->second->window)
+					existing->second->window->Focus();
 				UiCreateResponse created{};
 				created.handle = existing->first;
 				Append(response, created);
@@ -320,12 +320,16 @@ namespace WebFrontend
 		}
 		if (std::ranges::count_if(instances, [&](const auto& item) {
 				return item.second->addressSpaceId == request.addressSpaceId &&
-					item.second->generation == request.generation &&
-					item.second->mode == UiMode::Window;
+					   item.second->generation == request.generation &&
+					   item.second->mode == UiMode::Window;
 			}) >= 4)
 			return Status::Busy;
 		auto instance = std::make_unique<Instance>();
-		do { ++nextHandle; } while (!nextHandle || instances.contains(nextHandle));
+		do
+		{
+			++nextHandle;
+		}
+		while (!nextHandle || instances.contains(nextHandle));
 		instance->handle = nextHandle;
 		instance->windowId = 0x4000000000000000ULL | nextHandle;
 		instance->addressSpaceId = request.addressSpaceId;
@@ -338,71 +342,76 @@ namespace WebFrontend
 		instance->surface = surface;
 		instance->visible = header.visible != 0;
 		instance->interactive = header.interactive != 0;
-			const auto handle = instance->handle;
-			const auto windowId = instance->windowId;
-			const auto weakOwner = owner;
-			auto assets = Assets(*request.content);
-			CefOverlay::BrowserDescriptor browser;
-			browser.windowId = windowId;
-			browser.role = "cemod-web-ui";
-			browser.bootstrapJson = Bootstrap(*instance);
-			browser.initialUrl = "cemod-ui://" + assets->originId + "/" + viewId + "/";
-			browser.cemodAssets = std::move(assets);
-			IToolWindowSupport* support{};
-			if (mode == UiMode::Window)
-			{
-				instance->window = CreateToolWindowSupport(parent, false, [weakOwner, handle] {
+		const auto handle = instance->handle;
+		const auto windowId = instance->windowId;
+		const auto weakOwner = owner;
+		auto assets = Assets(*request.content);
+		CefOverlay::BrowserDescriptor browser;
+		browser.windowId = windowId;
+		browser.role = "cemod-web-ui";
+		browser.bootstrapJson = Bootstrap(*instance);
+		browser.initialUrl = "cemod-ui://" + assets->originId + "/" + viewId + "/";
+		browser.cemodAssets = std::move(assets);
+		IToolWindowSupport* support{};
+		if (mode == UiMode::Window)
+		{
+			instance->window = CreateToolWindowSupport(parent, false, [weakOwner, handle] {
+				if (const auto active = weakOwner.lock())
+					active->m_impl->CloseInstance(handle, UiCloseReason::User);
+			});
+			const auto& windowConfig = *view->second.window;
+			const auto minimumWidth = static_cast<std::int32_t>(windowConfig.minimumWidth.value_or(1));
+			const auto minimumHeight = static_cast<std::int32_t>(windowConfig.minimumHeight.value_or(1));
+			const auto width = std::max(minimumWidth, header.width.get() > 0 ? header.width.get()
+																			 : static_cast<std::int32_t>(windowConfig.width.value_or(960)));
+			const auto height = std::max(minimumHeight, header.height.get() > 0 ? header.height.get()
+																				: static_cast<std::int32_t>(windowConfig.height.value_or(540)));
+			instance->window->SetTitle(windowConfig.title.value_or(request.content->modId));
+			instance->window->SetMinimumSize(minimumWidth, minimumHeight);
+			instance->window->SetResizable(windowConfig.resizable.value_or(true));
+			instance->window->SetStateCallbacks(
+				[weakOwner, handle](Host::RenderRegionBounds bounds) {
 					if (const auto active = weakOwner.lock())
-						active->m_impl->CloseInstance(handle, UiCloseReason::User);
+						active->m_impl->WindowBoundsChanged(handle, bounds);
+				},
+				[weakOwner, handle](bool focused) {
+					if (const auto active = weakOwner.lock())
+						active->m_impl->WindowFocusChanged(handle, focused);
 				});
-				const auto& windowConfig = *view->second.window;
-				const auto minimumWidth = static_cast<std::int32_t>(windowConfig.minimumWidth.value_or(1));
-				const auto minimumHeight = static_cast<std::int32_t>(windowConfig.minimumHeight.value_or(1));
-				const auto width = std::max(minimumWidth, header.width.get() > 0 ? header.width.get()
-					: static_cast<std::int32_t>(windowConfig.width.value_or(960)));
-				const auto height = std::max(minimumHeight, header.height.get() > 0 ? header.height.get()
-					: static_cast<std::int32_t>(windowConfig.height.value_or(540)));
-				instance->window->SetTitle(windowConfig.title.value_or(request.content->modId));
-				instance->window->SetMinimumSize(minimumWidth, minimumHeight);
-				instance->window->SetResizable(windowConfig.resizable.value_or(true));
-				instance->window->SetStateCallbacks(
-					[weakOwner, handle](Host::RenderRegionBounds bounds) {
-						if (const auto active = weakOwner.lock())
-							active->m_impl->WindowBoundsChanged(handle, bounds);
-					},
-					[weakOwner, handle](bool focused) {
-						if (const auto active = weakOwner.lock())
-							active->m_impl->WindowFocusChanged(handle, focused);
-					});
-				instance->window->SetSize(width, height);
-				support = instance->window.get();
-				browser.presentation = CefOverlay::BrowserPresentation::NativeChild;
-				browser.nativeParent = support->GetBrowserParentWindow();
-				browser.bounds = support->GetBrowserBounds();
-				browser.bounds.width = std::max(browser.bounds.width, 1);
-				browser.bounds.height = std::max(browser.bounds.height, 1);
-				browser.dpiScale = support->GetBrowserDpiScale();
-				browser.nativeBrowserCreated = [support](void* child) { support->AttachBrowser(child); };
-				browser.nativeBrowserClosing = [support](void* child) { support->DetachBrowser(child); };
-			}
-			else
-			{
-				const auto& overlayConfig = *view->second.overlay;
-				browser.presentation = CefOverlay::BrowserPresentation::OverlayOsr;
-				browser.overlaySurface = surface == UiSurface::Tv
-					? Host::PointerSurface::Main : Host::PointerSurface::Pad;
-				browser.overlayLayer = CefOverlay::OverlayLayer::Cemod;
-				browser.cemodOverlayOrder = overlayConfig.order == CemodWebUiOverlayOrder::BelowBuiltin
-					? CefOverlay::CemodOverlayOrder::BelowBuiltin
-					: CefOverlay::CemodOverlayOrder::AboveBuiltin;
-				browser.overlayVisible = instance->visible;
-				browser.overlayInteractive = instance->interactive;
-				browser.overlayTransparent = overlayConfig.transparent;
-				browser.bounds = {0, 0, 1, 1};
-				browser.dpiScale = 1.0;
-			}
+			instance->window->SetSize(width, height);
+			support = instance->window.get();
+			browser.presentation = CefOverlay::BrowserPresentation::NativeChild;
+			browser.nativeParent = support->GetBrowserParentWindow();
+			browser.bounds = support->GetBrowserBounds();
+			browser.bounds.width = std::max(browser.bounds.width, 1);
+			browser.bounds.height = std::max(browser.bounds.height, 1);
+			browser.dpiScale = support->GetBrowserDpiScale();
+			browser.nativeBrowserCreated = [support](void* child) {
+				support->AttachBrowser(child);
+			};
+			browser.nativeBrowserClosing = [support](void* child) {
+				support->DetachBrowser(child);
+			};
+		}
+		else
+		{
+			const auto& overlayConfig = *view->second.overlay;
+			browser.presentation = CefOverlay::BrowserPresentation::OverlayOsr;
+			browser.overlaySurface = surface == UiSurface::Tv
+										 ? Host::PointerSurface::Main
+										 : Host::PointerSurface::Pad;
+			browser.overlayLayer = CefOverlay::OverlayLayer::Cemod;
+			browser.cemodOverlayOrder = overlayConfig.order == CemodWebUiOverlayOrder::BelowBuiltin
+											? CefOverlay::CemodOverlayOrder::BelowBuiltin
+											: CefOverlay::CemodOverlayOrder::AboveBuiltin;
+			browser.overlayVisible = instance->visible;
+			browser.overlayInteractive = instance->interactive;
+			browser.overlayTransparent = overlayConfig.transparent;
+			browser.bounds = {0, 0, 1, 1};
+			browser.dpiScale = 1.0;
+		}
 		browser.cemodQuery = [weakOwner, handle](std::int64_t queryId, std::string query,
-			std::function<void(bool, std::string)> callback) {
+												 std::function<void(bool, std::string)> callback) {
 			if (const auto active = weakOwner.lock())
 				active->m_impl->HandleQuery(handle, queryId, std::move(query), std::move(callback));
 			else
@@ -430,10 +439,10 @@ namespace WebFrontend
 		{
 			auto failed = instances.extract(handle);
 			failed.mapped()->window.reset();
-				return mode == UiMode::Overlay ? Status::Busy : Status::IoError;
-			}
-			if (header.visible && support)
-				support->Show();
+			return mode == UiMode::Overlay ? Status::Busy : Status::IoError;
+		}
+		if (header.visible && support)
+			support->Show();
 		UiCreateResponse created{};
 		created.handle = handle;
 		Append(response, created);
@@ -441,7 +450,7 @@ namespace WebFrontend
 	}
 
 	void CemodWebUiFrontend::Impl::Process(CemodWebUiHostRequest request,
-		Completion completion)
+										   Completion completion)
 	{
 		std::vector<std::byte> response;
 		Status status = Status::Ok;
@@ -474,8 +483,10 @@ namespace WebFrontend
 					instance->visible = value.visible != 0;
 					if (instance->window)
 					{
-						if (value.visible) instance->window->Show();
-						else instance->window->Hide();
+						if (value.visible)
+							instance->window->Show();
+						else
+							instance->window->Hide();
 					}
 					else
 						browsers->SetOverlayVisible(instance->windowId, instance->visible);
@@ -499,9 +510,9 @@ namespace WebFrontend
 					const auto height = std::max(value.height.get(), minimumHeight);
 					if (instance->window)
 						instance->window->SetBounds(value.x.get(), value.y.get(),
-							width, height);
+													width, height);
 					browsers->ResizeWindow(instance->windowId, width, height,
-						instance->window ? instance->window->GetBrowserDpiScale() : 1.0);
+										   instance->window ? instance->window->GetBrowserDpiScale() : 1.0);
 					break;
 				}
 				case UiOperation::SetTitle:
@@ -509,9 +520,11 @@ namespace WebFrontend
 					UiTitleRequestHeader value{};
 					ReadStruct(std::span{request.payload}, value);
 					const std::string_view title{reinterpret_cast<const char*>(request.payload.data() + sizeof(value)),
-						value.titleBytes.get()};
-					if (instance->window) instance->window->SetTitle(title);
-					else status = Status::NotSupported;
+												 value.titleBytes.get()};
+					if (instance->window)
+						instance->window->SetTitle(title);
+					else
+						status = Status::NotSupported;
 					break;
 				}
 				case UiOperation::SetInteractive:
@@ -533,7 +546,7 @@ namespace WebFrontend
 					browsers->SetOverlayInteractive(instance->windowId, instance->interactive);
 					break;
 				}
-					break;
+				break;
 				case UiOperation::Emit:
 				{
 					UiMessageHeader value{};
@@ -564,7 +577,7 @@ namespace WebFrontend
 						auto callback = std::move(call->second.completion);
 						instance->calls.erase(call);
 						std::string json{reinterpret_cast<const char*>(request.payload.data() + sizeof(value)),
-							value.jsonBytes.get()};
+										 value.jsonBytes.get()};
 						callback(value.success != 0, std::move(json));
 					}
 					break;
@@ -579,7 +592,7 @@ namespace WebFrontend
 	}
 
 	void CemodWebUiFrontend::Impl::HandleQuery(std::uint32_t handle, std::int64_t queryId,
-		std::string request, std::function<void(bool, std::string)> completion)
+											   std::string request, std::function<void(bool, std::string)> completion)
 	{
 		const auto found = instances.find(handle);
 		if (found == instances.end() || found->second->closing)
@@ -650,10 +663,14 @@ namespace WebFrontend
 		if (instance.calls.size() >= 64)
 		{
 			completion(false,
-				R"({"code":"BUSY","message":"Too many pending Cemod UI calls","details":null})");
+					   R"({"code":"BUSY","message":"Too many pending Cemod UI calls","details":null})");
 			return;
 		}
-		do { ++nextCallId; } while (!nextCallId || instance.calls.contains(nextCallId));
+		do
+		{
+			++nextCallId;
+		}
+		while (!nextCallId || instance.calls.contains(nextCallId));
 		const auto callId = nextCallId;
 		instance.calls.emplace(callId, PendingCall{queryId, std::move(completion)});
 		Publish(instance, UiEvent::Call, MessagePayload(handle, callId, name, json));
@@ -693,13 +710,13 @@ namespace WebFrontend
 		if (!instance.calls.empty())
 		{
 			cemuLog_log(LogType::Force,
-				"Cemod Web UI reload left {} pending calls for handle {}",
-				instance.calls.size(), handle);
+						"Cemod Web UI reload left {} pending calls for handle {}",
+						instance.calls.size(), handle);
 		}
 	}
 
 	void CemodWebUiFrontend::Impl::WindowBoundsChanged(std::uint32_t handle,
-		Host::RenderRegionBounds bounds)
+													   Host::RenderRegionBounds bounds)
 	{
 		const auto found = instances.find(handle);
 		if (found == instances.end() || found->second->closing)
@@ -751,7 +768,7 @@ namespace WebFrontend
 			(void)callId;
 			if (call.completion)
 				call.completion(false,
-					R"({"code":"PAGE_CLOSED","message":"Cemod UI was closed","details":null})");
+								R"({"code":"PAGE_CLOSED","message":"Cemod UI was closed","details":null})");
 		}
 		instance->calls.clear();
 		instance->window.reset();
@@ -764,17 +781,18 @@ namespace WebFrontend
 	}
 
 	void CemodWebUiFrontend::Impl::CloseMatching(std::function<bool(const Instance&)> predicate,
-		UiCloseReason reason)
+												 UiCloseReason reason)
 	{
 		std::vector<std::uint32_t> handles;
 		for (const auto& [handle, instance] : instances)
-			if (predicate(*instance)) handles.push_back(handle);
+			if (predicate(*instance))
+				handles.push_back(handle);
 		for (const auto handle : handles)
 			CloseInstance(handle, reason);
 	}
 
 	std::shared_ptr<CemodWebUiFrontend> CemodWebUiFrontend::Create(void* parent,
-		std::shared_ptr<CefOverlay::BrowserRuntime> browsers, PostTask postTask)
+																   std::shared_ptr<CefOverlay::BrowserRuntime> browsers, PostTask postTask)
 	{
 		if (!parent || !browsers || !postTask)
 			return {};
@@ -800,7 +818,7 @@ namespace WebFrontend
 		if (m_impl->stopping.load(std::memory_order_acquire))
 			return false;
 		const Impl::RequestKey key{request.addressSpaceId, request.generation,
-			request.sessionId, request.correlationId};
+								   request.sessionId, request.correlationId};
 		auto cancelled = std::make_shared<std::atomic_bool>(false);
 		{
 			std::scoped_lock lock(m_impl->mutex);
@@ -813,14 +831,15 @@ namespace WebFrontend
 		const auto weak = weak_from_this();
 		auto completionCalled = std::make_shared<std::atomic_bool>(false);
 		auto completeOnce = [completion = std::move(completion), completionCalled](Status status,
-			std::vector<std::byte> response) mutable {
+																				   std::vector<std::byte> response) mutable {
 			if (!completionCalled->exchange(true, std::memory_order_acq_rel) && completion)
 				completion(status, std::move(response));
 		};
 		if (!m_impl->postTask([weak, key, cancelled, request = std::move(request),
-				completeOnce = std::move(completeOnce)]() mutable {
+							   completeOnce = std::move(completeOnce)]() mutable {
 				const auto self = weak.lock();
-				if (!self) return;
+				if (!self)
+					return;
 				{
 					std::scoped_lock lock(self->m_impl->mutex);
 					self->m_impl->pendingRequests.erase(key);
@@ -832,13 +851,11 @@ namespace WebFrontend
 				try
 				{
 					self->m_impl->Process(std::move(request), completeOnce);
-				}
-				catch (const std::exception& error)
+				} catch (const std::exception& error)
 				{
 					cemuLog_log(LogType::Force, "Cemod Web UI operation failed: {}", error.what());
 					completeOnce(Status::IoError, {});
-				}
-				catch (...)
+				} catch (...)
 				{
 					cemuLog_log(LogType::Force, "Cemod Web UI operation failed");
 					completeOnce(Status::IoError, {});
@@ -853,7 +870,7 @@ namespace WebFrontend
 	}
 
 	void CemodWebUiFrontend::Cancel(std::uint64_t addressSpaceId, std::uint32_t generation,
-		std::uint32_t sessionId, std::uint32_t correlationId)
+									std::uint32_t sessionId, std::uint32_t correlationId)
 	{
 		std::scoped_lock lock(m_impl->mutex);
 		const auto found = m_impl->pendingRequests.find(
@@ -863,15 +880,16 @@ namespace WebFrontend
 	}
 
 	void CemodWebUiFrontend::CloseSession(std::uint64_t addressSpaceId, std::uint32_t generation,
-		std::uint32_t sessionId)
+										  std::uint32_t sessionId)
 	{
 		const auto weak = weak_from_this();
 		(void)m_impl->postTask([weak, addressSpaceId, generation, sessionId] {
 			if (const auto self = weak.lock())
 				self->m_impl->CloseMatching([&](const Impl::Instance& value) {
 					return value.addressSpaceId == addressSpaceId && value.generation == generation &&
-						value.sessionId == sessionId;
-				}, UiCloseReason::ConnectionClosed);
+						   value.sessionId == sessionId;
+				},
+											UiCloseReason::ConnectionClosed);
 		});
 	}
 
@@ -882,7 +900,8 @@ namespace WebFrontend
 			if (const auto self = weak.lock())
 				self->m_impl->CloseMatching([&](const Impl::Instance& value) {
 					return value.addressSpaceId == addressSpaceId && value.generation == generation;
-				}, UiCloseReason::ModUnloaded);
+				},
+											UiCloseReason::ModUnloaded);
 		});
 	}
 
@@ -892,7 +911,7 @@ namespace WebFrontend
 		(void)m_impl->postTask([weak] {
 			if (const auto self = weak.lock())
 				self->m_impl->CloseMatching([](const Impl::Instance&) { return true; },
-					UiCloseReason::CemuClosed);
+											UiCloseReason::CemuClosed);
 		});
 	}
 

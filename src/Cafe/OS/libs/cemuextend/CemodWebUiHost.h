@@ -45,19 +45,19 @@ namespace cemuextend_hle
 	{
 	  public:
 		using Completion = std::function<void(cemuextend::wire::Status,
-			std::vector<std::byte>)>;
+											  std::vector<std::byte>)>;
 		using EventSink = std::function<void(CemodWebUiHostEvent)>;
 
 		virtual ~ICemodWebUiHost() = default;
 		virtual void SetEventSink(EventSink sink) = 0;
 		[[nodiscard]] virtual bool Submit(CemodWebUiHostRequest request,
-			Completion completion) = 0;
+										  Completion completion) = 0;
 		virtual void Cancel(std::uint64_t addressSpaceId, std::uint32_t generation,
-			std::uint32_t sessionId, std::uint32_t correlationId) = 0;
+							std::uint32_t sessionId, std::uint32_t correlationId) = 0;
 		virtual void CloseSession(std::uint64_t addressSpaceId, std::uint32_t generation,
-			std::uint32_t sessionId) = 0;
+								  std::uint32_t sessionId) = 0;
 		virtual void CloseOwner(std::uint64_t addressSpaceId,
-			std::uint32_t generation) = 0;
+								std::uint32_t generation) = 0;
 		virtual void CloseAll() = 0;
 	};
 } // namespace cemuextend_hle

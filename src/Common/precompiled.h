@@ -521,7 +521,11 @@ bool match_any_of(T1&& value, Types&&... others)
 {
 #ifdef _WIN32
 	// get current time
-	static const long long _Freq = [] { LARGE_INTEGER value; QueryPerformanceFrequency(&value); return value.QuadPart; }();
+	static const long long _Freq = [] {
+		LARGE_INTEGER value;
+		QueryPerformanceFrequency(&value);
+		return value.QuadPart;
+	}();
 	LARGE_INTEGER counter;
 	QueryPerformanceCounter(&counter);
 	const long long _Ctr = counter.QuadPart;
@@ -538,7 +542,11 @@ bool match_any_of(T1&& value, Types&&... others)
 {
 #if BOOST_OS_WINDOWS
 	// get current time
-	static const long long _Freq = [] { LARGE_INTEGER value; QueryPerformanceFrequency(&value); return value.QuadPart; }();
+	static const long long _Freq = [] {
+		LARGE_INTEGER value;
+		QueryPerformanceFrequency(&value);
+		return value.QuadPart;
+	}();
 	LARGE_INTEGER counter;
 	QueryPerformanceCounter(&counter);
 	const long long _Ctr = counter.QuadPart;

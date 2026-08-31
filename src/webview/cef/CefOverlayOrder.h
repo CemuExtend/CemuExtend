@@ -21,7 +21,7 @@ namespace WebFrontend::CefOverlay
 		CemodOverlayOrder order)
 	{
 		return order == CemodOverlayOrder::BelowBuiltin
-			? std::array{OverlayLayer::Cemod, OverlayLayer::Builtin}
-			: std::array{OverlayLayer::Builtin, OverlayLayer::Cemod};
+				   ? std::array{OverlayLayer::Cemod, OverlayLayer::Builtin}
+				   : std::array{OverlayLayer::Builtin, OverlayLayer::Cemod};
 	}
-}
+} // namespace WebFrontend::CefOverlay

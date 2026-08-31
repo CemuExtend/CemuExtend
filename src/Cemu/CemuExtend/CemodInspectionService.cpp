@@ -179,8 +179,8 @@ namespace CemuExtend
 		// dedicated approval bit below.
 		constexpr std::uint32_t legacyServicePermissionMask = 0x3fU;
 		std::uint64_t requested = descriptor.executionMode == CemodExecutionMode::Isolated
-			? descriptor.requestedPermissions & legacyServicePermissionMask
-			: descriptor.requestedPermissions;
+									  ? descriptor.requestedPermissions & legacyServicePermissionMask
+									  : descriptor.requestedPermissions;
 		const auto& declaredPermissions = package->manifest.nativePermissions;
 		const std::array declared{
 			declaredPermissions.nativeMemory, declaredPermissions.functionPatching,
@@ -233,7 +233,7 @@ namespace CemuExtend
 			const auto bit = PermissionBit(permission);
 			const auto index = static_cast<std::size_t>(permission);
 			const bool manifestMismatch = index < declared.size() &&
-				(requested & bit) != 0 && !declared[index];
+										  (requested & bit) != 0 && !declared[index];
 			result.permissions.push_back({permission, bit, (requested & bit) != 0,
 										  (result.approval.granted & bit) != 0, IsDangerous(permission),
 										  manifestMismatch});
@@ -257,6 +257,12 @@ namespace CemuExtend
 			result.usesTls = wups.usesTls;
 			result.usesFixedAddressPatches = wups.usesFixedAddressPatches;
 			for (const auto& module : wups.requiredModules)
+			{
+				// Core RPL imports are resolved by the title runtime and are not
+				// grantable Aroma/WUMS modules. Only dynamic homebrew modules belong
+				// in permissions.modules and in its manifest-mismatch assessment.
+				if (!module.starts_with("homebrew_"))
+					continue;
 				if (std::ranges::find(declaredPermissions.modules, module) ==
 					declaredPermissions.modules.end())
 				{
@@ -269,6 +275,7 @@ namespace CemuExtend
 					if (modules != result.permissions.end())
 						modules->manifestMismatch = true;
 				}
+			}
 			AddMismatch(result, CemodPermission::FunctionPatching, !wups.replacements.empty(),
 						declaredPermissions.functionPatching,
 						"Function patching is required by the payload but not declared in manifest permissions");

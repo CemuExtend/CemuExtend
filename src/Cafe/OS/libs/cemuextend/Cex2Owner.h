@@ -19,7 +19,10 @@ namespace cemuextend_hle
 		[[nodiscard]] virtual const std::string& Principal() const = 0;
 		[[nodiscard]] virtual std::uint64_t TitleId() const = 0;
 		[[nodiscard]] virtual bool IsStopped() const = 0;
-		[[nodiscard]] virtual const CemodPackage* Package() const { return nullptr; }
+		[[nodiscard]] virtual const CemodPackage* Package() const
+		{
+			return nullptr;
+		}
 		[[nodiscard]] virtual std::uint32_t GrantedPermissions() const = 0;
 		virtual void SetGrantedPermissions(std::uint32_t permissions) = 0;
 		[[nodiscard]] virtual bool IsServiceAllowed(std::uint16_t service,

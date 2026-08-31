@@ -58,7 +58,7 @@ namespace WebFrontend::CefOverlay
 			}
 			std::uint32_t port{};
 			const auto parsed = std::from_chars(portText.data(),
-				portText.data() + portText.size(), port);
+												portText.data() + portText.size(), port);
 			if (host.empty() || parsed.ec != std::errc{} ||
 				parsed.ptr != portText.data() + portText.size() || port == 0 || port > 65535)
 				return std::nullopt;
@@ -103,7 +103,8 @@ namespace WebFrontend::CefOverlay
 			{
 				m_timer.expires_after(duration);
 				m_timer.async_wait([self = shared_from_this()](const boost::system::error_code& error) {
-					if (!error) self->Close();
+					if (!error)
+						self->Close();
 				});
 			}
 
@@ -111,14 +112,14 @@ namespace WebFrontend::CefOverlay
 			{
 				auto self = shared_from_this();
 				boost::asio::async_read_until(m_client, m_header, "\r\n\r\n",
-					[self](const boost::system::error_code& error, std::size_t) {
-						if (error || self->m_header.size() > kMaximumProxyHeaderBytes)
-						{
-							self->Close();
-							return;
-						}
-						self->HandleHeader();
-					});
+											  [self](const boost::system::error_code& error, std::size_t) {
+												  if (error || self->m_header.size() > kMaximumProxyHeaderBytes)
+												  {
+													  self->Close();
+													  return;
+												  }
+												  self->HandleHeader();
+											  });
 			}
 
 			void HandleHeader()
@@ -130,10 +131,11 @@ namespace WebFrontend::CefOverlay
 					Close();
 					return;
 				}
-				if (!line.empty() && line.back() == '\r') line.pop_back();
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
 				const auto firstSpace = line.find(' ');
 				const auto secondSpace = firstSpace == std::string::npos ? std::string::npos
-					: line.find(' ', firstSpace + 1);
+																		 : line.find(' ', firstSpace + 1);
 				if (firstSpace == std::string::npos || secondSpace == std::string::npos ||
 					line.substr(0, firstSpace) != "CONNECT" ||
 					line.substr(secondSpace + 1) != "HTTP/1.1")
@@ -151,32 +153,32 @@ namespace WebFrontend::CefOverlay
 				m_authority = *authority;
 				auto self = shared_from_this();
 				m_resolver.async_resolve(m_authority.host, std::to_string(m_authority.port),
-					[self](const boost::system::error_code& error, tcp::resolver::results_type results) {
-						if (error || results.empty() ||
-							(!self->m_policy->allowPrivateNetwork &&
-							 !std::ranges::all_of(results, [](const auto& entry) {
-								 return IsPublicNetworkAddress(entry.endpoint().address().to_string());
-							 })))
-						{
-							self->Reject("403 Forbidden");
-							return;
-						}
-						self->Connect(std::move(results));
-					});
+										 [self](const boost::system::error_code& error, tcp::resolver::results_type results) {
+											 if (error || results.empty() ||
+												 (!self->m_policy->allowPrivateNetwork &&
+												  !std::ranges::all_of(results, [](const auto& entry) {
+													  return IsPublicNetworkAddress(entry.endpoint().address().to_string());
+												  })))
+											 {
+												 self->Reject("403 Forbidden");
+												 return;
+											 }
+											 self->Connect(std::move(results));
+										 });
 			}
 
 			void Connect(tcp::resolver::results_type results)
 			{
 				auto self = shared_from_this();
 				boost::asio::async_connect(m_upstream, std::move(results),
-					[self](const boost::system::error_code& error, const tcp::endpoint&) {
-						if (error)
-						{
-							self->Reject("502 Bad Gateway");
-							return;
-						}
-						self->AcceptTunnel();
-					});
+										   [self](const boost::system::error_code& error, const tcp::endpoint&) {
+											   if (error)
+											   {
+												   self->Reject("502 Bad Gateway");
+												   return;
+											   }
+											   self->AcceptTunnel();
+										   });
 			}
 
 			void AcceptTunnel()
@@ -184,55 +186,69 @@ namespace WebFrontend::CefOverlay
 				m_response = "HTTP/1.1 200 Connection Established\r\n\r\n";
 				auto self = shared_from_this();
 				boost::asio::async_write(m_client, boost::asio::buffer(m_response),
-					[self](const boost::system::error_code& error, std::size_t) {
-						if (error)
-						{
-							self->Close();
-							return;
-						}
-						self->ArmTimeout(std::chrono::minutes(30));
-						self->ReadClient();
-						self->ReadUpstream();
-					});
+										 [self](const boost::system::error_code& error, std::size_t) {
+											 if (error)
+											 {
+												 self->Close();
+												 return;
+											 }
+											 self->ArmTimeout(std::chrono::minutes(30));
+											 self->ReadClient();
+											 self->ReadUpstream();
+										 });
 			}
 
 			void ReadClient()
 			{
 				auto self = shared_from_this();
 				m_client.async_read_some(boost::asio::buffer(m_clientBuffer),
-					[self](const boost::system::error_code& error, std::size_t bytes) {
-						if (error) { self->Close(); return; }
-						self->ArmTimeout(std::chrono::minutes(30));
-						boost::asio::async_write(self->m_upstream,
-							boost::asio::buffer(self->m_clientBuffer.data(), bytes),
-							[self](const boost::system::error_code& writeError, std::size_t) {
-								if (writeError) self->Close(); else self->ReadClient();
-							});
-					});
+										 [self](const boost::system::error_code& error, std::size_t bytes) {
+											 if (error)
+											 {
+												 self->Close();
+												 return;
+											 }
+											 self->ArmTimeout(std::chrono::minutes(30));
+											 boost::asio::async_write(self->m_upstream,
+																	  boost::asio::buffer(self->m_clientBuffer.data(), bytes),
+																	  [self](const boost::system::error_code& writeError, std::size_t) {
+																		  if (writeError)
+																			  self->Close();
+																		  else
+																			  self->ReadClient();
+																	  });
+										 });
 			}
 
 			void ReadUpstream()
 			{
 				auto self = shared_from_this();
 				m_upstream.async_read_some(boost::asio::buffer(m_upstreamBuffer),
-					[self](const boost::system::error_code& error, std::size_t bytes) {
-						if (error) { self->Close(); return; }
-						self->ArmTimeout(std::chrono::minutes(30));
-						boost::asio::async_write(self->m_client,
-							boost::asio::buffer(self->m_upstreamBuffer.data(), bytes),
-							[self](const boost::system::error_code& writeError, std::size_t) {
-								if (writeError) self->Close(); else self->ReadUpstream();
-							});
-					});
+										   [self](const boost::system::error_code& error, std::size_t bytes) {
+											   if (error)
+											   {
+												   self->Close();
+												   return;
+											   }
+											   self->ArmTimeout(std::chrono::minutes(30));
+											   boost::asio::async_write(self->m_client,
+																		boost::asio::buffer(self->m_upstreamBuffer.data(), bytes),
+																		[self](const boost::system::error_code& writeError, std::size_t) {
+																			if (writeError)
+																				self->Close();
+																			else
+																				self->ReadUpstream();
+																		});
+										   });
 			}
 
 			void Reject(std::string_view status)
 			{
 				m_response = "HTTP/1.1 " + std::string(status) +
-					"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+							 "\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 				auto self = shared_from_this();
 				boost::asio::async_write(m_client, boost::asio::buffer(m_response),
-					[self](const boost::system::error_code&, std::size_t) { self->Close(); });
+										 [self](const boost::system::error_code&, std::size_t) { self->Close(); });
 			}
 
 			void Close()
@@ -265,37 +281,47 @@ namespace WebFrontend::CefOverlay
 			~CemodNetworkProxyImpl() override
 			{
 				m_io.stop();
-				if (m_thread.joinable()) m_thread.join();
+				if (m_thread.joinable())
+					m_thread.join();
 			}
 
 			bool Start()
 			{
 				boost::system::error_code error;
 				m_acceptor.open(tcp::v4(), error);
-				if (error) return false;
+				if (error)
+					return false;
 				m_acceptor.set_option(tcp::acceptor::reuse_address(false), error);
-				if (error) return false;
+				if (error)
+					return false;
 				m_acceptor.bind({boost::asio::ip::address_v4::loopback(), 0}, error);
-				if (error) return false;
+				if (error)
+					return false;
 				m_acceptor.listen(boost::asio::socket_base::max_listen_connections, error);
-				if (error) return false;
+				if (error)
+					return false;
 				m_port = m_acceptor.local_endpoint(error).port();
-				if (error || !m_port) return false;
+				if (error || !m_port)
+					return false;
 				Accept();
 				m_thread = std::thread([this] { m_io.run(); });
 				return true;
 			}
 
-			std::uint16_t Port() const noexcept override { return m_port; }
+			std::uint16_t Port() const noexcept override
+			{
+				return m_port;
+			}
 
 		  private:
 			void Accept()
 			{
 				m_acceptor.async_accept([this](const boost::system::error_code& error,
-					tcp::socket socket) {
+											   tcp::socket socket) {
 					if (!error && m_policy->activeConnections.load() < kMaximumProxyConnections)
 						std::make_shared<ProxySession>(std::move(socket), m_policy)->Start();
-					if (m_acceptor.is_open()) Accept();
+					if (m_acceptor.is_open())
+						Accept();
 				});
 			}
 
@@ -307,21 +333,23 @@ namespace WebFrontend::CefOverlay
 		};
 
 		void AddOrigins(std::set<ProxyAuthority>& authorities,
-			const std::vector<std::string>& origins)
+						const std::vector<std::string>& origins)
 		{
 			for (const auto& value : origins)
 			{
 				const auto origin = ParseCemodNetworkOrigin(value);
-				if (!origin) continue;
+				if (!origin)
+					continue;
 				const auto colon = origin->canonical.rfind(':');
 				std::uint32_t port{};
-				if (colon == std::string::npos) continue;
+				if (colon == std::string::npos)
+					continue;
 				const auto text = std::string_view(origin->canonical).substr(colon + 1);
 				const auto parsed = std::from_chars(text.data(), text.data() + text.size(), port);
 				if (parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size() &&
 					port > 0 && port <= 65535)
 					authorities.emplace(ProxyAuthority{origin->host,
-						static_cast<std::uint16_t>(port)});
+													   static_cast<std::uint16_t>(port)});
 			}
 		}
 	} // namespace

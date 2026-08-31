@@ -24,7 +24,7 @@ namespace WebFrontend
 		virtual void DetachBrowser(void* browserWindow) = 0;
 		virtual void SetSize(std::int32_t width, std::int32_t height) = 0;
 		virtual void SetBounds(std::int32_t x, std::int32_t y,
-			std::int32_t width, std::int32_t height) = 0;
+							   std::int32_t width, std::int32_t height) = 0;
 		virtual void SetMinimumSize(std::int32_t width, std::int32_t height) = 0;
 		virtual void SetResizable(bool resizable) = 0;
 		virtual void SetStateCallbacks(

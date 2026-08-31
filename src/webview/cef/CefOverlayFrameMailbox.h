@@ -15,13 +15,13 @@ namespace WebFrontend::CefOverlay
 		explicit FrameMailbox(std::function<void(Host::PointerSurface)> redraw = {});
 
 		bool PublishView(Host::PointerSurface surface, int width, int height,
-			const void* bgra, int sourceStride,
-			std::span<const Host::OverlayDirtyRect> dirtyRects);
+						 const void* bgra, int sourceStride,
+						 std::span<const Host::OverlayDirtyRect> dirtyRects);
 		void SetPopupVisible(Host::PointerSurface surface, bool visible);
 		void SetPopupRect(Host::PointerSurface surface, Host::OverlayDirtyRect rect);
 		bool PublishPopup(Host::PointerSurface surface, int width, int height,
-			const void* bgra, int sourceStride,
-			std::span<const Host::OverlayDirtyRect> dirtyRects);
+						  const void* bgra, int sourceStride,
+						  std::span<const Host::OverlayDirtyRect> dirtyRects);
 		void BeginClose(Host::PointerSurface surface);
 		void Reopen(Host::PointerSurface surface);
 
@@ -51,9 +51,9 @@ namespace WebFrontend::CefOverlay
 		static std::optional<Host::OverlayDirtyRect> Clamp(
 			Host::OverlayDirtyRect rect, int width, int height);
 		static void CopyDirty(std::vector<std::uint8_t>& destination, int destinationWidth,
-			int destinationHeight, const std::uint8_t* source, int sourceWidth,
-			int sourceStride,
-			std::span<const Host::OverlayDirtyRect> dirtyRects);
+							  int destinationHeight, const std::uint8_t* source, int sourceWidth,
+							  int sourceStride,
+							  std::span<const Host::OverlayDirtyRect> dirtyRects);
 		void PublishLocked(Host::PointerSurface surface, SurfaceState& state);
 
 		std::mutex m_mutex;

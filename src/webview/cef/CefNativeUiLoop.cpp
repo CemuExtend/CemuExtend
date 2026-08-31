@@ -39,7 +39,7 @@ namespace WebFrontend::CefNative
 		bool s_reentrantPumpDetected{};
 
 		void QueuePumpRequest(std::chrono::milliseconds delay, std::uint64_t generation,
-			NativeUiTask callback);
+							  NativeUiTask callback);
 		void InvokePumpAndArmWatchdog(std::uint64_t generation, NativeUiTask callback);
 
 		void InvokeSafely(NativeUiTask& task) noexcept
@@ -48,8 +48,7 @@ namespace WebFrontend::CefNative
 			{
 				if (task)
 					task();
-			}
-			catch (...)
+			} catch (...)
 			{
 				// Never allow an application callback to unwind through a C platform API.
 			}
@@ -202,7 +201,7 @@ namespace WebFrontend::CefNative
 			return false;
 		s_registeredWindowClass = registered != 0;
 		s_messageWindow = CreateWindowExW(0, kWindowClassName, L"", 0, 0, 0, 0, 0,
-			HWND_MESSAGE, nullptr, s_module, nullptr);
+										  HWND_MESSAGE, nullptr, s_module, nullptr);
 		if (!s_messageWindow)
 		{
 			if (s_registeredWindowClass)
@@ -347,12 +346,12 @@ namespace WebFrontend::CefNative
 		auto* posted = new PostedTask{
 			s_lifecycleGeneration.load(std::memory_order_acquire), std::move(task)};
 		return g_idle_add_full(G_PRIORITY_DEFAULT, &InvokePostedTask, posted,
-			&DestroyPostedTask) != 0;
+							   &DestroyPostedTask) != 0;
 #elif defined(_WIN32)
 		auto posted = std::make_unique<NativeUiTask>(std::move(task));
 		if (!s_messageWindow ||
 			!PostMessageW(s_messageWindow, kPostedTaskMessage, 0,
-				reinterpret_cast<LPARAM>(posted.get())))
+						  reinterpret_cast<LPARAM>(posted.get())))
 		{
 			return false;
 		}
@@ -404,10 +403,10 @@ namespace WebFrontend::CefNative
 				// only if no still-newer CEF request has appeared in the meantime.
 				auto expected = s_pumpGeneration.load(std::memory_order_acquire);
 				if (s_pumpGeneration.compare_exchange_strong(expected, expected + 1,
-					std::memory_order_acq_rel, std::memory_order_acquire))
+															 std::memory_order_acq_rel, std::memory_order_acquire))
 				{
 					QueuePumpRequest(std::chrono::milliseconds::zero(), expected + 1,
-						std::move(watchdogCallback));
+									 std::move(watchdogCallback));
 				}
 				return;
 			}
@@ -418,15 +417,15 @@ namespace WebFrontend::CefNative
 			// CAS and replaces this watchdog before it fires.
 			auto expected = generation;
 			if (s_pumpGeneration.compare_exchange_strong(expected, generation + 1,
-				std::memory_order_acq_rel, std::memory_order_acquire))
+														 std::memory_order_acq_rel, std::memory_order_acquire))
 			{
 				QueuePumpRequest(kMaximumPumpDelay, generation + 1,
-					std::move(watchdogCallback));
+								 std::move(watchdogCallback));
 			}
 		}
 
 		void QueuePumpRequest(std::chrono::milliseconds delay, std::uint64_t generation,
-			NativeUiTask callback)
+							  NativeUiTask callback)
 		{
 			delay = std::clamp(delay, std::chrono::milliseconds::zero(), kMaximumPumpDelay);
 			PostNativeUi([delay, generation, callback = std::move(callback)]() mutable {
@@ -459,14 +458,14 @@ namespace WebFrontend::CefNative
 				const guint milliseconds = static_cast<guint>(std::min(delay.count(), maximum));
 				auto* scheduled = new ScheduledPump{generation, std::move(callback)};
 				s_pumpSource = g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, milliseconds,
-					&InvokeScheduledPump, scheduled, &DestroyScheduledPump);
+												  &InvokeScheduledPump, scheduled, &DestroyScheduledPump);
 #elif defined(_WIN32)
 				s_scheduledPump = [generation, callback = std::move(callback)]() mutable {
 					InvokePumpAndArmWatchdog(generation, std::move(callback));
 				};
 				const auto maximum = static_cast<std::int64_t>(std::numeric_limits<UINT>::max());
 				const auto milliseconds = static_cast<UINT>(std::max<std::int64_t>(1,
-					std::min(delay.count(), maximum)));
+																				   std::min(delay.count(), maximum)));
 				SetTimer(s_messageWindow, kPumpTimer, milliseconds, nullptr);
 #elif defined(__APPLE__)
 				auto* scheduled = new ScheduledPump{generation, std::move(callback)};
@@ -475,7 +474,7 @@ namespace WebFrontend::CefNative
 				context.release = &ReleaseScheduledPump;
 				const auto seconds = static_cast<CFTimeInterval>(delay.count()) / 1000.0;
 				s_pumpTimer = CFRunLoopTimerCreate(kCFAllocatorDefault,
-					CFAbsoluteTimeGetCurrent() + seconds, 0, 0, 0, &InvokeScheduledPump, &context);
+												   CFAbsoluteTimeGetCurrent() + seconds, 0, 0, 0, &InvokeScheduledPump, &context);
 				if (!s_pumpTimer)
 				{
 					delete scheduled;
@@ -516,6 +515,6 @@ namespace WebFrontend::CefNative
 	{
 		const std::lock_guard lock(s_stateMutex);
 		return s_initialized.load(std::memory_order_acquire) &&
-			s_uiThread == std::this_thread::get_id();
+			   s_uiThread == std::this_thread::get_id();
 	}
 } // namespace WebFrontend::CefNative

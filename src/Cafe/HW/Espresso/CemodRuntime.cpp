@@ -474,7 +474,7 @@ std::optional<std::uint64_t> CemodRuntime::Load(CemodPackage package,
 	cpu->gpr[1] = stackTop;
 	auto [inserted, added] = m_impl->mods.emplace(
 		handle, Impl::Instance{std::move(package), std::move(context), std::move(global),
-								   std::move(cpu), entrypoints, stackTop});
+							   std::move(cpu), entrypoints, stackTop});
 	if (!added)
 	{
 		error = "failed to register Mod runtime instance";

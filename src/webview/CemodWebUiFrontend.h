@@ -9,22 +9,22 @@
 namespace WebFrontend
 {
 	class CemodWebUiFrontend final : public cemuextend_hle::ICemodWebUiHost,
-		public std::enable_shared_from_this<CemodWebUiFrontend>
+									 public std::enable_shared_from_this<CemodWebUiFrontend>
 	{
 	  public:
 		using PostTask = std::function<bool(std::function<void()>)>;
 
 		static std::shared_ptr<CemodWebUiFrontend> Create(void* parent,
-			std::shared_ptr<CefOverlay::BrowserRuntime> browsers, PostTask postTask);
+														  std::shared_ptr<CefOverlay::BrowserRuntime> browsers, PostTask postTask);
 		~CemodWebUiFrontend() override;
 
 		void SetEventSink(EventSink sink) override;
 		[[nodiscard]] bool Submit(cemuextend_hle::CemodWebUiHostRequest request,
-			Completion completion) override;
+								  Completion completion) override;
 		void Cancel(std::uint64_t addressSpaceId, std::uint32_t generation,
-			std::uint32_t sessionId, std::uint32_t correlationId) override;
+					std::uint32_t sessionId, std::uint32_t correlationId) override;
 		void CloseSession(std::uint64_t addressSpaceId, std::uint32_t generation,
-			std::uint32_t sessionId) override;
+						  std::uint32_t sessionId) override;
 		void CloseOwner(std::uint64_t addressSpaceId, std::uint32_t generation) override;
 		void CloseAll() override;
 		void BeginShutdown();

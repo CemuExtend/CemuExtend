@@ -60,7 +60,7 @@ namespace
 		}
 
 		bool Submit(cemuextend_hle::CemodWebUiHostRequest request,
-			Completion completion) override
+					Completion completion) override
 		{
 			contents.push_back(request.content);
 			requests.push_back(std::move(request));
@@ -69,13 +69,13 @@ namespace
 		}
 
 		void Cancel(std::uint64_t, std::uint32_t, std::uint32_t,
-			std::uint32_t correlationId) override
+					std::uint32_t correlationId) override
 		{
 			cancelled.push_back(correlationId);
 		}
 
 		void CloseSession(std::uint64_t, std::uint32_t,
-			std::uint32_t sessionId) override
+						  std::uint32_t sessionId) override
 		{
 			closedSessions.push_back(sessionId);
 		}
@@ -91,7 +91,7 @@ namespace
 		}
 
 		void Complete(std::size_t index, Status status,
-			std::span<const std::byte> payload = {})
+					  std::span<const std::byte> payload = {})
 		{
 			auto completion = std::move(completions.at(index));
 			completion(status, {payload.begin(), payload.end()});
@@ -244,7 +244,7 @@ namespace
 		const auto session = Open(host, context);
 
 		auto get = Request(1, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
-			{}, ServiceId::Timing);
+						   {}, ServiceId::Timing);
 		CHECK(host.Submit(context, session, get) == static_cast<std::int32_t>(Error::Ok));
 		auto response = PollUntil(host, context, session);
 		const auto* header = reinterpret_cast<const ResponseHeader*>(response.data());
@@ -258,7 +258,7 @@ namespace
 		const auto bytes = std::span<const std::byte>(
 			reinterpret_cast<const std::byte*>(&requested), sizeof(requested));
 		auto set = Request(2, static_cast<std::uint16_t>(TimingOperation::SetFrameRate),
-			bytes, ServiceId::Timing);
+						   bytes, ServiceId::Timing);
 		CHECK(host.Submit(context, session, set) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		header = reinterpret_cast<const ResponseHeader*>(response.data());
@@ -270,7 +270,7 @@ namespace
 		context.SetServicePermissions({timingMask, 0, 0});
 		host.PermissionsChanged(context, 3);
 		get = Request(3, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
-			{}, ServiceId::Timing);
+					  {}, ServiceId::Timing);
 		CHECK(host.Submit(context, session, get) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		const auto* revoked = reinterpret_cast<const TimingFrameRatePayload*>(
@@ -281,7 +281,7 @@ namespace
 
 		requested.frequency = 501;
 		auto invalid = Request(4, static_cast<std::uint16_t>(TimingOperation::SetFrameRate),
-			bytes, ServiceId::Timing);
+							   bytes, ServiceId::Timing);
 		CHECK(host.Submit(context, session, invalid) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		header = reinterpret_cast<const ResponseHeader*>(response.data());
@@ -290,7 +290,7 @@ namespace
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 		const auto replacement = Open(host, context);
 		get = Request(5, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
-			{}, ServiceId::Timing);
+					  {}, ServiceId::Timing);
 		CHECK(host.Submit(context, replacement, get) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, replacement);
 		const auto* reset = reinterpret_cast<const TimingFrameRatePayload*>(
@@ -473,7 +473,7 @@ namespace
 			  static_cast<std::uint16_t>(Status::Ok));
 		CHECK(response.size() == sizeof(ResponseHeader) + replacementData.size());
 		CHECK(std::memcmp(response.data() + sizeof(ResponseHeader), replacementData.data(),
-					  replacementData.size()) == 0);
+						  replacementData.size()) == 0);
 
 		cemuextend::wire::Encoder invalidType;
 		CHECK(invalidType.String("invalid-bool"));
@@ -1155,7 +1155,7 @@ namespace
 			std::memcpy(payload.data() + sizeof(header), viewId.data(), viewId.size());
 			std::memcpy(payload.data() + sizeof(header) + viewId.size(), json.data(), json.size());
 			return Request(correlation, static_cast<std::uint16_t>(UiOperation::Create),
-				payload, ServiceId::Ui);
+						   payload, ServiceId::Ui);
 		};
 
 		auto request = makeCreate(1);
@@ -1168,7 +1168,7 @@ namespace
 		webUiHost->Complete(0, Status::Ok, createdBytes);
 		auto response = pollUi(firstSession, "first create");
 		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-			static_cast<std::uint16_t>(Status::Ok));
+			  static_cast<std::uint16_t>(Status::Ok));
 		CHECK(host.Close(context, firstSession) == static_cast<std::int32_t>(Error::Ok));
 		const auto secondSession = Open(host, context);
 		request = makeCreate(2);
@@ -1181,17 +1181,17 @@ namespace
 		Encoder subscription;
 		subscription.U16(static_cast<std::uint16_t>(ServiceId::Ui));
 		request = Request(3, static_cast<std::uint16_t>(CoreOperation::Subscribe),
-			subscription.data());
+						  subscription.data());
 		CHECK(host.Submit(context, secondSession, request) == static_cast<std::int32_t>(Error::Ok));
 		response = pollUi(secondSession, "subscribe");
 		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-			static_cast<std::uint16_t>(Status::Ok));
+			  static_cast<std::uint16_t>(Status::Ok));
 		UiHandleRequest ready{};
 		ready.handle = 41;
 		const auto* readyBegin = reinterpret_cast<const std::byte*>(&ready);
 		std::vector<std::byte> readyPayload(readyBegin, readyBegin + sizeof(ready));
 		webUiHost->Emit({context.AddressSpaceId(), context.Generation(), secondSession,
-			UiEvent::Ready, std::move(readyPayload)});
+						 UiEvent::Ready, std::move(readyPayload)});
 		response = pollUi(secondSession, "ready event");
 		const auto* event = reinterpret_cast<const ResponseHeader*>(response.data());
 		CHECK(event->serviceId.get() == static_cast<std::uint16_t>(ServiceId::Ui));
@@ -1203,7 +1203,7 @@ namespace
 		CHECK(webUiHost->cancelled == std::vector<std::uint32_t>{4});
 		response = pollUi(secondSession, "cancel");
 		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
-			static_cast<std::uint16_t>(Status::Cancelled));
+			  static_cast<std::uint16_t>(Status::Cancelled));
 
 		CHECK(webUiHost->closedSessions == std::vector<std::uint32_t>{firstSession});
 		host.PermissionsChanged(context, 0);
