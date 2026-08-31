@@ -231,6 +231,74 @@ namespace
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
 
+	void TestTimingFrameRateOverride()
+	{
+		using namespace cemuextend::wire;
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		ModExecutionContext context(92, 1, "timing-frame-rate");
+		context.SetGrantedPermissions(3);
+		const std::uint32_t timingMask =
+			1U << (static_cast<std::uint32_t>(ServiceId::Timing) - 1U);
+		context.SetServicePermissions({timingMask, timingMask, 0});
+		const auto session = Open(host, context);
+
+		auto get = Request(1, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
+			{}, ServiceId::Timing);
+		CHECK(host.Submit(context, session, get) == static_cast<std::int32_t>(Error::Ok));
+		auto response = PollUntil(host, context, session);
+		const auto* header = reinterpret_cast<const ResponseHeader*>(response.data());
+		CHECK(header->status.get() == static_cast<std::uint16_t>(Status::Ok));
+		const auto* initial = reinterpret_cast<const TimingFrameRatePayload*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(initial->frequency.get() == 60);
+
+		TimingFrameRatePayload requested{};
+		requested.frequency = 144;
+		const auto bytes = std::span<const std::byte>(
+			reinterpret_cast<const std::byte*>(&requested), sizeof(requested));
+		auto set = Request(2, static_cast<std::uint16_t>(TimingOperation::SetFrameRate),
+			bytes, ServiceId::Timing);
+		CHECK(host.Submit(context, session, set) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		header = reinterpret_cast<const ResponseHeader*>(response.data());
+		CHECK(header->status.get() == static_cast<std::uint16_t>(Status::Ok));
+		const auto* applied = reinterpret_cast<const TimingFrameRatePayload*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(applied->frequency.get() == 144);
+
+		context.SetServicePermissions({timingMask, 0, 0});
+		host.PermissionsChanged(context, 3);
+		get = Request(3, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
+			{}, ServiceId::Timing);
+		CHECK(host.Submit(context, session, get) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		const auto* revoked = reinterpret_cast<const TimingFrameRatePayload*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(revoked->frequency.get() == 60);
+		context.SetServicePermissions({timingMask, timingMask, 0});
+		host.PermissionsChanged(context, 3);
+
+		requested.frequency = 501;
+		auto invalid = Request(4, static_cast<std::uint16_t>(TimingOperation::SetFrameRate),
+			bytes, ServiceId::Timing);
+		CHECK(host.Submit(context, session, invalid) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		header = reinterpret_cast<const ResponseHeader*>(response.data());
+		CHECK(header->status.get() == static_cast<std::uint16_t>(Status::InvalidArgument));
+
+		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+		const auto replacement = Open(host, context);
+		get = Request(5, static_cast<std::uint16_t>(TimingOperation::GetFrameRate),
+			{}, ServiceId::Timing);
+		CHECK(host.Submit(context, replacement, get) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, replacement);
+		const auto* reset = reinterpret_cast<const TimingFrameRatePayload*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(reset->frequency.get() == 60);
+		CHECK(host.Close(context, replacement) == static_cast<std::int32_t>(Error::Ok));
+	}
+
 	void TestBackpressureAndProtocolReap()
 	{
 		auto& host = cemuextend_hle::Cex2Host::Instance();
@@ -1175,6 +1243,7 @@ int main(int argc, char** argv)
 		TestHttpPermissionGate();
 		TestWebUiServiceLifecycle();
 		TestDiagnosticsGraphicsApi();
+		TestTimingFrameRateOverride();
 	}
 	cemuextend_hle::Cex2Host::Instance().ShutdownForTesting();
 	// OpenSSL keeps provider/configuration state alive until process shutdown.

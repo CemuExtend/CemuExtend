@@ -13,6 +13,7 @@
 #include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
+#include "Cafe/HW/Latte/Core/LatteTiming.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cemu/Logging/CemuLogging.h"
 #endif
@@ -69,6 +70,17 @@ namespace cemuextend_hle
 #endif
 		}
 
+#ifdef CEMU_CEX2_TESTING
+		sint32 g_testGuestFrameRate{-1};
+		void SetGuestFrameRate(sint32 frequency) { g_testGuestFrameRate = frequency; }
+		void ClearGuestFrameRate() { g_testGuestFrameRate = -1; }
+		sint32 EffectiveFrameRate() { return g_testGuestFrameRate > 0 ? g_testGuestFrameRate : 60; }
+#else
+		void SetGuestFrameRate(sint32 frequency) { LatteTiming_setGuestCustomVsyncFrequency(frequency); }
+		void ClearGuestFrameRate() { LatteTiming_disableGuestCustomVsyncFrequency(); }
+		sint32 EffectiveFrameRate() { return LatteTiming_getEffectiveVsyncFrequency(); }
+#endif
+
 		void LogGuestRecord(std::string_view principal, std::uint8_t level, std::string_view message)
 		{
 #ifndef CEMU_CEX2_TESTING
@@ -115,6 +127,7 @@ namespace cemuextend_hle
 			Diagnostics,
 			Http,
 			Ui,
+			Timing,
 		};
 
 		struct OperationDefinition
@@ -175,6 +188,8 @@ namespace cemuextend_hle
 			OperationDefinition{11, 7, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiHandleRequest), 0, 30, 60, Handler::Ui},
 			OperationDefinition{11, 8, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiTitleRequestHeader) + 256, 0, 20, 40, Handler::Ui},
 			OperationDefinition{11, 9, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiInteractiveRequest), 0, 30, 60, Handler::Ui},
+			OperationDefinition{12, 1, 1, 1, 0, sizeof(cemuextend::wire::TimingFrameRatePayload), 10, 20, Handler::Timing},
+			OperationDefinition{12, 2, 1, 2, sizeof(cemuextend::wire::TimingFrameRatePayload), sizeof(cemuextend::wire::TimingFrameRatePayload), 10, 20, Handler::Timing},
 		};
 
 		const OperationDefinition* FindOperation(std::uint16_t service, std::uint16_t operation)
@@ -197,6 +212,7 @@ namespace cemuextend_hle
 			ServiceDefinition{9, 1, 1, 64, 4U * 1024U},
 			ServiceDefinition{10, 1, 32, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{11, 1, kCemodUiPermission, 64U * 1024U, 64U * 1024U},
+			ServiceDefinition{12, 1, 3, sizeof(cemuextend::wire::TimingFrameRatePayload), sizeof(cemuextend::wire::TimingFrameRatePayload)},
 		};
 
 		struct WireServiceDefinition
@@ -258,6 +274,8 @@ namespace cemuextend_hle
 			double loggingTokens{50.0};
 			std::chrono::steady_clock::time_point loggingLastRefill{std::chrono::steady_clock::now()};
 			std::set<std::uint16_t> pressedKeyboardUsages;
+			sint32 frameRate{-1};
+			std::uint64_t frameRateSequence{};
 			cemuextend::wire::PointerPolicyPayload pointerPolicy{};
 			std::uint64_t pointerPolicySequence{};
 			Cex2HostTextInputState textInput{};
@@ -290,6 +308,7 @@ namespace cemuextend_hle
 		std::unordered_map<std::uint32_t, Session> sessions;
 		std::uint32_t nextSession{1};
 		std::uint64_t nextPointerPolicySequence{1};
+		std::uint64_t nextFrameRateSequence{1};
 		cemuextend::wire::MouseEventPayloadV2 hostMouse{};
 		std::mutex workMutex;
 		std::condition_variable workReady;
@@ -345,6 +364,22 @@ namespace cemuextend_hle
 				work.push_back(std::move(task));
 			}
 			workReady.notify_one();
+		}
+
+		void RefreshGuestFrameRateLocked()
+		{
+			const Session* selected{};
+			for (const auto& [id, session] : sessions)
+			{
+				(void)id;
+				if (session.frameRate > 0 &&
+					(selected == nullptr || session.frameRateSequence > selected->frameRateSequence))
+					selected = &session;
+			}
+			if (selected != nullptr)
+				SetGuestFrameRate(selected->frameRate);
+			else
+				ClearGuestFrameRate();
 		}
 
 		void QueueTextInputWakeLocked()
@@ -904,6 +939,32 @@ namespace cemuextend_hle
 				return MakeResponse(request, Status::Ok,
 									{reinterpret_cast<const std::byte*>(&diagnostics), sizeof(diagnostics)});
 			}
+			if (definition->handler == Handler::Timing)
+			{
+				if (request.operation.get() == static_cast<std::uint16_t>(TimingOperation::GetFrameRate))
+				{
+					if (!payload.empty())
+						return MakeResponse(request, Status::InvalidArgument);
+					TimingFrameRatePayload response{};
+					response.frequency = EffectiveFrameRate();
+					return MakeResponse(request, Status::Ok,
+						{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
+				}
+				if (payload.size() != sizeof(TimingFrameRatePayload))
+					return MakeResponse(request, Status::InvalidArgument);
+				TimingFrameRatePayload requested{};
+				std::memcpy(&requested, payload.data(), sizeof(requested));
+				const sint32 frequency = requested.frequency.get();
+				if (!((frequency >= 30 && frequency <= 500) || frequency == 10000))
+					return MakeResponse(request, Status::InvalidArgument);
+				session.frameRate = frequency;
+				session.frameRateSequence = nextFrameRateSequence++;
+				RefreshGuestFrameRateLocked();
+				TimingFrameRatePayload response{};
+				response.frequency = frequency;
+				return MakeResponse(request, Status::Ok,
+					{reinterpret_cast<const std::byte*>(&response), sizeof(response)});
+			}
 			if (definition->handler == Handler::Http)
 			{
 				if (request.operation.get() == static_cast<std::uint16_t>(HttpOperation::Start))
@@ -1153,6 +1214,7 @@ namespace cemuextend_hle
 			requestBytes.size() > cemuextend::transport::kMaximumMessageSize)
 		{
 			m_impl->sessions.erase(found);
+			m_impl->RefreshGuestFrameRateLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		RequestHeader request{};
@@ -1161,12 +1223,14 @@ namespace cemuextend_hle
 			request.flags.get() != 0)
 		{
 			m_impl->sessions.erase(found);
+			m_impl->RefreshGuestFrameRateLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		const auto correlationId = request.correlationId.get();
 		if (!Impl::AdmitCorrelation(session, correlationId))
 		{
 			m_impl->sessions.erase(found);
+			m_impl->RefreshGuestFrameRateLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		const auto payload = requestBytes.subspan(sizeof(RequestHeader));
@@ -1801,6 +1865,7 @@ namespace cemuextend_hle
 		const auto generation = found->second.generation;
 		auto webUi = m_impl->webUi;
 		m_impl->sessions.erase(found);
+		m_impl->RefreshGuestFrameRateLocked();
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
 		lock.unlock();
@@ -1821,6 +1886,7 @@ namespace cemuextend_hle
 			hadTextInput |= remove && session.textInput.active;
 			return remove;
 		});
+		m_impl->RefreshGuestFrameRateLocked();
 		// Transfers are scoped to the address space, so they outlive one session of
 		// it but never the owner that started them.
 		Cex2Http::ReleaseSession(owner.AddressSpaceId());
@@ -1843,6 +1909,7 @@ namespace cemuextend_hle
 		for (const auto& entry : m_impl->sessions)
 			Cex2Http::ReleaseSession(entry.second.addressSpaceId);
 		m_impl->sessions.clear();
+		m_impl->RefreshGuestFrameRateLocked();
 		m_impl->webUiContents.clear();
 		auto webUi = m_impl->webUi;
 		if (hadTextInput)
@@ -2205,6 +2272,7 @@ namespace cemuextend_hle
 		const bool closeUi = (owner.GrantedPermissions() & kCemodUiPermission) != 0 &&
 			(permissions & kCemodUiPermission) == 0;
 		bool hadTextInput{};
+		bool frameRateChanged{};
 		for (const auto& [id, session] : m_impl->sessions)
 			hadTextInput |= session.owner == &owner && session.textInput.active;
 		owner.SetGrantedPermissions(permissions);
@@ -2255,6 +2323,14 @@ namespace cemuextend_hle
 				session.pointerPolicy = {};
 			if (!Impl::HasPermission(session, 16, static_cast<std::uint16_t>(ServiceId::Capture)))
 				session.capture = {};
+			if (session.frameRate > 0 &&
+				!Impl::HasPermission(session, 2, static_cast<std::uint16_t>(ServiceId::Timing),
+					static_cast<std::uint16_t>(cemuextend::wire::TimingOperation::SetFrameRate)))
+			{
+				session.frameRate = -1;
+				session.frameRateSequence = 0;
+				frameRateChanged = true;
+			}
 			for (auto pending = session.pending.begin(); pending != session.pending.end();)
 			{
 				if (Impl::HasPermission(session, pending->second.permission,
@@ -2273,6 +2349,8 @@ namespace cemuextend_hle
 				--session.reservedResponses;
 			}
 		}
+		if (frameRateChanged)
+			m_impl->RefreshGuestFrameRateLocked();
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
 		auto webUi = m_impl->webUi;

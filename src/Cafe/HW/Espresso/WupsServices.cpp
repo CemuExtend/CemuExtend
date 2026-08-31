@@ -551,7 +551,7 @@ struct AromaCompatibilityRuntime::Impl
 		{
 			if (service == 1 || permission == 0)
 				return true;
-			if (service < 2 || service > 9)
+			if (service < 2 || service > 12)
 				return false;
 			const auto bit = 1U << (service - 1U);
 			if (permission == 1)

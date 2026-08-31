@@ -1,4 +1,5 @@
 #include "Cafe/HW/Latte/Core/Latte.h"
+#include "Cafe/HW/Latte/Core/LatteTiming.h"
 #include "Cafe/OS/libs/gx2/GX2_Event.h"
 #ifdef ENABLE_VULKAN
 #include "Cafe/HW/Latte/Renderer/Vulkan/VsyncDriver.h"
@@ -8,7 +9,8 @@
 #include "Cafe/CafeSystem.h"
 #include "Cafe/OS/RPL/rpl.h"
 
-sint32 s_customVsyncFrequency = -1;
+std::atomic<sint32> s_customVsyncFrequency{-1};
+std::atomic<sint32> s_guestCustomVsyncFrequency{-1};
 
 void LatteTiming_NotifyHostVSync();
 
@@ -20,9 +22,11 @@ HRTick LatteTime_CalculateTimeBetweenVSync()
 	// 59.94 -> 60 * 0.999
 
 	HRTick tick = HighResolutionTimer::getFrequency();
-	if (s_customVsyncFrequency > 0)
+	sint32 customFrequency{};
+	if (LatteTiming_getGuestCustomVsyncFrequency(customFrequency) ||
+		LatteTiming_getCustomVsyncFrequency(customFrequency))
 	{
-		tick /= (uint64)s_customVsyncFrequency;
+		tick /= (uint64)customFrequency;
 	}
 	else
 	{
@@ -35,21 +39,49 @@ HRTick LatteTime_CalculateTimeBetweenVSync()
 
 void LatteTiming_setCustomVsyncFrequency(sint32 frequency)
 {
-	s_customVsyncFrequency = frequency;
+	s_customVsyncFrequency.store(frequency, std::memory_order_release);
 }
 
 void LatteTiming_disableCustomVsyncFrequency()
 {
-	s_customVsyncFrequency = -1;
+	s_customVsyncFrequency.store(-1, std::memory_order_release);
 }
 
 bool LatteTiming_getCustomVsyncFrequency(sint32& customFrequency)
 {
-	sint32 t = s_customVsyncFrequency;
+	sint32 t = s_customVsyncFrequency.load(std::memory_order_acquire);
 	if (t <= 0)
 		return false;
 	customFrequency = t;
 	return true;
+}
+
+void LatteTiming_setGuestCustomVsyncFrequency(sint32 frequency)
+{
+	s_guestCustomVsyncFrequency.store(frequency, std::memory_order_release);
+}
+
+void LatteTiming_disableGuestCustomVsyncFrequency()
+{
+	s_guestCustomVsyncFrequency.store(-1, std::memory_order_release);
+}
+
+bool LatteTiming_getGuestCustomVsyncFrequency(sint32& customFrequency)
+{
+	const sint32 frequency = s_guestCustomVsyncFrequency.load(std::memory_order_acquire);
+	if (frequency <= 0)
+		return false;
+	customFrequency = frequency;
+	return true;
+}
+
+sint32 LatteTiming_getEffectiveVsyncFrequency()
+{
+	sint32 frequency{};
+	if (LatteTiming_getGuestCustomVsyncFrequency(frequency) ||
+		LatteTiming_getCustomVsyncFrequency(frequency))
+		return frequency;
+	return 60;
 }
 
 bool s_usingHostDrivenVSync = false;

@@ -17,10 +17,12 @@ namespace cemuextend_hle
 		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Configuration) - 1U)) |
 		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::File) - 1U)) |
 		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Window) - 1U)) |
-		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Diagnostics) - 1U));
+		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Diagnostics) - 1U)) |
+		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Timing) - 1U));
 	constexpr uint32 kDefaultWriteMask =
 		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Input) - 1U)) |
-		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Logging) - 1U));
+		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Logging) - 1U)) |
+		(1U << (static_cast<uint32>(cemuextend::wire::ServiceId::Timing) - 1U));
 	constexpr uint32 kDefaultInjectMask = 0;
 
 	inline void ObserveVpad(sint32 channel, const VPADStatus& status, sint32 error, sint32 sampleCount)

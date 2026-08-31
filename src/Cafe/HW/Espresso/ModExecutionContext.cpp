@@ -142,7 +142,7 @@ bool ModExecutionContext::IsServiceAllowed(std::uint16_t service, std::uint32_t 
 {
 	if (service == 1 || permission == 0)
 		return true;
-	if (service < 2 || service > 9)
+	if (service < 2 || service > 12)
 		return false;
 	const auto serviceBit = 1U << (service - 1U);
 	if (permission == 1)
