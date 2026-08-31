@@ -10,6 +10,7 @@ executable="$(readlink -f "$1")"
 output_dir="$2"
 runtime_dir="${output_dir}/.cemu-runtime"
 lib_dir="${runtime_dir}/lib"
+fallback_dir="${runtime_dir}/fallback"
 launcher="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/Cemu-runtime-launcher.sh"
 
 [[ -x "${executable}" ]] || { echo "executable not found: ${executable}" >&2; exit 1; }
@@ -79,7 +80,10 @@ if [[ -f "${executable_dir}/libcef.so" ]]; then
 			echo "CEF runtime library was not found: ${cef_runtime_name}" >&2
 			exit 1
 		}
-		cp -Lf "${cef_runtime_library}" "${lib_dir}/${cef_runtime_name}"
+		# Host stack, so it follows the same fallback rule as the libraries below.
+		install -d "${fallback_dir}"
+		cp -Lf "${cef_runtime_library}" "${fallback_dir}/${cef_runtime_name}"
+		rm -f "${lib_dir}/${cef_runtime_name}"
 		elf_inputs+=("${cef_runtime_library}")
 	done
 fi
@@ -91,6 +95,22 @@ for input in "${elf_inputs[@]}"; do
 		'/=> \// { print $3 } /^\// { print $1 }')
 done
 
+# The host's GPU drivers are loaded into this process and are built against the
+# host's display libraries: a Mesa ICD linked against a newer libwayland-client
+# fails to resolve its symbols against the older copy bundled here, and the
+# Vulkan loader then reports no drivers at all. These libraries therefore go to a
+# fallback directory that the launcher only puts on the search path when the host
+# does not provide them itself.
+is_host_stack_library()
+{
+	case "$1" in
+		libwayland-*.so.*|libX11.so.*|libX11-xcb.so.*|libxcb.so.*|libxcb-*.so.*|\
+		libxshmfence.so.*|libdrm.so.*|libgbm.so.*)
+			return 0 ;;
+	esac
+	return 1
+}
+
 for library in "${!libraries[@]}"; do
 	name=$(basename "${library}")
 	case "${name}" in
@@ -98,10 +118,17 @@ for library in "${!libraries[@]}"; do
 		libcef.so|libvulkan.so.*)
 			continue ;;
 	esac
+	if is_host_stack_library "${name}"; then
+		install -d "${fallback_dir}"
+		cp -Lf "${library}" "${fallback_dir}/${name}"
+		# A previous additive bundle may still hold the shadowing copy.
+		rm -f "${lib_dir}/${name}"
+		continue
+	fi
 	cp -Lf "${library}" "${lib_dir}/${name}"
 done
 
-missing_libraries=$(LD_LIBRARY_PATH="${output_dir}:${lib_dir}" LC_ALL=C \
+missing_libraries=$(LD_LIBRARY_PATH="${output_dir}:${lib_dir}:${fallback_dir}" LC_ALL=C \
 	ldd "${output_dir}/.Cemu_release.bin" 2>/dev/null | \
 	awk '$2 == "=>" && $3 == "not" { print $1 }')
 if [[ -n "${missing_libraries}" ]]; then

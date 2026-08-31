@@ -109,6 +109,16 @@ else
 	if [[ "${artifact_name}" != "Cemu_release" ]]; then
 		mv -f "${artifact_dir}/Cemu_release" "${artifact_dir}/${artifact_name}"
 	fi
+	# Host display libraries now live in .cemu-runtime/fallback, which the
+	# launcher only uses when the host lacks them. A copy left in the always
+	# preferred library directory by an older bundle would still shadow the
+	# host's, so the host's GPU driver could not load.
+	if [[ -d "${artifact_dir}/.cemu-runtime/fallback" ]]; then
+		for fallback_library in "${artifact_dir}"/.cemu-runtime/fallback/*; do
+			[[ -e "${fallback_library}" ]] || continue
+			rm -f "${artifact_dir}/.cemu-runtime/lib/$(basename -- "${fallback_library}")"
+		done
+	fi
 fi
 
 printf 'Docker %s release build: %s\n' "${build_platform}" "${artifact_dir}/${artifact_name}"

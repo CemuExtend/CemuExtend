@@ -85,6 +85,27 @@ fi
 if [ -n "${NIX_LD_LIBRARY_PATH:-}" ]; then
 	library_path="$library_path:$NIX_LD_LIBRARY_PATH"
 fi
+# The host's GPU drivers get loaded into this process and are built against the
+# host's own display libraries. Bundled copies of those would shadow the newer
+# host ones and leave a driver unable to resolve its symbols - a Mesa ICD linked
+# against a newer libwayland-client then fails to load and Vulkan reports no
+# drivers at all, so a title cannot start. Use the bundled fallbacks only when
+# the host is missing one of them, which is the portability case they exist for.
+fallback_dir="$runtime_dir/fallback"
+if [ -d "$fallback_dir" ]; then
+	fallback_needed=0
+	for fallback_library in "$fallback_dir"/*.so.*; do
+		[ -e "$fallback_library" ] || continue
+		fallback_name=${fallback_library##*/}
+		if ! ldconfig -p 2>/dev/null | grep -q "^[[:space:]]*$fallback_name "; then
+			fallback_needed=1
+			break
+		fi
+	done
+	if [ "$fallback_needed" -eq 1 ]; then
+		append_library_dir "$fallback_dir"
+	fi
+fi
 export LD_LIBRARY_PATH="$library_path:$runtime_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 cef_sandbox="$launcher_dir/chrome-sandbox"
 if [ ! -f "$cef_sandbox" ] || [ ! -u "$cef_sandbox" ] || [ "$(stat -c %u "$cef_sandbox" 2>/dev/null || printf 1)" != "0" ]; then
