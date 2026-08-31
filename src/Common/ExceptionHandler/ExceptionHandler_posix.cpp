@@ -124,6 +124,11 @@ void handlerDumpingSignal(int sig, siginfo_t* info, void* context)
 	ExceptionHandler_LogGeneralInfo();
 	CrashLog_SetOutputChannels(true, true);
 
+	// Log lines are queued for the writer thread, and both paths below end the
+	// process immediately: without waiting here the crash report is cut off part
+	// way through, losing the title and CPU state that make it worth reading.
+	cemuLog_waitForFlush();
+
 	if (GetConfig().crash_dump == CrashDump::Enabled)
 	{
 		// reset signal handler to default and re-raise signal to dump core

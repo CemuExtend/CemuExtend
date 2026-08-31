@@ -1,4 +1,5 @@
 #include "Common/precompiled.h"
+#include "Common/ExceptionHandler/ExceptionHandler.h"
 #include "Common/version.h"
 
 #include "application/ApplicationRuntime.h"
@@ -1876,6 +1877,11 @@ namespace
 				m_nativeUiLoopInitialized = true;
 				if (!WebFrontend::CefOverlay::InitializeProcessRuntime())
 					throw std::runtime_error("failed to initialize the CEF process runtime");
+				// Chromium installs its own handlers for the signals that dump core,
+				// replacing the ones startup put in place. Losing those means a crash
+				// writes no stack trace to the log at all, so claim them back now that
+				// CEF has had its turn.
+				ExceptionHandler_Init();
 				// On Linux CEF must initialize before GTK. CefInitialize configures
 				// Chromium's GTK integration (including locale handling), while the
 				// native host constructor calls gtk_init_check and opens the display.
