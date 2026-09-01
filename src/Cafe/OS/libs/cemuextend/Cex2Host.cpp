@@ -2064,26 +2064,11 @@ namespace cemuextend_hle
 		if (!usage)
 			return;
 		std::lock_guard lock(m_impl->mutex);
-#ifndef CEMU_CEX2_TESTING
-		if (usage == 62 || usage == 0xe5)
-			cemuLog_log(LogType::Force,
-						"CEX2-KEY raw usage={} pressed={} modifiers={} sessions={}",
-						usage, pressed, modifiers, m_impl->sessions.size());
-#endif
 		for (auto& [id, session] : m_impl->sessions)
 		{
 			if (!Impl::HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input)))
 				continue;
 			const bool wasPressed = session.pressedKeyboardUsages.contains(usage);
-			if (usage == 62 || usage == 0xe5)
-			{
-#ifndef CEMU_CEX2_TESTING
-				cemuLog_log(LogType::Force,
-							"CEX2-KEY session={} usage={} pressed={} duplicate={} queued={} reserved={} dropped={}",
-							id, usage, pressed, wasPressed == pressed, session.responses.size(),
-							session.reservedResponses, session.droppedEvents);
-#endif
-			}
 			if (wasPressed == pressed)
 				continue;
 			if (pressed)
@@ -2098,21 +2083,9 @@ namespace cemuextend_hle
 			event.usbHidUsage = usage;
 			event.pressed = pressed;
 			event.modifiers = modifiers;
-			[[maybe_unused]] const std::size_t queuedBefore = session.responses.size();
-			[[maybe_unused]] const std::uint64_t droppedBefore = session.droppedEvents;
 			m_impl->EmitEvent(session, ServiceId::Input,
 							  static_cast<std::uint16_t>(cemuextend::wire::InputEvent::Keyboard),
 							  {reinterpret_cast<const std::byte*>(&event), sizeof(event)});
-			if (usage == 62 || usage == 0xe5)
-			{
-#ifndef CEMU_CEX2_TESTING
-				cemuLog_log(LogType::Force,
-							"CEX2-KEY emit session={} usage={} event={} pressed={} enqueued={} queued={}->{} dropped={}->{}",
-							id, usage, event.identity.eventId.get(), pressed,
-							session.responses.size() != queuedBefore, queuedBefore, session.responses.size(),
-							droppedBefore, session.droppedEvents);
-#endif
-			}
 		}
 	}
 
