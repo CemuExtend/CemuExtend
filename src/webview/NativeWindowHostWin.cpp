@@ -1,4 +1,5 @@
 #include "webview/NativeWindowHost.h"
+#include "webview/NativeKeyboardInput.h"
 
 #if defined(_WIN32)
 
@@ -169,8 +170,18 @@ namespace WebFrontend
 			case WM_SYSKEYDOWN:
 			case WM_KEYUP:
 			case WM_SYSKEYUP:
-				emit({.kind = NativeInputKind::Key, .key = static_cast<std::uint32_t>(wparam), .modifiers = KeyModifiers(), .pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN, .repeat = (lparam & (1LL << 30)) != 0});
+			{
+				const auto scanCode = static_cast<std::uint32_t>((lparam >> 16) & 0xff);
+				const bool extended = (lparam & (1LL << 24)) != 0;
+				emit({.kind = NativeInputKind::Key,
+					  .key = static_cast<std::uint32_t>(wparam),
+					  .usage = WindowsModifierUsbHidUsage(
+						  static_cast<std::uint32_t>(wparam), scanCode, extended),
+					  .modifiers = KeyModifiers(),
+					  .pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN,
+					  .repeat = (lparam & (1LL << 30)) != 0});
 				return 0;
+			}
 			case WM_CHAR:
 			{
 				const auto character = static_cast<wchar_t>(wparam);

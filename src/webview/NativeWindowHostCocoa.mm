@@ -1,4 +1,5 @@
 #include "webview/NativeWindowHost.h"
+#include "webview/NativeKeyboardInput.h"
 
 #if defined(__APPLE__)
 
@@ -30,6 +31,7 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 	BOOL captured;
 	BOOL confined;
 	BOOL rawMouseEnabled;
+	std::uint8_t modifierKeys;
 }
 @end
 
@@ -56,12 +58,14 @@ static BOOL CemuDispatchTextCommand(void* context, SEL command);
 - (void)scrollWheel:(NSEvent*)event { CemuDispatchRenderInput(self, event, 3); }
 - (void)keyDown:(NSEvent*)event { CemuDispatchRenderInput(self, event, 4); }
 - (void)keyUp:(NSEvent*)event { CemuDispatchRenderInput(self, event, 5); }
+- (void)flagsChanged:(NSEvent*)event { CemuDispatchRenderInput(self, event, 8); }
 - (void)touchesBeganWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 6); }
 - (void)touchesMovedWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 6); }
 - (void)touchesEndedWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 7); }
 - (void)touchesCancelledWithEvent:(NSEvent*)event { CemuDispatchRenderInput(self, event, 7); }
 - (BOOL)resignFirstResponder
 {
+	modifierKeys = 0;
 	CemuDispatchRenderFocusLost(inputContext, padSurface);
 	return [super resignFirstResponder];
 }
@@ -860,7 +864,7 @@ static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInte
 			.insideContent = inside});
 		return;
 	}
-	if (kind == 4 || kind == 5)
+	if (kind == 4 || kind == 5 || kind == 8)
 	{
 		const auto flags = [event modifierFlags];
 		const auto modifiers = static_cast<std::uint8_t>(
@@ -868,9 +872,20 @@ static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInte
 			((flags & NSEventModifierFlagShift) ? 2U : 0U) |
 			((flags & NSEventModifierFlagOption) ? 4U : 0U) |
 			((flags & NSEventModifierFlagCommand) ? 8U : 0U));
+		const auto keyCode = static_cast<std::uint32_t>([event keyCode]);
+		const auto usage = WebFrontend::MacKeyCodeUsbHidUsage(keyCode);
+		bool pressed = kind == 4;
+		if (kind == 8)
+		{
+			const auto bit = WebFrontend::MacModifierBit(usage);
+			if (!bit) return;
+			pressed = WebFrontend::MacModifierPressed(view->modifierKeys, usage, modifiers);
+			if (pressed) view->modifierKeys |= bit;
+			else view->modifierKeys &= static_cast<std::uint8_t>(~bit);
+		}
 		emit({.kind = WebFrontend::NativeInputKind::Key,
-			.key = static_cast<std::uint32_t>([event keyCode]), .modifiers = modifiers,
-			.pressed = kind == 4, .repeat = [event isARepeat] == YES});
+			.key = keyCode, .usage = usage, .modifiers = modifiers,
+			.pressed = pressed, .repeat = [event isARepeat] == YES});
 		if (kind == 4 && (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) == 0)
 		{
 			NSString* characters = [event characters];

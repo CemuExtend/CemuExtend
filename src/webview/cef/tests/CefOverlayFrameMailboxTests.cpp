@@ -34,13 +34,16 @@ int main()
 	static_assert(WindowsKeyCodeFromUsbHid(0xe5) == 0xa1);
 	constexpr auto overlayKey =
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Key, true);
-	static_assert(overlayKey.publishGuestPhysicalInput && !overlayKey.processFrontendInput);
+	static_assert(overlayKey.publishGuestPhysicalInput && overlayKey.sendOverlayInput &&
+				  !overlayKey.processFrontendInput);
 	constexpr auto overlayButton =
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::PointerButton, true);
-	static_assert(overlayButton.publishGuestPhysicalInput && !overlayButton.processFrontendInput);
+	static_assert(overlayButton.publishGuestPhysicalInput && overlayButton.sendOverlayInput &&
+				  !overlayButton.processFrontendInput);
 	constexpr auto overlayWheel =
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::PointerWheel, true);
-	static_assert(overlayWheel.publishGuestPhysicalInput && !overlayWheel.processFrontendInput);
+	static_assert(overlayWheel.publishGuestPhysicalInput && overlayWheel.sendOverlayInput &&
+				  !overlayWheel.processFrontendInput);
 	constexpr auto overlayCharacter =
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Character, true);
 	static_assert(!overlayCharacter.publishGuestPhysicalInput &&
@@ -55,7 +58,8 @@ int main()
 				  overlayDeviceChanged.processFrontendInput);
 	constexpr auto ordinaryKey =
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Key, false);
-	static_assert(ordinaryKey.publishGuestPhysicalInput && ordinaryKey.processFrontendInput);
+	static_assert(ordinaryKey.publishGuestPhysicalInput && !ordinaryKey.sendOverlayInput &&
+				  ordinaryKey.processFrontendInput);
 
 	using WebFrontend::CefOverlay::CemodOverlayOrder;
 	using WebFrontend::CefOverlay::OverlayLayer;

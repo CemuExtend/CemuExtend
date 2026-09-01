@@ -22,6 +22,7 @@
 #include "input/emulated/EmulatedController.h"
 #include "webview/MainWindowState.h"
 #include "webview/NativeWindowHost.h"
+#include "webview/NativeKeyboardInput.h"
 #include "webview/NativeFileDialog.h"
 #include "webview/RendererHost.h"
 #include "webview/RpcDispatcher.h"
@@ -3545,6 +3546,11 @@ namespace
 
 		void HandleMetrics(Host::WindowMetricsSnapshot metrics)
 		{
+			// Store the same authoritative focus level that pointer events expose.
+			// Otherwise WindowGet can observe GTK's transient false sample and make
+			// the guest release every held key even though live MouseV2 was corrected.
+			metrics.appActive =
+				m_nativeKeyboardFocus.EffectivePointerFocus(metrics.appActive);
 			const auto previous = m_hostState->GetWindowMetrics();
 			m_hostState->UpdateMetrics(metrics);
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
@@ -3644,7 +3650,8 @@ namespace
 				.contentWidth = state.width,
 				.contentHeight = state.height,
 				.insideContent = state.inside,
-				.focused = metrics.appActive || event.windowActive,
+				.focused = m_nativeKeyboardFocus.EffectivePointerFocus(
+					metrics.appActive || event.windowActive),
 				.flags = raw
 							 ? static_cast<std::uint8_t>(Frontend::CemuExtendMouseEventFlag::RawRelative)
 							 : static_cast<std::uint8_t>(0),
@@ -3673,6 +3680,7 @@ namespace
 
 		void ReleaseNativeInput(bool resetTextInput)
 		{
+			m_nativeKeyboardFocus.Reset();
 			if (m_hostServices)
 				m_hostServices->ReleaseKeys();
 			m_controller.KeyboardFocusLost();
@@ -3683,6 +3691,37 @@ namespace
 				m_textInputSequence = 0;
 				m_nativeWindow->UpdateTextInput({});
 			}
+		}
+
+		void ConfirmNativeFocusLoss()
+		{
+			// A deferred GTK focus-out is authoritative. Publish it directly to the
+			// cached snapshot as well as CEX2 so the next WindowGet cannot resurrect
+			// the pre-idle active state or retain a transient corrected value.
+			auto metrics = m_hostState->GetWindowMetrics();
+			metrics.appActive = false;
+			m_hostState->UpdateMetrics(metrics);
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay && m_cefOverlay->HasWindow(0))
+				m_cefOverlay->SetWindowFocus(0, false);
+#endif
+			m_controller.PointerFocusChanged(false);
+		}
+
+		void ConfirmNativeKeyboardFocus()
+		{
+			// PointerFocusChanged publishes the ordered MouseV2 edge, but WindowGet
+			// reads WebHostState independently. Update both from the same native
+			// key-down so a previously cached false value cannot end a long hold at
+			// Aqua's next periodic window poll.
+			auto metrics = m_hostState->GetWindowMetrics();
+			metrics.appActive = true;
+			m_hostState->UpdateMetrics(metrics);
+			// Window 0 is the launcher browser, not the in-game OSR overlay. Giving
+			// it native CEF focus here steals X focus from the render window and
+			// immediately turns this same key-down into a synthetic FocusLost/up.
+			// OSR input focus is maintained by the overlay runtime's layer routing.
+			m_controller.PointerFocusChanged(true);
 		}
 
 		void RefreshHotkeyBindings(const Application::HotkeySettingsModel& model)
@@ -3870,6 +3909,23 @@ namespace
 			WebFrontend::NativeInputEvent normalized = event;
 			if (normalized.kind == WebFrontend::NativeInputKind::Key && !normalized.usage)
 				normalized.usage = UsbHidUsage(normalized.key);
+			const bool keyboardStateChanged =
+				normalized.kind == WebFrontend::NativeInputKind::Key && normalized.usage &&
+				m_nativeKeyboardFocus.SetKey(normalized.usage, normalized.pressed);
+			if (normalized.kind == WebFrontend::NativeInputKind::Key)
+			{
+				// Bounded end-to-end keyboard trace. This stops after the first
+				// transitions of a launch process, but includes auto-repeat so a
+				// synthetic GTK release can be distinguished from a held level.
+				static std::atomic_uint32_t traceCount{};
+				const auto trace = traceCount.fetch_add(1, std::memory_order_relaxed);
+				if (trace < 128)
+					cemuLog_log(LogType::Force,
+							"CEX2-KEY frontend n={} key={} usage={} pressed={} repeat={} modifiers={} surface={}",
+							trace, normalized.key, normalized.usage, normalized.pressed,
+							normalized.repeat, normalized.modifiers,
+							static_cast<unsigned>(normalized.surface));
+			}
 
 			bool overlayCapturesInput{};
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
@@ -3933,12 +3989,19 @@ namespace
 					break;
 				case WebFrontend::NativeInputKind::Key:
 					if (normalized.usage)
+					{
+						// Receiving a new native key-down proves that the game window
+						// owns keyboard input. Publish focus first so the ordered guest
+						// stream cannot reject this press using a stale GTK metric.
+						if (normalized.pressed && keyboardStateChanged)
+							ConfirmNativeKeyboardFocus();
 						m_controller.SubmitKeyboard(normalized.usage, normalized.pressed,
 												normalized.modifiers);
+					}
 					break;
 				case WebFrontend::NativeInputKind::FocusLost:
-					m_controller.PointerFocusChanged(false);
 					ReleaseNativeInput(false);
+					ConfirmNativeFocusLoss();
 					break;
 				default:
 					break;
@@ -3946,7 +4009,7 @@ namespace
 			}
 
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
-			if (overlayCapturesInput)
+			if (route.sendOverlayInput)
 			{
 				if (WebFrontend::CefOverlay::IsPointerInput(normalized.kind))
 				{
@@ -6745,6 +6808,7 @@ namespace
 		};
 		std::array<PointerState, 2> m_pointerStates;
 		std::array<Frontend::CemuExtendFrontendBridge, 2> m_pointerBridges;
+		WebFrontend::NativeKeyboardFocusTracker m_nativeKeyboardFocus;
 		mutable std::mutex m_hotkeyMutex;
 		Application::HotkeySettingsModel m_hotkeySettings;
 		std::atomic_bool m_hotkeyEditing{};

@@ -1,8 +1,10 @@
 #include "webview/cef/CefOverlayRuntime.h"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -75,6 +77,19 @@ namespace
 		}
 	}
 
+	std::optional<std::array<std::uint8_t, 4>> CenterPixel(
+		const Host::OverlayFrameSnapshot& frame)
+	{
+		if (!frame.bgra || frame.width <= 0 || frame.height <= 0 || frame.stride < frame.width * 4)
+			return std::nullopt;
+		const auto offset = static_cast<std::size_t>(frame.height / 2) * frame.stride +
+							static_cast<std::size_t>(frame.width / 2) * 4U;
+		if (offset + 4U > frame.bgra->size())
+			return std::nullopt;
+		return std::array{frame.bgra->at(offset), frame.bgra->at(offset + 1U),
+						  frame.bgra->at(offset + 2U), frame.bgra->at(offset + 3U)};
+	}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -104,17 +119,153 @@ int main(int argc, char* argv[])
 
 	PixelState mainState;
 	PixelState padState;
-	while (!mainState.Complete() || !padState.Complete())
+	std::optional<Host::OverlayFrameSnapshot> mainBeforeResize;
+	std::optional<Host::OverlayFrameSnapshot> padBeforeResize;
+	const auto initialPaintDeadline =
+		std::chrono::steady_clock::now() + std::chrono::seconds(10);
+	while ((!mainState.Complete() || !padState.Complete()) &&
+		   std::chrono::steady_clock::now() < initialPaintDeadline)
 	{
 		DoProcessMessageLoopWork();
 		if (auto frame = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main, 0))
-			AccumulatePixels(*frame, mainState);
+		{
+			mainBeforeResize = std::move(frame);
+			AccumulatePixels(*mainBeforeResize, mainState);
+		}
 		if (auto frame = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Pad, 0))
-			AccumulatePixels(*frame, padState);
+		{
+			padBeforeResize = std::move(frame);
+			AccumulatePixels(*padBeforeResize, padState);
+		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	if (!mainState.Complete() || !padState.Complete())
+	{
+		std::cerr << "CEF OSR initial paint timed out (main=" << mainState.Complete()
+				  << ", pad=" << padState.Complete() << ")\n";
+		runtime->CloseAll();
+		runtime.reset();
+		ShutdownProcessRuntime();
+		return 1;
+	}
+
+	// Focus and activation events refresh window metrics without changing the
+	// render size. A redundant Resize must retain the composed frame instead of
+	// synchronously publishing a transparent one while CEF schedules a repaint.
+	if (auto latest = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main, 0))
+		mainBeforeResize = std::move(latest);
+	if (auto latest = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Pad, 0))
+		padBeforeResize = std::move(latest);
+	bool redundantResizeFailed{};
+	if (!mainBeforeResize || !padBeforeResize)
+	{
+		std::cerr << "CEF OSR frame disappeared before redundant resize check\n";
+		redundantResizeFailed = true;
+	}
+	else
+	{
+		runtime->Resize(Host::PointerSurface::Main, 640, 360, 1.0);
+		runtime->Resize(Host::PointerSurface::Pad, 480, 270, 1.0);
+		if (runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main,
+				mainBeforeResize->sequence) ||
+			runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Pad,
+				padBeforeResize->sequence))
+		{
+			std::cerr << "Redundant CEF OSR resize published a replacement frame\n";
+			redundantResizeFailed = true;
+		}
+	}
+
+	// OSR animations must be paced by Blink's monotonic clock rather than guest
+	// presents. Simulate a paused guest by pumping CEF without acquiring frames:
+	// the transition must still reach its final state in the latest-only mailbox.
+	bool animationCadenceFailed{};
+	std::uint64_t mainSequence = mainBeforeResize ? mainBeforeResize->sequence : 0;
+	runtime->ExecuteScript(Host::PointerSurface::Main, R"JS(
+		(() => {
+			const old = document.getElementById('__cemu_osr_cadence_test');
+			old?.remove();
+			const cover = document.createElement('div');
+			cover.id = '__cemu_osr_cadence_test';
+			Object.assign(cover.style, {
+				position: 'fixed', inset: '0', zIndex: '2147483647',
+				backgroundColor: 'rgb(255, 0, 0)', pointerEvents: 'none'
+			});
+			document.documentElement.appendChild(cover);
+			cover.animate(
+				[{backgroundColor: 'rgb(255, 0, 0)'}, {backgroundColor: 'rgb(0, 255, 0)'}],
+				{duration: 240, easing: 'linear', fill: 'forwards'});
+		})();
+	)JS");
+	const auto pausedUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
+	while (std::chrono::steady_clock::now() < pausedUntil)
+	{
+		DoProcessMessageLoopWork();
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	auto afterPausedPresent = runtime->AcquireLatestOverlayFrame(
+		Host::PointerSurface::Main, mainSequence);
+	if (!afterPausedPresent)
+	{
+		std::cerr << "CEF OSR animation did not repaint while guest presents were paused\n";
+		animationCadenceFailed = true;
+	}
+	else
+	{
+		mainSequence = afterPausedPresent->sequence;
+		const auto pixel = CenterPixel(*afterPausedPresent);
+		if (!pixel || (*pixel)[1] < 220 || (*pixel)[2] > 35 || (*pixel)[3] < 250)
+		{
+			std::cerr << "CEF OSR animation did not advance to its final state while presents were paused\n";
+			animationCadenceFailed = true;
+		}
+	}
+
+	// Sample a second linear transition at a 30 Hz guest-present cadence. It is
+	// expected to skip intermediate mailbox sequence numbers, but the sampled
+	// pixels must retain intermediate states and finish on wall-clock time.
+	runtime->ExecuteScript(Host::PointerSurface::Main, R"JS(
+		(() => {
+			const cover = document.getElementById('__cemu_osr_cadence_test');
+			cover.getAnimations().forEach(animation => animation.cancel());
+			cover.animate(
+				[{backgroundColor: 'rgb(0, 255, 0)'}, {backgroundColor: 'rgb(255, 0, 0)'}],
+				{duration: 300, easing: 'linear', fill: 'forwards'});
+		})();
+	)JS");
+	bool sawIntermediate{};
+	bool sawFinalRed{};
+	const auto cadenceStarted = std::chrono::steady_clock::now();
+	auto nextGuestPresent = cadenceStarted;
+	while (std::chrono::steady_clock::now() - cadenceStarted < std::chrono::milliseconds(750))
+	{
+		DoProcessMessageLoopWork();
+		const auto now = std::chrono::steady_clock::now();
+		if (now >= nextGuestPresent)
+		{
+			nextGuestPresent += std::chrono::milliseconds(33);
+			if (auto frame = runtime->AcquireLatestOverlayFrame(
+					Host::PointerSurface::Main, mainSequence))
+			{
+				mainSequence = frame->sequence;
+				if (const auto pixel = CenterPixel(*frame))
+				{
+					const auto green = (*pixel)[1];
+					const auto red = (*pixel)[2];
+					sawIntermediate |= green > 25 && green < 230 && red > 25 && red < 230;
+					sawFinalRed |= red > 220 && green < 35 && (*pixel)[3] >= 250;
+				}
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	if (!sawIntermediate || !sawFinalRed)
+	{
+		std::cerr << "CEF OSR animation lost its linear cadence at a 30 Hz guest sample rate\n";
+		animationCadenceFailed = true;
 	}
 	runtime->CloseAll();
 	runtime.reset();
 	ShutdownProcessRuntime();
-	return 0;
+	return redundantResizeFailed || animationCadenceFailed ? 1 : 0;
 }

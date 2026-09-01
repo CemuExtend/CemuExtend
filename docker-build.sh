@@ -67,20 +67,33 @@ artifact_name="Cemu_release${artifact_suffix}"
 if [[ "${build_platform}" == "linux" && "${frontend}" == "headless" ]]; then
 	artifact_name="Cemu_headless"
 fi
+
+# The CMake tree is a shared BuildKit cache. Serialize callers so two wrappers
+# cannot compile into it or replace result/bin at the same time.
+mkdir -p "${project_dir}/build"
+exec 9>"${project_dir}/build/.docker-build.lock"
+if ! flock -n 9; then
+	printf 'Another CemuExtend Docker build is already running.\n' >&2
+	exit 1
+fi
+
 git_hash="$(git -C "${project_dir}" log --format=%h -1 2>/dev/null || printf unknown)"
 commit_hash="$(git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown)"
-source_fingerprint="$({
-	git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown
-	# These host-only files do not affect the compiled Cemu artifact. Excluding
-	# them lets wrapper and cache-policy edits reuse the verified build layer.
-	git -C "${project_dir}" diff --binary --no-ext-diff HEAD -- . \
-		':(exclude)docker-build.sh' \
-		':(exclude)buildkitd.toml' 2>/dev/null || true
-	git -C "${project_dir}" ls-files --others --exclude-standard -z -- \
-		':(exclude)buildkitd.toml' 2>/dev/null \
-		| LC_ALL=C sort -z \
-		| xargs -0 -r sha256sum
-} | sha256sum | cut -d' ' -f1)"
+compute_source_fingerprint() {
+	{
+		git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf unknown
+		# These host-only files do not affect the compiled Cemu artifact. Excluding
+		# them lets wrapper and cache-policy edits reuse the verified build layer.
+		git -C "${project_dir}" diff --binary --no-ext-diff HEAD -- . \
+			':(exclude)docker-build.sh' \
+			':(exclude)buildkitd.toml' 2>/dev/null || true
+		git -C "${project_dir}" ls-files --others --exclude-standard -z -- \
+			':(exclude)buildkitd.toml' 2>/dev/null \
+			| LC_ALL=C sort -z \
+			| xargs -0 -r sha256sum
+	} | sha256sum | cut -d' ' -f1
+}
+source_fingerprint="$(compute_source_fingerprint)"
 
 build_log="$(mktemp "${TMPDIR:-/tmp}/cemu-docker-build.XXXXXX.log")"
 export_dir="$(mktemp -d "${TMPDIR:-/tmp}/cemu-docker-export.XXXXXX")"
@@ -168,6 +181,17 @@ if ! docker buildx build --builder "${builder_name}" \
 	exit 1
 fi
 filter_build_log "${build_log}"
+
+# BuildKit receives a source snapshot after the fingerprint above is computed.
+# If an editor changes compiled inputs while the build runs, the snapshot and
+# cache key may describe different source generations. Never publish that
+# potentially mixed artifact; the next stable invocation can rebuild it.
+final_source_fingerprint="$(compute_source_fingerprint)"
+if [[ "${final_source_fingerprint}" != "${source_fingerprint}" ]]; then
+	printf 'CemuExtend sources changed during the Docker build; artifact was not installed.\n' >&2
+	printf 'Run the build again after edits have finished.\n' >&2
+	exit 1
+fi
 
 mkdir -p "${artifact_dir}"
 if [[ "${build_platform}" == "win" ]]; then

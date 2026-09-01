@@ -1902,6 +1902,11 @@ namespace WebFrontend::CefOverlay
 											: CefColorSetARGB(255, 32, 32, 32);
 			if (descriptor.presentation == BrowserPresentation::OverlayOsr)
 			{
+				// Blink must keep its own monotonic animation clock. The guest can
+				// present at 30 Hz, pause while changing menus, or stop presenting
+				// altogether; tying external begin frames to those presents stalls CSS
+				// transitions and requestAnimationFrame. The renderer's latest-only
+				// mailbox samples this 60 Hz timeline without queueing stale frames.
 				int frameRate = 60;
 				if (const char* value = std::getenv("CEMU_CEF_OVERLAY_FPS"))
 					frameRate = std::clamp(std::atoi(value), 30, 60);
@@ -2089,6 +2094,11 @@ namespace WebFrontend::CefOverlay
 			{
 				std::scoped_lock lock(m_mutex);
 				auto& layers = m_surfaces[Index(surface)];
+				// Window focus and activation notifications also refresh metrics. Keep
+				// those size-neutral updates from discarding both retained OSR layers
+				// and publishing a transparent frame before CEF repaints them.
+				if (layers.width == width && layers.height == height && layers.scale == scale)
+					return;
 				layers.width = width;
 				layers.height = height;
 				layers.scale = scale;

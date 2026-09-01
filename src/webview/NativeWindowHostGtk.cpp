@@ -1,4 +1,5 @@
 #include "webview/NativeWindowHost.h"
+#include "webview/NativeKeyboardInput.h"
 
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 
@@ -13,6 +14,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
+#include <X11/XKBlib.h>
 #ifdef HAS_WAYLAND
 #include <gdk/gdkwayland.h>
 #endif
@@ -21,12 +23,29 @@ namespace WebFrontend
 {
 	namespace
 	{
+		std::uint16_t GtkUsbHidUsage(GtkWidget* source, const GdkEventKey& event)
+		{
+			guint baseKeyval{};
+			GdkModifierType consumed{};
+			auto* keymap = gdk_keymap_get_for_display(gtk_widget_get_display(source));
+			if (keymap && gdk_keymap_translate_keyboard_state(
+					  keymap, event.hardware_keycode, static_cast<GdkModifierType>(0),
+					  event.group, &baseKeyval, nullptr, nullptr, &consumed))
+			{
+				if (const auto usage = XkbBaseKeyvalUsbHidUsage(baseKeyval))
+					return usage;
+			}
+			return XkbBaseKeyvalUsbHidUsage(event.keyval);
+		}
+
 		struct GtkInputBinding
 		{
 			Host::PointerSurface surface{Host::PointerSurface::Main};
 			INativeWindowHost::InputHandler* handler{};
 			GtkWidget* contentWidget{};
 			std::unordered_set<std::uint32_t> pressedKeys;
+			std::uint64_t focusGeneration{};
+			bool detectableAutoRepeat{};
 			bool captured{};
 			bool rawMouseEnabled{};
 			bool warpCapture{};
@@ -64,6 +83,14 @@ namespace WebFrontend
 			gtk_widget_add_events(keySource,
 							  GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK);
 			auto* binding = new GtkInputBinding{surface, handler, widget};
+			if (auto* display = gtk_widget_get_display(keySource);
+				display && GDK_IS_X11_DISPLAY(display))
+			{
+				Bool supported{};
+				XkbSetDetectableAutoRepeat(gdk_x11_display_get_xdisplay(display), True,
+									   &supported);
+				binding->detectableAutoRepeat = supported != False;
+			}
 			g_object_set_data_full(G_OBJECT(keySource), "cemu-input-binding", binding, +[](gpointer data) { delete static_cast<GtkInputBinding*>(data); });
 			g_signal_connect(widget, "motion-notify-event", G_CALLBACK((+[](GtkWidget* source, GdkEventMotion* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
@@ -146,8 +173,9 @@ namespace WebFrontend
 									 ((event->state & GDK_SHIFT_MASK) ? 2U : 0U) |
 									 ((event->state & GDK_MOD1_MASK) ? 4U : 0U) |
 									 ((event->state & GDK_META_MASK) ? 8U : 0U));
-								 const bool repeat = !binding->pressedKeys.insert(event->keyval).second;
-								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .modifiers = modifiers, .pressed = true, .repeat = repeat});
+								 const bool repeat =
+									 !binding->pressedKeys.insert(event->hardware_keycode).second;
+								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usage = GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = true, .repeat = repeat});
 								 if (event->string && event->length > 0)
 									 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Character, .repeat = repeat, .text = std::string(event->string, event->length)});
 								 return TRUE;
@@ -156,30 +184,67 @@ namespace WebFrontend
 			g_signal_connect(keySource, "key-release-event", G_CALLBACK((+[](GtkWidget* source, GdkEventKey* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 bool autoRepeatRelease = false;
-								 if (auto* next = gdk_event_peek())
+								 if (!binding->detectableAutoRepeat)
 								 {
-									 autoRepeatRelease = next->type == GDK_KEY_PRESS &&
-														 next->key.hardware_keycode == event->hardware_keycode &&
-														 next->key.time == event->time;
-									 gdk_event_free(next);
+									 if (auto* next = gdk_event_peek())
+									 {
+										 autoRepeatRelease = next->type == GDK_KEY_PRESS &&
+																 next->key.hardware_keycode == event->hardware_keycode &&
+																 next->key.time == event->time;
+										 gdk_event_free(next);
+									 }
 								 }
 								 if (autoRepeatRelease)
 									 return TRUE;
-								 binding->pressedKeys.erase(event->keyval);
+								 binding->pressedKeys.erase(event->hardware_keycode);
 								 const auto modifiers = static_cast<std::uint8_t>(
 									 ((event->state & GDK_CONTROL_MASK) ? 1U : 0U) |
 									 ((event->state & GDK_SHIFT_MASK) ? 2U : 0U) |
 									 ((event->state & GDK_MOD1_MASK) ? 4U : 0U) |
 									 ((event->state & GDK_META_MASK) ? 8U : 0U));
-								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .modifiers = modifiers, .pressed = false});
+								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usage = GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = false});
 								 return TRUE;
 							 })),
 							 binding);
+			g_signal_connect(keySource, "focus-in-event", G_CALLBACK((+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+								 ++static_cast<GtkInputBinding*>(data)->focusGeneration;
+								 return FALSE;
+							 })),
+							 binding);
 			g_signal_connect(keySource, "focus-out-event", G_CALLBACK((+[](GtkWidget* source, GdkEventFocus*, gpointer data) -> gboolean {
+								 struct DeferredFocusLoss
+								 {
+									 GtkWidget* source{};
+									 std::uint64_t generation{};
+								 };
 								 auto* binding = static_cast<GtkInputBinding*>(data);
-								 binding->pressedKeys.clear();
-								 DispatchGtkInput(source, binding,
-												  {.kind = NativeInputKind::FocusLost});
+								 auto* deferred = new DeferredFocusLoss{
+									 GTK_WIDGET(g_object_ref(source)), ++binding->focusGeneration};
+								 g_idle_add_full(
+									 G_PRIORITY_DEFAULT_IDLE,
+									 +[](gpointer value) -> gboolean {
+										 auto* deferred = static_cast<DeferredFocusLoss*>(value);
+										 if (gtk_widget_in_destruction(deferred->source))
+											 return G_SOURCE_REMOVE;
+										 auto* binding = static_cast<GtkInputBinding*>(g_object_get_data(
+											 G_OBJECT(deferred->source), "cemu-input-binding"));
+										 if (!binding || binding->focusGeneration != deferred->generation)
+											 return G_SOURCE_REMOVE;
+										 auto* toplevel = gtk_widget_get_toplevel(deferred->source);
+										 if (toplevel && GTK_IS_WINDOW(toplevel) &&
+											 gtk_window_is_active(GTK_WINDOW(toplevel)))
+											 return G_SOURCE_REMOVE;
+										 binding->pressedKeys.clear();
+										 DispatchGtkInput(deferred->source, binding,
+														  {.kind = NativeInputKind::FocusLost});
+										 return G_SOURCE_REMOVE;
+									 },
+									 deferred,
+									 +[](gpointer value) {
+										 auto* deferred = static_cast<DeferredFocusLoss*>(value);
+										 g_object_unref(deferred->source);
+										 delete deferred;
+									 });
 								 return FALSE;
 							 })),
 							 binding);
@@ -348,15 +413,21 @@ namespace WebFrontend
 					// ignores unfocused input - as any sane one does - sees no mouse at
 					// all while a title is running.
 					gtk_widget_add_events(m_window, GDK_FOCUS_CHANGE_MASK);
-					for (const auto* signal : {"focus-in-event", "focus-out-event"})
-						g_signal_connect(m_window, signal, G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-											 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-											 self.ClaimInputFocus();
-											 if (self.m_metricsHandler)
-												 self.m_metricsHandler();
-											 return FALSE;
-										 }),
-										 this);
+					g_signal_connect(m_window, "focus-in-event", G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+									 self.ClaimInputFocus();
+									 if (self.m_metricsHandler)
+										 self.m_metricsHandler();
+									 return FALSE;
+								 }),
+								 this);
+					g_signal_connect(m_window, "focus-out-event", G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
+									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+									 if (self.m_metricsHandler)
+										 self.m_metricsHandler();
+									 return FALSE;
+								 }),
+								 this);
 					gtk_widget_show_all(m_window);
 					gtk_widget_realize(m_widget);
 					gtk_widget_hide(m_window);

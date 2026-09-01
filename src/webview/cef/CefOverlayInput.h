@@ -9,6 +9,7 @@ namespace WebFrontend::CefOverlay
 	struct NativeInputRoute
 	{
 		bool publishGuestPhysicalInput{};
+		bool sendOverlayInput{};
 		bool processFrontendInput{true};
 	};
 
@@ -35,6 +36,7 @@ namespace WebFrontend::CefOverlay
 			kind == NativeInputKind::FocusLost;
 		return {
 			.publishGuestPhysicalInput = publishGuest,
+			.sendOverlayInput = overlayCapturesInput,
 			.processFrontendInput = !overlayCapturesInput || kind == NativeInputKind::DeviceChanged,
 		};
 	}

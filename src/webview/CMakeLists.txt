@@ -51,6 +51,7 @@ target_include_directories(CemuWebRpc PUBLIC
 )
 
 add_library(CemuWebFrontend STATIC
+	NativeKeyboardInput.h
 	NativeWindowHost.h
 	NativeFileDialog.h
 	RendererHost.h
@@ -115,6 +116,17 @@ target_link_libraries(CemuWebFrontend PRIVATE
 )
 
 if(BUILD_TESTING)
+	add_executable(native_keyboard_input_tests tests/NativeKeyboardInputTests.cpp)
+	target_include_directories(native_keyboard_input_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+	add_test(NAME native_keyboard_input_tests COMMAND native_keyboard_input_tests)
+
+	if(UNIX AND NOT APPLE)
+		add_executable(gtk_native_input_contract_tests tests/GtkNativeInputContractTests.cpp)
+		target_compile_definitions(gtk_native_input_contract_tests PRIVATE
+			CEMU_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+		add_test(NAME gtk_native_input_contract_tests COMMAND gtk_native_input_contract_tests)
+	endif()
+
 	if(CEMU_OVERLAY_BACKEND STREQUAL "cef")
 		add_executable(cef_overlay_frame_mailbox_tests
 			cef/CefOverlayFrameMailbox.cpp
@@ -135,7 +147,8 @@ if(BUILD_TESTING)
 			add_test(NAME cef_overlay_osr_smoke_tests COMMAND cef_overlay_osr_smoke_tests)
 		endif()
 		set_tests_properties(cef_overlay_osr_smoke_tests PROPERTIES
-			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1")
+			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1"
+			TIMEOUT 30)
 
 		add_executable(cemod_network_policy_tests
 			CemodNetworkPolicy.cpp
