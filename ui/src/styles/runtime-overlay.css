@@ -230,29 +230,56 @@
   background: var(--color-accent-bright);
   margin-inline-start: 2px;
 }
+/* Ten even columns per row, so every key lines up in a column the way a console
+   keyboard does. The modifier row spans the same ten columns. */
 .runtime-overlay__key-grid {
   width: 100%;
+  display: grid;
+  gap: 6px;
 }
 .runtime-overlay__key-row {
-  display: flex;
-  gap: 7px;
-  margin-block-end: 7px;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
 }
 .runtime-overlay__key-row button {
-  min-width: 70px;
-  height: 54px;
+  height: 52px;
+  min-width: 0;
   border-color: var(--color-rule-strong);
   background: var(--color-paper-hover);
   color: var(--color-ink);
   border-radius: var(--radius-card);
   font-size: var(--text-lg);
 }
-.runtime-overlay__key-row--actions button {
-  min-width: 150px;
+.runtime-overlay__key-row button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
-.runtime-overlay__key-row .runtime-overlay__space {
-  min-width: 240px;
+.runtime-overlay__shift,
+.runtime-overlay__symbols,
+.runtime-overlay__backspace {
+  font-size: var(--text-lg);
+}
+.runtime-overlay__space {
+  grid-column: span 5;
+}
+.runtime-overlay__done {
+  grid-column: span 2;
+  background: var(--color-accent);
+  color: var(--color-paper);
+  font-weight: 600;
+}
+/* A held shift reads as pressed; a locked one stays lit so the difference is
+   visible at a glance. */
+.runtime-overlay__shift[aria-pressed="true"] {
+  background: var(--color-selection);
+}
+.runtime-overlay__shift.is-locked {
+  background: var(--color-accent);
+  color: var(--color-paper);
+}
+.runtime-overlay__symbols[aria-pressed="true"] {
+  background: var(--color-selection);
 }
 
 @media (max-width: 59.999rem) {

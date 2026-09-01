@@ -1,6 +1,7 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/HW/Espresso/PPCCallback.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
+#include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "audio/IAudioAPI.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
 #include "config/ActiveSettings.h"
@@ -195,6 +196,11 @@ namespace vpad
 				} left{}, right{};
 			} stick_cross_clamp{};
 
+			// Buttons held while the system keyboard owned the pad. They stay masked
+			// until released so the press that dismissed the keyboard is not handed
+			// to the title afterwards, which would reopen it immediately.
+			uint32 keyboard_masked_buttons = 0;
+
 		} controller_data[VPAD_MAX_CONTROLLERS]{};
 	} g_vpad;
 
@@ -290,6 +296,33 @@ namespace vpad
 				}
 			}
 			controller->VPADRead(*status, vpad::g_vpad.controller_data[channel].btn_repeat);
+			auto& maskedButtons = vpad::g_vpad.controller_data[channel].keyboard_masked_buttons;
+			if (swkbd_hasKeyboardInputHook())
+			{
+				// The system keyboard owns the pad while it is up, exactly as it does
+				// on console. Passing presses through as well means the button that
+				// confirms the keyboard also reaches the title, which promptly opens
+				// the keyboard again.
+				maskedButtons |= static_cast<uint32>(status->hold);
+				status->hold = 0;
+				status->trig = 0;
+				status->release = 0;
+				status->leftStick.x = 0.0f;
+				status->leftStick.y = 0.0f;
+				status->rightStick.x = 0.0f;
+				status->rightStick.y = 0.0f;
+			}
+			else if (maskedButtons != 0)
+			{
+				// The keyboard has gone but the button that dismissed it is still held,
+				// and the title would read that as a fresh press. Keep it hidden until
+				// it is actually released.
+				const uint32 stillHeld = maskedButtons & static_cast<uint32>(status->hold);
+				status->hold = static_cast<uint32>(status->hold) & ~maskedButtons;
+				status->trig = static_cast<uint32>(status->trig) & ~maskedButtons;
+				status->release = static_cast<uint32>(status->release) & ~maskedButtons;
+				maskedButtons = stillHeld;
+			}
 			if (error)
 				*error = VPAD_READ_ERR_NONE;
 			return finishRead(1);

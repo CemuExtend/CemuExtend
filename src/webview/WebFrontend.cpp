@@ -1963,6 +1963,10 @@ namespace
 					if (gate->target)
 						gate->target->SignalRuntimeOverlayChanged();
 				});
+				// Anything the model published while no handler was attached never
+				// reached the overlay, so start from the current state rather than
+				// whatever the previous session left on screen.
+				SignalRuntimeOverlayChanged();
 #endif
 				m_emulatedUsb.SetObserver([gate = m_callbackGate](const Application::UsbDeviceChange& change) {
 					std::scoped_lock lock(gate->mutex);
@@ -3851,10 +3855,18 @@ namespace
 				throw std::runtime_error("a screenshot request is already active");
 		}
 
-		void HandleNativeInput(const WebFrontend::NativeInputEvent& event)
+		void HandleNativeInput(const WebFrontend::NativeInputEvent& incoming)
 		{
 			if (m_stopping.load(std::memory_order_acquire) || !m_hostServices)
 				return;
+			// The overlay turns a key into the code Chromium expects by way of its USB
+			// HID usage, which the window layer does not carry: on Linux it reports the
+			// platform keyval and nothing else. Resolve it here, before the overlay is
+			// offered the event, or an offscreen overlay - the software keyboard among
+			// them - receives keystrokes it cannot interpret.
+			auto event = incoming;
+			if (event.kind == WebFrontend::NativeInputKind::Key && !event.usage)
+				event.usage = UsbHidUsage(event.key);
 			WebFrontend::NativeInputEvent normalized = event;
 			if (normalized.kind == WebFrontend::NativeInputKind::Key && !normalized.usage)
 				normalized.usage = UsbHidUsage(normalized.key);
@@ -5025,7 +5037,7 @@ namespace
 				if (m_invokingWindow != 0 && m_invokingWindow != kMainOverlayWindowId &&
 					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay state is available only to a render window");
-				const auto generation = RequiredUint64(params, "generation");
+				const auto generation = ParseDecimalUint64(RequiredString(params, "generation"), "generation");
 				const auto surface = RequiredString(params, "surface");
 				const auto snapshot = m_controller.GetRuntimeOverlaySnapshot();
 				if (!snapshot.shaderProgress.visible ||
@@ -5047,7 +5059,7 @@ namespace
 					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay input is available only to a render window");
 				if (!m_controller.SubmitRuntimeOverlayKeyboardKey(
-						RequiredUint64(params, "generation"), RequiredUint(params, "keyCode")))
+						ParseDecimalUint64(RequiredString(params, "generation"), "generation"), RequiredUint(params, "keyCode")))
 					throw std::runtime_error("the software keyboard request is no longer active");
 				return std::string("{}");
 			});
@@ -5056,7 +5068,7 @@ namespace
 					m_invokingWindow != kPadOverlayWindowId)
 					throw std::runtime_error("runtime overlay input is available only to a render window");
 				if (!m_controller.SelectRuntimeOverlayErrorButton(
-						RequiredUint64(params, "generation"), RequiredBool(params, "rightButton")))
+						ParseDecimalUint64(RequiredString(params, "generation"), "generation"), RequiredBool(params, "rightButton")))
 					throw std::runtime_error("the error dialog request is no longer active");
 				return std::string("{}");
 			});

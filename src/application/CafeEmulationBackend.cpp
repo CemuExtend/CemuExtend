@@ -3562,6 +3562,10 @@ namespace Application
 			{
 				std::unique_lock lock(m_inputLifecycleMutex);
 				m_inputAvailable = false;
+				// A title closed while the system keyboard was up leaves the overlay
+				// holding that keyboard, and it is still there when the next title
+				// starts - typing into a session that never asked for it.
+				RuntimeOverlay::Model::Instance().Reset();
 				return CafeSystem::ShutdownTitle();
 			}
 			bool ShutdownApplication() override

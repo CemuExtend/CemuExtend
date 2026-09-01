@@ -8,18 +8,24 @@ import type {
 import { invoke } from "../../bridge/native";
 import { overlayColor } from "./runtimeOverlayModel";
 
-const LOWER_KEYS = [
-  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "⌫"],
-  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "/"],
-  ["a", "s", "d", "f", "g", "h", "j", "k", "l", ":", "'"],
-  ["z", "x", "c", "v", "b", "n", "m", ",", ".", "?", "!"],
+// Laid out like the console's own keyboard: four rows of ten, then a row of
+// modifiers. Keeping every row the same width is what makes the grid line up.
+const LETTER_ROWS = [
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+  ["a", "s", "d", "f", "g", "h", "j", "k", "l", "-"],
+  ["z", "x", "c", "v", "b", "n", "m", "@", ".", "_"],
 ] as const;
-const UPPER_KEYS = [
-  ["#", "[", "]", "$", "%", "^", "&", "*", "(", ")", "_", "⌫"],
-  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "@"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L", ";", '"'],
-  ["Z", "X", "C", "V", "B", "N", "M", "<", ">", "+", "="],
+const SYMBOL_ROWS = [
+  ["!", '"', "#", "$", "%", "&", "'", "(", ")", "*"],
+  ["+", ",", "-", ".", "/", ":", ";", "<", "=", ">"],
+  ["?", "@", "[", "\\", "]", "^", "_", "`", "{", "}"],
+  ["|", "~", "1", "2", "3", "4", "5", "6", "7", "8"],
 ] as const;
+
+// Shift behaves as it does on the console: a tap capitalises the next character
+// only, a second tap locks it until pressed again.
+type ShiftMode = "off" | "once" | "lock";
 
 const MIN_OVERLAY_SCALE = 50;
 const MAX_OVERLAY_SCALE = 300;
@@ -154,11 +160,14 @@ function ShaderProgress({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
 
 function SoftwareKeyboard({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
   const keyboard = snapshot.keyboard;
-  const [shifted, setShifted] = useState(keyboard.shifted);
-  useEffect(
-    () => setShifted(keyboard.shifted),
-    [keyboard.generation, keyboard.shifted],
+  const [shift, setShift] = useState<ShiftMode>(
+    keyboard.shifted ? "lock" : "off",
   );
+  const [symbols, setSymbols] = useState(false);
+  useEffect(() => {
+    setShift(keyboard.shifted ? "lock" : "off");
+    setSymbols(false);
+  }, [keyboard.generation, keyboard.shifted]);
   const submit = useCallback(
     (keyCode: number) =>
       invoke("overlay.submitKeyboardKey", {
@@ -166,6 +175,15 @@ function SoftwareKeyboard({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
         keyCode,
       }),
     [keyboard.generation],
+  );
+  const press = useCallback(
+    (character: string) => {
+      const shifted = shift !== "off" ? character.toUpperCase() : character;
+      void submit(shifted.codePointAt(0)!);
+      // A one-shot capital applies to this character and nothing after it.
+      setShift((mode) => (mode === "once" ? "off" : mode));
+    },
+    [shift, submit],
   );
   useEffect(() => {
     if (!keyboard.active) return;
@@ -187,7 +205,7 @@ function SoftwareKeyboard({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keyboard.active, submit]);
   if (!keyboard.active) return null;
-  const rows = shifted ? UPPER_KEYS : LOWER_KEYS;
+  const rows = symbols ? SYMBOL_ROWS : LETTER_ROWS;
   return (
     <section
       className="runtime-overlay__modal-layer runtime-overlay__keyboard"
@@ -196,7 +214,7 @@ function SoftwareKeyboard({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
       aria-label="Software keyboard"
     >
       <div className="runtime-overlay__input-preview">
-        ⌨ <span>{keyboard.text}</span>
+        <span>{keyboard.text}</span>
         <i aria-hidden="true" />
       </div>
       <div className="runtime-overlay__key-grid">
@@ -205,29 +223,61 @@ function SoftwareKeyboard({ snapshot }: { snapshot: RuntimeOverlaySnapshot }) {
             {row.map((key) => (
               <button
                 key={key}
-                onClick={() =>
-                  void submit(key === "⌫" ? 8 : key.codePointAt(0)!)
-                }
+                // Type on the way down, the way a physical key behaves. The click
+                // handler still fires for a synthesised click - detail 0, which is
+                // how controller activation reaches a button - without doubling up
+                // on a real press.
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  press(key);
+                }}
+                onClick={(event) => {
+                  if (event.detail === 0) press(key);
+                }}
               >
-                {key}
+                {shift !== "off" && !symbols ? key.toUpperCase() : key}
               </button>
             ))}
           </div>
         ))}
         <div className="runtime-overlay__key-row runtime-overlay__key-row--actions">
           <button
-            aria-pressed={shifted}
-            onClick={() => setShifted((value) => !value)}
+            className={`runtime-overlay__shift${shift === "lock" ? " is-locked" : ""}`}
+            aria-pressed={shift !== "off"}
+            aria-label={shift === "lock" ? "Caps lock on" : "Shift"}
+            onClick={() =>
+              setShift((mode) =>
+                mode === "off" ? "once" : mode === "once" ? "lock" : "off",
+              )
+            }
           >
-            ⇧ Shift
+            ⇧
+          </button>
+          <button
+            className="runtime-overlay__symbols"
+            aria-pressed={symbols}
+            onClick={() => setSymbols((value) => !value)}
+          >
+            {symbols ? "abc" : "@#:"}
           </button>
           <button
             className="runtime-overlay__space"
+            aria-label="Space"
             onClick={() => void submit(32)}
+          />
+          <button
+            className="runtime-overlay__backspace"
+            aria-label="Backspace"
+            onClick={() => void submit(8)}
           >
-            Space
+            ⌫
           </button>
-          <button onClick={() => void submit(13)}>✓ OK</button>
+          <button
+            className="runtime-overlay__done"
+            onClick={() => void submit(13)}
+          >
+            Done
+          </button>
         </div>
       </div>
     </section>
@@ -328,7 +378,43 @@ export function RuntimeOverlayRoot() {
         return;
       }
       if (!["left", "right", "up", "down"].includes(action)) return;
-      const delta = action === "left" || action === "up" ? -1 : 1;
+      if (action === "up" || action === "down") {
+        // The keys form a grid, so a vertical step has to land on the nearest key
+        // in the row above or below. Moving one place in document order instead
+        // made up and down behave exactly like left and right.
+        const current = buttons[index < 0 ? 0 : index];
+        const from = current.getBoundingClientRect();
+        const fromCenter = from.left + from.width / 2;
+        const rowOf = (button: HTMLButtonElement) => {
+          const rect = button.getBoundingClientRect();
+          return action === "up" ? -rect.bottom : rect.top;
+        };
+        // Keys are not all one column wide, so picking the nearest centre walks
+        // past a wide key that sits directly below. Prefer whichever key actually
+        // spans this column, and fall back to the nearest edge.
+        const distanceFrom = (button: HTMLButtonElement) => {
+          const rect = button.getBoundingClientRect();
+          if (fromCenter >= rect.left && fromCenter <= rect.right) return 0;
+          return fromCenter < rect.left
+            ? rect.left - fromCenter
+            : fromCenter - rect.right;
+        };
+        const target = buttons
+          .filter((button) => {
+            const rect = button.getBoundingClientRect();
+            return action === "up"
+              ? rect.bottom <= from.top + 1
+              : rect.top >= from.bottom - 1;
+          })
+          .sort((left, right) => {
+            const rows = rowOf(left) - rowOf(right);
+            if (Math.abs(rows) > 1) return rows;
+            return distanceFrom(left) - distanceFrom(right);
+          })[0];
+        (target ?? current).focus();
+        return;
+      }
+      const delta = action === "left" ? -1 : 1;
       buttons[
         (index < 0 ? 0 : index + delta + buttons.length) % buttons.length
       ].focus();
