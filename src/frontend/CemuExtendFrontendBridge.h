@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -65,6 +66,7 @@ namespace Frontend
 	{
 		std::uint32_t buttons{};
 		std::uint32_t changed{};
+		std::uint32_t deviceButtons{};
 	};
 
 	struct CemuExtendMotionUpdate
@@ -101,7 +103,8 @@ namespace Frontend
 		[[nodiscard]] CemuExtendPointerDecision ApplyPointerPolicy(std::uint8_t mode,
 																   std::uint8_t cursor, std::uint32_t flags, bool appActive, bool hasCanvas);
 		[[nodiscard]] CemuExtendButtonUpdate UpdateButtons(CemuExtendMouseTransition transition,
-														   std::uint32_t changedMask, std::uint32_t aggregateButtons = 0);
+												   std::uint32_t changedMask, std::uint32_t aggregateButtons = 0,
+												   std::uint16_t deviceId = 0);
 		[[nodiscard]] CemuExtendMotionUpdate UpdatePosition(CemuExtendPoint position,
 															CemuExtendPoint captureCenter, bool rawMouseAvailable);
 		void RecordRawPosition(CemuExtendPoint position);
@@ -150,6 +153,7 @@ namespace Frontend
 		bool m_positionValid{};
 		std::uint8_t m_pointerMode{};
 		std::uint32_t m_mouseButtons{};
+		std::map<std::uint16_t, std::uint32_t> m_deviceButtons;
 		std::int32_t m_wheelRemainderX{};
 		std::int32_t m_wheelRemainderY{};
 		bool m_rawMouseRequested{true};

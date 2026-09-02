@@ -899,9 +899,11 @@ namespace WebFrontend::CefOverlay
 		{
 		  public:
 			RuntimeImpl(RpcHandler rpc, std::function<void(Host::PointerSurface)> redraw,
-						ClosedHandler closed, WindowClosedHandler windowClosed)
+						ClosedHandler closed, WindowClosedHandler windowClosed,
+						InputOwnershipHandler inputOwnershipChanged)
 				: m_rpc(std::move(rpc)), m_mailbox(std::move(redraw)), m_closed(std::move(closed)),
-				  m_windowClosed(std::move(windowClosed)) {}
+				  m_windowClosed(std::move(windowClosed)),
+				  m_inputOwnershipChanged(std::move(inputOwnershipChanged)) {}
 
 			~RuntimeImpl() override
 			{
@@ -915,7 +917,8 @@ namespace WebFrontend::CefOverlay
 						int physicalHeight, double dpiScale) override;
 			void SetInteractive(Host::PointerSurface surface, bool interactive) override;
 			bool CapturesInput(Host::PointerSurface surface) const override;
-			bool SendInput(const NativeInputEvent& event) override;
+			OverlayInputTarget ResolveInput(const NativeInputEvent& event) override;
+			bool SendInput(const NativeInputEvent& event, std::uint64_t windowId) override;
 			void ExecuteEvent(Host::PointerSurface surface, std::string_view name,
 							  std::string_view jsonPayload, std::uint64_t sequence) override;
 			void ExecuteScript(Host::PointerSurface surface, std::string_view script) override;
@@ -925,6 +928,9 @@ namespace WebFrontend::CefOverlay
 			void SetWindowFocus(std::uint64_t windowId, bool focused) override;
 			void SetOverlayVisible(std::uint64_t windowId, bool visible) override;
 			void SetOverlayInteractive(std::uint64_t windowId, bool interactive) override;
+			bool UpdateInputIntent(std::uint64_t windowId, InputIntent intent) override;
+			void ResetInputIntent(std::uint64_t windowId, std::uint64_t generation) override;
+			void ReleaseInput(Host::PointerSurface surface) override;
 			void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 									std::string_view payload, std::uint64_t sequence) override;
 			void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
@@ -969,6 +975,8 @@ namespace WebFrontend::CefOverlay
 				Host::PointerSurface surface{Host::PointerSurface::Main};
 				bool visible{true};
 				bool interactive{};
+				bool hasInputIntent{};
+				InputIntent inputIntent{};
 				std::optional<CemodOverlayOrder> cemodOrder;
 				int width{};
 				int height{};
@@ -987,6 +995,16 @@ namespace WebFrontend::CefOverlay
 				double scale{1.0};
 				std::optional<std::uint64_t> builtin;
 				std::optional<std::uint64_t> cemod;
+				double pointerX{};
+				double pointerY{};
+			};
+
+			struct ResolvedSurfaceInput
+			{
+				InputOwnership ownership{};
+				std::uint64_t keyboardWindow{};
+				std::uint64_t pointerWindow{};
+				std::uint64_t textWindow{};
 			};
 
 			struct ComposedFrame
@@ -1008,12 +1026,17 @@ namespace WebFrontend::CefOverlay
 			std::array<std::optional<std::uint64_t>, 2> BottomToTopLocked(
 				const SurfaceLayers& layers) const;
 			std::optional<ComposedFrame> ComposeLocked(Host::PointerSurface surface) const;
+			ResolvedSurfaceInput ResolveSurfaceInputLocked(Host::PointerSurface surface,
+													 double x, double y) const;
+			void NotifyInputOwnership(Host::PointerSurface surface,
+								 const InputOwnership& ownership);
 			void PublishComposite(Host::PointerSurface surface);
 			void UpdateLayerFocus(Host::PointerSurface surface);
 			RpcHandler m_rpc;
 			FrameMailbox m_mailbox;
 			ClosedHandler m_closed;
 			WindowClosedHandler m_windowClosed;
+			InputOwnershipHandler m_inputOwnershipChanged;
 			mutable std::mutex m_mutex;
 			std::unordered_map<std::uint64_t, CefRefPtr<Client>> m_clients;
 			std::unordered_map<std::string, CefRefPtr<CefRequestContext>> m_requestContexts;
@@ -1021,6 +1044,8 @@ namespace WebFrontend::CefOverlay
 			std::unordered_map<std::string, std::shared_ptr<CemodNetworkProxy>> m_networkProxies;
 			std::unordered_map<std::uint64_t, LayerBitmap> m_overlayLayers;
 			std::array<SurfaceLayers, 2> m_surfaces;
+			std::mutex m_inputOwnershipMutex;
+			std::array<InputOwnership, 2> m_notifiedOwnership{};
 			std::condition_variable m_closeCondition;
 		};
 
@@ -1959,6 +1984,7 @@ namespace WebFrontend::CefOverlay
 		{
 			std::optional<Host::PointerSurface> surface;
 			std::optional<OverlayLayer> overlayLayer;
+			InputOwnership ownership;
 			std::string cemodOrigin;
 			bool releaseCemodOrigin{};
 			{
@@ -1979,6 +2005,9 @@ namespace WebFrontend::CefOverlay
 					else
 						layers.builtin.reset();
 					m_overlayLayers.erase(windowId);
+					const auto& state = m_surfaces[Index(*surface)];
+					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
+												 state.pointerY).ownership;
 				}
 				if (!cemodOrigin.empty())
 					releaseCemodOrigin = std::ranges::none_of(m_clients, [&](const auto& item) {
@@ -1993,7 +2022,10 @@ namespace WebFrontend::CefOverlay
 				m_networkProxies.erase(cemodOrigin);
 			}
 			if (surface)
+			{
+				NotifyInputOwnership(*surface, ownership);
 				PublishComposite(*surface);
+			}
 			m_closeCondition.notify_all();
 			try
 			{
@@ -2032,6 +2064,7 @@ namespace WebFrontend::CefOverlay
 			if (auto client = Get(windowId))
 			{
 				const auto surface = client->Descriptor().overlaySurface;
+				InputOwnership ownership;
 				if (surface)
 				{
 					std::scoped_lock lock(m_mutex);
@@ -2043,9 +2076,13 @@ namespace WebFrontend::CefOverlay
 						layer->popup.clear();
 						layer->popupVisible = false;
 					}
+					const auto& state = m_surfaces[Index(*surface)];
+					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
+												 state.pointerY).ownership;
 				}
 				if (surface)
 				{
+					NotifyInputOwnership(*surface, ownership);
 					PublishComposite(*surface);
 					UpdateLayerFocus(*surface);
 				}
@@ -2141,13 +2178,18 @@ namespace WebFrontend::CefOverlay
 
 		void RuntimeImpl::SetInteractive(Host::PointerSurface surface, bool interactive)
 		{
+			InputOwnership ownership;
 			{
 				std::scoped_lock lock(m_mutex);
 				const auto window = m_surfaces[Index(surface)].builtin;
 				if (window)
 					if (auto* layer = FindLayerLocked(*window))
 						layer->interactive = interactive;
+				const auto& state = m_surfaces[Index(surface)];
+				ownership = ResolveSurfaceInputLocked(surface, state.pointerX,
+												 state.pointerY).ownership;
 			}
+			NotifyInputOwnership(surface, ownership);
 			UpdateLayerFocus(surface);
 		}
 
@@ -2165,19 +2207,198 @@ namespace WebFrontend::CefOverlay
 									   });
 		}
 
+		RuntimeImpl::ResolvedSurfaceInput RuntimeImpl::ResolveSurfaceInputLocked(
+			Host::PointerSurface surface, double x, double y) const
+		{
+			ResolvedSurfaceInput result;
+			const auto& layers = m_surfaces[Index(surface)];
+			const auto order = BottomToTopLocked(layers);
+			for (auto layer = order.rbegin(); layer != order.rend(); ++layer)
+			{
+				if (!*layer)
+					continue;
+				const auto* candidate = FindLayerLocked(**layer);
+				if (!candidate || !candidate->visible || !candidate->interactive)
+					continue;
+				const bool legacyCapture = !candidate->hasInputIntent;
+				const auto& intent = candidate->inputIntent;
+				const bool intentVisible = legacyCapture || intent.visible;
+				if (!intentVisible)
+					continue;
+				double candidateX = x;
+				double candidateY = y;
+				if (const auto client = m_clients.find(**layer); client != m_clients.end())
+				{
+					const auto scale = client->second->Scale();
+					if (scale > 0.0)
+					{
+						candidateX /= scale;
+						candidateY /= scale;
+					}
+				}
+				constexpr auto webUiOwner = InputOwner::WebUi;
+				if (!result.keyboardWindow &&
+					(legacyCapture || intent.bindingCapture || intent.popup ||
+					 intent.keyboardFocus != KeyboardFocus::None))
+				{
+					result.keyboardWindow = **layer;
+					result.ownership.keyboard = webUiOwner;
+				}
+				const bool pointerHit = legacyCapture || intent.pointerCaptured ||
+					std::ranges::any_of(intent.interactiveRects,
+						[candidateX, candidateY](const InteractiveRect& rect) {
+							return rect.Contains(candidateX, candidateY);
+						});
+				if (!result.pointerWindow && (intent.bindingCapture || pointerHit))
+				{
+					result.pointerWindow = **layer;
+					result.ownership.pointer = webUiOwner;
+				}
+				if (!result.textWindow &&
+					(legacyCapture || intent.keyboardFocus == KeyboardFocus::Text || intent.ime))
+				{
+					result.textWindow = **layer;
+					result.ownership.text = InputOwner::WebUi;
+				}
+				result.ownership.webUiTextFocused =
+					result.ownership.webUiTextFocused ||
+					(!legacyCapture && intent.keyboardFocus == KeyboardFocus::Text);
+				result.ownership.webUiPointerCaptured =
+					result.ownership.webUiPointerCaptured ||
+					(!legacyCapture && intent.pointerCaptured);
+			}
+			return result;
+		}
+
+		void RuntimeImpl::NotifyInputOwnership(Host::PointerSurface surface,
+			const InputOwnership& ownership)
+		{
+			const auto index = Index(surface);
+			{
+				std::scoped_lock lock(m_inputOwnershipMutex);
+				if (m_notifiedOwnership[index] == ownership)
+					return;
+				m_notifiedOwnership[index] = ownership;
+			}
+			if (m_inputOwnershipChanged)
+				m_inputOwnershipChanged(surface, ownership);
+		}
+
+		OverlayInputTarget RuntimeImpl::ResolveInput(const NativeInputEvent& event)
+		{
+			ResolvedSurfaceInput resolved;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto& surface = m_surfaces[Index(event.surface)];
+				if (event.kind == NativeInputKind::PointerMove ||
+					event.kind == NativeInputKind::PointerButton ||
+					event.kind == NativeInputKind::PointerWheel ||
+					event.kind == NativeInputKind::Touch ||
+					event.kind == NativeInputKind::RawMouse)
+				{
+					surface.pointerX = event.x;
+					surface.pointerY = event.y;
+				}
+				resolved = ResolveSurfaceInputLocked(event.surface, surface.pointerX,
+												 surface.pointerY);
+			}
+			NotifyInputOwnership(event.surface, resolved.ownership);
+			std::uint64_t target{};
+			if (event.kind == NativeInputKind::Key)
+				target = resolved.keyboardWindow;
+			else if (event.kind == NativeInputKind::Character ||
+					 event.kind == NativeInputKind::TextComposition)
+				target = resolved.textWindow;
+			else if (IsPointerInput(event.kind))
+				target = resolved.pointerWindow;
+			else if (event.kind == NativeInputKind::FocusLost)
+				target = resolved.keyboardWindow ? resolved.keyboardWindow
+					: resolved.pointerWindow ? resolved.pointerWindow : resolved.textWindow;
+			return {target, resolved.ownership};
+		}
+
+		bool RuntimeImpl::UpdateInputIntent(std::uint64_t windowId, InputIntent intent)
+		{
+			std::optional<Host::PointerSurface> surface;
+			InputOwnership ownership;
+			{
+				std::scoped_lock lock(m_mutex);
+				auto* layer = FindLayerLocked(windowId);
+				if (!layer)
+					return false;
+				if (layer->hasInputIntent &&
+					(intent.generation < layer->inputIntent.generation ||
+					 (intent.generation == layer->inputIntent.generation &&
+					  intent.revision <= layer->inputIntent.revision)))
+					return true;
+				layer->hasInputIntent = true;
+				layer->inputIntent = std::move(intent);
+				surface = layer->surface;
+				const auto& state = m_surfaces[Index(*surface)];
+				ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
+												 state.pointerY).ownership;
+			}
+			NotifyInputOwnership(*surface, ownership);
+			UpdateLayerFocus(*surface);
+			return true;
+		}
+
+		void RuntimeImpl::ResetInputIntent(std::uint64_t windowId, std::uint64_t generation)
+		{
+			InputIntent intent;
+			intent.generation = generation;
+			intent.visible = false;
+			(void)UpdateInputIntent(windowId, std::move(intent));
+		}
+
+		void RuntimeImpl::ReleaseInput(Host::PointerSurface surface)
+		{
+			std::vector<CefRefPtr<Client>> clients;
+			{
+				std::scoped_lock lock(m_mutex);
+				const auto& state = m_surfaces[Index(surface)];
+				for (const auto window : {state.builtin, state.cemod})
+				{
+					if (!window)
+						continue;
+					if (auto* layer = FindLayerLocked(*window); layer && layer->hasInputIntent)
+					{
+						layer->inputIntent.visible = false;
+						layer->inputIntent.keyboardFocus = KeyboardFocus::None;
+						layer->inputIntent.ime = false;
+						layer->inputIntent.pointerCaptured = false;
+						layer->inputIntent.pointerId.reset();
+						layer->inputIntent.popup = false;
+						layer->inputIntent.bindingCapture = false;
+					}
+					if (const auto client = m_clients.find(*window); client != m_clients.end())
+						clients.push_back(client->second);
+				}
+			}
+			NotifyInputOwnership(surface, {});
+			for (const auto& client : clients)
+				if (client->Browser())
+					client->Browser()->GetHost()->SetFocus(false);
+		}
+
 		void RuntimeImpl::SetOverlayVisible(std::uint64_t windowId, bool visible)
 		{
 			std::optional<Host::PointerSurface> surface;
+			InputOwnership ownership;
 			{
 				std::scoped_lock lock(m_mutex);
 				if (auto* layer = FindLayerLocked(windowId))
 				{
 					layer->visible = visible;
 					surface = layer->surface;
+					const auto& state = m_surfaces[Index(*surface)];
+					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
+												 state.pointerY).ownership;
 				}
 			}
 			if (surface)
 			{
+				NotifyInputOwnership(*surface, ownership);
 				PublishComposite(*surface);
 				UpdateLayerFocus(*surface);
 			}
@@ -2186,16 +2407,23 @@ namespace WebFrontend::CefOverlay
 		void RuntimeImpl::SetOverlayInteractive(std::uint64_t windowId, bool interactive)
 		{
 			std::optional<Host::PointerSurface> surface;
+			InputOwnership ownership;
 			{
 				std::scoped_lock lock(m_mutex);
 				if (auto* layer = FindLayerLocked(windowId))
 				{
 					layer->interactive = interactive;
 					surface = layer->surface;
+					const auto& state = m_surfaces[Index(*surface)];
+					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
+												 state.pointerY).ownership;
 				}
 			}
 			if (surface)
+			{
+				NotifyInputOwnership(*surface, ownership);
 				UpdateLayerFocus(*surface);
+			}
 		}
 
 		void RuntimeImpl::UpdateLayerFocus(Host::PointerSurface surface)
@@ -2204,17 +2432,13 @@ namespace WebFrontend::CefOverlay
 			{
 				std::scoped_lock lock(m_mutex);
 				const auto& layers = m_surfaces[Index(surface)];
-				std::optional<std::uint64_t> target;
-				const auto order = BottomToTopLocked(layers);
-				for (auto layer = order.rbegin(); layer != order.rend() && !target; ++layer)
-					if (*layer)
-						if (const auto* candidate = FindLayerLocked(**layer);
-							candidate && candidate->visible && candidate->interactive)
-							target = *layer;
+				const auto resolved = ResolveSurfaceInputLocked(
+					surface, layers.pointerX, layers.pointerY);
+				const auto target = resolved.keyboardWindow;
 				for (const auto window : {layers.builtin, layers.cemod})
 					if (window)
 						if (const auto found = m_clients.find(*window); found != m_clients.end())
-							updates.emplace_back(found->second, target && *target == *window);
+							updates.emplace_back(found->second, target && target == *window);
 			}
 			for (const auto& [client, focused] : updates)
 				if (client->Browser())
@@ -2227,22 +2451,13 @@ namespace WebFrontend::CefOverlay
 				client->Browser()->GetHost()->SetFocus(focused);
 		}
 
-		bool RuntimeImpl::SendInput(const NativeInputEvent& event)
+		bool RuntimeImpl::SendInput(const NativeInputEvent& event, std::uint64_t windowId)
 		{
 			CefRefPtr<Client> client;
 			{
 				std::scoped_lock lock(m_mutex);
-				const auto& layers = m_surfaces[Index(event.surface)];
-				std::optional<std::uint64_t> target;
-				const auto order = BottomToTopLocked(layers);
-				for (auto layer = order.rbegin(); layer != order.rend() && !target; ++layer)
-					if (*layer)
-						if (const auto* candidate = FindLayerLocked(**layer);
-							candidate && candidate->visible && candidate->interactive)
-							target = *layer;
-				if (target)
-					if (const auto found = m_clients.find(*target); found != m_clients.end())
-						client = found->second;
+				if (const auto found = m_clients.find(windowId); found != m_clients.end())
+					client = found->second;
 			}
 			if (!client || !client->Browser())
 				return false;
@@ -2259,6 +2474,9 @@ namespace WebFrontend::CefOverlay
 			switch (event.kind)
 			{
 			case NativeInputKind::PointerMove:
+				host->SendMouseMoveEvent(mouse, !event.insideContent);
+				return true;
+			case NativeInputKind::RawMouse:
 				host->SendMouseMoveEvent(mouse, !event.insideContent);
 				return true;
 			case NativeInputKind::PointerButton:
@@ -2544,13 +2762,15 @@ namespace WebFrontend::CefOverlay
 	}
 
 	std::shared_ptr<BrowserRuntime> CreateBrowserRuntime(BrowserRuntime::RpcHandler rpc,
-														 std::function<void(Host::PointerSurface)> redraw, BrowserRuntime::ClosedHandler closed,
-														 BrowserRuntime::WindowClosedHandler windowClosed)
+												 std::function<void(Host::PointerSurface)> redraw, BrowserRuntime::ClosedHandler closed,
+												 BrowserRuntime::WindowClosedHandler windowClosed,
+												 BrowserRuntime::InputOwnershipHandler inputOwnershipChanged)
 	{
 		if (!g_initialized)
 			return {};
 		auto runtime = std::make_shared<RuntimeImpl>(std::move(rpc), std::move(redraw),
-													 std::move(closed), std::move(windowClosed));
+												 std::move(closed), std::move(windowClosed),
+												 std::move(inputOwnershipChanged));
 		{
 			std::scoped_lock lock(g_runtimesMutex);
 			std::erase_if(g_runtimes, [](const auto& value) { return value.expired(); });

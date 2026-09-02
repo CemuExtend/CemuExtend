@@ -60,6 +60,22 @@ int main()
 		ResolveNativeInputRoute(WebFrontend::NativeInputKind::Key, false);
 	static_assert(ordinaryKey.publishGuestPhysicalInput && !ordinaryKey.sendOverlayInput &&
 				  ordinaryKey.processFrontendInput);
+	constexpr WebFrontend::CefOverlay::InteractiveRect rect{10.0, 20.0, 30.0, 40.0};
+	static_assert(rect.Contains(10.0, 20.0));
+	static_assert(rect.Contains(39.99, 59.99));
+	static_assert(!rect.Contains(40.0, 60.0));
+	constexpr WebFrontend::CefOverlay::InputOwnership webUiText{
+		.keyboard = WebFrontend::CefOverlay::InputOwner::WebUi,
+		.pointer = WebFrontend::CefOverlay::InputOwner::Title,
+		.text = WebFrontend::CefOverlay::InputOwner::WebUi,
+		.webUiTextFocused = true,
+	};
+	constexpr auto routedKey = ResolveNativeInputRoute(
+		WebFrontend::NativeInputKind::Key, webUiText);
+	constexpr auto routedPointer = ResolveNativeInputRoute(
+		WebFrontend::NativeInputKind::PointerButton, webUiText);
+	static_assert(routedKey.sendOverlayInput && !routedKey.processFrontendInput);
+	static_assert(!routedPointer.sendOverlayInput && routedPointer.processFrontendInput);
 
 	using WebFrontend::CefOverlay::CemodOverlayOrder;
 	using WebFrontend::CefOverlay::OverlayLayer;

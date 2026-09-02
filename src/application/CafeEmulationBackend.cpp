@@ -3576,10 +3576,22 @@ namespace Application
 			}
 
 			void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
-								std::uint8_t modifiers) override
+								std::uint8_t modifiers, std::uint16_t deviceId) override
 			{
 				cemuextend_hle::Cex2Host::Instance().KeyboardEvent(
-					usagePage, usage, pressed, modifiers);
+					usagePage, usage, pressed, modifiers, deviceId);
+			}
+
+			void UpdatePhysicalInputOwnership(
+				const PhysicalInputOwnership& ownership) override
+			{
+				cemuextend::wire::InputOwnershipV3 wire{};
+				wire.keyboardOwner = ownership.keyboardOwner;
+				wire.pointerOwner = ownership.pointerOwner;
+				wire.textOwner = ownership.textOwner;
+				wire.flags = ownership.flags;
+				cemuextend_hle::Cex2Host::Instance().InputOwnershipChanged(
+					static_cast<cemuextend::wire::PointerSurface>(ownership.surface), wire);
 			}
 
 			void SubmitText(std::uint32_t codepoint, bool repeat) override
@@ -3656,7 +3668,8 @@ namespace Application
 					static_cast<cemuextend::wire::PointerSurface>(input.surface),
 					input.x, input.y, input.deltaX, input.deltaY, input.wheelX, input.wheelY,
 					input.buttons, input.changedButtons, input.contentWidth, input.contentHeight,
-					input.insideContent, input.focused, input.flags);
+					input.insideContent, input.focused, input.flags, input.deviceId,
+					input.deviceButtons);
 			}
 
 			PointerPolicy GetPointerPolicy() override

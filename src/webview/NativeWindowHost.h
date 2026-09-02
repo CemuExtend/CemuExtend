@@ -40,6 +40,9 @@ namespace WebFrontend
 		std::uint32_t key{};
 		std::uint16_t usagePage{0x0007};
 		std::uint16_t usage{};
+		// Stable physical source when the native backend can identify it. Zero means
+		// unknown and is replaced by a documented aggregate fallback upstream.
+		std::uint16_t deviceId{};
 		std::uint8_t modifiers{};
 		std::uint32_t button{};
 		std::uint32_t touchId{};

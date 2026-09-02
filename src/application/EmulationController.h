@@ -163,6 +163,7 @@ namespace Application
 	struct MouseInput
 	{
 		PointerSurface surface{};
+		std::uint16_t deviceId{};
 		std::int32_t x{};
 		std::int32_t y{};
 		std::int32_t deltaX{};
@@ -171,10 +172,20 @@ namespace Application
 		std::int32_t wheelY{};
 		std::uint32_t buttons{};
 		std::uint32_t changedButtons{};
+		std::uint32_t deviceButtons{};
 		std::int32_t contentWidth{};
 		std::int32_t contentHeight{};
 		bool insideContent{};
 		bool focused{};
+		std::uint8_t flags{};
+	};
+
+	struct PhysicalInputOwnership
+	{
+		PointerSurface surface{};
+		std::uint8_t keyboardOwner{};
+		std::uint8_t pointerOwner{};
+		std::uint8_t textOwner{};
 		std::uint8_t flags{};
 	};
 
@@ -195,7 +206,8 @@ namespace Application
 		[[nodiscard]] virtual std::optional<WindowTitlePresentation>
 		CurrentWindowTitlePresentation() const = 0;
 		virtual void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
-									std::uint8_t modifiers) = 0;
+									std::uint8_t modifiers, std::uint16_t deviceId = 0) = 0;
+		virtual void UpdatePhysicalInputOwnership(const PhysicalInputOwnership&) {}
 		virtual void SubmitText(std::uint32_t codepoint, bool repeat) = 0;
 		virtual void KeyboardFocusLost() = 0;
 		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
@@ -260,7 +272,8 @@ namespace Application
 		[[nodiscard]] std::optional<WindowTitlePresentation>
 		CurrentWindowTitlePresentation() const;
 		void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage,
-							bool pressed, std::uint8_t modifiers);
+							bool pressed, std::uint8_t modifiers, std::uint16_t deviceId = 0);
+		void UpdatePhysicalInputOwnership(const PhysicalInputOwnership& ownership);
 		void SubmitText(std::uint32_t codepoint, bool repeat);
 		void KeyboardFocusLost();
 		[[nodiscard]] bool SoftwareKeyboardActive() const;

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -63,7 +64,9 @@ namespace cemuextend_hle
 						 std::int32_t sampleCount);
 		void ApplyMappedVpad(std::int32_t channel, VPADStatus& status);
 		void KeyboardEvent(std::uint16_t usagePage, std::uint16_t usage,
-						   bool pressed, std::uint8_t modifiers);
+						   bool pressed, std::uint8_t modifiers, std::uint16_t deviceId = 0);
+		void InputOwnershipChanged(cemuextend::wire::PointerSurface surface,
+							   cemuextend::wire::InputOwnershipV3 ownership);
 		void TextEvent(std::uint32_t codepoint, bool repeat);
 		[[nodiscard]] Cex2HostTextInputState EffectiveTextInput();
 		void TextCompositionEvent(std::string_view text,
@@ -76,7 +79,8 @@ namespace cemuextend_hle
 						std::int32_t wheelX, std::int32_t wheelY, std::uint32_t buttons,
 						std::uint32_t changedButtons, std::int32_t contentWidth,
 						std::int32_t contentHeight, bool insideContent, bool focused,
-						std::uint8_t flags = 0);
+						std::uint8_t flags = 0, std::uint16_t deviceId = 0,
+						std::uint32_t deviceButtons = std::numeric_limits<std::uint32_t>::max());
 		void PointerFocusChanged(bool focused);
 		[[nodiscard]] cemuextend::wire::PointerPolicyPayload EffectivePointerPolicy();
 		void PermissionsChanged(Cex2Owner& owner, std::uint32_t permissions);

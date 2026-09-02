@@ -137,6 +137,67 @@ namespace WebFrontend
 			AppendText(result, json);
 			return result;
 		}
+
+		bool ParseInputIntent(const rapidjson::Value& value,
+			CefOverlay::InputIntent& intent)
+		{
+			if (!value.IsObject() || !value.HasMember("version") ||
+				!value["version"].IsUint() || value["version"].GetUint() != 1 ||
+				!value.HasMember("revision") || !value["revision"].IsUint64() ||
+				!value.HasMember("visible") || !value["visible"].IsBool() ||
+				!value.HasMember("keyboard") || !value["keyboard"].IsObject() ||
+				!value.HasMember("pointer") || !value["pointer"].IsObject() ||
+				!value.HasMember("interactiveRects") || !value["interactiveRects"].IsArray() ||
+				!value.HasMember("popup") || !value["popup"].IsBool() ||
+				!value.HasMember("bindingCapture") || !value["bindingCapture"].IsBool())
+				return false;
+			const auto& keyboard = value["keyboard"];
+			const auto& pointer = value["pointer"];
+			if (!keyboard.HasMember("focus") || !keyboard["focus"].IsString() ||
+				!keyboard.HasMember("ime") || !keyboard["ime"].IsBool() ||
+				!pointer.HasMember("captured") || !pointer["captured"].IsBool() ||
+				!pointer.HasMember("pointerId") ||
+				(!pointer["pointerId"].IsNull() && !pointer["pointerId"].IsUint()))
+				return false;
+			const std::string_view focus{keyboard["focus"].GetString(),
+				keyboard["focus"].GetStringLength()};
+			if (focus == "none")
+				intent.keyboardFocus = CefOverlay::KeyboardFocus::None;
+			else if (focus == "navigation")
+				intent.keyboardFocus = CefOverlay::KeyboardFocus::Navigation;
+			else if (focus == "text")
+				intent.keyboardFocus = CefOverlay::KeyboardFocus::Text;
+			else
+				return false;
+			const auto& rects = value["interactiveRects"];
+			if (rects.Size() > 512)
+				return false;
+			intent.interactiveRects.reserve(rects.Size());
+			for (const auto& rect : rects.GetArray())
+			{
+				if (!rect.IsObject() || !rect.HasMember("x") || !rect["x"].IsNumber() ||
+					!rect.HasMember("y") || !rect["y"].IsNumber() ||
+					!rect.HasMember("width") || !rect["width"].IsNumber() ||
+					!rect.HasMember("height") || !rect["height"].IsNumber())
+					return false;
+				CefOverlay::InteractiveRect parsed{rect["x"].GetDouble(), rect["y"].GetDouble(),
+											 rect["width"].GetDouble(), rect["height"].GetDouble()};
+				if (!std::isfinite(parsed.x) || !std::isfinite(parsed.y) ||
+					!std::isfinite(parsed.width) || !std::isfinite(parsed.height) ||
+					parsed.width < 0.0 || parsed.height < 0.0)
+					return false;
+				intent.interactiveRects.push_back(parsed);
+			}
+			intent.revision = value["revision"].GetUint64();
+			intent.visible = value["visible"].GetBool();
+			intent.ime = keyboard["ime"].GetBool();
+			intent.pointerCaptured = pointer["captured"].GetBool();
+			if (pointer["pointerId"].IsUint())
+				intent.pointerId = pointer["pointerId"].GetUint();
+			intent.popup = value["popup"].GetBool();
+			intent.bindingCapture = value["bindingCapture"].GetBool();
+			return true;
+		}
 	} // namespace
 	using cemuextend::wire::Status;
 	using cemuextend::wire::UiCloseReason;
@@ -648,6 +709,28 @@ namespace WebFrontend
 			return;
 		}
 		const std::string name{value["name"].GetString(), value["name"].GetStringLength()};
+		if (name == "input.update")
+		{
+			if (instance.mode != UiMode::Overlay)
+			{
+				completion(false, R"({"code":"NOT_SUPPORTED","message":"Input intent is only available to overlays","details":null})");
+				return;
+			}
+			CefOverlay::InputIntent intent;
+			intent.generation = instance.documentGeneration;
+			if (!ParseInputIntent(value["data"], intent))
+			{
+				completion(false, R"({"code":"INVALID_ARGUMENT","message":"Invalid input intent","details":null})");
+				return;
+			}
+			if (!browsers->UpdateInputIntent(instance.windowId, std::move(intent)))
+			{
+				completion(false, R"({"code":"PAGE_CLOSED","message":"Cemod overlay is closed","details":null})");
+				return;
+			}
+			completion(true, "null");
+			return;
+		}
 		const auto json = JsonValue(value["data"]);
 		if (!ValidName(name) || json.size() > kMaximumUiJsonBytes)
 		{
@@ -705,6 +788,8 @@ namespace WebFrontend
 		++instance.documentGeneration;
 		instance.ready = false;
 		instance.queuedEvents.clear();
+		if (instance.mode == UiMode::Overlay)
+			browsers->ResetInputIntent(instance.windowId, instance.documentGeneration);
 		// CefMessageRouterBrowserSide cancels every old query before this callback.
 		// A non-empty map here would indicate a broken query ownership invariant.
 		if (!instance.calls.empty())

@@ -75,7 +75,8 @@ namespace
 		{
 			return windowTitlePresentation;
 		}
-		void SubmitKeyboard(std::uint16_t, std::uint16_t, bool, std::uint8_t) override {}
+		void SubmitKeyboard(std::uint16_t, std::uint16_t, bool, std::uint8_t,
+							std::uint16_t) override {}
 		void SubmitText(std::uint32_t, bool) override {}
 		void KeyboardFocusLost() override {}
 		bool softwareKeyboardActive{};

@@ -53,26 +53,38 @@ namespace Frontend
 
 	CemuExtendButtonUpdate CemuExtendFrontendBridge::UpdateButtons(
 		CemuExtendMouseTransition transition, std::uint32_t changedMask,
-		std::uint32_t aggregateButtons)
+		std::uint32_t aggregateButtons, std::uint16_t deviceId)
 	{
-		auto next = m_mouseButtons;
+		const auto previousButtons = m_mouseButtons;
+		auto deviceButtons = m_deviceButtons[deviceId];
+		const auto previousDeviceButtons = deviceButtons;
 		switch (transition)
 		{
 		case CemuExtendMouseTransition::Down:
-			next |= changedMask;
+			deviceButtons |= changedMask;
 			break;
 		case CemuExtendMouseTransition::Up:
-			next &= ~changedMask;
+			deviceButtons &= ~changedMask;
 			break;
 		case CemuExtendMouseTransition::Aggregate:
-			next = (next & ~changedMask) | (aggregateButtons & changedMask);
+			for (auto& [id, buttons] : m_deviceButtons)
+				buttons &= ~changedMask;
+			deviceButtons = (deviceButtons & ~changedMask) | (aggregateButtons & changedMask);
 			break;
 		case CemuExtendMouseTransition::None:
 			break;
 		}
-		const auto actualChanged = (m_mouseButtons ^ next) & changedMask;
-		m_mouseButtons = next;
-		return {m_mouseButtons, actualChanged};
+		if (deviceButtons)
+			m_deviceButtons[deviceId] = deviceButtons;
+		else
+			m_deviceButtons.erase(deviceId);
+		m_mouseButtons = 0;
+		for (const auto& [id, buttons] : m_deviceButtons)
+			m_mouseButtons |= buttons;
+		const auto deviceChanged = transition == CemuExtendMouseTransition::Aggregate
+			? (previousButtons ^ m_mouseButtons) & changedMask
+			: (previousDeviceButtons ^ deviceButtons) & changedMask;
+		return {m_mouseButtons, deviceChanged, deviceButtons};
 	}
 
 	CemuExtendMotionUpdate CemuExtendFrontendBridge::UpdatePosition(

@@ -1921,7 +1921,25 @@ namespace
 							m_nativeWindow->RequestRenderRedraw(surface);
 					},
 					{},
-					[this](std::uint64_t windowId) { HandleCefWindowClosed(windowId); });
+					[this](std::uint64_t windowId) { HandleCefWindowClosed(windowId); },
+					[this](Host::PointerSurface surface,
+						   const WebFrontend::CefOverlay::InputOwnership& ownership) {
+						Application::PhysicalInputOwnership update;
+						update.surface = surface == Host::PointerSurface::Main
+							? Application::PointerSurface::Tv
+							: Application::PointerSurface::Drc;
+						update.keyboardOwner = static_cast<std::uint8_t>(ownership.keyboard);
+						update.pointerOwner = static_cast<std::uint8_t>(ownership.pointer);
+						update.textOwner = static_cast<std::uint8_t>(ownership.text);
+						update.flags =
+							(ownership.webUiTextFocused
+								 ? static_cast<std::uint8_t>(cemuextend::wire::InputOwnershipFlag::WebUiTextFocused)
+								 : 0) |
+							(ownership.webUiPointerCaptured
+								 ? static_cast<std::uint8_t>(cemuextend::wire::InputOwnershipFlag::WebUiPointerCaptured)
+								 : 0);
+						m_controller.UpdatePhysicalInputOwnership(update);
+					});
 				if (!m_cefOverlay)
 					throw std::runtime_error("failed to create the shared CEF browser runtime");
 				m_cemodWebUi = WebFrontend::CemodWebUiFrontend::Create(
@@ -3631,7 +3649,8 @@ namespace
 
 		void SubmitPointer(const WebFrontend::NativeInputEvent& event,
 						   std::int32_t deltaX, std::int32_t deltaY, std::int32_t wheelX,
-						   std::int32_t wheelY, std::uint32_t changedButtons, bool raw)
+						   std::int32_t wheelY, std::uint32_t changedButtons,
+						   std::uint32_t deviceButtons, bool raw)
 		{
 			auto& state = m_pointerStates[event.surface == Host::PointerSurface::Main ? 0 : 1];
 			const auto metrics = m_hostState->GetWindowMetrics();
@@ -3639,6 +3658,7 @@ namespace
 				.surface = event.surface == Host::PointerSurface::Main
 							   ? Application::PointerSurface::Tv
 							   : Application::PointerSurface::Drc,
+				.deviceId = event.deviceId,
 				.x = state.x,
 				.y = state.y,
 				.deltaX = deltaX,
@@ -3647,6 +3667,7 @@ namespace
 				.wheelY = wheelY,
 				.buttons = PointerBridge(event.surface).MouseButtons(),
 				.changedButtons = changedButtons,
+				.deviceButtons = deviceButtons,
 				.contentWidth = state.width,
 				.contentHeight = state.height,
 				.insideContent = state.inside,
@@ -3668,7 +3689,8 @@ namespace
 			{
 				WebFrontend::NativeInputEvent event{.kind = WebFrontend::NativeInputKind::PointerButton,
 													.surface = surface};
-				SubmitPointer(event, 0, 0, 0, 0, released.changed, false);
+				SubmitPointer(event, 0, 0, 0, 0, released.changed,
+							  released.deviceButtons, false);
 			}
 			(void)bridge.ApplyPointerPolicy(0, 0, 0, false, false);
 			bridge.ResetPointerPosition();
@@ -3680,6 +3702,13 @@ namespace
 
 		void ReleaseNativeInput(bool resetTextInput)
 		{
+		#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay)
+			{
+				m_cefOverlay->ReleaseInput(Host::PointerSurface::Main);
+				m_cefOverlay->ReleaseInput(Host::PointerSurface::Pad);
+			}
+		#endif
 			m_nativeKeyboardFocus.Reset();
 			if (m_hostServices)
 				m_hostServices->ReleaseKeys();
@@ -3909,6 +3938,12 @@ namespace
 			WebFrontend::NativeInputEvent normalized = event;
 			if (normalized.kind == WebFrontend::NativeInputKind::Key && !normalized.usage)
 				normalized.usage = UsbHidUsage(normalized.key);
+			if (!normalized.deviceId)
+				normalized.deviceId = normalized.kind == WebFrontend::NativeInputKind::Key ||
+										 normalized.kind == WebFrontend::NativeInputKind::Character ||
+										 normalized.kind == WebFrontend::NativeInputKind::TextComposition
+					? 1
+					: static_cast<std::uint16_t>(normalized.surface == Host::PointerSurface::Main ? 1 : 2);
 			const bool keyboardStateChanged =
 				normalized.kind == WebFrontend::NativeInputKind::Key && normalized.usage &&
 				m_nativeKeyboardFocus.SetKey(normalized.usage, normalized.pressed);
@@ -3927,13 +3962,43 @@ namespace
 							static_cast<unsigned>(normalized.surface));
 			}
 
-			bool overlayCapturesInput{};
+			auto& state = m_pointerStates[normalized.surface == Host::PointerSurface::Main ? 0 : 1];
+			if (normalized.kind == WebFrontend::NativeInputKind::RawMouse)
+			{
+				if (normalized.contentWidth > 0)
+					state.width = normalized.contentWidth;
+				if (normalized.contentHeight > 0)
+					state.height = normalized.contentHeight;
+				if (state.width > 0 && state.height > 0)
+				{
+					if (!state.inside)
+					{
+						state.x = state.width / 2;
+						state.y = state.height / 2;
+					}
+					state.x = std::clamp(state.x + normalized.deltaX, 0, state.width - 1);
+					state.y = std::clamp(state.y + normalized.deltaY, 0, state.height - 1);
+					state.inside = true;
+					normalized.x = state.x;
+					normalized.y = state.y;
+					normalized.insideContent = true;
+				}
+			}
+			else if ((normalized.kind == WebFrontend::NativeInputKind::PointerButton ||
+					  normalized.kind == WebFrontend::NativeInputKind::PointerWheel) &&
+					 PointerBridge(normalized.surface).RawMouseRequested() && state.inside)
+			{
+				normalized.x = state.x;
+				normalized.y = state.y;
+				normalized.insideContent = true;
+			}
+			WebFrontend::CefOverlay::OverlayInputTarget overlayTarget;
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
-			overlayCapturesInput = m_cefOverlay && m_cefOverlay->CapturesInput(normalized.surface);
+			if (m_cefOverlay)
+				overlayTarget = m_cefOverlay->ResolveInput(normalized);
 #endif
 			const auto route = WebFrontend::CefOverlay::ResolveNativeInputRoute(
-				normalized.kind, overlayCapturesInput);
-			auto& state = m_pointerStates[normalized.surface == Host::PointerSurface::Main ? 0 : 1];
+				normalized.kind, overlayTarget.ownership);
 			auto& bridge = PointerBridge(normalized.surface);
 			std::int32_t guestWheelY{};
 
@@ -3954,7 +4019,7 @@ namespace
 						{normalized.x, normalized.y},
 						{normalized.contentWidth / 2, normalized.contentHeight / 2},
 						bridge.RawMouseRequested());
-					SubmitPointer(normalized, motion.delta.x, motion.delta.y, 0, 0, 0,
+					SubmitPointer(normalized, motion.delta.x, motion.delta.y, 0, 0, 0, 0,
 							  motion.rawRelative);
 					break;
 				}
@@ -3967,15 +4032,16 @@ namespace
 					const auto update = bridge.UpdateButtons(
 						normalized.pressed ? Frontend::CemuExtendMouseTransition::Down
 										   : Frontend::CemuExtendMouseTransition::Up,
-						mask);
-					SubmitPointer(normalized, 0, 0, 0, 0, update.changed, false);
+						mask, 0, normalized.deviceId);
+					SubmitPointer(normalized, 0, 0, 0, 0, update.changed,
+							  update.deviceButtons, false);
 					break;
 				}
 				case WebFrontend::NativeInputKind::PointerWheel:
 				{
 					const auto wheelX = bridge.NormalizeWheel(normalized.wheelX, 120, true);
 					guestWheelY = bridge.NormalizeWheel(normalized.wheelY, 120, false);
-					SubmitPointer(normalized, 0, 0, wheelX, guestWheelY, 0, false);
+					SubmitPointer(normalized, 0, 0, wheelX, guestWheelY, 0, 0, false);
 					break;
 				}
 				case WebFrontend::NativeInputKind::RawMouse:
@@ -3984,7 +4050,7 @@ namespace
 						break;
 					bridge.MarkRawMouseSeen();
 					bridge.RecordRawPosition({state.x, state.y});
-					SubmitPointer(normalized, normalized.deltaX, normalized.deltaY, 0, 0, 0,
+					SubmitPointer(normalized, normalized.deltaX, normalized.deltaY, 0, 0, 0, 0,
 							  true);
 					break;
 				case WebFrontend::NativeInputKind::Key:
@@ -3997,7 +4063,7 @@ namespace
 							ConfirmNativeKeyboardFocus();
 						m_controller.SubmitKeyboard(normalized.usagePage, normalized.usage,
 												normalized.pressed,
-												normalized.modifiers);
+												normalized.modifiers, normalized.deviceId);
 					}
 					break;
 				case WebFrontend::NativeInputKind::FocusLost:
@@ -4012,7 +4078,8 @@ namespace
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 			if (route.sendOverlayInput)
 			{
-				if (WebFrontend::CefOverlay::IsPointerInput(normalized.kind))
+				if (WebFrontend::CefOverlay::IsPointerInput(normalized.kind) &&
+					!PointerBridge(normalized.surface).RawMouseRequested())
 				{
 					// An interactive OSR layer owns the real host pointer. Do not make
 					// cursor release depend on the guest's mapped-injection permission:
@@ -4024,7 +4091,7 @@ namespace
 						.showCursor = true,
 					});
 				}
-				(void)m_cefOverlay->SendInput(normalized);
+				(void)m_cefOverlay->SendInput(normalized, overlayTarget.windowId);
 				if (!route.processFrontendInput)
 					return;
 			}
@@ -4072,6 +4139,7 @@ namespace
 			case WebFrontend::NativeInputKind::FocusLost:
 				break;
 			case WebFrontend::NativeInputKind::DeviceChanged:
+				ReleaseNativeInput(false);
 				m_hostServices->NotifyDeviceChanged();
 				break;
 			case WebFrontend::NativeInputKind::TextComposition:

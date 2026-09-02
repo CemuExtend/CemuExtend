@@ -945,13 +945,14 @@ namespace
 		const auto* baseline = reinterpret_cast<const InputSnapshotV3Header*>(
 			response.data() + sizeof(ResponseHeader));
 		CHECK((baseline->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::Baseline)) != 0);
+		CHECK((baseline->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::Routed)) != 0);
 		CHECK(baseline->generation.get() != 0);
-		CHECK(baseline->recordCount.get() == 2);
+		CHECK(baseline->recordCount.get() == 4);
 
 		for (int index = 0; index < 8000; ++index)
 			host.MouseEvent(PointerSurface::Tv, index, index, 1, -1, 0, 0, 0, 0,
 							1280, 720, true, true,
-							static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
+							static_cast<std::uint8_t>(MouseEventFlag::RawRelative), 77);
 		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Consumer),
 						   0x00e9, true, 0);
 		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Consumer),
@@ -967,23 +968,67 @@ namespace
 			response.data() + sizeof(ResponseHeader));
 		CHECK(snapshot->surfaces[0].motionX.get() == 8000);
 		CHECK(snapshot->surfaces[0].motionY.get() == -8000);
-		CHECK(snapshot->recordCount.get() == 2);
+		CHECK(snapshot->recordCount.get() == 127);
 		const auto records = response.data() + sizeof(ResponseHeader) +
 			sizeof(InputSnapshotV3Header) +
 			snapshot->pressedControlCount.get() * sizeof(InputControlV3);
-		const auto* keyDown = reinterpret_cast<const InputRecordV3*>(records);
-		const auto* keyUp = reinterpret_cast<const InputRecordV3*>(
-			records + sizeof(InputRecordV3) + keyDown->payloadBytes.get());
+		std::size_t offset{};
+		std::int64_t totalX{};
+		std::int64_t totalY{};
+		const InputRecordV3* keyDown{};
+		const InputRecordV3* keyUp{};
+		for (std::uint32_t index = 0; index < snapshot->recordCount.get(); ++index)
+		{
+			const auto* record = reinterpret_cast<const InputRecordV3*>(records + offset);
+			if (record->type == static_cast<std::uint8_t>(InputRecordType::PointerMotion))
+			{
+				CHECK(record->deviceId.get() == 77);
+				CHECK(record->payloadBytes.get() == sizeof(InputPointerMotionV3));
+				CHECK(record->auxiliary.get() >= 1 && record->auxiliary.get() <= 64);
+				const auto* motion = reinterpret_cast<const InputPointerMotionV3*>(
+					records + offset + sizeof(InputRecordV3));
+				totalX += motion->deltaX.get();
+				totalY += motion->deltaY.get();
+			}
+			else if (!keyDown)
+				keyDown = record;
+			else
+				keyUp = record;
+			offset += sizeof(InputRecordV3) + record->payloadBytes.get();
+		}
+		CHECK(totalX == 8000 && totalY == -8000);
+		CHECK(keyDown != nullptr && keyUp != nullptr);
 		CHECK(keyDown->type == static_cast<std::uint8_t>(InputRecordType::Key));
 		CHECK(keyDown->usagePage.get() == static_cast<std::uint16_t>(InputUsagePage::Consumer));
 		CHECK(keyDown->usage.get() == 0x00e9 && keyDown->value.get() == 1);
 		CHECK(keyUp->usage.get() == 0x00e9 && keyUp->value.get() == 0);
 
+		// Once a motion sequence has been delivered it must never be mutated by a
+		// later coalesce; otherwise acknowledging the old sequence drops new motion.
+		host.MouseEvent(PointerSurface::Tv, 8009, 8009, 9, -9, 0, 0, 0, 0,
+			1280, 720, true, true,
+			static_cast<std::uint8_t>(MouseEventFlag::RawRelative), 77);
+		read.acknowledgedSequence = snapshot->nextSequence.get();
+		request = Request(3, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		const auto* postDelivery = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(postDelivery->recordCount.get() == 1);
+		const auto* postDeliveryRecord = reinterpret_cast<const InputRecordV3*>(
+			response.data() + sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header));
+		CHECK(postDeliveryRecord->type ==
+			static_cast<std::uint8_t>(InputRecordType::PointerMotion));
+		const auto* postDeliveryMotion = reinterpret_cast<const InputPointerMotionV3*>(
+			reinterpret_cast<const std::byte*>(postDeliveryRecord) + sizeof(InputRecordV3));
+		CHECK(postDeliveryMotion->deltaX.get() == 9 && postDeliveryMotion->deltaY.get() == -9);
+
 		TextInputRequestHeaderV3 textInput{};
 		textInput.requestId = 77;
 		textInput.maximumLength = 1'000'000;
 		textInput.flags = static_cast<std::uint8_t>(TextInputFlag::Active);
-		request = Request(3, static_cast<std::uint16_t>(InputOperation::SetTextInputV3),
+		request = Request(4, static_cast<std::uint16_t>(InputOperation::SetTextInputV3),
 			{reinterpret_cast<const std::byte*>(&textInput), sizeof(textInput)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
@@ -993,9 +1038,9 @@ namespace
 		const std::string largePreedit(70'000, 'x');
 		host.TextCompositionEvent({}, largePreedit, 0,
 			static_cast<std::uint32_t>(largePreedit.size()));
-		read.acknowledgedSequence = snapshot->nextSequence.get();
+		read.acknowledgedSequence = postDelivery->nextSequence.get();
 		std::size_t receivedTextBytes{};
-		std::uint32_t correlation = 4;
+		std::uint32_t correlation = 5;
 		bool more{};
 		do
 		{
@@ -1020,6 +1065,95 @@ namespace
 			more = (page->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::More)) != 0;
 		} while (more);
 		CHECK(receivedTextBytes == largePreedit.size());
+		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+	}
+
+	void TestInputV3OwnershipAndDeviceIdentity()
+	{
+		using namespace cemuextend::wire;
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		ModExecutionContext context(321, 1, "input-v3-routing-principal");
+		context.SetGrantedPermissions(1);
+		const auto session = OpenV3(host, context);
+		InputReadRequestV3 read{};
+		read.maximumBytes = 65520;
+		auto request = Request(1, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		auto response = PollUntil(host, context, session);
+		const auto* baseline = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+
+		InputOwnershipV3 ownership{};
+		ownership.keyboardOwner = static_cast<std::uint8_t>(InputOwner::WebUi);
+		ownership.pointerOwner = static_cast<std::uint8_t>(InputOwner::Title);
+		ownership.textOwner = static_cast<std::uint8_t>(InputOwner::WebUi);
+		ownership.flags = static_cast<std::uint8_t>(InputOwnershipFlag::WebUiTextFocused);
+		host.InputOwnershipChanged(PointerSurface::Tv, ownership);
+		constexpr auto page = static_cast<std::uint16_t>(InputUsagePage::Keyboard);
+		host.KeyboardEvent(page, 0x04, true, 0, 11);
+		host.KeyboardEvent(page, 0x04, true, 0, 22);
+		host.KeyboardEvent(page, 0x04, false, 0, 11);
+		host.KeyboardEvent(page, 0x04, false, 0, 22);
+		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
+			0, 0, false, true, 0, 11, 1);
+		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
+			0, 0, false, true, 0, 22, 1);
+		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
+			0, 0, false, true, 0, 11, 0);
+		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 0, 1,
+			0, 0, false, true, 0, 22, 0);
+
+		read.generation = baseline->generation.get();
+		read.acknowledgedSequence = baseline->nextSequence.get();
+		request = Request(2, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		const auto* snapshot = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(snapshot->recordCount.get() == 9);
+		CHECK(snapshot->pressedControlCount.get() == 0);
+		std::size_t offset = sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header);
+		const auto* ownerRecord = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+		CHECK(ownerRecord->type == static_cast<std::uint8_t>(InputRecordType::Ownership));
+		CHECK(ownerRecord->usage.get() == static_cast<std::uint16_t>(PointerSurface::Tv));
+		CHECK(ownerRecord->payloadBytes.get() == sizeof(InputOwnershipV3));
+		offset += sizeof(InputRecordV3) + ownerRecord->payloadBytes.get();
+		const std::array<std::uint16_t, 4> devices{11, 22, 11, 22};
+		const std::array<std::int32_t, 4> levels{1, 1, 0, 0};
+		for (std::size_t index = 0; index < devices.size(); ++index)
+		{
+			const auto* record = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+			CHECK(record->type == static_cast<std::uint8_t>(InputRecordType::Key));
+			CHECK(record->deviceId.get() == devices[index]);
+			CHECK(record->value.get() == levels[index]);
+			offset += sizeof(InputRecordV3) + record->payloadBytes.get();
+		}
+		for (std::size_t index = 0; index < devices.size(); ++index)
+		{
+			const auto* record = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+			CHECK(record->type == static_cast<std::uint8_t>(InputRecordType::MouseButton));
+			CHECK(record->deviceId.get() == devices[index]);
+			CHECK(record->value.get() == levels[index]);
+			offset += sizeof(InputRecordV3) + record->payloadBytes.get();
+		}
+		host.KeyboardFocusLost();
+		read.acknowledgedSequence = snapshot->nextSequence.get();
+		request = Request(3, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		const auto* released = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(released->recordCount.get() == 2);
+		offset = sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header);
+		const auto* releasedOwner = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+		CHECK(releasedOwner->type == static_cast<std::uint8_t>(InputRecordType::Ownership));
+		offset += sizeof(InputRecordV3) + releasedOwner->payloadBytes.get();
+		const auto* reset = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+		CHECK(reset->type == static_cast<std::uint8_t>(InputRecordType::DeviceReset));
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
 
@@ -1362,6 +1496,7 @@ int main(int argc, char** argv)
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
 		TestInputV3SnapshotBatch();
+		TestInputV3OwnershipAndDeviceIdentity();
 		TestTextInputComposition();
 	}
 	else

@@ -2,6 +2,7 @@
 
 #include "host/contracts/HostContracts.h"
 #include "webview/NativeWindowHost.h"
+#include "webview/cef/CefOverlayInput.h"
 #include "webview/cef/CefOverlayOrder.h"
 
 #include <functional>
@@ -83,6 +84,8 @@ namespace WebFrontend::CefOverlay
 		using RpcHandler = std::function<std::string(std::uint64_t, std::string_view)>;
 		using ClosedHandler = std::function<void(Host::PointerSurface)>;
 		using WindowClosedHandler = std::function<void(std::uint64_t)>;
+		using InputOwnershipHandler =
+			std::function<void(Host::PointerSurface, const InputOwnership&)>;
 
 		virtual ~BrowserRuntime() = default;
 		virtual bool Create(Host::PointerSurface surface, std::uint64_t windowId,
@@ -93,7 +96,9 @@ namespace WebFrontend::CefOverlay
 							int physicalHeight, double dpiScale) = 0;
 		virtual void SetInteractive(Host::PointerSurface surface, bool interactive) = 0;
 		[[nodiscard]] virtual bool CapturesInput(Host::PointerSurface surface) const = 0;
-		virtual bool SendInput(const NativeInputEvent& event) = 0;
+		[[nodiscard]] virtual OverlayInputTarget ResolveInput(
+			const NativeInputEvent& event) = 0;
+		virtual bool SendInput(const NativeInputEvent& event, std::uint64_t windowId) = 0;
 		virtual void ExecuteEvent(Host::PointerSurface surface, std::string_view name,
 								  std::string_view jsonPayload, std::uint64_t sequence) = 0;
 		virtual void ExecuteScript(Host::PointerSurface surface, std::string_view script) = 0;
@@ -107,6 +112,9 @@ namespace WebFrontend::CefOverlay
 		virtual void SetWindowFocus(std::uint64_t windowId, bool focused) = 0;
 		virtual void SetOverlayVisible(std::uint64_t windowId, bool visible) = 0;
 		virtual void SetOverlayInteractive(std::uint64_t windowId, bool interactive) = 0;
+		virtual bool UpdateInputIntent(std::uint64_t windowId, InputIntent intent) = 0;
+		virtual void ResetInputIntent(std::uint64_t windowId, std::uint64_t generation) = 0;
+		virtual void ReleaseInput(Host::PointerSurface surface) = 0;
 		virtual void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 										std::string_view jsonPayload, std::uint64_t sequence) = 0;
 		virtual void ExecuteCemodEvent(std::uint64_t windowId, std::string_view name,
@@ -118,5 +126,6 @@ namespace WebFrontend::CefOverlay
 	[[nodiscard]] std::shared_ptr<BrowserRuntime> CreateBrowserRuntime(
 		BrowserRuntime::RpcHandler rpc, std::function<void(Host::PointerSurface)> redraw,
 		BrowserRuntime::ClosedHandler closed = {},
-		BrowserRuntime::WindowClosedHandler windowClosed = {});
+		BrowserRuntime::WindowClosedHandler windowClosed = {},
+		BrowserRuntime::InputOwnershipHandler inputOwnershipChanged = {});
 } // namespace WebFrontend::CefOverlay

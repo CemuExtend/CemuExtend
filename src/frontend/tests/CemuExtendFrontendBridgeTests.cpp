@@ -76,6 +76,14 @@ int main()
 	assert(buttons.buttons == 1 && buttons.changed == 0);
 	buttons = bridge.UpdateButtons(Frontend::CemuExtendMouseTransition::Up, 1);
 	assert(buttons.buttons == 0 && buttons.changed == 1);
+	buttons = bridge.UpdateButtons(Frontend::CemuExtendMouseTransition::Down, 1, 0, 11);
+	assert(buttons.buttons == 1 && buttons.deviceButtons == 1 && buttons.changed == 1);
+	buttons = bridge.UpdateButtons(Frontend::CemuExtendMouseTransition::Down, 1, 0, 22);
+	assert(buttons.buttons == 1 && buttons.deviceButtons == 1 && buttons.changed == 1);
+	buttons = bridge.UpdateButtons(Frontend::CemuExtendMouseTransition::Up, 1, 0, 11);
+	assert(buttons.buttons == 1 && buttons.deviceButtons == 0 && buttons.changed == 1);
+	buttons = bridge.UpdateButtons(Frontend::CemuExtendMouseTransition::Up, 1, 0, 22);
+	assert(buttons.buttons == 0 && buttons.deviceButtons == 0 && buttons.changed == 1);
 	assert(bridge.NormalizeWheel(60, 120, false) == 0);
 	assert(bridge.NormalizeWheel(60, 120, false) == 1);
 	assert(bridge.NormalizeWheel(-60, 120, true) == 0);

@@ -3,9 +3,70 @@
 #include "webview/NativeWindowHost.h"
 
 #include <cstdint>
+#include <optional>
+#include <vector>
 
 namespace WebFrontend::CefOverlay
 {
+	enum class InputOwner : std::uint8_t
+	{
+		Title,
+		WebUi,
+		None,
+	};
+
+	enum class KeyboardFocus : std::uint8_t
+	{
+		None,
+		Navigation,
+		Text,
+	};
+
+	struct InteractiveRect
+	{
+		double x{};
+		double y{};
+		double width{};
+		double height{};
+
+		[[nodiscard]] constexpr bool Contains(double pointX, double pointY) const
+		{
+			return width > 0.0 && height > 0.0 && pointX >= x && pointY >= y &&
+				   pointX < x + width && pointY < y + height;
+		}
+	};
+
+	struct InputIntent
+	{
+		std::uint64_t generation{};
+		std::uint64_t revision{};
+		bool visible{};
+		KeyboardFocus keyboardFocus{KeyboardFocus::None};
+		bool ime{};
+		bool pointerCaptured{};
+		std::optional<std::uint32_t> pointerId;
+		std::vector<InteractiveRect> interactiveRects;
+		bool popup{};
+		bool bindingCapture{};
+	};
+
+	struct InputOwnership
+	{
+		InputOwner keyboard{InputOwner::Title};
+		InputOwner pointer{InputOwner::Title};
+		InputOwner text{InputOwner::Title};
+		bool webUiTextFocused{};
+		bool webUiPointerCaptured{};
+
+		constexpr bool operator==(const InputOwnership&) const = default;
+	};
+
+	struct OverlayInputTarget
+	{
+		std::uint64_t windowId{};
+		InputOwnership ownership{};
+	};
+
 	struct NativeInputRoute
 	{
 		bool publishGuestPhysicalInput{};
@@ -18,6 +79,24 @@ namespace WebFrontend::CefOverlay
 		return kind == NativeInputKind::PointerMove || kind == NativeInputKind::PointerButton ||
 			   kind == NativeInputKind::PointerWheel || kind == NativeInputKind::Touch ||
 			   kind == NativeInputKind::RawMouse;
+	}
+
+	[[nodiscard]] constexpr InputOwner OwnerFor(
+		NativeInputKind kind, const InputOwnership& ownership)
+	{
+		if (kind == NativeInputKind::Key)
+			return ownership.keyboard;
+		if (kind == NativeInputKind::Character || kind == NativeInputKind::TextComposition)
+			return ownership.text;
+		if (IsPointerInput(kind))
+			return ownership.pointer;
+		if (kind == NativeInputKind::FocusLost)
+		{
+			if (ownership.keyboard == InputOwner::WebUi || ownership.pointer == InputOwner::WebUi ||
+				ownership.text == InputOwner::WebUi)
+				return InputOwner::WebUi;
+		}
+		return InputOwner::None;
 	}
 
 	// Guest input subscriptions observe the physical keyboard and mouse stream.
@@ -39,6 +118,18 @@ namespace WebFrontend::CefOverlay
 			.sendOverlayInput = overlayCapturesInput,
 			.processFrontendInput = !overlayCapturesInput || kind == NativeInputKind::DeviceChanged,
 		};
+	}
+
+	[[nodiscard]] constexpr NativeInputRoute ResolveNativeInputRoute(
+		NativeInputKind kind, const InputOwnership& ownership)
+	{
+		const auto owner = OwnerFor(kind, ownership);
+		const bool overlayOwns = owner == InputOwner::WebUi;
+		auto result = ResolveNativeInputRoute(kind, overlayOwns);
+		if (owner == InputOwner::None && kind != NativeInputKind::DeviceChanged &&
+			kind != NativeInputKind::FocusLost)
+			result.processFrontendInput = false;
+		return result;
 	}
 
 	// CefKeyEvent::windows_key_code uses Windows virtual-key values on every
