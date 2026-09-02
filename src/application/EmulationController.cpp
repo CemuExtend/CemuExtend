@@ -297,10 +297,10 @@ namespace Application
 		return m_backend->CurrentWindowTitlePresentation();
 	}
 
-	void EmulationController::SubmitKeyboard(std::uint16_t usage, bool pressed,
-											 std::uint8_t modifiers)
+	void EmulationController::SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
+										 std::uint8_t modifiers)
 	{
-		m_backend->SubmitKeyboard(usage, pressed, modifiers);
+		m_backend->SubmitKeyboard(usagePage, usage, pressed, modifiers);
 	}
 
 	void EmulationController::SubmitText(std::uint32_t codepoint, bool repeat)

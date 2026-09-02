@@ -3995,7 +3995,8 @@ namespace
 						// stream cannot reject this press using a stale GTK metric.
 						if (normalized.pressed && keyboardStateChanged)
 							ConfirmNativeKeyboardFocus();
-						m_controller.SubmitKeyboard(normalized.usage, normalized.pressed,
+						m_controller.SubmitKeyboard(normalized.usagePage, normalized.usage,
+												normalized.pressed,
 												normalized.modifiers);
 					}
 					break;

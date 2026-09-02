@@ -3575,10 +3575,11 @@ namespace Application
 				return CafeSystem::Shutdown();
 			}
 
-			void SubmitKeyboard(std::uint16_t usage, bool pressed,
+			void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
 								std::uint8_t modifiers) override
 			{
-				cemuextend_hle::Cex2Host::Instance().KeyboardEvent(usage, pressed, modifiers);
+				cemuextend_hle::Cex2Host::Instance().KeyboardEvent(
+					usagePage, usage, pressed, modifiers);
 			}
 
 			void SubmitText(std::uint32_t codepoint, bool repeat) override

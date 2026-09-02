@@ -62,7 +62,8 @@ namespace cemuextend_hle
 		void ObserveVpad(std::int32_t channel, const VPADStatus& status, std::int32_t error,
 						 std::int32_t sampleCount);
 		void ApplyMappedVpad(std::int32_t channel, VPADStatus& status);
-		void KeyboardEvent(std::uint16_t usbHidUsage, bool pressed, std::uint8_t modifiers);
+		void KeyboardEvent(std::uint16_t usagePage, std::uint16_t usage,
+						   bool pressed, std::uint8_t modifiers);
 		void TextEvent(std::uint32_t codepoint, bool repeat);
 		[[nodiscard]] Cex2HostTextInputState EffectiveTextInput();
 		void TextCompositionEvent(std::string_view text,

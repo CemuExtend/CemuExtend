@@ -873,7 +873,8 @@ static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInte
 			((flags & NSEventModifierFlagOption) ? 4U : 0U) |
 			((flags & NSEventModifierFlagCommand) ? 8U : 0U));
 		const auto keyCode = static_cast<std::uint32_t>([event keyCode]);
-		const auto usage = WebFrontend::MacKeyCodeUsbHidUsage(keyCode);
+		const auto consumerUsage = WebFrontend::MacConsumerUsbHidUsage(keyCode);
+		const auto usage = consumerUsage ? consumerUsage : WebFrontend::MacKeyCodeUsbHidUsage(keyCode);
 		bool pressed = kind == 4;
 		if (kind == 8)
 		{
@@ -884,7 +885,9 @@ static void CemuDispatchRenderInput(CemuRenderView* view, NSEvent* event, NSInte
 			else view->modifierKeys &= static_cast<std::uint8_t>(~bit);
 		}
 		emit({.kind = WebFrontend::NativeInputKind::Key,
-			.key = keyCode, .usage = usage, .modifiers = modifiers,
+			.key = keyCode,
+			.usagePage = consumerUsage ? WebFrontend::ConsumerUsagePage : WebFrontend::KeyboardUsagePage,
+			.usage = usage, .modifiers = modifiers,
 			.pressed = pressed, .repeat = [event isARepeat] == YES});
 		if (kind == 4 && (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) == 0)
 		{

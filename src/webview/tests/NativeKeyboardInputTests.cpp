@@ -45,6 +45,8 @@ int main()
 	assert(WindowsModifierUsbHidUsage(0x12, 0x38, false) == 0xe2);
 	assert(WindowsModifierUsbHidUsage(0x12, 0x38, true) == 0xe6);
 	assert(WindowsModifierUsbHidUsage('W', 0x11, false) == 0);
+	assert(WindowsConsumerUsbHidUsage(0xaf) == 0x00e9);
+	assert(WindowsConsumerUsbHidUsage(0xb3) == 0x00cd);
 
 	assert(MacModifierUsbHidUsage(0x38) == 0xe1);
 	assert(MacModifierUsbHidUsage(0x3c) == 0xe5);
@@ -68,4 +70,7 @@ int main()
 	assert(XkbBaseKeyvalUsbHidUsage('!') == 0);
 	assert(XkbBaseKeyvalUsbHidUsage(0xffe2) == 0xe5);
 	assert(XkbBaseKeyvalUsbHidUsage(0xffc2) == 0x3e);
+	assert(XkbConsumerUsbHidUsage(0x1008ff13) == 0x00e9);
+	assert(XkbConsumerUsbHidUsage(0x1008ff17) == 0x00b5);
+	assert(MacConsumerUsbHidUsage(0x48) == 0x00e9);
 }

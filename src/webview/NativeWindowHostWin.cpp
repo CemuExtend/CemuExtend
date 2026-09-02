@@ -173,9 +173,12 @@ namespace WebFrontend
 			{
 				const auto scanCode = static_cast<std::uint32_t>((lparam >> 16) & 0xff);
 				const bool extended = (lparam & (1LL << 24)) != 0;
+				const auto consumerUsage =
+					WindowsConsumerUsbHidUsage(static_cast<std::uint32_t>(wparam));
 				emit({.kind = NativeInputKind::Key,
 					  .key = static_cast<std::uint32_t>(wparam),
-					  .usage = WindowsModifierUsbHidUsage(
+					  .usagePage = consumerUsage ? ConsumerUsagePage : KeyboardUsagePage,
+					  .usage = consumerUsage ? consumerUsage : WindowsModifierUsbHidUsage(
 						  static_cast<std::uint32_t>(wparam), scanCode, extended),
 					  .modifiers = KeyModifiers(),
 					  .pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN,

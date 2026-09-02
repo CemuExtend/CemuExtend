@@ -756,6 +756,47 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	}
 }
 
+static uint16 CemuExtendConsumerUsbHidUsage(const wxKeyEvent& event)
+{
+	const auto rawKey = fix_raw_keycode(event.GetRawKeyCode(), event.GetRawKeyFlags());
+#if BOOST_OS_WINDOWS
+	switch (rawKey)
+	{
+	case 0xad: return 0x00e2;
+	case 0xae: return 0x00ea;
+	case 0xaf: return 0x00e9;
+	case 0xb0: return 0x00b5;
+	case 0xb1: return 0x00b6;
+	case 0xb2: return 0x00b7;
+	case 0xb3: return 0x00cd;
+	default: return 0;
+	}
+#elif BOOST_OS_LINUX || BOOST_OS_BSD
+	switch (rawKey)
+	{
+	case 0x1008ff11: return 0x00ea;
+	case 0x1008ff12: return 0x00e2;
+	case 0x1008ff13: return 0x00e9;
+	case 0x1008ff14: return 0x00cd;
+	case 0x1008ff15: return 0x00b7;
+	case 0x1008ff16: return 0x00b6;
+	case 0x1008ff17: return 0x00b5;
+	default: return 0;
+	}
+#elif BOOST_OS_MACOS
+	switch (rawKey)
+	{
+	case 0x48: return 0x00e9;
+	case 0x49: return 0x00ea;
+	case 0x4a: return 0x00e2;
+	default: return 0;
+	}
+#else
+	(void)rawKey;
+	return 0;
+#endif
+}
+
 static uint8 CemuExtendKeyModifiers(const wxKeyEvent& event)
 {
 	return (event.ControlDown() ? 1U : 0U) |
@@ -783,7 +824,8 @@ int CemuApp::FilterEvent(wxEvent& event)
 	if (event.GetEventType() == wxEVT_KEY_DOWN)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
-		const auto usage = CemuExtendUsbHidUsage(key_event);
+		const auto consumerUsage = CemuExtendConsumerUsbHidUsage(key_event);
+		const auto usage = consumerUsage ? consumerUsage : CemuExtendUsbHidUsage(key_event);
 		m_windowState->SetKeyState(
 			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
 		// A single-line native IME owns ordinary editing keys, but Enter is
@@ -794,21 +836,26 @@ int CemuApp::FilterEvent(wxEvent& event)
 								   (usage == 0x28 || usage == 0x58) &&
 								   m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
-			m_emulationController.SubmitKeyboard(usage, true,
-												 CemuExtendKeyModifiers(key_event));
+			m_emulationController.SubmitKeyboard(
+				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
+				usage, true,
+											 CemuExtendKeyModifiers(key_event));
 	}
 	else if (event.GetEventType() == wxEVT_KEY_UP)
 	{
 		const auto& key_event = (wxKeyEvent&)event;
-		const auto usage = CemuExtendUsbHidUsage(key_event);
+		const auto consumerUsage = CemuExtendConsumerUsbHidUsage(key_event);
+		const auto usage = consumerUsage ? consumerUsage : CemuExtendUsbHidUsage(key_event);
 		m_windowState->SetKeyState(
 			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
 		const bool native_submit = native_text_input_event &&
 								   (usage == 0x28 || usage == 0x58) &&
 								   m_mainFrame->CanSubmitCemuExtendTextInput();
 		if (!native_text_input_event || native_submit)
-			m_emulationController.SubmitKeyboard(usage, false,
-												 CemuExtendKeyModifiers(key_event));
+			m_emulationController.SubmitKeyboard(
+				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
+				usage, false,
+											 CemuExtendKeyModifiers(key_event));
 	}
 	else if (event.GetEventType() == wxEVT_CHAR)
 	{

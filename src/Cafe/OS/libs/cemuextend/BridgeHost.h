@@ -37,7 +37,9 @@ namespace cemuextend_hle
 
 	inline void KeyboardEvent(uint16 usbHidUsage, bool pressed, uint8 modifiers)
 	{
-		Cex2Host::Instance().KeyboardEvent(usbHidUsage, pressed, modifiers);
+		Cex2Host::Instance().KeyboardEvent(
+			static_cast<std::uint16_t>(cemuextend::wire::InputUsagePage::Keyboard),
+			usbHidUsage, pressed, modifiers);
 	}
 
 	inline void KeyboardFocusLost()

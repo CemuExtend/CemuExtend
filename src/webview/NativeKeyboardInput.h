@@ -6,6 +6,50 @@
 
 namespace WebFrontend
 {
+	inline constexpr std::uint16_t KeyboardUsagePage = 0x0007;
+	inline constexpr std::uint16_t ConsumerUsagePage = 0x000c;
+
+	[[nodiscard]] constexpr std::uint16_t WindowsConsumerUsbHidUsage(std::uint32_t virtualKey)
+	{
+		switch (virtualKey)
+		{
+		case 0xad: return 0x00e2; // mute
+		case 0xae: return 0x00ea; // volume down
+		case 0xaf: return 0x00e9; // volume up
+		case 0xb0: return 0x00b5; // next track
+		case 0xb1: return 0x00b6; // previous track
+		case 0xb2: return 0x00b7; // stop
+		case 0xb3: return 0x00cd; // play/pause
+		default: return 0;
+		}
+	}
+
+	[[nodiscard]] constexpr std::uint16_t XkbConsumerUsbHidUsage(std::uint32_t key)
+	{
+		switch (key)
+		{
+		case 0x1008ff11: return 0x00ea; // XF86AudioLowerVolume
+		case 0x1008ff12: return 0x00e2; // XF86AudioMute
+		case 0x1008ff13: return 0x00e9; // XF86AudioRaiseVolume
+		case 0x1008ff14: return 0x00cd; // XF86AudioPlay
+		case 0x1008ff15: return 0x00b7; // XF86AudioStop
+		case 0x1008ff16: return 0x00b6; // XF86AudioPrev
+		case 0x1008ff17: return 0x00b5; // XF86AudioNext
+		default: return 0;
+		}
+	}
+
+	[[nodiscard]] constexpr std::uint16_t MacConsumerUsbHidUsage(std::uint32_t keyCode)
+	{
+		switch (keyCode)
+		{
+		case 0x48: return 0x00e9;
+		case 0x49: return 0x00ea;
+		case 0x4a: return 0x00e2;
+		default: return 0;
+		}
+	}
+
 	// GTK/XWayland can transiently report an inactive toplevel while it is still
 	// delivering physical keyboard input to the game window. A held native key
 	// is stronger evidence of gameplay focus than that stale window sample.

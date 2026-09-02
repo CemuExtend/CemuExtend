@@ -31,6 +31,9 @@
 
 namespace Application
 {
+	inline constexpr std::uint16_t KeyboardUsagePage = 0x0007;
+	inline constexpr std::uint16_t ConsumerUsagePage = 0x000c;
+
 	enum class EmulationState : std::uint8_t
 	{
 		Idle,
@@ -191,7 +194,7 @@ namespace Application
 		[[nodiscard]] virtual std::optional<std::int32_t> ForegroundProcessExitStatus() const = 0;
 		[[nodiscard]] virtual std::optional<WindowTitlePresentation>
 		CurrentWindowTitlePresentation() const = 0;
-		virtual void SubmitKeyboard(std::uint16_t usage, bool pressed,
+		virtual void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
 									std::uint8_t modifiers) = 0;
 		virtual void SubmitText(std::uint32_t codepoint, bool repeat) = 0;
 		virtual void KeyboardFocusLost() = 0;
@@ -256,7 +259,8 @@ namespace Application
 		[[nodiscard]] std::optional<std::int32_t> ForegroundProcessExitStatus() const;
 		[[nodiscard]] std::optional<WindowTitlePresentation>
 		CurrentWindowTitlePresentation() const;
-		void SubmitKeyboard(std::uint16_t usage, bool pressed, std::uint8_t modifiers);
+		void SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage,
+							bool pressed, std::uint8_t modifiers);
 		void SubmitText(std::uint32_t codepoint, bool repeat);
 		void KeyboardFocusLost();
 		[[nodiscard]] bool SoftwareKeyboardActive() const;

@@ -162,6 +162,28 @@ namespace
 		return session;
 	}
 
+	std::uint32_t OpenV3(cemuextend_hle::Cex2Host& host, ModExecutionContext& context)
+	{
+		cemuextend::transport::OpenOptionsV3 options{};
+		options.abiMajor = cemuextend::transport::kLatestAbiMajor;
+		options.abiMinor = cemuextend::transport::kLatestAbiMinor;
+		options.maximumPendingRequests = 128;
+		options.requiredFeatures =
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::CopyTransport) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::Cancellation) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::Pagination) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::PermissionRevocation) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::MemoryLayoutQuery) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::VersionedSessions) |
+			static_cast<std::uint64_t>(cemuextend::transport::Feature::InputSnapshotBatch);
+		std::uint32_t session{};
+		const auto bytes = std::span<const std::byte>(
+			reinterpret_cast<const std::byte*>(&options), sizeof(options));
+		CHECK(host.Open(context, bytes, session) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(session != 0);
+		return session;
+	}
+
 	void TestOwnershipCopyAndCancel()
 	{
 		auto& host = cemuextend_hle::Cex2Host::Instance();
@@ -177,7 +199,15 @@ namespace
 		CHECK(info.abiMinor.get() == 3);
 		CHECK(info.maximumMessageSize.get() == 64U * 1024U);
 		CHECK((info.features.get() & static_cast<std::uint64_t>(
-										 cemuextend::transport::Feature::MemoryLayoutQuery)) != 0);
+									 cemuextend::transport::Feature::MemoryLayoutQuery)) != 0);
+		std::array<std::byte, sizeof(cemuextend::transport::InfoV3)> infoV3Bytes{};
+		CHECK(host.Query(first,
+						 static_cast<std::uint32_t>(cemuextend::transport::Query::InfoV3),
+						 infoV3Bytes) == static_cast<std::int32_t>(Error::Ok));
+		const auto& infoV3 =
+			*reinterpret_cast<const cemuextend::transport::InfoV3*>(infoV3Bytes.data());
+		CHECK(infoV3.abiMajor.get() == 3 && infoV3.inputServiceVersion.get() == 3);
+		CHECK(infoV3.maximumInputJournalBytes.get() == 16U * 1024U * 1024U);
 
 		std::array<std::byte, sizeof(cemuextend::transport::MemoryLayout)> layoutBytes{};
 		CHECK(host.Query(first,
@@ -872,8 +902,10 @@ namespace
 		// no additional raw state, so only the down/up transition pair should cross
 		// the bounded transport queue.
 		for (std::size_t repeat = 0; repeat < 512; ++repeat)
-			host.KeyboardEvent(0x04, true, 0);
-		host.KeyboardEvent(0x04, false, 0);
+			host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
+							   0x04, true, 0);
+		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
+						   0x04, false, 0);
 		response = PollUntil(host, context, session);
 		const auto& keyDown = *reinterpret_cast<const KeyboardEventPayload*>(
 			response.data() + sizeof(ResponseHeader));
@@ -887,6 +919,108 @@ namespace
 
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 		CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
+	}
+
+	void TestInputV3SnapshotBatch()
+	{
+		using namespace cemuextend::wire;
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		ModExecutionContext context(320, 1, "input-v3-principal");
+		context.SetGrantedPermissions(1);
+		const auto session = OpenV3(host, context);
+		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
+			0x04, true, 0);
+		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
+			0x04, false, 0);
+
+		InputReadRequestV3 read{};
+		read.maximumBytes = 65520;
+		auto request = Request(1, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		auto response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<const ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		const auto* baseline = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK((baseline->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::Baseline)) != 0);
+		CHECK(baseline->generation.get() != 0);
+		CHECK(baseline->recordCount.get() == 2);
+
+		for (int index = 0; index < 8000; ++index)
+			host.MouseEvent(PointerSurface::Tv, index, index, 1, -1, 0, 0, 0, 0,
+							1280, 720, true, true,
+							static_cast<std::uint8_t>(MouseEventFlag::RawRelative));
+		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Consumer),
+						   0x00e9, true, 0);
+		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Consumer),
+						   0x00e9, false, 0);
+
+		read.generation = baseline->generation.get();
+		read.acknowledgedSequence = baseline->nextSequence.get();
+		request = Request(2, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		const auto* snapshot = reinterpret_cast<const InputSnapshotV3Header*>(
+			response.data() + sizeof(ResponseHeader));
+		CHECK(snapshot->surfaces[0].motionX.get() == 8000);
+		CHECK(snapshot->surfaces[0].motionY.get() == -8000);
+		CHECK(snapshot->recordCount.get() == 2);
+		const auto records = response.data() + sizeof(ResponseHeader) +
+			sizeof(InputSnapshotV3Header) +
+			snapshot->pressedControlCount.get() * sizeof(InputControlV3);
+		const auto* keyDown = reinterpret_cast<const InputRecordV3*>(records);
+		const auto* keyUp = reinterpret_cast<const InputRecordV3*>(
+			records + sizeof(InputRecordV3) + keyDown->payloadBytes.get());
+		CHECK(keyDown->type == static_cast<std::uint8_t>(InputRecordType::Key));
+		CHECK(keyDown->usagePage.get() == static_cast<std::uint16_t>(InputUsagePage::Consumer));
+		CHECK(keyDown->usage.get() == 0x00e9 && keyDown->value.get() == 1);
+		CHECK(keyUp->usage.get() == 0x00e9 && keyUp->value.get() == 0);
+
+		TextInputRequestHeaderV3 textInput{};
+		textInput.requestId = 77;
+		textInput.maximumLength = 1'000'000;
+		textInput.flags = static_cast<std::uint8_t>(TextInputFlag::Active);
+		request = Request(3, static_cast<std::uint16_t>(InputOperation::SetTextInputV3),
+			{reinterpret_cast<const std::byte*>(&textInput), sizeof(textInput)}, ServiceId::Input);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<const ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+
+		const std::string largePreedit(70'000, 'x');
+		host.TextCompositionEvent({}, largePreedit, 0,
+			static_cast<std::uint32_t>(largePreedit.size()));
+		read.acknowledgedSequence = snapshot->nextSequence.get();
+		std::size_t receivedTextBytes{};
+		std::uint32_t correlation = 4;
+		bool more{};
+		do
+		{
+			request = Request(correlation++,
+				static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+				{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+			CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+			response = PollUntil(host, context, session);
+			const auto* page = reinterpret_cast<const InputSnapshotV3Header*>(
+				response.data() + sizeof(ResponseHeader));
+			std::size_t offset = sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header) +
+				page->pressedControlCount.get() * sizeof(InputControlV3);
+			for (std::uint32_t index = 0; index < page->recordCount.get(); ++index)
+			{
+				const auto* record = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
+				CHECK(record->type == static_cast<std::uint8_t>(InputRecordType::TextChunk));
+				CHECK(record->payloadBytes.get() >= sizeof(InputTextChunkV3));
+				receivedTextBytes += record->payloadBytes.get() - sizeof(InputTextChunkV3);
+				offset += sizeof(InputRecordV3) + record->payloadBytes.get();
+			}
+			read.acknowledgedSequence = page->nextSequence.get();
+			more = (page->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::More)) != 0;
+		} while (more);
+		CHECK(receivedTextBytes == largePreedit.size());
+		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
 
 	void TestTextInputComposition()
@@ -1227,6 +1361,7 @@ int main(int argc, char** argv)
 	{
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
+		TestInputV3SnapshotBatch();
 		TestTextInputComposition();
 	}
 	else

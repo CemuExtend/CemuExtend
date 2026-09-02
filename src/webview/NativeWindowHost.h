@@ -38,6 +38,7 @@ namespace WebFrontend
 		std::int32_t contentWidth{};
 		std::int32_t contentHeight{};
 		std::uint32_t key{};
+		std::uint16_t usagePage{0x0007};
 		std::uint16_t usage{};
 		std::uint8_t modifiers{};
 		std::uint32_t button{};

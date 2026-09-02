@@ -175,7 +175,8 @@ namespace WebFrontend
 									 ((event->state & GDK_META_MASK) ? 8U : 0U));
 								 const bool repeat =
 									 !binding->pressedKeys.insert(event->hardware_keycode).second;
-								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usage = GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = true, .repeat = repeat});
+								 const auto consumerUsage = XkbConsumerUsbHidUsage(event->keyval);
+								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usagePage = consumerUsage ? ConsumerUsagePage : KeyboardUsagePage, .usage = consumerUsage ? consumerUsage : GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = true, .repeat = repeat});
 								 if (event->string && event->length > 0)
 									 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Character, .repeat = repeat, .text = std::string(event->string, event->length)});
 								 return TRUE;
@@ -202,7 +203,8 @@ namespace WebFrontend
 									 ((event->state & GDK_SHIFT_MASK) ? 2U : 0U) |
 									 ((event->state & GDK_MOD1_MASK) ? 4U : 0U) |
 									 ((event->state & GDK_META_MASK) ? 8U : 0U));
-								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usage = GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = false});
+								 const auto consumerUsage = XkbConsumerUsbHidUsage(event->keyval);
+								 DispatchGtkInput(source, binding, {.kind = NativeInputKind::Key, .key = event->keyval, .usagePage = consumerUsage ? ConsumerUsagePage : KeyboardUsagePage, .usage = consumerUsage ? consumerUsage : GtkUsbHidUsage(source, *event), .modifiers = modifiers, .pressed = false});
 								 return TRUE;
 							 })),
 							 binding);
