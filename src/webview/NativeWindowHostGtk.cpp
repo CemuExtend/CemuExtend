@@ -5,9 +5,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -15,6 +18,7 @@
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
 #include <X11/XKBlib.h>
+#include <X11/extensions/XInput2.h>
 #ifdef HAS_WAYLAND
 #include <gdk/gdkwayland.h>
 #endif
@@ -23,6 +27,45 @@ namespace WebFrontend
 {
 	namespace
 	{
+		struct GtkInputBinding;
+
+		class XInput2RawMouse
+		{
+		  public:
+			bool Activate(GtkInputBinding* binding, GdkDisplay* display);
+			void Deactivate(GtkInputBinding* binding);
+			[[nodiscard]] bool IsActive(const GtkInputBinding* binding) const
+			{
+				return m_active == binding;
+			}
+
+		  private:
+			struct FractionalMotion
+			{
+				double x{};
+				double y{};
+			};
+
+			static GdkFilterReturn Filter(GdkXEvent* event, GdkEvent*, gpointer data);
+			GdkFilterReturn Handle(XEvent* event);
+			bool Initialize(GdkDisplay* display);
+
+			GdkDisplay* m_gdkDisplay{};
+			Display* m_xDisplay{};
+			GtkInputBinding* m_active{};
+			std::unordered_map<int, FractionalMotion> m_fractionalMotion;
+			int m_opcode{};
+			bool m_initialized{};
+		};
+
+		XInput2RawMouse& RawMouse()
+		{
+			// GDK owns the display for the process lifetime. Keeping the filter alive
+			// avoids removing it after GDK has already begun tearing the display down.
+			static auto* rawMouse = new XInput2RawMouse;
+			return *rawMouse;
+		}
+
 		std::uint16_t GtkUsbHidUsage(GtkWidget* source, const GdkEventKey& event)
 		{
 			guint baseKeyval{};
@@ -40,6 +83,11 @@ namespace WebFrontend
 
 		struct GtkInputBinding
 		{
+			~GtkInputBinding()
+			{
+				RawMouse().Deactivate(this);
+			}
+
 			Host::PointerSurface surface{Host::PointerSurface::Main};
 			INativeWindowHost::InputHandler* handler{};
 			GtkWidget* contentWidget{};
@@ -72,6 +120,127 @@ namespace WebFrontend
 			(*binding->handler)(event);
 		}
 
+		bool XInput2RawMouse::Initialize(GdkDisplay* display)
+		{
+			if (m_initialized)
+				return display == m_gdkDisplay && m_xDisplay;
+			m_initialized = true;
+			if (!display || !GDK_IS_X11_DISPLAY(display))
+				return false;
+
+			m_gdkDisplay = display;
+			m_xDisplay = gdk_x11_display_get_xdisplay(display);
+			int eventBase{};
+			int errorBase{};
+			if (!m_xDisplay ||
+				!XQueryExtension(m_xDisplay, "XInputExtension", &m_opcode,
+							 &eventBase, &errorBase))
+			{
+				m_xDisplay = nullptr;
+				return false;
+			}
+
+			int major = 2;
+			int minor = 0;
+			if (XIQueryVersion(m_xDisplay, &major, &minor) != Success)
+			{
+				m_xDisplay = nullptr;
+				return false;
+			}
+
+			unsigned char bits[XIMaskLen(XI_RawMotion)]{};
+			XIEventMask mask{XIAllMasterDevices, static_cast<int>(sizeof(bits)), bits};
+			XISetMask(bits, XI_RawMotion);
+			if (XISelectEvents(m_xDisplay, DefaultRootWindow(m_xDisplay), &mask, 1) != Success)
+			{
+				m_xDisplay = nullptr;
+				return false;
+			}
+			XFlush(m_xDisplay);
+			gdk_window_add_filter(nullptr, &XInput2RawMouse::Filter, this);
+			return true;
+		}
+
+		bool XInput2RawMouse::Activate(GtkInputBinding* binding, GdkDisplay* display)
+		{
+			if (!binding || !Initialize(display))
+				return false;
+			if (m_active != binding)
+				m_fractionalMotion.clear();
+			m_active = binding;
+			return true;
+		}
+
+		void XInput2RawMouse::Deactivate(GtkInputBinding* binding)
+		{
+			if (m_active != binding)
+				return;
+			m_active = nullptr;
+			m_fractionalMotion.clear();
+		}
+
+		GdkFilterReturn XInput2RawMouse::Filter(GdkXEvent* event, GdkEvent*, gpointer data)
+		{
+			return static_cast<XInput2RawMouse*>(data)->Handle(
+				static_cast<XEvent*>(event));
+		}
+
+		GdkFilterReturn XInput2RawMouse::Handle(XEvent* event)
+		{
+			if (!m_active || !event || event->type != GenericEvent ||
+				event->xcookie.extension != m_opcode ||
+				event->xcookie.evtype != XI_RawMotion ||
+				!XGetEventData(m_xDisplay, &event->xcookie))
+				return GDK_FILTER_CONTINUE;
+
+			auto* raw = static_cast<XIRawEvent*>(event->xcookie.data);
+			double deltaX{};
+			double deltaY{};
+			if (raw && raw->raw_values)
+			{
+				int valueIndex{};
+				for (int axis = 0; axis < raw->valuators.mask_len * 8; ++axis)
+				{
+					if (!XIMaskIsSet(raw->valuators.mask, axis))
+						continue;
+					const auto value = raw->raw_values[valueIndex++];
+					if (axis == 0)
+						deltaX = value;
+					else if (axis == 1)
+						deltaY = value;
+				}
+			}
+
+			const auto sourceId = raw ? raw->sourceid : 0;
+			auto& fractional = m_fractionalMotion[sourceId];
+			double integralX{};
+			double integralY{};
+			fractional.x = std::modf(fractional.x + deltaX, &integralX);
+			fractional.y = std::modf(fractional.y + deltaY, &integralY);
+			const auto clampDelta = [](double value) {
+				return static_cast<std::int32_t>(std::clamp(
+					value,
+					static_cast<double>(std::numeric_limits<std::int32_t>::min()),
+					static_cast<double>(std::numeric_limits<std::int32_t>::max())));
+			};
+			const auto x = clampDelta(integralX);
+			const auto y = clampDelta(integralY);
+			if (x || y)
+			{
+				const auto deviceId = sourceId > 0 &&
+									 sourceId <= std::numeric_limits<std::uint16_t>::max()
+					? static_cast<std::uint16_t>(sourceId)
+					: std::uint16_t{};
+				DispatchGtkInput(m_active->contentWidget, m_active,
+					{.kind = NativeInputKind::RawMouse,
+					 .deltaX = x,
+					 .deltaY = y,
+					 .deviceId = deviceId});
+			}
+			XFreeEventData(m_xDisplay, &event->xcookie);
+			return GDK_FILTER_CONTINUE;
+		}
+
 		void ConnectInput(GtkWidget* widget, Host::PointerSurface surface,
 						  INativeWindowHost::InputHandler* handler,
 						  GtkWidget* keySource = nullptr)
@@ -95,9 +264,11 @@ namespace WebFrontend
 			g_signal_connect(widget, "motion-notify-event", G_CALLBACK((+[](GtkWidget* source, GdkEventMotion* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 const auto scale = gtk_widget_get_scale_factor(source);
-								 if (binding->captured)
-								 {
-									 if (binding->warpCapture)
+									 if (binding->captured)
+									 {
+										 if (RawMouse().IsActive(binding))
+											 return TRUE;
+										 if (binding->warpCapture)
 									 {
 										 GtkAllocation allocation{};
 										 gtk_widget_get_allocation(source, &allocation);
@@ -1026,7 +1197,12 @@ namespace WebFrontend
 				{
 					binding->captured = wantsCapture && grabbed;
 					binding->rawMouseEnabled = presentation.rawMouseEnabled;
-					binding->warpCapture = binding->captured && GDK_IS_X11_DISPLAY(display);
+					const bool usesRawMouse = binding->captured &&
+						binding->rawMouseEnabled && RawMouse().Activate(binding, display);
+					if (!usesRawMouse)
+						RawMouse().Deactivate(binding);
+					binding->warpCapture = binding->captured &&
+						GDK_IS_X11_DISPLAY(display) && !usesRawMouse;
 					if (binding->warpCapture && presentation.enteringCapture)
 					{
 						GtkAllocation allocation{};

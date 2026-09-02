@@ -20,6 +20,15 @@ int main()
 	assert(source.find("focusGeneration") != std::string::npos);
 	assert(source.find("gtk_widget_in_destruction") != std::string::npos);
 
+	// Captured gameplay uses unaccelerated XInput2 device counts. GDK motion and
+	// cursor warping remain a fallback only, otherwise an 8 kHz mouse is
+	// accelerated, coalesced, and periodically produces a large center delta.
+	assert(source.find("XI_RawMotion") != std::string::npos);
+	assert(source.find("XISelectEvents") != std::string::npos);
+	assert(source.find("raw->raw_values") != std::string::npos);
+	assert(source.find("RawMouse().IsActive(binding)") != std::string::npos);
+	assert(source.find("&& !usesRawMouse") != std::string::npos);
+
 	// Losing application focus must publish metrics and release held inputs.
 	// Reclaiming X focus from the focus-out callback creates a focus tug-of-war
 	// whose transient FocusLost events repeatedly interrupt held gameplay keys.
