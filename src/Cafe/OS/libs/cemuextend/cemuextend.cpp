@@ -82,6 +82,9 @@ namespace cemuextend_hle
 			case transport::Query::MemoryLayout:
 				outputSize = sizeof(transport::MemoryLayout);
 				break;
+			case transport::Query::InfoV3:
+				outputSize = sizeof(transport::InfoV3);
+				break;
 			default:
 				return Return(hCPU, wire::Error::NotSupported);
 			}
@@ -91,7 +94,7 @@ namespace cemuextend_hle
 				hCPU, hCPU->gpr[4], outputSize);
 			if (!output)
 				return Return(hCPU, wire::Error::InvalidArgument);
-			std::array<std::byte, sizeof(transport::Info)> hostOutput{};
+			std::array<std::byte, sizeof(transport::InfoV3)> hostOutput{};
 			const auto result = static_cast<wire::Error>(Cex2Host::Instance().Query(
 				*owner, hCPU->gpr[3], {hostOutput.data(), outputSize}));
 			if (result == wire::Error::Ok)
@@ -105,18 +108,21 @@ namespace cemuextend_hle
 			auto* owner = CurrentOwner(hCPU);
 			if (!owner)
 				return Return(hCPU, wire::Error::PermissionDenied);
-			if (hCPU->gpr[4] != sizeof(transport::OpenOptions))
+			const auto optionsSize = hCPU->gpr[4];
+			if (optionsSize != sizeof(transport::OpenOptions) &&
+				optionsSize != sizeof(transport::OpenOptionsV3))
 				return Return(hCPU, wire::Error::InvalidArgument);
-			auto* options = ResolveGuest<ModMemoryPermission::Read>(hCPU, hCPU->gpr[3], hCPU->gpr[4]);
+			auto* options =
+				ResolveGuest<ModMemoryPermission::Read>(hCPU, hCPU->gpr[3], optionsSize);
 			auto* output = ResolveGuest<ModMemoryPermission::Write>(hCPU, hCPU->gpr[5], sizeof(wire::Be32));
 			if (!options || !output)
 				return Return(hCPU, wire::Error::InvalidArgument);
-			transport::OpenOptions hostOptions{};
-			std::memcpy(&hostOptions, options, sizeof(hostOptions));
+			std::array<std::byte, sizeof(transport::OpenOptionsV3)> hostOptions{};
+			std::memcpy(hostOptions.data(), options, optionsSize);
 			uint32 session{};
 			const auto result = static_cast<wire::Error>(Cex2Host::Instance().Open(
 				*owner,
-				{reinterpret_cast<const std::byte*>(&hostOptions), sizeof(hostOptions)}, session));
+				{hostOptions.data(), optionsSize}, session));
 			if (result == wire::Error::Ok)
 			{
 				const wire::Be32 encodedSession{session};
