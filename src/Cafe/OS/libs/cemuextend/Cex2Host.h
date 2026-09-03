@@ -66,7 +66,7 @@ namespace cemuextend_hle
 		void KeyboardEvent(std::uint16_t usagePage, std::uint16_t usage,
 						   bool pressed, std::uint8_t modifiers, std::uint16_t deviceId = 0);
 		void InputOwnershipChanged(cemuextend::wire::PointerSurface surface,
-							   cemuextend::wire::InputOwnershipV3 ownership);
+								   cemuextend::wire::InputOwnershipV3 ownership);
 		void TextEvent(std::uint32_t codepoint, bool repeat);
 		[[nodiscard]] Cex2HostTextInputState EffectiveTextInput();
 		void TextCompositionEvent(std::string_view text,

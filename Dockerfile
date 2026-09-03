@@ -127,6 +127,8 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
             -DCEMU_FRONTEND=${CEMU_FRONTEND} \
             ${cef_root_arg} \
             ${CEMU_OVERLAY_BACKEND:+-DCEMU_OVERLAY_BACKEND=${CEMU_OVERLAY_BACKEND}} \
+			-DCEMU_RUNTIME_OUTPUT_DIRECTORY=/workspace/CemuExtend/build/docker/bin \
+			-DCEMU_STAGE_CEF_RUNTIME=OFF \
             -DALLOW_PORTABLE=OFF \
             -DVCPKG_INSTALL_OPTIONS=--clean-after-build \
         && break; \
@@ -139,39 +141,82 @@ RUN --mount=type=bind,source=.,target=/workspace/CemuExtend,rw \
     else \
         cmake --build build/docker --parallel; \
     fi \
-    && ctest --test-dir build/docker --output-on-failure \
+    && ctest --test-dir build/docker --output-on-failure --label-exclude cef-runtime \
 	&& build_type_lower="$(printf '%s' "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')" \
-	&& cp "bin/Cemu_${build_type_lower}" "/Cemu_${build_type_lower}" \
-	&& mkdir -p /cemu-bin \
-	&& cp -r bin/. /cemu-bin/ \
-	&& if [ "${CEMU_FRONTEND}" = "headless" ]; then \
-		mkdir -p /Cemu_release.bundle \
-		&& cp bin/Cemu_release /Cemu_release.bundle/Cemu_release; \
-	else \
-		tools/bundle-linux-runtime.sh bin/Cemu_release /Cemu_release.bundle; \
-	fi
+	&& cp "build/docker/bin/Cemu_${build_type_lower}" "/Cemu_${build_type_lower}"
 
 CMD ["bash"]
+
+# The normal developer build exports only the executable. The persistent
+# runtime already installed in result/bin is reused by docker-build.sh.
+FROM scratch AS build-linux-binary-artifact
+
+COPY --from=build /Cemu_release /Cemu_release
+
+# Runtime packaging is intentionally separate from compilation so ordinary
+# source edits never copy and export the multi-gigabyte CEF distribution.
+FROM build AS build-linux-bundle
+
+ARG CEMU_FRONTEND=cef
+
+WORKDIR /workspace/CemuExtend
+
+COPY cmake/CefVersion.cmake ./cmake/CefVersion.cmake
+COPY scripts/fetch-cef.sh ./scripts/fetch-cef.sh
+COPY tools/Cemu-runtime-launcher.sh ./tools/Cemu-runtime-launcher.sh
+COPY tools/bundle-linux-runtime.sh ./tools/bundle-linux-runtime.sh
+
+RUN --mount=type=cache,id=cemu-extend-cef,target=/root/.cache/cemu-cef,sharing=locked \
+	--mount=type=cache,id=cemu-extend-cmake,target=/workspace/CemuExtend/build/docker,sharing=locked \
+	if [ "${CEMU_FRONTEND}" = "headless" ]; then \
+		mkdir -p /Cemu_release.bundle \
+		&& cp /Cemu_release /Cemu_release.bundle/Cemu_release; \
+	else \
+		mkdir -p /cemu-bundle-input \
+		&& cp /Cemu_release /cemu-bundle-input/Cemu_release \
+		&& if [ "${CEMU_FRONTEND}" = "cef" ] || [ "${CEMU_FRONTEND}" = "webview" ]; then \
+			CEMU_CEF_DOWNLOAD_DIR=/root/.cache/cemu-cef/downloads \
+				CEF_ROOT=/root/.cache/cemu-cef/sdk \
+				bash ./scripts/fetch-cef.sh \
+			&& cp -a /root/.cache/cemu-cef/sdk/Release/. /cemu-bundle-input/ \
+			&& cp -a /root/.cache/cemu-cef/sdk/Resources/. /cemu-bundle-input/ \
+			&& mkdir -p /cemu-bundle-input/cef-swiftshader \
+			&& mv /cemu-bundle-input/libvulkan.so.1 \
+				/cemu-bundle-input/cef-swiftshader/libvulkan.so.1 \
+			&& cp /root/.cache/cemu-cef/sdk/LICENSE.txt /cemu-bundle-input/CEF-LICENSE.txt \
+			&& if [ -f /root/.cache/cemu-cef/sdk/README.txt ]; then \
+				cp /root/.cache/cemu-cef/sdk/README.txt /cemu-bundle-input/CEF-README.txt; \
+			fi \
+			&& cp build/docker/src/webview/cef_overlay_osr_smoke_tests \
+				/cemu-bundle-input/cef_overlay_osr_smoke_tests \
+			&& CEMU_CEF_NO_SANDBOX=1 CEMU_CEF_OSR_SMOKE=1 \
+				xvfb-run -a -s "-screen 0 1280x720x24" \
+				/cemu-bundle-input/cef_overlay_osr_smoke_tests \
+			&& rm /cemu-bundle-input/cef_overlay_osr_smoke_tests; \
+		fi \
+		&& tools/bundle-linux-runtime.sh \
+			/cemu-bundle-input/Cemu_release /Cemu_release.bundle; \
+	fi
 
 # Export the Linux bundle without loading the multi-gigabyte build image into
 # Docker's image store. docker-build.sh uses the local exporter for this stage.
 FROM scratch AS build-linux-artifact
 
-COPY --from=build /Cemu_release.bundle /Cemu_release.bundle
+COPY --from=build-linux-bundle /Cemu_release.bundle /Cemu_release.bundle
 
-# AppImage packaging. Reuses the compiled tree from the build stage (copied to
-# /cemu-bin above, outside the bind mount, so it survives into this stage) and
-# runs it through dist/linux/appimage.sh, which downloads linuxdeploy/mkappimage
-# and produces a self-contained .AppImage. Requires network access at build
-# time (docker build --network=default, which is the default).
-FROM build AS appimage
+# AppImage packaging reuses the explicitly requested full runtime stage.
+FROM build-linux-bundle AS appimage
 
 ARG CEMU_APPIMAGE_ARCH=X64
 
 WORKDIR /workspace/CemuExtend
 
 COPY dist/linux ./dist/linux
-RUN mkdir -p bin && cp -r /cemu-bin/. bin/
+RUN mkdir -p bin \
+	&& cp -a /Cemu_release.bundle/. bin/ \
+	&& rm -f bin/Cemu_release \
+	&& mv bin/.Cemu_release.bin bin/Cemu_release \
+	&& rm -rf bin/.cemu-runtime
 
 RUN bash dist/linux/appimage.sh "${CEMU_APPIMAGE_ARCH}"
 
@@ -282,7 +327,7 @@ FROM cemu-extend-base AS runtime
 
 ARG CEMU_FRONTEND=cef
 
-COPY --from=build /Cemu_release.bundle /opt/cemu
+COPY --from=build-linux-bundle /Cemu_release.bundle /opt/cemu
 COPY bin/resources /opt/cemu/resources
 COPY bin/gameProfiles /opt/cemu/gameProfiles
 COPY dist/network_services.xml /opt/cemu/network_services.xml

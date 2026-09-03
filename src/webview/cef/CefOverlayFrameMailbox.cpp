@@ -108,8 +108,6 @@ namespace WebFrontend::CefOverlay
 				state.forceFullDamage = true;
 				++state.resizeGeneration;
 			}
-			else if (!state.view.unique())
-				state.view = std::make_shared<std::vector<std::uint8_t>>(*state.view);
 			std::vector<Host::OverlayDirtyRect> valid;
 			if (dirtyRects.empty() || resized)
 				valid.push_back({0, 0, width, height});
@@ -120,9 +118,12 @@ namespace WebFrontend::CefOverlay
 			if (valid.empty())
 				return false;
 			// Drop an unconsumed snapshot only after the incoming paint was
-			// validated. If the renderer is currently reading this buffer,
-			// copy-on-write preserves its immutable view.
+			// validated. The mailbox's own latest snapshot must not force a full
+			// buffer clone for every CEF paint; only a snapshot already acquired by
+			// the renderer needs copy-on-write protection.
 			state.latest.reset();
+			if (!resized && !state.view.unique())
+				state.view = std::make_shared<std::vector<std::uint8_t>>(*state.view);
 			CopyDirty(*state.view, width, height, static_cast<const std::uint8_t*>(pixels), width,
 					  sourceStride, valid);
 			for (const auto& rect : valid)

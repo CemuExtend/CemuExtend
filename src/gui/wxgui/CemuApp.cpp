@@ -762,34 +762,54 @@ static uint16 CemuExtendConsumerUsbHidUsage(const wxKeyEvent& event)
 #if BOOST_OS_WINDOWS
 	switch (rawKey)
 	{
-	case 0xad: return 0x00e2;
-	case 0xae: return 0x00ea;
-	case 0xaf: return 0x00e9;
-	case 0xb0: return 0x00b5;
-	case 0xb1: return 0x00b6;
-	case 0xb2: return 0x00b7;
-	case 0xb3: return 0x00cd;
-	default: return 0;
+	case 0xad:
+		return 0x00e2;
+	case 0xae:
+		return 0x00ea;
+	case 0xaf:
+		return 0x00e9;
+	case 0xb0:
+		return 0x00b5;
+	case 0xb1:
+		return 0x00b6;
+	case 0xb2:
+		return 0x00b7;
+	case 0xb3:
+		return 0x00cd;
+	default:
+		return 0;
 	}
 #elif BOOST_OS_LINUX || BOOST_OS_BSD
 	switch (rawKey)
 	{
-	case 0x1008ff11: return 0x00ea;
-	case 0x1008ff12: return 0x00e2;
-	case 0x1008ff13: return 0x00e9;
-	case 0x1008ff14: return 0x00cd;
-	case 0x1008ff15: return 0x00b7;
-	case 0x1008ff16: return 0x00b6;
-	case 0x1008ff17: return 0x00b5;
-	default: return 0;
+	case 0x1008ff11:
+		return 0x00ea;
+	case 0x1008ff12:
+		return 0x00e2;
+	case 0x1008ff13:
+		return 0x00e9;
+	case 0x1008ff14:
+		return 0x00cd;
+	case 0x1008ff15:
+		return 0x00b7;
+	case 0x1008ff16:
+		return 0x00b6;
+	case 0x1008ff17:
+		return 0x00b5;
+	default:
+		return 0;
 	}
 #elif BOOST_OS_MACOS
 	switch (rawKey)
 	{
-	case 0x48: return 0x00e9;
-	case 0x49: return 0x00ea;
-	case 0x4a: return 0x00e2;
-	default: return 0;
+	case 0x48:
+		return 0x00e9;
+	case 0x49:
+		return 0x00ea;
+	case 0x4a:
+		return 0x00e2;
+	default:
+		return 0;
 	}
 #else
 	(void)rawKey;
@@ -839,7 +859,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 			m_emulationController.SubmitKeyboard(
 				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
 				usage, true,
-											 CemuExtendKeyModifiers(key_event));
+				CemuExtendKeyModifiers(key_event));
 	}
 	else if (event.GetEventType() == wxEVT_KEY_UP)
 	{
@@ -855,7 +875,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 			m_emulationController.SubmitKeyboard(
 				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
 				usage, false,
-											 CemuExtendKeyModifiers(key_event));
+				CemuExtendKeyModifiers(key_event));
 	}
 	else if (event.GetEventType() == wxEVT_CHAR)
 	{

@@ -8,7 +8,7 @@ int main()
 	std::ifstream input(std::string(CEMU_SOURCE_DIR) +
 						"/src/webview/NativeWindowHostGtk.cpp");
 	const std::string source{std::istreambuf_iterator<char>{input},
-						 std::istreambuf_iterator<char>{}};
+							 std::istreambuf_iterator<char>{}};
 	assert(!source.empty());
 
 	// X11 detectable repeat suppresses the synthetic release half of an
@@ -39,11 +39,10 @@ int main()
 	assert(focusOutEnd != std::string::npos);
 	assert(source.substr(focusOut, focusOutEnd - focusOut)
 			   .find("ClaimInputFocus") == std::string::npos);
-
 	std::ifstream frontendInput(std::string(CEMU_SOURCE_DIR) +
 								"/src/webview/WebFrontend.cpp");
 	const std::string frontend{std::istreambuf_iterator<char>{frontendInput},
-						   std::istreambuf_iterator<char>{}};
+							   std::istreambuf_iterator<char>{}};
 	const auto metricsHandler = frontend.find(
 		"void HandleMetrics(Host::WindowMetricsSnapshot metrics)");
 	assert(metricsHandler != std::string::npos);
@@ -51,6 +50,18 @@ int main()
 	const auto metricsUpdate = frontend.find("m_hostState->UpdateMetrics(metrics)", metricsHandler);
 	assert(effectiveFocus != std::string::npos && metricsUpdate != std::string::npos);
 	assert(effectiveFocus < metricsUpdate);
+	const auto launcherFocus = frontend.find("const bool launcherFocused", metricsHandler);
+	const auto launcherFocusCall = frontend.find(
+		"SetWindowFocus(0, launcherFocused);", launcherFocus);
+	assert(launcherFocus != std::string::npos && launcherFocusCall != std::string::npos);
+	assert(frontend.substr(launcherFocus, launcherFocusCall - launcherFocus)
+			   .find("MainWindowContentMode::Library") != std::string::npos);
+	const auto suspendOnMetrics = frontend.find(
+		"SetInputSuspended(Host::PointerSurface::Main", metricsHandler);
+	assert(suspendOnMetrics != std::string::npos);
+	const auto releaseWithoutIntent = frontend.find(
+		"ReleaseNativeInput(false, false);", suspendOnMetrics);
+	assert(releaseWithoutIntent != std::string::npos);
 	const auto focusGain = frontend.find("void ConfirmNativeKeyboardFocus()", metricsHandler);
 	const auto focusLoss = frontend.find("void ConfirmNativeFocusLoss()", metricsHandler);
 	assert(focusGain != std::string::npos && focusLoss != std::string::npos);
@@ -62,4 +73,12 @@ int main()
 			   .find("SetWindowFocus") == std::string::npos);
 	const auto keyUsesGain = frontend.find("ConfirmNativeKeyboardFocus();", gainPointer);
 	assert(keyUsesGain != std::string::npos);
+	const auto ownershipCallback = frontend.find("m_webUiPointerOwnership[");
+	const auto pointerRefresh = frontend.find(
+		"Frontend::CemuExtendPointerDecision RefreshPointerPolicy", ownershipCallback);
+	assert(ownershipCallback != std::string::npos && pointerRefresh != std::string::npos);
+	assert(frontend.substr(pointerRefresh, 2048)
+			   .find("if (m_webUiPointerOwnership[index])") != std::string::npos);
+	assert(frontend.substr(pointerRefresh, 2048)
+			   .find(".showCursor = true") != std::string::npos);
 }

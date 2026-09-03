@@ -219,7 +219,11 @@ named `build-windows`, and the development stage remains `dev`.
 The default image downloads and verifies the pinned CEF SDK into a persistent
 BuildKit cache, then performs an incremental CEF Release build. Its persistent
 CMake/Ninja cache means regenerating `src/webview/generated/WebAssets.h` only
-recompiles the affected frontend target and relinks Cemu. Use
+recompiles the affected frontend target and relinks Cemu. The first Linux build
+creates the relocatable runtime under `result/bin`; subsequent builds export
+and atomically replace only the Cemu executable. The runtime is rebuilt
+automatically when its CEF, vcpkg, CMake, frontend, or packaging inputs change.
+Set `CEMU_REBUNDLE=1 ./docker-build.sh` to force that rebuild explicitly. Use
 `CEMU_CLEAN_BUILD=1 ./docker-build.sh` only when a dependency, toolchain, or
 configuration change requires `--clean-first`. Use `--build-arg
 CEMU_FRONTEND=wx` or `--build-arg CEMU_FRONTEND=headless` to select another

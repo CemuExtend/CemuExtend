@@ -214,9 +214,9 @@ namespace cemuextend_hle
 
 	// PermissionBit() is not constexpr, so mirror its shift here.
 	static_assert((1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceRead)) ==
-					  kCemodServiceReadApproval &&
-				  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceCapture)) ==
-					  kCemodServiceCaptureApproval,
+						  kCemodServiceReadApproval &&
+					  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceCapture)) ==
+						  kCemodServiceCaptureApproval,
 				  "CemodPermission::Service* must match the kCemodService*Approval bits");
 
 	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,

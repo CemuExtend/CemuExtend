@@ -178,8 +178,7 @@ namespace WebFrontend
 				emit({.kind = NativeInputKind::Key,
 					  .key = static_cast<std::uint32_t>(wparam),
 					  .usagePage = consumerUsage ? ConsumerUsagePage : KeyboardUsagePage,
-					  .usage = consumerUsage ? consumerUsage : WindowsModifierUsbHidUsage(
-						  static_cast<std::uint32_t>(wparam), scanCode, extended),
+					  .usage = consumerUsage ? consumerUsage : WindowsModifierUsbHidUsage(static_cast<std::uint32_t>(wparam), scanCode, extended),
 					  .modifiers = KeyModifiers(),
 					  .pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN,
 					  .repeat = (lparam & (1LL << 30)) != 0});

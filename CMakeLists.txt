@@ -77,7 +77,6 @@ if (NOT GIT_HASH)
 			OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
 endif()
-add_definitions(-DEMULATOR_HASH=${GIT_HASH})
 
 set(CEMU_EXTEND_COMMIT_HASH "" CACHE STRING "Full Git revision used in the build")
 if (NOT CEMU_EXTEND_COMMIT_HASH)
@@ -91,7 +90,6 @@ endif()
 if (NOT CEMU_EXTEND_COMMIT_HASH)
 	set(CEMU_EXTEND_COMMIT_HASH ${GIT_HASH})
 endif()
-add_compile_definitions(CEMU_EXTEND_COMMIT_HASH="${CEMU_EXTEND_COMMIT_HASH}")
 
 if (ENABLE_VCPKG)
 	# check if vcpkg is shallow and unshallow it if necessary
@@ -142,6 +140,12 @@ project(Cemu VERSION 2.0.0)
 if(CEMU_OVERLAY_ENABLED AND CEMU_OVERLAY_BACKEND STREQUAL "cef")
 	include("${CMAKE_CURRENT_LIST_DIR}/cmake/CefOverlay.cmake")
 endif()
+
+# Keep revision-only definitions out of third-party targets such as CEF's
+# libcef_dll_wrapper. They change after every commit and would otherwise
+# invalidate objects which cannot use Cemu's build identity.
+add_definitions(-DEMULATOR_HASH=${GIT_HASH})
+add_compile_definitions(CEMU_EXTEND_COMMIT_HASH="${CEMU_EXTEND_COMMIT_HASH}")
 
 include(CTest)
 

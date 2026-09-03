@@ -140,7 +140,10 @@ if(BUILD_TESTING)
 		add_executable(cef_overlay_osr_smoke_tests cef/tests/CefOverlayOsrSmokeTests.cpp)
 		target_include_directories(cef_overlay_osr_smoke_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 		target_link_libraries(cef_overlay_osr_smoke_tests PRIVATE CemuWebFrontend)
-		cemu_stage_cef_runtime(cef_overlay_osr_smoke_tests)
+		cemu_configure_cef_runtime_target(cef_overlay_osr_smoke_tests)
+		if(CEMU_STAGE_CEF_RUNTIME)
+			cemu_stage_cef_runtime(cef_overlay_osr_smoke_tests)
+		endif()
 		find_program(XVFB_RUN_EXECUTABLE xvfb-run)
 		if(XVFB_RUN_EXECUTABLE)
 			add_test(NAME cef_overlay_osr_smoke_tests COMMAND
@@ -151,6 +154,7 @@ if(BUILD_TESTING)
 		endif()
 		set_tests_properties(cef_overlay_osr_smoke_tests PROPERTIES
 			ENVIRONMENT "CEMU_CEF_NO_SANDBOX=1;CEMU_CEF_OSR_SMOKE=1"
+			LABELS "cef-runtime"
 			TIMEOUT 30)
 
 		add_executable(cemod_network_policy_tests

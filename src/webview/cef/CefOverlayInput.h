@@ -108,11 +108,11 @@ namespace WebFrontend::CefOverlay
 		NativeInputKind kind, bool overlayCapturesInput)
 	{
 		const bool publishGuest = kind == NativeInputKind::Key ||
-			kind == NativeInputKind::PointerMove ||
-			kind == NativeInputKind::PointerButton ||
-			kind == NativeInputKind::PointerWheel ||
-			kind == NativeInputKind::RawMouse ||
-			kind == NativeInputKind::FocusLost;
+								  kind == NativeInputKind::PointerMove ||
+								  kind == NativeInputKind::PointerButton ||
+								  kind == NativeInputKind::PointerWheel ||
+								  kind == NativeInputKind::RawMouse ||
+								  kind == NativeInputKind::FocusLost;
 		return {
 			.publishGuestPhysicalInput = publishGuest,
 			.sendOverlayInput = overlayCapturesInput,

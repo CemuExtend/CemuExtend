@@ -82,8 +82,8 @@ namespace Frontend
 		for (const auto& [id, buttons] : m_deviceButtons)
 			m_mouseButtons |= buttons;
 		const auto deviceChanged = transition == CemuExtendMouseTransition::Aggregate
-			? (previousButtons ^ m_mouseButtons) & changedMask
-			: (previousDeviceButtons ^ deviceButtons) & changedMask;
+									   ? (previousButtons ^ m_mouseButtons) & changedMask
+									   : (previousDeviceButtons ^ deviceButtons) & changedMask;
 		return {m_mouseButtons, deviceChanged, deviceButtons};
 	}
 

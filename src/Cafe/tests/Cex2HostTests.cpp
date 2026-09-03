@@ -199,7 +199,7 @@ namespace
 		CHECK(info.abiMinor.get() == 3);
 		CHECK(info.maximumMessageSize.get() == 64U * 1024U);
 		CHECK((info.features.get() & static_cast<std::uint64_t>(
-									 cemuextend::transport::Feature::MemoryLayoutQuery)) != 0);
+										 cemuextend::transport::Feature::MemoryLayoutQuery)) != 0);
 		std::array<std::byte, sizeof(cemuextend::transport::InfoV3)> infoV3Bytes{};
 		CHECK(host.Query(first,
 						 static_cast<std::uint32_t>(cemuextend::transport::Query::InfoV3),
@@ -930,14 +930,14 @@ namespace
 		context.SetGrantedPermissions(1);
 		const auto session = OpenV3(host, context);
 		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
-			0x04, true, 0);
+						   0x04, true, 0);
 		host.KeyboardEvent(static_cast<std::uint16_t>(InputUsagePage::Keyboard),
-			0x04, false, 0);
+						   0x04, false, 0);
 
 		InputReadRequestV3 read{};
 		read.maximumBytes = 65520;
 		auto request = Request(1, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+							   {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		auto response = PollUntil(host, context, session);
 		CHECK(reinterpret_cast<const ResponseHeader*>(response.data())->status.get() ==
@@ -961,7 +961,7 @@ namespace
 		read.generation = baseline->generation.get();
 		read.acknowledgedSequence = baseline->nextSequence.get();
 		request = Request(2, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+						  {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		const auto* snapshot = reinterpret_cast<const InputSnapshotV3Header*>(
@@ -970,8 +970,8 @@ namespace
 		CHECK(snapshot->surfaces[0].motionY.get() == -8000);
 		CHECK(snapshot->recordCount.get() == 127);
 		const auto records = response.data() + sizeof(ResponseHeader) +
-			sizeof(InputSnapshotV3Header) +
-			snapshot->pressedControlCount.get() * sizeof(InputControlV3);
+							 sizeof(InputSnapshotV3Header) +
+							 snapshot->pressedControlCount.get() * sizeof(InputControlV3);
 		std::size_t offset{};
 		std::int64_t totalX{};
 		std::int64_t totalY{};
@@ -1006,11 +1006,11 @@ namespace
 		// Once a motion sequence has been delivered it must never be mutated by a
 		// later coalesce; otherwise acknowledging the old sequence drops new motion.
 		host.MouseEvent(PointerSurface::Tv, 8009, 8009, 9, -9, 0, 0, 0, 0,
-			1280, 720, true, true,
-			static_cast<std::uint8_t>(MouseEventFlag::RawRelative), 77);
+						1280, 720, true, true,
+						static_cast<std::uint8_t>(MouseEventFlag::RawRelative), 77);
 		read.acknowledgedSequence = snapshot->nextSequence.get();
 		request = Request(3, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+						  {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		const auto* postDelivery = reinterpret_cast<const InputSnapshotV3Header*>(
@@ -1019,7 +1019,7 @@ namespace
 		const auto* postDeliveryRecord = reinterpret_cast<const InputRecordV3*>(
 			response.data() + sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header));
 		CHECK(postDeliveryRecord->type ==
-			static_cast<std::uint8_t>(InputRecordType::PointerMotion));
+			  static_cast<std::uint8_t>(InputRecordType::PointerMotion));
 		const auto* postDeliveryMotion = reinterpret_cast<const InputPointerMotionV3*>(
 			reinterpret_cast<const std::byte*>(postDeliveryRecord) + sizeof(InputRecordV3));
 		CHECK(postDeliveryMotion->deltaX.get() == 9 && postDeliveryMotion->deltaY.get() == -9);
@@ -1029,7 +1029,7 @@ namespace
 		textInput.maximumLength = 1'000'000;
 		textInput.flags = static_cast<std::uint8_t>(TextInputFlag::Active);
 		request = Request(4, static_cast<std::uint16_t>(InputOperation::SetTextInputV3),
-			{reinterpret_cast<const std::byte*>(&textInput), sizeof(textInput)}, ServiceId::Input);
+						  {reinterpret_cast<const std::byte*>(&textInput), sizeof(textInput)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		CHECK(reinterpret_cast<const ResponseHeader*>(response.data())->status.get() ==
@@ -1037,7 +1037,7 @@ namespace
 
 		const std::string largePreedit(70'000, 'x');
 		host.TextCompositionEvent({}, largePreedit, 0,
-			static_cast<std::uint32_t>(largePreedit.size()));
+								  static_cast<std::uint32_t>(largePreedit.size()));
 		read.acknowledgedSequence = postDelivery->nextSequence.get();
 		std::size_t receivedTextBytes{};
 		std::uint32_t correlation = 5;
@@ -1045,14 +1045,14 @@ namespace
 		do
 		{
 			request = Request(correlation++,
-				static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-				{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+							  static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
+							  {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 			CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 			response = PollUntil(host, context, session);
 			const auto* page = reinterpret_cast<const InputSnapshotV3Header*>(
 				response.data() + sizeof(ResponseHeader));
 			std::size_t offset = sizeof(ResponseHeader) + sizeof(InputSnapshotV3Header) +
-				page->pressedControlCount.get() * sizeof(InputControlV3);
+								 page->pressedControlCount.get() * sizeof(InputControlV3);
 			for (std::uint32_t index = 0; index < page->recordCount.get(); ++index)
 			{
 				const auto* record = reinterpret_cast<const InputRecordV3*>(response.data() + offset);
@@ -1063,7 +1063,8 @@ namespace
 			}
 			read.acknowledgedSequence = page->nextSequence.get();
 			more = (page->flags.get() & static_cast<std::uint32_t>(InputBatchFlag::More)) != 0;
-		} while (more);
+		}
+		while (more);
 		CHECK(receivedTextBytes == largePreedit.size());
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
@@ -1079,7 +1080,7 @@ namespace
 		InputReadRequestV3 read{};
 		read.maximumBytes = 65520;
 		auto request = Request(1, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+							   {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		auto response = PollUntil(host, context, session);
 		const auto* baseline = reinterpret_cast<const InputSnapshotV3Header*>(
@@ -1097,18 +1098,18 @@ namespace
 		host.KeyboardEvent(page, 0x04, false, 0, 11);
 		host.KeyboardEvent(page, 0x04, false, 0, 22);
 		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
-			0, 0, false, true, 0, 11, 1);
+						0, 0, false, true, 0, 11, 1);
 		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
-			0, 0, false, true, 0, 22, 1);
+						0, 0, false, true, 0, 22, 1);
 		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 1, 1,
-			0, 0, false, true, 0, 11, 0);
+						0, 0, false, true, 0, 11, 0);
 		host.MouseEvent(PointerSurface::Tv, 0, 0, 0, 0, 0, 0, 0, 1,
-			0, 0, false, true, 0, 22, 0);
+						0, 0, false, true, 0, 22, 0);
 
 		read.generation = baseline->generation.get();
 		read.acknowledgedSequence = baseline->nextSequence.get();
 		request = Request(2, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+						  {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		const auto* snapshot = reinterpret_cast<const InputSnapshotV3Header*>(
@@ -1142,7 +1143,7 @@ namespace
 		host.KeyboardFocusLost();
 		read.acknowledgedSequence = snapshot->nextSequence.get();
 		request = Request(3, static_cast<std::uint16_t>(InputOperation::ReadBatchV3),
-			{reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
+						  {reinterpret_cast<const std::byte*>(&read), sizeof(read)}, ServiceId::Input);
 		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
 		response = PollUntil(host, context, session);
 		const auto* released = reinterpret_cast<const InputSnapshotV3Header*>(

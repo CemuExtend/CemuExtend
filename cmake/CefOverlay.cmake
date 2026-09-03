@@ -134,6 +134,19 @@ function(_cemu_copy_cef_licenses target destination)
 	endforeach()
 endfunction()
 
+function(cemu_configure_cef_runtime_target target)
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR
+			"cemu_configure_cef_runtime_target: unknown target '${target}'")
+	endif()
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		set_target_properties(${target} PROPERTIES
+			BUILD_WITH_INSTALL_RPATH TRUE
+			BUILD_RPATH "$ORIGIN"
+			INSTALL_RPATH "$ORIGIN")
+	endif()
+endfunction()
+
 function(cemu_stage_cef_runtime target)
 	if(NOT TARGET ${target})
 		message(FATAL_ERROR "cemu_stage_cef_runtime: unknown target '${target}'")
@@ -171,11 +184,6 @@ function(cemu_stage_cef_runtime target)
 			COMMAND "${CMAKE_COMMAND}" -E copy_directory
 				"${CEMU_CEF_RESOURCE_DIR}/locales" "$<TARGET_FILE_DIR:${target}>/locales")
 		_cemu_copy_cef_licenses(${target} "$<TARGET_FILE_DIR:${target}>")
-		set_target_properties(${target} PROPERTIES
-			BUILD_WITH_INSTALL_RPATH TRUE
-			BUILD_RPATH "$ORIGIN"
-			INSTALL_RPATH "$ORIGIN")
-
 	elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 		foreach(_file chrome_elf.dll d3dcompiler_47.dll dxcompiler.dll dxil.dll
 			libcef.dll libEGL.dll libGLESv2.dll v8_context_snapshot.bin)

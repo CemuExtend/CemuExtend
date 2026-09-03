@@ -119,6 +119,39 @@ int main(int argc, char* argv[])
 
 	PixelState mainState;
 	PixelState padState;
+	bool inputSuspensionFailed{};
+	runtime->SetInteractive(Host::PointerSurface::Main, true);
+	InputIntent dockIntent;
+	dockIntent.generation = 1;
+	dockIntent.revision = 1;
+	dockIntent.visible = true;
+	dockIntent.keyboardFocus = KeyboardFocus::Navigation;
+	dockIntent.interactiveRects.push_back({0, 0, 640, 360});
+	WebFrontend::NativeInputEvent keyEvent{.kind = WebFrontend::NativeInputKind::Key,
+										   .surface = Host::PointerSurface::Main};
+	if (!runtime->UpdateInputIntent(1, dockIntent) ||
+		(runtime->ResolveInput(keyEvent).ownership.keyboard != InputOwner::WebUi ||
+		 runtime->ResolveInput(keyEvent).ownership.pointer != InputOwner::WebUi))
+	{
+		std::cerr << "CEF OSR input intent did not acquire keyboard ownership\n";
+		inputSuspensionFailed = true;
+	}
+	runtime->SetInputSuspended(Host::PointerSurface::Main, true);
+	if (runtime->ResolveInput(keyEvent).ownership.keyboard != InputOwner::Title ||
+		runtime->ResolveInput(keyEvent).ownership.pointer != InputOwner::Title)
+	{
+		std::cerr << "CEF OSR input suspension did not release keyboard ownership\n";
+		inputSuspensionFailed = true;
+	}
+	runtime->SetInputSuspended(Host::PointerSurface::Main, false);
+	if (runtime->ResolveInput(keyEvent).ownership.keyboard != InputOwner::WebUi ||
+		runtime->ResolveInput(keyEvent).ownership.pointer != InputOwner::WebUi)
+	{
+		std::cerr << "CEF OSR input intent was not restored after suspension\n";
+		inputSuspensionFailed = true;
+	}
+	runtime->ResetInputIntent(1, 2);
+	runtime->SetInteractive(Host::PointerSurface::Main, false);
 	std::optional<Host::OverlayFrameSnapshot> mainBeforeResize;
 	std::optional<Host::OverlayFrameSnapshot> padBeforeResize;
 	const auto initialPaintDeadline =
@@ -167,9 +200,9 @@ int main(int argc, char* argv[])
 		runtime->Resize(Host::PointerSurface::Main, 640, 360, 1.0);
 		runtime->Resize(Host::PointerSurface::Pad, 480, 270, 1.0);
 		if (runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main,
-				mainBeforeResize->sequence) ||
+											   mainBeforeResize->sequence) ||
 			runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Pad,
-				padBeforeResize->sequence))
+											   padBeforeResize->sequence))
 		{
 			std::cerr << "Redundant CEF OSR resize published a replacement frame\n";
 			redundantResizeFailed = true;
@@ -267,5 +300,5 @@ int main(int argc, char* argv[])
 	runtime->CloseAll();
 	runtime.reset();
 	ShutdownProcessRuntime();
-	return redundantResizeFailed || animationCadenceFailed ? 1 : 0;
+	return redundantResizeFailed || animationCadenceFailed || inputSuspensionFailed ? 1 : 0;
 }

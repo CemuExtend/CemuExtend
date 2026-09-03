@@ -298,7 +298,7 @@ namespace Application
 	}
 
 	void EmulationController::SubmitKeyboard(std::uint16_t usagePage, std::uint16_t usage, bool pressed,
-										 std::uint8_t modifiers, std::uint16_t deviceId)
+											 std::uint8_t modifiers, std::uint16_t deviceId)
 	{
 		m_backend->SubmitKeyboard(usagePage, usage, pressed, modifiers, deviceId);
 	}

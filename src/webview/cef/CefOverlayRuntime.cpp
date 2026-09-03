@@ -930,6 +930,7 @@ namespace WebFrontend::CefOverlay
 			void SetOverlayInteractive(std::uint64_t windowId, bool interactive) override;
 			bool UpdateInputIntent(std::uint64_t windowId, InputIntent intent) override;
 			void ResetInputIntent(std::uint64_t windowId, std::uint64_t generation) override;
+			void SetInputSuspended(Host::PointerSurface surface, bool suspended) override;
 			void ReleaseInput(Host::PointerSurface surface) override;
 			void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 									std::string_view payload, std::uint64_t sequence) override;
@@ -997,6 +998,7 @@ namespace WebFrontend::CefOverlay
 				std::optional<std::uint64_t> cemod;
 				double pointerX{};
 				double pointerY{};
+				std::vector<std::uint8_t> composite;
 			};
 
 			struct ResolvedSurfaceInput
@@ -1005,14 +1007,6 @@ namespace WebFrontend::CefOverlay
 				std::uint64_t keyboardWindow{};
 				std::uint64_t pointerWindow{};
 				std::uint64_t textWindow{};
-			};
-
-			struct ComposedFrame
-			{
-				Host::PointerSurface surface{Host::PointerSurface::Main};
-				int width{};
-				int height{};
-				std::vector<std::uint8_t> bgra;
 			};
 
 			static std::size_t Index(Host::PointerSurface surface)
@@ -1025,12 +1019,17 @@ namespace WebFrontend::CefOverlay
 			const LayerBitmap* FindLayerLocked(std::uint64_t windowId) const;
 			std::array<std::optional<std::uint64_t>, 2> BottomToTopLocked(
 				const SurfaceLayers& layers) const;
-			std::optional<ComposedFrame> ComposeLocked(Host::PointerSurface surface) const;
+			std::vector<Host::OverlayDirtyRect> NormalizeDamageLocked(
+				Host::PointerSurface surface,
+				std::span<const Host::OverlayDirtyRect> dirtyRects) const;
+			void RecomposeLocked(Host::PointerSurface surface,
+								 std::span<const Host::OverlayDirtyRect> dirtyRects);
 			ResolvedSurfaceInput ResolveSurfaceInputLocked(Host::PointerSurface surface,
-													 double x, double y) const;
+														   double x, double y) const;
 			void NotifyInputOwnership(Host::PointerSurface surface,
-								 const InputOwnership& ownership);
-			void PublishComposite(Host::PointerSurface surface);
+									  const InputOwnership& ownership);
+			void PublishComposite(Host::PointerSurface surface,
+								  std::span<const Host::OverlayDirtyRect> dirtyRects = {});
 			void UpdateLayerFocus(Host::PointerSurface surface);
 			RpcHandler m_rpc;
 			FrameMailbox m_mailbox;
@@ -1044,6 +1043,7 @@ namespace WebFrontend::CefOverlay
 			std::unordered_map<std::string, std::shared_ptr<CemodNetworkProxy>> m_networkProxies;
 			std::unordered_map<std::uint64_t, LayerBitmap> m_overlayLayers;
 			std::array<SurfaceLayers, 2> m_surfaces;
+			std::array<bool, 2> m_inputSuspended{};
 			std::mutex m_inputOwnershipMutex;
 			std::array<InputOwnership, 2> m_notifiedOwnership{};
 			std::condition_variable m_closeCondition;
@@ -1524,87 +1524,163 @@ namespace WebFrontend::CefOverlay
 			return result;
 		}
 
-		std::optional<RuntimeImpl::ComposedFrame> RuntimeImpl::ComposeLocked(
-			Host::PointerSurface surface) const
+		std::vector<Host::OverlayDirtyRect> RuntimeImpl::NormalizeDamageLocked(
+			Host::PointerSurface surface,
+			std::span<const Host::OverlayDirtyRect> dirtyRects) const
 		{
 			const auto& layers = m_surfaces[Index(surface)];
 			if (layers.width <= 0 || layers.height <= 0 || layers.width > 16384 ||
 				layers.height > 16384)
-				return std::nullopt;
-			const auto pixels = static_cast<std::size_t>(layers.width) *
-								static_cast<std::size_t>(layers.height);
-			if (pixels > std::numeric_limits<std::size_t>::max() / 4U)
-				return std::nullopt;
-			ComposedFrame frame;
-			frame.surface = surface;
-			frame.width = layers.width;
-			frame.height = layers.height;
-			frame.bgra.assign(pixels * 4U, 0);
-
-			auto blendPixel = [](std::uint8_t* destination, const std::uint8_t* source) {
-				const unsigned inverseAlpha = 255U - source[3];
-				for (unsigned channel = 0; channel != 4; ++channel)
-					destination[channel] = static_cast<std::uint8_t>(std::min(255U,
-																			  static_cast<unsigned>(source[channel]) +
-																				  (static_cast<unsigned>(destination[channel]) * inverseAlpha + 127U) / 255U));
-			};
-			auto blendLayer = [&](const std::optional<std::uint64_t>& id) {
-				if (!id)
-					return;
-				const auto* layer = FindLayerLocked(*id);
-				if (!layer || !layer->visible || layer->width != layers.width ||
-					layer->height != layers.height || layer->view.size() != frame.bgra.size())
-					return;
-				for (std::size_t pixel = 0; pixel < pixels; ++pixel)
-					blendPixel(frame.bgra.data() + pixel * 4U, layer->view.data() + pixel * 4U);
-				if (!layer->popupVisible || layer->popup.empty() || layer->popupWidth <= 0 ||
-					layer->popupHeight <= 0)
-					return;
-				for (int popupY = 0; popupY < layer->popupHeight; ++popupY)
-					for (int popupX = 0; popupX < layer->popupWidth; ++popupX)
-					{
-						const int x = layer->popupRect.x + popupX;
-						const int y = layer->popupRect.y + popupY;
-						if (x < 0 || y < 0 || x >= layers.width || y >= layers.height)
-							continue;
-						const auto sourceOffset =
-							(static_cast<std::size_t>(popupY) * layer->popupWidth + popupX) * 4U;
-						if (sourceOffset + 4U > layer->popup.size())
-							continue;
-						const auto destinationOffset =
-							(static_cast<std::size_t>(y) * layers.width + x) * 4U;
-						blendPixel(frame.bgra.data() + destinationOffset,
-								   layer->popup.data() + sourceOffset);
-					}
-			};
-			for (const auto layer : BottomToTopLocked(layers))
-				blendLayer(layer);
-			return frame;
+				return {};
+			const Host::OverlayDirtyRect full{0, 0, layers.width, layers.height};
+			if (dirtyRects.empty())
+				return {full};
+			std::vector<Host::OverlayDirtyRect> result;
+			result.reserve(dirtyRects.size());
+			for (auto rect : dirtyRects)
+			{
+				if (rect.width <= 0 || rect.height <= 0)
+					continue;
+				const auto right = std::min<std::int64_t>(
+					layers.width, static_cast<std::int64_t>(rect.x) + rect.width);
+				const auto bottom = std::min<std::int64_t>(
+					layers.height, static_cast<std::int64_t>(rect.y) + rect.height);
+				rect.x = std::max(rect.x, 0);
+				rect.y = std::max(rect.y, 0);
+				rect.width = static_cast<int>(right - rect.x);
+				rect.height = static_cast<int>(bottom - rect.y);
+				if (rect.width > 0 && rect.height > 0)
+					result.push_back(rect);
+			}
+			return result;
 		}
 
-		void RuntimeImpl::PublishComposite(Host::PointerSurface surface)
+		void RuntimeImpl::RecomposeLocked(
+			Host::PointerSurface surface,
+			std::span<const Host::OverlayDirtyRect> dirtyRects)
 		{
-			std::optional<ComposedFrame> frame;
+			auto& layers = m_surfaces[Index(surface)];
+			const auto layerOrder = BottomToTopLocked(layers);
+			auto blendPixel = [](std::uint8_t* destination, const std::uint8_t* source) {
+				if (source[3] == 0)
+					return;
+				if (source[3] == 255)
+				{
+					std::memcpy(destination, source, 4U);
+					return;
+				}
+				const unsigned inverseAlpha = 255U - source[3];
+				for (unsigned channel = 0; channel != 4; ++channel)
+					destination[channel] = static_cast<std::uint8_t>(std::min(
+						255U, static_cast<unsigned>(source[channel]) +
+								  (static_cast<unsigned>(destination[channel]) * inverseAlpha + 127U) / 255U));
+			};
+			std::array<const LayerBitmap*, 2> activeLayers{};
+			std::size_t activeLayerCount{};
+			for (const auto id : layerOrder)
 			{
-				std::scoped_lock lock(m_mutex);
-				frame = ComposeLocked(surface);
+				if (!id)
+					continue;
+				const auto* layer = FindLayerLocked(*id);
+				if (layer && layer->visible && layer->width == layers.width &&
+					layer->height == layers.height &&
+					layer->view.size() == layers.composite.size())
+					activeLayers[activeLayerCount++] = layer;
 			}
-			if (!frame)
+			const bool hasPopup = std::any_of(
+				activeLayers.begin(), activeLayers.begin() + activeLayerCount,
+				[](const LayerBitmap* layer) {
+					return layer->popupVisible && !layer->popup.empty() &&
+						   layer->popupWidth > 0 && layer->popupHeight > 0;
+				});
+			for (const auto& rect : dirtyRects)
+			{
+				if (activeLayerCount == 1 && !hasPopup)
+				{
+					for (int row = 0; row < rect.height; ++row)
+					{
+						const auto offset =
+							(static_cast<std::size_t>(rect.y + row) * layers.width + rect.x) * 4U;
+						std::memcpy(layers.composite.data() + offset,
+									activeLayers[0]->view.data() + offset,
+									static_cast<std::size_t>(rect.width) * 4U);
+					}
+					continue;
+				}
+				for (int row = 0; row < rect.height; ++row)
+				{
+					const auto offset =
+						(static_cast<std::size_t>(rect.y + row) * layers.width + rect.x) * 4U;
+					std::memset(layers.composite.data() + offset, 0,
+								static_cast<std::size_t>(rect.width) * 4U);
+				}
+				for (std::size_t layerIndex = 0; layerIndex < activeLayerCount; ++layerIndex)
+				{
+					const auto& layer = *activeLayers[layerIndex];
+					for (int y = rect.y; y < rect.y + rect.height; ++y)
+						for (int x = rect.x; x < rect.x + rect.width; ++x)
+						{
+							const auto offset =
+								(static_cast<std::size_t>(y) * layers.width + x) * 4U;
+							blendPixel(layers.composite.data() + offset,
+									   layer.view.data() + offset);
+						}
+					if (!layer.popupVisible || layer.popup.empty() ||
+						layer.popupWidth <= 0 || layer.popupHeight <= 0)
+						continue;
+					const int left = std::max(rect.x, layer.popupRect.x);
+					const int top = std::max(rect.y, layer.popupRect.y);
+					const int right = std::min(rect.x + rect.width,
+											   layer.popupRect.x + layer.popupWidth);
+					const int bottom = std::min(rect.y + rect.height,
+												layer.popupRect.y + layer.popupHeight);
+					for (int y = top; y < bottom; ++y)
+						for (int x = left; x < right; ++x)
+						{
+							const auto destinationOffset =
+								(static_cast<std::size_t>(y) * layers.width + x) * 4U;
+							const auto popupOffset =
+								(static_cast<std::size_t>(y - layer.popupRect.y) * layer.popupWidth +
+								 (x - layer.popupRect.x)) *
+								4U;
+							if (popupOffset + 4U <= layer.popup.size())
+								blendPixel(layers.composite.data() + destinationOffset,
+										   layer.popup.data() + popupOffset);
+						}
+				}
+			}
+		}
+
+		void RuntimeImpl::PublishComposite(
+			Host::PointerSurface surface,
+			std::span<const Host::OverlayDirtyRect> dirtyRects)
+		{
+			std::scoped_lock lock(m_mutex);
+			auto& layers = m_surfaces[Index(surface)];
+			auto damage = NormalizeDamageLocked(surface, dirtyRects);
+			if (damage.empty())
 				return;
+			const auto size = static_cast<std::size_t>(layers.width) * layers.height * 4U;
+			if (layers.composite.size() != size)
+			{
+				layers.composite.assign(size, 0);
+				damage = NormalizeDamageLocked(surface, {});
+			}
+			RecomposeLocked(surface, damage);
 			m_mailbox.Reopen(surface);
-			const Host::OverlayDirtyRect damage{0, 0, frame->width, frame->height};
-			m_mailbox.PublishView(surface, frame->width, frame->height, frame->bgra.data(),
-								  frame->width * 4, std::span{&damage, 1U});
+			m_mailbox.PublishView(surface, layers.width, layers.height,
+								  layers.composite.data(), layers.width * 4, damage);
 		}
 
 		void RuntimeImpl::PaintView(std::uint64_t windowId, int width, int height,
 									const void* bgra, int sourceStride,
-									std::span<const Host::OverlayDirtyRect>)
+									std::span<const Host::OverlayDirtyRect> dirtyRects)
 		{
 			if (!bgra || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
 				sourceStride < width * 4)
 				return;
 			Host::PointerSurface surface;
+			std::vector<Host::OverlayDirtyRect> damage;
 			{
 				std::scoped_lock lock(m_mutex);
 				auto* layer = FindLayerLocked(windowId);
@@ -1614,40 +1690,85 @@ namespace WebFrontend::CefOverlay
 				const auto& target = m_surfaces[Index(surface)];
 				if (width != target.width || height != target.height)
 					return;
+				const auto size = static_cast<std::size_t>(width) * height * 4U;
+				const bool resized = layer->width != width || layer->height != height ||
+									 layer->view.size() != size;
 				layer->width = width;
 				layer->height = height;
-				layer->view.resize(static_cast<std::size_t>(width) * height * 4U);
-				for (int row = 0; row < height; ++row)
-					std::memcpy(layer->view.data() + static_cast<std::size_t>(row) * width * 4U,
-								static_cast<const std::uint8_t*>(bgra) + static_cast<std::size_t>(row) * sourceStride,
-								static_cast<std::size_t>(width) * 4U);
+				if (resized)
+					layer->view.assign(size, 0);
+				damage = NormalizeDamageLocked(surface, resized
+															? std::span<const Host::OverlayDirtyRect>{}
+															: dirtyRects);
+				for (const auto& rect : damage)
+					for (int row = 0; row < rect.height; ++row)
+					{
+						const auto offset =
+							(static_cast<std::size_t>(rect.y + row) * width + rect.x) * 4U;
+						std::memcpy(layer->view.data() + offset,
+									static_cast<const std::uint8_t*>(bgra) +
+										static_cast<std::size_t>(rect.y + row) * sourceStride +
+										static_cast<std::size_t>(rect.x) * 4U,
+									static_cast<std::size_t>(rect.width) * 4U);
+					}
 			}
-			PublishComposite(surface);
+			if (!damage.empty())
+				PublishComposite(surface, damage);
 		}
 
 		void RuntimeImpl::PaintPopup(std::uint64_t windowId, int width, int height,
 									 const void* bgra, int sourceStride,
-									 std::span<const Host::OverlayDirtyRect>)
+									 std::span<const Host::OverlayDirtyRect> dirtyRects)
 		{
 			if (!bgra || width <= 0 || height <= 0 || width > 16384 || height > 16384 ||
 				sourceStride < width * 4)
 				return;
 			Host::PointerSurface surface;
+			std::vector<Host::OverlayDirtyRect> damage;
 			{
 				std::scoped_lock lock(m_mutex);
 				auto* layer = FindLayerLocked(windowId);
 				if (!layer || !layer->popupVisible)
 					return;
 				surface = layer->surface;
+				const bool resized = layer->popupWidth != width || layer->popupHeight != height ||
+									 layer->popup.size() != static_cast<std::size_t>(width) * height * 4U;
 				layer->popupWidth = width;
 				layer->popupHeight = height;
-				layer->popup.resize(static_cast<std::size_t>(width) * height * 4U);
-				for (int row = 0; row < height; ++row)
-					std::memcpy(layer->popup.data() + static_cast<std::size_t>(row) * width * 4U,
-								static_cast<const std::uint8_t*>(bgra) + static_cast<std::size_t>(row) * sourceStride,
-								static_cast<std::size_t>(width) * 4U);
+				if (resized)
+					layer->popup.assign(static_cast<std::size_t>(width) * height * 4U, 0);
+				const Host::OverlayDirtyRect full{0, 0, width, height};
+				const auto popupDamage = resized || dirtyRects.empty()
+											 ? std::span<const Host::OverlayDirtyRect>{&full, 1U}
+											 : dirtyRects;
+				for (auto rect : popupDamage)
+				{
+					const auto right = std::min<std::int64_t>(
+						width, static_cast<std::int64_t>(rect.x) + rect.width);
+					const auto bottom = std::min<std::int64_t>(
+						height, static_cast<std::int64_t>(rect.y) + rect.height);
+					rect.x = std::max(rect.x, 0);
+					rect.y = std::max(rect.y, 0);
+					rect.width = static_cast<int>(right - rect.x);
+					rect.height = static_cast<int>(bottom - rect.y);
+					if (rect.width <= 0 || rect.height <= 0)
+						continue;
+					for (int row = 0; row < rect.height; ++row)
+					{
+						const auto popupOffset =
+							(static_cast<std::size_t>(rect.y + row) * width + rect.x) * 4U;
+						std::memcpy(layer->popup.data() + popupOffset,
+									static_cast<const std::uint8_t*>(bgra) +
+										static_cast<std::size_t>(rect.y + row) * sourceStride +
+										static_cast<std::size_t>(rect.x) * 4U,
+									static_cast<std::size_t>(rect.width) * 4U);
+					}
+					damage.push_back({layer->popupRect.x + rect.x,
+									  layer->popupRect.y + rect.y, rect.width, rect.height});
+				}
 			}
-			PublishComposite(surface);
+			if (!damage.empty())
+				PublishComposite(surface, damage);
 		}
 
 		void RuntimeImpl::SetPopupVisible(std::uint64_t windowId, bool visible)
@@ -2007,7 +2128,8 @@ namespace WebFrontend::CefOverlay
 					m_overlayLayers.erase(windowId);
 					const auto& state = m_surfaces[Index(*surface)];
 					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
-												 state.pointerY).ownership;
+														  state.pointerY)
+									.ownership;
 				}
 				if (!cemodOrigin.empty())
 					releaseCemodOrigin = std::ranges::none_of(m_clients, [&](const auto& item) {
@@ -2078,7 +2200,8 @@ namespace WebFrontend::CefOverlay
 					}
 					const auto& state = m_surfaces[Index(*surface)];
 					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
-												 state.pointerY).ownership;
+														  state.pointerY)
+									.ownership;
 				}
 				if (surface)
 				{
@@ -2139,6 +2262,7 @@ namespace WebFrontend::CefOverlay
 				layers.width = width;
 				layers.height = height;
 				layers.scale = scale;
+				layers.composite.clear();
 				windows = {layers.builtin, layers.cemod};
 				for (const auto window : windows)
 					if (window)
@@ -2187,7 +2311,8 @@ namespace WebFrontend::CefOverlay
 						layer->interactive = interactive;
 				const auto& state = m_surfaces[Index(surface)];
 				ownership = ResolveSurfaceInputLocked(surface, state.pointerX,
-												 state.pointerY).ownership;
+													  state.pointerY)
+								.ownership;
 			}
 			NotifyInputOwnership(surface, ownership);
 			UpdateLayerFocus(surface);
@@ -2211,6 +2336,8 @@ namespace WebFrontend::CefOverlay
 			Host::PointerSurface surface, double x, double y) const
 		{
 			ResolvedSurfaceInput result;
+			if (m_inputSuspended[Index(surface)])
+				return result;
 			const auto& layers = m_surfaces[Index(surface)];
 			const auto order = BottomToTopLocked(layers);
 			for (auto layer = order.rbegin(); layer != order.rend(); ++layer)
@@ -2245,10 +2372,10 @@ namespace WebFrontend::CefOverlay
 					result.ownership.keyboard = webUiOwner;
 				}
 				const bool pointerHit = legacyCapture || intent.pointerCaptured ||
-					std::ranges::any_of(intent.interactiveRects,
-						[candidateX, candidateY](const InteractiveRect& rect) {
-							return rect.Contains(candidateX, candidateY);
-						});
+										std::ranges::any_of(intent.interactiveRects,
+															[candidateX, candidateY](const InteractiveRect& rect) {
+																return rect.Contains(candidateX, candidateY);
+															});
 				if (!result.pointerWindow && (intent.bindingCapture || pointerHit))
 				{
 					result.pointerWindow = **layer;
@@ -2271,7 +2398,7 @@ namespace WebFrontend::CefOverlay
 		}
 
 		void RuntimeImpl::NotifyInputOwnership(Host::PointerSurface surface,
-			const InputOwnership& ownership)
+											   const InputOwnership& ownership)
 		{
 			const auto index = Index(surface);
 			{
@@ -2300,7 +2427,7 @@ namespace WebFrontend::CefOverlay
 					surface.pointerY = event.y;
 				}
 				resolved = ResolveSurfaceInputLocked(event.surface, surface.pointerX,
-												 surface.pointerY);
+													 surface.pointerY);
 			}
 			NotifyInputOwnership(event.surface, resolved.ownership);
 			std::uint64_t target{};
@@ -2312,8 +2439,9 @@ namespace WebFrontend::CefOverlay
 			else if (IsPointerInput(event.kind))
 				target = resolved.pointerWindow;
 			else if (event.kind == NativeInputKind::FocusLost)
-				target = resolved.keyboardWindow ? resolved.keyboardWindow
-					: resolved.pointerWindow ? resolved.pointerWindow : resolved.textWindow;
+				target = resolved.keyboardWindow  ? resolved.keyboardWindow
+						 : resolved.pointerWindow ? resolved.pointerWindow
+												  : resolved.textWindow;
 			return {target, resolved.ownership};
 		}
 
@@ -2336,7 +2464,8 @@ namespace WebFrontend::CefOverlay
 				surface = layer->surface;
 				const auto& state = m_surfaces[Index(*surface)];
 				ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
-												 state.pointerY).ownership;
+													  state.pointerY)
+								.ownership;
 			}
 			NotifyInputOwnership(*surface, ownership);
 			UpdateLayerFocus(*surface);
@@ -2349,6 +2478,23 @@ namespace WebFrontend::CefOverlay
 			intent.generation = generation;
 			intent.visible = false;
 			(void)UpdateInputIntent(windowId, std::move(intent));
+		}
+
+		void RuntimeImpl::SetInputSuspended(Host::PointerSurface surface, bool suspended)
+		{
+			InputOwnership ownership;
+			{
+				std::scoped_lock lock(m_mutex);
+				if (m_inputSuspended[Index(surface)] == suspended)
+					return;
+				m_inputSuspended[Index(surface)] = suspended;
+				const auto& state = m_surfaces[Index(surface)];
+				ownership = ResolveSurfaceInputLocked(surface, state.pointerX,
+													  state.pointerY)
+								.ownership;
+			}
+			NotifyInputOwnership(surface, ownership);
+			UpdateLayerFocus(surface);
 		}
 
 		void RuntimeImpl::ReleaseInput(Host::PointerSurface surface)
@@ -2393,7 +2539,8 @@ namespace WebFrontend::CefOverlay
 					surface = layer->surface;
 					const auto& state = m_surfaces[Index(*surface)];
 					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
-												 state.pointerY).ownership;
+														  state.pointerY)
+									.ownership;
 				}
 			}
 			if (surface)
@@ -2416,7 +2563,8 @@ namespace WebFrontend::CefOverlay
 					surface = layer->surface;
 					const auto& state = m_surfaces[Index(*surface)];
 					ownership = ResolveSurfaceInputLocked(*surface, state.pointerX,
-												 state.pointerY).ownership;
+														  state.pointerY)
+									.ownership;
 				}
 			}
 			if (surface)
@@ -2762,15 +2910,15 @@ namespace WebFrontend::CefOverlay
 	}
 
 	std::shared_ptr<BrowserRuntime> CreateBrowserRuntime(BrowserRuntime::RpcHandler rpc,
-												 std::function<void(Host::PointerSurface)> redraw, BrowserRuntime::ClosedHandler closed,
-												 BrowserRuntime::WindowClosedHandler windowClosed,
-												 BrowserRuntime::InputOwnershipHandler inputOwnershipChanged)
+														 std::function<void(Host::PointerSurface)> redraw, BrowserRuntime::ClosedHandler closed,
+														 BrowserRuntime::WindowClosedHandler windowClosed,
+														 BrowserRuntime::InputOwnershipHandler inputOwnershipChanged)
 	{
 		if (!g_initialized)
 			return {};
 		auto runtime = std::make_shared<RuntimeImpl>(std::move(rpc), std::move(redraw),
-												 std::move(closed), std::move(windowClosed),
-												 std::move(inputOwnershipChanged));
+													 std::move(closed), std::move(windowClosed),
+													 std::move(inputOwnershipChanged));
 		{
 			std::scoped_lock lock(g_runtimesMutex);
 			std::erase_if(g_runtimes, [](const auto& value) { return value.expired(); });

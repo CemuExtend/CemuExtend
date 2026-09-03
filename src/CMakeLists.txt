@@ -2,6 +2,11 @@ project(cemuMain)
 
 include("${CMAKE_SOURCE_DIR}/cmake/TargetArchitecture.cmake")
 
+set(CEMU_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin" CACHE PATH
+	"Directory for the Cemu executable")
+option(CEMU_STAGE_CEF_RUNTIME
+	"Stage the CEF runtime beside the Cemu executable after linking" ON)
+
 option(CEMU_CXX_FLAGS "Additional flags used for compiling Cemu source code")
 if(CEMU_CXX_FLAGS)
 	add_compile_options(${CEMU_CXX_FLAGS})
@@ -491,7 +496,7 @@ endif()
 set_target_properties(CemuBin PROPERTIES
 	# multi-configuration generators will add a config subdirectory to RUNTIME_OUTPUT_DIRECTORY if no generator expression is used
 	# to get the same behavior everywhere we append an empty generator expression
-	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../bin/$<1:>"
+	RUNTIME_OUTPUT_DIRECTORY "${CEMU_RUNTIME_OUTPUT_DIRECTORY}/$<1:>"
 	OUTPUT_NAME "${OUTPUT_NAME}"
 )
 
@@ -542,7 +547,7 @@ if(APPLE AND CEMU_FRONTEND STREQUAL "cef")
 		set_target_properties(${_helper_target} PROPERTIES
 			MACOSX_BUNDLE_INFO_PLIST "${_helper_info_plist}"
 			OUTPUT_NAME "${_helper_output_name}"
-			RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../bin/$<1:>")
+			RUNTIME_OUTPUT_DIRECTORY "${CEMU_RUNTIME_OUTPUT_DIRECTORY}/$<1:>")
 		cemu_stage_cef_macos_helper(CemuBin ${_helper_target} "${_helper_output_name}")
 	endforeach()
 	unset(_helper_info_plist)
@@ -556,7 +561,10 @@ if(APPLE AND CEMU_FRONTEND STREQUAL "cef")
 endif()
 
 if(CEMU_OVERLAY_ENABLED AND CEMU_OVERLAY_BACKEND STREQUAL "cef")
-	cemu_stage_cef_runtime(CemuBin)
+	cemu_configure_cef_runtime_target(CemuBin)
+	if(CEMU_STAGE_CEF_RUNTIME)
+		cemu_stage_cef_runtime(CemuBin)
+	endif()
 endif()
 
 if(UNIX AND NOT APPLE)

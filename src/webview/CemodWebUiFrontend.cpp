@@ -139,7 +139,7 @@ namespace WebFrontend
 		}
 
 		bool ParseInputIntent(const rapidjson::Value& value,
-			CefOverlay::InputIntent& intent)
+							  CefOverlay::InputIntent& intent)
 		{
 			if (!value.IsObject() || !value.HasMember("version") ||
 				!value["version"].IsUint() || value["version"].GetUint() != 1 ||
@@ -160,7 +160,7 @@ namespace WebFrontend
 				(!pointer["pointerId"].IsNull() && !pointer["pointerId"].IsUint()))
 				return false;
 			const std::string_view focus{keyboard["focus"].GetString(),
-				keyboard["focus"].GetStringLength()};
+										 keyboard["focus"].GetStringLength()};
 			if (focus == "none")
 				intent.keyboardFocus = CefOverlay::KeyboardFocus::None;
 			else if (focus == "navigation")
@@ -181,7 +181,7 @@ namespace WebFrontend
 					!rect.HasMember("height") || !rect["height"].IsNumber())
 					return false;
 				CefOverlay::InteractiveRect parsed{rect["x"].GetDouble(), rect["y"].GetDouble(),
-											 rect["width"].GetDouble(), rect["height"].GetDouble()};
+												   rect["width"].GetDouble(), rect["height"].GetDouble()};
 				if (!std::isfinite(parsed.x) || !std::isfinite(parsed.y) ||
 					!std::isfinite(parsed.width) || !std::isfinite(parsed.height) ||
 					parsed.width < 0.0 || parsed.height < 0.0)

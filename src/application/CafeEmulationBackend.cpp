@@ -2451,12 +2451,16 @@ namespace Application
 				switch (value)
 				{
 #if BOOST_OS_WINDOWS
-				case CrashDump::Lite: return "lite";
-				case CrashDump::Full: return "full";
+				case CrashDump::Lite:
+					return "lite";
+				case CrashDump::Full:
+					return "full";
 #else
-				case CrashDump::Enabled: return "enabled";
+				case CrashDump::Enabled:
+					return "enabled";
 #endif
-				case CrashDump::Disabled: break;
+				case CrashDump::Disabled:
+					break;
 				}
 				return "disabled";
 			}

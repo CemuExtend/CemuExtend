@@ -114,6 +114,7 @@ namespace WebFrontend::CefOverlay
 		virtual void SetOverlayInteractive(std::uint64_t windowId, bool interactive) = 0;
 		virtual bool UpdateInputIntent(std::uint64_t windowId, InputIntent intent) = 0;
 		virtual void ResetInputIntent(std::uint64_t windowId, std::uint64_t generation) = 0;
+		virtual void SetInputSuspended(Host::PointerSurface surface, bool suspended) = 0;
 		virtual void ReleaseInput(Host::PointerSurface surface) = 0;
 		virtual void ExecuteWindowEvent(std::uint64_t windowId, std::string_view name,
 										std::string_view jsonPayload, std::uint64_t sequence) = 0;

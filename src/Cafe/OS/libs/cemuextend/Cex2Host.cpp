@@ -648,7 +648,8 @@ namespace cemuextend_hle
 		[[nodiscard]] static std::uint64_t MonotonicTimeNs()
 		{
 			return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-				std::chrono::steady_clock::now().time_since_epoch()).count());
+												  std::chrono::steady_clock::now().time_since_epoch())
+												  .count());
 		}
 
 		void TrimInputJournalLocked()
@@ -661,7 +662,7 @@ namespace cemuextend_hle
 					continue;
 				hasReader = true;
 				minimumAcknowledged = std::min(minimumAcknowledged,
-										 session.inputAcknowledgedSequence);
+											   session.inputAcknowledgedSequence);
 			}
 			if (!hasReader)
 				minimumAcknowledged = nextInputSequence - 1;
@@ -692,12 +693,12 @@ namespace cemuextend_hle
 		}
 
 		void AppendInputRecordLocked(cemuextend::wire::InputRecordType type,
-								 std::uint16_t usagePage = 0, std::uint16_t usage = 0,
-								 std::int32_t value = 0, std::int32_t auxiliary = 0,
-								 std::uint8_t flags = 0,
-								 std::span<const std::byte> payload = {},
-								 std::uint32_t targetSession = 0,
-								 std::uint16_t deviceId = 0)
+									 std::uint16_t usagePage = 0, std::uint16_t usage = 0,
+									 std::int32_t value = 0, std::int32_t auxiliary = 0,
+									 std::uint8_t flags = 0,
+									 std::span<const std::byte> payload = {},
+									 std::uint32_t targetSession = 0,
+									 std::uint16_t deviceId = 0)
 		{
 			const bool hasV3Reader = std::ranges::any_of(sessions, [](const auto& item) {
 				return item.second.negotiatedMajor >= 3;
@@ -763,8 +764,8 @@ namespace cemuextend_hle
 				}
 			}
 			AppendInputRecordLocked(InputRecordType::PointerMotion, 0,
-				static_cast<std::uint16_t>(surface), static_cast<std::int32_t>(epoch), 1, 0,
-				{reinterpret_cast<const std::byte*>(&motion), sizeof(motion)}, 0, deviceId);
+									static_cast<std::uint16_t>(surface), static_cast<std::int32_t>(epoch), 1, 0,
+									{reinterpret_cast<const std::byte*>(&motion), sizeof(motion)}, 0, deviceId);
 		}
 
 		void AppendInputBaselineRecordsLocked(Session& session)
@@ -780,31 +781,31 @@ namespace cemuextend_hle
 					current.epoch = nextInputOwnershipEpoch++;
 				}
 				AppendInputRecordLocked(InputRecordType::Ownership, 0,
-					static_cast<std::uint16_t>(index == 0 ? PointerSurface::Tv : PointerSurface::Drc),
-					0, 0, 0, {reinterpret_cast<const std::byte*>(&current), sizeof(current)},
-					session.id);
+										static_cast<std::uint16_t>(index == 0 ? PointerSurface::Tv : PointerSurface::Drc),
+										0, 0, 0, {reinterpret_cast<const std::byte*>(&current), sizeof(current)},
+										session.id);
 			}
 			for (const auto [deviceId, usagePage, usage] : hostPressedKeyboardDevices)
 				AppendInputRecordLocked(InputRecordType::Key, usagePage, usage, 1, 0,
-					static_cast<std::uint8_t>(InputRecordFlag::Pressed), {}, session.id, deviceId);
+										static_cast<std::uint8_t>(InputRecordFlag::Pressed), {}, session.id, deviceId);
 			for (const auto& [identity, buttons] : hostPointerDeviceButtons)
 			{
 				const auto [deviceId, surface] = identity;
 				for (std::uint16_t bit = 0; bit < 32; ++bit)
 					if ((buttons & (1U << bit)) != 0)
 						AppendInputRecordLocked(InputRecordType::MouseButton,
-							static_cast<std::uint16_t>(InputUsagePage::Button), bit + 1, 1,
-							static_cast<std::int32_t>(surface ==
-								static_cast<std::uint8_t>(PointerSurface::Drc)),
-							static_cast<std::uint8_t>(InputRecordFlag::Pressed), {}, session.id,
-							deviceId);
+												static_cast<std::uint16_t>(InputUsagePage::Button), bit + 1, 1,
+												static_cast<std::int32_t>(surface ==
+																		  static_cast<std::uint8_t>(PointerSurface::Drc)),
+												static_cast<std::uint8_t>(InputRecordFlag::Pressed), {}, session.id,
+												deviceId);
 			}
 		}
 
 		void AppendTextRecordLocked(std::string_view text, std::uint8_t flags,
-								std::uint32_t requestId, std::uint32_t revision,
-								std::uint32_t preeditStart, std::uint32_t preeditCursor,
-								std::uint32_t targetSession)
+									std::uint32_t requestId, std::uint32_t revision,
+									std::uint32_t preeditStart, std::uint32_t preeditCursor,
+									std::uint32_t targetSession)
 		{
 			using namespace cemuextend::wire;
 			const std::uint64_t transfer = nextTextTransferId++;
@@ -832,7 +833,7 @@ namespace cemuextend_hle
 				if (offset + bytes == text.size())
 					recordFlags |= static_cast<std::uint8_t>(InputRecordFlag::TextEnd);
 				AppendInputRecordLocked(InputRecordType::TextChunk, 0, 0, 0, 0,
-									recordFlags, payload, targetSession);
+										recordFlags, payload, targetSession);
 				if (text.empty())
 					break;
 				offset += bytes;
@@ -840,8 +841,8 @@ namespace cemuextend_hle
 		}
 
 		Status BuildInputBatchLocked(Session& session,
-								 const cemuextend::wire::InputReadRequestV3& request,
-								 std::vector<std::byte>& output)
+									 const cemuextend::wire::InputReadRequestV3& request,
+									 std::vector<std::byte>& output)
 		{
 			using namespace cemuextend::wire;
 			if (session.negotiatedMajor < 3 || request.flags.get() != 0)
@@ -857,7 +858,7 @@ namespace cemuextend_hle
 			const bool firstBaseline = !session.inputBaselineDelivered;
 			const bool overflowBaseline = session.inputOverflow;
 			const bool requiresBaseline = firstBaseline || requestedGeneration != inputGeneration ||
-				session.inputGeneration != inputGeneration || session.inputOverflow;
+										  session.inputGeneration != inputGeneration || session.inputOverflow;
 			if (requiresBaseline)
 			{
 				responseFlags |= static_cast<std::uint32_t>(InputBatchFlag::Baseline);
@@ -885,11 +886,11 @@ namespace cemuextend_hle
 			TrimInputJournalLocked();
 
 			const auto& pressedControls = firstBaseline && !overflowBaseline
-				? session.inputBaselineControls
-				: hostPressedKeyboardUsages;
+											  ? session.inputBaselineControls
+											  : hostPressedKeyboardUsages;
 			const auto& surfaces = firstBaseline && !overflowBaseline
-				? session.inputBaselineSurfaces
-				: inputSurfaces;
+									   ? session.inputBaselineSurfaces
+									   : inputSurfaces;
 			const std::size_t pressedBytes = pressedControls.size() * sizeof(InputControlV3);
 			if (sizeof(InputSnapshotV3Header) + pressedBytes > maximumBytes)
 				return Status::TooLarge;
@@ -1043,7 +1044,7 @@ namespace cemuextend_hle
 		}
 
 		void EmitMouseEventLocked(const cemuextend::wire::MouseEventPayloadV2& state,
-			std::uint32_t deviceButtons = std::numeric_limits<std::uint32_t>::max())
+								  std::uint32_t deviceButtons = std::numeric_limits<std::uint32_t>::max())
 		{
 			using namespace cemuextend::wire;
 			const std::size_t surfaceIndex =
@@ -1058,12 +1059,12 @@ namespace cemuextend_hle
 			else
 				hostPointerDeviceButtons.erase(deviceKey);
 			const bool positionChanged = snapshot.x.get() != state.x.get() ||
-				snapshot.y.get() != state.y.get() || state.deltaX.get() != 0 ||
-				state.deltaY.get() != 0 || snapshot.contentWidth.get() != state.contentWidth.get() ||
-				snapshot.contentHeight.get() != state.contentHeight.get() ||
-				snapshot.insideContent != state.insideContent ||
-				snapshot.rawRelative !=
-					((state.flags & static_cast<std::uint8_t>(MouseEventFlag::RawRelative)) != 0);
+										 snapshot.y.get() != state.y.get() || state.deltaX.get() != 0 ||
+										 state.deltaY.get() != 0 || snapshot.contentWidth.get() != state.contentWidth.get() ||
+										 snapshot.contentHeight.get() != state.contentHeight.get() ||
+										 snapshot.insideContent != state.insideContent ||
+										 snapshot.rawRelative !=
+											 ((state.flags & static_cast<std::uint8_t>(MouseEventFlag::RawRelative)) != 0);
 			snapshot.x = state.x.get();
 			snapshot.y = state.y.get();
 			snapshot.contentWidth = state.contentWidth.get();
@@ -1088,28 +1089,29 @@ namespace cemuextend_hle
 					continue;
 				const bool pressed = (deviceButtons & (1U << bit)) != 0;
 				AppendInputRecordLocked(InputRecordType::MouseButton,
-					static_cast<std::uint16_t>(InputUsagePage::Button),
-					static_cast<std::uint16_t>(bit + 1), pressed ? 1 : 0,
-					static_cast<std::int32_t>(surfaceIndex),
-					pressed ? static_cast<std::uint8_t>(InputRecordFlag::Pressed) : 0,
-					{}, 0, state.identity.deviceId.get());
+										static_cast<std::uint16_t>(InputUsagePage::Button),
+										static_cast<std::uint16_t>(bit + 1), pressed ? 1 : 0,
+										static_cast<std::int32_t>(surfaceIndex),
+										pressed ? static_cast<std::uint8_t>(InputRecordFlag::Pressed) : 0,
+										{}, 0, state.identity.deviceId.get());
 			}
 			if (state.wheelX.get() != 0 || state.wheelY.get() != 0)
 			{
 				AppendInputRecordLocked(InputRecordType::MouseWheel, 0,
-					static_cast<std::uint16_t>(surfaceIndex),
-					static_cast<std::int32_t>(std::clamp<std::int64_t>(
-						wheelXQ16, std::numeric_limits<std::int32_t>::min(),
-						std::numeric_limits<std::int32_t>::max())),
-					static_cast<std::int32_t>(std::clamp<std::int64_t>(
-						wheelYQ16, std::numeric_limits<std::int32_t>::min(),
-						std::numeric_limits<std::int32_t>::max())), 0, {}, 0,
-					state.identity.deviceId.get());
+										static_cast<std::uint16_t>(surfaceIndex),
+										static_cast<std::int32_t>(std::clamp<std::int64_t>(
+											wheelXQ16, std::numeric_limits<std::int32_t>::min(),
+											std::numeric_limits<std::int32_t>::max())),
+										static_cast<std::int32_t>(std::clamp<std::int64_t>(
+											wheelYQ16, std::numeric_limits<std::int32_t>::min(),
+											std::numeric_limits<std::int32_t>::max())),
+										0, {}, 0,
+										state.identity.deviceId.get());
 			}
 			if (previousFocused != (state.focused != 0))
 			{
 				AppendInputRecordLocked(InputRecordType::Focus, 0,
-					static_cast<std::uint16_t>(surfaceIndex), state.focused != 0 ? 1 : 0);
+										static_cast<std::uint16_t>(surfaceIndex), state.focused != 0 ? 1 : 0);
 			}
 			const auto middle = static_cast<std::uint32_t>(MouseButton::Middle);
 			const bool perspectiveTransition = (state.changedButtons.get() & middle) != 0;
@@ -1193,7 +1195,7 @@ namespace cemuextend_hle
 					std::memcpy(&header, payload.data(), sizeof(header));
 					const auto textBytes = header.initialTextBytes.get();
 					const auto allowedFlags = static_cast<std::uint8_t>(TextInputFlag::Active) |
-										  static_cast<std::uint8_t>(TextInputFlag::Multiline);
+											  static_cast<std::uint8_t>(TextInputFlag::Multiline);
 					if (textBytes > std::numeric_limits<std::size_t>::max() ||
 						payload.size() != sizeof(header) + static_cast<std::size_t>(textBytes) ||
 						(header.flags & ~allowedFlags) != 0 ||
@@ -1206,7 +1208,7 @@ namespace cemuextend_hle
 					if (!IsValidUtf8(text))
 						return MakeResponse(request, Status::InvalidArgument);
 					const bool active = (header.flags &
-						static_cast<std::uint8_t>(TextInputFlag::Active)) != 0;
+										 static_cast<std::uint8_t>(TextInputFlag::Active)) != 0;
 					const auto requestId = header.requestId.get();
 					if (active && (!session.textInput.active ||
 								   session.textInput.requestId != requestId))
@@ -2613,7 +2615,7 @@ namespace cemuextend_hle
 	}
 
 	void Cex2Host::InputOwnershipChanged(cemuextend::wire::PointerSurface surface,
-		cemuextend::wire::InputOwnershipV3 ownership)
+										 cemuextend::wire::InputOwnershipV3 ownership)
 	{
 		using namespace cemuextend::wire;
 		if (surface != PointerSurface::Tv && surface != PointerSurface::Drc)
@@ -2625,7 +2627,7 @@ namespace cemuextend_hle
 			!validOwner(ownership.textOwner))
 			return;
 		const auto allowedFlags = static_cast<std::uint8_t>(InputOwnershipFlag::WebUiTextFocused) |
-			static_cast<std::uint8_t>(InputOwnershipFlag::WebUiPointerCaptured);
+								  static_cast<std::uint8_t>(InputOwnershipFlag::WebUiPointerCaptured);
 		if ((ownership.flags & ~allowedFlags) != 0)
 			return;
 		std::lock_guard lock(m_impl->mutex);
@@ -2640,8 +2642,8 @@ namespace cemuextend_hle
 		ownership.epoch = m_impl->nextInputOwnershipEpoch++;
 		current = ownership;
 		m_impl->AppendInputRecordLocked(InputRecordType::Ownership, 0,
-			static_cast<std::uint16_t>(surface), 0, 0, 0,
-			{reinterpret_cast<const std::byte*>(&ownership), sizeof(ownership)});
+										static_cast<std::uint16_t>(surface), 0, 0, 0,
+										{reinterpret_cast<const std::byte*>(&ownership), sizeof(ownership)});
 	}
 
 	void Cex2Host::KeyboardEvent(std::uint16_t usagePage, std::uint16_t usage,
@@ -2726,10 +2728,10 @@ namespace cemuextend_hle
 			ownership.textOwner = title;
 			ownership.flags = 0;
 			m_impl->AppendInputRecordLocked(cemuextend::wire::InputRecordType::Ownership, 0,
-				static_cast<std::uint16_t>(index == 0
-					? cemuextend::wire::PointerSurface::Tv
-					: cemuextend::wire::PointerSurface::Drc),
-				0, 0, 0, {reinterpret_cast<const std::byte*>(&ownership), sizeof(ownership)});
+											static_cast<std::uint16_t>(index == 0
+																		   ? cemuextend::wire::PointerSurface::Tv
+																		   : cemuextend::wire::PointerSurface::Drc),
+											0, 0, 0, {reinterpret_cast<const std::byte*>(&ownership), sizeof(ownership)});
 		}
 		for (const auto [deviceId, usagePage, usage] : m_impl->hostPressedKeyboardDevices)
 			m_impl->AppendInputRecordLocked(
@@ -2812,8 +2814,8 @@ namespace cemuextend_hle
 		for (const auto& [id, session] : m_impl->sessions)
 		{
 			const auto textOperation = session.negotiatedMajor >= 3
-				? cemuextend::wire::InputOperation::SetTextInputV3
-				: cemuextend::wire::InputOperation::SetTextInput;
+										   ? cemuextend::wire::InputOperation::SetTextInputV3
+										   : cemuextend::wire::InputOperation::SetTextInput;
 			if (session.textInput.active && session.textInput.sequence > result.sequence &&
 				Impl::HasPermission(session, 1,
 									static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Input),
@@ -2835,8 +2837,8 @@ namespace cemuextend_hle
 				Impl::HasPermission(session, 1,
 									static_cast<std::uint16_t>(ServiceId::Input),
 									static_cast<std::uint16_t>(session.negotiatedMajor >= 3
-										? InputOperation::SetTextInputV3
-										: InputOperation::SetTextInput)) &&
+																   ? InputOperation::SetTextInputV3
+																   : InputOperation::SetTextInput)) &&
 				(target == nullptr || session.textInput.sequence > target->textInput.sequence))
 				target = &session;
 		if (target == nullptr ||

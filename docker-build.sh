@@ -6,8 +6,8 @@ build_platform="${1:-linux}"
 
 case "${build_platform}" in
 	linux)
-		docker_target="build-linux-artifact"
-		container_artifact="Cemu_release.bundle"
+		docker_target=""
+		container_artifact=""
 		artifact_suffix=""
 		;;
 	win)
@@ -40,6 +40,7 @@ done
 frontend="${CEMU_FRONTEND:-cef}"
 overlay_backend="${CEMU_OVERLAY_BACKEND:-}"
 clean_build="${CEMU_CLEAN_BUILD:-0}"
+rebundle="${CEMU_REBUNDLE:-0}"
 case "${frontend}" in
 	cef|webview|wx|headless) ;;
 	*)
@@ -61,11 +62,75 @@ case "${clean_build}" in
 		exit 2
 		;;
 esac
+case "${rebundle}" in
+	0|1) ;;
+	*)
+		printf 'Unsupported CEMU_REBUNDLE: %s (expected 0 or 1)\n' "${rebundle}" >&2
+		exit 2
+		;;
+esac
 artifact_dir="${project_dir}/result/bin"
 temporary_name=".Cemu_release.$$.tmp${artifact_suffix}"
 artifact_name="Cemu_release${artifact_suffix}"
 if [[ "${build_platform}" == "linux" && "${frontend}" == "headless" ]]; then
 	artifact_name="Cemu_headless"
+fi
+
+compute_runtime_key() {
+	{
+		printf 'runtime-format=1\nfrontend=%s\noverlay=%s\n' \
+			"${frontend}" "${overlay_backend}"
+		git -C "${project_dir}" ls-files -z -- \
+			Dockerfile vcpkg.json \
+			':(glob)**/CMakeLists.txt' 'cmake/**' \
+			tools/Cemu-runtime-launcher.sh tools/bundle-linux-runtime.sh \
+			| LC_ALL=C sort -z \
+			| while IFS= read -r -d '' runtime_input; do
+				sha256sum "${project_dir}/${runtime_input}"
+			done
+		git -C "${project_dir}/dependencies/vcpkg" rev-parse HEAD 2>/dev/null || true
+	} | sha256sum | cut -d' ' -f1
+}
+
+bundle_build=0
+runtime_key=""
+runtime_key_file="${artifact_dir}/.cemu-runtime-key"
+if [[ "${build_platform}" == "linux" ]]; then
+	if [[ "${frontend}" == "headless" ]]; then
+		docker_target="build-linux-binary-artifact"
+		container_artifact="Cemu_release"
+	else
+		runtime_key="$(compute_runtime_key)"
+		runtime_ready=1
+		for runtime_file in Cemu_release .Cemu_release.bin \
+			.cemu-runtime/lib; do
+			if [[ ! -e "${artifact_dir}/${runtime_file}" ]]; then
+				runtime_ready=0
+				break
+			fi
+		done
+		if [[ "${frontend}" == "cef" || "${frontend}" == "webview" ]]; then
+			for runtime_file in libcef.so resources.pak locales; do
+				if [[ ! -e "${artifact_dir}/${runtime_file}" ]]; then
+					runtime_ready=0
+					break
+				fi
+			done
+		fi
+		installed_runtime_key=""
+		if [[ -f "${runtime_key_file}" ]]; then
+			installed_runtime_key="$(<"${runtime_key_file}")"
+		fi
+		if [[ "${rebundle}" == "1" || "${runtime_ready}" != "1" ||
+			"${installed_runtime_key}" != "${runtime_key}" ]]; then
+			docker_target="build-linux-artifact"
+			container_artifact="Cemu_release.bundle"
+			bundle_build=1
+		else
+			docker_target="build-linux-binary-artifact"
+			container_artifact="Cemu_release"
+		fi
+	fi
 fi
 
 # The CMake tree is a shared BuildKit cache. Serialize callers so two wrappers
@@ -97,11 +162,23 @@ source_fingerprint="$(compute_source_fingerprint)"
 
 build_log="$(mktemp "${TMPDIR:-/tmp}/cemu-docker-build.XXXXXX.log")"
 export_dir="$(mktemp -d "${TMPDIR:-/tmp}/cemu-docker-export.XXXXXX")"
+bundle_staging=""
+runtime_binary_temp=""
+runtime_key_temp=""
 builder_name="${CEMU_DOCKER_BUILDER:-cemu-extend}"
 builder_ready=0
 cleanup() {
 	rm -f -- "${build_log}"
 	rm -rf -- "${export_dir}"
+	if [[ -n "${bundle_staging}" ]]; then
+		rm -rf -- "${bundle_staging}"
+	fi
+	if [[ -n "${runtime_binary_temp}" ]]; then
+		rm -f -- "${runtime_binary_temp}"
+	fi
+	if [[ -n "${runtime_key_temp}" ]]; then
+		rm -f -- "${runtime_key_temp}"
+	fi
 	if [[ "${builder_ready}" == "1" ]]; then
 		# Enforce the cap immediately after successful and failed builds instead
 		# of waiting for BuildKit's periodic garbage-collection pass.
@@ -197,12 +274,38 @@ mkdir -p "${artifact_dir}"
 if [[ "${build_platform}" == "win" ]]; then
 	cp "${export_dir}/${container_artifact}" "${artifact_dir}/${temporary_name}"
 	mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/${artifact_name}"
+elif [[ "${frontend}" == "headless" ]]; then
+	cp "${export_dir}/${container_artifact}" "${artifact_dir}/${temporary_name}"
+	mv -f "${artifact_dir}/${temporary_name}" "${artifact_dir}/${artifact_name}"
+elif [[ "${bundle_build}" != "1" ]]; then
+	# Keep the launcher and its already verified runtime in place. Replacing only
+	# the payload avoids exporting and copying CEF on ordinary source changes.
+	runtime_binary_temp="${artifact_dir}/.Cemu_release.bin.$$.tmp"
+	cp "${export_dir}/${container_artifact}" "${runtime_binary_temp}"
+	mv -f "${runtime_binary_temp}" "${artifact_dir}/.Cemu_release.bin"
+	runtime_binary_temp=""
 else
 	# Extraction is additive, so remove obsolete runtime copies that older
 	# bundles may have left behind.
 	rm -f "${artifact_dir}/.cemu-runtime/lib/libcef.so"
 	rm -f "${artifact_dir}/libvulkan.so.1"
-	cp -a "${export_dir}/${container_artifact}/." "${artifact_dir}"
+	# Linux rejects an in-place copy over a running executable with ETXTBSY.
+	# Stage the bundle, install its supporting files first, then atomically
+	# replace the launcher payload. Existing processes retain the old inode and
+	# the next launch uses the newly verified binary.
+	bundle_staging="$(mktemp -d "${artifact_dir}/.bundle-stage.XXXXXX")"
+	cp -a "${export_dir}/${container_artifact}/." "${bundle_staging}"
+	if [[ -f "${bundle_staging}/.Cemu_release.bin" ]]; then
+		runtime_binary_temp="${artifact_dir}/.Cemu_release.bin.$$.tmp"
+		mv "${bundle_staging}/.Cemu_release.bin" "${runtime_binary_temp}"
+	fi
+	cp -a "${bundle_staging}/." "${artifact_dir}"
+	if [[ -n "${runtime_binary_temp}" ]]; then
+		mv -f "${runtime_binary_temp}" "${artifact_dir}/.Cemu_release.bin"
+		runtime_binary_temp=""
+	fi
+	rm -rf -- "${bundle_staging}"
+	bundle_staging=""
 	if [[ "${artifact_name}" != "Cemu_release" ]]; then
 		mv -f "${artifact_dir}/Cemu_release" "${artifact_dir}/${artifact_name}"
 	fi
@@ -216,7 +319,23 @@ else
 			rm -f "${artifact_dir}/.cemu-runtime/lib/$(basename -- "${fallback_library}")"
 		done
 	fi
+	runtime_key_temp="${runtime_key_file}.$$.tmp"
+	printf '%s\n' "${runtime_key}" >"${runtime_key_temp}"
+	mv -f "${runtime_key_temp}" "${runtime_key_file}"
+	runtime_key_temp=""
 fi
 
-printf 'Docker %s release build: %s\n' "${build_platform}" "${artifact_dir}/${artifact_name}"
-sha256sum "${artifact_dir}/${artifact_name}"
+if [[ "${build_platform}" == "linux" && "${frontend}" != "headless" ]]; then
+	if [[ "${bundle_build}" == "1" ]]; then
+		printf 'Docker linux release build (runtime bundled): %s\n' \
+			"${artifact_dir}/${artifact_name}"
+	else
+		printf 'Docker linux release build (runtime reused): %s\n' \
+			"${artifact_dir}/${artifact_name}"
+	fi
+	sha256sum "${artifact_dir}/.Cemu_release.bin"
+else
+	printf 'Docker %s release build: %s\n' "${build_platform}" \
+		"${artifact_dir}/${artifact_name}"
+	sha256sum "${artifact_dir}/${artifact_name}"
+fi

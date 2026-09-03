@@ -103,8 +103,8 @@ namespace Frontend
 		[[nodiscard]] CemuExtendPointerDecision ApplyPointerPolicy(std::uint8_t mode,
 																   std::uint8_t cursor, std::uint32_t flags, bool appActive, bool hasCanvas);
 		[[nodiscard]] CemuExtendButtonUpdate UpdateButtons(CemuExtendMouseTransition transition,
-												   std::uint32_t changedMask, std::uint32_t aggregateButtons = 0,
-												   std::uint16_t deviceId = 0);
+														   std::uint32_t changedMask, std::uint32_t aggregateButtons = 0,
+														   std::uint16_t deviceId = 0);
 		[[nodiscard]] CemuExtendMotionUpdate UpdatePosition(CemuExtendPoint position,
 															CemuExtendPoint captureCenter, bool rawMouseAvailable);
 		void RecordRawPosition(CemuExtendPoint position);

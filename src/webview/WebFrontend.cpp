@@ -1926,8 +1926,8 @@ namespace
 						   const WebFrontend::CefOverlay::InputOwnership& ownership) {
 						Application::PhysicalInputOwnership update;
 						update.surface = surface == Host::PointerSurface::Main
-							? Application::PointerSurface::Tv
-							: Application::PointerSurface::Drc;
+											 ? Application::PointerSurface::Tv
+											 : Application::PointerSurface::Drc;
 						update.keyboardOwner = static_cast<std::uint8_t>(ownership.keyboard);
 						update.pointerOwner = static_cast<std::uint8_t>(ownership.pointer);
 						update.textOwner = static_cast<std::uint8_t>(ownership.text);
@@ -1939,6 +1939,15 @@ namespace
 								 ? static_cast<std::uint8_t>(cemuextend::wire::InputOwnershipFlag::WebUiPointerCaptured)
 								 : 0);
 						m_controller.UpdatePhysicalInputOwnership(update);
+						cemuLog_log(LogType::Force,
+									"CEX2-INPUT ownership surface={} keyboard={} pointer={} text={}",
+									static_cast<unsigned>(surface),
+									static_cast<unsigned>(ownership.keyboard),
+									static_cast<unsigned>(ownership.pointer),
+									static_cast<unsigned>(ownership.text));
+						m_webUiPointerOwnership[surface == Host::PointerSurface::Main ? 0 : 1] =
+							ownership.pointer == WebFrontend::CefOverlay::InputOwner::WebUi;
+						(void)RefreshPointerPolicy(surface);
 					});
 				if (!m_cefOverlay)
 					throw std::runtime_error("failed to create the shared CEF browser runtime");
@@ -3574,12 +3583,24 @@ namespace
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 			if (m_cefOverlay)
 			{
+				m_cefOverlay->SetInputSuspended(Host::PointerSurface::Main,
+												!metrics.appActive);
+				m_cefOverlay->SetInputSuspended(Host::PointerSurface::Pad,
+												!metrics.appActive);
 				if (m_cefOverlay->HasWindow(0))
 				{
 					const auto browserBounds = m_nativeWindow->GetBrowserBounds();
 					m_cefOverlay->ResizeWindow(0, std::max(browserBounds.width, 1),
 											   std::max(browserBounds.height, 1), m_nativeWindow->GetBrowserDpiScale());
-					m_cefOverlay->SetWindowFocus(0, metrics.appActive);
+					// Window 0 is the launcher browser. Game-window metrics must never
+					// focus it: its native X11 child otherwise takes keyboard focus back
+					// from the render window and leaves both Minecraft and the OSR Dock
+					// without usable input until the user changes focus manually.
+					const bool launcherFocused =
+						metrics.appActive &&
+						(!m_windowState || m_windowState->Snapshot().mode ==
+											   WebFrontend::MainWindowContentMode::Library);
+					m_cefOverlay->SetWindowFocus(0, launcherFocused);
 				}
 				m_cefOverlay->Resize(Host::PointerSurface::Main, metrics.physicalWidth,
 									 metrics.physicalHeight, metrics.dpiScale);
@@ -3590,10 +3611,12 @@ namespace
 #endif
 			if (previous.appActive != metrics.appActive)
 			{
+				cemuLog_log(LogType::Force, "CEX2-FOCUS appActive={}",
+							metrics.appActive);
 				m_controller.PointerFocusChanged(metrics.appActive);
 				if (!metrics.appActive && m_hostServices)
 				{
-					ReleaseNativeInput(false);
+					ReleaseNativeInput(false, false);
 				}
 			}
 		}
@@ -3626,6 +3649,25 @@ namespace
 		Frontend::CemuExtendPointerDecision RefreshPointerPolicy(Host::PointerSurface surface)
 		{
 			auto& bridge = PointerBridge(surface);
+			const auto index = surface == Host::PointerSurface::Main ? 0U : 1U;
+			if (m_webUiPointerOwnership[index])
+			{
+				// The Dock owns the complete interactive surface. Keep this override in
+				// the common refresh path so a later physical mouse event cannot reapply
+				// Minecraft's relative/raw policy and hide the cursor again.
+				auto decision = bridge.ApplyPointerPolicy(0, 0, 0, false, false);
+				decision.ownsPointer = true;
+				decision.showCursor = true;
+				decision.requestRawMouse = false;
+				m_nativeWindow->ApplyPointerPresentation({
+					.surface = surface,
+					.ownsPointer = true,
+					.showCursor = true,
+					.leavingPolicy = decision.leavingPolicy,
+					.rawMouseEnabled = false,
+				});
+				return decision;
+			}
 			const auto policy = m_controller.GetPointerPolicy();
 			const auto metrics = m_hostState->GetWindowMetrics();
 			const bool hasCanvas = surface == Host::PointerSurface::Main
@@ -3700,15 +3742,15 @@ namespace
 													  .leavingPolicy = true});
 		}
 
-		void ReleaseNativeInput(bool resetTextInput)
+		void ReleaseNativeInput(bool resetTextInput, bool releaseOverlayIntent = true)
 		{
-		#if defined(CEMU_OVERLAY_BACKEND_CEF)
-			if (m_cefOverlay)
+#if defined(CEMU_OVERLAY_BACKEND_CEF)
+			if (m_cefOverlay && releaseOverlayIntent)
 			{
 				m_cefOverlay->ReleaseInput(Host::PointerSurface::Main);
 				m_cefOverlay->ReleaseInput(Host::PointerSurface::Pad);
 			}
-		#endif
+#endif
 			m_nativeKeyboardFocus.Reset();
 			if (m_hostServices)
 				m_hostServices->ReleaseKeys();
@@ -3731,8 +3773,13 @@ namespace
 			metrics.appActive = false;
 			m_hostState->UpdateMetrics(metrics);
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
-			if (m_cefOverlay && m_cefOverlay->HasWindow(0))
-				m_cefOverlay->SetWindowFocus(0, false);
+			if (m_cefOverlay)
+			{
+				m_cefOverlay->SetInputSuspended(Host::PointerSurface::Main, true);
+				m_cefOverlay->SetInputSuspended(Host::PointerSurface::Pad, true);
+				if (m_cefOverlay->HasWindow(0))
+					m_cefOverlay->SetWindowFocus(0, false);
+			}
 #endif
 			m_controller.PointerFocusChanged(false);
 		}
@@ -3940,10 +3987,10 @@ namespace
 				normalized.usage = UsbHidUsage(normalized.key);
 			if (!normalized.deviceId)
 				normalized.deviceId = normalized.kind == WebFrontend::NativeInputKind::Key ||
-										 normalized.kind == WebFrontend::NativeInputKind::Character ||
-										 normalized.kind == WebFrontend::NativeInputKind::TextComposition
-					? 1
-					: static_cast<std::uint16_t>(normalized.surface == Host::PointerSurface::Main ? 1 : 2);
+											  normalized.kind == WebFrontend::NativeInputKind::Character ||
+											  normalized.kind == WebFrontend::NativeInputKind::TextComposition
+										  ? 1
+										  : static_cast<std::uint16_t>(normalized.surface == Host::PointerSurface::Main ? 1 : 2);
 			const bool keyboardStateChanged =
 				normalized.kind == WebFrontend::NativeInputKind::Key && normalized.usage &&
 				m_nativeKeyboardFocus.SetKey(normalized.usage, normalized.pressed);
@@ -3956,10 +4003,10 @@ namespace
 				const auto trace = traceCount.fetch_add(1, std::memory_order_relaxed);
 				if (trace < 128)
 					cemuLog_log(LogType::Force,
-							"CEX2-KEY frontend n={} key={} usage={} pressed={} repeat={} modifiers={} surface={}",
-							trace, normalized.key, normalized.usage, normalized.pressed,
-							normalized.repeat, normalized.modifiers,
-							static_cast<unsigned>(normalized.surface));
+								"CEX2-KEY frontend n={} key={} usage={} pressed={} repeat={} modifiers={} surface={}",
+								trace, normalized.key, normalized.usage, normalized.pressed,
+								normalized.repeat, normalized.modifiers,
+								static_cast<unsigned>(normalized.surface));
 			}
 
 			auto& state = m_pointerStates[normalized.surface == Host::PointerSurface::Main ? 0 : 1];
@@ -4020,7 +4067,7 @@ namespace
 						{normalized.contentWidth / 2, normalized.contentHeight / 2},
 						bridge.RawMouseRequested());
 					SubmitPointer(normalized, motion.delta.x, motion.delta.y, 0, 0, 0, 0,
-							  motion.rawRelative);
+								  motion.rawRelative);
 					break;
 				}
 				case WebFrontend::NativeInputKind::PointerButton:
@@ -4034,7 +4081,7 @@ namespace
 										   : Frontend::CemuExtendMouseTransition::Up,
 						mask, 0, normalized.deviceId);
 					SubmitPointer(normalized, 0, 0, 0, 0, update.changed,
-							  update.deviceButtons, false);
+								  update.deviceButtons, false);
 					break;
 				}
 				case WebFrontend::NativeInputKind::PointerWheel:
@@ -4051,7 +4098,7 @@ namespace
 					bridge.MarkRawMouseSeen();
 					bridge.RecordRawPosition({state.x, state.y});
 					SubmitPointer(normalized, normalized.deltaX, normalized.deltaY, 0, 0, 0, 0,
-							  true);
+								  true);
 					break;
 				case WebFrontend::NativeInputKind::Key:
 					if (normalized.usage)
@@ -4062,12 +4109,12 @@ namespace
 						if (normalized.pressed && keyboardStateChanged)
 							ConfirmNativeKeyboardFocus();
 						m_controller.SubmitKeyboard(normalized.usagePage, normalized.usage,
-												normalized.pressed,
-												normalized.modifiers, normalized.deviceId);
+													normalized.pressed,
+													normalized.modifiers, normalized.deviceId);
 					}
 					break;
 				case WebFrontend::NativeInputKind::FocusLost:
-					ReleaseNativeInput(false);
+					ReleaseNativeInput(false, false);
 					ConfirmNativeFocusLoss();
 					break;
 				default:
@@ -4078,8 +4125,7 @@ namespace
 #if defined(CEMU_OVERLAY_BACKEND_CEF)
 			if (route.sendOverlayInput)
 			{
-				if (WebFrontend::CefOverlay::IsPointerInput(normalized.kind) &&
-					!PointerBridge(normalized.surface).RawMouseRequested())
+				if (WebFrontend::CefOverlay::IsPointerInput(normalized.kind))
 				{
 					// An interactive OSR layer owns the real host pointer. Do not make
 					// cursor release depend on the guest's mapped-injection permission:
@@ -4100,7 +4146,7 @@ namespace
 			{
 			case WebFrontend::NativeInputKind::PointerMove:
 				m_hostServices->UpdateMousePosition(normalized.surface,
-											{normalized.x, normalized.y});
+													{normalized.x, normalized.y});
 				break;
 			case WebFrontend::NativeInputKind::PointerButton:
 				if (normalized.button == 1 || normalized.button == 3)
@@ -4118,7 +4164,7 @@ namespace
 				break;
 			case WebFrontend::NativeInputKind::Touch:
 				m_hostServices->UpdateTouch(normalized.surface,
-										{normalized.x, normalized.y}, normalized.pressed);
+											{normalized.x, normalized.y}, normalized.pressed);
 				break;
 			case WebFrontend::NativeInputKind::Key:
 			{
@@ -6877,6 +6923,7 @@ namespace
 		};
 		std::array<PointerState, 2> m_pointerStates;
 		std::array<Frontend::CemuExtendFrontendBridge, 2> m_pointerBridges;
+		std::array<bool, 2> m_webUiPointerOwnership{};
 		WebFrontend::NativeKeyboardFocusTracker m_nativeKeyboardFocus;
 		mutable std::mutex m_hotkeyMutex;
 		Application::HotkeySettingsModel m_hotkeySettings;

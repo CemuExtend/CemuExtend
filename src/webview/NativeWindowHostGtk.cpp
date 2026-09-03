@@ -72,8 +72,8 @@ namespace WebFrontend
 			GdkModifierType consumed{};
 			auto* keymap = gdk_keymap_get_for_display(gtk_widget_get_display(source));
 			if (keymap && gdk_keymap_translate_keyboard_state(
-					  keymap, event.hardware_keycode, static_cast<GdkModifierType>(0),
-					  event.group, &baseKeyval, nullptr, nullptr, &consumed))
+							  keymap, event.hardware_keycode, static_cast<GdkModifierType>(0),
+							  event.group, &baseKeyval, nullptr, nullptr, &consumed))
 			{
 				if (const auto usage = XkbBaseKeyvalUsbHidUsage(baseKeyval))
 					return usage;
@@ -134,7 +134,7 @@ namespace WebFrontend
 			int errorBase{};
 			if (!m_xDisplay ||
 				!XQueryExtension(m_xDisplay, "XInputExtension", &m_opcode,
-							 &eventBase, &errorBase))
+								 &eventBase, &errorBase))
 			{
 				m_xDisplay = nullptr;
 				return false;
@@ -228,14 +228,14 @@ namespace WebFrontend
 			if (x || y)
 			{
 				const auto deviceId = sourceId > 0 &&
-									 sourceId <= std::numeric_limits<std::uint16_t>::max()
-					? static_cast<std::uint16_t>(sourceId)
-					: std::uint16_t{};
+											  sourceId <= std::numeric_limits<std::uint16_t>::max()
+										  ? static_cast<std::uint16_t>(sourceId)
+										  : std::uint16_t{};
 				DispatchGtkInput(m_active->contentWidget, m_active,
-					{.kind = NativeInputKind::RawMouse,
-					 .deltaX = x,
-					 .deltaY = y,
-					 .deviceId = deviceId});
+								 {.kind = NativeInputKind::RawMouse,
+								  .deltaX = x,
+								  .deltaY = y,
+								  .deviceId = deviceId});
 			}
 			XFreeEventData(m_xDisplay, &event->xcookie);
 			return GDK_FILTER_CONTINUE;
@@ -250,25 +250,25 @@ namespace WebFrontend
 			gtk_widget_add_events(widget, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK |
 											  GDK_BUTTON_RELEASE_MASK | GDK_SCROLL_MASK | GDK_TOUCH_MASK);
 			gtk_widget_add_events(keySource,
-							  GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK);
+								  GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK);
 			auto* binding = new GtkInputBinding{surface, handler, widget};
 			if (auto* display = gtk_widget_get_display(keySource);
 				display && GDK_IS_X11_DISPLAY(display))
 			{
 				Bool supported{};
 				XkbSetDetectableAutoRepeat(gdk_x11_display_get_xdisplay(display), True,
-									   &supported);
+										   &supported);
 				binding->detectableAutoRepeat = supported != False;
 			}
 			g_object_set_data_full(G_OBJECT(keySource), "cemu-input-binding", binding, +[](gpointer data) { delete static_cast<GtkInputBinding*>(data); });
 			g_signal_connect(widget, "motion-notify-event", G_CALLBACK((+[](GtkWidget* source, GdkEventMotion* event, gpointer data) -> gboolean {
 								 auto* binding = static_cast<GtkInputBinding*>(data);
 								 const auto scale = gtk_widget_get_scale_factor(source);
-									 if (binding->captured)
-									 {
-										 if (RawMouse().IsActive(binding))
-											 return TRUE;
-										 if (binding->warpCapture)
+								 if (binding->captured)
+								 {
+									 if (RawMouse().IsActive(binding))
+										 return TRUE;
+									 if (binding->warpCapture)
 									 {
 										 GtkAllocation allocation{};
 										 gtk_widget_get_allocation(source, &allocation);
@@ -361,8 +361,8 @@ namespace WebFrontend
 									 if (auto* next = gdk_event_peek())
 									 {
 										 autoRepeatRelease = next->type == GDK_KEY_PRESS &&
-																 next->key.hardware_keycode == event->hardware_keycode &&
-																 next->key.time == event->time;
+															 next->key.hardware_keycode == event->hardware_keycode &&
+															 next->key.time == event->time;
 										 gdk_event_free(next);
 									 }
 								 }
@@ -587,20 +587,20 @@ namespace WebFrontend
 					// all while a title is running.
 					gtk_widget_add_events(m_window, GDK_FOCUS_CHANGE_MASK);
 					g_signal_connect(m_window, "focus-in-event", G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-									 self.ClaimInputFocus();
-									 if (self.m_metricsHandler)
-										 self.m_metricsHandler();
-									 return FALSE;
-								 }),
-								 this);
+										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+										 self.ClaimInputFocus();
+										 if (self.m_metricsHandler)
+											 self.m_metricsHandler();
+										 return FALSE;
+									 }),
+									 this);
 					g_signal_connect(m_window, "focus-out-event", G_CALLBACK(+[](GtkWidget*, GdkEventFocus*, gpointer data) -> gboolean {
-									 auto& self = *static_cast<GtkPadRenderRegion*>(data);
-									 if (self.m_metricsHandler)
-										 self.m_metricsHandler();
-									 return FALSE;
-								 }),
-								 this);
+										 auto& self = *static_cast<GtkPadRenderRegion*>(data);
+										 if (self.m_metricsHandler)
+											 self.m_metricsHandler();
+										 return FALSE;
+									 }),
+									 this);
 					gtk_widget_show_all(m_window);
 					gtk_widget_realize(m_widget);
 					gtk_widget_hide(m_window);
@@ -699,7 +699,8 @@ namespace WebFrontend
 					XSetInputFocus(display, self, RevertToParent, CurrentTime);
 					XSync(display, False);
 				}
-				(void)gdk_x11_display_error_trap_pop(gdkDisplay);
+				[[maybe_unused]] const auto xError =
+					gdk_x11_display_error_trap_pop(gdkDisplay);
 			}
 			void RequestRedraw()
 			{
@@ -1198,11 +1199,11 @@ namespace WebFrontend
 					binding->captured = wantsCapture && grabbed;
 					binding->rawMouseEnabled = presentation.rawMouseEnabled;
 					const bool usesRawMouse = binding->captured &&
-						binding->rawMouseEnabled && RawMouse().Activate(binding, display);
+											  binding->rawMouseEnabled && RawMouse().Activate(binding, display);
 					if (!usesRawMouse)
 						RawMouse().Deactivate(binding);
 					binding->warpCapture = binding->captured &&
-						GDK_IS_X11_DISPLAY(display) && !usesRawMouse;
+										   GDK_IS_X11_DISPLAY(display) && !usesRawMouse;
 					if (binding->warpCapture && presentation.enteringCapture)
 					{
 						GtkAllocation allocation{};
