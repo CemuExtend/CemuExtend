@@ -275,6 +275,7 @@ add_library(CemuCafe
 	OS/libs/cemuextend/Cex2Host.cpp
 	OS/libs/cemuextend/CemodWebUiHost.h
   OS/libs/cemuextend/Cex2Http.cpp
+  OS/libs/cemuextend/Cex2Media.cpp
   OS/libs/cemuextend/Cex2Http.h
   OS/libs/cemuextend/Cex2Owner.h
   OS/libs/cemuextend/Cex2Storage.cpp
@@ -815,6 +816,7 @@ if(BUILD_TESTING)
 		HW/Espresso/ModExecutionContext.cpp
 		OS/libs/cemuextend/Cex2Host.cpp
 		OS/libs/cemuextend/Cex2Http.cpp
+		OS/libs/cemuextend/Cex2Media.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/Cex2HostTests.cpp
 	)
@@ -912,6 +914,7 @@ if(BUILD_TESTING)
 		HW/Espresso/WupsPluginHeap.cpp
 		OS/libs/cemuextend/Cex2Host.cpp
 		OS/libs/cemuextend/Cex2Http.cpp
+		OS/libs/cemuextend/Cex2Media.cpp
 		OS/libs/cemuextend/Cex2Storage.cpp
 		tests/TrustedCemodRuntimeStub.cpp
 		tests/WupsRuntimeStub.cpp

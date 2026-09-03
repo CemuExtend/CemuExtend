@@ -2,6 +2,7 @@
 #include "input/InputManager.h"
 #include "audio/IAudioInputAPI.h"
 #include "config/CemuConfig.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Media.h"
 
 enum class MIC_RESULT
 {
@@ -432,6 +433,7 @@ void mic_updateOnAXFrame()
 	{
 		sint16 micSampleData[MIC_SAMPLES_PER_3MS_32KHZ];
 		g_inputAudio->ConsumeBlock(micSampleData);
+		cemuextend_hle::Cex2Media::MixMicrophone(micSampleData);
 		mic_feedSamples(0, micSampleData, MIC_SAMPLES_PER_3MS_32KHZ);
 	}
 	else
@@ -451,6 +453,7 @@ void mic_updateOnAXFrame()
 		{
 			memset(micSampleData, 0x00, sizeof(micSampleData));
 		}
+		cemuextend_hle::Cex2Media::MixMicrophone(micSampleData);
 		mic_feedSamples(0, micSampleData, micSampleCount);
 	}
 }

@@ -5,6 +5,7 @@
 #include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Media.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include "cemuextend/services.hpp"
@@ -1377,6 +1378,85 @@ namespace
 		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
 	}
 
+	std::vector<std::byte> MediaOpenPayload(std::string_view url)
+	{
+		using namespace cemuextend::wire;
+		MediaOpenRequest request{};
+		request.width = 16;
+		request.height = 16;
+		request.framesPerSecond = 1;
+		request.paletteEntries = 2;
+		request.urlBytes = static_cast<std::uint32_t>(url.size());
+		std::vector<std::byte> payload(sizeof(request) + url.size() + 8U);
+		std::memcpy(payload.data(), &request, sizeof(request));
+		std::memcpy(payload.data() + sizeof(request), url.data(), url.size());
+		payload[payload.size() - 4U] = std::byte{0xff};
+		payload[payload.size() - 1U] = std::byte{0xff};
+		return payload;
+	}
+
+	void TestMediaValidationOwnershipAndPermission()
+	{
+		using namespace cemuextend::wire;
+		constexpr std::uint64_t owner = 0x4455;
+		CHECK(cemuextend_hle::Cex2Media::ActiveSessions() == 0);
+		auto invalid = MediaOpenPayload("https://example.com/video");
+		auto result = cemuextend_hle::Cex2Media::Dispatch(
+			owner, "media-test", static_cast<std::uint16_t>(MediaOperation::Open), invalid);
+		CHECK(result.status == Status::InvalidArgument);
+
+		auto valid = MediaOpenPayload("https://youtu.be/abcdefghijk");
+		result = cemuextend_hle::Cex2Media::Dispatch(
+			owner, "media-test", static_cast<std::uint16_t>(MediaOperation::Open), valid);
+		CHECK(result.status == Status::Ok && result.payload.size() == sizeof(MediaOpenResponse));
+		const auto handle = reinterpret_cast<const MediaOpenResponse*>(result.payload.data())->handle.get();
+		CHECK(handle != 0 && cemuextend_hle::Cex2Media::ActiveSessions() == 1);
+
+		MediaStatusRequest statusRequest{};
+		statusRequest.handle = handle;
+		const auto statusBytes = std::span<const std::byte>(
+			reinterpret_cast<const std::byte*>(&statusRequest), sizeof(statusRequest));
+		result = cemuextend_hle::Cex2Media::Dispatch(
+			owner + 1, "other", static_cast<std::uint16_t>(MediaOperation::Status), statusBytes);
+		CHECK(result.status == Status::NotFound);
+
+		Be32 close{handle};
+		result = cemuextend_hle::Cex2Media::Dispatch(
+			owner,
+			"media-test",
+			static_cast<std::uint16_t>(MediaOperation::Close),
+			{reinterpret_cast<const std::byte*>(&close), sizeof(close)});
+		CHECK(result.status == Status::Ok && cemuextend_hle::Cex2Media::ActiveSessions() == 0);
+
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		ModExecutionContext context(93, 1, "media-permission-principal");
+		const auto session = Open(host, context);
+		auto request = Request(1,
+							   static_cast<std::uint16_t>(MediaOperation::Open), valid, ServiceId::Media);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		auto response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::PermissionDenied));
+
+		context.SetGrantedPermissions(cemuextend_hle::kCemodNetworkPermission);
+		request = Request(2,
+						  static_cast<std::uint16_t>(MediaOperation::Open), valid, ServiceId::Media);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::PermissionDenied));
+
+		context.SetGrantedPermissions(cemuextend_hle::kCemodNetworkPermission | 4U);
+		request = Request(3,
+						  static_cast<std::uint16_t>(MediaOperation::Open), invalid, ServiceId::Media);
+		CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, context, session);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::InvalidArgument));
+		CHECK(host.Close(context, session) == static_cast<std::int32_t>(Error::Ok));
+	}
+
 	void TestWebUiServiceLifecycle()
 	{
 		using namespace cemuextend::wire;
@@ -1512,6 +1592,7 @@ int main(int argc, char** argv)
 		TestMouseAndPointerPolicy();
 		TestHttpValidationAndOwnership();
 		TestHttpPermissionGate();
+		TestMediaValidationOwnershipAndPermission();
 		TestWebUiServiceLifecycle();
 		TestDiagnosticsGraphicsApi();
 		TestTimingFrameRateOverride();

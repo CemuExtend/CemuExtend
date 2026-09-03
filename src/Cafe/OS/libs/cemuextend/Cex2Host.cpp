@@ -4,6 +4,7 @@
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Media.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 #include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "host/contracts/HostContracts.h"
@@ -122,6 +123,7 @@ namespace cemuextend_hle
 		using cemuextend::wire::Error;
 		using cemuextend::wire::ServiceId;
 		using cemuextend::wire::Status;
+		constexpr std::uint32_t kMediaPermissions = kCemodNetworkPermission | 4U;
 
 		struct ServiceDefinition
 		{
@@ -146,6 +148,7 @@ namespace cemuextend_hle
 			Http,
 			Ui,
 			Timing,
+			Media,
 		};
 
 		struct OperationDefinition
@@ -210,6 +213,12 @@ namespace cemuextend_hle
 			OperationDefinition{11, 9, 1, kCemodUiPermission, sizeof(cemuextend::wire::UiInteractiveRequest), 0, 30, 60, Handler::Ui},
 			OperationDefinition{12, 1, 1, 1, 0, sizeof(cemuextend::wire::TimingFrameRatePayload), 10, 20, Handler::Timing},
 			OperationDefinition{12, 2, 1, 2, sizeof(cemuextend::wire::TimingFrameRatePayload), sizeof(cemuextend::wire::TimingFrameRatePayload), 10, 20, Handler::Timing},
+			OperationDefinition{13, 1, 1, kMediaPermissions, 0, 0, 2, 4, Handler::Media},
+			OperationDefinition{13, 2, 1, kMediaPermissions, 4096, sizeof(cemuextend::wire::MediaOpenResponse), 2, 4, Handler::Media},
+			OperationDefinition{13, 3, 1, kMediaPermissions, sizeof(cemuextend::wire::MediaControlRequest), 0, 30, 60, Handler::Media},
+			OperationDefinition{13, 4, 1, kMediaPermissions, sizeof(cemuextend::wire::MediaStatusRequest), sizeof(cemuextend::wire::MediaStatusResponse), 30, 60, Handler::Media},
+			OperationDefinition{13, 5, 1, kMediaPermissions, sizeof(cemuextend::wire::MediaReadFrameRequest), 65520, 600, 1200, Handler::Media},
+			OperationDefinition{13, 6, 1, kMediaPermissions, 4, 0, 10, 20, Handler::Media},
 		};
 
 		const OperationDefinition* FindOperation(std::uint16_t service, std::uint16_t operation)
@@ -233,6 +242,7 @@ namespace cemuextend_hle
 			ServiceDefinition{10, 1, 32, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{11, 1, kCemodUiPermission, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{12, 1, 3, sizeof(cemuextend::wire::TimingFrameRatePayload), sizeof(cemuextend::wire::TimingFrameRatePayload)},
+			ServiceDefinition{13, 1, kMediaPermissions, 64U * 1024U, 64U * 1024U},
 		};
 
 		struct WireServiceDefinition
@@ -509,8 +519,10 @@ namespace cemuextend_hle
 			// HTTP is authorized by the dedicated per-Mod Network grant. It is not
 			// part of the legacy title-wide read/write/inject service matrix.
 			const bool networkService =
-				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Http) &&
-				permission == kCemodNetworkPermission;
+				(service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Http) &&
+				 permission == kCemodNetworkPermission) ||
+				(service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Media) &&
+				 permission == kMediaPermissions);
 			const bool uiService =
 				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Ui) &&
 				permission == kCemodUiPermission;
@@ -1471,6 +1483,16 @@ namespace cemuextend_hle
 					AuditSensitiveUse(session.owner->Principal(), "Network Fetch", false);
 				auto result = Cex2Http::Dispatch(session.addressSpaceId,
 												 session.owner->Principal(), request.operation.get(), payload);
+				if (result.status != Status::Ok)
+					return MakeResponse(request, result.status);
+				return MakeResponse(request, Status::Ok, result.payload);
+			}
+			if (definition->handler == Handler::Media)
+			{
+				if (request.operation.get() == static_cast<std::uint16_t>(MediaOperation::Open))
+					AuditSensitiveUse(session.owner->Principal(), "YouTube Media", false);
+				auto result = Cex2Media::Dispatch(session.addressSpaceId, session.owner->Principal(),
+												  request.operation.get(), payload);
 				if (result.status != Status::Ok)
 					return MakeResponse(request, result.status);
 				return MakeResponse(request, Status::Ok, result.payload);
@@ -2444,6 +2466,7 @@ namespace cemuextend_hle
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
 		lock.unlock();
+		Cex2Media::ReleaseSession(addressSpaceId);
 		if (webUi)
 			webUi->CloseSession(addressSpaceId, generation, sessionId);
 		return static_cast<std::int32_t>(Error::Ok);
@@ -2465,6 +2488,7 @@ namespace cemuextend_hle
 		// Transfers are scoped to the address space, so they outlive one session of
 		// it but never the owner that started them.
 		Cex2Http::ReleaseSession(owner.AddressSpaceId());
+		Cex2Media::ReleaseSession(owner.AddressSpaceId());
 		auto webUi = m_impl->webUi;
 		const auto addressSpaceId = owner.AddressSpaceId();
 		const auto generation = owner.Generation();
@@ -2482,7 +2506,10 @@ namespace cemuextend_hle
 		const bool hadTextInput = std::ranges::any_of(m_impl->sessions,
 													  [](const auto& entry) { return entry.second.textInput.active; });
 		for (const auto& entry : m_impl->sessions)
+		{
 			Cex2Http::ReleaseSession(entry.second.addressSpaceId);
+			Cex2Media::ReleaseSession(entry.second.addressSpaceId);
+		}
 		m_impl->sessions.clear();
 		m_impl->RefreshGuestFrameRateLocked();
 		m_impl->webUiContents.clear();
