@@ -987,14 +987,35 @@ namespace WebFrontend
 				auto* self = reinterpret_cast<WinWindowHost*>(GetWindowLongPtrW(window, GWLP_USERDATA));
 				if (!self || !self->m_textInputProc)
 					return DefWindowProcW(window, message, wparam, lparam);
+				bool composing = !self->m_textPreedit.empty();
+				if (auto context = ImmGetContext(window))
+				{
+					composing = composing || ImmGetCompositionStringW(context, GCS_COMPSTR, nullptr, 0) > 0;
+					ImmReleaseContext(window, context);
+				}
 				const auto result = CallWindowProcW(self->m_textInputProc, window, message, wparam, lparam);
 				if (message == WM_IME_COMPOSITION || message == WM_CHAR || message == WM_PASTE ||
 					message == WM_CUT || message == WM_CLEAR || message == WM_UNDO)
 					self->DispatchTextComposition();
-				if ((message == WM_KEYDOWN || message == WM_KEYUP) && wparam == VK_RETURN &&
-					self->m_textPreedit.empty() && self->m_inputHandler)
-					self->m_inputHandler({.kind = NativeInputKind::Key, .key = VK_RETURN, .usage = 0x28, .modifiers = KeyModifiers(), .pressed = message == WM_KEYDOWN});
+				if (message == WM_KEYDOWN && !composing &&
+					(wparam == VK_RETURN || wparam == VK_ESCAPE))
+					self->DispatchTextAction(wparam == VK_RETURN);
 				return result;
+			}
+
+			void DispatchTextAction(bool accepted)
+			{
+				if (!m_textInput || !m_inputHandler || !m_textInputSequence)
+					return;
+				const auto length = GetWindowTextLengthW(m_textInput);
+				std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+				if (length > 0)
+					GetWindowTextW(m_textInput, text.data(), length + 1);
+				text.resize(static_cast<std::size_t>(length));
+				m_inputHandler({.kind = NativeInputKind::TextAction,
+								.text = Utf8(text),
+								.textSequence = m_textInputSequence,
+								.textAccepted = accepted});
 			}
 
 			void DispatchTextComposition()

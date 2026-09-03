@@ -379,6 +379,11 @@ namespace Application
 		m_backend->SubmitTextComposition(text, preedit, cursor, selectionLength);
 	}
 
+	void EmulationController::SubmitTextAction(bool accepted, std::string_view text)
+	{
+		m_backend->SubmitTextAction(accepted, text);
+	}
+
 	void EmulationController::SaveCemodPermissionDecisions(std::uint64_t titleId,
 														   std::span<const CemodPermissionDecision> decisions)
 	{

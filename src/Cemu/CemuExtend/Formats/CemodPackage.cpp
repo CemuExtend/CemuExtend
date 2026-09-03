@@ -681,6 +681,7 @@ namespace
 			{"capture", 16U},
 			{"network", 32U},
 			{"ui", 64U},
+			{"microphone", 128U},
 		};
 		for (const auto& value : document["requested_permissions"].GetArray())
 		{

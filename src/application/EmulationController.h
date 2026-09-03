@@ -233,6 +233,7 @@ namespace Application
 		virtual void SubmitTextComposition(std::string_view text,
 										   std::string_view preedit, std::uint32_t cursor,
 										   std::uint32_t selectionLength) = 0;
+		virtual void SubmitTextAction(bool, std::string_view) {}
 		virtual void SaveCemodPermissionDecisions(std::uint64_t titleId,
 												  std::span<const CemodPermissionDecision> decisions) = 0;
 		[[nodiscard]] virtual std::vector<CemodPackage> DiscoverCemodCatalog() = 0;
@@ -288,6 +289,7 @@ namespace Application
 		[[nodiscard]] TextInputState GetTextInputState();
 		void SubmitTextComposition(std::string_view text, std::string_view preedit,
 								   std::uint32_t cursor, std::uint32_t selectionLength);
+		void SubmitTextAction(bool accepted, std::string_view text);
 		void SaveCemodPermissionDecisions(std::uint64_t titleId,
 										  std::span<const CemodPermissionDecision> decisions);
 		[[nodiscard]] std::vector<CemodPackage> DiscoverCemodCatalog();

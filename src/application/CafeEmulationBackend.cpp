@@ -3704,6 +3704,14 @@ namespace Application
 					text, preedit, cursor, selectionLength);
 			}
 
+			void SubmitTextAction(bool accepted, std::string_view text) override
+			{
+				cemuextend_hle::Cex2Host::Instance().TextActionEvent(
+					accepted ? cemuextend::wire::TextAction::Commit
+							 : cemuextend::wire::TextAction::Cancel,
+					text);
+			}
+
 			void SaveCemodPermissionDecisions(std::uint64_t titleId,
 											  std::span<const CemodPermissionDecision> decisions) override
 			{

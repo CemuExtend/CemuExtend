@@ -1,5 +1,8 @@
 #pragma once
 
+#include <span>
+#include <cstdint>
+
 class IAudioInputAPI
 {
 	friend class GeneralSettings2;
@@ -56,6 +59,15 @@ class IAudioInputAPI
 	}
 
 	virtual bool ConsumeBlock(sint16* data) = 0;
+	// Returns only captured samples and never pads with silence. CEX2 uses this
+	// to keep its guest-side jitter buffer from treating underflow as real data.
+	virtual std::size_t ConsumeAvailable(std::span<sint16> data,
+										 std::uint64_t* captureTimeNs = nullptr) = 0;
+	virtual std::uint64_t ConsumeDroppedSamples() = 0;
+	virtual bool HasFailed() const
+	{
+		return false;
+	}
 	virtual bool Play() = 0;
 	virtual bool Stop() = 0;
 	virtual bool IsPlaying() const = 0;
@@ -64,7 +76,7 @@ class IAudioInputAPI
 	static void InitializeStatic();
 	static bool IsAudioInputAPIAvailable(AudioInputAPI api);
 
-	static std::unique_ptr<IAudioInputAPI> CreateDevice(AudioInputAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample);
+	static std::unique_ptr<IAudioInputAPI> CreateDevice(AudioInputAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample, bool voice = false, uint32 target_latency_samples = 0);
 	static std::vector<DeviceDescriptionPtr> GetDevices(AudioInputAPI api);
 
   protected:

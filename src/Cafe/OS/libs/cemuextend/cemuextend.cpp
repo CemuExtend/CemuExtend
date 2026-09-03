@@ -216,7 +216,9 @@ namespace cemuextend_hle
 	static_assert((1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceRead)) ==
 						  kCemodServiceReadApproval &&
 					  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceCapture)) ==
-						  kCemodServiceCaptureApproval,
+						  kCemodServiceCaptureApproval &&
+					  (1ULL << static_cast<unsigned int>(CemuExtend::CemodPermission::ServiceMicrophone)) ==
+						  kCemodServiceMicrophoneApproval,
 				  "CemodPermission::Service* must match the kCemodService*Approval bits");
 
 	CemodInspectionInfo InspectCemodPackage(const CemodPackageInfo& package,
@@ -320,6 +322,8 @@ namespace cemuextend_hle
 				return "Service: clipboard";
 			case CemuExtend::CemodPermission::ServiceCapture:
 				return "Service: screen capture";
+			case CemuExtend::CemodPermission::ServiceMicrophone:
+				return "Service: microphone";
 			case CemuExtend::CemodPermission::Modules:
 				return "Aroma/WUMS modules";
 			case CemuExtend::CemodPermission::PluginManagement:

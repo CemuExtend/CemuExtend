@@ -2049,6 +2049,24 @@ void MainWindow::OnCemuExtendTextChanged(wxCommandEvent& event)
 	PublishCemuExtendTextComposition();
 }
 
+void MainWindow::OnCemuExtendTextEnter(wxCommandEvent&)
+{
+	if (CanSubmitCemuExtendTextInput())
+		m_emulationController.SubmitTextAction(
+			true, m_cemuextend_text_input->GetValue().utf8_string());
+}
+
+void MainWindow::OnCemuExtendTextKeyDown(wxKeyEvent& event)
+{
+	if (event.GetKeyCode() == WXK_ESCAPE && CanSubmitCemuExtendTextInput())
+	{
+		m_emulationController.SubmitTextAction(
+			false, m_cemuextend_text_input->GetValue().utf8_string());
+		return;
+	}
+	event.Skip();
+}
+
 void MainWindow::OnCemuExtendTextPreedit(std::string_view preedit)
 {
 	m_cemuextend_bridge.SetPreedit(preedit);
@@ -2189,6 +2207,10 @@ void MainWindow::CreateCanvas()
 	m_cemuextend_text_input->Hide();
 	m_cemuextend_text_input->Bind(wxEVT_TEXT,
 								  &MainWindow::OnCemuExtendTextChanged, this);
+	m_cemuextend_text_input->Bind(wxEVT_TEXT_ENTER,
+								  &MainWindow::OnCemuExtendTextEnter, this);
+	m_cemuextend_text_input->Bind(wxEVT_KEY_DOWN,
+								  &MainWindow::OnCemuExtendTextKeyDown, this);
 #if defined(__WXGTK__)
 	GtkWidget* entry = static_cast<GtkWidget*>(m_cemuextend_text_input->GetHandle());
 	if (GTK_IS_ENTRY(entry))

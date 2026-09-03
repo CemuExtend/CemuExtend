@@ -31,9 +31,9 @@ int main()
 	CHECK((kCemodExactApprovalPermissionMask & kCemodWebUiApprovalPermission) != 0);
 	// The approval namespace now runs past Web UI to the CEX2 services, and stops
 	// there: anything above the last service bit is outside what a package may ask.
-	CHECK((kCemodExactApprovalPermissionMask & cemuextend_hle::kCemodServiceCaptureApproval) != 0);
+	CHECK((kCemodExactApprovalPermissionMask & cemuextend_hle::kCemodServiceMicrophoneApproval) != 0);
 	CHECK((kCemodExactApprovalPermissionMask &
-		   (cemuextend_hle::kCemodServiceCaptureApproval << 1U)) == 0);
+		   (cemuextend_hle::kCemodServiceMicrophoneApproval << 1U)) == 0);
 
 	CHECK(!NeedsCemodPermissionPrompt(0x1fU, 0, 0, false));
 	CHECK(!NeedsCemodPermissionPrompt(0, 0, 0, true));
@@ -44,6 +44,15 @@ int main()
 	CHECK(!NeedsCemodPermissionPrompt(0x20U, 0x20U, 0x20U, true));
 	CHECK(NeedsCemodPermissionPrompt(0x40U, 0, 0, true));
 	CHECK(!NeedsCemodPermissionPrompt(0x40U, 0x40U, 0x40U, true));
+	CHECK(NeedsCemodPermissionPrompt(0x80U, 0, 0, true));
+	CHECK(!NeedsCemodPermissionPrompt(0x80U, 0x80U, 0x80U, true));
+
+	CHECK(ExactRuntimeServicePermissions(
+			  0, cemuextend_hle::kCemodMicrophonePermission, false) == 0);
+	CHECK(ExactRuntimeServicePermissions(
+			  cemuextend_hle::kCemodServiceMicrophoneApproval,
+			  cemuextend_hle::kCemodMicrophonePermission,
+			  false) == cemuextend_hle::kCemodMicrophonePermission);
 
 	CHECK(CemodTrustAnchorCoversRequest(0x0fU, 0x1fU));
 	CHECK(CemodTrustAnchorCoversRequest(0x1fU, 0x1fU));

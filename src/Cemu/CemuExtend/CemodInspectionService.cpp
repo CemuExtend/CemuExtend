@@ -214,6 +214,7 @@ namespace CemuExtend
 			{1U << 2U, CemodPermission::ServiceInject},
 			{1U << 3U, CemodPermission::ServiceClipboard},
 			{1U << 4U, CemodPermission::ServiceCapture},
+			{1U << 7U, CemodPermission::ServiceMicrophone},
 		};
 		for (const auto& [manifestBit, permission] : kServiceRequests)
 			if ((package->manifest.requestedPermissions & manifestBit) != 0)

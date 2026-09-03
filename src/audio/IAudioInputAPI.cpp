@@ -36,7 +36,7 @@ bool IAudioInputAPI::IsAudioInputAPIAvailable(AudioInputAPI api)
 	return false;
 }
 
-AudioInputAPIPtr IAudioInputAPI::CreateDevice(AudioInputAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample)
+AudioInputAPIPtr IAudioInputAPI::CreateDevice(AudioInputAPI api, const DeviceDescriptionPtr& device, sint32 samplerate, sint32 channels, sint32 samples_per_block, sint32 bits_per_sample, bool voice, uint32 target_latency_samples)
 {
 	if (!IsAudioInputAPIAvailable(api))
 		return {};
@@ -47,7 +47,7 @@ AudioInputAPIPtr IAudioInputAPI::CreateDevice(AudioInputAPI api, const DeviceDes
 	case Cubeb:
 	{
 		const auto tmp = std::dynamic_pointer_cast<CubebInputAPI::CubebDeviceDescription>(device);
-		return std::make_unique<CubebInputAPI>(tmp->GetDeviceId(), samplerate, channels, samples_per_block, bits_per_sample);
+		return std::make_unique<CubebInputAPI>(tmp->GetDeviceId(), samplerate, channels, samples_per_block, bits_per_sample, voice, target_latency_samples);
 	}
 #endif
 	default:

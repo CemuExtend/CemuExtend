@@ -5,6 +5,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Owner.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Http.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Media.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Microphone.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Storage.h"
 #include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "host/contracts/HostContracts.h"
@@ -149,6 +150,7 @@ namespace cemuextend_hle
 			Ui,
 			Timing,
 			Media,
+			Microphone,
 		};
 
 		struct OperationDefinition
@@ -219,6 +221,10 @@ namespace cemuextend_hle
 			OperationDefinition{13, 4, 1, kMediaPermissions, sizeof(cemuextend::wire::MediaStatusRequest), sizeof(cemuextend::wire::MediaStatusResponse), 30, 60, Handler::Media},
 			OperationDefinition{13, 5, 1, kMediaPermissions, sizeof(cemuextend::wire::MediaReadFrameRequest), 65520, 600, 1200, Handler::Media},
 			OperationDefinition{13, 6, 1, kMediaPermissions, 4, 0, 10, 20, Handler::Media},
+			OperationDefinition{14, 1, 1, kCemodMicrophonePermission, 0, sizeof(cemuextend::wire::MicrophoneProbeResponse), 2, 4, Handler::Microphone},
+			OperationDefinition{14, 2, 1, kCemodMicrophonePermission, sizeof(cemuextend::wire::MicrophoneOpenRequest), sizeof(cemuextend::wire::MicrophoneOpenResponse), 2, 4, Handler::Microphone},
+			OperationDefinition{14, 3, 1, kCemodMicrophonePermission, sizeof(cemuextend::wire::MicrophoneReadRequest), 65520, 500, 1000, Handler::Microphone},
+			OperationDefinition{14, 4, 1, kCemodMicrophonePermission, sizeof(cemuextend::wire::Be32), 0, 10, 20, Handler::Microphone},
 		};
 
 		const OperationDefinition* FindOperation(std::uint16_t service, std::uint16_t operation)
@@ -231,7 +237,7 @@ namespace cemuextend_hle
 
 		constexpr std::array kServices{
 			ServiceDefinition{1, 1, 0, 64U * 1024U, 64U * 1024U},
-			ServiceDefinition{2, 3, 7, 64U * 1024U, 64U * 1024U},
+			ServiceDefinition{2, 4, 7, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{3, 1, 2, 4U * 1024U, 64},
 			ServiceDefinition{4, 1, 3, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{5, 1, 3, 64U * 1024U, 64U * 1024U},
@@ -243,6 +249,7 @@ namespace cemuextend_hle
 			ServiceDefinition{11, 1, kCemodUiPermission, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{12, 1, 3, sizeof(cemuextend::wire::TimingFrameRatePayload), sizeof(cemuextend::wire::TimingFrameRatePayload)},
 			ServiceDefinition{13, 1, kMediaPermissions, 64U * 1024U, 64U * 1024U},
+			ServiceDefinition{14, 1, kCemodMicrophonePermission, sizeof(cemuextend::wire::MicrophoneOpenRequest), 64U * 1024U},
 		};
 
 		struct WireServiceDefinition
@@ -526,7 +533,10 @@ namespace cemuextend_hle
 			const bool uiService =
 				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Ui) &&
 				permission == kCemodUiPermission;
-			return granted && (service == 0 || networkService || uiService ||
+			const bool microphoneService =
+				service == static_cast<std::uint16_t>(cemuextend::wire::ServiceId::Microphone) &&
+				permission == kCemodMicrophonePermission;
+			return granted && (service == 0 || networkService || uiService || microphoneService ||
 							   session.owner->IsServiceAllowed(service, permission, operation));
 		}
 
@@ -1207,7 +1217,8 @@ namespace cemuextend_hle
 					std::memcpy(&header, payload.data(), sizeof(header));
 					const auto textBytes = header.initialTextBytes.get();
 					const auto allowedFlags = static_cast<std::uint8_t>(TextInputFlag::Active) |
-											  static_cast<std::uint8_t>(TextInputFlag::Multiline);
+											  static_cast<std::uint8_t>(TextInputFlag::Multiline) |
+											  static_cast<std::uint8_t>(TextInputFlag::TextActions);
 					if (textBytes > std::numeric_limits<std::size_t>::max() ||
 						payload.size() != sizeof(header) + static_cast<std::size_t>(textBytes) ||
 						(header.flags & ~allowedFlags) != 0 ||
@@ -1222,6 +1233,9 @@ namespace cemuextend_hle
 					const bool active = (header.flags &
 										 static_cast<std::uint8_t>(TextInputFlag::Active)) != 0;
 					const auto requestId = header.requestId.get();
+					if (!active && session.textInput.active &&
+						session.textInput.requestId != requestId)
+						return MakeResponse(request, Status::NotFound);
 					if (active && (!session.textInput.active ||
 								   session.textInput.requestId != requestId))
 						session.textInput.sequence = nextTextInputSequence++;
@@ -1232,6 +1246,8 @@ namespace cemuextend_hle
 					session.textInput.caretY = header.caretY.get();
 					session.textInput.lineHeight = header.lineHeight.get();
 					session.textInput.initialText.assign(text);
+					session.textInput.supportsTextActions =
+						(header.flags & static_cast<std::uint8_t>(TextInputFlag::TextActions)) != 0;
 					QueueTextInputWakeLocked();
 					return MakeResponse(request, Status::Ok);
 				}
@@ -1243,7 +1259,8 @@ namespace cemuextend_hle
 					std::memcpy(&header, payload.data(), sizeof(header));
 					const auto textBytes = header.textBytes.get();
 					const auto allowedFlags = static_cast<std::uint8_t>(TextInputFlag::Active) |
-											  static_cast<std::uint8_t>(TextInputFlag::Multiline);
+											  static_cast<std::uint8_t>(TextInputFlag::Multiline) |
+											  static_cast<std::uint8_t>(TextInputFlag::TextActions);
 					if (payload.size() != sizeof(header) + textBytes ||
 						(header.flags & ~allowedFlags) != 0 ||
 						header.reserved != std::array<std::byte, 3>{} ||
@@ -1256,6 +1273,9 @@ namespace cemuextend_hle
 					const bool active = (header.flags &
 										 static_cast<std::uint8_t>(TextInputFlag::Active)) != 0;
 					const auto requestId = header.requestId.get();
+					if (!active && session.textInput.active &&
+						session.textInput.requestId != requestId)
+						return MakeResponse(request, Status::NotFound);
 					if (active && (!session.textInput.active ||
 								   session.textInput.requestId != requestId))
 						session.textInput.sequence = nextTextInputSequence++;
@@ -1266,6 +1286,8 @@ namespace cemuextend_hle
 					session.textInput.caretY = header.caretY.get();
 					session.textInput.lineHeight = header.lineHeight.get();
 					session.textInput.initialText.assign(text);
+					session.textInput.supportsTextActions =
+						(header.flags & static_cast<std::uint8_t>(TextInputFlag::TextActions)) != 0;
 					QueueTextInputWakeLocked();
 					return MakeResponse(request, Status::Ok);
 				}
@@ -1496,6 +1518,22 @@ namespace cemuextend_hle
 				if (result.status != Status::Ok)
 					return MakeResponse(request, result.status);
 				return MakeResponse(request, Status::Ok, result.payload);
+			}
+			if (definition->handler == Handler::Microphone)
+			{
+#ifdef CEMU_CEX2_TESTING
+				return MakeResponse(request, Status::NotSupported);
+#else
+				if (request.operation.get() == static_cast<std::uint16_t>(MicrophoneOperation::Open))
+					AuditSensitiveUse(session.owner->Principal(), "Microphone capture", false);
+				auto result = Cex2Microphone::Dispatch({session.addressSpaceId,
+														session.generation,
+														session.id},
+													   session.owner->Principal(), request.operation.get(), payload);
+				if (result.payload.size() > definition->maximumResponse)
+					return MakeResponse(request, Status::TooLarge);
+				return MakeResponse(request, result.status, result.payload);
+#endif
 			}
 			if (definition->handler == Handler::Configuration || definition->handler == Handler::File)
 			{
@@ -2440,6 +2478,14 @@ namespace cemuextend_hle
 			std::memcpy(&header, response.data(), sizeof(header));
 			if (header.correlationId.get() != correlationId)
 				continue;
+#ifndef CEMU_CEX2_TESTING
+			if (header.serviceId.get() == static_cast<std::uint16_t>(ServiceId::Microphone) &&
+				header.operation.get() == static_cast<std::uint16_t>(MicrophoneOperation::Open) &&
+				header.status.get() == static_cast<std::uint16_t>(Status::Ok))
+				Cex2Microphone::ReleaseSession({found->second.addressSpaceId,
+												found->second.generation,
+												found->second.id});
+#endif
 			header.status = static_cast<std::uint16_t>(Status::Cancelled);
 			header.totalSize = sizeof(ResponseHeader);
 			response.resize(sizeof(ResponseHeader));
@@ -2460,6 +2506,9 @@ namespace cemuextend_hle
 		const bool hadTextInput = found->second.textInput.active;
 		const auto addressSpaceId = found->second.addressSpaceId;
 		const auto generation = found->second.generation;
+#ifndef CEMU_CEX2_TESTING
+		Cex2Microphone::ReleaseSession({addressSpaceId, generation, found->second.id});
+#endif
 		auto webUi = m_impl->webUi;
 		m_impl->sessions.erase(found);
 		m_impl->RefreshGuestFrameRateLocked();
@@ -2489,6 +2538,9 @@ namespace cemuextend_hle
 		// it but never the owner that started them.
 		Cex2Http::ReleaseSession(owner.AddressSpaceId());
 		Cex2Media::ReleaseSession(owner.AddressSpaceId());
+#ifndef CEMU_CEX2_TESTING
+		Cex2Microphone::ReleaseOwner(owner.AddressSpaceId(), owner.Generation());
+#endif
 		auto webUi = m_impl->webUi;
 		const auto addressSpaceId = owner.AddressSpaceId();
 		const auto generation = owner.Generation();
@@ -2511,6 +2563,9 @@ namespace cemuextend_hle
 			Cex2Media::ReleaseSession(entry.second.addressSpaceId);
 		}
 		m_impl->sessions.clear();
+#ifndef CEMU_CEX2_TESTING
+		Cex2Microphone::ReleaseAll();
+#endif
 		m_impl->RefreshGuestFrameRateLocked();
 		m_impl->webUiContents.clear();
 		auto webUi = m_impl->webUi;
@@ -2913,6 +2968,78 @@ namespace cemuextend_hle
 						  static_cast<std::uint16_t>(InputEvent::TextComposition), payload);
 	}
 
+	void Cex2Host::TextActionEvent(cemuextend::wire::TextAction action, std::string_view text)
+	{
+		using namespace cemuextend::wire;
+		if ((action != TextAction::Commit && action != TextAction::Cancel) ||
+			text.size() > 4096U || !Impl::IsValidUtf8(text))
+			return;
+		std::lock_guard lock(m_impl->mutex);
+		Impl::Session* target{};
+		for (auto& [id, session] : m_impl->sessions)
+			if (session.textInput.active &&
+				Impl::HasPermission(session, 1, static_cast<std::uint16_t>(ServiceId::Input),
+									static_cast<std::uint16_t>(session.negotiatedMajor >= 3
+																   ? InputOperation::SetTextInputV3
+																   : InputOperation::SetTextInput)) &&
+				(target == nullptr || session.textInput.sequence > target->textInput.sequence))
+				target = &session;
+		if (!target)
+			return;
+		const auto keyUsage = action == TextAction::Commit ? 0x28U : 0x29U;
+		if (!target->textInput.supportsTextActions)
+		{
+			for (const bool pressed : {true, false})
+			{
+				KeyboardEventPayload key{};
+				key.identity.eventId = target->nextInputEventId++;
+				key.identity.origin = static_cast<std::uint8_t>(InputOrigin::Physical);
+				key.identity.channel = static_cast<std::uint8_t>(InputChannel::Keyboard);
+				key.identity.frameNumber = CurrentFrameNumber();
+				key.usbHidUsage = keyUsage;
+				key.pressed = pressed ? 1 : 0;
+				m_impl->AppendInputRecordLocked(
+					InputRecordType::Key, static_cast<std::uint16_t>(InputUsagePage::Keyboard),
+					static_cast<std::uint16_t>(keyUsage), pressed ? 1 : 0, 0,
+					pressed ? static_cast<std::uint8_t>(InputRecordFlag::Pressed) : 0,
+					{}, target->id);
+				if (target->negotiatedMajor < 3)
+					m_impl->EmitEvent(*target, ServiceId::Input,
+									  static_cast<std::uint16_t>(InputEvent::Keyboard),
+									  {reinterpret_cast<const std::byte*>(&key), sizeof(key)});
+			}
+			target->textInput.active = false;
+			m_impl->QueueTextInputWakeLocked();
+			return;
+		}
+
+		TextActionEventHeader event{};
+		event.identity.eventId = target->nextInputEventId++;
+		event.identity.origin = static_cast<std::uint8_t>(InputOrigin::Physical);
+		event.identity.channel = static_cast<std::uint8_t>(InputChannel::Keyboard);
+		event.identity.frameNumber = CurrentFrameNumber();
+		event.requestId = target->textInput.requestId;
+		event.revision = static_cast<std::uint32_t>(event.identity.eventId.get());
+		event.textBytes = static_cast<std::uint32_t>(text.size());
+		event.action = static_cast<std::uint8_t>(action);
+		std::vector<std::byte> payload(sizeof(event) + text.size());
+		std::memcpy(payload.data(), &event, sizeof(event));
+		if (!text.empty())
+			std::memcpy(payload.data() + sizeof(event), text.data(), text.size());
+		if (target->negotiatedMajor >= 3)
+		{
+			m_impl->AppendInputRecordLocked(InputRecordType::TextAction, 0, 0, 0, 0, 0,
+											payload, target->id);
+			target->textInput.active = false;
+			m_impl->QueueTextInputWakeLocked();
+			return;
+		}
+		m_impl->EmitEvent(*target, ServiceId::Input,
+						  static_cast<std::uint16_t>(InputEvent::TextAction), payload);
+		target->textInput.active = false;
+		m_impl->QueueTextInputWakeLocked();
+	}
+
 	void Cex2Host::SetTextInputWakeCallback(std::function<void()> callback)
 	{
 		std::lock_guard lock(m_impl->mutex);
@@ -2988,6 +3115,8 @@ namespace cemuextend_hle
 		std::unique_lock lock(m_impl->mutex);
 		const bool closeUi = (owner.GrantedPermissions() & kCemodUiPermission) != 0 &&
 							 (permissions & kCemodUiPermission) == 0;
+		const bool closeMicrophone = (owner.GrantedPermissions() & kCemodMicrophonePermission) != 0 &&
+									 (permissions & kCemodMicrophonePermission) == 0;
 		bool hadTextInput{};
 		bool frameRateChanged{};
 		for (const auto& [id, session] : m_impl->sessions)
@@ -3076,6 +3205,12 @@ namespace cemuextend_hle
 		const auto generation = owner.Generation();
 		if (closeUi)
 			m_impl->webUiContents.erase({addressSpaceId, generation});
+		if (closeMicrophone)
+#ifndef CEMU_CEX2_TESTING
+			Cex2Microphone::ReleaseOwner(addressSpaceId, generation);
+#else
+			(void)addressSpaceId;
+#endif
 		lock.unlock();
 		if (closeUi && webUi)
 			webUi->CloseOwner(addressSpaceId, generation);
