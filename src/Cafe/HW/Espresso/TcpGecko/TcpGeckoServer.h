@@ -2,7 +2,9 @@
 
 #include "Common/socket.h"
 
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -86,6 +88,53 @@ extern std::unique_ptr<TcpGeckoServer> g_tcpGeckoServer;
 
 namespace TcpGecko
 {
+	enum class PauseOwner : std::uint8_t
+	{
+		RemoteDebugger,
+		CemuExtendFocusLoss,
+	};
+
+	class PauseOwnership
+	{
+	  public:
+		// Returns true only when the aggregate paused state changes.
+		bool Set(PauseOwner owner, bool paused, std::uint64_t sequence = 0)
+		{
+			const auto ownerIndex = static_cast<std::size_t>(owner);
+			if (sequence != 0 && sequence <= m_sequences[ownerIndex])
+				return false;
+			if (sequence != 0)
+				m_sequences[ownerIndex] = sequence;
+			const bool wasPaused = IsPaused();
+			const auto ownerBit = static_cast<std::uint8_t>(
+				1U << static_cast<std::uint8_t>(owner));
+			if (paused)
+				m_owners |= ownerBit;
+			else
+				m_owners &= static_cast<std::uint8_t>(~ownerBit);
+			return wasPaused != IsPaused();
+		}
+
+		[[nodiscard]] bool IsPaused() const
+		{
+			return m_owners != 0;
+		}
+
+		void Reset()
+		{
+			m_owners = 0;
+			m_sequences = {};
+		}
+
+	  private:
+		std::uint8_t m_owners{};
+		std::array<std::uint64_t, 2> m_sequences{};
+	};
+
+	// Pause owners are reference-independent: releasing one owner never resumes
+	// the guest while another owner still requires it to remain paused.
+	void SetGuestPaused(PauseOwner owner, bool paused, std::uint64_t sequence = 0);
+	[[nodiscard]] bool IsGuestPaused();
 	void OnTitleBoot();
 	void OnTitleShutdown();
 

@@ -9,6 +9,7 @@ namespace Host
 	class IInputFocus;
 	class ICanvasHost;
 	class IWindowMetrics;
+	class IWindowControl;
 } // namespace Host
 
 namespace cemuextend_hle
@@ -21,6 +22,7 @@ namespace Application
 	struct HostBindings
 	{
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics;
+		std::shared_ptr<Host::IWindowControl> windowControl;
 		std::shared_ptr<Host::IClipboard> clipboard;
 		std::shared_ptr<Host::IExternalLauncher> externalLauncher;
 		std::shared_ptr<Host::IInputFocus> inputFocus;

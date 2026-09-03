@@ -1,6 +1,7 @@
 #include "Common/precompiled.h"
 
 #include "Cafe/HW/Espresso/ModExecutionContext.h"
+#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 #include "Cafe/OS/libs/cemuextend/CemodPermission.h"
 #include "Cafe/OS/libs/cemuextend/CemodWebUiHost.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
@@ -10,6 +11,7 @@
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include "cemuextend/services.hpp"
 #include "cemuextend/transport.hpp"
+#include "host/contracts/HostContracts.h"
 
 #include <openssl/crypto.h>
 
@@ -114,6 +116,43 @@ namespace
 		std::uint32_t closedOwners{};
 		std::uint32_t closedAll{};
 	};
+
+	class TestWindowControl final : public Host::IWindowControl
+	{
+	  public:
+		bool SetFullscreen(bool fullscreen) override
+		{
+			fullscreenRequests.push_back(fullscreen);
+			return acceptFullscreen;
+		}
+
+		void SetFocusPaused(bool paused, std::uint64_t sequence) override
+		{
+			focusPauseRequests.push_back(paused);
+			focusPauseSequences.push_back(sequence);
+		}
+
+		bool acceptFullscreen{true};
+		std::vector<bool> fullscreenRequests;
+		std::vector<bool> focusPauseRequests;
+		std::vector<std::uint64_t> focusPauseSequences;
+	};
+
+	void TestPauseOwnership()
+	{
+		TcpGecko::PauseOwnership ownership;
+		CHECK(!ownership.IsPaused());
+		CHECK(ownership.Set(TcpGecko::PauseOwner::RemoteDebugger, true));
+		CHECK(ownership.IsPaused());
+		CHECK(!ownership.Set(TcpGecko::PauseOwner::CemuExtendFocusLoss, true));
+		CHECK(!ownership.Set(TcpGecko::PauseOwner::CemuExtendFocusLoss, false));
+		CHECK(ownership.IsPaused());
+		CHECK(ownership.Set(TcpGecko::PauseOwner::RemoteDebugger, false));
+		CHECK(!ownership.IsPaused());
+		CHECK(ownership.Set(TcpGecko::PauseOwner::CemuExtendFocusLoss, true, 2));
+		CHECK(!ownership.Set(TcpGecko::PauseOwner::CemuExtendFocusLoss, false, 1));
+		CHECK(ownership.IsPaused());
+	}
 
 	std::vector<std::byte> Request(std::uint32_t correlation, std::uint16_t operation,
 								   std::span<const std::byte> payload = {},
@@ -922,6 +961,102 @@ namespace
 		CHECK(host.EffectivePointerPolicy().mode == static_cast<std::uint8_t>(PointerMode::Default));
 	}
 
+	void TestWindowControls()
+	{
+		using namespace cemuextend::wire;
+		auto& host = cemuextend_hle::Cex2Host::Instance();
+		host.CloseAll();
+		auto windowControl = std::make_shared<TestWindowControl>();
+		host.ConfigureHost({}, {}, {}, windowControl);
+		host.PointerFocusChanged(true);
+
+		ModExecutionContext firstContext(34, 1, "window-control-first");
+		firstContext.SetGrantedPermissions(2);
+		const auto firstSession = Open(host, firstContext);
+		auto submitBoolean = [&](ModExecutionContext& context, std::uint32_t session,
+								 std::uint32_t correlation, WindowOperation operation, bool enabled) {
+			WindowBooleanPayload payload{};
+			payload.enabled = enabled ? 1 : 0;
+			auto request = Request(correlation, static_cast<std::uint16_t>(operation),
+								   {reinterpret_cast<const std::byte*>(&payload), sizeof(payload)}, ServiceId::Window);
+			CHECK(host.Submit(context, session, request) == static_cast<std::int32_t>(Error::Ok));
+			return PollUntil(host, context, session);
+		};
+
+		auto response = submitBoolean(firstContext, firstSession, 1,
+									  WindowOperation::SetFullscreen, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		CHECK(windowControl->fullscreenRequests == std::vector<bool>{true});
+		CHECK(response.size() == sizeof(ResponseHeader) + sizeof(WindowBooleanPayload));
+		WindowBooleanPayload invalid{};
+		invalid.reserved[0] = std::byte{1};
+		auto invalidRequest = Request(
+			2, static_cast<std::uint16_t>(WindowOperation::SetFullscreen),
+			{reinterpret_cast<const std::byte*>(&invalid), sizeof(invalid)}, ServiceId::Window);
+		CHECK(host.Submit(firstContext, firstSession, invalidRequest) ==
+			  static_cast<std::int32_t>(Error::Ok));
+		response = PollUntil(host, firstContext, firstSession);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::InvalidArgument));
+
+		windowControl->acceptFullscreen = false;
+		response = submitBoolean(firstContext, firstSession, 3,
+								 WindowOperation::SetFullscreen, false);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Busy));
+
+		response = submitBoolean(firstContext, firstSession, 4,
+								 WindowOperation::SetPauseOnFocusLoss, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		CHECK(windowControl->focusPauseRequests.empty());
+		host.PointerFocusChanged(false);
+		CHECK(windowControl->focusPauseRequests == std::vector<bool>{true});
+
+		ModExecutionContext secondContext(35, 1, "window-control-second");
+		secondContext.SetGrantedPermissions(2);
+		const auto secondSession = Open(host, secondContext);
+		response = submitBoolean(secondContext, secondSession, 1,
+								 WindowOperation::SetPauseOnFocusLoss, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		CHECK(host.Close(firstContext, firstSession) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(windowControl->focusPauseRequests == std::vector<bool>{true});
+		CHECK(host.Close(secondContext, secondSession) == static_cast<std::int32_t>(Error::Ok));
+		CHECK(windowControl->focusPauseRequests == std::vector<bool>({true, false}));
+
+		ModExecutionContext revokedContext(38, 1, "window-control-revoked");
+		revokedContext.SetGrantedPermissions(2);
+		const auto revokedSession = Open(host, revokedContext);
+		response = submitBoolean(revokedContext, revokedSession, 1,
+								 WindowOperation::SetPauseOnFocusLoss, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::Ok));
+		host.PermissionsChanged(revokedContext, 0);
+		CHECK(windowControl->focusPauseRequests ==
+			  std::vector<bool>({true, false, true, false}));
+		CHECK(host.Close(revokedContext, revokedSession) == static_cast<std::int32_t>(Error::Ok));
+
+		ModExecutionContext deniedContext(36, 1, "window-control-denied");
+		const auto deniedSession = Open(host, deniedContext);
+		response = submitBoolean(deniedContext, deniedSession, 1,
+								 WindowOperation::SetFullscreen, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::PermissionDenied));
+		CHECK(host.Close(deniedContext, deniedSession) == static_cast<std::int32_t>(Error::Ok));
+
+		host.ConfigureHost({}, {}, {}, {});
+		ModExecutionContext unavailableContext(37, 1, "window-control-unavailable");
+		unavailableContext.SetGrantedPermissions(2);
+		const auto unavailableSession = Open(host, unavailableContext);
+		response = submitBoolean(unavailableContext, unavailableSession, 1,
+								 WindowOperation::SetFullscreen, true);
+		CHECK(reinterpret_cast<ResponseHeader*>(response.data())->status.get() ==
+			  static_cast<std::uint16_t>(Status::NotSupported));
+		CHECK(host.Close(unavailableContext, unavailableSession) == static_cast<std::int32_t>(Error::Ok));
+	}
+
 	void TestInputV3SnapshotBatch()
 	{
 		using namespace cemuextend::wire;
@@ -1576,6 +1711,8 @@ int main(int argc, char** argv)
 	{
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
+		TestWindowControls();
+		TestPauseOwnership();
 		TestInputV3SnapshotBatch();
 		TestInputV3OwnershipAndDeviceIdentity();
 		TestTextInputComposition();
@@ -1590,6 +1727,8 @@ int main(int argc, char** argv)
 		TestObservedInputSnapshot();
 		TestMappedInputReplacement();
 		TestMouseAndPointerPolicy();
+		TestWindowControls();
+		TestPauseOwnership();
 		TestHttpValidationAndOwnership();
 		TestHttpPermissionGate();
 		TestMediaValidationOwnershipAndPermission();

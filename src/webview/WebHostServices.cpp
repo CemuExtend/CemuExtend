@@ -3,6 +3,7 @@
 #include "webview/WebHostServices.h"
 
 #include "config/ActiveSettings.h"
+#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 #include "input/InputManager.h"
 #include "webview/NativeWindowHost.h"
 #include "webview/WebHostState.h"
@@ -12,9 +13,11 @@
 namespace WebFrontend
 {
 	WebHostServices::WebHostServices(std::shared_ptr<WebHostState> state,
-									 INativeWindowHost& nativeWindow, UiDispatch dispatch, CanvasRecreator recreateCanvas)
+									 INativeWindowHost& nativeWindow, UiDispatch dispatch, CanvasRecreator recreateCanvas,
+									 FullscreenSetter setFullscreen)
 		: m_state(std::move(state)), m_nativeWindow(nativeWindow),
 		  m_dispatch(std::move(dispatch)), m_recreateCanvas(std::move(recreateCanvas)),
+		  m_setFullscreen(std::move(setFullscreen)),
 		  m_uiThread(std::this_thread::get_id()) {}
 
 	void WebHostServices::Deactivate()
@@ -65,6 +68,26 @@ namespace WebFrontend
 	Host::WindowMetricsSnapshot WebHostServices::GetWindowMetrics() const
 	{
 		return m_state->GetWindowMetrics();
+	}
+
+	bool WebHostServices::SetFullscreen(bool fullscreen)
+	{
+		return Queue([setter = m_setFullscreen, fullscreen] { setter(fullscreen); });
+	}
+
+	void WebHostServices::SetFocusPaused(bool paused, std::uint64_t sequence)
+	{
+		if (!Queue([paused, sequence] {
+				TcpGecko::SetGuestPaused(
+					TcpGecko::PauseOwner::CemuExtendFocusLoss, paused, sequence);
+			}) &&
+			!paused)
+		{
+			// Deactivation rejects queued work, but the pause source still belongs
+			// to this frontend and therefore has to be released synchronously.
+			TcpGecko::SetGuestPaused(
+				TcpGecko::PauseOwner::CemuExtendFocusLoss, false, sequence);
+		}
 	}
 
 	std::filesystem::path WebHostServices::GetUserDataPath(std::string_view path) const
