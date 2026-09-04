@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -19,6 +20,7 @@
 #include <Windows.h>
 #else
 #include <csignal>
+#include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -90,6 +92,13 @@ namespace cemuextend_hle
 				int pipes[2]{};
 				if (pipe(pipes) != 0)
 					return false;
+				if (fcntl(pipes[0], F_SETFD, FD_CLOEXEC) == -1 ||
+					fcntl(pipes[1], F_SETFD, FD_CLOEXEC) == -1)
+				{
+					close(pipes[0]);
+					close(pipes[1]);
+					return false;
+				}
 				posix_spawn_file_actions_t actions;
 				posix_spawn_file_actions_init(&actions);
 				posix_spawn_file_actions_adddup2(&actions, pipes[1], STDOUT_FILENO);
@@ -130,7 +139,12 @@ namespace cemuextend_hle
 				}
 				if (readDescriptor < 0)
 					return 0;
-				const auto result = ::read(readDescriptor, output.data(), output.size());
+				ssize_t result{};
+				do
+				{
+					result = ::read(readDescriptor, output.data(), output.size());
+				}
+				while (result < 0 && errno == EINTR);
 				return result > 0 ? static_cast<std::size_t>(result) : 0;
 #endif
 			}
@@ -185,13 +199,34 @@ namespace cemuextend_hle
 					process = std::exchange(pid_, -1);
 					readDescriptor = std::exchange(read_, -1);
 				}
+				// Closing the read side first prevents a child blocked on a full stdout
+				// pipe from deadlocking this thread in waitpid during cancellation.
+				if (readDescriptor >= 0)
+					close(readDescriptor);
 				if (process > 0)
 				{
 					kill(process, SIGTERM);
-					waitpid(process, nullptr, 0);
+					bool reaped{};
+					for (unsigned attempt{}; attempt < 200; ++attempt)
+					{
+						const auto result = waitpid(process, nullptr, WNOHANG);
+						if (result == process || (result < 0 && errno == ECHILD))
+						{
+							reaped = true;
+							break;
+						}
+						if (result < 0 && errno != EINTR)
+							break;
+						std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					}
+					if (!reaped)
+					{
+						kill(process, SIGKILL);
+						while (waitpid(process, nullptr, 0) < 0 && errno == EINTR)
+						{
+						}
+					}
 				}
-				if (readDescriptor >= 0)
-					close(readDescriptor);
 #endif
 			}
 
@@ -237,6 +272,7 @@ namespace cemuextend_hle
 			std::jthread worker;
 			std::vector<std::array<std::uint8_t, 4>> palette;
 			std::vector<std::uint8_t> frame;
+			std::vector<std::uint8_t> readFrame;
 			std::vector<std::int16_t> audio;
 			std::vector<std::string> playlist;
 			std::string source;
@@ -250,7 +286,9 @@ namespace cemuextend_hle
 			std::uint32_t effectiveMilliFps{};
 			std::uint32_t commandGeneration{};
 			std::uint32_t lastReadFrameId{};
+			std::uint32_t readFrameId{};
 			std::uint32_t fpsFrames{};
+			std::uint64_t readFramePresentationTimeUs{};
 			std::size_t audioRead{};
 			std::chrono::steady_clock::time_point lastFpsUpdate{std::chrono::steady_clock::now()};
 			std::uint16_t width{};
@@ -285,9 +323,13 @@ namespace cemuextend_hle
 						unsigned bestDistance = std::numeric_limits<unsigned>::max();
 						std::uint8_t best{};
 						// Map palette entry zero is transparent. Never choose it for opaque video
-						// pixels merely because its RGB payload is also black.
+						// pixels merely because its RGB payload is also black. The guest also marks
+						// unavailable map-color slots transparent; those indices are not valid
+						// renderer inputs either.
 						for (std::size_t i{session.palette.size() > 1 ? 1U : 0U}; i < session.palette.size(); ++i)
 						{
+							if (session.palette[i][3] == 0)
+								continue;
 							const int dr = static_cast<int>(r * 255 / 31) - session.palette[i][0];
 							const int dg = static_cast<int>(g * 255 / 31) - session.palette[i][1];
 							const int db = static_cast<int>(b * 255 / 31) - session.palette[i][2];
@@ -605,26 +647,35 @@ namespace cemuextend_hle
 			std::vector<std::byte> chunk;
 			{
 				std::scoped_lock lock(session->mutex);
-				response.handle = session->handle;
-				response.frameId = session->frameId;
-				response.presentationTimeUs = session->positionUs;
-				response.error = static_cast<std::int32_t>(session->error);
-				response.state = static_cast<std::uint8_t>(session->state == MediaState::Failed ? MediaFrameState::Failed : session->state == MediaState::Ended ? MediaFrameState::Ended
-																														: session->frame.empty()				? MediaFrameState::Pending
-																																								: MediaFrameState::Ready);
-				response.totalBytes = static_cast<std::uint32_t>(session->frame.size());
-				if (!session->frame.empty() && (request.frameId.get() == 0 || request.frameId.get() == session->frameId))
+				const auto requestedFrameId = request.frameId.get();
+				if (requestedFrameId == 0 && !session->frame.empty())
 				{
-					const auto offset = std::min<std::size_t>(request.offset.get(), session->frame.size());
-					const auto length = std::min<std::size_t>({request.length.get(), session->frame.size() - offset, 65520U - sizeof(response)});
-					chunk.resize(length);
-					std::memcpy(chunk.data(), session->frame.data() + offset, length);
-					response.chunkBytes = static_cast<std::uint32_t>(length);
-					if (offset + length == session->frame.size())
-						session->lastReadFrameId = session->frameId;
+					session->readFrame = session->frame;
+					session->readFrameId = session->frameId;
+					session->readFramePresentationTimeUs = session->positionUs;
 				}
-				else if (request.frameId.get() != session->frameId)
-					response.state = static_cast<std::uint8_t>(MediaFrameState::Superseded);
+				const bool hasReadFrame = !session->readFrame.empty() &&
+										  (requestedFrameId == 0 || requestedFrameId == session->readFrameId);
+				response.handle = session->handle;
+				response.frameId = hasReadFrame ? session->readFrameId : session->frameId;
+				response.presentationTimeUs = hasReadFrame ? session->readFramePresentationTimeUs : session->positionUs;
+				response.error = static_cast<std::int32_t>(session->error);
+				response.state = static_cast<std::uint8_t>(session->state == MediaState::Failed	 ? MediaFrameState::Failed
+														   : hasReadFrame						 ? MediaFrameState::Ready
+														   : session->state == MediaState::Ended ? MediaFrameState::Ended
+														   : session->frame.empty()				 ? MediaFrameState::Pending
+																								 : MediaFrameState::Superseded);
+				response.totalBytes = hasReadFrame ? static_cast<std::uint32_t>(session->readFrame.size()) : 0;
+				if (hasReadFrame)
+				{
+					const auto offset = std::min<std::size_t>(request.offset.get(), session->readFrame.size());
+					const auto length = std::min<std::size_t>({request.length.get(), session->readFrame.size() - offset, 65520U - sizeof(response)});
+					chunk.resize(length);
+					std::memcpy(chunk.data(), session->readFrame.data() + offset, length);
+					response.chunkBytes = static_cast<std::uint32_t>(length);
+					if (offset + length == session->readFrame.size())
+						session->lastReadFrameId = session->readFrameId;
+				}
 			}
 			auto result = Reply(response);
 			result.payload.insert(result.payload.end(), chunk.begin(), chunk.end());
