@@ -1,5 +1,7 @@
 #include "CubebInputAPI.h"
 
+#include <chrono>
+
 #if BOOST_OS_WINDOWS
 #include <combaseapi.h>
 #include <mmreg.h>
@@ -11,6 +13,9 @@ static void state_cb(cubeb_stream* stream, void* user, cubeb_state state)
 	if (!stream)
 		return;
 
+	auto* input = static_cast<CubebInputAPI*>(user);
+	if (input && state == CUBEB_STATE_ERROR)
+		input->MarkFailed();
 	/*switch (state)
 	{
 	case CUBEB_STATE_STARTED:
@@ -30,23 +35,52 @@ static void state_cb(cubeb_stream* stream, void* user, cubeb_state state)
 long CubebInputAPI::data_cb(cubeb_stream* stream, void* user, const void* inputbuffer, void* outputbuffer, long nframes)
 {
 	auto* thisptr = (CubebInputAPI*)user;
-
-	const auto size = (size_t)nframes * thisptr->m_channels * (thisptr->m_bitsPerSample / 8);
-
-	std::unique_lock lock(thisptr->m_mutex);
-	if (thisptr->m_buffer.capacity() <= thisptr->m_buffer.size() + size)
+	const auto samples = static_cast<std::size_t>(nframes) * thisptr->m_channels;
+	std::unique_lock lock(thisptr->m_mutex, std::try_to_lock);
+	if (!lock.owns_lock() || thisptr->m_buffer.empty())
 	{
-		cemuLog_logDebug(LogType::Force, "dropped input sound block since too many buffers are queued");
+		thisptr->m_droppedSamples += samples;
 		return nframes;
 	}
 
-	thisptr->m_buffer.insert(thisptr->m_buffer.end(), (uint8*)inputbuffer, (uint8*)inputbuffer + size);
+	const auto* input = static_cast<const sint16*>(inputbuffer);
+	const auto callbackTimeNs = static_cast<std::uint64_t>(
+		std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now().time_since_epoch())
+			.count());
+	const auto inputLatencyNs =
+		static_cast<std::uint64_t>(thisptr->m_inputLatencyFrames.load(std::memory_order_acquire)) *
+		1'000'000'000ULL / thisptr->m_samplerate;
+	const auto lastCaptureTimeNs =
+		callbackTimeNs > inputLatencyNs ? callbackTimeNs - inputLatencyNs : 0;
+	const auto samplePeriodDenominator =
+		static_cast<std::uint64_t>(thisptr->m_samplerate) * thisptr->m_channels;
+	std::size_t first = samples > thisptr->m_buffer.size() ? samples - thisptr->m_buffer.size() : 0;
+	if (first != 0)
+		thisptr->m_droppedSamples += first;
+	for (; first < samples; ++first)
+	{
+		if (thisptr->m_sampleCount == thisptr->m_buffer.size())
+		{
+			thisptr->m_readIndex = (thisptr->m_readIndex + 1) % thisptr->m_buffer.size();
+			--thisptr->m_sampleCount;
+			++thisptr->m_droppedSamples;
+		}
+		thisptr->m_buffer[thisptr->m_writeIndex] = input ? input[first] : 0;
+		const auto remaining = samples - first - 1;
+		const auto ageNs = static_cast<std::uint64_t>(remaining) * 1'000'000'000ULL /
+						   samplePeriodDenominator;
+		thisptr->m_captureTimes[thisptr->m_writeIndex] =
+			lastCaptureTimeNs > ageNs ? lastCaptureTimeNs - ageNs : 0;
+		thisptr->m_writeIndex = (thisptr->m_writeIndex + 1) % thisptr->m_buffer.size();
+		++thisptr->m_sampleCount;
+	}
 
 	return nframes;
 }
 
 CubebInputAPI::CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block,
-							 uint32 bits_per_sample)
+							 uint32 bits_per_sample, bool voice, uint32 target_latency_samples)
 	: IAudioInputAPI(samplerate, channels, samples_per_block, bits_per_sample)
 {
 	cubeb_stream_params input_params;
@@ -54,7 +88,7 @@ CubebInputAPI::CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channe
 	input_params.format = CUBEB_SAMPLE_S16LE;
 	input_params.rate = samplerate;
 	input_params.channels = channels;
-	input_params.prefs = CUBEB_STREAM_PREF_NONE;
+	input_params.prefs = voice ? CUBEB_STREAM_PREF_VOICE : CUBEB_STREAM_PREF_NONE;
 
 	switch (channels)
 	{
@@ -77,8 +111,12 @@ CubebInputAPI::CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channe
 
 	uint32 latency = 1;
 	cubeb_get_min_latency(s_context, &input_params, &latency);
+	if (target_latency_samples != 0)
+		latency = std::max(latency, target_latency_samples);
+	m_inputLatencyFrames.store(latency, std::memory_order_relaxed);
 
-	m_buffer.reserve((size_t)m_bytesPerBlock * kBlockCount);
+	m_buffer.resize(static_cast<std::size_t>(m_samplesPerBlock) * m_channels * kBlockCount);
+	m_captureTimes.resize(m_buffer.size());
 
 	if (cubeb_stream_init(s_context, &m_stream, "Cemu Cubeb input",
 						  devid, &input_params,
@@ -100,24 +138,72 @@ CubebInputAPI::~CubebInputAPI()
 
 bool CubebInputAPI::ConsumeBlock(sint16* data)
 {
-	std::unique_lock lock(m_mutex);
-	if (m_buffer.empty())
-	{
-		// we got no data, just write silence
-		memset(data, 0x00, m_bytesPerBlock);
-	}
-	else
-	{
-		const auto copied = std::min(m_buffer.size(), (size_t)m_bytesPerBlock);
-		memcpy(data, m_buffer.data(), copied);
-		m_buffer.erase(m_buffer.begin(), std::next(m_buffer.begin(), copied));
-		lock.unlock();
-		// fill rest with silence
-		if (copied != m_bytesPerBlock)
-			memset((uint8*)data + copied, 0x00, m_bytesPerBlock - copied);
-	}
-
+	const auto requested = static_cast<std::size_t>(m_samplesPerBlock) * m_channels;
+	const auto copied = ConsumeAvailable({data, requested});
+	if (copied < requested)
+		std::fill(data + copied, data + requested, 0);
 	return true;
+}
+
+std::size_t CubebInputAPI::ConsumeAvailable(std::span<sint16> data, std::uint64_t* captureTimeNs)
+{
+	RefreshInputLatency();
+	std::unique_lock lock(m_mutex);
+	const auto copied = std::min(data.size(), m_sampleCount);
+	if (captureTimeNs)
+		*captureTimeNs = copied != 0 ? m_captureTimes[m_readIndex] : 0;
+	for (std::size_t index = 0; index < copied; ++index)
+	{
+		data[index] = m_buffer[m_readIndex];
+		m_readIndex = (m_readIndex + 1) % m_buffer.size();
+	}
+	m_sampleCount -= copied;
+	return copied;
+}
+
+void CubebInputAPI::RefreshInputLatency()
+{
+	if (m_inputLatencyKnown.load(std::memory_order_acquire) || !m_stream)
+		return;
+	std::uint32_t latencyFrames{};
+	const int result = cubeb_stream_get_input_latency(m_stream, &latencyFrames);
+	if (result == CUBEB_ERROR_NOT_SUPPORTED)
+	{
+		// PulseAudio and AudioUnit do not expose input latency through cubeb.
+		// Retain the stream's requested/minimum latency as a fixed estimate and
+		// avoid retrying an unsupported control query for every guest Read.
+		m_inputLatencyKnown.store(true, std::memory_order_release);
+		return;
+	}
+	if (result != CUBEB_OK)
+		return;
+	std::unique_lock lock(m_mutex);
+	if (m_inputLatencyKnown.load(std::memory_order_relaxed))
+		return;
+	const auto previousFrames = m_inputLatencyFrames.load(std::memory_order_relaxed);
+	const auto previousNs = static_cast<std::uint64_t>(previousFrames) * 1'000'000'000ULL /
+							m_samplerate;
+	const auto latencyNs = static_cast<std::uint64_t>(latencyFrames) * 1'000'000'000ULL /
+						   m_samplerate;
+	for (std::size_t index = 0, position = m_readIndex; index < m_sampleCount; ++index)
+	{
+		auto& timestamp = m_captureTimes[position];
+		if (latencyNs >= previousNs)
+		{
+			const auto adjustment = latencyNs - previousNs;
+			timestamp = timestamp > adjustment ? timestamp - adjustment : 0;
+		}
+		else
+			timestamp += previousNs - latencyNs;
+		position = (position + 1) % m_captureTimes.size();
+	}
+	m_inputLatencyFrames.store(latencyFrames, std::memory_order_release);
+	m_inputLatencyKnown.store(true, std::memory_order_release);
+}
+
+std::uint64_t CubebInputAPI::ConsumeDroppedSamples()
+{
+	return m_droppedSamples.exchange(0, std::memory_order_relaxed);
 }
 
 bool CubebInputAPI::Play()
@@ -128,6 +214,7 @@ bool CubebInputAPI::Play()
 	if (cubeb_stream_start(m_stream) == CUBEB_OK)
 	{
 		m_is_playing = true;
+		RefreshInputLatency();
 		return true;
 	}
 

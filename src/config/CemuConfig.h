@@ -695,8 +695,16 @@ struct CemuConfig
 	sint32 audio_api = 0;
 	sint32 audio_delay = 2;
 	AudioChannels tv_channels = kStereo, pad_channels = kStereo, input_channels = kMono;
-	sint32 tv_volume = 50, pad_volume = 0, input_volume = 50, portal_volume = 50;
-	std::wstring tv_device{L"default"}, pad_device, input_device, portal_device;
+	sint32 tv_volume = 50, pad_volume = 0, input_volume = 50, mod_input_volume = 100, portal_volume = 50;
+	std::wstring tv_device{L"default"}, pad_device, input_device, mod_input_device{L"default"}, portal_device;
+	struct ModInputConfiguration
+	{
+		std::wstring device;
+		sint32 volume{};
+	};
+	[[nodiscard]] ModInputConfiguration GetModInputConfiguration() const;
+	void SetModInputDevice(std::wstring device);
+	void SetModInputVolume(sint32 volume);
 
 	// account
 	struct
@@ -804,6 +812,7 @@ struct CemuConfig
 	}
 
   private:
+	mutable std::shared_mutex mod_input_mutex;
 	GameEntry* GetGameEntryByTitleId(uint64 titleId);
 	GameEntry* CreateGameEntry(uint64 titleId);
 };

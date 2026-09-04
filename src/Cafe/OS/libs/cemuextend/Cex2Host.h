@@ -38,6 +38,7 @@ namespace cemuextend_hle
 		std::int32_t caretY{};
 		std::int32_t lineHeight{};
 		std::string initialText;
+		bool supportsTextActions{};
 	};
 
 	class Cex2Host
@@ -74,6 +75,7 @@ namespace cemuextend_hle
 		void TextCompositionEvent(std::string_view text,
 								  std::string_view preedit = {}, std::uint32_t preeditStart = 0,
 								  std::uint32_t preeditCursor = 0);
+		void TextActionEvent(cemuextend::wire::TextAction action, std::string_view text);
 		void SetTextInputWakeCallback(std::function<void()> callback);
 		void KeyboardFocusLost();
 		void MouseEvent(cemuextend::wire::PointerSurface surface,

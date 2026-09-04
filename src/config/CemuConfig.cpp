@@ -2,6 +2,24 @@
 #include "config/NetworkSettings.h"
 #include "util/helpers/helpers.h"
 
+CemuConfig::ModInputConfiguration CemuConfig::GetModInputConfiguration() const
+{
+	std::shared_lock lock(mod_input_mutex);
+	return {.device = mod_input_device, .volume = mod_input_volume};
+}
+
+void CemuConfig::SetModInputDevice(std::wstring device)
+{
+	std::unique_lock lock(mod_input_mutex);
+	mod_input_device = std::move(device);
+}
+
+void CemuConfig::SetModInputVolume(sint32 volume)
+{
+	std::unique_lock lock(mod_input_mutex);
+	mod_input_volume = volume;
+}
+
 namespace
 {
 	std::uint16_t LegacyWxKeyToUsbUsage(int key)
@@ -715,6 +733,7 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	tv_volume = audio.get("TVVolume", 20);
 	pad_volume = audio.get("PadVolume", 0);
 	input_volume = audio.get("InputVolume", 20);
+	mod_input_volume = audio.get("ModInputVolume", 100);
 	portal_volume = audio.get("PortalVolume", 20);
 
 	const auto tv = audio.get("TVDevice", "");
@@ -745,6 +764,15 @@ XMLConfigParser CemuConfig::Load(XMLConfigParser& parser)
 	}
 
 	const auto portal_device_name = audio.get("PortalDevice", "");
+	const auto mod_input_device_name = audio.get("ModInputDevice", "default");
+	try
+	{
+		mod_input_device = boost::nowide::widen(mod_input_device_name);
+	} catch (const std::exception&)
+	{
+		cemuLog_log(LogType::Force, "config load error: can't load Mod microphone device: {}", mod_input_device_name);
+	}
+
 	try
 	{
 		portal_device = boost::nowide::widen(portal_device_name);
@@ -1002,10 +1030,12 @@ XMLConfigParser CemuConfig::Save(XMLConfigParser& parser)
 	audio.set("TVVolume", tv_volume);
 	audio.set("PadVolume", pad_volume);
 	audio.set("InputVolume", input_volume);
+	audio.set("ModInputVolume", mod_input_volume);
 	audio.set("PortalVolume", portal_volume);
 	audio.set("TVDevice", boost::nowide::narrow(tv_device).c_str());
 	audio.set("PadDevice", boost::nowide::narrow(pad_device).c_str());
 	audio.set("InputDevice", boost::nowide::narrow(input_device).c_str());
+	audio.set("ModInputDevice", boost::nowide::narrow(mod_input_device).c_str());
 	audio.set("PortalDevice", boost::nowide::narrow(portal_device).c_str());
 
 	// account

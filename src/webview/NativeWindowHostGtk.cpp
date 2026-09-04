@@ -1430,6 +1430,30 @@ namespace WebFrontend
 									 }
 								 }),
 								 this);
+				g_signal_connect(m_textInput, "activate", G_CALLBACK(+[](GtkEntry* entry, gpointer data) {
+									 auto& self = *static_cast<GtkWindowHost*>(data);
+									 if (!self.m_inputHandler || !self.m_textInputSequence || !self.m_textPreedit.empty())
+										 return;
+									 const char* text = gtk_entry_get_text(entry);
+									 self.m_inputHandler({.kind = NativeInputKind::TextAction,
+														  .text = text ? text : "",
+														  .textSequence = self.m_textInputSequence,
+														  .textAccepted = true});
+								 }),
+								 this);
+				g_signal_connect_after(m_textInput, "key-press-event", G_CALLBACK(+[](GtkWidget*, GdkEventKey* event, gpointer data) -> gboolean {
+										   auto& self = *static_cast<GtkWindowHost*>(data);
+										   if (event->keyval != GDK_KEY_Escape || !self.m_textPreedit.empty() ||
+											   !self.m_inputHandler || !self.m_textInputSequence)
+											   return FALSE;
+										   const char* text = gtk_entry_get_text(GTK_ENTRY(self.m_textInput));
+										   self.m_inputHandler({.kind = NativeInputKind::TextAction,
+																.text = text ? text : "",
+																.textSequence = self.m_textInputSequence,
+																.textAccepted = false});
+										   return TRUE;
+									   }),
+									   this);
 				gtk_box_pack_start(GTK_BOX(m_root), m_overlay, TRUE, TRUE, 0);
 				gtk_container_add(GTK_CONTAINER(m_window), m_root);
 				gtk_widget_realize(m_window);

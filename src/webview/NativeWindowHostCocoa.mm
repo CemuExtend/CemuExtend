@@ -681,16 +681,19 @@ namespace WebFrontend
 			}
 			BOOL DispatchTextCommand(SEL command)
 			{
-				if (command != @selector(insertNewline:) && command != @selector(insertNewlineIgnoringFieldEditor:))
+				const bool accepted = command == @selector(insertNewline:) ||
+					command == @selector(insertNewlineIgnoringFieldEditor:);
+				if (!accepted && command != @selector(cancelOperation:))
 					return NO;
 				NSTextView* editor = (NSTextView*)[m_textInput currentEditor];
 				if (editor && [editor hasMarkedText]) return NO;
 				if (m_inputHandler)
 				{
-					m_inputHandler({.kind = NativeInputKind::Key, .key = 0x24,
-						.usage = 0x28, .pressed = true});
-					m_inputHandler({.kind = NativeInputKind::Key, .key = 0x24,
-						.usage = 0x28, .pressed = false});
+					NSString* finalText = editor ? [editor string] : [m_textInput stringValue];
+					const char* text = [finalText UTF8String];
+					m_inputHandler({.kind = NativeInputKind::TextAction,
+						.text = text ? text : "", .textSequence = m_textInputSequence,
+						.textAccepted = accepted});
 				}
 				return YES;
 			}

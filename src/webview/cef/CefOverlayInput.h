@@ -86,7 +86,8 @@ namespace WebFrontend::CefOverlay
 	{
 		if (kind == NativeInputKind::Key)
 			return ownership.keyboard;
-		if (kind == NativeInputKind::Character || kind == NativeInputKind::TextComposition)
+		if (kind == NativeInputKind::Character || kind == NativeInputKind::TextComposition ||
+			kind == NativeInputKind::TextAction)
 			return ownership.text;
 		if (IsPointerInput(kind))
 			return ownership.pointer;

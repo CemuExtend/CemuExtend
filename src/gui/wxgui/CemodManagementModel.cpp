@@ -80,6 +80,8 @@ std::string CemodGuiAdapter::PermissionName(CemodGuiPermission permission)
 		return "Service: clipboard";
 	case CemodGuiPermission::ServiceCapture:
 		return "Service: screen capture";
+	case CemodGuiPermission::ServiceMicrophone:
+		return "Service: microphone";
 	}
 	return "Unknown permission";
 }

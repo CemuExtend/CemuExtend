@@ -27,6 +27,7 @@
 #include "audio/CubebAPI.h"
 
 #include "audio/IAudioInputAPI.h"
+#include "Cafe/OS/libs/cemuextend/Cex2Microphone.h"
 
 #include "wxgui/canvas/RendererWindowAdapter.h"
 
@@ -712,6 +713,49 @@ wxPanel* GeneralSettings2::AddAudioPage(wxNotebook* notebook)
 		m_input_volume->Bind(wxEVT_SLIDER, &GeneralSettings2::OnVolumeChanged, this);
 
 		box_sizer->Add(audio_input_row, 1, wxEXPAND, 5);
+		audio_panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
+	}
+
+	{
+		auto box = new wxStaticBox(audio_panel, wxID_ANY, _("Mod microphone"));
+		auto box_sizer = new wxStaticBoxSizer(box, wxVERTICAL);
+		auto row = new wxFlexGridSizer(0, 3, 0, 0);
+		row->SetFlexibleDirection(wxBOTH);
+		row->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+		row->Add(new wxStaticText(box, wxID_ANY, _("Device")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		m_mod_input_device = new wxChoice(box, wxID_ANY);
+		m_mod_input_device->SetMinSize(wxSize(300, -1));
+		m_mod_input_device->SetToolTip(_("Select the microphone exposed directly to CemuExtend Mods"));
+		row->Add(m_mod_input_device, 0, wxEXPAND | wxALL, 5);
+		row->AddSpacer(0);
+		m_mod_input_device->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) {
+			auto& config = GetConfig();
+			std::wstring identifier;
+			const auto selection = m_mod_input_device->GetSelection();
+			if (selection != wxNOT_FOUND && selection != 0 && m_mod_input_device->HasClientObjectData())
+			{
+				const auto* description =
+					(wxInputDeviceDescription*)m_mod_input_device->GetClientObject(selection);
+				if (description)
+					identifier = description->GetDescription()->GetIdentifier();
+			}
+			config.SetModInputDevice(std::move(identifier));
+			cemuextend_hle::Cex2Microphone::ReleaseAll();
+		});
+
+		row->Add(new wxStaticText(box, wxID_ANY, _("Input level")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		m_mod_input_volume = new wxSlider(box, wxID_ANY, 100, 0, 200);
+		row->Add(m_mod_input_volume, 0, wxEXPAND | wxALL, 5);
+		auto level_text = new wxStaticText(box, wxID_ANY, "100%");
+		row->Add(level_text, 0, wxALIGN_CENTER_VERTICAL | wxALL | wxALIGN_RIGHT, 5);
+		m_mod_input_volume->Bind(wxEVT_SLIDER, &GeneralSettings2::OnSliderChangedPercent, this,
+								 wxID_ANY, wxID_ANY, new wxControlObject(level_text));
+		m_mod_input_volume->Bind(wxEVT_SLIDER, [](wxCommandEvent& event) {
+			GetConfig().SetModInputVolume(event.GetInt());
+		});
+
+		box_sizer->Add(row, 1, wxEXPAND, 5);
 		audio_panel_sizer->Add(box_sizer, 0, wxEXPAND | wxALL, 5);
 	}
 
@@ -1660,6 +1704,7 @@ void GeneralSettings2::StoreConfig()
 	config.tv_volume = m_tv_volume->GetValue();
 	config.pad_volume = m_pad_volume->GetValue();
 	config.input_volume = m_input_volume->GetValue();
+	config.SetModInputVolume(m_mod_input_volume->GetValue());
 	config.portal_volume = m_portal_volume->GetValue();
 
 	config.tv_device.clear();
@@ -1688,6 +1733,16 @@ void GeneralSettings2::StoreConfig()
 		if (device_description)
 			config.input_device = device_description->GetDescription()->GetIdentifier();
 	}
+
+	std::wstring mod_input_identifier;
+	const auto mod_input_device = m_mod_input_device->GetSelection();
+	if (mod_input_device != wxNOT_FOUND && mod_input_device != 0 && m_mod_input_device->HasClientObjectData())
+	{
+		const auto* device_description = (wxInputDeviceDescription*)m_mod_input_device->GetClientObject(mod_input_device);
+		if (device_description)
+			mod_input_identifier = device_description->GetDescription()->GetIdentifier();
+	}
+	config.SetModInputDevice(std::move(mod_input_identifier));
 
 	config.portal_device.clear();
 	const auto portal_device = m_portal_device->GetSelection();
@@ -1905,11 +1960,13 @@ void GeneralSettings2::UpdateAudioDeviceList()
 	m_tv_device->Clear();
 	m_pad_device->Clear();
 	m_input_device->Clear();
+	m_mod_input_device->Clear();
 	m_portal_device->Clear();
 
 	m_tv_device->Append(_("Disabled"));
 	m_pad_device->Append(_("Disabled"));
 	m_input_device->Append(_("Disabled"));
+	m_mod_input_device->Append(_("Disabled"));
 	m_portal_device->Append(_("Disabled"));
 
 	const auto audio_api = (IAudioAPI::AudioAPI)GetConfig().audio_api;
@@ -1927,6 +1984,7 @@ void GeneralSettings2::UpdateAudioDeviceList()
 	for (auto& device : input_devices)
 	{
 		m_input_device->Append(device->GetName(), new wxInputDeviceDescription(device));
+		m_mod_input_device->Append(device->GetName(), new wxInputDeviceDescription(device));
 	}
 
 	if (m_tv_device->GetCount() > 1)
@@ -1937,6 +1995,7 @@ void GeneralSettings2::UpdateAudioDeviceList()
 	m_pad_device->SetSelection(0);
 
 	m_input_device->SetSelection(0);
+	m_mod_input_device->SetSelection(m_mod_input_device->GetCount() > 1 ? 1 : 0);
 
 	m_portal_device->SetSelection(0);
 
@@ -2532,6 +2591,22 @@ void GeneralSettings2::ApplyConfig()
 	}
 	else
 		m_input_device->SetSelection(0);
+
+	SendSliderEvent(m_mod_input_volume, config.mod_input_volume);
+	if (!config.mod_input_device.empty() && m_mod_input_device->HasClientObjectData())
+	{
+		for (uint32 i = 0; i < m_mod_input_device->GetCount(); ++i)
+		{
+			const auto description = (wxInputDeviceDescription*)m_mod_input_device->GetClientObject(i);
+			if (description && config.mod_input_device == description->GetDescription()->GetIdentifier())
+			{
+				m_mod_input_device->SetSelection(i);
+				break;
+			}
+		}
+	}
+	else
+		m_mod_input_device->SetSelection(0);
 
 	SendSliderEvent(m_portal_volume, config.portal_volume);
 	if (!config.portal_device.empty() && m_portal_device->HasClientObjectData())

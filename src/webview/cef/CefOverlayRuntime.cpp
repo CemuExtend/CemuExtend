@@ -2434,7 +2434,8 @@ namespace WebFrontend::CefOverlay
 			if (event.kind == NativeInputKind::Key)
 				target = resolved.keyboardWindow;
 			else if (event.kind == NativeInputKind::Character ||
-					 event.kind == NativeInputKind::TextComposition)
+					 event.kind == NativeInputKind::TextComposition ||
+					 event.kind == NativeInputKind::TextAction)
 				target = resolved.textWindow;
 			else if (IsPointerInput(event.kind))
 				target = resolved.pointerWindow;

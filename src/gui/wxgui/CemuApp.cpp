@@ -848,14 +848,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 		const auto usage = consumerUsage ? consumerUsage : CemuExtendUsbHidUsage(key_event);
 		m_windowState->SetKeyState(
 			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), true);
-		// A single-line native IME owns ordinary editing keys, but Enter is
-		// also the guest field's submit action. Mirror Enter only after any
-		// preedit has been committed; the first Enter used to accept a Japanese
-		// conversion candidate must remain private to the OS IME.
-		const bool native_submit = native_text_input_event &&
-								   (usage == 0x28 || usage == 0x58) &&
-								   m_mainFrame->CanSubmitCemuExtendTextInput();
-		if (!native_text_input_event || native_submit)
+		if (!native_text_input_event)
 			m_emulationController.SubmitKeyboard(
 				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
 				usage, true,
@@ -868,10 +861,7 @@ int CemuApp::FilterEvent(wxEvent& event)
 		const auto usage = consumerUsage ? consumerUsage : CemuExtendUsbHidUsage(key_event);
 		m_windowState->SetKeyState(
 			fix_raw_keycode(key_event.GetRawKeyCode(), key_event.GetRawKeyFlags()), false);
-		const bool native_submit = native_text_input_event &&
-								   (usage == 0x28 || usage == 0x58) &&
-								   m_mainFrame->CanSubmitCemuExtendTextInput();
-		if (!native_text_input_event || native_submit)
+		if (!native_text_input_event)
 			m_emulationController.SubmitKeyboard(
 				consumerUsage ? Application::ConsumerUsagePage : Application::KeyboardUsagePage,
 				usage, false,

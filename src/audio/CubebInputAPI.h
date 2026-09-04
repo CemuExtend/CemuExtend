@@ -2,6 +2,7 @@
 
 #include "IAudioInputAPI.h"
 
+#include <atomic>
 #include <cubeb/cubeb.h>
 
 class CubebInputAPI : public IAudioInputAPI
@@ -29,7 +30,7 @@ class CubebInputAPI : public IAudioInputAPI
 
 	using CubebDeviceDescriptionPtr = std::shared_ptr<CubebDeviceDescription>;
 
-	CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample);
+	CubebInputAPI(cubeb_devid devid, uint32 samplerate, uint32 channels, uint32 samples_per_block, uint32 bits_per_sample, bool voice = false, uint32 target_latency_samples = 0);
 	~CubebInputAPI();
 
 	AudioInputAPI GetType() const override
@@ -38,6 +39,16 @@ class CubebInputAPI : public IAudioInputAPI
 	}
 
 	bool ConsumeBlock(sint16* data) override;
+	std::size_t ConsumeAvailable(std::span<sint16> data, std::uint64_t* captureTimeNs = nullptr) override;
+	std::uint64_t ConsumeDroppedSamples() override;
+	bool HasFailed() const override
+	{
+		return m_failed.load(std::memory_order_acquire);
+	}
+	void MarkFailed()
+	{
+		m_failed.store(true, std::memory_order_release);
+	}
 	bool Play() override;
 	bool Stop() override;
 	bool IsPlaying() const override
@@ -58,6 +69,15 @@ class CubebInputAPI : public IAudioInputAPI
 	bool m_is_playing = false;
 
 	mutable std::shared_mutex m_mutex;
-	std::vector<uint8> m_buffer;
+	std::vector<sint16> m_buffer;
+	std::vector<std::uint64_t> m_captureTimes;
+	std::size_t m_readIndex{};
+	std::size_t m_writeIndex{};
+	std::size_t m_sampleCount{};
+	std::atomic_uint64_t m_droppedSamples{};
+	std::atomic_uint32_t m_inputLatencyFrames{};
+	std::atomic_bool m_inputLatencyKnown{};
+	std::atomic_bool m_failed{};
+	void RefreshInputLatency();
 	static long data_cb(cubeb_stream* stream, void* user, const void* inputbuffer, void* outputbuffer, long nframes);
 };

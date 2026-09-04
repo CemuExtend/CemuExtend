@@ -276,6 +276,8 @@ add_library(CemuCafe
 	OS/libs/cemuextend/CemodWebUiHost.h
   OS/libs/cemuextend/Cex2Http.cpp
   OS/libs/cemuextend/Cex2Media.cpp
+	OS/libs/cemuextend/Cex2Microphone.cpp
+	OS/libs/cemuextend/Cex2Microphone.h
   OS/libs/cemuextend/Cex2Http.h
   OS/libs/cemuextend/Cex2Owner.h
   OS/libs/cemuextend/Cex2Storage.cpp

@@ -194,6 +194,8 @@ class MainWindow : public wxFrame
 
 	void OnTimer(wxTimerEvent& event);
 	void OnCemuExtendTextChanged(wxCommandEvent& event);
+	void OnCemuExtendTextEnter(wxCommandEvent& event);
+	void OnCemuExtendTextKeyDown(wxKeyEvent& event);
 	void OnCemuExtendTextPreedit(std::string_view preedit);
 	void PublishCemuExtendTextComposition();
 	void EnsureCemuExtendTextInputFocus(std::uint64_t sequence);

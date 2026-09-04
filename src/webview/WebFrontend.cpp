@@ -3996,7 +3996,7 @@ namespace
 			if (!normalized.deviceId)
 				normalized.deviceId = normalized.kind == WebFrontend::NativeInputKind::Key ||
 											  normalized.kind == WebFrontend::NativeInputKind::Character ||
-											  normalized.kind == WebFrontend::NativeInputKind::TextComposition
+											  normalized.kind == WebFrontend::NativeInputKind::TextComposition || normalized.kind == WebFrontend::NativeInputKind::TextAction
 										  ? 1
 										  : static_cast<std::uint16_t>(normalized.surface == Host::PointerSurface::Main ? 1 : 2);
 			const bool keyboardStateChanged =
@@ -4201,6 +4201,10 @@ namespace
 					m_controller.SubmitTextComposition(
 						normalized.text, normalized.preedit, normalized.textCursor,
 						normalized.selectionLength);
+				break;
+			case WebFrontend::NativeInputKind::TextAction:
+				if (normalized.textSequence == m_textInputSequence && m_textInputSequence != 0)
+					m_controller.SubmitTextAction(normalized.textAccepted, normalized.text);
 				break;
 			}
 		}

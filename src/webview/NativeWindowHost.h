@@ -23,6 +23,7 @@ namespace WebFrontend
 		DeviceChanged,
 		RawMouse,
 		TextComposition,
+		TextAction,
 	};
 
 	struct NativeInputEvent
@@ -59,6 +60,7 @@ namespace WebFrontend
 		std::uint32_t textCursor{};
 		std::uint32_t selectionLength{};
 		std::uint64_t textSequence{};
+		bool textAccepted{};
 	};
 
 	struct NativePointerPresentation

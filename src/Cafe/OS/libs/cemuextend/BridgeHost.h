@@ -65,6 +65,11 @@ namespace cemuextend_hle
 			text, preedit, preeditStart, preeditCursor);
 	}
 
+	inline void TextActionEvent(cemuextend::wire::TextAction action, std::string_view text)
+	{
+		Cex2Host::Instance().TextActionEvent(action, text);
+	}
+
 	inline void MouseEvent(cemuextend::wire::PointerSurface surface,
 						   sint32 x, sint32 y, sint32 deltaX, sint32 deltaY,
 						   sint32 wheelX, sint32 wheelY, uint32 buttons, uint32 changedButtons,
