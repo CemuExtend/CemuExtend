@@ -2,7 +2,6 @@
 #include "input/InputManager.h"
 #include "audio/IAudioAPI.h"
 #include "application/ApplicationHost.h"
-#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 #include "frontend/FrontendRuntime.h"
 #include "wxgui/WxFrontendContext.h"
 
@@ -209,15 +208,13 @@ namespace
 		void SetFocusPaused(bool paused, std::uint64_t sequence) override
 		{
 			if (!QueueUi([paused, sequence] {
-					TcpGecko::SetGuestPaused(
-						TcpGecko::PauseOwner::CemuExtendFocusLoss, paused, sequence);
+					Application::SetCemuExtendFocusPaused(paused, sequence);
 				}) &&
 				!paused)
 			{
 				// Shutdown rejects new UI work; releasing our own pause source is safe
 				// from the host shutdown thread and must not be skipped.
-				TcpGecko::SetGuestPaused(
-					TcpGecko::PauseOwner::CemuExtendFocusLoss, false, sequence);
+				Application::SetCemuExtendFocusPaused(false, sequence);
 			}
 		}
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
 namespace Host
@@ -34,4 +35,6 @@ namespace Application
 	// cannot use constructor injection. Each module receives only its narrow port.
 	void ConnectHost(const HostBindings& bindings);
 	void DisconnectHost();
+	void SetCemuExtendFocusPaused(bool paused, std::uint64_t sequence);
+	void ReleaseCemuExtendMicrophones();
 } // namespace Application

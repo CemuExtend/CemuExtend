@@ -27,7 +27,7 @@
 #include "audio/CubebAPI.h"
 
 #include "audio/IAudioInputAPI.h"
-#include "Cafe/OS/libs/cemuextend/Cex2Microphone.h"
+#include "application/ApplicationHost.h"
 
 #include "wxgui/canvas/RendererWindowAdapter.h"
 
@@ -741,7 +741,7 @@ wxPanel* GeneralSettings2::AddAudioPage(wxNotebook* notebook)
 					identifier = description->GetDescription()->GetIdentifier();
 			}
 			config.SetModInputDevice(std::move(identifier));
-			cemuextend_hle::Cex2Microphone::ReleaseAll();
+			Application::ReleaseCemuExtendMicrophones();
 		});
 
 		row->Add(new wxStaticText(box, wxID_ANY, _("Input level")), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
