@@ -2,6 +2,7 @@
 #include "input/InputManager.h"
 #include "audio/IAudioAPI.h"
 #include "application/ApplicationHost.h"
+#include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 #include "frontend/FrontendRuntime.h"
 #include "wxgui/WxFrontendContext.h"
 
@@ -177,6 +178,7 @@ namespace
 	}
 
 	class WxHostServices final : public Host::IWindowMetrics,
+								 public Host::IWindowControl,
 								 public Host::IPathProvider,
 								 public Host::INativeSurfaceProvider,
 								 public Host::INativeSurfacePublisher,
@@ -196,6 +198,27 @@ namespace
 		Host::WindowMetricsSnapshot GetWindowMetrics() const override
 		{
 			return m_state->Metrics();
+		}
+
+		bool SetFullscreen(bool fullscreen) override
+		{
+			return QueueFrameCallback(
+				[fullscreen](MainWindow& frame) { frame.SetFullScreen(fullscreen); });
+		}
+
+		void SetFocusPaused(bool paused, std::uint64_t sequence) override
+		{
+			if (!QueueUi([paused, sequence] {
+					TcpGecko::SetGuestPaused(
+						TcpGecko::PauseOwner::CemuExtendFocusLoss, paused, sequence);
+				}) &&
+				!paused)
+			{
+				// Shutdown rejects new UI work; releasing our own pause source is safe
+				// from the host shutdown thread and must not be skipped.
+				TcpGecko::SetGuestPaused(
+					TcpGecko::PauseOwner::CemuExtendFocusLoss, false, sequence);
+			}
 		}
 
 		fs::path GetUserDataPath(std::string_view relativePath) const override
@@ -446,6 +469,7 @@ namespace
 		}
 		Application::ConnectHost({
 			.windowMetrics = std::static_pointer_cast<Host::IWindowMetrics>(hostServices),
+			.windowControl = std::static_pointer_cast<Host::IWindowControl>(hostServices),
 			.clipboard = std::static_pointer_cast<Host::IClipboard>(hostServices),
 			.externalLauncher = std::static_pointer_cast<Host::IExternalLauncher>(hostServices),
 			.inputFocus = std::static_pointer_cast<Host::IInputFocus>(hostServices),

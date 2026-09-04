@@ -98,7 +98,9 @@ namespace // TCPGecko commands
 		p[3] = uint8_t(v);
 	}
 
-	std::atomic_bool s_consolePaused{false};
+	std::mutex s_pauseMutex;
+	TcpGecko::PauseOwnership s_pauseOwners;
+	bool s_guestPauseApplied{};
 
 	OSThread_t* ThreadById(MPTR threadId)
 	{
@@ -117,8 +119,17 @@ namespace // TCPGecko commands
 	{
 		__OSLockScheduler();
 		for (sint32 i = 0; i < activeThreadCount; i++)
-			coreinit::__OSResumeThreadInternal(ThreadById(activeThread[i]), 4);
+			coreinit::__OSResumeThreadInternal(ThreadById(activeThread[i]), 1);
 		__OSUnlockScheduler();
+	}
+
+	void ResetGuestPause()
+	{
+		std::scoped_lock lock(s_pauseMutex);
+		s_pauseOwners.Reset();
+		if (s_guestPauseApplied && coreinit::OSIsSchedulerActive())
+			ResumeAllGuestThreads();
+		s_guestPauseApplied = false;
 	}
 
 	OSThread_t* FirstActiveThread()
@@ -921,21 +932,19 @@ bool TcpGeckoServer::CmdExecuteAssembly(SOCKET s)
 
 bool TcpGeckoServer::CmdPauseConsole(SOCKET s)
 {
-	if (!s_consolePaused.exchange(true))
-		SuspendAllGuestThreads();
+	TcpGecko::SetGuestPaused(TcpGecko::PauseOwner::RemoteDebugger, true);
 	return true;
 }
 
 bool TcpGeckoServer::CmdResumeConsole(SOCKET s)
 {
-	if (s_consolePaused.exchange(false))
-		ResumeAllGuestThreads();
+	TcpGecko::SetGuestPaused(TcpGecko::PauseOwner::RemoteDebugger, false);
 	return true;
 }
 
 bool TcpGeckoServer::CmdIsConsolePaused(SOCKET s)
 {
-	return SendByteValue(s, s_consolePaused.load() ? 1 : 0);
+	return SendByteValue(s, TcpGecko::IsGuestPaused() ? 1 : 0);
 }
 
 bool TcpGeckoServer::CmdServerVersion(SOCKET s)
@@ -1106,8 +1115,38 @@ bool TcpGeckoServer::CmdTakeScreenShot(SOCKET s)
 
 namespace TcpGecko
 {
+	void SetGuestPaused(PauseOwner owner, bool paused, std::uint64_t sequence)
+	{
+		std::scoped_lock lock(s_pauseMutex);
+		if (!s_pauseOwners.Set(owner, paused, sequence))
+			return;
+		const bool shouldPause = s_pauseOwners.IsPaused();
+		if (!coreinit::OSIsSchedulerActive())
+		{
+			s_guestPauseApplied = false;
+			return;
+		}
+		if (shouldPause)
+		{
+			SuspendAllGuestThreads();
+			s_guestPauseApplied = true;
+		}
+		else if (s_guestPauseApplied)
+		{
+			ResumeAllGuestThreads();
+			s_guestPauseApplied = false;
+		}
+	}
+
+	bool IsGuestPaused()
+	{
+		std::scoped_lock lock(s_pauseMutex);
+		return s_pauseOwners.IsPaused();
+	}
+
 	void OnTitleBoot()
 	{
+		ResetGuestPause();
 		if (!GetConfig().tcpgecko.enabled.GetValue())
 			return;
 		if (!g_tcpGeckoServer)
@@ -1118,6 +1157,7 @@ namespace TcpGecko
 
 	void OnTitleShutdown()
 	{
+		ResetGuestPause();
 		CodeHandler::Uninstall();
 	}
 

@@ -128,6 +128,17 @@ namespace Host
 		[[nodiscard]] virtual WindowMetricsSnapshot GetWindowMetrics() const = 0;
 	};
 
+	class IWindowControl
+	{
+	  public:
+		virtual ~IWindowControl() = default;
+		// Implementations queue this request onto their UI thread. Returning false
+		// means that the frontend is shutting down and cannot accept the request.
+		[[nodiscard]] virtual bool SetFullscreen(bool fullscreen) = 0;
+		// This pause source is independently owned from debugger/manual pause state.
+		virtual void SetFocusPaused(bool paused, std::uint64_t sequence) = 0;
+	};
+
 	class IPathProvider
 	{
 	  public:

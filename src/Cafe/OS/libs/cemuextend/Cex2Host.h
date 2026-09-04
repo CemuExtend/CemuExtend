@@ -15,6 +15,7 @@ namespace Host
 {
 	class IClipboard;
 	class IWindowMetrics;
+	class IWindowControl;
 } // namespace Host
 
 namespace cemuextend_hle
@@ -45,7 +46,8 @@ namespace cemuextend_hle
 		static Cex2Host& Instance();
 		void ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
 						   std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-						   std::shared_ptr<ICemodWebUiHost> webUi = {});
+						   std::shared_ptr<ICemodWebUiHost> webUi = {},
+						   std::shared_ptr<Host::IWindowControl> windowControl = {});
 
 		std::int32_t Query(Cex2Owner& owner, std::uint32_t query,
 						   std::span<std::byte> output);

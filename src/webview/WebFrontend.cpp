@@ -1964,7 +1964,14 @@ namespace
 						if (gate->target)
 							gate->target->SignalFramePresented(mainWindow);
 					});
-				m_hostServices = std::make_shared<WebHostServices>(m_hostState, *m_nativeWindow, [this](std::function<void()> action) { return PostToUi(std::move(action)); }, [this] { return RecreateCanvasForHost(); });
+				m_hostServices = std::make_shared<WebHostServices>(
+					m_hostState, *m_nativeWindow,
+					[this](std::function<void()> action) { return PostToUi(std::move(action)); },
+					[this] { return RecreateCanvasForHost(); },
+					[this](bool fullscreen) {
+						m_fullscreen = fullscreen;
+						m_nativeWindow->SetFullscreen(fullscreen);
+					});
 				RefreshHotkeyBindings(m_controller.GetHotkeySettings());
 				m_hostServices->SetControllerObserver(
 					[this](const ControllerState& current, const ControllerState& previous) {
@@ -1972,6 +1979,7 @@ namespace
 					});
 				Application::ConnectHost({
 					.windowMetrics = m_hostServices,
+					.windowControl = m_hostServices,
 					.clipboard = m_hostServices,
 					.externalLauncher = m_hostServices,
 					.inputFocus = m_hostServices,

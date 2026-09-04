@@ -195,6 +195,8 @@ namespace cemuextend_hle
 			OperationDefinition{7, 1, 1, 1, 0, sizeof(cemuextend::wire::WindowStatePayload), 0, 0, Handler::Window},
 			OperationDefinition{7, 2, 1, 4, sizeof(cemuextend::wire::PointerPolicyPayload), sizeof(cemuextend::wire::PointerPolicyPayload), 0, 0, Handler::Window},
 			OperationDefinition{7, 3, 1, 1, 0, sizeof(cemuextend::wire::PointerPolicyPayload), 0, 0, Handler::Window},
+			OperationDefinition{7, 4, 1, 2, sizeof(cemuextend::wire::WindowBooleanPayload), sizeof(cemuextend::wire::WindowBooleanPayload), 0, 0, Handler::Window},
+			OperationDefinition{7, 5, 1, 2, sizeof(cemuextend::wire::WindowBooleanPayload), sizeof(cemuextend::wire::WindowBooleanPayload), 0, 0, Handler::Window},
 			OperationDefinition{8, 1, 1, 16, 1, 64, 0, 0, Handler::Capture},
 			OperationDefinition{8, 2, 1, 16, 8, 65520, 0, 0, Handler::Capture},
 			OperationDefinition{8, 3, 1, 16, 4, 0, 0, 0, Handler::Capture},
@@ -236,7 +238,7 @@ namespace cemuextend_hle
 			ServiceDefinition{4, 1, 3, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{5, 1, 3, 64U * 1024U, 64U * 1024U},
 			ServiceDefinition{6, 1, 8, 64U * 1024U, 64U * 1024U},
-			ServiceDefinition{7, 1, 1, 64, 256},
+			ServiceDefinition{7, 2, 7, 64, 256},
 			ServiceDefinition{8, 1, 16, 64, 64U * 1024U},
 			ServiceDefinition{9, 1, 1, 64, 4U * 1024U},
 			ServiceDefinition{10, 1, 32, 64U * 1024U, 64U * 1024U},
@@ -316,6 +318,7 @@ namespace cemuextend_hle
 			std::uint64_t frameRateSequence{};
 			cemuextend::wire::PointerPolicyPayload pointerPolicy{};
 			std::uint64_t pointerPolicySequence{};
+			bool pauseOnFocusLoss{};
 			Cex2HostTextInputState textInput{};
 			std::array<cemuextend::wire::ObservedVpadState, 2> observedVpad{};
 			std::array<bool, 2> hasObservedVpad{};
@@ -338,6 +341,7 @@ namespace cemuextend_hle
 		std::mutex mutex;
 		std::shared_ptr<Host::IClipboard> clipboard;
 		std::shared_ptr<Host::IWindowMetrics> windowMetrics;
+		std::shared_ptr<Host::IWindowControl> windowControl;
 		std::shared_ptr<ICemodWebUiHost> webUi;
 		std::map<std::pair<std::uint64_t, std::uint32_t>,
 				 std::shared_ptr<const CemodWebUiContent>>
@@ -349,6 +353,8 @@ namespace cemuextend_hle
 		std::uint32_t nextSession{1};
 		std::uint64_t nextPointerPolicySequence{1};
 		std::uint64_t nextFrameRateSequence{1};
+		std::uint64_t nextFocusPauseSequence{1};
+		bool focusPauseApplied{};
 		cemuextend::wire::MouseEventPayloadV2 hostMouse{};
 		struct InputJournalRecord
 		{
@@ -572,6 +578,27 @@ namespace cemuextend_hle
 				result = session.pointerPolicy;
 			}
 			return result;
+		}
+
+		[[nodiscard]] bool EffectivePauseOnFocusLossLocked() const
+		{
+			using namespace cemuextend::wire;
+			return std::ranges::any_of(sessions, [](const auto& entry) {
+				const auto& session = entry.second;
+				return session.pauseOnFocusLoss &&
+					   HasPermission(session, 2, static_cast<std::uint16_t>(ServiceId::Window),
+									 static_cast<std::uint16_t>(WindowOperation::SetPauseOnFocusLoss));
+			});
+		}
+
+		void RefreshFocusPauseLocked()
+		{
+			const bool shouldPause = !hostMouse.focused && EffectivePauseOnFocusLossLocked();
+			if (focusPauseApplied == shouldPause)
+				return;
+			focusPauseApplied = shouldPause;
+			if (windowControl)
+				windowControl->SetFocusPaused(shouldPause, nextFocusPauseSequence++);
 		}
 
 		static bool AdmitCorrelation(Session& session, std::uint32_t correlation)
@@ -1390,6 +1417,32 @@ namespace cemuextend_hle
 			}
 			if (definition->handler == Handler::Window)
 			{
+				if (request.operation.get() == static_cast<std::uint16_t>(WindowOperation::SetFullscreen) ||
+					request.operation.get() == static_cast<std::uint16_t>(WindowOperation::SetPauseOnFocusLoss))
+				{
+					if (payload.size() != sizeof(WindowBooleanPayload))
+						return MakeResponse(request, Status::InvalidArgument);
+					WindowBooleanPayload value{};
+					std::memcpy(&value, payload.data(), sizeof(value));
+					if (value.enabled > 1 || value.reserved != std::array<std::byte, 3>{})
+						return MakeResponse(request, Status::InvalidArgument);
+					if (!windowControl)
+						return MakeResponse(request, Status::NotSupported);
+					if (request.operation.get() == static_cast<std::uint16_t>(WindowOperation::SetFullscreen))
+					{
+						if (!windowControl->SetFullscreen(value.enabled != 0))
+							return MakeResponse(request, Status::Busy);
+						AuditSensitiveUse(session.owner->Principal(), "Fullscreen", false);
+					}
+					else
+					{
+						session.pauseOnFocusLoss = value.enabled != 0;
+						RefreshFocusPauseLocked();
+						AuditSensitiveUse(session.owner->Principal(), "Pause On Focus Loss", false);
+					}
+					return MakeResponse(request, Status::Ok,
+										{reinterpret_cast<const std::byte*>(&value), sizeof(value)});
+				}
 				if (request.operation.get() == static_cast<std::uint16_t>(WindowOperation::SetPointerPolicy))
 				{
 					if (payload.size() != sizeof(PointerPolicyPayload))
@@ -1622,15 +1675,32 @@ namespace cemuextend_hle
 
 	void Cex2Host::ConfigureHost(std::shared_ptr<Host::IClipboard> clipboard,
 								 std::shared_ptr<Host::IWindowMetrics> windowMetrics,
-								 std::shared_ptr<ICemodWebUiHost> webUi)
+								 std::shared_ptr<ICemodWebUiHost> webUi,
+								 std::shared_ptr<Host::IWindowControl> windowControl)
 	{
 		std::shared_ptr<ICemodWebUiHost> previous;
+		std::shared_ptr<Host::IWindowControl> previousWindowControl;
+		bool focusPaused{};
+		std::uint64_t releaseSequence{};
+		std::uint64_t applySequence{};
 		{
 			std::scoped_lock lock(m_impl->mutex);
 			m_impl->clipboard = std::move(clipboard);
 			m_impl->windowMetrics = std::move(windowMetrics);
 			previous = std::exchange(m_impl->webUi, webUi);
+			previousWindowControl = std::exchange(m_impl->windowControl, windowControl);
+			focusPaused = m_impl->focusPauseApplied;
+			if (focusPaused && previousWindowControl != windowControl)
+			{
+				releaseSequence = m_impl->nextFocusPauseSequence++;
+				if (windowControl)
+					applySequence = m_impl->nextFocusPauseSequence++;
+			}
 		}
+		if (previousWindowControl && previousWindowControl != windowControl && focusPaused)
+			previousWindowControl->SetFocusPaused(false, releaseSequence);
+		if (windowControl && previousWindowControl != windowControl && focusPaused)
+			windowControl->SetFocusPaused(true, applySequence);
 		if (previous && previous != webUi)
 			previous->SetEventSink({});
 		if (webUi)
@@ -1811,6 +1881,7 @@ namespace cemuextend_hle
 		{
 			m_impl->sessions.erase(found);
 			m_impl->RefreshGuestFrameRateLocked();
+			m_impl->RefreshFocusPauseLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		RequestHeader request{};
@@ -1820,6 +1891,7 @@ namespace cemuextend_hle
 		{
 			m_impl->sessions.erase(found);
 			m_impl->RefreshGuestFrameRateLocked();
+			m_impl->RefreshFocusPauseLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		const auto correlationId = request.correlationId.get();
@@ -1827,6 +1899,7 @@ namespace cemuextend_hle
 		{
 			m_impl->sessions.erase(found);
 			m_impl->RefreshGuestFrameRateLocked();
+			m_impl->RefreshFocusPauseLocked();
 			return static_cast<std::int32_t>(Error::ProtocolError);
 		}
 		const auto payload = requestBytes.subspan(sizeof(RequestHeader));
@@ -2463,6 +2536,7 @@ namespace cemuextend_hle
 		auto webUi = m_impl->webUi;
 		m_impl->sessions.erase(found);
 		m_impl->RefreshGuestFrameRateLocked();
+		m_impl->RefreshFocusPauseLocked();
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
 		lock.unlock();
@@ -2485,6 +2559,7 @@ namespace cemuextend_hle
 			return remove;
 		});
 		m_impl->RefreshGuestFrameRateLocked();
+		m_impl->RefreshFocusPauseLocked();
 		// Transfers are scoped to the address space, so they outlive one session of
 		// it but never the owner that started them.
 		Cex2Http::ReleaseSession(owner.AddressSpaceId());
@@ -2512,6 +2587,7 @@ namespace cemuextend_hle
 		}
 		m_impl->sessions.clear();
 		m_impl->RefreshGuestFrameRateLocked();
+		m_impl->RefreshFocusPauseLocked();
 		m_impl->webUiContents.clear();
 		auto webUi = m_impl->webUi;
 		if (hadTextInput)
@@ -2975,6 +3051,7 @@ namespace cemuextend_hle
 			state.changedButtons = 0;
 		}
 		m_impl->EmitMouseEventLocked(state);
+		m_impl->RefreshFocusPauseLocked();
 	}
 
 	cemuextend::wire::PointerPolicyPayload Cex2Host::EffectivePointerPolicy()
@@ -2990,6 +3067,7 @@ namespace cemuextend_hle
 							 (permissions & kCemodUiPermission) == 0;
 		bool hadTextInput{};
 		bool frameRateChanged{};
+		bool focusPauseChanged{};
 		for (const auto& [id, session] : m_impl->sessions)
 			hadTextInput |= session.owner == &owner && session.textInput.active;
 		owner.SetGrantedPermissions(permissions);
@@ -3039,6 +3117,13 @@ namespace cemuextend_hle
 			if (!Impl::HasPermission(session, 4, static_cast<std::uint16_t>(ServiceId::Window),
 									 static_cast<std::uint16_t>(cemuextend::wire::WindowOperation::SetPointerPolicy)))
 				session.pointerPolicy = {};
+			if (session.pauseOnFocusLoss &&
+				!Impl::HasPermission(session, 2, static_cast<std::uint16_t>(ServiceId::Window),
+									 static_cast<std::uint16_t>(cemuextend::wire::WindowOperation::SetPauseOnFocusLoss)))
+			{
+				session.pauseOnFocusLoss = false;
+				focusPauseChanged = true;
+			}
 			if (!Impl::HasPermission(session, 16, static_cast<std::uint16_t>(ServiceId::Capture)))
 				session.capture = {};
 			if (session.frameRate > 0 &&
@@ -3069,6 +3154,8 @@ namespace cemuextend_hle
 		}
 		if (frameRateChanged)
 			m_impl->RefreshGuestFrameRateLocked();
+		if (focusPauseChanged)
+			m_impl->RefreshFocusPauseLocked();
 		if (hadTextInput)
 			m_impl->QueueTextInputWakeLocked();
 		auto webUi = m_impl->webUi;

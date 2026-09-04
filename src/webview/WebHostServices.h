@@ -16,6 +16,7 @@ namespace WebFrontend
 	class WebHostState;
 
 	class WebHostServices final : public Host::IWindowMetrics,
+								  public Host::IWindowControl,
 								  public Host::IPathProvider,
 								  public Host::INativeSurfaceProvider,
 								  public Host::INativeSurfacePublisher,
@@ -30,10 +31,12 @@ namespace WebFrontend
 	  public:
 		using UiDispatch = std::function<bool(std::function<void()>)>;
 		using CanvasRecreator = std::function<bool()>;
+		using FullscreenSetter = std::function<void(bool)>;
 		using ControllerObserver = std::function<void(const ControllerState&, const ControllerState&)>;
 
 		WebHostServices(std::shared_ptr<WebHostState> state, INativeWindowHost& nativeWindow,
-						UiDispatch dispatch, CanvasRecreator recreateCanvas);
+						UiDispatch dispatch, CanvasRecreator recreateCanvas,
+						FullscreenSetter setFullscreen);
 
 		void Deactivate();
 		void UpdateKey(std::uint32_t key, bool pressed);
@@ -42,6 +45,8 @@ namespace WebFrontend
 		void SetControllerObserver(ControllerObserver observer);
 
 		[[nodiscard]] Host::WindowMetricsSnapshot GetWindowMetrics() const override;
+		[[nodiscard]] bool SetFullscreen(bool fullscreen) override;
+		void SetFocusPaused(bool paused, std::uint64_t sequence) override;
 		[[nodiscard]] std::filesystem::path GetUserDataPath(std::string_view relativePath) const override;
 		[[nodiscard]] std::filesystem::path GetMlcPath() const override;
 		[[nodiscard]] std::filesystem::path GetExecutablePath() const override;
@@ -90,6 +95,7 @@ namespace WebFrontend
 		INativeWindowHost& m_nativeWindow;
 		UiDispatch m_dispatch;
 		CanvasRecreator m_recreateCanvas;
+		FullscreenSetter m_setFullscreen;
 		std::thread::id m_uiThread;
 		std::atomic_bool m_active{true};
 		std::atomic_bool m_inputConfigurationFocused{};
