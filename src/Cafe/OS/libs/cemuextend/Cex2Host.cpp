@@ -2553,7 +2553,8 @@ namespace cemuextend_hle
 				continue;
 #ifndef CEMU_CEX2_TESTING
 			if (header.serviceId.get() == static_cast<std::uint16_t>(ServiceId::Microphone) &&
-				header.operation.get() == static_cast<std::uint16_t>(MicrophoneOperation::Open) &&
+				header.operation.get() ==
+					static_cast<std::uint16_t>(cemuextend::wire::MicrophoneOperation::Open) &&
 				header.status.get() == static_cast<std::uint16_t>(Status::Ok))
 				Cex2Microphone::ReleaseSession({found->second.addressSpaceId,
 												found->second.generation,
