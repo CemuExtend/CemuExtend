@@ -7,14 +7,9 @@ import type {
 import { subscribe } from "../bridge/events";
 import { invoke } from "../bridge/native";
 import { cemodEventJobId, parseCemodSnapshot } from "./cemodEvents";
+import { isCemodPermissionModelValid } from "./cemodPermissionModel";
 
 type Context = NonNullable<Bootstrap["context"]>;
-
-// The host serialises one entry per kCemodPermissions member
-// (src/Cemu/CemuExtend/CemodInspectionService.h). Approval is blocked unless the
-// package model carries the whole set, so this has to track that list: a short
-// model means the dialog cannot show everything the package is asking for.
-const CEMOD_PERMISSION_MODEL_SIZE = 18;
 
 export function CemodPermissionsWindow({
   context,
@@ -111,8 +106,7 @@ export function CemodPermissionsWindow({
     () => [...grants].reduce((mask, bit) => mask | BigInt(bit), 0n).toString(),
     [grants],
   );
-  const permissionCountValid =
-    item?.permissions.length === CEMOD_PERMISSION_MODEL_SIZE;
+  const permissionModelValid = item ? isCemodPermissionModelValid(item) : false;
   const completeNativeGrant =
     !item ||
     (!item.trustedNative && !item.wups) ||
@@ -125,7 +119,7 @@ export function CemodPermissionsWindow({
       !context?.titleId ||
       !context.generation ||
       !digestConfirmed ||
-      !permissionCountValid
+      !permissionModelValid
     )
       return;
     setSaving(true);
@@ -183,11 +177,10 @@ export function CemodPermissionsWindow({
               Headless package: it cannot present an interactive runtime UI.
             </div>
           )}
-          {!permissionCountValid && (
+          {!permissionModelValid && (
             <div className="error">
-              The host did not provide the complete{" "}
-              {CEMOD_PERMISSION_MODEL_SIZE}-permission model. Approval is
-              blocked.
+              The host permission model does not cover every requested
+              permission. Approval is blocked.
             </div>
           )}
           <h2>{item.pluginName || item.modId}</h2>
@@ -285,7 +278,7 @@ export function CemodPermissionsWindow({
             !item ||
             !item.valid ||
             !digestConfirmed ||
-            !permissionCountValid ||
+            !permissionModelValid ||
             (approved && !completeNativeGrant) ||
             saving
           }
