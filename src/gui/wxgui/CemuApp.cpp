@@ -519,6 +519,29 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	default:
 		break;
 	}
+#elif BOOST_OS_MACOS
+	// wxOSX reports Command as WXK_CONTROL, so map modifiers from the native kVK_* code.
+	switch (rawKey)
+	{
+	case 0x38:
+		return 0xe1; // kVK_Shift
+	case 0x3c:
+		return 0xe5; // kVK_RightShift
+	case 0x3b:
+		return 0xe0; // kVK_Control
+	case 0x3e:
+		return 0xe4; // kVK_RightControl
+	case 0x3a:
+		return 0xe2; // kVK_Option
+	case 0x3d:
+		return 0xe6; // kVK_RightOption
+	case 0x37:
+		return 0xe3; // kVK_Command
+	case 0x36:
+		return 0xe7; // kVK_RightCommand
+	default:
+		break;
+	}
 #else
 	(void)rawKey;
 #endif
@@ -745,8 +768,15 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 		return 0xe3;
 	case WXK_WINDOWS_RIGHT:
 		return 0xe7;
+#if BOOST_OS_MACOS
+	case WXK_RAW_CONTROL:
+		return 0xe0;
+	case WXK_CONTROL:
+		return 0xe3; // Command on wxOSX
+#else
 	case WXK_CONTROL:
 		return 0xe0;
+#endif
 	case WXK_SHIFT:
 		return 0xe1;
 	case WXK_ALT:
