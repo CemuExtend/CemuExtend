@@ -261,6 +261,14 @@ target_include_directories(CemuWxGui PUBLIC "../")
 # PUBLIC because rapidjson/document.h is included in ChecksumTool.h
 target_include_directories(CemuWxGui PUBLIC ${RAPIDJSON_INCLUDE_DIRS})
 
+if(APPLE)
+  target_sources(CemuWxGui PRIVATE
+    MacRelativePointer.h
+    MacRelativePointer.mm
+  )
+  target_link_libraries(CemuWxGui PRIVATE "-framework AppKit" "-framework ApplicationServices")
+endif()
+
 target_link_libraries(CemuWxGui PRIVATE
   CemuAudio
   CemuCommon

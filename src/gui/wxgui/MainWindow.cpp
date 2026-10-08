@@ -62,6 +62,9 @@
 #if BOOST_OS_WINDOWS
 #include <windows.h>
 #endif
+#if BOOST_OS_MACOS
+#include "wxgui/MacRelativePointer.h"
+#endif
 
 enum
 {
@@ -1629,6 +1632,35 @@ bool MainWindow::EnsureCemuExtendRawMouse()
 	m_cemuextend_raw_mouse_registered =
 		RegisterRawInputDevices(&device, 1, sizeof(device)) != FALSE;
 	return m_cemuextend_raw_mouse_registered;
+#elif BOOST_OS_MACOS
+	if (!m_cemuextend_raw_mouse_registered)
+	{
+		MacRelativePointer::Install([this, remainderX = 0.0, remainderY = 0.0](double deltaX, double deltaY) mutable {
+			if (m_cemuextend_bridge.PointerMode() !=
+				static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::CapturedRelative))
+				return;
+			remainderX += deltaX;
+			remainderY += deltaY;
+			const auto x = static_cast<std::int32_t>(remainderX);
+			const auto y = static_cast<std::int32_t>(remainderY);
+			remainderX -= x;
+			remainderY -= y;
+			if (x == 0 && y == 0)
+				return;
+			if (m_cemuextend_bridge.RawMouseRequested())
+				m_cemuextend_bridge.MarkRawMouseSeen();
+			EmitCemuExtendRawMouseEvent(x, y, 0);
+		}, [this]() {
+			if (!m_render_canvas || m_cemuextend_bridge.PointerMode() ==
+										 static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::Default))
+				return;
+			wxMouseEvent motion(wxEVT_MOTION);
+			motion.SetPosition(m_render_canvas->ScreenToClient(wxGetMousePosition()));
+			OnMouseMove(motion);
+		});
+		m_cemuextend_raw_mouse_registered = true;
+	}
+	return true;
 #else
 	return false;
 #endif
@@ -1702,10 +1734,27 @@ bool MainWindow::ApplyCemuExtendPointerPolicy()
 			EnsureCemuExtendRawMouse();
 		const auto size = m_render_canvas->GetClientSize();
 		const wxPoint center{size.GetWidth() / 2, size.GetHeight() / 2};
+#if BOOST_OS_MACOS
+		const auto screenCenter = m_render_canvas->ClientToScreen(center);
+		MacRelativePointer::WarpTo(screenCenter.x, screenCenter.y);
+		// NSEvent deltas are always available here; never fall back to "cursor minus center".
+		if (decision.requestRawMouse)
+			m_cemuextend_bridge.MarkRawMouseSeen();
+#else
 		m_render_canvas->WarpPointer(center.x, center.y);
+#endif
 		const auto physicalCenter = ToPhys(center);
 		m_cemuextend_bridge.RecordRawPosition({physicalCenter.x, physicalCenter.y});
 	}
+#if BOOST_OS_MACOS
+	// wxOSX gets no button-less mouseMoved over the canvas; detach the cursor and read NSEvent deltas.
+	const bool capture = decision.mode ==
+							 static_cast<std::uint8_t>(Frontend::CemuExtendPointerMode::CapturedRelative) &&
+						 m_render_canvas && m_windowState->app_active.load();
+	if (m_render_canvas)
+		EnsureCemuExtendRawMouse();
+	MacRelativePointer::SetCaptured(capture);
+#endif
 	return decision.ownsPointer;
 }
 
@@ -1724,6 +1773,7 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 										   {physPos.x, physPos.y});
 	EmitCemuExtendMouseEvent(event);
 
+#if !BOOST_OS_MACOS
 	if (m_cemuextend_bridge.PointerMode() == static_cast<std::uint8_t>(
 												 Frontend::CemuExtendPointerMode::CapturedRelative) &&
 		m_render_canvas)
@@ -1733,6 +1783,7 @@ void MainWindow::OnMouseMove(wxMouseEvent& event)
 		if (event.GetPosition() != center)
 			m_render_canvas->WarpPointer(center.x, center.y);
 	}
+#endif
 
 	if (bridgeOwnsPointer || !IsFullScreen())
 		return;
