@@ -3,6 +3,7 @@
 #include "config/CemuConfig.h"
 
 #include <wx/button.h>
+#include <wx/checkbox.h>
 #include <wx/checklst.h>
 #include <wx/listbox.h>
 #include <wx/msgdlg.h>
@@ -80,6 +81,9 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 			   0, wxEXPAND | wxRIGHT | wxBOTTOM, 6);
 	m_permissions = new wxCheckListBox(this, wxID_ANY);
 	right->Add(m_permissions, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
+	m_trustUpdates = new wxCheckBox(this, wxID_ANY,
+									_("Trust future updates to this Mod (keep this approval when the .cemod is rebuilt, unless it asks for more)"));
+	right->Add(m_trustUpdates, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
 	auto* save = new wxButton(this, wxID_ANY, _("Save approval"));
 	right->Add(save, 0, wxALIGN_RIGHT | wxRIGHT | wxBOTTOM, 8);
 	body->Add(right, 1, wxEXPAND | wxRIGHT | wxBOTTOM, 10);
@@ -123,7 +127,16 @@ void CemodPluginManagerDialog::RefreshPlugins()
 	m_plugins->Clear();
 	for (const auto& info : m_infos)
 	{
-		const auto view = CemodGuiAdapter::InspectPlugin(info, m_titleId, LoadApproval(info));
+		const auto approval = LoadApproval(info);
+		auto view = CemodGuiAdapter::InspectPlugin(info, m_titleId, approval);
+		// Same renewal the runtime applies when a trusted Mod is rebuilt.
+		const auto trusted = GetConfig().GetCemuExtendModUpdateTrust(m_titleId, view.modIdentity);
+		if (!approval && trusted && !view.packageDigest.empty() &&
+			(view.approval.requested & ~*trusted) == 0)
+			view = CemodGuiAdapter::InspectPlugin(info, m_titleId,
+												  CemuExtend::CemodApproval{view.packageDigest, view.modIdentity,
+																			view.approval.requested,
+																			*trusted & view.approval.requested, true, false});
 		m_views.push_back(view);
 		m_plugins->Append(wxString::FromUTF8(ApprovalLabel(view)));
 	}
@@ -153,6 +166,7 @@ void CemodPluginManagerDialog::ShowPlugin(std::size_t index)
 													 (permission.dangerous ? " (dangerous)" : "")));
 			m_permissions->Check(m_permissionBits.size() - 1, permission.granted);
 		}
+	m_trustUpdates->SetValue(GetConfig().GetCemuExtendModUpdateTrust(m_titleId, view.modIdentity).has_value());
 
 	std::ostringstream details;
 	details << "Package: " << view.path.filename().string() << "\n"
@@ -225,6 +239,10 @@ void CemodPluginManagerDialog::SaveApproval()
 	const auto key = CemodGuiAdapter::MakeApprovalKey(view.modIdentity, view.packageDigest);
 	GetConfig().SetCemuExtendPermissionApproval(m_titleId, key,
 												{view.packageDigest, view.modIdentity, requested, granted, view.enabled, false});
+	if (view.enabled && m_trustUpdates->IsChecked())
+		GetConfig().SetCemuExtendModUpdateTrust(m_titleId, view.modIdentity, granted);
+	else
+		GetConfig().RemoveCemuExtendModUpdateTrust(m_titleId, view.modIdentity);
 	GetConfigHandle().Save();
 	view.approval = CemodGuiAdapter::EvaluateApproval(requested,
 													  ToDomainApproval(GetConfig().GetCemuExtendPermissionApproval(m_titleId, key)), false);

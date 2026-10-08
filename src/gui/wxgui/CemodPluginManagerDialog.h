@@ -9,6 +9,7 @@
 #include <optional>
 #include <vector>
 
+class wxCheckBox;
 class wxCheckListBox;
 class wxListBox;
 class wxStaticText;
@@ -32,6 +33,7 @@ class CemodPluginManagerDialog final : public wxDialog
 	Application::EmulationController& m_emulationController;
 	wxListBox* m_plugins{};
 	wxCheckListBox* m_permissions{};
+	wxCheckBox* m_trustUpdates{};
 	wxStaticText* m_status{};
 	wxTextCtrl* m_details{};
 	std::vector<CemodGuiPackageInfo> m_infos;
