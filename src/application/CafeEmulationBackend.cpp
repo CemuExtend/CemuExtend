@@ -1469,7 +1469,7 @@ namespace Application
 					const auto modified = fs::last_write_time(iterator->path(), error);
 					if (error)
 						break;
-					identity.append("|").append(std::to_string(modified.time_since_epoch().count()));
+					identity.append("|").append(std::to_string(static_cast<long long>(modified.time_since_epoch().count())));
 					if (status.type() == fs::file_type::regular)
 					{
 						const auto size = fs::file_size(iterator->path(), error);
@@ -4350,7 +4350,7 @@ namespace Application
 								return {ContentOperationError::ReadFailure,
 										"Game image ended before its declared size", std::nullopt};
 							offset += read;
-							publish({ContentOperationPhase::Hashing, 0, 0, offset, total});
+							publish({ContentOperationPhase::Hashing, 0, 0, offset, static_cast<std::uint64_t>(total)});
 						}
 						unsigned int digestLength{};
 						if (EVP_DigestFinal_ex(context.get(), digest.data(), &digestLength) != 1 ||

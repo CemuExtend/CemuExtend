@@ -1,4 +1,5 @@
 #include "Cafe/OS/common/OSCommon.h"
+#include "Common/AtomicSharedPtr.h"
 #include "host/contracts/HostContracts.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/GameProfile/GameProfile.h"
@@ -473,7 +474,7 @@ namespace CafeSystem
 	{
 		std::shared_mutex s_eventSinkMutex;
 		IEventSink* s_eventSink{};
-		std::atomic<std::shared_ptr<Host::ICanvasHost>> s_canvasHost;
+		AtomicSharedPtr<Host::ICanvasHost> s_canvasHost;
 	} // namespace
 
 	void ConfigureCanvasHost(std::shared_ptr<Host::ICanvasHost> canvas)

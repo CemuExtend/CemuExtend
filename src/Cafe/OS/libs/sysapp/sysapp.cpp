@@ -1,4 +1,5 @@
 #include "Cafe/OS/common/OSCommon.h"
+#include "Common/AtomicSharedPtr.h"
 #include "sysapp.h"
 #include "Cafe/CafeSystem.h"
 #include "Cafe/OS/libs/coreinit/coreinit_FG.h"
@@ -19,7 +20,7 @@ typedef struct
 
 namespace
 {
-	std::atomic<std::shared_ptr<Host::IExternalLauncher>> s_externalLauncher;
+	AtomicSharedPtr<Host::IExternalLauncher> s_externalLauncher;
 }
 
 void sysapp::ConfigureExternalLauncher(std::shared_ptr<Host::IExternalLauncher> launcher)

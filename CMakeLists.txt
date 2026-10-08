@@ -397,4 +397,11 @@ endif()
 
 add_subdirectory("dependencies/libcemuextend" EXCLUDE_FROM_ALL)
 
+# CMake has no LINK_GROUP:RESCAN for Apple; ld64 resolves archive cycles on its own.
+if(APPLE)
+	set(CEMU_CAFE_AUDIO_LINK CemuCafe CemuAudio)
+else()
+	set(CEMU_CAFE_AUDIO_LINK "$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>")
+endif()
+
 add_subdirectory(src)

@@ -506,7 +506,7 @@ endif()
 
 target_link_libraries(CemuBin PRIVATE
 	CemuApplication
-	"$<LINK_GROUP:RESCAN,CemuCafe,CemuAudio>"
+	${CEMU_CAFE_AUDIO_LINK}
 	CemuCommon
 	CemuComponents
 	CemuConfig

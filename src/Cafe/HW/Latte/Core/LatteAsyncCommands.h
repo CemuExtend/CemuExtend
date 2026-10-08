@@ -2,6 +2,9 @@
 
 #include <functional>
 
+#include "Cafe/HW/Latte/Core/LatteConst.h"
+#include "Cafe/HW/Latte/ISA/LatteReg.h"
+
 struct LatteSurfaceCopyParam;
 struct LatteSurfaceCopyRect;
 

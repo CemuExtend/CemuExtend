@@ -1,4 +1,5 @@
 #include "Cafe/OS/libs/HostInputFocus.h"
+#include "Common/AtomicSharedPtr.h"
 
 #include "host/contracts/HostContracts.h"
 
@@ -6,7 +7,7 @@
 
 namespace
 {
-	std::atomic<std::shared_ptr<Host::IInputFocus>> s_inputFocus;
+	AtomicSharedPtr<Host::IInputFocus> s_inputFocus;
 }
 
 void CafeHost::ConfigureInputFocus(std::shared_ptr<Host::IInputFocus> inputFocus)
