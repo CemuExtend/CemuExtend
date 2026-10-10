@@ -560,8 +560,15 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 		return usage;
 	if (const uint16 usage = letterUsage(event.GetUnicodeKey()))
 		return usage;
+#if BOOST_OS_WINDOWS
+	// Windows virtual-key codes name letters only as 'A'..'Z'; 0x60..0x7B are the
+	// numpad and F1..F12 (VK_F1 == 'p'), so the lowercase range must not match here.
+	if (rawKey >= 'A' && rawKey <= 'Z')
+		return static_cast<uint16>(0x04 + rawKey - 'A');
+#else
 	if (const uint16 usage = letterUsage(rawKey))
 		return usage;
+#endif
 	if (key >= '1' && key <= '9')
 		return static_cast<uint16>(0x1e + key - '1');
 	if (key == '0')
