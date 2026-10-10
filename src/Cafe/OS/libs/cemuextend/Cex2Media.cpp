@@ -17,7 +17,7 @@
 #include <unordered_map>
 
 #ifdef _WIN32
-#include <Windows.h>
+#include <windows.h>
 #else
 #include <csignal>
 #include <fcntl.h>

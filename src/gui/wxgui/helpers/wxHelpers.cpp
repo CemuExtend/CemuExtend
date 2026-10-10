@@ -51,9 +51,12 @@ uint32 fix_raw_keycode(uint32 keycode, uint32 raw_flags)
 	const auto flags = (HIWORD(raw_flags) & 0xFFF);
 	if (keycode == VK_SHIFT)
 	{
-		if (flags == 0x2A)
+		// Shift sides differ only by scan code; some keyboards also set the extended-key bit on
+		// Right Shift (0x136), so compare the scan code alone.
+		const auto scanCode = flags & 0xFF;
+		if (scanCode == 0x2A)
 			return 160;
-		else if (flags == 0x36)
+		else if (scanCode == 0x36)
 			return 161;
 	}
 	else if (keycode == VK_CONTROL)
