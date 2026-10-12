@@ -565,6 +565,9 @@ static uint16 CemuExtendUsbHidUsage(const wxKeyEvent& event)
 	// numpad and F1..F12 (VK_F1 == 'p'), so the lowercase range must not match here.
 	if (rawKey >= 'A' && rawKey <= 'Z')
 		return static_cast<uint16>(0x04 + rawKey - 'A');
+#elif BOOST_OS_MACOS
+	// Native kVK_* codes aren't ASCII: 0x61..0x7A are F-keys, Home/End/PageUp/PageDown and
+	// ForwardDelete (0x75 == 'u'), so matching them as letters would misreport those keys.
 #else
 	if (const uint16 usage = letterUsage(rawKey))
 		return usage;
