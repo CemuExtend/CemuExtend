@@ -432,6 +432,9 @@ void swkbd_render(bool mainWindow)
 	if (swkbdInternalState == NULL || swkbdInternalState->isActive == false)
 		return;
 
+	// Japanese and other non-Latin input needs its glyphs baked before it can be shown instead of '?'
+	ImGui_RequestGlyphs(swkbdInternalState->formStringBuffer);
+
 	auto& io = ImGui::GetIO();
 	const auto font = ImGui_GetFont(48.0f);
 	const auto textFont = ImGui_GetFont(24.0f);
