@@ -9,6 +9,10 @@
 #include "imgui_impl_vulkan.h"
 #endif
 #include "input/InputManager.h"
+#include "config/ActiveSettings.h"
+#include "Common/FileStream.h"
+
+#include <set>
 
 // <imgui_internal.h>
 template<typename T>
@@ -64,8 +68,75 @@ extern char const g_fontawesome_data[];
 std::unordered_map<int, ImFont*> g_imgui_fonts;
 std::stack<int> g_font_requests;
 
+// Characters outside the placeholder font (e.g. Japanese typed into the software keyboard) are baked on demand from
+// the Wii U system font, so the atlas only grows by the glyphs actually shown
+std::set<ImWchar> g_extra_glyphs;
+ImVector<ImWchar> g_extra_glyph_ranges;
+bool g_extra_glyphs_dirty = false;
+std::vector<uint8> g_system_font_data;
+bool g_system_font_load_attempted = false;
+
+static bool LoadSystemFontData()
+{
+	if (g_system_font_load_attempted)
+		return !g_system_font_data.empty();
+	g_system_font_load_attempted = true;
+	const fs::path candidates[] = {
+		ActiveSettings::GetMlcPath("sys/title/0005001b/10042400/content/CafeStd.ttf"),
+		ActiveSettings::GetDataPath("resources/sharedFonts/CafeStd.ttf")};
+	for (const auto& path : candidates)
+	{
+		std::unique_ptr<FileStream> file(FileStream::openFile2(path));
+		if (!file)
+			continue;
+		g_system_font_data.resize(file->GetSize());
+		if (file->readData(g_system_font_data.data(), (uint32)g_system_font_data.size()) == g_system_font_data.size())
+			return true;
+		g_system_font_data.clear();
+	}
+	cemuLog_log(LogType::Force, "ImGui: CafeStd.ttf not found, non-Latin characters will not be displayed");
+	return false;
+}
+
+void ImGui_RequestGlyphs(const wchar_t* text)
+{
+	for (; text && *text; ++text)
+	{
+		const wchar_t c = *text;
+		if (c < 0x80 || (c >= 0xD800 && c <= 0xDFFF))
+			continue;
+		if (g_extra_glyphs.insert((ImWchar)c).second)
+			g_extra_glyphs_dirty = true;
+	}
+}
+
+// re-adds every font size already in use, now with the extra glyphs merged in
+static void RebuildFontsWithExtraGlyphs()
+{
+	g_extra_glyphs_dirty = false;
+	if (!LoadSystemFontData())
+		return;
+	ImFontGlyphRangesBuilder builder;
+	for (const ImWchar c : g_extra_glyphs)
+		builder.AddChar(c);
+	g_extra_glyph_ranges.clear();
+	builder.BuildRanges(&g_extra_glyph_ranges);
+
+	auto& io = ImGui::GetIO();
+	cemu_assert(io.Fonts->Locked == false);
+	for (const auto& [size, font] : g_imgui_fonts)
+		g_font_requests.emplace(size);
+	g_imgui_fonts.clear();
+	g_renderer->Flush(true);
+	g_renderer->DeleteFontTextures();
+	io.Fonts->Clear();
+	io.Fonts->AddFontDefault(); // Renderer::Initialize() starts the atlas with it, keep it as the default font
+}
+
 void ImGui_PrecacheFonts()
 {
+	if (g_extra_glyphs_dirty)
+		RebuildFontsWithExtraGlyphs();
 	while (!g_font_requests.empty())
 	{
 		const int size = g_font_requests.top();
@@ -109,6 +180,14 @@ void ImGui_PrecacheFonts()
 #else
 		io.Fonts->AddFontFromMemoryTTF((void*)g_fontawesome_data, (int)g_fontawesome_size, (float)size, &cfgmerge, icon_ranges);
 #endif
+
+		if (!g_extra_glyph_ranges.empty() && !g_system_font_data.empty())
+		{
+			ImFontConfig cfgextra{};
+			cfgextra.FontDataOwnedByAtlas = false;
+			cfgextra.MergeMode = true;
+			io.Fonts->AddFontFromMemoryTTF(g_system_font_data.data(), (int)g_system_font_data.size(), (float)size, &cfgextra, g_extra_glyph_ranges.Data);
+		}
 
 		g_imgui_fonts[(int)size] = font;
 
