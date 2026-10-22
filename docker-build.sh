@@ -37,8 +37,12 @@ for required_file in "${required_submodule_files[@]}"; do
 	fi
 done
 
-frontend="${CEMU_FRONTEND:-cef}"
-overlay_backend="${CEMU_OVERLAY_BACKEND:-}"
+frontend="${CEMU_FRONTEND:-wx}"
+case "${frontend}" in
+	cef|webview) default_overlay=cef ;;
+	*) default_overlay=imgui ;;
+esac
+overlay_backend="${CEMU_OVERLAY_BACKEND:-${default_overlay}}"
 clean_build="${CEMU_CLEAN_BUILD:-0}"
 rebundle="${CEMU_REBUNDLE:-0}"
 case "${frontend}" in
@@ -223,7 +227,7 @@ filter_build_log() {
 				next
 			lower = tolower(line)
 			if (lower ~ /(^|[^a-z])(warning|error|failed|failure|fatal)([^a-z]|$)/ ||
-				lower ~ /undefined reference|ninja: build stopped|tests? passed|100% tests|total test time/ ||
+				lower ~ /undefined reference|ninja: build stopped|tests? passed|100% tests|total test time|cef osr|gtk ime|redundant cef/ ||
 				lower ~ /-- cemu frontend:|-- cemu runtime overlay:|cef .*already available/)
 				emit(line)
 		}
@@ -245,7 +249,7 @@ if ! docker buildx build --builder "${builder_name}" \
 	--build-arg "CLEAN_BUILD=${clean_build}" \
 	--build-arg "ENABLE_WXWIDGETS=${CEMU_ENABLE_WXWIDGETS:-ON}" \
 	--output "type=local,dest=${export_dir}" \
-	"${project_dir}" >"${build_log}" 2>&1; then
+	"${project_dir}" 2>&1 | tee "${build_log}"; then
 	printf 'Docker %s release build failed.\n' "${build_platform}" >&2
 	filtered_log="$(filter_build_log "${build_log}")"
 	if [[ -n "${filtered_log}" ]]; then

@@ -1,7 +1,5 @@
 #include "CemodPluginManagerDialog.h"
 
-#include "config/CemuConfig.h"
-
 #include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/checklst.h>
@@ -11,47 +9,35 @@
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 
+#include <algorithm>
 #include <sstream>
 
 namespace
 {
-	std::string Join(const std::vector<std::string>& values, std::string_view separator = ", ")
+	std::string ApprovalLabel(const Application::CemodManagerPackage& package)
 	{
-		std::ostringstream result;
-		for (std::size_t index = 0; index < values.size(); ++index)
-		{
-			if (index != 0)
-				result << separator;
-			result << values[index];
-		}
-		return result.str();
-	}
-
-	std::string ApprovalLabel(const CemodPluginView& view)
-	{
-		std::string label = view.pluginName.empty() ? view.modId : view.pluginName;
+		std::string label = package.pluginName.empty() ? package.modId : package.pluginName;
 		if (label.empty())
-			label = view.path.filename().string();
-		label += " — ";
-		label += view.enabled ? "enabled" : "disabled";
+			label = package.packageKey;
+		if (!package.valid)
+			label += " — rejected";
+		else if (!package.enabled)
+			label += " — disabled";
+		else
+			label += package.approved ? " — approved" : " — approval required";
 		return label;
 	}
 
-	CemodGuiPackageInfo ToGuiPackageInfo(const Application::CemodPackage& info)
+	std::string TitleIdsText(const std::vector<std::uint64_t>& titleIds)
 	{
-		return {info.path, info.modId, info.principal, info.requestedPermissions,
-				info.executionMode == Application::CemodExecutionMode::TrustedNative ? CemodGuiExecutionMode::TrustedNative : CemodGuiExecutionMode::Isolated,
-				info.signedPackage, info.titleIds, info.error};
-	}
-
-	std::optional<CemuExtend::CemodApproval> ToDomainApproval(
-		const std::optional<CemuExtendPermissionApproval>& approval)
-	{
-		if (!approval)
-			return std::nullopt;
-		return CemuExtend::CemodApproval{approval->packageDigest, approval->modIdentity,
-										 approval->requestedPermissions, approval->grantedPermissions, approval->approved,
-										 false};
+		std::ostringstream result;
+		for (std::size_t index = 0; index < titleIds.size(); ++index)
+		{
+			if (index != 0)
+				result << ", ";
+			result << std::hex << titleIds[index];
+		}
+		return result.str();
 	}
 } // namespace
 
@@ -64,7 +50,7 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 {
 	auto* root = new wxBoxSizer(wxVERTICAL);
 	root->Add(new wxStaticText(this, wxID_ANY,
-							   _("WUPS is a payload format, not an execution sandbox. Runtime-backed operations are shown as unavailable until the runtime adapter is connected.")),
+							   _("WUPS is a payload format, not an execution sandbox. Approvals are bound to the exact package digest: a rebuilt .cemod needs a new approval unless update trust covers it.")),
 			  0, wxEXPAND | wxALL, 10);
 
 	auto* body = new wxBoxSizer(wxHORIZONTAL);
@@ -77,10 +63,13 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 	m_details = new wxTextCtrl(this, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize,
 							   wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
 	right->Add(m_details, 1, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
-	right->Add(new wxStaticText(this, wxID_ANY, _("Requested permissions (dangerous permissions start denied):")),
+	right->Add(new wxStaticText(this, wxID_ANY, _("Requested permissions (the runtime skips the package while any is denied):")),
 			   0, wxEXPAND | wxRIGHT | wxBOTTOM, 6);
 	m_permissions = new wxCheckListBox(this, wxID_ANY);
 	right->Add(m_permissions, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
+	m_approve = new wxCheckBox(this, wxID_ANY,
+							   _("Mark this exact package as approved"));
+	right->Add(m_approve, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
 	m_trustUpdates = new wxCheckBox(this, wxID_ANY,
 									_("Trust future updates to this Mod (keep this approval when the .cemod is rebuilt, unless it asks for more)"));
 	right->Add(m_trustUpdates, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
@@ -96,8 +85,7 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 		ShowPlugin(static_cast<std::size_t>(event.GetInt()));
 	});
 	m_plugins->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent& event) {
-		TogglePlugin(static_cast<std::size_t>(event.GetInt()),
-					 m_views[static_cast<std::size_t>(event.GetInt())].enabled);
+		TogglePlugin(static_cast<std::size_t>(event.GetInt()));
 	});
 	save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SaveApproval(); });
 	SetSizer(root);
@@ -106,149 +94,179 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 	RefreshPlugins();
 }
 
-std::optional<CemuExtend::CemodApproval> CemodPluginManagerDialog::LoadApproval(
-	const CemodGuiPackageInfo& info) const
-{
-	std::string digestError;
-	const auto digest = CemodGuiAdapter::CalculatePackageDigest(info.path, digestError);
-	if (digest.empty())
-		return std::nullopt;
-	const auto identity = info.modId.empty() ? info.principal : info.modId;
-	return ToDomainApproval(GetConfig().GetCemuExtendPermissionApproval(m_titleId,
-																		CemodGuiAdapter::MakeApprovalKey(identity, digest)));
-}
-
 void CemodPluginManagerDialog::RefreshPlugins()
 {
-	m_infos.clear();
-	for (const auto& info : m_emulationController.DiscoverCemods(m_titleId))
-		m_infos.push_back(ToGuiPackageInfo(info));
-	m_views.clear();
+	const int previous = m_plugins->GetSelection();
+	m_snapshot = m_emulationController.GetCemodManagerSnapshot(m_titleId);
 	m_plugins->Clear();
-	for (const auto& info : m_infos)
-	{
-		const auto approval = LoadApproval(info);
-		auto view = CemodGuiAdapter::InspectPlugin(info, m_titleId, approval);
-		// Same renewal the runtime applies when a trusted Mod is rebuilt.
-		const auto trusted = GetConfig().GetCemuExtendModUpdateTrust(m_titleId, view.modIdentity);
-		if (!approval && trusted && !view.packageDigest.empty() &&
-			(view.approval.requested & ~*trusted) == 0)
-			view = CemodGuiAdapter::InspectPlugin(info, m_titleId,
-												  CemuExtend::CemodApproval{view.packageDigest, view.modIdentity,
-																			view.approval.requested,
-																			*trusted & view.approval.requested, true, false});
-		m_views.push_back(view);
-		m_plugins->Append(wxString::FromUTF8(ApprovalLabel(view)));
-	}
-	if (m_views.empty())
+	for (const auto& package : m_snapshot.packages)
+		m_plugins->Append(wxString::FromUTF8(ApprovalLabel(package)));
+	if (m_snapshot.packages.empty())
 	{
 		m_status->SetLabel(_("No packages are installed for this title."));
 		m_details->Clear();
 		m_permissions->Clear();
+		m_permissionBits.clear();
+		m_approve->SetValue(false);
+		m_trustUpdates->SetValue(false);
 		return;
 	}
-	m_plugins->SetSelection(0);
-	ShowPlugin(0);
+	const auto selection = previous == wxNOT_FOUND
+							   ? 0
+							   : std::min<int>(previous, static_cast<int>(m_snapshot.packages.size()) - 1);
+	m_plugins->SetSelection(selection);
+	ShowPlugin(static_cast<std::size_t>(selection));
+}
+
+std::string CemodPluginManagerDialog::StatusText(const Application::CemodManagerPackage& package)
+{
+	if (!package.valid)
+		return package.warnings.empty() ? "Rejected: the package could not be inspected."
+										: "Rejected: " + package.warnings.front();
+	if (!package.enabled)
+		return "Disabled in the manager: it is not loaded and is not asked about at launch.";
+	if (package.headless)
+		return "Approved, but this package targets a headless runtime and has no interactive UI.";
+	if (package.approved)
+		return "Approved for this exact package digest.";
+	return "Approval required: the runtime skips this package until it is approved.";
 }
 
 void CemodPluginManagerDialog::ShowPlugin(std::size_t index)
 {
-	if (index >= m_views.size())
+	if (index >= m_snapshot.packages.size())
 		return;
-	const auto& view = m_views[index];
+	const auto& package = m_snapshot.packages[index];
 	m_permissionBits.clear();
 	m_permissions->Clear();
-	for (const auto& permission : view.permissions)
+	for (const auto& permission : package.permissions)
 		if (permission.requested)
 		{
 			m_permissionBits.push_back(permission.bit);
-			m_permissions->Append(wxString::FromUTF8(permission.label +
+			m_permissions->Append(wxString::FromUTF8(permission.name +
 													 (permission.dangerous ? " (dangerous)" : "")));
-			m_permissions->Check(m_permissionBits.size() - 1, permission.granted);
+			m_permissions->Check(static_cast<unsigned int>(m_permissionBits.size()) - 1, permission.granted);
 		}
-	m_trustUpdates->SetValue(GetConfig().GetCemuExtendModUpdateTrust(m_titleId, view.modIdentity).has_value());
+	m_permissions->Enable(package.valid);
+	m_approve->SetValue(package.approved);
+	m_approve->Enable(package.valid);
+	m_trustUpdates->SetValue(package.trustUpdates);
+	m_trustUpdates->Enable(package.valid && package.approved);
 
 	std::ostringstream details;
-	details << "Package: " << view.path.filename().string() << "\n"
-			<< "Payload: " << view.payloadFormat << "\n"
-			<< "Mod identity: " << view.modIdentity << "\n"
-			<< "Package digest: sha256:" << view.packageDigest << "\n"
-			<< "Scope: " << view.scope << "\n"
-			<< "Signed: " << (view.signedPackage ? "yes" : "no") << "\n";
-	if (view.isWups)
-	{
-		details << "Plugin: " << view.pluginName << "\n"
-				<< "Author: " << view.author << "\n"
-				<< "Version: " << view.pluginVersion << "\n"
-				<< "WUPS ABI: " << view.wupsAbiVersion << "\n"
-				<< "License: " << view.license << "\n"
-				<< "Build timestamp: " << view.buildTimestamp << "\n"
-				<< "Storage ID: " << view.storageId << "\n"
-				<< "Required modules: " << Join(view.requiredModules) << "\n"
-				<< "Process targets: " << Join(view.processTargets) << "\n"
-				<< "TLS: " << (view.usesTls ? "yes" : "no") << "\n"
-				<< "Fixed-address patches: " << (view.usesFixedAddressPatches ? "yes" : "no") << "\n"
-				<< "Config: Unavailable — Requires runtime integration\n"
-				<< "Notifications: Unavailable — Requires runtime integration\n"
-				<< "Restart/reload: " << (view.restartRequired ? "required" : "not required") << "/"
-				<< (view.reloadRequired ? "required" : "not required") << "\n";
-	}
-	if (!view.compatibilityWarnings.empty())
-		details << "Compatibility warnings: " << Join(view.compatibilityWarnings) << "\n";
-	if (!view.permissionMismatches.empty())
-		details << "Permission mismatch: " << Join(view.permissionMismatches) << "\n";
-	if (!view.abiWarning.empty())
-		details << "ABI warning: " << view.abiWarning << "\n";
-	if (!view.lastError.empty())
-		details << "Last error: " << view.lastError << "\n";
-	details << "Status: " << view.statusText << "\n"
-			<< "Approval: " << view.approval.reason;
+	const std::string name = package.pluginName.empty() ? package.modId : package.pluginName;
+	details << "Package: " << (name.empty() ? package.packageKey : name) << "\n"
+			<< "Mod identity: " << package.modIdentity << "\n"
+			<< "Package digest: sha256:" << package.packageDigest << "\n"
+			<< "Scope: " << package.scope << "\n"
+			<< "Signed: " << (package.signedPackage ? "yes" : "no") << "\n"
+			<< "Trusted native: " << (package.trustedNative ? "yes" : "no") << "\n"
+			<< "WUPS payload: " << (package.wups ? "yes" : "no") << "\n"
+			<< "Enabled: " << (package.enabled ? "yes" : "no") << "\n"
+			<< "Target titles: " << TitleIdsText(package.titleIds) << "\n";
+	if (!package.pluginName.empty())
+		details << "Plugin: " << package.pluginName << "\n"
+				<< "Author: " << package.author << "\n"
+				<< "Version: " << package.version << "\n";
+	if (!package.description.empty())
+		details << "Description: " << package.description << "\n";
+	for (const auto& warning : package.warnings)
+		details << "Warning: " << warning << "\n";
+	details << "Status: " << StatusText(package) << "\n"
+			<< "Approval: " << package.approvalReason;
 	m_details->SetValue(wxString::FromUTF8(details.str()));
-	m_status->SetLabel(wxString::FromUTF8(view.statusText));
+	m_status->SetLabel(wxString::FromUTF8(StatusText(package)));
 }
 
-void CemodPluginManagerDialog::TogglePlugin(std::size_t index, bool enabled)
+std::uint64_t CemodPluginManagerDialog::CheckedPermissionMask() const
 {
-	if (index >= m_views.size())
+	std::uint64_t granted{};
+	for (std::size_t index = 0; index < m_permissionBits.size(); ++index)
+		if (m_permissions->IsChecked(index))
+			granted |= m_permissionBits[index];
+	return granted;
+}
+
+void CemodPluginManagerDialog::RefreshLabels()
+{
+	for (std::size_t index = 0; index < m_snapshot.packages.size(); ++index)
+		m_plugins->SetString(index, wxString::FromUTF8(ApprovalLabel(m_snapshot.packages[index])));
+}
+
+void CemodPluginManagerDialog::TogglePlugin(std::size_t index)
+{
+	if (index >= m_snapshot.packages.size())
 		return;
-	// Double-click is only a convenience for changing the check state in the
-	// list. It never claims that the runtime loaded or unloaded a plugin.
-	m_views[index].enabled = !enabled;
-	m_plugins->SetString(index, wxString::FromUTF8(ApprovalLabel(m_views[index])));
-	m_plugins->SetSelection(static_cast<int>(index));
+	// Keep permission ticks the user has not saved yet: enabling a package is an
+	// independent decision and must not discard edits to this form.
+	const auto grantedBefore = CheckedPermissionMask();
+	Application::CemodEnableUpdate update{};
+	update.packageKey = m_snapshot.packages[index].packageKey;
+	update.enabled = !m_snapshot.packages[index].enabled;
+	auto result = m_emulationController.SetCemodEnabled(update);
+	if (!result)
+	{
+		m_status->SetLabel(wxString::FromUTF8(result.diagnostic.empty() ? "The package state could not be saved."
+																	   : result.diagnostic));
+		return;
+	}
+	m_snapshot = std::move(result.snapshot);
+	if (index >= m_snapshot.packages.size())
+		return;
+	RefreshLabels();
 	ShowPlugin(index);
+	for (std::size_t permission = 0; permission < m_permissionBits.size(); ++permission)
+		m_permissions->Check(static_cast<unsigned int>(permission), (grantedBefore & m_permissionBits[permission]) != 0);
+	m_status->SetLabel(wxString::FromUTF8(m_snapshot.packages[index].enabled
+											  ? "Package enabled."
+											  : "Package disabled: it is not loaded and is not asked about at launch."));
 }
 
 void CemodPluginManagerDialog::SaveApproval()
 {
 	const auto selection = m_plugins->GetSelection();
-	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_views.size())
+	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_snapshot.packages.size())
 		return;
-	auto& view = m_views[static_cast<std::size_t>(selection)];
-	if (view.packageDigest.empty() || view.modIdentity.empty())
+	const auto& package = m_snapshot.packages[static_cast<std::size_t>(selection)];
+	if (!package.valid)
 	{
-		wxMessageBox(_("The package digest or mod identity is unavailable; approval was not saved."),
+		wxMessageBox(_("The package failed inspection; its approval cannot be saved."),
 					 _("CemuExtend"), wxOK | wxICON_ERROR, this);
 		return;
 	}
-	std::uint64_t granted{};
-	for (std::size_t index = 0; index < m_permissionBits.size(); ++index)
-		if (m_permissions->IsChecked(index))
-			granted |= m_permissionBits[index];
-	const auto requested = view.approval.requested;
-	const auto key = CemodGuiAdapter::MakeApprovalKey(view.modIdentity, view.packageDigest);
-	GetConfig().SetCemuExtendPermissionApproval(m_titleId, key,
-												{view.packageDigest, view.modIdentity, requested, granted, view.enabled, false});
-	if (view.enabled && m_trustUpdates->IsChecked())
-		GetConfig().SetCemuExtendModUpdateTrust(m_titleId, view.modIdentity, granted);
-	else
-		GetConfig().RemoveCemuExtendModUpdateTrust(m_titleId, view.modIdentity);
-	GetConfigHandle().Save();
-	view.approval = CemodGuiAdapter::EvaluateApproval(requested,
-													  ToDomainApproval(GetConfig().GetCemuExtendPermissionApproval(m_titleId, key)), false);
-	view.enabled = view.approval.result == CemodGuiApprovalResult::Approved;
-	view.loadStatus = view.runtimeAvailability == CemodGuiRuntimeAvailability::UnavailableRequiresRuntimeIntegration ? CemodGuiLoadStatus::Unavailable : (view.enabled ? CemodGuiLoadStatus::Ready : CemodGuiLoadStatus::Disabled);
-	m_plugins->SetString(selection, wxString::FromUTF8(ApprovalLabel(view)));
-	ShowPlugin(static_cast<std::size_t>(selection));
-	m_status->SetLabel(_("Approval saved. Runtime load/reload remains unavailable until runtime integration is connected."));
+	const auto granted = CheckedPermissionMask();
+	const bool approved = m_approve->IsChecked();
+	if (approved && (package.requestedPermissions & ~granted) != 0)
+	{
+		wxMessageBox(_("Native and WUPS packages require every requested permission. Grant all of them, or leave the package unapproved."),
+					 _("CemuExtend"), wxOK | wxICON_ERROR, this);
+		return;
+	}
+	Application::CemodApprovalUpdate update{};
+	update.generation = m_snapshot.generation;
+	update.titleId = m_titleId;
+	update.packageKey = package.packageKey;
+	update.grantedPermissions = granted;
+	update.approved = approved;
+	update.trustUpdates = m_trustUpdates->IsChecked();
+	auto result = m_emulationController.SaveCemodApproval(update);
+	if (!result)
+	{
+		m_status->SetLabel(wxString::FromUTF8(result.diagnostic.empty() ? "The approval could not be saved."
+																	   : result.diagnostic));
+		if (result.snapshot.generation != 0)
+		{
+			m_snapshot = std::move(result.snapshot);
+			RefreshLabels();
+			if (static_cast<std::size_t>(selection) < m_snapshot.packages.size())
+				ShowPlugin(static_cast<std::size_t>(selection));
+		}
+		return;
+	}
+	m_snapshot = std::move(result.snapshot);
+	RefreshLabels();
+	if (static_cast<std::size_t>(selection) < m_snapshot.packages.size())
+		ShowPlugin(static_cast<std::size_t>(selection));
+	m_status->SetLabel(wxString::FromUTF8(approved ? "Approval saved for this exact package digest."
+												   : "The package is now marked as not approved."));
 }

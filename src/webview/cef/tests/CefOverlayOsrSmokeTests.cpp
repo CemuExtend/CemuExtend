@@ -16,6 +16,17 @@
 
 namespace
 {
+	void PumpMessages()
+	{
+#if defined(__linux__)
+		// Exercise the same external CEF pump and GTK dispatch as the frontend.
+		while (g_main_context_pending(nullptr))
+			g_main_context_iteration(nullptr, FALSE);
+#else
+		WebFrontend::CefOverlay::DoProcessMessageLoopWork();
+#endif
+	}
+
 	std::string Response(std::uint64_t windowId, std::string_view request)
 	{
 		const auto idKey = request.find(R"("id":")");
@@ -187,7 +198,7 @@ int main(int argc, char* argv[])
 	while ((!mainState.Complete() || !padState.Complete()) &&
 		   std::chrono::steady_clock::now() < initialPaintDeadline)
 	{
-		DoProcessMessageLoopWork();
+		PumpMessages();
 		if (auto frame = runtime->AcquireLatestOverlayFrame(Host::PointerSurface::Main, 0))
 		{
 			mainBeforeResize = std::move(frame);
@@ -283,7 +294,7 @@ int main(int argc, char* argv[])
 	const auto dockDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
 	while (!dockReady && std::chrono::steady_clock::now() < dockDeadline)
 	{
-		DoProcessMessageLoopWork();
+		PumpMessages();
 		std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	}
 	if (!dockReady)
@@ -307,7 +318,7 @@ int main(int argc, char* argv[])
 		const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
 		while (std::chrono::steady_clock::now() < until)
 		{
-			DoProcessMessageLoopWork();
+			PumpMessages();
 			std::this_thread::sleep_for(std::chrono::milliseconds(2));
 		}
 	};
@@ -389,7 +400,7 @@ int main(int argc, char* argv[])
 	const auto pausedUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
 	while (std::chrono::steady_clock::now() < pausedUntil)
 	{
-		DoProcessMessageLoopWork();
+		PumpMessages();
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
 	auto afterPausedPresent = runtime->AcquireLatestOverlayFrame(
@@ -428,7 +439,7 @@ int main(int argc, char* argv[])
 	auto nextGuestPresent = cadenceStarted;
 	while (std::chrono::steady_clock::now() - cadenceStarted < std::chrono::milliseconds(750))
 	{
-		DoProcessMessageLoopWork();
+		PumpMessages();
 		const auto now = std::chrono::steady_clock::now();
 		if (now >= nextGuestPresent)
 		{
@@ -466,7 +477,7 @@ int main(int argc, char* argv[])
 			{
 				while (gtk_events_pending())
 					gtk_main_iteration_do(FALSE);
-				DoProcessMessageLoopWork();
+				PumpMessages();
 				std::this_thread::sleep_for(std::chrono::milliseconds(2));
 			}
 		};
