@@ -4500,6 +4500,8 @@ namespace
 			case Application::EventType::TextInputWakeRequested:
 				Emit("input.textWakeRequested", "{}", [this] { RefreshTextInput(); });
 				break;
+			case Application::EventType::SoftwareKeyboardChanged:
+				break;
 			}
 		}
 

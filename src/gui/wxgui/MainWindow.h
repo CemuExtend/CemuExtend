@@ -163,6 +163,7 @@ class MainWindow : public wxFrame
 
 	void AsyncSetTitle(std::string_view windowTitle);
 	void RefreshCemuExtendTextInput();
+	void SyncSoftwareKeyboardIme();
 	bool IsCemuExtendTextInputEvent(const wxEvent& event) const;
 	bool CanSubmitCemuExtendTextInput() const;
 

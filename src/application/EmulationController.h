@@ -180,6 +180,22 @@ namespace Application
 		std::uint8_t flags{};
 	};
 
+	// Text editing commands for the emulated software keyboard that have no
+	// single character of their own (shortcuts and caret movement).
+	enum class SoftwareKeyboardEdit : std::uint8_t
+	{
+		SelectAll,
+		Copy,
+		Cut,
+		Paste,
+		Undo,
+		CursorLeft,
+		CursorRight,
+		CursorHome,
+		CursorEnd,
+		DeleteForward,
+	};
+
 	struct PhysicalInputOwnership
 	{
 		PointerSurface surface{};
@@ -212,6 +228,10 @@ namespace Application
 		virtual void KeyboardFocusLost() = 0;
 		[[nodiscard]] virtual bool SoftwareKeyboardActive() const = 0;
 		virtual bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode) = 0;
+		virtual bool SubmitSoftwareKeyboardEdit(SoftwareKeyboardEdit, bool)
+		{
+			return false;
+		}
 		[[nodiscard]] virtual RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot()
 		{
 			return {};
@@ -279,6 +299,8 @@ namespace Application
 		void KeyboardFocusLost();
 		[[nodiscard]] bool SoftwareKeyboardActive() const;
 		bool SubmitSoftwareKeyboardKey(std::uint32_t keyCode);
+		// extendSelection: move the caret while keeping the selection anchor (Shift held)
+		bool SubmitSoftwareKeyboardEdit(SoftwareKeyboardEdit edit, bool extendSelection = false);
 		[[nodiscard]] RuntimeOverlay::Snapshot GetRuntimeOverlaySnapshot();
 		bool SubmitRuntimeOverlayKeyboardKey(std::uint64_t generation, std::uint32_t keyCode);
 		bool SelectRuntimeOverlayErrorButton(std::uint64_t generation, bool rightButton);

@@ -269,6 +269,10 @@ if(APPLE)
   target_link_libraries(CemuWxGui PRIVATE "-framework AppKit" "-framework ApplicationServices")
 endif()
 
+if(WIN32)
+  target_link_libraries(CemuWxGui PRIVATE imm32)
+endif()
+
 target_link_libraries(CemuWxGui PRIVATE
   CemuAudio
   CemuCommon

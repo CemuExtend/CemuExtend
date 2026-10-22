@@ -2227,11 +2227,17 @@ namespace Application
 							forwarder->events->Publish(
 								{.type = EventType::TextInputWakeRequested});
 					});
+				swkbd_setStateChangedCallback([forwarder = m_eventForwarder] {
+					std::scoped_lock lock(forwarder->mutex);
+					if (forwarder->events)
+						forwarder->events->Publish({.type = EventType::SoftwareKeyboardChanged});
+				});
 			}
 
 			~CafeEmulationBackend() override
 			{
 				cemuextend_hle::Cex2Host::Instance().SetTextInputWakeCallback({});
+				swkbd_setStateChangedCallback({});
 				DownloadManager::SetGameListRefreshCallback({});
 				{
 					std::scoped_lock lock(m_eventForwarder->mutex);
@@ -3618,6 +3624,49 @@ namespace Application
 				if (!swkbd_hasKeyboardInputHook())
 					return false;
 				swkbd_keyInput(keyCode);
+				return true;
+			}
+
+			bool SubmitSoftwareKeyboardEdit(SoftwareKeyboardEdit edit,
+											bool extendSelection) override
+			{
+				if (!swkbd_hasKeyboardInputHook())
+					return false;
+				switch (edit)
+				{
+				case SoftwareKeyboardEdit::SelectAll:
+					swkbd_editCommand(SwkbdEditCommand::SelectAll, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::Copy:
+					swkbd_editCommand(SwkbdEditCommand::Copy, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::Cut:
+					swkbd_editCommand(SwkbdEditCommand::Cut, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::Paste:
+					swkbd_editCommand(SwkbdEditCommand::Paste, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::Undo:
+					swkbd_editCommand(SwkbdEditCommand::Undo, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::CursorLeft:
+					swkbd_editCommand(SwkbdEditCommand::CursorLeft, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::CursorRight:
+					swkbd_editCommand(SwkbdEditCommand::CursorRight, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::CursorHome:
+					swkbd_editCommand(SwkbdEditCommand::CursorHome, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::CursorEnd:
+					swkbd_editCommand(SwkbdEditCommand::CursorEnd, extendSelection);
+					break;
+				case SoftwareKeyboardEdit::DeleteForward:
+					swkbd_editCommand(SwkbdEditCommand::DeleteForward, extendSelection);
+					break;
+				default:
+					return false;
+				}
 				return true;
 			}
 
