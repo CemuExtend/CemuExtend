@@ -23,4 +23,5 @@ bool ImGui_BeginPadDistinct(const char* name, bool* p_open, ImGuiWindowFlags fla
 void ImGui_PrecacheFonts();
 void ImGui_ClearFonts();
 ImFont* ImGui_GetFont(float size);
+void ImGui_RequestGlyphs(const wchar_t* text);
 void ImGui_UpdateWindowInformation(bool mainWindow);
