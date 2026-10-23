@@ -2,7 +2,11 @@
 #include "Cafe/OS/libs/coreinit/coreinit_FS.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
+#include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "frontend/RuntimeOverlay.h"
+#include "host/contracts/HostContracts.h"
+
+#include <mutex>
 
 #if defined(CEMU_OVERLAY_BACKEND_IMGUI)
 #include <imgui.h>
@@ -109,6 +113,186 @@ namespace
 				fmt::format(L"{}", swkbdInternalState->formStringBuffer));
 		}
 		RuntimeOverlay::Model::Instance().SetSoftwareKeyboard(std::move(keyboard));
+	}
+} // namespace
+
+void swkbd_inputStringChanged();
+
+namespace
+{
+	// Host-side editing state of the input form. The text itself stays in
+	// swkbdInternalState->formStringBuffer; this tracks caret, selection and undo.
+	enum class SwkbdEditGroup
+	{
+		None,
+		Typing,
+		Erasing,
+	};
+
+	struct SwkbdUndoEntry
+	{
+		std::wstring text;
+		sint32 cursor;
+		sint32 anchor;
+	};
+
+	struct SwkbdEditor
+	{
+		// edits arrive from the UI thread, mouse selection from the render thread
+		std::recursive_mutex mutex;
+		sint32 cursor = 0;
+		sint32 anchor = 0; // the selection is the range between anchor and cursor
+		std::vector<SwkbdUndoEntry> undo;
+		SwkbdEditGroup group = SwkbdEditGroup::None;
+		bool dragging = false;
+		bool draggingInMainWindow = false; // the keyboard is drawn on both windows
+		std::chrono::steady_clock::time_point caretShown{};
+		std::shared_ptr<Host::IClipboard> clipboard;
+		std::function<void()> stateChanged;
+	};
+
+	constexpr size_t kSwkbdUndoLimit = 100;
+
+	SwkbdEditor& Editor()
+	{
+		static SwkbdEditor editor;
+		return editor;
+	}
+
+	sint32 SelectionStart()
+	{
+		return std::min(Editor().cursor, Editor().anchor);
+	}
+
+	sint32 SelectionEnd()
+	{
+		return std::max(Editor().cursor, Editor().anchor);
+	}
+
+	bool HasSelection()
+	{
+		return Editor().cursor != Editor().anchor;
+	}
+
+	void ShowCaret()
+	{
+		Editor().caretShown = std::chrono::steady_clock::now();
+	}
+
+	void ResetEditor()
+	{
+		auto& editor = Editor();
+		editor.cursor = editor.anchor = swkbdInternalState->formStringLength;
+		editor.undo.clear();
+		editor.group = SwkbdEditGroup::None;
+		editor.dragging = false;
+		ShowCaret();
+	}
+
+	void ClampEditor()
+	{
+		auto& editor = Editor();
+		const sint32 length = swkbdInternalState->formStringLength;
+		editor.cursor = std::clamp(editor.cursor, 0, length);
+		editor.anchor = std::clamp(editor.anchor, 0, length);
+	}
+
+	void NotifyStateChanged()
+	{
+		std::function<void()> callback;
+		{
+			std::scoped_lock lock(Editor().mutex);
+			callback = Editor().stateChanged;
+		}
+		if (callback)
+			callback();
+	}
+
+	sint32 MaxTextLength()
+	{
+		sint32 maxLength = swkbdInternalState->maxTextLength;
+		if (swkbdInternalState->keyboardOnlyMode)
+		{
+			uint32 stringBufferSize = swkbdInternalState->keyboardArg.receiverArg.stringBufSize;
+			if (stringBufferSize > 1)
+			{
+				maxLength = stringBufferSize - 1; // don't count the null-termination character
+			}
+			else
+				maxLength = 0;
+		}
+		return std::clamp(maxLength, 0, SWKBD_FORM_STRING_MAX_LENGTH - 1);
+	}
+
+	std::wstring CurrentText()
+	{
+		return {swkbdInternalState->formStringBuffer,
+				static_cast<size_t>(swkbdInternalState->formStringLength)};
+	}
+
+	void StoreText(std::wstring_view text)
+	{
+		const auto length = std::min<size_t>(text.size(), SWKBD_FORM_STRING_MAX_LENGTH - 1);
+		std::copy_n(text.data(), length, swkbdInternalState->formStringBuffer);
+		swkbdInternalState->formStringBuffer[length] = '\0';
+		swkbdInternalState->formStringLength = static_cast<sint32>(length);
+	}
+
+	void NotifyTextChanged()
+	{
+		swkbd_inputStringChanged();
+		PublishSoftwareKeyboard();
+	}
+
+	// consecutive edits of the same group (typing, erasing) are undone together
+	void PushUndo(SwkbdEditGroup group, bool forceNew)
+	{
+		auto& editor = Editor();
+		if (!forceNew && group != SwkbdEditGroup::None && group == editor.group)
+			return;
+		editor.group = group;
+		editor.undo.push_back({CurrentText(), editor.cursor, editor.anchor});
+		if (editor.undo.size() > kSwkbdUndoLimit)
+			editor.undo.erase(editor.undo.begin());
+	}
+
+	// replaces [start, end) with insert (cut to the length limit) and leaves the caret after it
+	bool ApplyEdit(sint32 start, sint32 end, std::wstring_view insert, SwkbdEditGroup group)
+	{
+		const sint32 length = swkbdInternalState->formStringLength;
+		const sint32 room = std::max(0, MaxTextLength() - (length - (end - start)));
+		insert = insert.substr(0, std::min<size_t>(insert.size(), room));
+		if (insert.empty() && start == end)
+			return false;
+		auto& editor = Editor();
+		PushUndo(group, HasSelection());
+		std::wstring text = CurrentText();
+		text.replace(start, end - start, insert);
+		StoreText(text);
+		editor.cursor = editor.anchor = start + static_cast<sint32>(insert.size());
+		ShowCaret();
+		NotifyTextChanged();
+		return true;
+	}
+
+	void PasteText(std::uint64_t generation, std::string_view utf8)
+	{
+		std::scoped_lock lock(Editor().mutex);
+		if (swkbdInternalState == nullptr || !swkbdInternalState->isActive ||
+			generation != swkbdOverlayGeneration)
+			return;
+		ClampEditor();
+		std::wstring text;
+		for (const wchar_t c : boost::nowide::widen(std::string(utf8)))
+			if (c >= 0x20 && c != 0x7F) // the form is a single line
+				text.push_back(c);
+		Editor().group = SwkbdEditGroup::None;
+		ApplyEdit(SelectionStart(), SelectionEnd(), text, SwkbdEditGroup::None);
+	}
+
+	bool IsWordCharacter(wchar_t c)
+	{
+		return c != ' ' && c != 0x3000;
 	}
 } // namespace
 
@@ -246,7 +430,12 @@ uint32 SwkbdAppearInputForm(const swkbdAppearArg_t* appearArg)
 		swkbdInternalState->formStringBuffer[0] = '\0';
 		swkbdInternalState->formStringLength = 0;
 	}
+	{
+		std::scoped_lock lock(Editor().mutex);
+		ResetEditor();
+	}
 	PublishSoftwareKeyboard();
+	NotifyStateChanged();
 	return 1;
 }
 
@@ -267,28 +456,44 @@ uint32 SwkbdAppearKeyboard(const SwkbdKeyboardArg_t* keyboardArg)
 	swkbdInternalState->formStringBuffer[0] = '\0';
 	swkbdInternalState->formStringLength = 0;
 	swkbdInternalState->keyboardArg = *keyboardArg;
+	{
+		std::scoped_lock lock(Editor().mutex);
+		ResetEditor();
+	}
 	PublishSoftwareKeyboard();
+	NotifyStateChanged();
 	return 1;
 }
 
 uint32 SwkbdDisappearInputForm()
 {
 	debug_printf("SwkbdDisappearInputForm__3RplFv\n");
-	swkbdInternalState->isActive = false;
+	{
+		std::scoped_lock lock(Editor().mutex);
+		swkbdInternalState->isActive = false;
+		Editor().dragging = false;
+	}
 	PublishSoftwareKeyboard();
+	NotifyStateChanged();
 	return 1;
 }
 
 uint32 SwkbdDisappearKeyboard()
 {
 	debug_printf("SwkbdDisappearKeyboard__3RplFv\n");
-	swkbdInternalState->isActive = false;
+	{
+		std::scoped_lock lock(Editor().mutex);
+		swkbdInternalState->isActive = false;
+		Editor().dragging = false;
+	}
 	PublishSoftwareKeyboard();
+	NotifyStateChanged();
 	return 1;
 }
 
 uint16be* SwkbdGetInputFormString()
 {
+	std::scoped_lock lock(Editor().mutex);
 	for (sint32 i = 0; i < swkbdInternalState->formStringLength; i++)
 		swkbdInternalState->formStringBufferBE[i] = swkbdInternalState->formStringBuffer[i];
 	cemu_assert(swkbdInternalState->formStringLength < SWKBD_FORM_STRING_MAX_LENGTH);
@@ -426,8 +631,135 @@ void SwkbdCalc(void* controllerInfo)
 
 void swkbd_keyInput(uint32 keyCode);
 #if defined(CEMU_OVERLAY_BACKEND_IMGUI)
+namespace
+{
+	// draws the form text with its selection and caret, and handles mouse selection
+	void DrawSwkbdText(bool mainWindow)
+	{
+		auto& editor = Editor();
+		ClampEditor();
+		const wchar_t* text = swkbdInternalState->formStringBuffer;
+		const sint32 length = swkbdInternalState->formStringLength;
+		ImFont* font = ImGui::GetFont();
+		const float fontSize = ImGui::GetFontSize();
+		const float scale = fontSize / font->FontSize;
+		const float lineHeight = ImGui::GetTextLineHeight();
+		const float wrapWidth = std::max(ImGui::GetContentRegionAvail().x, fontSize);
+
+		// lay out per character so that long text wraps like before
+		std::vector<float> x(length + 1), advance(length + 1, 0.0f);
+		std::vector<sint32> line(length + 1);
+		std::vector<sint32> lineStarts{0};
+		float pen = 0.0f;
+		for (sint32 i = 0; i < length; i++)
+		{
+			advance[i] = font->GetCharAdvance((ImWchar)text[i]) * scale;
+			if (pen > 0.0f && pen + advance[i] > wrapWidth)
+			{
+				lineStarts.push_back(i);
+				pen = 0.0f;
+			}
+			x[i] = pen;
+			line[i] = (sint32)lineStarts.size() - 1;
+			pen += advance[i];
+		}
+		x[length] = pen;
+		line[length] = (sint32)lineStarts.size() - 1;
+		const sint32 lineCount = (sint32)lineStarts.size();
+		auto lineEnd = [&](sint32 l) { return l + 1 < lineCount ? lineStarts[l + 1] : length; };
+
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		ImGui::Dummy({wrapWidth, lineHeight * lineCount});
+
+		auto hitTest = [&](const ImVec2& mouse) {
+			const sint32 l = std::clamp((sint32)std::floor((mouse.y - origin.y) / lineHeight), 0, lineCount - 1);
+			const sint32 end = lineEnd(l);
+			for (sint32 i = lineStarts[l]; i < end; i++)
+			{
+				if (mouse.x < origin.x + x[i] + advance[i] * 0.5f)
+					return i;
+			}
+			return end;
+		};
+
+		// the whole input window acts as the text area
+		const auto& io = ImGui::GetIO();
+		const bool hovered = ImGui::IsWindowHovered();
+		if (hovered)
+			ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+		if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			const sint32 hit = hitTest(io.MousePos);
+			editor.group = SwkbdEditGroup::None;
+			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				// select the word under the pointer
+				sint32 start = std::min(hit, std::max(0, length - 1));
+				if (length > 0 && !IsWordCharacter(text[start]) && start > 0 && IsWordCharacter(text[start - 1]))
+					start--;
+				sint32 end = start;
+				if (length > 0 && IsWordCharacter(text[start]))
+				{
+					while (start > 0 && IsWordCharacter(text[start - 1]))
+						start--;
+					while (end < length && IsWordCharacter(text[end]))
+						end++;
+				}
+				editor.anchor = start;
+				editor.cursor = end;
+				editor.dragging = false;
+			}
+			else
+			{
+				editor.cursor = editor.anchor = hit;
+				editor.dragging = true;
+				editor.draggingInMainWindow = mainWindow;
+			}
+			ShowCaret();
+		}
+		else if (editor.dragging && editor.draggingInMainWindow == mainWindow)
+		{
+			if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				editor.cursor = hitTest(io.MousePos);
+			else
+				editor.dragging = false;
+		}
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const sint32 selectionStart = SelectionStart();
+		const sint32 selectionEnd = SelectionEnd();
+		const ImU32 selectionColor = IM_COL32(0x26, 0x7D, 0xF2, 0xFF);
+		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+		for (sint32 l = 0; l < lineCount; l++)
+		{
+			const sint32 begin = lineStarts[l];
+			const sint32 end = lineEnd(l);
+			const float top = origin.y + lineHeight * l;
+			const sint32 from = std::max(selectionStart, begin);
+			const sint32 to = std::min(selectionEnd, end);
+			if (from < to)
+				drawList->AddRectFilled({origin.x + x[from], top},
+										{origin.x + x[to - 1] + advance[to - 1], top + lineHeight},
+										selectionColor);
+			const auto utf8 = boost::nowide::narrow(std::wstring(text + begin, text + end));
+			drawList->AddText(font, fontSize, {origin.x, top}, textColor, utf8.c_str(), utf8.c_str() + utf8.size());
+		}
+
+		// caret blinks, but stays visible right after it moved
+		const auto shownFor = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - editor.caretShown).count();
+		if (shownFor % 1000 < 500)
+		{
+			const float caretX = origin.x + x[editor.cursor];
+			const float caretY = origin.y + lineHeight * line[editor.cursor];
+			drawList->AddRectFilled({caretX, caretY}, {caretX + 2.0f, caretY + lineHeight}, textColor);
+		}
+	}
+} // namespace
+
 void swkbd_render(bool mainWindow)
 {
+	std::scoped_lock lock(Editor().mutex);
 	// only render if active
 	if (swkbdInternalState == NULL || swkbdInternalState->isActive == false)
 		return;
@@ -469,24 +801,7 @@ void swkbd_render(bool mainWindow)
 	{
 		ImGui::Text("%s", _utf8WrapperPtr(ICON_FA_KEYBOARD));
 		ImGui::SameLine(70);
-		auto text = boost::nowide::narrow(fmt::format(L"{}", swkbdInternalState->formStringBuffer));
-
-		static std::chrono::steady_clock::time_point s_last_tick = tick_cached();
-		static bool s_blink_state = false;
-		const auto now = tick_cached();
-
-		if (std::chrono::duration_cast<std::chrono::milliseconds>(now - s_last_tick).count() >= 500)
-		{
-			s_blink_state = !s_blink_state;
-			s_last_tick = now;
-		}
-
-		if (s_blink_state)
-			text += "|";
-
-		ImGui::PushTextWrapPos();
-		ImGui::TextUnformatted(text.c_str(), text.c_str() + text.size());
-		ImGui::PopTextWrapPos();
+		DrawSwkbdText(mainWindow);
 
 		position.y += ImGui::GetWindowSize().y + 100.0f;
 	}
@@ -603,6 +918,18 @@ std::uint64_t swkbd_overlayGeneration()
 	return swkbdOverlayGeneration;
 }
 
+void swkbd_setClipboard(std::shared_ptr<Host::IClipboard> clipboard)
+{
+	std::scoped_lock lock(Editor().mutex);
+	Editor().clipboard = std::move(clipboard);
+}
+
+void swkbd_setStateChangedCallback(std::function<void()> callback)
+{
+	std::scoped_lock lock(Editor().mutex);
+	Editor().stateChanged = std::move(callback);
+}
+
 void swkbd_finishInput()
 {
 	swkbdInternalState->decideButtonWasPressed = true; // currently we always accept the input
@@ -653,13 +980,35 @@ void swkbd_inputStringChanged()
 
 void swkbd_keyInput(uint32 keyCode)
 {
+	std::scoped_lock lock(Editor().mutex);
+	if (swkbdInternalState == nullptr)
+		return;
+	ClampEditor();
+	// Ctrl+letter arrives as its control character
+	switch (keyCode)
+	{
+	case 1: // Ctrl+A
+		swkbd_editCommand(SwkbdEditCommand::SelectAll, false);
+		return;
+	case 3: // Ctrl+C
+		swkbd_editCommand(SwkbdEditCommand::Copy, false);
+		return;
+	case 22: // Ctrl+V
+		swkbd_editCommand(SwkbdEditCommand::Paste, false);
+		return;
+	case 24: // Ctrl+X
+		swkbd_editCommand(SwkbdEditCommand::Cut, false);
+		return;
+	case 26: // Ctrl+Z
+		swkbd_editCommand(SwkbdEditCommand::Undo, false);
+		return;
+	}
 	if (keyCode == 8 || keyCode == 127) // backspace || backwards delete
 	{
-		if (swkbdInternalState->formStringLength > 0)
-			swkbdInternalState->formStringLength--;
-		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
-		swkbd_inputStringChanged();
-		PublishSoftwareKeyboard();
+		if (HasSelection())
+			ApplyEdit(SelectionStart(), SelectionEnd(), {}, SwkbdEditGroup::None);
+		else if (Editor().cursor > 0)
+			ApplyEdit(Editor().cursor - 1, Editor().cursor, {}, SwkbdEditGroup::Erasing);
 		return;
 	}
 	else if (keyCode == 13) // return
@@ -668,48 +1017,101 @@ void swkbd_keyInput(uint32 keyCode)
 		PublishSoftwareKeyboard();
 		return;
 	}
-	// check if allowed character
-	if ((keyCode >= 'a' && keyCode <= 'z') ||
-		(keyCode >= 'A' && keyCode <= 'Z'))
-	{
-		// allowed
-	}
-	else if ((keyCode >= '0' && keyCode <= '9'))
-	{
-		// allowed
-	}
-	else if (keyCode == ' ' || keyCode == '.' || keyCode == '/' || keyCode == '?' || keyCode == '=')
-	{
-		// allowed
-	}
 	else if (keyCode < 32)
 	{
 		// control key
 		return;
 	}
-	else
-		; // return;
-	// get max length
-	sint32 maxLength = swkbdInternalState->maxTextLength;
-	if (swkbdInternalState->keyboardOnlyMode)
+	// typing replaces the selection
+	const wchar_t character = static_cast<wchar_t>(keyCode);
+	ApplyEdit(SelectionStart(), SelectionEnd(), {&character, 1}, SwkbdEditGroup::Typing);
+}
+
+void swkbd_editCommand(SwkbdEditCommand command, bool extendSelection)
+{
+	std::shared_ptr<Host::IClipboard> clipboard;
+	std::string copied;
+	bool paste = false;
+	std::uint64_t generation = 0;
 	{
-		uint32 stringBufferSize = swkbdInternalState->keyboardArg.receiverArg.stringBufSize;
-		if (stringBufferSize > 1)
+		std::scoped_lock lock(Editor().mutex);
+		if (swkbdInternalState == nullptr || !swkbdInternalState->isActive)
+			return;
+		ClampEditor();
+		auto& editor = Editor();
+		const sint32 length = swkbdInternalState->formStringLength;
+		auto moveCaret = [&](sint32 position) {
+			editor.cursor = std::clamp(position, 0, length);
+			if (!extendSelection)
+				editor.anchor = editor.cursor;
+			editor.group = SwkbdEditGroup::None;
+			ShowCaret();
+		};
+		switch (command)
 		{
-			maxLength = stringBufferSize - 1; // don't count the null-termination character
+		case SwkbdEditCommand::SelectAll:
+			editor.anchor = 0;
+			editor.cursor = length;
+			editor.group = SwkbdEditGroup::None;
+			ShowCaret();
+			break;
+		case SwkbdEditCommand::Copy:
+		case SwkbdEditCommand::Cut:
+			if (!HasSelection() || !editor.clipboard)
+				return;
+			clipboard = editor.clipboard;
+			copied = boost::nowide::narrow(CurrentText().substr(SelectionStart(), SelectionEnd() - SelectionStart()));
+			if (command == SwkbdEditCommand::Cut)
+				ApplyEdit(SelectionStart(), SelectionEnd(), {}, SwkbdEditGroup::None);
+			break;
+		case SwkbdEditCommand::Paste:
+			clipboard = editor.clipboard;
+			paste = true;
+			generation = swkbdOverlayGeneration;
+			break;
+		case SwkbdEditCommand::Undo:
+		{
+			if (editor.undo.empty())
+				return;
+			const auto entry = std::move(editor.undo.back());
+			editor.undo.pop_back();
+			StoreText(entry.text);
+			editor.cursor = entry.cursor;
+			editor.anchor = entry.anchor;
+			editor.group = SwkbdEditGroup::None;
+			ClampEditor();
+			ShowCaret();
+			NotifyTextChanged();
+			break;
 		}
-		else
-			maxLength = 0;
+		case SwkbdEditCommand::CursorLeft:
+			moveCaret(HasSelection() && !extendSelection ? SelectionStart() : editor.cursor - 1);
+			break;
+		case SwkbdEditCommand::CursorRight:
+			moveCaret(HasSelection() && !extendSelection ? SelectionEnd() : editor.cursor + 1);
+			break;
+		case SwkbdEditCommand::CursorHome:
+			moveCaret(0);
+			break;
+		case SwkbdEditCommand::CursorEnd:
+			moveCaret(length);
+			break;
+		case SwkbdEditCommand::DeleteForward:
+			if (HasSelection())
+				ApplyEdit(SelectionStart(), SelectionEnd(), {}, SwkbdEditGroup::None);
+			else if (editor.cursor < length)
+				ApplyEdit(editor.cursor, editor.cursor + 1, {}, SwkbdEditGroup::Erasing);
+			break;
+		}
 	}
-	// append character
-	if (swkbdInternalState->formStringLength < maxLength)
-	{
-		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = keyCode;
-		swkbdInternalState->formStringLength++;
-		swkbdInternalState->formStringBuffer[swkbdInternalState->formStringLength] = '\0';
-		swkbd_inputStringChanged();
-		PublishSoftwareKeyboard();
-	}
+	// the clipboard completes on the UI thread, so it is used outside of the lock
+	if (clipboard && !copied.empty())
+		clipboard->SetTextAsync(std::move(copied), [](bool) {});
+	if (clipboard && paste)
+		clipboard->GetTextAsync([generation](bool success, std::string text) {
+			if (success)
+				PasteText(generation, text);
+		});
 }
 
 namespace swkbd

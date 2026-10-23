@@ -329,6 +329,12 @@ namespace Application
 		return m_backend->SubmitSoftwareKeyboardKey(keyCode);
 	}
 
+	bool EmulationController::SubmitSoftwareKeyboardEdit(SoftwareKeyboardEdit edit,
+														 bool extendSelection)
+	{
+		return m_backend->SubmitSoftwareKeyboardEdit(edit, extendSelection);
+	}
+
 	RuntimeOverlay::Snapshot EmulationController::GetRuntimeOverlaySnapshot()
 	{
 		return m_backend->GetRuntimeOverlaySnapshot();

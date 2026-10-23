@@ -4,6 +4,7 @@
 #include "Cafe/OS/libs/cemuextend/Cex2Host.h"
 #include "Cafe/OS/libs/cemuextend/Cex2Microphone.h"
 #include "Cafe/OS/libs/sysapp/sysapp.h"
+#include "Cafe/OS/libs/swkbd/swkbd.h"
 #include "Cafe/OS/libs/HostInputFocus.h"
 #include "Cafe/HW/Espresso/TcpGecko/TcpGeckoServer.h"
 #include "Cafe/CafeSystem.h"
@@ -15,6 +16,7 @@ namespace Application
 		cemuextend_hle::Cex2Host::Instance().ConfigureHost(
 			bindings.clipboard, bindings.windowMetrics, bindings.cemodWebUi,
 			bindings.windowControl);
+		swkbd_setClipboard(bindings.clipboard);
 		sysapp::ConfigureExternalLauncher(bindings.externalLauncher);
 		CafeHost::ConfigureInputFocus(bindings.inputFocus);
 		CafeSystem::ConfigureCanvasHost(bindings.canvas);
@@ -26,6 +28,7 @@ namespace Application
 		CafeHost::ConfigureInputFocus({});
 		sysapp::ConfigureExternalLauncher({});
 		cemuextend_hle::Cex2Host::Instance().ConfigureHost({}, {}, {}, {});
+		swkbd_setClipboard({});
 	}
 
 	void SetCemuExtendFocusPaused(bool paused, std::uint64_t sequence)

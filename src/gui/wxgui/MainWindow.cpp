@@ -61,10 +61,80 @@
 
 #if BOOST_OS_WINDOWS
 #include <windows.h>
+#include <imm.h>
 #endif
 #if BOOST_OS_MACOS
 #include "wxgui/MacRelativePointer.h"
 #endif
+
+namespace
+{
+	// editing keys of the emulated software keyboard that produce no character
+	std::optional<Application::SoftwareKeyboardEdit> SoftwareKeyboardEditForKey(const wxKeyEvent& event)
+	{
+		using Edit = Application::SoftwareKeyboardEdit;
+		if (event.ControlDown() && !event.AltDown())
+		{
+			switch (event.GetKeyCode())
+			{
+			case 'A':
+				return Edit::SelectAll;
+			case 'C':
+				return Edit::Copy;
+			case 'V':
+				return Edit::Paste;
+			case 'X':
+				return Edit::Cut;
+			case 'Z':
+				return Edit::Undo;
+			}
+		}
+		switch (event.GetKeyCode())
+		{
+		case WXK_LEFT:
+		case WXK_NUMPAD_LEFT:
+			return Edit::CursorLeft;
+		case WXK_RIGHT:
+		case WXK_NUMPAD_RIGHT:
+			return Edit::CursorRight;
+		case WXK_HOME:
+		case WXK_NUMPAD_HOME:
+			return Edit::CursorHome;
+		case WXK_END:
+		case WXK_NUMPAD_END:
+			return Edit::CursorEnd;
+		case WXK_DELETE:
+		case WXK_NUMPAD_DELETE:
+			return Edit::DeleteForward;
+		}
+		return std::nullopt;
+	}
+
+#if BOOST_OS_WINDOWS
+	// The game canvas only needs the IME while the software keyboard is open.
+	// Without it, a left-on Japanese IME would turn game key presses into an
+	// uncommitted composition drawn in the window's top-left corner.
+	void SetWindowImeEnabled(wxWindow* window, bool enabled)
+	{
+		if (window == nullptr)
+			return;
+		const auto hwnd = static_cast<HWND>(window->GetHWND());
+		if (enabled)
+		{
+			ImmAssociateContextEx(hwnd, nullptr, IACE_DEFAULT);
+			return;
+		}
+		// switch back to direct (half-width alphanumeric) input before detaching
+		if (const auto context = ImmGetContext(hwnd))
+		{
+			ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
+			ImmSetOpenStatus(context, FALSE);
+			ImmReleaseContext(hwnd, context);
+		}
+		ImmAssociateContextEx(hwnd, nullptr, 0);
+	}
+#endif
+} // namespace
 
 enum
 {
@@ -490,6 +560,9 @@ void MainWindow::HandleApplicationEvent(const Application::Event& event)
 		break;
 	case EventType::TextInputWakeRequested:
 		RefreshCemuExtendTextInput();
+		break;
+	case EventType::SoftwareKeyboardChanged:
+		SyncSoftwareKeyboardIme();
 		break;
 	}
 }
@@ -1881,6 +1954,15 @@ void MainWindow::OnKeyUp(wxKeyEvent& event)
 
 void MainWindow::OnKeyDown(wxKeyEvent& event)
 {
+	if (m_emulationController.SoftwareKeyboardActive())
+	{
+		if (const auto edit = SoftwareKeyboardEditForKey(event))
+		{
+			// handled here, so no character event follows
+			m_emulationController.SubmitSoftwareKeyboardEdit(*edit, event.ShiftDown());
+			return;
+		}
+	}
 #if defined(__APPLE__)
 	// On macOS, allow Cmd+Q to quit the application
 	if (event.CmdDown() && event.GetKeyCode() == 'Q')
@@ -2206,6 +2288,15 @@ void MainWindow::RefreshCemuExtendTextInput()
 	EnsureCemuExtendTextInputFocus(state.sequence);
 }
 
+void MainWindow::SyncSoftwareKeyboardIme()
+{
+#if BOOST_OS_WINDOWS
+	const bool enabled = m_emulationController.SoftwareKeyboardActive();
+	SetWindowImeEnabled(m_game_panel, enabled);
+	SetWindowImeEnabled(m_render_canvas, enabled);
+#endif
+}
+
 void MainWindow::CreateCanvas()
 {
 	// create panel for canvas
@@ -2314,6 +2405,7 @@ void MainWindow::CreateCanvas()
 
 	GetSizer()->Layout();
 	m_render_canvas->SetFocus();
+	SyncSoftwareKeyboardIme();
 
 	if (m_padView)
 		m_padView->InitializeRenderCanvas();
@@ -2564,6 +2656,9 @@ bool MainWindow::IsMenuHidden() const
 
 void MainWindow::OnTimer(wxTimerEvent& event)
 {
+	// a recreated canvas starts with the IME attached again
+	SyncSoftwareKeyboardIme();
+
 	if (m_update_available.valid() && future_is_ready(m_update_available))
 	{
 		if (m_update_available.get())
