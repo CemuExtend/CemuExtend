@@ -29,7 +29,9 @@ class CemodPluginManagerDialog final : public wxDialog
 	void SaveApproval();
 	void TogglePlugin(std::size_t index);
 	void RefreshLabels();
+	void SyncTrustAvailability();
 	[[nodiscard]] std::uint64_t CheckedPermissionMask() const;
+	[[nodiscard]] std::string MissingPermissions() const;
 	[[nodiscard]] static std::string StatusText(const Application::CemodManagerPackage& package);
 
 	std::uint64_t m_titleId{};
@@ -42,4 +44,5 @@ class CemodPluginManagerDialog final : public wxDialog
 	wxTextCtrl* m_details{};
 	Application::CemodManagerSnapshot m_snapshot;
 	std::vector<std::uint64_t> m_permissionBits;
+	std::vector<std::string> m_permissionNames;
 };

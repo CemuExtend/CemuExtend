@@ -44,7 +44,7 @@ namespace
 CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64_t titleId,
 												   Application::EmulationController& emulationController)
 	: wxDialog(parent, wxID_ANY, _("Aroma / WUPS package manager"), wxDefaultPosition,
-			   wxSize(980, 680), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+			   wxSize(1000, 780), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_titleId(titleId),
 	  m_emulationController(emulationController)
 {
@@ -66,6 +66,7 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 	right->Add(new wxStaticText(this, wxID_ANY, _("Requested permissions (the runtime skips the package while any is denied):")),
 			   0, wxEXPAND | wxRIGHT | wxBOTTOM, 6);
 	m_permissions = new wxCheckListBox(this, wxID_ANY);
+	m_permissions->SetMinSize(wxSize(-1, 330));
 	right->Add(m_permissions, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
 	m_approve = new wxCheckBox(this, wxID_ANY,
 							   _("Mark this exact package as approved"));
@@ -73,8 +74,12 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 	m_trustUpdates = new wxCheckBox(this, wxID_ANY,
 									_("Trust future updates to this Mod (keep this approval when the .cemod is rebuilt, unless it asks for more)"));
 	right->Add(m_trustUpdates, 0, wxEXPAND | wxRIGHT | wxBOTTOM, 8);
+	auto* actions = new wxBoxSizer(wxHORIZONTAL);
+	auto* grantAll = new wxButton(this, wxID_ANY, _("Grant all requested permissions"));
+	actions->Add(grantAll, 0, wxRIGHT, 8);
 	auto* save = new wxButton(this, wxID_ANY, _("Save approval"));
-	right->Add(save, 0, wxALIGN_RIGHT | wxRIGHT | wxBOTTOM, 8);
+	actions->Add(save, 0, 0);
+	right->Add(actions, 0, wxALIGN_RIGHT | wxRIGHT | wxBOTTOM, 8);
 	body->Add(right, 1, wxEXPAND | wxRIGHT | wxBOTTOM, 10);
 	root->Add(body, 1, wxEXPAND);
 
@@ -88,6 +93,27 @@ CemodPluginManagerDialog::CemodPluginManagerDialog(wxWindow* parent, std::uint64
 		TogglePlugin(static_cast<std::size_t>(event.GetInt()));
 	});
 	save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SaveApproval(); });
+	grantAll->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		for (std::size_t index = 0; index < m_permissionBits.size(); ++index)
+			m_permissions->Check(static_cast<unsigned int>(index), true);
+	});
+	m_approve->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		SyncTrustAvailability();
+		if (!m_approve->IsChecked())
+			return;
+		const auto missing = MissingPermissions();
+		m_status->SetLabel(wxString::FromUTF8(missing.empty()
+												  ? "Ready to save: every requested permission is granted."
+												  : "Still denied: " + missing + "."));
+	});
+	m_permissions->Bind(wxEVT_CHECKLISTBOX, [this](wxCommandEvent&) {
+		if (!m_approve->IsChecked())
+			return;
+		const auto missing = MissingPermissions();
+		m_status->SetLabel(wxString::FromUTF8(missing.empty()
+												  ? "Ready to save: every requested permission is granted."
+												  : "Still denied: " + missing + "."));
+	});
 	SetSizer(root);
 	SetMinSize(wxSize(760, 500));
 	CentreOnParent();
@@ -107,8 +133,11 @@ void CemodPluginManagerDialog::RefreshPlugins()
 		m_details->Clear();
 		m_permissions->Clear();
 		m_permissionBits.clear();
+		m_permissionNames.clear();
 		m_approve->SetValue(false);
+		m_approve->Enable(false);
 		m_trustUpdates->SetValue(false);
+		m_trustUpdates->Enable(false);
 		return;
 	}
 	const auto selection = previous == wxNOT_FOUND
@@ -138,11 +167,13 @@ void CemodPluginManagerDialog::ShowPlugin(std::size_t index)
 		return;
 	const auto& package = m_snapshot.packages[index];
 	m_permissionBits.clear();
+	m_permissionNames.clear();
 	m_permissions->Clear();
 	for (const auto& permission : package.permissions)
 		if (permission.requested)
 		{
 			m_permissionBits.push_back(permission.bit);
+			m_permissionNames.push_back(permission.name);
 			m_permissions->Append(wxString::FromUTF8(permission.name +
 													 (permission.dangerous ? " (dangerous)" : "")));
 			m_permissions->Check(static_cast<unsigned int>(m_permissionBits.size()) - 1, permission.granted);
@@ -151,7 +182,7 @@ void CemodPluginManagerDialog::ShowPlugin(std::size_t index)
 	m_approve->SetValue(package.approved);
 	m_approve->Enable(package.valid);
 	m_trustUpdates->SetValue(package.trustUpdates);
-	m_trustUpdates->Enable(package.valid && package.approved);
+	SyncTrustAvailability();
 
 	std::ostringstream details;
 	const std::string name = package.pluginName.empty() ? package.modId : package.pluginName;
@@ -191,6 +222,32 @@ void CemodPluginManagerDialog::RefreshLabels()
 {
 	for (std::size_t index = 0; index < m_snapshot.packages.size(); ++index)
 		m_plugins->SetString(index, wxString::FromUTF8(ApprovalLabel(m_snapshot.packages[index])));
+}
+
+void CemodPluginManagerDialog::SyncTrustAvailability()
+{
+	const bool approved = m_approve->IsChecked() && m_approve->IsEnabled();
+	m_trustUpdates->Enable(approved);
+	if (!approved)
+		m_trustUpdates->SetValue(false);
+}
+
+std::string CemodPluginManagerDialog::MissingPermissions() const
+{
+	const auto selection = m_plugins->GetSelection();
+	if (selection == wxNOT_FOUND || static_cast<std::size_t>(selection) >= m_snapshot.packages.size())
+		return {};
+	const auto& package = m_snapshot.packages[static_cast<std::size_t>(selection)];
+	std::string missing;
+	for (std::size_t index = 0; index < m_permissionBits.size(); ++index)
+	{
+		if ((package.requestedPermissions & m_permissionBits[index]) == 0 || m_permissions->IsChecked(index))
+			continue;
+		if (!missing.empty())
+			missing += ", ";
+		missing += index < m_permissionNames.size() ? m_permissionNames[index] : "unknown permission";
+	}
+	return missing;
 }
 
 void CemodPluginManagerDialog::TogglePlugin(std::size_t index)
@@ -236,11 +293,16 @@ void CemodPluginManagerDialog::SaveApproval()
 	}
 	const auto granted = CheckedPermissionMask();
 	const bool approved = m_approve->IsChecked();
-	if (approved && (package.requestedPermissions & ~granted) != 0)
+	if (approved)
 	{
-		wxMessageBox(_("Native and WUPS packages require every requested permission. Grant all of them, or leave the package unapproved."),
-					 _("CemuExtend"), wxOK | wxICON_ERROR, this);
-		return;
+		const auto missing = MissingPermissions();
+		if (!missing.empty())
+		{
+			wxMessageBox(wxString::FromUTF8("Native and WUPS packages require every requested permission. Still denied: " +
+											missing + "."),
+						 _("CemuExtend"), wxOK | wxICON_ERROR, this);
+			return;
+		}
 	}
 	Application::CemodApprovalUpdate update{};
 	update.generation = m_snapshot.generation;
